@@ -306,18 +306,26 @@ function AudioAttachment({
     if (!a) return;
     setPlayError(false);
     try {
-      // iOS can leave the PWA audio session in record/receiver mode after
-      // getUserMedia(). Force normal media playback before every voice memo.
+      // Voice playback on iOS/PWA must begin inside the original tap. Waiting
+      // for a network request first can consume the user activation and leave
+      // the player advancing with no useful audible output.
       const audioSession = (navigator as any).audioSession;
       if (audioSession && "type" in audioSession) audioSession.type = "playback";
     } catch {}
     a.muted = false;
     a.volume = 1;
     a.playbackRate = rate;
+
+    // First use the already-resolved signed URL immediately, preserving the
+    // user's gesture so iOS routes this as normal media playback.
     try {
-      // Always mint a fresh storage URL on the actual user tap. iOS/PWA can
-      // retain an expired/cached media response even while React has a newer
-      // batched URL, which makes the clock move without audible playback.
+      await a.play();
+      return;
+    } catch {}
+
+    // If that URL is stale, refresh it and retry. This path is intentionally
+    // fallback-only; most taps never cross an async network boundary.
+    try {
       if (att.storage_path) {
         const { data, error } = await supabase.storage
           .from("message-attachments")
@@ -325,27 +333,22 @@ function AudioAttachment({
         if (error) throw error;
         if (!data?.signedUrl) throw new Error("No audio URL returned");
         setFreshSrc(data.signedUrl);
-        if (a.src !== data.signedUrl) {
-          a.src = data.signedUrl;
-          a.load();
-        }
+        a.pause();
+        a.src = data.signedUrl;
+        a.load();
+      } else if (src) {
+        a.pause();
+        a.src = src;
+        a.load();
       }
+      a.muted = false;
+      a.volume = 1;
+      a.playbackRate = rate;
       await a.play();
     } catch {
-      try {
-        // Last-resort iOS recovery: rebuild the media element's resource from
-        // the current source during the same user interaction.
-        a.pause();
-        a.removeAttribute("src");
-        a.load();
-        if (src) a.src = src;
-        a.load();
-        await a.play();
-      } catch {
-        setPlaying(false);
-        setPlayError(true);
-        toast.error("Voice message couldn't play. Tap Retry audio.");
-      }
+      setPlaying(false);
+      setPlayError(true);
+      toast.error("Voice message couldn't play. Tap Retry audio.");
     }
   };
 
@@ -356,7 +359,7 @@ function AudioAttachment({
 
   if (!src) return <div className="text-xs opacity-70">Loading voice message…</div>;
 
-  const ratio = duration > 0 ? progress / duration : 0;
+  const safeProgress = duration > 0 ? Math.min(progress, duration) : progress;\n  const ratio = duration > 0 ? safeProgress / duration : 0;
   const txStatus = message?.transcript_status;
   const txText = message?.transcript;
 
@@ -395,7 +398,7 @@ function AudioAttachment({
             }}
           />
           <div className="mt-1 flex items-center justify-between text-[10px] opacity-80">
-            <span>{fmtDuration(progress)} / {fmtDuration(duration)}</span>
+            <span>{fmtDuration(safeProgress)} / {fmtDuration(duration)}</span>
             <button
               type="button"
               className="inline-flex items-center gap-0.5 hover:underline"
@@ -446,7 +449,7 @@ function AudioAttachment({
       )}
       <audio
         ref={ref} src={src} preload="metadata" playsInline
-        onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (isFinite(d)) setDuration(d); }}
+        onLoadedMetadata={(e) => { const d = e.currentTarget.duration; if (isFinite(d) && d > 0) setDuration(d); }}\n        onDurationChange={(e) => { const d = e.currentTarget.duration; if (isFinite(d) && d > 0) setDuration(d); }}
         onCanPlay={() => setPlayError(false)}
         onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
         onPause={() => setPlaying(false)}
