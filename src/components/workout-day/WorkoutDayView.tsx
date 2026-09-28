@@ -3042,7 +3042,34 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const showReps = inputOverrides.reps ?? prescribedInputs.reps;
   const showTimer = inputOverrides.timer ?? prescribedInputs.timer;
   const showWeight = inputOverrides.weight ?? prescribedInputs.weight;
-  const showVelocity = inputOverrides.velocity ?? getVelocityDefault();
+  const [velocityDefault, setVelocityDefaultState] = useState(() => getVelocityDefault());
+  const { data: velocityPreference } = useQuery({
+    queryKey: ["velocity-input-default", clientId],
+    enabled: !!clientId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await sb.from("clients").select("velocity_input_default").eq("id", clientId!).maybeSingle();
+      if (error) throw error;
+      return data as { velocity_input_default?: boolean | null } | null;
+    },
+  });
+  useEffect(() => {
+    if (typeof velocityPreference?.velocity_input_default !== "boolean") return;
+    setVelocityDefaultState(velocityPreference.velocity_input_default);
+    setVelocityDefault(velocityPreference.velocity_input_default);
+  }, [velocityPreference?.velocity_input_default]);
+  const persistVelocityDefault = async (next: boolean) => {
+    setVelocityDefaultState(next);
+    setVelocityDefault(next);
+    if (!clientId) return;
+    const { error } = await sb.from("clients").update({ velocity_input_default: next }).eq("id", clientId);
+    if (error) {
+      setVelocityDefaultState(!next);
+      setVelocityDefault(!next);
+      throw error;
+    }
+  };
+  const showVelocity = inputOverrides.velocity ?? velocityDefault;
   const toggleInput = (field: keyof RowInputOverrides) => {
     const current = { reps: showReps, weight: showWeight, timer: showTimer, velocity: showVelocity }[field];
     const next: RowInputOverrides = { ...inputOverrides, [field]: !current };
@@ -3667,8 +3694,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </p>
       )}
 
-      {/* Input type — Reps / Weight / Timer are all optional columns.
-          Device-only choice; the coach's prescription is never modified. */}
+      {/* Input type — optional athlete logging columns. Velocity uses mean concentric
+          velocity (m/s). Per-row choices are instant; the velocity default is account-wide. */}
       {!readonly && (
         <div className="mt-2 flex items-center gap-1.5">
           <DropdownMenu>
@@ -3703,18 +3730,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               <DropdownMenuItem
                 onSelect={(e) => {
                   e.preventDefault();
-                  const next = !getVelocityDefault();
-                  setVelocityDefault(next);
-                  if (next && !showVelocity) {
-                    const updated = { ...inputOverrides, velocity: true };
-                    setInputOverridesState(updated);
-                    setRowInputs(row.id, updated);
-                  }
-                  toast.success(next ? "Velocity will open by default" : "Velocity default turned off");
+                  const next = !velocityDefault;
+                  void persistVelocityDefault(next)
+                    .then(() => {
+                      if (next && !showVelocity) {
+                        const updated = { ...inputOverrides, velocity: true };
+                        setInputOverridesState(updated);
+                        setRowInputs(row.id, updated);
+                      }
+                      toast.success(next ? "Velocity will open by default on your workouts" : "Velocity default turned off");
+                    })
+                    .catch(() => toast.error("Could not save velocity default"));
                 }}
                 className="text-xs font-semibold"
               >
-                Velocity default: {getVelocityDefault() ? "On" : "Off"}
+                Velocity default: {velocityDefault ? "On" : "Off"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
