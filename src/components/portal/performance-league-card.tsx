@@ -11,7 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PublicAchievements } from "@/components/portal/achievements-card";
 import { usePublicAchievements } from "@/lib/athlete-achievements";
 
-type Row = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null; strength_score?:number; workouts_completed?:number; fully_logged?:number };\nconst rating=(r?:Row|null)=>Number(r?.monthly_xp??0)/10;
+type Row = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null; strength_score?:number; workouts_completed?:number; fully_logged?:number };
+const rating=(r?:Row|null)=>Number(r?.monthly_xp??0)/10;
 
 export function PerformanceLeagueCard({ clientId, userId }: { clientId:string; userId:string }) {
   const [open, setOpen] = useState(false);
@@ -65,7 +66,9 @@ function LeaderboardOverlay({onClose,rows,loading,isAdmin}:{onClose:()=>void;row
         <div><div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{format(new Date(),"MMMM")} Performance League</div><div className="text-lg font-black">JF Performance League</div><div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Top 10</div></div>
       </div>
       <div className="mt-4 rounded-2xl border bg-muted/20 p-4 text-xs leading-relaxed text-muted-foreground">
-        <div className="mb-2 flex items-center gap-2 font-black text-foreground"><Info className="h-4 w-4 text-primary"/>How you rank</div>\n        <div><b>Your Performance Rating is scored out of 100:</b> 50% relative performance, 35% training execution, 10% training quality, and 5% bodyweight tracking.</div>\n        <div className="mt-2"><b>Relative performance matters most.</b> Get stronger relative to your bodyweight, complete your programmed training, and log your work. Highest Performance Rating takes #1.</div>
+        <div className="mb-2 flex items-center gap-2 font-black text-foreground"><Info className="h-4 w-4 text-primary"/>How you rank</div>
+        <div><b>Your Performance Rating is scored out of 100:</b> 50% relative performance, 35% training execution, 10% training quality, and 5% bodyweight tracking.</div>
+        <div className="mt-2"><b>Relative performance matters most.</b> Get stronger relative to your bodyweight, complete your programmed training, and log your work. Highest Performance Rating takes #1.</div>
       </div>
       {loading ? <div className="py-10 text-center text-sm text-muted-foreground">Loading leaderboard…</div> :
        <div className="mt-4 space-y-2">{ranked.map(r=><button type="button" onClick={()=>setSelected(r)} key={r.client_id} className={"flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-colors active:bg-muted/60 "+(r.is_me?"bg-primary/5 ring-1 ring-primary/30":"bg-card")}>
