@@ -2173,6 +2173,7 @@ function WorkoutDay({
                       repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       assistedBests={assistedBestsByRow.get(r.id) ?? null}
                       blockId={blockId}
+                      topSetBasis={topSetBasisForRow(r, rowIndex)}
                       existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                       existingNote={notesByRowId.get(r.id)}
                       notesLoading={notesLoading}
@@ -2489,6 +2490,7 @@ function WorkoutDay({
                     repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                     assistedBests={assistedBestsByRow.get(r.id) ?? null}
                     blockId={blockId}
+                      topSetBasis={topSetBasisForRow(r, rowIndex)}
                     existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                     existingNote={notesByRowId.get(r.id)}
                     notesLoading={notesLoading}
