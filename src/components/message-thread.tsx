@@ -290,7 +290,9 @@ function AudioAttachment({
   message?: Message;
 }) {
   const signed = useSignedUrlFor(att.storage_path);
-  const src = att.storage_path ? signed : att.url;
+  const initialSrc = att.storage_path ? signed : att.url;
+  const [freshSrc, setFreshSrc] = useState<string | null>(null);
+  const src = freshSrc || initialSrc;
   const ref = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -313,17 +315,36 @@ function AudioAttachment({
     a.volume = 1;
     a.playbackRate = rate;
     try {
+      // Always mint a fresh storage URL on the actual user tap. iOS/PWA can
+      // retain an expired/cached media response even while React has a newer
+      // batched URL, which makes the clock move without audible playback.
+      if (att.storage_path) {
+        const { data, error } = await supabase.storage
+          .from("message-attachments")
+          .createSignedUrl(att.storage_path, 3600);
+        if (error) throw error;
+        if (!data?.signedUrl) throw new Error("No audio URL returned");
+        setFreshSrc(data.signedUrl);
+        if (a.src !== data.signedUrl) {
+          a.src = data.signedUrl;
+          a.load();
+        }
+      }
       await a.play();
     } catch {
-      // Signed URLs are long lived, but an audio element can still hold a stale
-      // failed resource. Reload once from the current URL inside the user tap.
       try {
+        // Last-resort iOS recovery: rebuild the media element's resource from
+        // the current source during the same user interaction.
+        a.pause();
+        a.removeAttribute("src");
+        a.load();
+        if (src) a.src = src;
         a.load();
         await a.play();
       } catch {
         setPlaying(false);
         setPlayError(true);
-        toast.error("Voice message couldn't play. Try again.");
+        toast.error("Voice message couldn't play. Tap Retry audio.");
       }
     }
   };
