@@ -111,7 +111,7 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
       </div>
       <Progress value={summary.pct} className="mt-3 h-2.5" />
 
-      <div className="mt-4 grid grid-cols-4 gap-2">
+      <div className="mt-4 grid grid-cols-3 gap-2">
         {QUICK_ADDS.map((q) => (
           <Button
             key={q.ml}
@@ -122,14 +122,14 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
             <Plus className="mr-0.5 h-3.5 w-3.5 shrink-0" />{q.label}
           </Button>
         ))}
-        <Button
-          variant="outline"
-          className="h-11 min-w-0 px-2 text-xs font-bold"
-          onClick={() => setCustomOpen(true)}
-        >
-          <Plus className="mr-0.5 h-3.5 w-3.5 shrink-0" />Custom
-        </Button>
       </div>
+      <Button
+        variant="ghost"
+        className="mt-1.5 h-9 w-full text-xs font-semibold text-muted-foreground hover:text-foreground"
+        onClick={() => setCustomOpen(true)}
+      >
+        <Plus className="mr-1 h-3.5 w-3.5" /> Custom amount
+      </Button>
 
       {entries.length > 0 && (
         <div className="mt-4 rounded-xl border bg-secondary/25 p-3">
