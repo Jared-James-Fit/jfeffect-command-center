@@ -78,6 +78,10 @@ export function MissingBodyweightPrompt({ userId, defaultUnit = "lb" }: { userId
       window.setTimeout(() => {
         qc.invalidateQueries({ queryKey: combinedBodyweightQueryKey(userId) });
         qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly"] });
+      qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly-raw"] });
+      qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly-view"] });
+      qc.refetchQueries({ queryKey: ["athlete-rankings-monthly-raw"], type: "active" });
+      qc.refetchQueries({ queryKey: ["athlete-rankings-monthly-view"], type: "active" });
         qc.invalidateQueries({ queryKey: ["progress-bodyweight"] });
       }, 280);
     } catch (e) {
