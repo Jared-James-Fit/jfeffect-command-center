@@ -72,10 +72,15 @@ export default function DeferredExerciseHowToSheet({
     >
       <SheetContent
         side="bottom"
-        className="h-[92vh] overflow-y-auto p-0 sm:mx-auto sm:max-w-xl sm:rounded-t-2xl"
+        className="h-[92vh] overflow-y-auto p-0 [&>button]:hidden sm:mx-auto sm:max-w-xl sm:rounded-t-2xl"
       >
-        <SheetHeader className="sticky top-0 z-10 border-b bg-background/95 px-5 py-3 text-left backdrop-blur">
-          <SheetTitle className="text-base font-black">{name}</SheetTitle>
+        <SheetHeader className="sticky top-0 z-10 border-b bg-background/95 px-5 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-left backdrop-blur">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" className="h-9 shrink-0 rounded-full px-3" onClick={onClose}>
+              <ArrowLeft className="mr-1 h-4 w-4" /> Back
+            </Button>
+            <SheetTitle className="min-w-0 truncate text-base font-black">{name}</SheetTitle>
+          </div>
           {(category || muscles) && (
             <SheetDescription className="text-xs">
               {[category, muscles].filter(Boolean).join(" · ")}
