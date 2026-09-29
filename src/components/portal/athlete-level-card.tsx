@@ -64,7 +64,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
         >
           <span className="min-w-0 flex-1">
             <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} Performance League</span>
-            <span className="mt-1 block text-xl font-bold tracking-tight">Top 10 <span className="font-medium text-muted-foreground">· Live</span></span>
+            <span className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight">Top 10 <span className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-emerald-600"><span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" /></span>Live</span></span>
           </span>
           {!leaguePending && leagueMe?.qualified && (() => {
             const top10 = leagueRows.filter(r=>r.qualified && r.rank!=null && Number(r.rank)<=10).sort((a,b)=>Number(a.rank)-Number(b.rank));
@@ -352,8 +352,8 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
       )}
 
       <div className="rounded-2xl border bg-muted/20 p-3">
-        <div className="text-xs font-black">Up to 110 performance points</div>
-        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground">Training 40 · Complete logging 25 · Performance improvement 25 · Bodyweight logging 10 · Performance bonus 10</div>
+        <div className="text-xs font-black">Performance points accumulate all month</div>
+        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground">Training 10 pts/workout · Complete logging 6.25 pts/workout · Bodyweight logging 2.5 pts/log · Performance improvement adds points as you improve</div>
       </div>
 
       {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
@@ -396,13 +396,13 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
               <div className="mt-3 rounded-xl bg-background/80 px-3 py-2 text-sm font-bold text-primary">
                 {gap.toFixed(1)} pts to crack the Top 10
               </div>
-            ) : <Progress value={Math.min(100, (Number(me.xp ?? 0) / 110) * 100)} className="mt-3 h-2" />;
+            ) : null;
           })()}
         </div>
       )}
 
       <div className="rounded-xl border bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-bold text-foreground">How scoring works:</span> earn up to 40 points from programmed workouts, 25 from fully logged training, 25 from your best bodyweight-normalized performance improvements, and 10 from bodyweight logging. Strong performance can add up to a 10-point bonus, for a maximum of 110. Your Logging Level and Powerlifting Records are separate systems.
+        <span className="font-bold text-foreground">How scoring works:</span> points keep accumulating throughout the month. Programmed workouts earn 10 points each, fully logged workouts earn 6.25 points each, bodyweight logs earn 2.5 points each, and performance improvement adds points when you beat your prior performance on the same exercises. There is no 110-point maximum. Your Logging Level and Powerlifting Records are separate systems.
       </div>
     </div>
   );
