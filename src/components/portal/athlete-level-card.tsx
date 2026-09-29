@@ -353,7 +353,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
 
       <div className="rounded-2xl border bg-muted/20 p-3">
         <div className="text-xs font-black">Performance points accumulate all month</div>
-        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground">Training 10 pts/workout · Complete logging 6.25 pts/workout · Bodyweight logging 2.5 pts/log · Performance improvement adds points as you improve</div>
+        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground">Training 10 pts/workout · Complete logging 6.25 pts/workout · Bodyweight 2.5 pts/log · Performance improvement rewards progress</div>
       </div>
 
       {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
