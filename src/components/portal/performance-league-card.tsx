@@ -1,4 +1,4 @@
-// Production deploy marker: 2026-09-28 performance-rating rebuild v2
+// Production deploy marker: 2026-09-29 uncapped performance league
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -72,8 +72,8 @@ function LeaderboardOverlay({onClose,rows,loading,isAdmin}:{onClose:()=>void;row
       </div>
       <div className="mt-4 rounded-2xl border bg-muted/20 p-4 text-xs leading-relaxed text-muted-foreground">
         <div className="mb-2 flex items-center gap-2 font-black text-foreground"><Info className="h-4 w-4 text-primary"/>How you rank</div>
-        <div><b>100 base points + up to 10 performance bonus:</b> 40 workouts, 25 fully logged training, 25 performance improvement, and 10 bodyweight tracking.</div>
-        <div className="mt-2"><b>How to score:</b> Complete your programmed workouts, fully log your sets, beat your previous performance on the same exercises, and log bodyweight consistently. Exceptional improvement can push your score above 100. Highest Performance Score takes #1.</div>
+        <div><b>Points keep accumulating all month:</b> Training earns 10 points per completed programmed workout, complete logging earns 6.25 points per fully logged workout, bodyweight logging earns 2.5 points per log, and performance improvement adds points when you beat prior performance on the same exercises.</div>
+        <div className="mt-2"><b>No 110-point cap:</b> The category targets are reference amounts, not ceilings. Keep training, logging and improving to keep earning points. Highest Performance Score takes #1.</div>
       </div>
       {loading ? <div className="py-10 text-center text-sm text-muted-foreground">Loading leaderboard…</div> :
        <div className="mt-4 space-y-2">{ranked.map(r=><button type="button" onClick={()=>setSelected(r)} key={r.client_id} className={"flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-colors active:bg-muted/60 "+(r.is_me?"bg-primary/5 ring-1 ring-primary/30":"bg-card")}>
