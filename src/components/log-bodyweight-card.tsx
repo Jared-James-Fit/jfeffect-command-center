@@ -106,6 +106,10 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
       qc.invalidateQueries({ queryKey: bodyweightQueryKey(user.id) });
       qc.invalidateQueries({ queryKey: ["combined-bodyweight", user.id] });
       qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly"] });
+      qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly-raw"] });
+      qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly-view"] });
+      qc.refetchQueries({ queryKey: ["athlete-rankings-monthly-raw"], type: "active" });
+      qc.refetchQueries({ queryKey: ["athlete-rankings-monthly-view"], type: "active" });
     } finally {
       setSaving(false);
     }
