@@ -45,7 +45,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
   const { data: catalog = [] } = useBadgeCatalog();
   const { data: earned = [] } = useMyAchievements(clientId);
   const { data: leagueRows = [], isPending: leaguePending } = useQuery({
-    queryKey:["athlete-rankings-monthly"],
+    queryKey:["athlete-rankings-monthly-raw"],
     staleTime:60_000,
     queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:50}); if(error) throw error; return (data??[]) as LeagueRow[]; }
   });
@@ -313,7 +313,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
   onSelectedChange: (id: string | null) => void;
 }) {
   const { data = [], isPending } = useQuery({
-    queryKey: ["athlete-rankings-monthly"],
+    queryKey: ["athlete-rankings-monthly-view"],
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_monthly_athlete_rankings", { _limit: 50 });
