@@ -66,11 +66,17 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
             <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} Performance League</span>
             <span className="mt-1 block text-xl font-bold tracking-tight">Top 10 <span className="font-medium text-muted-foreground">· Live</span></span>
           </span>
-          {!leaguePending && leagueMe?.qualified && <span className="shrink-0 text-right">
-            <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Your rank</span>
-            <span className="block text-lg font-bold leading-tight"><b className="text-primary">#{leagueMe.rank}</b></span>
-            <span className="block text-xs font-bold text-muted-foreground">{leagueScore(leagueMe).toFixed(1)} pts</span>
-          </span>}
+          {!leaguePending && leagueMe?.qualified && (() => {
+            const top10 = leagueRows.filter(r=>r.qualified && r.rank!=null && Number(r.rank)<=10).sort((a,b)=>Number(a.rank)-Number(b.rank));
+            const tenth = top10.at(-1);
+            const outside = Number(leagueMe.rank) > 10;
+            const gap = outside && tenth ? Math.max(0, leagueScore(tenth)-leagueScore(leagueMe)) : 0;
+            return <span className="shrink-0 text-right">
+              <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{outside ? "Your score" : "Your rank"}</span>
+              <span className="block text-lg font-bold leading-tight text-primary">{outside ? leagueScore(leagueMe).toFixed(1) : "#"+leagueMe.rank}</span>
+              <span className="block text-xs font-bold text-muted-foreground">{outside ? gap.toFixed(1)+" pts to Top 10" : leagueScore(leagueMe).toFixed(1)+" pts"}</span>
+            </span>;
+          })()}
           <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-muted-foreground"/>
         </button>
 
@@ -310,16 +316,16 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     queryKey: ["athlete-rankings-monthly"],
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_monthly_athlete_rankings", { _limit: 10 });
+      const { data, error } = await (supabase as any).rpc("get_monthly_athlete_rankings", { _limit: 50 });
       if (error) throw error;
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
-        xp: Number(r.monthly_xp ?? 0),
+        xp: leagueScore(r),
         rank: r.rank == null ? 999 : Number(r.rank),
         qualified: Boolean(r.qualified),
         workouts_completed: Number(r.workouts_completed ?? 0),
         fully_logged: Number(r.fully_logged ?? 0),
-        strength_score: Number(r.strength_score ?? 0) / 1000,
+        strength_score: Number(r.strength_score ?? 0),
       })) as Array<RankRow & { qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null; workouts_completed:number; fully_logged:number; strength_score:number }>;
     },
   });
@@ -361,7 +367,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
                 <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
                 <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
                 <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
-                <div className="text-xs font-black text-primary">{(Number(r.xp ?? 0) / 1000).toFixed(1)} pts</div>
+                <div className="text-xs font-black text-primary">{Number(r.xp ?? 0).toFixed(1)} pts</div>
               </button>
             ) : <div key={i} />)}
           </div>
@@ -371,7 +377,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
                 <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
                 <RankAvatar row={r} size="h-9 w-9" />
                 <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{r.workouts_completed} workouts · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div></div>
-                <span className="text-xs font-black text-primary">{(Number(r.xp ?? 0) / 1000).toFixed(1)} pts</span>
+                <span className="text-xs font-black text-primary">{Number(r.xp ?? 0).toFixed(1)} pts</span>
               </li>
             ))}
           </ul>
@@ -381,9 +387,17 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
       {me?.qualified && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
-          <div className="mt-1 text-2xl font-black text-primary">{(Number(me.xp ?? 0) / 1000).toFixed(1)} <span className="text-sm">pts</span></div>
+          <div className="mt-1 text-2xl font-black text-primary">{Number(me.xp ?? 0).toFixed(1)} <span className="text-sm">pts</span></div>
           <div className="mt-1 text-xs text-muted-foreground">{me.workouts_completed} workouts · {me.fully_logged} fully logged · {Number(me.strength_score ?? 0).toFixed(1)} performance pts · BW verified</div>
-          <Progress value={Math.min(100, (Number(me.xp ?? 0) / 1000) / 1.1)} className="mt-3 h-2" />
+          {(() => {
+            const tenth = data.filter((r) => r.qualified && r.rank <= 10).sort((a,b)=>a.rank-b.rank).at(-1);
+            const gap = me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
+            return me.rank > 10 ? (
+              <div className="mt-3 rounded-xl bg-background/80 px-3 py-2 text-sm font-bold text-primary">
+                {gap.toFixed(1)} pts to crack the Top 10
+              </div>
+            ) : <Progress value={Math.min(100, (Number(me.xp ?? 0) / 110) * 100)} className="mt-3 h-2" />;
+          })()}
         </div>
       )}
 
