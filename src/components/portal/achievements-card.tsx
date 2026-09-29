@@ -256,8 +256,9 @@ export function AchievementCelebrations({ clientId, catalog }: { clientId: strin
     ack([b.badge_key]); ping();
     if (index < queue.length - 1) setIndex((i) => i + 1); else finish();
   };
-  const close = () => { const b = queue[index]; if (b) ack([b.badge_key]); finish(); };
-  const seeAll = () => { ack(queue.slice(index).map((b) => b.badge_key)); finish(); };
+  // Dismissing never acknowledges a milestone. Any unacknowledged badges
+  // remain server-side as unseen and replay on the next app load/login.
+  const close = () => { finish(); };
 
   const b = ready ? queue[index] : null;
   if (!b) return null;
@@ -283,11 +284,7 @@ export function AchievementCelebrations({ clientId, catalog }: { clientId: strin
         <button type="button" onClick={next} className="mt-4 min-h-12 w-full rounded-2xl bg-primary px-4 text-sm font-black text-primary-foreground active:scale-[0.99]">
           {index < queue.length - 1 ? "Next milestone" : "Awesome"}
         </button>
-        {queue.length - index > 1 && (
-          <button type="button" onClick={seeAll} className="mt-1 min-h-10 w-full text-xs font-semibold text-muted-foreground">
-            Mark all {queue.length - index} as seen
-          </button>
-        )}
+
       </div>
     </div>
   );
