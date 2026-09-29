@@ -3216,19 +3216,31 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   }, [row.percentage_basis, row.percentage, topSetBasis?.value, topSetBasis?.unit, activeUnit]);
 
   const suggestedWeight: number | null = useMemo(() => {
-    if (row.manual_override) {
-      if (activeUnit === "kg" && row.load_kg) return Number(row.load_kg);
-      if (activeUnit === "lb" && row.load_lb) return Number(row.load_lb);
-    }
+    // A prescription is one physical load. If the program only stores that
+    // load in one unit (common for fixed KG backoffs), convert it when the
+    // athlete toggles units instead of hiding the prescription.
+    const prescribedLoadInActiveUnit = (): number | null => {
+      const kg = Number(row.load_kg);
+      const lb = Number(row.load_lb);
+      const hasKg = row.load_kg != null && row.load_kg !== "" && Number.isFinite(kg);
+      const hasLb = row.load_lb != null && row.load_lb !== "" && Number.isFinite(lb);
+      if (activeUnit === "kg") {
+        if (hasKg) return kg;
+        if (hasLb) return convertLoad(lb, "lb", "kg");
+      } else {
+        if (hasLb) return lb;
+        if (hasKg) return convertLoad(kg, "kg", "lb");
+      }
+      return null;
+    };
+    if (row.manual_override) return prescribedLoadInActiveUnit();
     if (percentageBackoffWeight != null) return percentageBackoffWeight;
     if (computed && computed.status === "ok" && computed.load != null) {
       const inUnit = activeUnit === "kg" ? computed.load : computed.load * 2.2046226218;
       const step = weightIncrement(activeUnit);
       return Math.round(inUnit / step) * step;
     }
-    if (activeUnit === "kg" && row.load_kg) return Number(row.load_kg);
-    if (activeUnit === "lb" && row.load_lb) return Number(row.load_lb);
-    return null;
+    return prescribedLoadInActiveUnit();
   }, [row.manual_override, row.load_kg, row.load_lb, percentageBackoffWeight, computed, activeUnit]);
 
   const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
