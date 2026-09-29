@@ -154,13 +154,13 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             <X className="h-4 w-4" />
           </Button>
 
-          <div className={`flex flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
+          <div className={`mx-auto flex w-full max-w-[calc(100%-4.5rem)] flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
             <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${prList.length > 0 ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`}>
               {prList.length > 0 ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
               {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
             <div className="mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-primary">Workout complete</div>
-            <DialogHeader className="mt-1 space-y-0 text-center">
+            <DialogHeader className="mx-auto mt-1 w-full space-y-0 text-center sm:text-center">
               <DialogTitle className="text-2xl font-black leading-tight tracking-tight">{headline}</DialogTitle>
               <DialogDescription className="mt-1 text-[11px]">
                 {workoutTitle ?? "Workout"}{dateLabel ? ` · ${dateLabel}` : ""}
