@@ -109,6 +109,10 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
       window.setTimeout(() => {
         qc.invalidateQueries({ queryKey: combinedBodyweightQueryKey(userId) });
         qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly"] });
+      qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly-raw"] });
+      qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly-view"] });
+      qc.refetchQueries({ queryKey: ["athlete-rankings-monthly-raw"], type: "active" });
+      qc.refetchQueries({ queryKey: ["athlete-rankings-monthly-view"], type: "active" });
       }, 280);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't save weight");
