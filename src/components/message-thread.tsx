@@ -54,6 +54,8 @@ import {
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
+import { playUiSound } from "@/lib/ui-sounds";
+import { haptic } from "@/platform/haptics";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { compressImage } from "@/lib/image-compress";
@@ -1508,6 +1510,8 @@ export function MessageThread({
         if (withoutTemp.some((m) => m.id === sent.id)) return withoutTemp;
         return [...withoutTemp, sent];
       });
+      playUiSound("message");
+      haptic("light");
       return sent;
     } catch (e: any) {
       // Mark the optimistic bubble as failed so the user can see it didn't send.
@@ -1517,6 +1521,8 @@ export function MessageThread({
           : m),
       );
       if (replyTarget) setReplyingTo(replyTarget);
+      playUiSound("error");
+      haptic("error");
       toast.error(e?.message ?? "Failed to send");
       return null;
     }
