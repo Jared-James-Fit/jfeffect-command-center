@@ -167,9 +167,11 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               </DialogDescription>
             </DialogHeader>
 
-            <div className="mt-3 flex items-end justify-center gap-1 tabular-nums">
-              <span className="text-5xl font-black leading-none text-primary">{displayScore}</span>
-              <span className="pb-1 text-xs font-bold text-muted-foreground">/100</span>
+            <div className="mt-3 grid w-full place-items-center tabular-nums">
+              <div className="relative inline-flex items-baseline justify-center">
+                <span className="text-5xl font-black leading-none text-primary">{displayScore}</span>
+                <span className="absolute left-full ml-1 whitespace-nowrap text-xs font-bold text-muted-foreground">/100</span>
+              </div>
             </div>
             <div className="mt-1 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Workout score</div>
 
