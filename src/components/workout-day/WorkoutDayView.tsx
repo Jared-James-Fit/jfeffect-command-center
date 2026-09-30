@@ -44,6 +44,8 @@ import {
 } from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
+import { playUiSound } from "@/lib/ui-sounds";
+import { haptic } from "@/platform/haptics";
 import {
   selectExerciseNoteHistory,
   noteContextLabel,
@@ -5025,6 +5027,16 @@ function SetRow({
   }, [repMaxBests, assistedBests, (existing as any)?.load_type, (existing as any)?.is_bodyweight, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
 
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
+  const prSoundedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!prBadge || !existing?.completed_at) return;
+    const key = `${rowId}:${setIndex}:${existing.completed_at}:${prBadge.reps}:${prBadge.amount}`;
+    if (prSoundedRef.current === key) return;
+    prSoundedRef.current = key;
+    playUiSound("pr", 0.055);
+    haptic("success");
+  }, [prBadge, existing?.completed_at, rowId, setIndex]);
+
   const prescribedSec = prescribedDurationSeconds ?? null;
 
   const saveTimeCompletion = async (completedSeconds: number, opts: {
@@ -5092,6 +5104,7 @@ function SetRow({
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
+      if (completeNow) { playUiSound("success"); haptic("light"); }
       toast.success(
         opts.finishedEarly && prescribedSec
           ? `Saved ${formatDuration(completedSeconds)} of ${formatDuration(prescribedSec)}`
