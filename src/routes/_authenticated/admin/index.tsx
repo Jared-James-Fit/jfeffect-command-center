@@ -22,7 +22,7 @@ const PriceCardPickerDialog = lazy(() =>
   import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
 );
 import { UserAvatar } from "@/components/user-avatar";
-import { getCoachIntel, filterIntel, LABEL_META } from "@/lib/coach-intel";
+import { getCoachIntel, filterIntel, LABEL_META, setPainFlagStatus } from "@/lib/coach-intel";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
@@ -143,28 +143,64 @@ const FILTERS: { key: Bucket | "all"; label: string }[] = [
   { key: "onboarding", label: "Onboarding" },
 ];
 
-function PriorityRow({ p }: { p: Priority }) {
+function PriorityRow({ p, intel, messagePreview }: { p: Priority; intel?: any; messagePreview?: string | null }) {
+  const [expanded, setExpanded] = useState(false);
+  const pain = intel?.pain_flags?.find((f: any) => f.status === "new" || f.status === "followup");
+  const extraSignals = [
+    intel?.compliance_pct != null ? `${intel.compliance_pct}% · ${intel.completed}/${intel.assigned} workouts` : null,
+    intel?.last_completed_at ? `Last trained ${formatDistanceToNow(parseISO(intel.last_completed_at), { addSuffix: true })}` : null,
+    intel?.active_block_name ?? null,
+  ].filter(Boolean);
+
   return (
-    <li className="flex items-center gap-3 py-2.5">
-      <UserAvatar src={p.avatarUrl ?? undefined} name={p.name} size={36} />
-      <div className="min-w-0 flex-1">
-        {p.clientId ? (
-          <ClientNameLink clientId={p.clientId} className="block truncate text-sm font-semibold hover:underline">{p.name}</ClientNameLink>
-        ) : <div className="truncate text-sm font-semibold">{p.name}</div>}
-        <div className="mt-0.5 flex items-center gap-2">
-          {p.urgent && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />}
-          <span className="truncate text-[11px] text-muted-foreground">
+    <li className="py-2.5">
+      <div className="flex items-center gap-3">
+        <UserAvatar src={p.avatarUrl ?? undefined} name={p.name} size={38} />
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="min-w-0 flex-1 text-left">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-bold">{p.name}</span>
+            {p.urgent && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />}
+          </div>
+          <div className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
             {p.reason}{p.time ? ` · ${p.time}` : ""}
-          </span>
-        </div>
+          </div>
+          {extraSignals.length > 0 && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{extraSignals.slice(0,2).join(" · ")}</div>}
+        </button>
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-secondary/30" aria-label={expanded ? "Collapse client details" : "Expand client details"}>
+          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
       </div>
-      <Link to={p.href as any} params={p.params as any} search={p.search} className="shrink-0">
-        <Button size="sm" className="h-10 min-w-[84px] px-3 text-xs font-bold">{p.action}</Button>
-      </Link>
+
+      {expanded && (
+        <div className="ml-[50px] mt-2.5 rounded-xl border border-border bg-secondary/20 p-3">
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div><span className="text-muted-foreground">14-day compliance</span><div className="font-bold">{intel?.compliance_pct != null ? `${intel.compliance_pct}% (${intel.completed}/${intel.assigned})` : "—"}</div></div>
+            <div><span className="text-muted-foreground">Last workout</span><div className="font-bold">{intel?.last_completed_at ? formatDistanceToNow(parseISO(intel.last_completed_at), { addSuffix: true }) : "No recent workout"}</div></div>
+            {intel?.active_block_name && <div className="col-span-2"><span className="text-muted-foreground">Current block</span><div className="truncate font-bold">{intel.active_block_name}</div></div>}
+          </div>
+          {pain?.note_text && (
+            <div className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2 text-[11px]">
+              <div className="font-bold text-destructive">Pain / discomfort</div>
+              <div className="mt-0.5 line-clamp-3 text-foreground">{pain.note_text}</div>
+            </div>
+          )}
+          {messagePreview && (
+            <div className="mt-2 rounded-lg border border-border bg-card p-2 text-[11px]">
+              <div className="font-bold">Latest message</div>
+              <div className="mt-0.5 line-clamp-2 text-muted-foreground">{messagePreview}</div>
+            </div>
+          )}
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {p.bucket === "messages" && <Link to="/admin/messages" search={{ client: p.clientId } as any}><Button size="sm" className="h-8 text-[11px]"><MessageCircle className="mr-1 h-3.5 w-3.5" />Reply</Button></Link>}
+            {pain && <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={async () => { await setPainFlagStatus(pain.id, "reviewed"); }}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Reviewed</Button>}
+            {p.clientId && <Link to="/admin/messages" search={{ client: p.clientId } as any}><Button size="sm" variant="outline" className="h-8 text-[11px]"><MessageCircle className="mr-1 h-3.5 w-3.5" />Message</Button></Link>}
+            {p.clientId && <Link to="/admin/clients/$id" params={{ id: p.clientId } as any}><Button size="sm" variant="ghost" className="h-8 text-[11px]">Full profile</Button></Link>}
+          </div>
+        </div>
+      )}
     </li>
   );
 }
-
 /* ------------------------------------------------------------------ */
 
 function AdminDashboard() {
@@ -399,6 +435,12 @@ function AdminDashboard() {
     return acc;
   }, {});
   const filtered = filter === "all" ? priorities : priorities.filter((p) => p.bucket === filter);
+  const intelById = useMemo(() => new Map((intel as any[]).map((x: any) => [x.client_id, x])), [intel]);
+  const messageByClient = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const msg of recentMsgs as any[]) if (!m.has(msg.client_id)) m.set(msg.client_id, msg.body ?? "");
+    return m;
+  }, [recentMsgs]);
   const visible = showAll ? filtered : filtered.slice(0, 5);
 
   /* ---------- Client alerts (severity ordered) ---------- */
@@ -501,7 +543,7 @@ function AdminDashboard() {
           ) : (
             <>
               <ul className="divide-y divide-border">
-                {visible.map((p) => <PriorityRow key={p.id} p={p} />)}
+                {visible.map((p) => <PriorityRow key={p.id} p={p} intel={p.clientId ? intelById.get(p.clientId) : undefined} messagePreview={p.clientId ? messageByClient.get(p.clientId) : null} />)}
               </ul>
               {filtered.length > visible.length && (
                 <button
