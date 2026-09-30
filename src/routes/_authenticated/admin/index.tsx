@@ -216,6 +216,7 @@ function AdminDashboard() {
     staleTime: 15_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     refetchOnReconnect: true,
   } as const;
   const refreshNeedsYou = () => {
