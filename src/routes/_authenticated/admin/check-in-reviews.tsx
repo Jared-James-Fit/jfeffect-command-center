@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Send, MessageCircle, Loader2, Plus, ExternalLink, Trash2, RotateCcw } from "lucide-react";
+import { Send, MessageCircle, Loader2, Plus, ExternalLink, Trash2, RotateCcw, Trophy } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
   listAllSubmissionsForReview,
@@ -29,6 +29,7 @@ import {
 import { sendMessage } from "@/lib/messages";
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
 import { listAllManualReviews, deleteManualReview, reviewStatus, sourceLabel, resendManualReview } from "@/lib/manual-check-in-reviews";
+import { getClientIntel } from "@/lib/coach-intel";
 
 export const Route = createFileRoute("/_authenticated/admin/check-in-reviews")({
   component: CheckInReviewsRedirect,
@@ -272,6 +273,12 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
   const [sending, setSending] = useState(false);
 
   const { data: sub } = useQuery({ queryKey: ["nf-sub", submissionId], queryFn: () => getSubmission(submissionId) });
+  const { data: trainingIntel } = useQuery({
+    queryKey: ["checkin-training-wins", sub?.client_id],
+    enabled: !!sub?.client_id,
+    queryFn: () => getClientIntel(sub!.client_id),
+  });
+  const recentPrs = (trainingIntel as any)?.recent_prs ?? [];
   const { data: answers = [] } = useQuery({ queryKey: ["nf-sub-answers", submissionId], queryFn: () => listAnswers(submissionId) });
   const { data: files = [] } = useQuery({ queryKey: ["nf-sub-files", submissionId], queryFn: () => listFiles(submissionId) });
   // Prefer the form-version snapshot stamped on the submission so deleted/renamed
@@ -353,6 +360,21 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
           <Badge className={statusTone(sub.status) + " border"}>{statusLabel(sub.status)}</Badge>
         </div>
       </Card>
+
+      {recentPrs.length > 0 && (
+        <Card className="border-amber-500/25 bg-amber-500/5 p-3">
+          <div className="flex gap-2">
+            <Trophy className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div className="min-w-0">
+              <div className="text-xs font-bold">Training win to acknowledge</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                {recentPrs.length} recent PR{recentPrs.length === 1 ? "" : "s"}
+                {recentPrs[0]?.exercise ? ` · ${recentPrs[0].exercise}` : ""}. Consider naturally acknowledging this in your check-in reply.
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card className="border-border bg-card p-4">
         <div className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Reply → Messenger</div>
