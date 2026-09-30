@@ -19,7 +19,7 @@ function fmtWhen(iso: string) {
   return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export function UpcomingAppointmentsCard({ mode, limit = 5 }: { mode: "admin" | "portal"; limit?: number }) {
+export function UpcomingAppointmentsCard({ mode, limit = 5, hideWhenEmpty = false }: { mode: "admin" | "portal"; limit?: number; hideWhenEmpty?: boolean }) {
   const adminFn = useServerFn(listAppointments);
   const portalFn = useServerFn(listMyPortalAppointments);
   const { data, isLoading } = useQuery({
@@ -34,6 +34,7 @@ export function UpcomingAppointmentsCard({ mode, limit = 5 }: { mode: "admin" | 
     },
   });
   const rows = data ?? [];
+  if (!isLoading && hideWhenEmpty && rows.length === 0) return null;
 
   return (
     <Card className="border-border bg-card p-4 md:p-5">
