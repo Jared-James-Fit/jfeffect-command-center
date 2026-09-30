@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import { findCanonicalExerciseMatch, searchExercises, type SearchableExercise } from "@/lib/exercise-search";
 
 const lib: SearchableExercise[] = [
   { id: "1", name: "Incline Dumbbell Bench Press", muscle_group: "Chest", equipment: "Dumbbell", category: "Chest" },
@@ -50,5 +50,28 @@ describe("exercise search", () => {
 
   it("returns the full list for an empty query", () => {
     expect(searchExercises(lib, "  ").results).toHaveLength(lib.length);
+  });
+});
+
+
+describe("canonical exercise reuse", () => {
+  const canonical: SearchableExercise[] = [
+    { id: "comp-dl", name: "Competition Deadlift" },
+    { id: "curl", name: "Dumbbell Curl" },
+    { id: "t-raise", name: "Band Incline T Raise" },
+    { id: "y-raise", name: "Band Incline Y Raise" },
+  ];
+
+  it("strips programming classifications before matching", () => {
+    expect(findCanonicalExerciseMatch(canonical, "PRIMARY DEADLIFT — Competition Deadlift")?.id).toBe("comp-dl");
+  });
+
+  it("reuses singular/plural and DB/Dumbbell aliases", () => {
+    expect(findCanonicalExerciseMatch(canonical, "DB Curls")?.id).toBe("curl");
+  });
+
+  it("does not collapse genuinely different variations", () => {
+    expect(findCanonicalExerciseMatch(canonical, "Band Incline T Raise")?.id).toBe("t-raise");
+    expect(findCanonicalExerciseMatch(canonical, "Band Incline Y Raise")?.id).toBe("y-raise");
   });
 });
