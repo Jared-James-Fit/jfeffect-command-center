@@ -5,11 +5,11 @@ const dayView = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "u
 const recap = readFileSync("src/components/workout-submission-summary.tsx", "utf8");
 
 describe("workout mobile navigation and recap UX", () => {
-  it("keeps a mobile back-to-workouts control reachable while scrolling", () => {
-    expect(dayView).toContain("Back to workouts");
-    expect(dayView).toContain("bottom-nav-clearance");
-    expect(dayView).toContain("pointer-events-none fixed inset-x-0");
-    expect(dayView).toContain("navigate({ to: navigation.backTo })");
+  it("uses the current PageHeader back control instead of the legacy floating back pill", () => {
+    expect(dayView).toContain("backTo={navigation.backTo}");
+    expect(dayView).toContain('backLabel="Workouts"');
+    expect(dayView).not.toContain("pointer-events-none fixed inset-x-0");
+    expect(dayView).not.toContain("bottom-nav-clearance");
   });
 
   it("keeps completed detail state completed even when logging metadata is partial", () => {
