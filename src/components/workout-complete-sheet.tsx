@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { playUiSound } from "@/lib/ui-sounds";
+import { haptic } from "@/platform/haptics";
 
 const RATING_LABELS = ["Rough", "Below Avg", "Solid", "Great", "Excellent"];
 
@@ -61,6 +63,8 @@ export function WorkoutCompleteSheet({
       hit_target: null,
       client_notes: note.trim() ? note.trim() : null,
     });
+    playUiSound("complete", 0.055);
+    haptic("success");
   };
 
   return (
@@ -85,7 +89,7 @@ export function WorkoutCompleteSheet({
                 <button
                   key={n}
                   type="button"
-                  onClick={() => setRating(n)}
+                  onClick={() => { setRating(n); playUiSound("select"); haptic("light"); }}
                   aria-pressed={rating === n}
                   className={cn(
                     "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 transition-colors",
