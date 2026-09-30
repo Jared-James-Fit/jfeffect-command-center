@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/co
 import {
   Users, AlertTriangle, Calendar, DollarSign, Plus, Video, ShoppingCart,
   HardDrive, ChefHat, FileText, Megaphone, Zap, ClipboardList, ClipboardCheck,
-  MessageCircle, MoreHorizontal, CheckCircle2, Trophy, HeartPulse, Sparkles,
+  MessageCircle, MoreHorizontal, CheckCircle2, Trophy, Sparkles,
   ChevronDown, ChevronUp,
 } from "lucide-react";
 import type { ConversationState, Message } from "@/lib/messages";
@@ -23,7 +23,7 @@ const PriceCardPickerDialog = lazy(() =>
   import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
 );
 import { UserAvatar } from "@/components/user-avatar";
-import { getCoachIntel, filterIntel, LABEL_META, setPainFlagStatus } from "@/lib/coach-intel";
+import { getCoachIntel, setPainFlagStatus } from "@/lib/coach-intel";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
@@ -147,17 +147,14 @@ const FILTERS: { key: Bucket | "all"; label: string }[] = [
 function PriorityRow({ p, intel, messagePreview }: { p: Priority; intel?: any; messagePreview?: string | null }) {
   const [expanded, setExpanded] = useState(false);
   const pain = intel?.pain_flags?.find((f: any) => f.status === "new" || f.status === "followup");
-  const extraSignals = [
-    intel?.compliance_pct != null ? `${intel.compliance_pct}% · ${intel.completed}/${intel.assigned} workouts` : null,
-    intel?.last_completed_at ? `Last trained ${formatDistanceToNow(parseISO(intel.last_completed_at), { addSuffix: true })}` : null,
-    intel?.active_block_name ?? null,
-  ].filter(Boolean);
+  const missed = intel?.missed_days ?? [];
+  const isTrainingIssue = p.bucket === "urgent" || p.reason.toLowerCase().includes("workout") || p.reason.toLowerCase().includes("compliance");
 
   return (
     <li className="py-2.5">
-      <div className="flex items-center gap-3">
+      <button type="button" onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-3 text-left">
         <UserAvatar src={p.avatarUrl ?? undefined} name={p.name} size={38} />
-        <button type="button" onClick={() => setExpanded((v) => !v)} className="min-w-0 flex-1 text-left">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="truncate text-sm font-bold">{p.name}</span>
             {p.urgent && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />}
@@ -165,36 +162,41 @@ function PriorityRow({ p, intel, messagePreview }: { p: Priority; intel?: any; m
           <div className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
             {p.reason}{p.time ? ` · ${p.time}` : ""}
           </div>
-          {extraSignals.length > 0 && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{extraSignals.slice(0,2).join(" · ")}</div>}
-        </button>
-        <button type="button" onClick={() => setExpanded((v) => !v)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-secondary/30" aria-label={expanded ? "Collapse client details" : "Expand client details"}>
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
-      </div>
-
-      {expanded && (
-        <div className="ml-[50px] mt-2.5 rounded-xl border border-border bg-secondary/20 p-3">
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
-            <div><span className="text-muted-foreground">14-day compliance</span><div className="font-bold">{intel?.compliance_pct != null ? `${intel.compliance_pct}% (${intel.completed}/${intel.assigned})` : "—"}</div></div>
-            <div><span className="text-muted-foreground">Last workout</span><div className="font-bold">{intel?.last_completed_at ? formatDistanceToNow(parseISO(intel.last_completed_at), { addSuffix: true }) : "No recent workout"}</div></div>
-            {intel?.active_block_name && <div className="col-span-2"><span className="text-muted-foreground">Current block</span><div className="truncate font-bold">{intel.active_block_name}</div></div>}
-          </div>
-          {pain?.note_text && (
-            <div className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2 text-[11px]">
-              <div className="font-bold text-destructive">Pain / discomfort</div>
-              <div className="mt-0.5 line-clamp-3 text-foreground">{pain.note_text}</div>
+          {isTrainingIssue && intel?.last_completed_at && (
+            <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+              Last trained {formatDistanceToNow(parseISO(intel.last_completed_at), { addSuffix: true })}
             </div>
           )}
-          {messagePreview && (
-            <div className="mt-2 rounded-lg border border-border bg-card p-2 text-[11px]">
+        </div>
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-border bg-secondary/20">
+          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="ml-[50px] mt-2 rounded-xl border border-border bg-secondary/15 p-3">
+          {pain?.note_text && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-2 text-[11px]">
+              <div className="font-bold text-destructive">Pain / discomfort</div>
+              <div className="mt-0.5 text-foreground">{pain.note_text}</div>
+            </div>
+          )}
+          {p.bucket === "messages" && messagePreview && (
+            <div className="rounded-lg border border-border bg-card p-2 text-[11px]">
               <div className="font-bold">Latest message</div>
-              <div className="mt-0.5 line-clamp-2 text-muted-foreground">{messagePreview}</div>
+              <div className="mt-0.5 line-clamp-3 text-muted-foreground">{messagePreview}</div>
+            </div>
+          )}
+          {isTrainingIssue && !pain && (
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div><span className="text-muted-foreground">14-day compliance</span><div className="font-bold">{intel?.compliance_pct != null ? `${intel.compliance_pct}% (${intel.completed}/${intel.assigned})` : "—"}</div></div>
+              <div><span className="text-muted-foreground">Missed</span><div className="font-bold">{missed.length || 0}</div></div>
             </div>
           )}
           <div className="mt-2.5 flex flex-wrap gap-2">
             {p.bucket === "messages" && <Link to="/admin/messages" search={{ client: p.clientId } as any}><Button size="sm" className="h-8 text-[11px]"><MessageCircle className="mr-1 h-3.5 w-3.5" />Reply</Button></Link>}
             {pain && <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={async () => { await setPainFlagStatus(pain.id, "reviewed"); }}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Reviewed</Button>}
-            {p.clientId && <Link to="/admin/messages" search={{ client: p.clientId } as any}><Button size="sm" variant="outline" className="h-8 text-[11px]"><MessageCircle className="mr-1 h-3.5 w-3.5" />Message</Button></Link>}
+            {p.clientId && p.bucket !== "messages" && <Link to="/admin/messages" search={{ client: p.clientId } as any}><Button size="sm" variant="outline" className="h-8 text-[11px]"><MessageCircle className="mr-1 h-3.5 w-3.5" />Message</Button></Link>}
             {p.clientId && <Link to="/admin/clients/$id" params={{ id: p.clientId } as any}><Button size="sm" variant="ghost" className="h-8 text-[11px]">Full profile</Button></Link>}
           </div>
         </div>
@@ -431,11 +433,17 @@ function AdminDashboard() {
     return BUCKET_RANK[a.bucket] - BUCKET_RANK[b.bucket];
   });
 
-  const counts = priorities.reduce<Record<string, number>>((acc, p) => {
+  // Command center = one row per client. The first item is the highest-ranked
+  // actionable issue; lower-priority duplicate signals stay in deeper intel.
+  const dedupedPriorities = priorities.filter((p, index, all) =>
+    !p.clientId || all.findIndex((x) => x.clientId === p.clientId) === index
+  );
+
+  const counts = dedupedPriorities.reduce<Record<string, number>>((acc, p) => {
     acc[p.bucket] = (acc[p.bucket] ?? 0) + 1;
     return acc;
   }, {});
-  const filtered = filter === "all" ? priorities : priorities.filter((p) => p.bucket === filter);
+  const filtered = filter === "all" ? dedupedPriorities : dedupedPriorities.filter((p) => p.bucket === filter);
   const intelById = useMemo(() => new Map((intel as any[]).map((x: any) => [x.client_id, x])), [intel]);
   const messageByClient = useMemo(() => {
     const m = new Map<string, string>();
@@ -443,19 +451,6 @@ function AdminDashboard() {
     return m;
   }, [recentMsgs]);
   const visible = showAll ? filtered : filtered.slice(0, 5);
-
-  /* ---------- Client alerts (severity ordered) ---------- */
-  const alerts = filterIntel(intel as any[], "attention")
-    .map((c: any) => {
-      const painOpen = (c.pain_flags ?? []).filter((f: any) => f.status === "new" || f.status === "followup").length;
-      const severity = painOpen > 0 ? 0
-        : c.labels?.includes("inactive") ? 1
-        : c.labels?.includes("low_compliance") ? 2
-        : 3;
-      return { ...c, severity };
-    })
-    .sort((a: any, b: any) => a.severity - b.severity)
-    .slice(0, 6);
 
   const wins = (intel as any[])
     .filter((c) => (c.recent_prs?.length ?? 0) > 0)
@@ -484,7 +479,7 @@ function AdminDashboard() {
   if (offlineNoCache) return <DashboardOfflineEmpty />;
 
   const todayLabel = format(new Date(), "EEEE d MMM");
-  const openCount = priorities.length;
+  const openCount = dedupedPriorities.length;
 
   return (
     <>
@@ -512,7 +507,7 @@ function AdminDashboard() {
           {openCount > 0 && (
             <div className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {FILTERS.map((f) => {
-                const n = f.key === "all" ? priorities.length : counts[f.key] ?? 0;
+                const n = f.key === "all" ? dedupedPriorities.length : counts[f.key] ?? 0;
                 if (f.key !== "all" && n === 0) return null;
                 return (
                   <button
@@ -605,35 +600,6 @@ function AdminDashboard() {
 
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="min-w-0 space-y-4 lg:col-span-2">
-            {/* ---------------- CLIENT ALERTS ---------------- */}
-            <Card className="border-border bg-card p-4">
-              <SectionHeader title="Client alerts" icon={HeartPulse} viewAll={{ to: "/admin/training-intelligence" }} />
-              {alerts.length === 0 ? (
-                <EmptyRow>No training flags right now.</EmptyRow>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {alerts.map((c: any) => (
-                    <li key={c.client_id} className="flex items-start gap-3 py-2.5">
-                      <UserAvatar src={c.profile_picture_url ?? undefined} name={c.full_name ?? "Client"} size={32} />
-                      <div className="min-w-0 flex-1">
-                        <ClientNameLink clientId={c.client_id} className="block truncate text-sm font-semibold hover:underline">
-                          {c.full_name}
-                        </ClientNameLink>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {(c.labels ?? []).slice(0, 3).map((l: string) => {
-                            const meta = (LABEL_META as any)[l];
-                            if (!meta) return null;
-                            return <Badge key={l} variant="outline" className={`text-[10px] ${meta.cls}`}>{meta.label}</Badge>;
-                          })}
-                        </div>
-                      </div>
-                      <Link to="/admin/training-intelligence" className="shrink-0 text-[11px] font-semibold text-primary hover:underline">Open</Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
             {/* ---------------- WINS ---------------- */}
             {wins.length > 0 && (
               <Card className="border-border bg-card p-4">
