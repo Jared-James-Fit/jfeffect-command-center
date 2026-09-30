@@ -66,3 +66,9 @@ export function playUiSound(sound: UiSound, volume = 0.045): void {
     // Audio feedback is enhancement-only; never interrupt the user action.
   }
 }
+
+/** Call from a user gesture to prime WebAudio for later async success/error cues (iOS PWA). */
+export function unlockUiSounds(): void {
+  if (!uiSoundsEnabled()) return;
+  try { const ac = audioContext(); if (ac?.state === "suspended") void ac.resume(); } catch {}
+}
