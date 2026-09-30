@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useState, useMemo, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -11,7 +10,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/co
 import {
   Users, AlertTriangle, Calendar, DollarSign, Plus, Video, ShoppingCart,
   HardDrive, ChefHat, FileText, Megaphone, Zap, ClipboardList, ClipboardCheck,
-  MessageCircle, MoreHorizontal, CheckCircle2, Trophy, Sparkles,
+  MessageCircle, MoreHorizontal, CheckCircle2, Activity, Sparkles,
   ChevronDown, ChevronUp,
 } from "lucide-react";
 import type { ConversationState, Message } from "@/lib/messages";
@@ -340,9 +339,6 @@ function AdminDashboard() {
 
   /* ---------- Overview numbers ---------- */
   const active = clients.length;
-  const overdue = clients.filter((c) => c.status === "Payment Overdue" || c.payment_status === "Overdue").length;
-  const needsAttention = clients.filter((c) => c.status === "Needs Attention" || c.status === "Check-In Overdue").length;
-  const reviewsWaiting = (checkInSubmissions as any[]).length + liftNeedReview.length;
 
   /* ---------- Unified priority feed ---------- */
   const priorities: Priority[] = [];
@@ -478,10 +474,16 @@ function AdminDashboard() {
   }, [recentMsgs]);
   const visible = showAll ? filtered : filtered.slice(0, 3);
 
-  const wins = (intel as any[])
-    .filter((c) => (c.recent_prs?.length ?? 0) > 0)
-    .sort((a, b) => (b.recent_prs?.length ?? 0) - (a.recent_prs?.length ?? 0))
-    .slice(0, 3);
+  const activeIntel = (intel as any[]).filter((x: any) => clientById.has(x.client_id));
+  const pulseAtRisk = activeIntel.filter((x: any) =>
+    (x.pain_flags ?? []).some((p: any) => p.status === "new" || p.status === "followup") ||
+    (x.compliance_pct != null && x.assigned > 0 && x.compliance_pct < 60) ||
+    (x.labels ?? []).includes("inactive")
+  );
+  const pulseWatch = activeIntel.filter((x: any) =>
+    !pulseAtRisk.includes(x) && x.compliance_pct != null && x.assigned > 0 && x.compliance_pct < 80
+  );
+  const pulseOnTrack = Math.max(0, active - pulseAtRisk.length - pulseWatch.length);
 
   /* ---------- Quick actions ---------- */
   const primaryActions = [
@@ -614,51 +616,48 @@ function AdminDashboard() {
           )}
         </Card>
 
-        {/* ---------------- OVERVIEW (compact) ---------------- */}
-        <Card className="border-border bg-card p-3">
-          <div className="grid grid-cols-4 divide-x divide-border">
-            <OverviewStat label="Clients" value={active} to="/admin/clients" icon={Users} />
-            <OverviewStat label="Needs you" value={openCount} to="/admin" icon={Zap} tone={openCount > 0 ? "primary" : undefined} />
-            <OverviewStat label="Reviews" value={reviewsWaiting} to="/admin/check-in-reviews" icon={ClipboardCheck} tone={reviewsWaiting > 0 ? "primary" : undefined} />
-            <OverviewStat label="Overdue" value={overdue} to="/admin/payments" icon={DollarSign} tone={overdue > 0 ? "warn" : undefined} />
+        {/* ---------------- CLIENT PULSE ---------------- */}
+        <Card className="border-border bg-card p-4">
+          <SectionHeader title="Client pulse" icon={Activity} viewAll={{ to: "/admin/training-intelligence", label: "Training intel" }} />
+          <div className="grid grid-cols-3 divide-x divide-border rounded-lg bg-secondary/20 py-2.5">
+            <div className="text-center">
+              <div className="text-xl font-black text-emerald-600">{pulseOnTrack}</div>
+              <div className="text-[10px] font-semibold text-muted-foreground">On track</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xl font-black text-amber-600">{pulseWatch.length}</div>
+              <div className="text-[10px] font-semibold text-muted-foreground">Watch</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xl font-black text-destructive">{pulseAtRisk.length}</div>
+              <div className="text-[10px] font-semibold text-muted-foreground">Needs attention</div>
+            </div>
           </div>
+          {(pulseAtRisk.length > 0 || pulseWatch.length > 0) && (
+            <ul className="mt-2 divide-y divide-border">
+              {[...pulseAtRisk, ...pulseWatch].slice(0, 3).map((x: any) => {
+                const pain = (x.pain_flags ?? []).some((p: any) => p.status === "new" || p.status === "followup");
+                const reason = pain ? "Pain/discomfort reported" :
+                  (x.labels ?? []).includes("inactive") ? "Inactive" :
+                  x.compliance_pct != null ? `${x.compliance_pct}% 14-day compliance` : "Needs review";
+                return (
+                  <li key={x.client_id} className="flex items-center gap-2.5 py-2">
+                    <UserAvatar src={x.profile_picture_url ?? undefined} name={x.full_name ?? "Client"} size={30} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-bold">{x.full_name}</div>
+                      <div className="truncate text-[10px] text-muted-foreground">{reason}</div>
+                    </div>
+                    <Link to="/admin/training-intelligence" className="text-[10px] font-semibold text-primary">Review</Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </Card>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="min-w-0 space-y-4 lg:col-span-2">
-            {/* ---------------- WINS ---------------- */}
-            {wins.length > 0 && (
-              <Card className="border-border bg-card p-4">
-                <SectionHeader title="Wins to celebrate" icon={Trophy} />
-                <ul className="divide-y divide-border">
-                  {wins.map((c: any) => (
-                    <li key={`win-${c.client_id}`} className="flex items-center gap-3 py-2.5">
-                      <UserAvatar src={c.profile_picture_url ?? undefined} name={c.full_name ?? "Client"} size={32} />
-                      <div className="min-w-0 flex-1">
-                        <ClientNameLink clientId={c.client_id} className="block truncate text-sm font-semibold hover:underline">
-                          {c.full_name}
-                        </ClientNameLink>
-                        <div className="truncate text-[11px] text-muted-foreground">
-                          {c.recent_prs.length} recent PR{c.recent_prs.length === 1 ? "" : "s"}
-                          {c.recent_prs[0]?.exercise ? ` · ${c.recent_prs[0].exercise}` : ""}
-                        </div>
-                      </div>
-                      <Link to="/admin/messages" search={{ client: c.client_id } as any} className="shrink-0">
-                        <Button size="sm" variant="outline" className="h-9 text-xs font-bold">Send praise</Button>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            )}
-          </div>
-
-          {/* ---------------- UPCOMING ---------------- */}
-          <div className="min-w-0 space-y-4">
-            <UpcomingAppointmentsCard mode="admin" />
-            <UpcomingBirthdaysWidget windowDays={7} />
-          </div>
-        </div>
+        {/* Empty schedule sections collapse instead of consuming dashboard space. */}
+        <UpcomingAppointmentsCard mode="admin" limit={3} hideWhenEmpty />
+        <UpcomingBirthdaysWidget windowDays={7} />
       </div>
 
       {sellTo ? (
@@ -674,15 +673,3 @@ function AdminDashboard() {
   );
 }
 
-function OverviewStat({ label, value, to, icon: Icon, tone }: { label: string; value: number; to: string; icon: any; tone?: "warn" | "primary" }) {
-  return (
-    <Link to={to as any} className="flex flex-col items-center gap-0.5 px-1 py-1 text-center transition active:scale-[0.97]">
-      <Icon className={cn(
-        "h-3.5 w-3.5",
-        tone === "warn" ? "text-warning" : tone === "primary" ? "text-primary" : "text-muted-foreground",
-      )} />
-      <div className="text-xl font-black leading-none tracking-tight">{value}</div>
-      <div className="text-[10px] font-semibold text-muted-foreground">{label}</div>
-    </Link>
-  );
-}
