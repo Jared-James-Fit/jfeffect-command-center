@@ -160,8 +160,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
             <div className="mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-primary">Workout complete</div>
-            <DialogHeader className="mx-auto mt-1 w-full space-y-0 text-center sm:text-center">
-              <DialogTitle className="text-2xl font-black leading-tight tracking-tight">{headline}</DialogTitle>
+            <DialogHeader className="mx-auto mt-1 flex w-full flex-col items-center space-y-0 text-center sm:text-center">
+              <DialogTitle className="block w-full text-center text-2xl font-black leading-tight tracking-tight">{headline}</DialogTitle>
               <DialogDescription className="mt-1 text-[11px]">
                 {workoutTitle ?? "Workout"}{dateLabel ? ` · ${dateLabel}` : ""}
               </DialogDescription>
