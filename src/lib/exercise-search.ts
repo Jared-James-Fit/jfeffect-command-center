@@ -53,15 +53,33 @@ export function canonicalExerciseIdentity(input: string | null | undefined): str
   return normalizeText(withoutRole || raw);
 }
 
+function canonicalExerciseKey(input: string | null | undefined): string {
+  const identity = canonicalExerciseIdentity(input);
+  if (!identity) return "";
+  return identity
+    .split(" ")
+    .map((token) => {
+      const normalized = token === "db" || token === "dbs" || token === "dumbell" ? "dumbbell"
+        : token === "bb" ? "barbell"
+        : token;
+      return singularizeSearchToken(normalized);
+    })
+    .join(" ");
+}
+
 export function findCanonicalExerciseMatch<T extends SearchableExercise>(
   list: readonly T[],
   requestedName: string,
 ): T | null {
   const identity = canonicalExerciseIdentity(requestedName);
-  if (!identity) return null;
-  const matches = list.filter((exercise) => !exercise.archived && canonicalExerciseIdentity(exercise.name) === identity);
+  const key = canonicalExerciseKey(requestedName);
+  if (!key) return null;
+  const matches = list.filter(
+    (exercise) => !exercise.archived && canonicalExerciseKey(exercise.name) === key,
+  );
   if (matches.length === 0) return null;
-  // Prefer the established, concise canonical name over a role-prefixed duplicate.
+  // Prefer the established, concise canonical name over role-prefixed,
+  // punctuation-only, singular/plural, or shorthand duplicates.
   return [...matches].sort((a, b) => {
     const aExact = normalizeText(a.name) === identity ? 0 : 1;
     const bExact = normalizeText(b.name) === identity ? 0 : 1;
