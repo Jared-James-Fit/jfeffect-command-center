@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { jobStore } from "@/lib/progress-jobs";
-import { playUiSound } from "@/lib/ui-sounds";
+import { playUiSound, unlockUiSounds } from "@/lib/ui-sounds";
 import { haptic } from "@/platform/haptics";
 
 /**
@@ -106,6 +106,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
     }, [resetMs]);
 
     const handleClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
+      unlockUiSounds();
       if (!onAction) {
         // Fallback: behave like a regular Button when only onClick is provided.
         if (onClick) onClick(event);
