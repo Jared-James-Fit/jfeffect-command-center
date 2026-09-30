@@ -43,6 +43,33 @@ export function normalizeText(input: string | null | undefined): string {
     .trim();
 }
 
+/** Programming role labels are prescription metadata, not exercise identity. */
+export function canonicalExerciseIdentity(input: string | null | undefined): string {
+  const raw = String(input ?? "").trim();
+  const withoutRole = raw.replace(
+    /^\s*(?:primary|secondary|tertiary|quaternary|quinary|limiter|accessory|isolation|gpp)(?:\s+(?:squat|bench(?:\s+press)?|deadlift))?\s*(?:[-—–:|]+)\s*/i,
+    "",
+  );
+  return normalizeText(withoutRole || raw);
+}
+
+export function findCanonicalExerciseMatch<T extends SearchableExercise>(
+  list: readonly T[],
+  requestedName: string,
+): T | null {
+  const identity = canonicalExerciseIdentity(requestedName);
+  if (!identity) return null;
+  const matches = list.filter((exercise) => !exercise.archived && canonicalExerciseIdentity(exercise.name) === identity);
+  if (matches.length === 0) return null;
+  // Prefer the established, concise canonical name over a role-prefixed duplicate.
+  return [...matches].sort((a, b) => {
+    const aExact = normalizeText(a.name) === identity ? 0 : 1;
+    const bExact = normalizeText(b.name) === identity ? 0 : 1;
+    if (aExact !== bExact) return aExact - bExact;
+    return a.name.length - b.name.length;
+  })[0];
+}
+
 function words(input: string | null | undefined): string[] {
   const n = normalizeText(input);
   return n ? n.split(" ") : [];
