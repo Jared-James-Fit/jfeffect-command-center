@@ -36,6 +36,9 @@ import { DeferRender } from "@/components/defer-render";
 import { logPerf } from "@/lib/perf-timing";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { GoalsSetupFlow } from "@/components/client-goals/GoalsSetupFlow";
+import { Target } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -146,6 +149,16 @@ function PortalHome() {
     },
   });
 
+  const [goalsSetupPromptOpen, setGoalsSetupPromptOpen] = useState(false);
+  const [goalsSetupPromptDismissed, setGoalsSetupPromptDismissed] = useState(false);
+
+  // Prompt incomplete clients once per app load. Closing only dismisses this
+  // session; it never marks Goals & Setup complete, so it returns next load/login.
+  useEffect(() => {
+    if (!client?.id || goalsSetup === undefined || goalsSetupPromptDismissed) return;
+    if (!isGoalsSetupComplete(goalsSetup ?? null)) setGoalsSetupPromptOpen(true);
+  }, [client?.id, goalsSetup, goalsSetupPromptDismissed]);
+
   // Coach response surfaces — power "Today / This Week" cards so clients see
   // when their coach has replied to anything (messages, lift reviews, check-ins).
   const { data: coachUpdates } = useQuery({
@@ -243,6 +256,28 @@ function PortalHome() {
     <>
       {/* Background gates / popups — keep wired exactly as before. */}
       {client?.id && <ClientActionRequestModal clientId={client.id} />}
+      {client?.id && (
+        <Dialog
+          open={goalsSetupPromptOpen && !isGoalsSetupComplete(goalsSetup ?? null)}
+          onOpenChange={(open) => {
+            setGoalsSetupPromptOpen(open);
+            if (!open && !isGoalsSetupComplete(goalsSetup ?? null)) setGoalsSetupPromptDismissed(true);
+          }}
+        >
+          <DialogContent className="max-h-[90dvh] w-[calc(100%-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl p-4 sm:p-6">
+            <DialogHeader className="text-left">
+              <div className="mb-2 grid h-10 w-10 place-items-center rounded-full bg-primary/15 text-primary">
+                <Target className="h-5 w-5" />
+              </div>
+              <DialogTitle>Finish your Goals & Setup</DialogTitle>
+              <DialogDescription>
+                Complete the remaining coaching details so your program, nutrition and recommendations can be tailored to you. You can close this for now, but it will remind you again next time you load the app until setup is complete.
+              </DialogDescription>
+            </DialogHeader>
+            <GoalsSetupFlow clientId={client.id} />
+          </DialogContent>
+        </Dialog>
+      )}
       {client?.id && portalUserId && <MissingBodyweightPrompt userId={portalUserId} />}
       {client?.id && (
         <HomeScreenSetupCard
