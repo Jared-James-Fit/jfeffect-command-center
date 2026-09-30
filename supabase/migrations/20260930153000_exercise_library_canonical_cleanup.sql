@@ -1,6 +1,8 @@
--- Canonical exercise cleanup: remap-before-delete, history preserving.
--- Scope is intentionally conservative: only role-prefixed records whose stripped
--- name exactly matches an existing active canonical exercise are auto-merged.
+-- Canonical exercise cleanup: remap first, delete only confirmed identity duplicates.
+-- Programming roles belong to prescriptions, never Exercise Library identity.
+-- Intentionally conservative: punctuation/case and role-prefix normalization only.
+-- Singular/plural and semantic aliases are resolved in the app search/reuse path,
+-- where distinct variations can be kept separate.
 
 CREATE OR REPLACE FUNCTION public.exercise_identity_name(value text)
 RETURNS text
@@ -8,11 +10,12 @@ LANGUAGE sql IMMUTABLE
 SET search_path = public
 AS $$
   SELECT trim(regexp_replace(
-    lower(regexp_replace(
-      regexp_replace(coalesce(value, ''),
+    regexp_replace(
+      lower(regexp_replace(
+        coalesce(value, ''),
         '^\\s*(primary|secondary|tertiary|quaternary|quinary|limiter|accessory|isolation|gpp)(\\s+(squat|bench(\\s+press)?|deadlift))?\\s*[-—–:|]+\\s*',
-        '', 'i'),
-      '[^a-z0-9]+', ' ', 'g')),
+        '', 'i')),
+      '[^a-z0-9]+', ' ', 'g'),
     '\\s+', ' ', 'g'));
 $$;
 
@@ -22,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.exercise_dedupe_audit (
   canonical_id uuid NOT NULL,
   duplicate_name text NOT NULL,
   canonical_name text NOT NULL,
+  reason text NOT NULL DEFAULT 'confirmed duplicate',
   remapped_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -31,50 +35,66 @@ DECLARE
   remaining bigint;
 BEGIN
   FOR d IN
-    SELECT dup.id AS duplicate_id, can.id AS canonical_id,
-           dup.name AS duplicate_name, can.name AS canonical_name
+    SELECT dup.id duplicate_id, can.id canonical_id,
+           dup.name duplicate_name, can.name canonical_name
     FROM public.exercises dup
     JOIN public.exercises can
       ON can.id <> dup.id
-     AND coalesce(can.archived, false) = false
-     AND public.exercise_identity_name(can.name) = public.exercise_identity_name(dup.name)
-     AND lower(can.name) = public.exercise_identity_name(can.name)
-    WHERE coalesce(dup.archived, false) = false
+     AND coalesce(can.archived,false)=false
+     AND public.exercise_identity_name(can.name)=public.exercise_identity_name(dup.name)
+     AND lower(can.name)=public.exercise_identity_name(can.name)
+    WHERE coalesce(dup.archived,false)=false
       AND dup.name ~* '^\\s*(primary|secondary|tertiary|quaternary|quinary|limiter|accessory|isolation|gpp)(\\s+(squat|bench(\\s+press)?|deadlift))?\\s*[-—–:|]+'
   LOOP
-    -- Remap every known direct FK. Program-row IDs stay unchanged, so
-    -- pl_row_results/completed-set history keeps the exact historical prescription.
-    UPDATE public.pl_exercise_rows SET exercise_id = d.canonical_id WHERE exercise_id = d.duplicate_id;
-    UPDATE public.member_set_logs SET exercise_id = d.canonical_id WHERE exercise_id = d.duplicate_id;
-    UPDATE public.pl_client_maxes SET exercise_id = d.canonical_id WHERE exercise_id = d.duplicate_id;
-    UPDATE public.pl_exercise_notes SET exercise_id = d.canonical_id WHERE exercise_id = d.duplicate_id;
-    UPDATE public.member_exercise_notes SET exercise_id = d.canonical_id WHERE exercise_id = d.duplicate_id;
-    UPDATE public.member_exercise_swaps SET exercise_id = d.canonical_id WHERE exercise_id = d.duplicate_id;
-    UPDATE public.warmup_assignments SET exercise_id = d.canonical_id WHERE exercise_id = d.duplicate_id;
+    UPDATE public.pl_exercise_rows SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
+    UPDATE public.member_set_logs SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
+    UPDATE public.pl_client_maxes SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
+    UPDATE public.pl_client_maxes SET source_exercise_id=d.canonical_id WHERE source_exercise_id=d.duplicate_id;
+    UPDATE public.pl_exercise_notes SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
+    UPDATE public.member_exercise_notes SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
+    UPDATE public.member_exercise_swaps SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
+    UPDATE public.warmup_assignments SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
 
-    -- Fail closed: delete only after all known required references are zero.
+    DELETE FROM public.client_exercise_unit_prefs p
+      WHERE p.exercise_id=d.duplicate_id AND EXISTS (
+        SELECT 1 FROM public.client_exercise_unit_prefs c
+        WHERE c.client_id=p.client_id AND c.exercise_id=d.canonical_id);
+    UPDATE public.client_exercise_unit_prefs SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
+
+    DELETE FROM public.member_exercise_unit_prefs p
+      WHERE p.exercise_id=d.duplicate_id AND EXISTS (
+        SELECT 1 FROM public.member_exercise_unit_prefs c
+        WHERE c.user_id=p.user_id AND c.exercise_id=d.canonical_id);
+    UPDATE public.member_exercise_unit_prefs SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
+
+    DELETE FROM public.pl_exercise_favorites p
+      WHERE p.exercise_id=d.duplicate_id AND EXISTS (
+        SELECT 1 FROM public.pl_exercise_favorites c
+        WHERE c.user_id=p.user_id AND c.exercise_id=d.canonical_id);
+    UPDATE public.pl_exercise_favorites SET exercise_id=d.canonical_id WHERE exercise_id=d.duplicate_id;
+
     SELECT
       (SELECT count(*) FROM public.pl_exercise_rows WHERE exercise_id=d.duplicate_id) +
       (SELECT count(*) FROM public.member_set_logs WHERE exercise_id=d.duplicate_id) +
-      (SELECT count(*) FROM public.pl_client_maxes WHERE exercise_id=d.duplicate_id) +
+      (SELECT count(*) FROM public.pl_client_maxes WHERE exercise_id=d.duplicate_id OR source_exercise_id=d.duplicate_id) +
       (SELECT count(*) FROM public.pl_exercise_notes WHERE exercise_id=d.duplicate_id) +
       (SELECT count(*) FROM public.member_exercise_notes WHERE exercise_id=d.duplicate_id) +
       (SELECT count(*) FROM public.member_exercise_swaps WHERE exercise_id=d.duplicate_id) +
+      (SELECT count(*) FROM public.client_exercise_unit_prefs WHERE exercise_id=d.duplicate_id) +
+      (SELECT count(*) FROM public.member_exercise_unit_prefs WHERE exercise_id=d.duplicate_id) +
+      (SELECT count(*) FROM public.pl_exercise_favorites WHERE exercise_id=d.duplicate_id) +
       (SELECT count(*) FROM public.warmup_assignments WHERE exercise_id=d.duplicate_id)
     INTO remaining;
 
-    IF remaining = 0 THEN
-      INSERT INTO public.exercise_dedupe_audit(duplicate_id,canonical_id,duplicate_name,canonical_name)
-      VALUES(d.duplicate_id,d.canonical_id,d.duplicate_name,d.canonical_name);
+    IF remaining=0 THEN
+      INSERT INTO public.exercise_dedupe_audit(duplicate_id,canonical_id,duplicate_name,canonical_name,reason)
+      VALUES(d.duplicate_id,d.canonical_id,d.duplicate_name,d.canonical_name,'role-prefixed exact identity duplicate');
       DELETE FROM public.exercises WHERE id=d.duplicate_id;
     END IF;
   END LOOP;
 END
 $cleanup$;
 
--- Database backstop. App/AI builders should reuse the existing ID; this guard
--- prevents a missed code path from silently recreating the same exercise under
--- a programming-role prefix.
 CREATE OR REPLACE FUNCTION public.prevent_duplicate_exercise_identity()
 RETURNS trigger
 LANGUAGE plpgsql
