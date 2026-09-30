@@ -12,6 +12,7 @@ import {
   Users, AlertTriangle, Calendar, DollarSign, Plus, Video, ShoppingCart,
   HardDrive, ChefHat, FileText, Megaphone, Zap, ClipboardList, ClipboardCheck,
   MessageCircle, MoreHorizontal, CheckCircle2, Trophy, HeartPulse, Sparkles,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
 import type { ConversationState, Message } from "@/lib/messages";
 import { listLiftVideos } from "@/lib/lift-videos";
