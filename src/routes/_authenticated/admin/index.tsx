@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useState, useMemo, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -144,7 +144,7 @@ const FILTERS: { key: Bucket | "all"; label: string }[] = [
   { key: "onboarding", label: "Onboarding" },
 ];
 
-function PriorityRow({ p, intel, messagePreview }: { p: Priority; intel?: any; messagePreview?: string | null }) {
+function PriorityRow({ p, intel, messagePreview, onResolved }: { p: Priority; intel?: any; messagePreview?: string | null; onResolved?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const pain = intel?.pain_flags?.find((f: any) => f.status === "new" || f.status === "followup");
   const missed = intel?.missed_days ?? [];
@@ -195,7 +195,7 @@ function PriorityRow({ p, intel, messagePreview }: { p: Priority; intel?: any; m
           )}
           <div className="mt-2.5 flex flex-wrap gap-2">
             {p.bucket === "messages" && <Link to="/admin/messages" search={{ client: p.clientId } as any}><Button size="sm" className="h-8 text-[11px]"><MessageCircle className="mr-1 h-3.5 w-3.5" />Reply</Button></Link>}
-            {pain && <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={async () => { await setPainFlagStatus(pain.id, "reviewed"); }}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Reviewed</Button>}
+            {pain && <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={async () => { await setPainFlagStatus(pain.id, "reviewed"); onResolved?.(); }}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Reviewed</Button>}
             {p.clientId && p.bucket !== "messages" && <Link to="/admin/messages" search={{ client: p.clientId } as any}><Button size="sm" variant="outline" className="h-8 text-[11px]"><MessageCircle className="mr-1 h-3.5 w-3.5" />Message</Button></Link>}
             {p.clientId && <Link to="/admin/clients/$id" params={{ id: p.clientId } as any}><Button size="sm" variant="ghost" className="h-8 text-[11px]">Full profile</Button></Link>}
           </div>
@@ -211,6 +211,24 @@ function AdminDashboard() {
   const [filter, setFilter] = useState<Bucket | "all">("all");
   const [showAll, setShowAll] = useState(false);
   const offlineNoCache = useIsOfflineWithoutCache();
+  const queryClient = useQueryClient();
+  const liveQueueQuery = {
+    staleTime: 15_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  } as const;
+  const refreshNeedsYou = () => {
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["coach-intel"] }),
+      queryClient.invalidateQueries({ queryKey: ["conversation-states"] }),
+      queryClient.invalidateQueries({ queryKey: ["recent-client-messages-dash"] }),
+      queryClient.invalidateQueries({ queryKey: ["dashboard-checkin-submissions"] }),
+      queryClient.invalidateQueries({ queryKey: ["lift-videos-admin"] }),
+      queryClient.invalidateQueries({ queryKey: ["dashboard-action-requests"] }),
+      queryClient.invalidateQueries({ queryKey: ["payments-needing-attention"] }),
+    ]);
+  };
 
   const { data: clients = [] } = useQuery({
     queryKey: ["admin-clients"],
@@ -232,6 +250,7 @@ function AdminDashboard() {
       const { data } = await (supabase.from("conversation_state") as any).select("*");
       return (data ?? []) as ConversationState[];
     },
+    ...liveQueueQuery,
   });
 
   const { data: recentMsgs = [] } = useQuery({
@@ -243,11 +262,13 @@ function AdminDashboard() {
         .order("created_at", { ascending: false }).limit(60);
       return (data ?? []) as Message[];
     },
+    ...liveQueueQuery,
   });
 
   const { data: liftVideos = [] } = useQuery({
     queryKey: ["lift-videos-admin"],
     queryFn: () => listLiftVideos(),
+    ...liveQueueQuery,
   });
 
   const { data: paymentsAttention = [] } = useQuery({
@@ -257,6 +278,7 @@ function AdminDashboard() {
       .select("id, offer_name, payment_status, full_payable_amount, currency, purchased_at, client_id, clients(id, full_name)")
       .in("payment_status", ["Pending", "Pending Payment", "Overdue", "Failed", "Manual Payment Needed", "Partially Paid"])
       .order("purchased_at", { ascending: false }).limit(20)).data ?? [],
+    ...liveQueueQuery,
   });
 
   const { data: actionRequests = [] } = useQuery({
@@ -265,6 +287,7 @@ function AdminDashboard() {
       .from("client_action_requests")
       .select("id, client_id, completed_at, clients(id, full_name)")
       .is("completed_at", null).limit(50)).data ?? [],
+    ...liveQueueQuery,
   });
 
   const { data: checkInSubmissions = [] } = useQuery({
@@ -272,11 +295,13 @@ function AdminDashboard() {
     queryFn: async () => (await (supabase.from("nf_submissions") as any)
       .select("id, client_id, submitted_at, reviewed_at")
       .not("submitted_at", "is", null).is("reviewed_at", null).limit(50)).data ?? [],
+    ...liveQueueQuery,
   });
 
   const { data: intel = [] } = useQuery({
     queryKey: ["coach-intel"],
     queryFn: () => getCoachIntel(),
+    ...liveQueueQuery,
   });
 
   const liftNeedReview = liftVideos.filter((v) => !v.reviewed_at && v.status !== "Archived");
@@ -450,7 +475,7 @@ function AdminDashboard() {
     for (const msg of recentMsgs as any[]) if (!m.has(msg.client_id)) m.set(msg.client_id, msg.body ?? "");
     return m;
   }, [recentMsgs]);
-  const visible = showAll ? filtered : filtered.slice(0, 5);
+  const visible = showAll ? filtered : filtered.slice(0, 3);
 
   const wins = (intel as any[])
     .filter((c) => (c.recent_prs?.length ?? 0) > 0)
@@ -495,6 +520,31 @@ function AdminDashboard() {
         <DriveSetupBanner />
         <NotificationSetupPrompt problemsOnly />
 
+        {/* ---------------- QUICK ACTIONS ---------------- */}
+        <div className="grid grid-cols-5 gap-2">
+          {primaryActions.map((a) => (
+            <Link key={a.label} to={a.to as any} className="block">
+              <div className="flex h-full min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
+                <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/15 text-primary">
+                  <a.icon className="h-4 w-4" />
+                </div>
+                <div className="text-[11px] font-bold leading-tight">{a.label}</div>
+              </div>
+            </Link>
+          ))}
+          <ActionsSheet
+            actions={moreActions}
+            trigger={
+              <button type="button" className="flex h-full min-h-[72px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
+                <div className="grid h-9 w-9 place-items-center rounded-md bg-secondary text-foreground">
+                  <MoreHorizontal className="h-4 w-4" />
+                </div>
+                <div className="text-[11px] font-bold leading-tight">More</div>
+              </button>
+            }
+          />
+        </div>
+
         {/* ---------------- TODAY ---------------- */}
         <Card className="border-border bg-card p-4">
           <div className="mb-2.5 flex items-center justify-between gap-2">
@@ -532,14 +582,14 @@ function AdminDashboard() {
             <div className="flex items-center justify-between gap-2 rounded-md bg-emerald-500/5 px-3 py-2.5">
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                <span className="font-semibold">Nothing waiting here.</span>
+                <span className="font-semibold">{openCount === 0 ? "You’re caught up." : "Nothing in this filter."}</span>
               </div>
-              <Link to="/admin/calendar" className="text-[11px] font-semibold text-primary hover:underline">View schedule →</Link>
+              <span className="text-[11px] text-muted-foreground">{openCount === 0 ? "New items appear here automatically." : "Try All."}</span>
             </div>
           ) : (
             <>
               <ul className="divide-y divide-border">
-                {visible.map((p) => <PriorityRow key={p.id} p={p} intel={p.clientId ? intelById.get(p.clientId) : undefined} messagePreview={p.clientId ? messageByClient.get(p.clientId) : null} />)}
+                {visible.map((p) => <PriorityRow key={p.id} p={p} intel={p.clientId ? intelById.get(p.clientId) : undefined} messagePreview={p.clientId ? messageByClient.get(p.clientId) : null} onResolved={refreshNeedsYou} />)}
               </ul>
               {filtered.length > visible.length && (
                 <button
@@ -547,10 +597,10 @@ function AdminDashboard() {
                   onClick={() => setShowAll(true)}
                   className="mt-2 w-full rounded-md border border-border py-2 text-[11px] font-semibold text-primary hover:bg-secondary/50"
                 >
-                  Show all {filtered.length}
+                  Show remaining {filtered.length - visible.length}
                 </button>
               )}
-              {showAll && filtered.length > 5 && (
+              {showAll && filtered.length > 3 && (
                 <button
                   type="button"
                   onClick={() => setShowAll(false)}
@@ -563,36 +613,11 @@ function AdminDashboard() {
           )}
         </Card>
 
-        {/* ---------------- QUICK ACTIONS ---------------- */}
-        <div className="grid grid-cols-5 gap-2">
-          {primaryActions.map((a) => (
-            <Link key={a.label} to={a.to as any} className="block">
-              <div className="flex h-full min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
-                <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/15 text-primary">
-                  <a.icon className="h-4 w-4" />
-                </div>
-                <div className="text-[11px] font-bold leading-tight">{a.label}</div>
-              </div>
-            </Link>
-          ))}
-          <ActionsSheet
-            actions={moreActions}
-            trigger={
-              <button type="button" className="flex h-full min-h-[72px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
-                <div className="grid h-9 w-9 place-items-center rounded-md bg-secondary text-foreground">
-                  <MoreHorizontal className="h-4 w-4" />
-                </div>
-                <div className="text-[11px] font-bold leading-tight">More</div>
-              </button>
-            }
-          />
-        </div>
-
         {/* ---------------- OVERVIEW (compact) ---------------- */}
         <Card className="border-border bg-card p-3">
           <div className="grid grid-cols-4 divide-x divide-border">
             <OverviewStat label="Clients" value={active} to="/admin/clients" icon={Users} />
-            <OverviewStat label="Attention" value={needsAttention} to="/admin/clients" icon={AlertTriangle} tone={needsAttention > 0 ? "warn" : undefined} />
+            <OverviewStat label="Needs you" value={openCount} to="/admin" icon={Zap} tone={openCount > 0 ? "primary" : undefined} />
             <OverviewStat label="Reviews" value={reviewsWaiting} to="/admin/check-in-reviews" icon={ClipboardCheck} tone={reviewsWaiting > 0 ? "primary" : undefined} />
             <OverviewStat label="Overdue" value={overdue} to="/admin/payments" icon={DollarSign} tone={overdue > 0 ? "warn" : undefined} />
           </div>
