@@ -4,6 +4,7 @@ import { useIsCoarsePointer } from "@/hooks/use-touch-viewport";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { findCanonicalExerciseMatch } from "@/lib/exercise-search";
 import {
   invalidateExerciseLibrary,
   upsertExerciseInLibraryCaches,
@@ -103,6 +104,25 @@ export function ExerciseQuickCreateForm({
     if (commonMistakes.trim()) payload.common_mistakes = commonMistakes.trim();
 
     try {
+      // Reuse the canonical library record before creating anything new.
+      // Programming labels (PRIMARY/SECONDARY/etc.) are prescription metadata,
+      // never part of exercise identity.
+      const { data: existingRows, error: lookupError } = await supabase
+        .from("exercises")
+        .select("id,name,archived")
+        .eq("archived", false);
+      if (lookupError) {
+        toast.error(lookupError.message);
+        return;
+      }
+      const existing = findCanonicalExerciseMatch((existingRows ?? []) as any[], trimmed);
+      if (existing) {
+        upsertExerciseInLibraryCaches(qc, existing as never);
+        toast.success(`Using existing "${existing.name}" from library`);
+        onCreated?.(existing.id, existing.name);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("exercises")
         .insert(payload as never)
