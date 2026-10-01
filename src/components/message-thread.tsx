@@ -2252,6 +2252,10 @@ export function MessageThread({
               value={body}
               onChange={(e) => {
                 setBody(e.target.value);
+                const textarea = e.currentTarget;
+                textarea.style.height = "auto";
+                textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+                textarea.style.overflowY = textarea.scrollHeight > 160 ? "auto" : "hidden";
                 if (e.target.value.trim().length > 0) broadcastTyping(false);
                 else broadcastTyping(true);
               }}
@@ -2259,7 +2263,7 @@ export function MessageThread({
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
               rows={1}
               enterKeyHint="send"
-              className="min-h-[40px] max-h-40 flex-1 resize-none rounded-full border-border/60 bg-background/60 px-4 py-2 text-sm leading-snug focus-visible:ring-1 focus-visible:ring-border focus-visible:border-border"
+              className="min-h-[40px] max-h-40 flex-1 resize-none overflow-y-hidden rounded-[22px] border-border/60 bg-background/60 px-4 py-2 text-sm leading-snug focus-visible:ring-1 focus-visible:ring-border focus-visible:border-border"
               onFocus={() => {
                 // When the on-screen keyboard opens (composer focus), the
                 // outer chat container shrinks via --vv-h. Pin the scroller
