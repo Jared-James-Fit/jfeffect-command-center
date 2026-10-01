@@ -3733,7 +3733,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 ["reps", "Reps", showReps],
                 ["weight", "Weight", showWeight],
                 ["timer", "Timer", showTimer],
-                ["velocity", "Velocity (m/s)", showVelocity],
+                ["velocity", "Avg velocity (m/s)", showVelocity],
               ] as const).map(([field, label, on]) => (
                 <DropdownMenuItem
                   key={field}
@@ -3783,7 +3783,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           {showReps && <span>Reps</span>}
           {showTimer && <span>Time</span>}
           <span>{showRir ? "RIR" : "RPE"}</span>
-          {showVelocity && <span title="Mean concentric velocity">Vel</span>}
+          {showVelocity && <span title="Average concentric velocity — enter the final rep for multi-rep sets">Avg Vel</span>}
           {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
           <span className="text-right">Status</span>
         </div>
@@ -4142,7 +4142,7 @@ function SetRow({
   /** Which inputs this row shows — Timer is just another optional column. */
   showReps?: boolean;
   showTimer?: boolean;
-  /** Optional mean concentric velocity (m/s) input. */
+  /** Optional average concentric velocity (m/s) input; multi-rep sets use the final rep. */
   showVelocity?: boolean;
   /** Shared grid-template-columns string from the exercise card header. */
   gridTemplate?: string;
@@ -5175,7 +5175,7 @@ function SetRow({
           onKeyDown={onEnter}
           inputMode="decimal"
           placeholder="m/s"
-          aria-label={`Set ${setIndex} mean concentric velocity in metres per second`}
+          aria-label={`Set ${setIndex} average concentric velocity in metres per second; for multi-rep sets enter the final rep`}
           disabled={readonly}
           className={cn("h-8 px-1.5 text-center text-xs tabular-nums", focusMode && "h-10 text-sm")}
         />
