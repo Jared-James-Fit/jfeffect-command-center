@@ -4,7 +4,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Checkbox } from "@/components/ui/checkbox";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { calcAge, cmToFtIn, ftInToCm } from "@/lib/basic-info";
 import { todayLocalISO } from "@/lib/today";
@@ -27,18 +26,7 @@ export type BasicInfoValues = {
   timezone?: string | null;
   emergency_contact_name?: string | null;
   emergency_contact_phone?: string | null;
-  notes?: string | null; // maps to lifestyle_notes for client self-entry
-  intake_lifts_known?: boolean | null;
-  intake_lift_unit?: "kg" | "lb" | null;
-  intake_squat_1rm?: number | null;
-  intake_bench_1rm?: number | null;
-  intake_deadlift_1rm?: number | null;
-  intake_training_experience?: string | null;
-  intake_followed_program?: string | null;
-  intake_squat_5rm?: number | null;
-  intake_bench_5rm?: number | null;
-  intake_deadlift_5rm?: number | null;
-  intake_injuries?: string | null;
+  notes?: string | null;
 };
 
 export function BasicInfoForm({
@@ -192,170 +180,13 @@ export function BasicInfoForm({
         </div>
       </div>
 
-      <SbdIntakeSection values={values} onChange={onChange} />
-
       {showOptional && (
         <div>
-          <Label>Anything else we should know? <span className="text-muted-foreground">(optional)</span></Label>
-          <Textarea rows={3} value={values.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value })} placeholder="Allergies, medical conditions, schedule constraints, etc." />
+          <Label>Profile notes <span className="text-muted-foreground">(optional)</span></Label>
+          <Textarea rows={3} value={values.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value })} placeholder="Contact or profile details you want to keep here." />
+          <p className="mt-1 text-[11px] text-muted-foreground">Training, nutrition, injuries, availability and goals are collected once in Goals &amp; Setup.</p>
         </div>
       )}
-    </div>
-  );
-}
-
-function SbdIntakeSection({
-  values,
-  onChange,
-}: {
-  values: BasicInfoValues;
-  onChange: (patch: Partial<BasicInfoValues>) => void;
-}) {
-  const unit = (values.intake_lift_unit ?? "lb") as "kg" | "lb";
-  const dontKnow = values.intake_lifts_known === false;
-
-  const setNum = (k: keyof BasicInfoValues, raw: string) => {
-    const n = Number(raw);
-    onChange({ [k]: raw === "" ? null : (Number.isFinite(n) && n > 0 ? n : null) } as Partial<BasicInfoValues>);
-  };
-
-  return (
-    <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div className="text-xs uppercase tracking-widest text-muted-foreground">Best lifts (1-rep max) *</div>
-          <p className="text-[11px] text-muted-foreground">Don't worry if these aren't exact. An estimate is perfectly fine.</p>
-        </div>
-        <ToggleGroup
-          type="single"
-          value={unit}
-          onValueChange={(v) => v && onChange({ intake_lift_unit: v as "kg" | "lb" })}
-          size="sm"
-          className="border border-border rounded-md"
-          disabled={dontKnow}
-        >
-          <ToggleGroupItem value="lb" className="text-xs h-7 px-2">lb</ToggleGroupItem>
-          <ToggleGroupItem value="kg" className="text-xs h-7 px-2">kg</ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-
-      {!dontKnow && (
-      <div className="grid gap-3 sm:grid-cols-3">
-        {(["squat", "bench", "deadlift"] as const).map((lift) => {
-          const fieldMap = {
-            squat: "intake_squat_1rm",
-            bench: "intake_bench_1rm",
-            deadlift: "intake_deadlift_1rm",
-          } as const;
-          const field = fieldMap[lift];
-          const label = lift === "bench" ? "Bench press" : lift[0].toUpperCase() + lift.slice(1);
-          const stored = values[field] as number | null | undefined;
-          // Stored is in the unit the user selected; convert for display only if unit changed.
-          const display = stored == null ? "" : String(stored);
-          return (
-            <div key={lift}>
-              <Label className="text-xs">{label}</Label>
-              <div className="flex items-center gap-1">
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  step={unit === "kg" ? 2.5 : 5}
-                  value={display}
-                  disabled={dontKnow}
-                  onChange={(e) => setNum(field, e.target.value)}
-                  placeholder=""
-                />
-                <span className="text-xs text-muted-foreground">{unit}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      )}
-
-      {dontKnow && (
-        <div className="space-y-3 rounded-md border border-dashed border-border bg-background/40 p-3">
-          <p className="text-[11px] text-muted-foreground">
-            No problem — answer a few quick questions and Coach Jared will estimate your starting numbers with you.
-          </p>
-          <div>
-            <Label className="text-xs">How long have you been training?</Label>
-            <Input
-              value={values.intake_training_experience ?? ""}
-              onChange={(e) => onChange({ intake_training_experience: e.target.value })}
-              placeholder="e.g. 6 months, 2 years, never seriously"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Have you followed a structured program before?</Label>
-            <Input
-              value={values.intake_followed_program ?? ""}
-              onChange={(e) => onChange({ intake_followed_program: e.target.value })}
-              placeholder="e.g. Starting Strength, 5/3/1, no"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {(["squat", "bench", "deadlift"] as const).map((lift) => {
-              const fieldMap = {
-                squat: "intake_squat_5rm",
-                bench: "intake_bench_5rm",
-                deadlift: "intake_deadlift_5rm",
-              } as const;
-              const field = fieldMap[lift];
-              const label =
-                lift === "bench" ? "Bench press × 5" : (lift[0].toUpperCase() + lift.slice(1)) + " × 5";
-              const stored = values[field] as number | null | undefined;
-              return (
-                <div key={lift}>
-                  <Label className="text-xs">{label}</Label>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      step={unit === "kg" ? 2.5 : 5}
-                      value={stored == null ? "" : String(stored)}
-                      onChange={(e) => setNum(field, e.target.value)}
-                      placeholder=""
-                    />
-                    <span className="text-xs text-muted-foreground">{unit}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div>
-            <Label className="text-xs">Any injuries or movement limitations?</Label>
-            <Textarea
-              rows={2}
-              value={values.intake_injuries ?? ""}
-              onChange={(e) => onChange({ intake_injuries: e.target.value })}
-              placeholder="e.g. lower back tweak, sore right shoulder, none"
-            />
-          </div>
-        </div>
-      )}
-
-      <label className="flex items-start gap-2 text-sm pt-1">
-        <Checkbox
-          checked={dontKnow}
-          onCheckedChange={(v) => {
-            const known = !v;
-            onChange({
-              intake_lifts_known: known ? null : false,
-              ...(known
-                ? {}
-                : {
-                    intake_squat_1rm: null,
-                    intake_bench_1rm: null,
-                    intake_deadlift_1rm: null,
-                  }),
-            });
-          }}
-        />
-        <span>I don't know my maxes yet — we'll estimate them together.</span>
-      </label>
     </div>
   );
 }
