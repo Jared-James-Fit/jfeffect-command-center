@@ -99,7 +99,7 @@ export const createAppMember = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const setup_token = genToken();
-    const setup_token_expires_at = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    const setup_token_expires_at = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
     const { data: row, error } = await supabaseAdmin
       .from("app_members")
       .insert({
@@ -234,7 +234,7 @@ export const generateSetupLink = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const setup_token = genToken();
-    const setup_token_expires_at = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    const setup_token_expires_at = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
     const { data: row, error } = await supabaseAdmin
       .from("app_members")
       .update({ setup_token, setup_token_expires_at })
@@ -371,8 +371,11 @@ export const redeemSetupToken = createServerFn({ method: "POST" })
       .eq("setup_token", data.token)
       .maybeSingle();
     if (error || !member) throw new Error("Invalid setup link");
-    if (member.setup_token_expires_at && new Date(member.setup_token_expires_at) < new Date()) {
-      throw new Error("Setup link expired — ask the admin for a new one");
+    if (member.setup_token_expires_at) {
+      const expiresAt = Date.parse(member.setup_token_expires_at);
+      if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+        throw new Error("Setup link expired — ask the admin for a new one");
+      }
     }
 
     // Find or create auth user
