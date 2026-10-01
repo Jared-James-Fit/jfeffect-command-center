@@ -18,6 +18,7 @@ import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SendPasswordResetDialog } from "@/components/account/send-password-reset-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
+import { getLatestClientNutritionReviewFn } from "@/lib/nutrition-updates.functions";
 import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp, setClientPassword } from "@/lib/clients.functions";
 import { sendAuthLinkBySms } from "@/lib/sms-links.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
@@ -90,6 +91,56 @@ const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-ca
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
 const TrainingProgramHub = lazyDefault(() => import("@/components/clients/training-program-hub"), "TrainingProgramHub");
+
+function ClientNutritionReviewAccess({ clientId }: { clientId: string }) {
+  const getLatest = useServerFn(getLatestClientNutritionReviewFn);
+  const { data, isLoading } = useQuery({
+    queryKey: ["coach-client-nutrition-review", clientId],
+    queryFn: () => getLatest({ data: { clientId } }),
+  });
+  const sub = data?.submission as any;
+
+  return (
+    <Card className="border-border bg-card p-4 md:col-span-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-xs font-black uppercase tracking-widest">Client Nutrition Review</h3>
+            {sub ? (
+              <Badge variant="outline" className="text-[10px] capitalize">{String(sub.status).replaceAll("_", " ")}</Badge>
+            ) : null}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isLoading
+              ? "Loading the client's latest nutrition review…"
+              : sub
+                ? `Submitted ${new Date(sub.submitted_at).toLocaleString()} · use the review answers when building or updating this nutrition plan.`
+                : "No nutrition review has been submitted yet."}
+          </p>
+          {sub ? (
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              <span>Bodyweight: <b>{sub.current_bodyweight ?? "—"} {sub.current_bodyweight != null ? sub.bodyweight_unit : ""}</b></span>
+              <span>7-day avg: <b>{sub.avg_bodyweight ?? "—"} {sub.avg_bodyweight != null ? sub.bodyweight_unit : ""}</b></span>
+              <span>Compliance: <b>{sub.compliance_pct != null ? `${sub.compliance_pct}%` : "—"}</b></span>
+              <span>Goal: <b className="capitalize">{sub.goal_direction ?? "—"}</b></span>
+            </div>
+          ) : null}
+        </div>
+        {sub ? (
+          <Button asChild className="w-full shrink-0 font-bold sm:w-auto">
+            <Link to="/admin/nutrition-dashboard/review/$submissionId" params={{ submissionId: sub.id }}>
+              <Eye className="mr-2 h-4 w-4" /> View Nutrition Review
+            </Link>
+          </Button>
+        ) : (
+          <Button variant="outline" asChild className="w-full shrink-0 sm:w-auto">
+            <Link to="/admin/nutrition-dashboard">Open Nutrition Dashboard</Link>
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
 
 function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
@@ -883,6 +934,7 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="nutrition" className={WORKSPACE_GRID_CLASS}>
+          <ClientNutritionReviewAccess clientId={id} />
           <Suspense fallback={<TabFallback />}>
             <NutritionTargetsPanel clientId={id} />
             <CardioTargetsPanel clientId={id} />
