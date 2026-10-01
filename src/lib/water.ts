@@ -39,7 +39,6 @@ export const ML_PER_KG = 35;
 export const LB_TO_KG = 0.45359237;
 export const FL_OZ_TO_ML = 29.5735;
 
-/** Clamp + round to nearest 100mL. Default 3000 if no input. */
 export function suggestTargetMl(bodyweightKg: number | null | undefined): number {
   if (!bodyweightKg || bodyweightKg <= 0) return DEFAULT_TARGET_ML;
   const raw = bodyweightKg * ML_PER_KG;
@@ -47,204 +46,80 @@ export function suggestTargetMl(bodyweightKg: number | null | undefined): number
   return Math.max(MIN_AUTO_TARGET_ML, Math.min(MAX_AUTO_TARGET_ML, rounded));
 }
 
-export function mlToL(ml: number): number {
-  return ml / 1000;
-}
-
-export function mlToOz(ml: number): number {
-  return ml / FL_OZ_TO_ML;
-}
-
+export function mlToL(ml: number): number { return ml / 1000; }
+export function mlToOz(ml: number): number { return ml / FL_OZ_TO_ML; }
 export function formatWater(ml: number, unit: "ml" | "L" | "oz" = "L"): string {
   if (unit === "ml") return `${Math.round(ml)} mL`;
   if (unit === "oz") return `${mlToOz(ml).toFixed(1)} oz`;
-  return `${mlToL(ml).toFixed(ml % 1000 === 0 ? 1 : 1)} L`;
+  return `${mlToL(ml).toFixed(1)} L`;
 }
 
-export function todayLocalISO(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Browser-local calendar date. Do not use toISOString(): UTC rolls the day early in North America. */
+export function todayLocalISO(date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
-/** Get current water target row, or null if not yet set. */
 export async function getWaterTarget(userId: string): Promise<WaterTarget | null> {
-  const { data, error } = await supabase
-    .from("progress_water_targets")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const { data, error } = await supabase.from("progress_water_targets").select("*").eq("user_id", userId).maybeSingle();
   if (error) throw error;
   return (data as WaterTarget | null) ?? null;
 }
 
-/** Ensure a target row exists. If none, write the default 3.0 L row. */
 export async function ensureWaterTarget(userId: string): Promise<WaterTarget> {
   const existing = await getWaterTarget(userId);
   if (existing) return existing;
-  const { data, error } = await supabase
-    .from("progress_water_targets")
-    .upsert(
-      {
-        user_id: userId,
-        suggested_ml: DEFAULT_TARGET_ML,
-        active_ml: DEFAULT_TARGET_ML,
-        target_source: "default",
-        mode: "auto",
-      } as never,
-      { onConflict: "user_id" },
-    )
-    .select()
-    .single();
+  const { data, error } = await supabase.from("progress_water_targets").upsert({ user_id: userId, suggested_ml: DEFAULT_TARGET_ML, active_ml: DEFAULT_TARGET_ML, target_source: "default", mode: "auto" } as never, { onConflict: "user_id" }).select().single();
   if (error) throw error;
   return data as WaterTarget;
 }
 
-/** Persist a custom target (mode='custom'). source = who set it. */
-export async function setCustomWaterTarget(args: {
-  userId: string;
-  activeMl: number;
-  source: "user" | "coach" | "admin";
-  setByUserId: string;
-}): Promise<WaterTarget> {
+export async function setCustomWaterTarget(args: { userId: string; activeMl: number; source: "user" | "coach" | "admin"; setByUserId: string; }): Promise<WaterTarget> {
   const active = Math.max(500, Math.min(8000, Math.round(args.activeMl / 50) * 50));
-  const { data, error } = await supabase
-    .from("progress_water_targets")
-    .upsert(
-      {
-        user_id: args.userId,
-        active_ml: active,
-        // suggested stays as the auto value; keep current if present, else use default
-        suggested_ml: active,
-        target_source: args.source,
-        mode: "custom",
-        set_by_user_id: args.setByUserId,
-      } as never,
-      { onConflict: "user_id" },
-    )
-    .select()
-    .single();
+  const { data, error } = await supabase.from("progress_water_targets").upsert({ user_id: args.userId, active_ml: active, suggested_ml: active, target_source: args.source, mode: "custom", set_by_user_id: args.setByUserId } as never, { onConflict: "user_id" }).select().single();
   if (error) throw error;
   return data as WaterTarget;
 }
 
-/** Switch back to automatic suggestion (will get refreshed when bodyweight changes). */
-export async function useAutoWaterTarget(args: {
-  userId: string;
-  setByUserId: string;
-  bodyweightKg: number | null;
-}): Promise<WaterTarget> {
+export async function useAutoWaterTarget(args: { userId: string; setByUserId: string; bodyweightKg: number | null; }): Promise<WaterTarget> {
   const suggested = suggestTargetMl(args.bodyweightKg);
-  const { data, error } = await supabase
-    .from("progress_water_targets")
-    .upsert(
-      {
-        user_id: args.userId,
-        suggested_ml: suggested,
-        active_ml: suggested,
-        target_source: args.bodyweightKg ? "auto" : "default",
-        mode: "auto",
-        calc_bodyweight_kg: args.bodyweightKg,
-        last_recalculated_at: new Date().toISOString(),
-        set_by_user_id: args.setByUserId,
-      } as never,
-      { onConflict: "user_id" },
-    )
-    .select()
-    .single();
+  const { data, error } = await supabase.from("progress_water_targets").upsert({ user_id: args.userId, suggested_ml: suggested, active_ml: suggested, target_source: args.bodyweightKg ? "auto" : "default", mode: "auto", calc_bodyweight_kg: args.bodyweightKg, last_recalculated_at: new Date().toISOString(), set_by_user_id: args.setByUserId } as never, { onConflict: "user_id" }).select().single();
   if (error) throw error;
   return data as WaterTarget;
 }
 
-/** List entries for a single local-date (UTC date matches generated column). */
 export async function listWaterForDate(userId: string, dateISO: string): Promise<WaterEntry[]> {
-  const { data, error } = await supabase
-    .from("progress_water_entries")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("entry_date", dateISO)
-    .order("entry_at", { ascending: false });
+  const { data, error } = await supabase.from("progress_water_entries").select("*").eq("user_id", userId).eq("entry_date", dateISO).order("entry_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as WaterEntry[];
 }
 
-/** Recent history grouped by day, newest first. Limit `days` calendar days. */
-export async function listWaterHistory(
-  userId: string,
-  days = 30,
-): Promise<{ date: string; total_ml: number; entries: number; logs: WaterEntry[] }[]> {
+export async function listWaterHistory(userId: string, days = 30): Promise<{ date: string; total_ml: number; entries: number; logs: WaterEntry[] }[]> {
   const since = new Date();
   since.setDate(since.getDate() - days);
-  const sinceISO = since.toISOString().slice(0, 10);
-  const { data, error } = await supabase
-    .from("progress_water_entries")
-    .select("id, entry_date, entry_at, amount_ml, source, note")
-    .eq("user_id", userId)
-    .gte("entry_date", sinceISO)
-    .order("entry_date", { ascending: false });
+  const sinceISO = todayLocalISO(since);
+  const { data, error } = await supabase.from("progress_water_entries").select("id, entry_date, entry_at, amount_ml, source, note").eq("user_id", userId).gte("entry_date", sinceISO).order("entry_date", { ascending: false });
   if (error) throw error;
   const map = new Map<string, { total: number; n: number; logs: WaterEntry[] }>();
   for (const r of (data ?? []) as WaterEntry[]) {
     const cur = map.get(r.entry_date) ?? { total: 0, n: 0, logs: [] };
-    cur.total += r.amount_ml;
-    cur.n += 1;
-    cur.logs.push(r);
-    map.set(r.entry_date, cur);
+    cur.total += r.amount_ml; cur.n += 1; cur.logs.push(r); map.set(r.entry_date, cur);
   }
-  return Array.from(map.entries())
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([date, v]) => ({ date, total_ml: v.total, entries: v.n, logs: v.logs.sort((a,b)=>b.entry_at.localeCompare(a.entry_at)) }));
+  return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([date, v]) => ({ date, total_ml: v.total, entries: v.n, logs: v.logs.sort((a,b)=>b.entry_at.localeCompare(a.entry_at)) }));
 }
 
-export async function addWaterEntry(args: {
-  userId: string;
-  amountMl: number;
-  source?: WaterEntry["source"];
-  createdByUserId: string;
-  note?: string | null;
-  entryAt?: string;
-}): Promise<WaterEntry> {
+export async function addWaterEntry(args: { userId: string; amountMl: number; source?: WaterEntry["source"]; createdByUserId: string; note?: string | null; entryAt?: string; }): Promise<WaterEntry> {
   const amount = Math.max(1, Math.min(5000, Math.round(args.amountMl)));
   const offline = typeof navigator !== "undefined" && navigator.onLine === false;
   const entryAt = args.entryAt ?? new Date().toISOString();
   if (offline) {
     const { enqueueOfflineWrite } = await import("@/lib/workout-offline-queue");
-    enqueueOfflineWrite({
-      // Unique per entry instant so multiple quick-adds in the same minute
-      // don't collapse into one.
-      id: `water:${args.userId}:${entryAt}`,
-      label: `Water +${amount} ml`,
-      handlerKey: "water_insert",
-      payload: {
-        user_id: args.userId,
-        amount_ml: amount,
-        source: args.source ?? "quick_add",
-        note: args.note ?? null,
-        created_by: args.createdByUserId,
-        entry_at: entryAt,
-      },
-    });
-    return {
-      id: `pending-water-${entryAt}`,
-      user_id: args.userId,
-      amount_ml: amount,
-      source: args.source ?? "quick_add",
-      note: args.note ?? null,
-      created_by: args.createdByUserId,
-      entry_at: entryAt,
-      entry_date: entryAt.slice(0, 10),
-    } as unknown as WaterEntry;
+    enqueueOfflineWrite({ id: `water:${args.userId}:${entryAt}`, label: `Water +${amount} ml`, handlerKey: "water_insert", payload: { user_id: args.userId, amount_ml: amount, source: args.source ?? "quick_add", note: args.note ?? null, created_by: args.createdByUserId, entry_at: entryAt } });
+    return { id: `pending-water-${entryAt}`, user_id: args.userId, amount_ml: amount, source: args.source ?? "quick_add", note: args.note ?? null, created_by: args.createdByUserId, entry_at: entryAt, entry_date: todayLocalISO(new Date(entryAt)) } as unknown as WaterEntry;
   }
-  const { data, error } = await supabase
-    .from("progress_water_entries")
-    .insert({
-      user_id: args.userId,
-      amount_ml: amount,
-      source: args.source ?? "quick_add",
-      note: args.note ?? null,
-      created_by: args.createdByUserId,
-      entry_at: entryAt,
-    } as never)
-    .select()
-    .single();
+  const { data, error } = await supabase.from("progress_water_entries").insert({ user_id: args.userId, amount_ml: amount, source: args.source ?? "quick_add", note: args.note ?? null, created_by: args.createdByUserId, entry_at: entryAt } as never).select().single();
   if (error) throw error;
   return data as WaterEntry;
 }
@@ -254,31 +129,14 @@ export async function deleteWaterEntry(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function updateWaterEntry(
-  id: string,
-  patch: Partial<Pick<WaterEntry, "amount_ml" | "entry_at" | "note">>,
-): Promise<void> {
-  const { error } = await supabase
-    .from("progress_water_entries")
-    .update(patch as never)
-    .eq("id", id);
+export async function updateWaterEntry(id: string, patch: Partial<Pick<WaterEntry, "amount_ml" | "entry_at" | "note">>): Promise<void> {
+  const { error } = await supabase.from("progress_water_entries").update(patch as never).eq("id", id);
   if (error) throw error;
 }
 
-/** Quick-add chip presets. */
 export const QUICK_ADD_ML = [250, 500, 750, 1000] as const;
-
-/** Convert oz input → ml. */
-export function ozToMl(oz: number): number {
-  return Math.round(oz * FL_OZ_TO_ML);
-}
-
-/** Convert L input → ml. */
-export function lToMl(l: number): number {
-  return Math.round(l * 1000);
-}
-
-/** Compute today's total + remaining for display. */
+export function ozToMl(oz: number): number { return Math.round(oz * FL_OZ_TO_ML); }
+export function lToMl(l: number): number { return Math.round(l * 1000); }
 export function summarizeToday(entries: WaterEntry[], targetMl: number) {
   const total = entries.reduce((s, e) => s + e.amount_ml, 0);
   const remaining = Math.max(0, targetMl - total);
