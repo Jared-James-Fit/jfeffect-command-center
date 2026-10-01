@@ -237,12 +237,32 @@ export function MessengerCheckinRequestCard({
             Waiting for client
           </div>
         )}
-        {done && (
+        {done && role === "admin" && (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 h-10 w-full border-emerald-500/25 bg-emerald-500/10 font-semibold text-emerald-700 hover:bg-emerald-500/15 hover:text-emerald-800"
+            onClick={() => setOpen(true)}
+          >
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            View {taskType === "nutrition_review" ? "Nutrition Review" : "Check-In"}
+          </Button>
+        )}
+        {done && role === "client" && (
           <div className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700">
             ✓ Complete
           </div>
         )}
       </div>
+
+      {role === "admin" && done && (
+        <AdminCompletedCheckinSheet
+          open={open}
+          onOpenChange={setOpen}
+          taskType={taskType}
+          answers={(data?.answers ?? {}) as Record<string, any>}
+        />
+      )}
 
       {role === "client" && (
         <CheckinWizard
@@ -255,6 +275,43 @@ export function MessengerCheckinRequestCard({
         />
       )}
     </>
+  );
+}
+
+function AdminCompletedCheckinSheet({
+  open,
+  onOpenChange,
+  taskType,
+  answers,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  taskType: MessengerCheckinTaskType;
+  answers: Record<string, any>;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-3xl p-0">
+        <div className="mx-auto max-w-lg">
+          <SheetHeader className="min-h-0 border-b border-border px-5 py-4 text-left">
+            <SheetTitle>{titleFor(taskType)}</SheetTitle>
+            <p className="text-sm text-muted-foreground">Client submission</p>
+          </SheetHeader>
+          <div className="space-y-3 px-5 py-5">
+            {Object.entries(answers)
+              .filter(([, v]) => v !== undefined && v !== null && v !== "" && (!Array.isArray(v) || v.length > 0))
+              .map(([k, v]) => (
+                <div key={k} className="rounded-2xl border border-border bg-card p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    {LABELS[taskType][k] ?? k}
+                  </div>
+                  <div className="mt-1 text-sm font-medium">{displayAnswer(v)}</div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
