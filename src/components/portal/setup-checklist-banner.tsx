@@ -11,204 +11,64 @@ import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import { SetupStepSheet, type SetupStepKey } from "@/components/portal/setup-step-sheet";
 
-type Props = {
-  clientId: string;
-  userId: string;
-};
-
+type Props = { clientId: string; userId: string };
 type ItemKey = "profile_picture" | "basic_info" | "training_schedule" | "goals_setup";
+type Item = { key: ItemKey; label: string; description: string; to?: string; sheet?: SetupStepKey; icon: typeof Camera; done: boolean };
 
-type Item = {
-  key: ItemKey;
-  label: string;
-  description: string;
-  /** External navigation target when the step doesn't fit in a bottom sheet. */
-  to?: string;
-  /** In-place sheet key. When set, the row opens the sheet instead of navigating. */
-  sheet?: SetupStepKey;
-  icon: typeof Camera;
-  done: boolean;
-};
-
-/**
- * Non-blocking Home checklist that replaces the four hard-lock portal
- * gates (profile picture / basic info / training schedule / goals setup).
- *
- * Rules:
- *  - Never covers the screen. Inline card only.
- *  - Hidden only once every item is complete. Cannot be dismissed.
- */
 export function SetupChecklistBanner({ clientId, userId }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
   const { data: client, isPending: clientPending, isFetched: clientFetched } = useQuery({
-    queryKey: ["setup-banner-client", userId],
-    enabled: !!userId,
-    staleTime: 60_000,
+    queryKey: ["setup-banner-client", userId], enabled: !!userId, staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("clients")
-        .select("id, profile_picture_url, profile_picture_needs_update, full_name, first_name, last_name, phone, date_of_birth, height_cm, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, training_schedule_completed, intake_lifts_known, intake_lift_unit, intake_squat_1rm, intake_bench_1rm, intake_deadlift_1rm, intake_training_experience, intake_followed_program, intake_squat_5rm, intake_bench_5rm, intake_deadlift_5rm")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const { data } = await supabase.from("clients")
+        .select("id, profile_picture_url, profile_picture_needs_update, full_name, first_name, last_name, preferred_name, phone, date_of_birth, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, training_schedule_completed, committed_training_frequency, committed_training_days")
+        .eq("user_id", userId).maybeSingle();
       return data;
     },
   });
-
   const { data: goals, isPending: goalsPending, isFetched: goalsFetched } = useQuery({
-    queryKey: ["client-goals-setup", clientId],
-    enabled: !!clientId,
-    staleTime: 60_000,
+    queryKey: ["client-goals-setup", clientId], enabled: !!clientId, staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("client_goals_setup")
-        .select("*")
-        .eq("client_id", clientId)
-        .maybeSingle();
+      const { data } = await (supabase as any).from("client_goals_setup").select("*").eq("client_id", clientId).maybeSingle();
       return data as ClientGoalsSetupRow | null;
     },
   });
 
   const items = useMemo<Item[]>(() => {
     const c = client as any;
-    const profileDone = !!c?.profile_picture_url && !c?.profile_picture_needs_update;
-    const basicDone = !!c && isBasicInfoComplete(c);
-    const scheduleDone = !!c?.training_schedule_completed;
-    const goalsDone = isGoalsSetupComplete(goals ?? null);
     return [
-      {
-        key: "profile_picture",
-        label: "Add a profile photo",
-        description: "A clear headshot helps your coach personalise feedback.",
-        sheet: "profile_picture",
-        icon: Camera,
-        done: profileDone,
-      },
-      {
-        key: "basic_info",
-        label: "Confirm your basic info",
-        description: "Contact, height, emergency contact and a few intake details.",
-        sheet: "basic_info",
-        icon: IdCard,
-        done: basicDone,
-      },
-      {
-        key: "training_schedule",
-        label: "Set your training schedule",
-        description: "How many days a week you'll train, and which days.",
-        sheet: "training_schedule",
-        icon: CalendarClock,
-        done: scheduleDone,
-      },
-      {
-        key: "goals_setup",
-        label: "Finish Goals & Setup",
-        description: "A few quick answers so Coach Jared can build the right plan.",
-        to: "/portal/goals-setup",
-        icon: Target,
-        done: goalsDone,
-      },
+      { key: "profile_picture", label: "Add a profile photo", description: "A clear headshot helps your coach personalise feedback.", sheet: "profile_picture", icon: Camera, done: !!c?.profile_picture_url && !c?.profile_picture_needs_update },
+      { key: "basic_info", label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard, done: !!c && isBasicInfoComplete(c) },
+      { key: "training_schedule", label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock, done: !!c?.training_schedule_completed },
+      { key: "goals_setup", label: "Finish Goals & Setup", description: "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null) },
     ];
   }, [client, goals]);
 
   const done = items.filter((i) => i.done).length;
-  const total = items.length;
-  const allDone = done === total;
-
-  if (!clientId || !userId) return null;
-  // Avoid a flash for already-complete clients: don't render until both
-  // queries have resolved at least once. Mirrors how MemberSetupGate waits
-  // for its setup-status query before showing anything.
-  if (clientPending || goalsPending) return null;
-  if (!clientFetched || !goalsFetched) return null;
-  if (allDone) return null;
-
-  // Find the next incomplete item to feature as the primary CTA.
+  if (!clientId || !userId || clientPending || goalsPending || !clientFetched || !goalsFetched || done === items.length) return null;
   const nextItem = items.find((i) => !i.done) ?? items[0];
 
   return (
     <>
-    <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-black tracking-tight sm:text-lg">Complete your setup</h2>
-            <Badge variant="secondary" className="text-[10px]">{done}/{total}</Badge>
+      <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center gap-2"><h2 className="text-base font-black tracking-tight sm:text-lg">Complete your setup</h2><Badge variant="secondary" className="text-[10px]">{done}/{items.length}</Badge></div>
+            <p className="text-xs text-muted-foreground sm:text-sm">Each detail has one home, so you won't be asked the same onboarding questions in multiple setup steps.</p>
           </div>
-          <p className="text-xs text-muted-foreground sm:text-sm">
-            Finish a few quick steps so your coach can build the right plan for you. You can keep using the app while you do this.
-          </p>
         </div>
-      </div>
-
-      <div className="mt-3">
-        <Progress value={Math.round((done / total) * 100)} />
-      </div>
-
-      <ul className="mt-4 space-y-2">
-        {items.map((it) => {
-          const Icon = it.icon;
-          const rowClass =
-            "flex w-full items-center gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2.5 text-left text-sm transition hover:bg-background " +
-            (it.done ? "opacity-60" : "");
-          const inner = (
-            <>
-              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                <Icon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>
-                  {it.done ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  ) : (
-                    <Circle className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div>
-              </div>
-              {!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-            </>
-          );
-          return (
-            <li key={it.key}>
-              {it.sheet ? (
-                <button
-                  type="button"
-                  className={rowClass}
-                  onClick={() => setOpenStep(it.sheet!)}
-                  disabled={it.done}
-                >
-                  {inner}
-                </button>
-              ) : (
-                <Link to={it.to!} className={rowClass}>
-                  {inner}
-                </Link>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {nextItem.sheet ? (
-          <Button size="sm" onClick={() => setOpenStep(nextItem.sheet!)}>
-            Continue setup
-          </Button>
-        ) : (
-          <Button asChild size="sm">
-            <Link to={nextItem.to!}>Continue setup</Link>
-          </Button>
-        )}
-      </div>
-    </Card>
-    <SetupStepSheet
-      step={openStep}
-      clientId={clientId}
-      userId={userId}
-      client={client}
-      onOpenChange={(o) => { if (!o) setOpenStep(null); }}
-    />
+        <div className="mt-3"><Progress value={Math.round((done / items.length) * 100)} /></div>
+        <ul className="mt-4 space-y-2">
+          {items.map((it) => {
+            const Icon = it.icon;
+            const rowClass = "flex w-full items-center gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2.5 text-left text-sm transition hover:bg-background " + (it.done ? "opacity-60" : "");
+            const inner = <><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>{it.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground" />}</div><div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div></div>{!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}</>;
+            return <li key={it.key}>{it.sheet ? <button type="button" className={rowClass} onClick={() => setOpenStep(it.sheet!)} disabled={it.done}>{inner}</button> : <Link to={it.to!} className={rowClass}>{inner}</Link>}</li>;
+          })}
+        </ul>
+        <div className="mt-4 flex flex-wrap gap-2">{nextItem.sheet ? <Button size="sm" onClick={() => setOpenStep(nextItem.sheet!)}>Continue setup</Button> : <Button asChild size="sm"><Link to={nextItem.to!}>Continue setup</Link></Button>}</div>
+      </Card>
+      <SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} onOpenChange={(o) => { if (!o) setOpenStep(null); }} />
     </>
   );
 }
