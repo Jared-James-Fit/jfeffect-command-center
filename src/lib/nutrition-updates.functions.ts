@@ -254,6 +254,28 @@ export const listNutritionDashboardFn = createServerFn({ method: "POST" })
   });
 
 // ============================================================================
+// COACH/ADMIN: latest nutrition review for a client
+// ============================================================================
+export const getLatestClientNutritionReviewFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    if (!(await isAdminOrAssignedCoach(supabase, userId, data.clientId))) throw new Error("Not authorized");
+
+    const { data: submission, error } = await supabase
+      .from("nutrition_update_submissions")
+      .select("id, status, submitted_at, published_at, current_bodyweight, avg_bodyweight, bodyweight_unit, compliance_pct, goal_direction, hunger_rating, energy_rating, digestion_rating, sleep_rating, training_performance_rating, steps_completed, cardio_completed, missed_meals, notes")
+      .eq("client_id", data.clientId)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+
+    return { submission: submission ?? null };
+  });
+
+// ============================================================================
 // COACH/ADMIN: get submission detail
 // ============================================================================
 export const getSubmissionDetailFn = createServerFn({ method: "POST" })
