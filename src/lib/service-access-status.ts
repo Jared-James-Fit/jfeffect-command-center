@@ -1,9 +1,9 @@
 /**
  * ACCESS STATUS — separate from payment status.
  *
- * A paid sale whose coaching start date is in the future must NOT read as
- * "Active": the client has paid, but service has not begun. Payment truth
- * stays in the billing columns; this is purely about access.
+ * A payment link being live means the payment REQUEST is active; it does not
+ * mean paid service access has started. Keep those truths separate so admin
+ * never sees the misleading generic "Access not started" beside a valid link.
  */
 import { businessToday } from "@/lib/billing-schedule";
 import { formatCalendarDate } from "@/lib/calendar-date";
@@ -47,7 +47,7 @@ export function resolveAccessState(sale: AccessSale, today = businessToday()): A
 export function accessStateLabel(state: AccessState): string {
   switch (state) {
     case "not_started":
-      return "Access not started";
+      return "Starts after payment";
     case "upcoming":
       return "Access upcoming";
     case "ended":
