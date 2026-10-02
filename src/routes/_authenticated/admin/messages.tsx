@@ -104,7 +104,7 @@ export function MessagesInbox({
       // most-recent slice of messages across all relevant clients and
       // take the first row per client_id client-side.
       const { data, error } = await (supabase.from("messages") as any)
-        .select("id, client_id, body, sender_role, created_at, read_by_admin_at, is_internal_note")
+        .select("id, client_id, body, sender_role, created_at, read_by_admin_at, is_internal_note, message_type, attachments")
         .in("client_id", clientIds)
         .eq("is_internal_note", false)
         .in("delivery_status", ["sent", "sending"])
@@ -262,7 +262,7 @@ export function MessagesInbox({
           case "Priority": return priority === "High Priority" || priority === "Important";
           case "Resolved": return status === "resolved";
           case "Archived": return status === "archived";
-          default: return status !== "archived";
+          default: return status !== "archived" && status !== "resolved";
         }
       })
       .sort((a, b) => {

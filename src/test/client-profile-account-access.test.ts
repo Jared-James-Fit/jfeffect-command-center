@@ -66,10 +66,9 @@ describe("describeAccountAccess", () => {
         Date.parse("2026-08-10T00:00:00Z"),
       ).statusLabel,
     ).toBe("Invite expired");
-    expect(
-      describeAccountAccess({ email: "a@b.com", user_id: "u", account_created_at: "x", portal_access_disabled: true })
-        .statusLabel,
-    ).toBe("Access disabled");
+    const disabled = describeAccountAccess({ email: "a@b.com", user_id: "u", account_created_at: "x", portal_access_disabled: true });
+    expect(disabled.statusLabel).toBe("Never signed in");
+    expect(disabled.needsAttention).toBe(true);
     expect(describeAccountAccess({ user_id: "u", account_created_at: "x", last_signed_in_at: "y" }).needsAttention).toBe(true);
   });
 

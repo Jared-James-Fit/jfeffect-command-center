@@ -80,12 +80,12 @@ export function describeAccountAccess(
 
   if (missingEmail || input.needs_admin_help || accessDisabled) needsAttention = true;
 
-  const inviteStatusLabel = inviteSent === null
-    ? "Not sent"
-    : inviteExpired
-      ? "Expired"
-      : hasAccount
-        ? "Completed"
+  const inviteStatusLabel = hasAccount
+    ? "Completed"
+    : inviteSent === null
+      ? "Not sent"
+      : inviteExpired
+        ? "Expired"
         : "Sent";
 
   return {
