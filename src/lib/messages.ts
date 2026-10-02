@@ -90,7 +90,7 @@ export const MESSAGE_TYPES = [
   "Payment", "Scheduling", "Technical Support", "Injury / Modification", "Custom",
 ];
 
-export const PRIORITIES = ["Normal", "Important", "High Priority", "Needs Response", "Resolved"];
+export const PRIORITIES = ["Normal", "Important", "High Priority"];
 
 export const QUICK_REPLIES = [
   "I'll review this and get back to you.",
@@ -254,16 +254,6 @@ export async function markRead(clientId: string, role: SenderRole) {
     .eq("client_id", clientId)
     .eq("sender_role", oppRole)
     .is(col, null);
-  // Admin opening a "Needs Response" thread clears that status automatically.
-  if (role === "admin") {
-    try {
-      await db
-        .from("conversation_state")
-        .update({ status: "open" })
-        .eq("client_id", clientId)
-        .eq("status", "needs_response");
-    } catch {}
-  }
   // Best-effort: dismiss OS-level notifications + PWA app badge for this thread
   // so the reminder disappears the moment the conversation is opened.
   try { await dismissMessageBadges(clientId); } catch {}

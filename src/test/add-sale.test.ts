@@ -104,6 +104,7 @@ describe("custom sale", () => {
     const input = customSaleToProductInput(d);
     expect(input.checkoutMode).toBe("subscription");
     expect(input.billingFrequency).toBe("biweekly");
+    expect(input.paymentCount).toBe(4);
   });
 
   it("carries included session credits through the canonical fields", () => {

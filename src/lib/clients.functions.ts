@@ -79,9 +79,6 @@ export const inviteClient = createServerFn({ method: "POST" })
       });
 
     const now = new Date().toISOString();
-    // Invite expiry tracked at 48 hours
-    const expires = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
-
     if (inviteErr) {
       // If user already exists, fall back to a password recovery email.
       // resetPasswordForEmail actually SENDS the email (admin.generateLink does not).
@@ -92,8 +89,8 @@ export const inviteClient = createServerFn({ method: "POST" })
       if (resetErr) throw new Error(resetErr.message);
       const patch: ClientUpdate = {
         invite_last_resent_at: now,
-        invite_expires_at: expires,
-        account_status: "Invite Sent",
+        invite_expires_at: null,
+        account_status: client.user_id ? "Password Reset Sent" : "Invite Sent",
       };
       if (!client.invite_sent_at) patch.invite_sent_at = now;
       await supabaseAdmin.from("clients").update(patch).eq("id", client.id);
@@ -102,7 +99,7 @@ export const inviteClient = createServerFn({ method: "POST" })
 
     const patch: ClientUpdate = {
       invite_sent_at: now,
-      invite_expires_at: expires,
+      invite_expires_at: null,
       account_status: "Invite Sent",
     };
     if (invited.user) patch.user_id = invited.user.id;
@@ -142,6 +139,13 @@ export const getSetupLink = createServerFn({ method: "POST" })
     const url = new URL(data.redirectTo);
     url.searchParams.set("token_hash", hashedToken);
     url.searchParams.set("type", linkType);
+    const now = new Date().toISOString();
+    await supabaseAdmin.from("clients").update({
+      invite_sent_at: now,
+      invite_last_resent_at: now,
+      invite_expires_at: null,
+      account_status: client.user_id ? "Account Created" : "Invite Sent",
+    }).eq("id", client.id);
     return { url: url.toString() };
   });
 
@@ -169,6 +173,7 @@ export const sendPasswordReset = createServerFn({ method: "POST" })
     await supabaseAdmin.from("clients").update({
       password_reset_sent_at: new Date().toISOString(),
       account_status: "Password Reset Sent",
+      invite_expires_at: null,
     }).eq("id", client.id);
     return { ok: true, url: null as string | null };
   });
@@ -199,6 +204,11 @@ export const getPasswordResetLink = createServerFn({ method: "POST" })
     const url = new URL(data.redirectTo);
     url.searchParams.set("token_hash", hashedToken);
     url.searchParams.set("type", "recovery");
+    await supabaseAdmin.from("clients").update({
+      password_reset_sent_at: new Date().toISOString(),
+      account_status: "Password Reset Sent",
+      invite_expires_at: null,
+    }).eq("id", client.id);
     return { url: url.toString() };
   });
 

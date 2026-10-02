@@ -27,6 +27,17 @@ export type BasicInfoValues = {
   emergency_contact_name?: string | null;
   emergency_contact_phone?: string | null;
   notes?: string | null;
+  intake_lifts_known?: boolean | null;
+  intake_lift_unit?: "kg" | "lb" | null;
+  intake_squat_1rm?: number | null;
+  intake_bench_1rm?: number | null;
+  intake_deadlift_1rm?: number | null;
+  intake_squat_5rm?: number | null;
+  intake_bench_5rm?: number | null;
+  intake_deadlift_5rm?: number | null;
+  intake_training_experience?: string | null;
+  intake_followed_program?: string | null;
+  intake_injuries?: string | null;
 };
 
 export function BasicInfoForm({

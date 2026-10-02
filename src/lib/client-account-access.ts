@@ -24,6 +24,8 @@ export type ClientAccountAccess = {
   needsAttention: boolean;
   accountCreatedAt: string | null;
   inviteStatusLabel: string;
+  stage: "no_account" | "setup_pending" | "setup_expired" | "account_no_signin" | "live" | "access_disabled";
+  primaryAction: "send_setup" | "resend_setup" | "password_recovery" | "none";
   /** Fields intentionally excluded because App Activity already shows them. */
   excludedFields: readonly string[];
 };
@@ -38,7 +40,7 @@ export function describeAccountAccess(
   input: ClientAccountAccessInput,
   now: number = Date.now(),
 ): ClientAccountAccess {
-  const hasAccount = !!input.account_created_at || !!input.user_id;
+  const hasAccount = !!input.account_created_at || !!input.user_id || !!input.last_signed_in_at;
   const inviteSent = toDate(input.invite_sent_at);
   const expires = toDate(input.invite_expires_at);
   const inviteExpired = !hasAccount && expires !== null && expires <= now;
@@ -47,34 +49,43 @@ export function describeAccountAccess(
 
   let statusLabel: string;
   let needsAttention: boolean;
-  if (accessDisabled) {
-    statusLabel = "Access disabled";
-    needsAttention = true;
-  } else if (!hasAccount && inviteExpired) {
+  let stage: ClientAccountAccess["stage"];
+  let primaryAction: ClientAccountAccess["primaryAction"];
+  if (!hasAccount && inviteExpired) {
     statusLabel = "Invite expired";
     needsAttention = true;
+    stage = "setup_expired";
+    primaryAction = "resend_setup";
   } else if (!hasAccount && inviteSent !== null) {
-    statusLabel = "Invite pending";
+    statusLabel = "Waiting on client";
     needsAttention = true;
+    stage = "setup_pending";
+    primaryAction = "resend_setup";
   } else if (!hasAccount) {
     statusLabel = "No account";
     needsAttention = true;
+    stage = "no_account";
+    primaryAction = "send_setup";
   } else if (input.last_signed_in_at) {
     statusLabel = "Live";
     needsAttention = false;
+    stage = "live";
+    primaryAction = "password_recovery";
   } else {
     statusLabel = "Never signed in";
     needsAttention = true;
+    stage = "account_no_signin";
+    primaryAction = "password_recovery";
   }
 
-  if (missingEmail || input.needs_admin_help) needsAttention = true;
+  if (missingEmail || input.needs_admin_help || accessDisabled) needsAttention = true;
 
-  const inviteStatusLabel = inviteSent === null
-    ? "Not sent"
-    : inviteExpired
-      ? "Expired"
-      : hasAccount
-        ? "Completed"
+  const inviteStatusLabel = hasAccount
+    ? "Completed"
+    : inviteSent === null
+      ? "Not sent"
+      : inviteExpired
+        ? "Expired"
         : "Sent";
 
   return {
@@ -82,6 +93,8 @@ export function describeAccountAccess(
     needsAttention,
     accountCreatedAt: input.account_created_at ?? null,
     inviteStatusLabel,
+    stage,
+    primaryAction,
     excludedFields: ["last_signed_in_at", "last_active_at"],
   };
 }

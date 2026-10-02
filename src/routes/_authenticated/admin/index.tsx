@@ -316,7 +316,7 @@ function AdminDashboard() {
     const st = stateMap.get(m.client_id);
     const lr = st?.admin_last_read_at ? new Date(st.admin_last_read_at).getTime() : 0;
     const unread = new Date(m.created_at).getTime() > lr;
-    const needs = st?.status === "needs_response";
+    const needs = m.sender_role === "client";
     const highPriority = st?.priority === "High Priority" || st?.priority === "Important";
     if (unread || needs || highPriority) { seenC.add(m.client_id); return true; }
     return false;
