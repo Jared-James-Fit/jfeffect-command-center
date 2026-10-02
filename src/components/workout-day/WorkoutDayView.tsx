@@ -1279,7 +1279,7 @@ function WorkoutDay({
   // Per-exercise unit overrides (client preference + history detection)
   // ----------------------------------------------------------------
   const exerciseIds = useMemo(
-    () => Array.from(new Set((rows as any[]).map((r) => r.exercises?.id).filter(Boolean) as string[])),
+    () => Array.from(new Set((rows as any[]).map((r) => r.exercises?.id ?? r.exercise_id).filter(Boolean) as string[])),
     [rows],
   );
 
@@ -1330,13 +1330,12 @@ function WorkoutDay({
     }
     const map: Record<string, WUnit> = {};
     for (const r of rows as any[]) {
-      const exId = r.exercises?.id;
+      const exId = r.exercises?.id ?? r.exercise_id ?? null;
       const rowKey = `row:${r.id}`;
-      // Per-row override only — two cards with the same exerciseId (e.g.
-      // a primary + secondary backoff of the same lift) must toggle
-      // independently. The persisted client/member preference (saved by
-      // exerciseId) still seeds future workouts via resolveExerciseUnit.
-      const local = unitOverrides[rowKey];
+      // Unit choice belongs to the canonical exercise, not the program row.
+      // Repeated cards for the same exercise switch together immediately.
+      const preferenceKey = exId ? `exercise:${exId}` : rowKey;
+      const local = unitOverrides[preferenceKey];
       // Sensible defaults when there's no explicit preference/history:
       //   Competition squat, bench, deadlift → kg
       //   Everything else → lb
@@ -1361,33 +1360,44 @@ function WorkoutDay({
   }, [rows, prefRows, historyRows, unitOverrides, unit]);
 
   const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
-    const key = `row:${rowId}`;
-    const prevUnit = unitOverrides[key];
+    const rowKey = `row:${rowId}`;
+    const key = exerciseId ? `exercise:${exerciseId}` : rowKey;
+    const previousOverride = unitOverrides[key];
+    const prevUnit = resolvedUnitMap[rowKey] ?? unit;
+
+    // One optimistic override per exercise so top sets/backoffs stay in sync.
     setUnitOverrides((m) => ({ ...m, [key]: next }));
+
     if (client?.id && exerciseId) {
       try {
-        if (adapter) {
-          await adapter.saveExerciseUnitPref({ exerciseId, unit: next });
-        } else {
-          await saveExerciseUnitPref(client.id, exerciseId, next);
-        }
-      } catch { /* non-blocking */ }
-      qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
+        if (adapter) await adapter.saveExerciseUnitPref({ exerciseId, unit: next });
+        else await saveExerciseUnitPref(client.id, exerciseId, next);
+      } catch {
+        setUnitOverrides((m) => {
+          const copy = { ...m };
+          if (previousOverride === "kg" || previousOverride === "lb") copy[key] = previousOverride;
+          else delete copy[key];
+          return copy;
+        });
+        toast.error("Could not save the exercise unit — try again");
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
     }
+
     undo.push({
       label: `Set exercise unit to ${next.toUpperCase()}`,
       coalesceKey: `ex-unit:${key}`,
       undo: async () => {
-        setUnitOverrides((m) => ({ ...m, [key]: prevUnit as WUnit }));
-        if (client?.id && exerciseId && (prevUnit === "kg" || prevUnit === "lb")) {
+        setUnitOverrides((m) => ({ ...m, [key]: prevUnit }));
+        if (client?.id && exerciseId) {
           try {
-            if (adapter) {
-              await adapter.saveExerciseUnitPref({ exerciseId, unit: prevUnit as WUnit });
-            } else {
-              await saveExerciseUnitPref(client.id, exerciseId, prevUnit);
-            }
-          } catch {}
-          qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
+            if (adapter) await adapter.saveExerciseUnitPref({ exerciseId, unit: prevUnit });
+            else await saveExerciseUnitPref(client.id, exerciseId, prevUnit);
+            await qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
+          } catch {
+            toast.error("Could not restore the previous exercise unit");
+          }
         }
       },
     });
@@ -2181,7 +2191,7 @@ function WorkoutDay({
                       notesLoading={notesLoading}
                       readonly={readonly}
                       unit={unitForRow(r)}
-                      onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
+                      onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u)}
                       focusMode
                       onChange={refresh}
                       onNoteChange={refreshNotes}
@@ -2475,7 +2485,7 @@ function WorkoutDay({
                     notesLoading={notesLoading}
                     readonly={readonly}
                     unit={unitForRow(r)}
-                    onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}
+                    onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u)}
                     onChange={refresh}
                     onNoteChange={refreshNotes}
                     purposeLabel={purposeLabelById.get(r.id) ?? null}
