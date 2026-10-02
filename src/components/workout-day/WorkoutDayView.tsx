@@ -89,6 +89,7 @@ import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSe
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import { isSetLogComplete } from "@/lib/set-completion";
 import { planCascade, type CascadeOrigin, type CascadeSetState } from "@/lib/set-cascade";
+import { SET_INPUT_CASCADE_EVENT, canCascadeInputTo, markManualInputBoundary, type CascadedInputField } from "@/lib/set-input-cascade";
 import {
   formatLoadDisplay,
   loadColumnLabel,
@@ -4262,6 +4263,8 @@ function SetRow({
     return "";
   })();
   const prescribedRpeStr = (() => {
+    // RPE ranges default to the TOP end, matching reps (7–8 => 8).
+    if (rpeTarget?.max != null) return String(rpeTarget.max);
     if (rpeTarget?.exact != null) return String(rpeTarget.exact);
     if (rpeTarget?.min != null) return String(rpeTarget.min);
     if (targetRpe) return String(targetRpe).replace(/[^0-9.]/g, "").slice(0, 4);
@@ -4915,9 +4918,11 @@ function SetRow({
   };
   const useTargets = () => {
     if (suggestedWeight != null) setLoad(fmtNum(suggestedWeight));
-    if (repTarget?.exact != null) setReps(String(repTarget.exact));
+    if (repTarget?.max != null) setReps(String(repTarget.max));
+    else if (repTarget?.exact != null) setReps(String(repTarget.exact));
     else if (repTarget?.min != null) setReps(String(repTarget.min));
-    if (rpeTarget?.exact != null) setRpe(String(rpeTarget.exact));
+    if (rpeTarget?.max != null) setRpe(String(rpeTarget.max));
+    else if (rpeTarget?.exact != null) setRpe(String(rpeTarget.exact));
     else if (rpeTarget?.min != null) setRpe(String(rpeTarget.min));
     else if (rirTarget?.exact != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.exact))));
     else if (rirTarget?.max != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.max))));
@@ -4967,23 +4972,61 @@ function SetRow({
     if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
     recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
   };
+  const dispatchInputCascade = (field: CascadedInputField, value: string) => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(SET_INPUT_CASCADE_EVENT, {
+      detail: { rowId, fromSetIndex: setIndex, field, value },
+    }));
+  };
   const pickReps = (v: string) => {
     setReps(v);
     setRepsEdited(true);
+    markManualInputBoundary(rowId, "reps", setIndex);
     guardRecentSave();
+    dispatchInputCascade("reps", v);
   };
   const pickEffort = (v: string) => {
     setRpeEdited(true);
+    markManualInputBoundary(rowId, "rpe", setIndex);
+    let stored = v;
     if (v === "") {
+      stored = "";
       setRpe("");
     } else if (showRir) {
       const n = Number(v);
-      if (Number.isFinite(n)) setRpe(String(Math.max(0, Math.min(10, 10 - n))));
+      if (Number.isFinite(n)) {
+        stored = String(Math.max(0, Math.min(10, 10 - n)));
+        setRpe(stored);
+      }
     } else {
       setRpe(v);
     }
     guardRecentSave();
+    dispatchInputCascade("rpe", stored);
   };
+
+  // Reps and RPE use the same downward funnel as weight. A manual edit on a
+  // lower set is a boundary: cascades from above stop there and never jump
+  // across it. Confirmed sets are also protected. Auto-derived values remain
+  // eligible for a later change from a higher set.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ rowId: string; fromSetIndex: number; field: CascadedInputField; value: string }>).detail;
+      if (!detail || detail.rowId !== rowId || existing?.completed_at) return;
+      if (!canCascadeInputTo(rowId, detail.field, detail.fromSetIndex, setIndex)) return;
+      if (detail.field === "reps") {
+        if (repsEdited) return;
+        setReps(detail.value);
+      } else {
+        if (rpeEdited) return;
+        setRpe(detail.value);
+      }
+      guardRecentSave();
+    };
+    window.addEventListener(SET_INPUT_CASCADE_EVENT, handler);
+    return () => window.removeEventListener(SET_INPUT_CASCADE_EVENT, handler);
+  }, [rowId, setIndex, existing?.completed_at, repsEdited, rpeEdited]);
 
   // ── Exact rep-max PR badge ────────────────────────────────────────────
   // Compares the confirmed set against the historical best for the same
