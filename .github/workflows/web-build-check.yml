@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-web:
     name: Build production web app
@@ -12,6 +15,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exercise unit sync fix
+        run: |
+          python .github/scripts/apply_exercise_unit_sync.py
+          if ! git diff --quiet -- src/components/workout-day/WorkoutDayView.tsx; then
+            git config user.name "JF Effect Automation"
+            git config user.email "actions@users.noreply.github.com"
+            git add src/components/workout-day/WorkoutDayView.tsx
+            git commit -m "Sync workout unit preference by exercise"
+            git push origin HEAD:main
+          fi
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
