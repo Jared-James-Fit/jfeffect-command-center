@@ -6,15 +6,34 @@
  * below it, matching the existing weight-input mental model.
  */
 
+export type CascadedInputField = "reps" | "rpe";
+export const SET_INPUT_CASCADE_EVENT = "jf:set-input-cascade";
+
+const manualBoundaries = new Map<string, Set<number>>();
+const boundaryKey = (rowId: string, field: CascadedInputField) => `${rowId}:${field}`;
+
+export function markManualInputBoundary(rowId: string, field: CascadedInputField, setIndex: number) {
+  const key = boundaryKey(rowId, field);
+  const current = manualBoundaries.get(key) ?? new Set<number>();
+  current.add(setIndex);
+  manualBoundaries.set(key, current);
+}
+
+export function canCascadeInputTo(rowId: string, field: CascadedInputField, fromSetIndex: number, toSetIndex: number) {
+  if (toSetIndex <= fromSetIndex) return false;
+  const boundaries = manualBoundaries.get(boundaryKey(rowId, field));
+  if (!boundaries?.size) return true;
+  for (const index of boundaries) {
+    if (index > fromSetIndex && index <= toSetIndex) return false;
+  }
+  return true;
+}
+
 export function topEndProgrammedTarget(value: unknown): number | null {
   if (value == null) return null;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
-
   const text = String(value).trim();
   if (!text) return null;
-
-  // Supports common prescriptions such as "6-10", "6–10", "RPE 7-8",
-  // "@ 7–8", and single targets such as "8" / "RPE 8".
   const matches = [...text.matchAll(/(?:^|[^\d.])(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1]));
   const finite = matches.filter(Number.isFinite);
   return finite.length ? Math.max(...finite) : null;
@@ -26,10 +45,8 @@ export function defaultProgrammedSetInputs<T extends Record<string, any>>(
 ): T[] {
   const reps = topEndProgrammedTarget(prescription.reps);
   const rpe = topEndProgrammedTarget(prescription.rpe);
-
   return sets.map((set) => ({
     ...set,
-    // Never overwrite actual persisted/logged values. Defaults fill blanks only.
     ...(set.reps == null || set.reps === "" ? { reps } : {}),
     ...(set.rpe == null || set.rpe === "" ? { rpe } : {}),
   }));
@@ -55,7 +72,6 @@ export function inheritNewSetInputs<T extends Record<string, any>>(
     ...blankSet,
     reps: previous?.reps ?? topEndProgrammedTarget(prescription.reps),
     rpe: previous?.rpe ?? topEndProgrammedTarget(prescription.rpe),
-    // Weight follows the same "inherit the most recent set" convention.
     ...(previous?.weight != null ? { weight: previous.weight } : {}),
   };
 }
