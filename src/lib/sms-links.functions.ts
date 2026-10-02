@@ -167,8 +167,17 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
       await logSmsSend(supabase, { clientId: data.clientId, toPhone, body, kind: "manual", status: "sent", twilio_sid: sid, userId });
       // Stamp client status
       const patch: any = {};
-      if (data.kind === "setup") patch.invite_sent_at = new Date().toISOString();
-      if (data.kind === "reset") patch.password_reset_sent_at = new Date().toISOString();
+      if (data.kind === "setup") {
+        patch.invite_sent_at = new Date().toISOString();
+        patch.invite_last_resent_at = new Date().toISOString();
+        patch.invite_expires_at = null;
+        patch.account_status = client.user_id ? "Account Created" : "Invite Sent";
+      }
+      if (data.kind === "reset") {
+        patch.password_reset_sent_at = new Date().toISOString();
+        patch.invite_expires_at = null;
+        patch.account_status = "Password Reset Sent";
+      }
       if (Object.keys(patch).length > 0) {
         await supabase.from("clients").update(patch).eq("id", data.clientId);
       }
