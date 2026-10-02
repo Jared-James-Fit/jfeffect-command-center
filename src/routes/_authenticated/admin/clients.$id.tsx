@@ -15,11 +15,10 @@ import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, C
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
-import { SendPasswordResetDialog } from "@/components/account/send-password-reset-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { getLatestClientNutritionReviewFn } from "@/lib/nutrition-updates.functions";
-import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, markSetupComplete, setNeedsAdminHelp, setClientPassword } from "@/lib/clients.functions";
+import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPasswordReset, setNeedsAdminHelp, setClientPassword } from "@/lib/clients.functions";
 import { sendAuthLinkBySms } from "@/lib/sms-links.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -259,7 +258,6 @@ export function ClientProfileWorkspace({
   const [pwOpen, setPwOpen] = useState(false);
   const [pwValue, setPwValue] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
-  const markCompleteFn = useServerFn(markSetupComplete);
   const needsHelpFn = useServerFn(setNeedsAdminHelp);
   const deactivateFn = useServerFn(deactivateClient);
   const reactivateFn = useServerFn(reactivateClient);
@@ -361,6 +359,7 @@ export function ClientProfileWorkspace({
       const { url } = await getSetupLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/setup` } });
       await navigator.clipboard.writeText(url);
       toast.success("Setup link copied", { id: t });
+      qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
     }
@@ -385,6 +384,7 @@ export function ClientProfileWorkspace({
       const { url } = await getResetLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
       await navigator.clipboard.writeText(url);
       toast.success("Reset link copied", { id: t });
+      qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
     }
@@ -404,12 +404,6 @@ export function ClientProfileWorkspace({
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
     }
-  };
-
-  const markComplete = async () => {
-    await markCompleteFn({ data: { clientId: id } });
-    toast.success("Marked as account created");
-    qc.invalidateQueries({ queryKey: ["client", id] });
   };
 
   const toggleNeedsHelp = async () => {
@@ -600,11 +594,6 @@ export function ClientProfileWorkspace({
                 <Button variant="outline" size="sm"><MoreHorizontal className="mr-2 h-4 w-4" />More Actions</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Setup & Access</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup email</DropdownMenuItem>
-                <DropdownMenuItem onSelect={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</DropdownMenuItem>
-                <DropdownMenuItem onSelect={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
                 <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
@@ -657,11 +646,6 @@ export function ClientProfileWorkspace({
                 <Button variant="outline" size="sm"><MoreHorizontal className="mr-2 h-4 w-4" />More</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Setup & Access</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={sendSetup}><Mail className="mr-2 h-4 w-4" />Send setup email</DropdownMenuItem>
-                <DropdownMenuItem onSelect={copySetupLink}><Copy className="mr-2 h-4 w-4" />Copy setup link</DropdownMenuItem>
-                <DropdownMenuItem onSelect={sendReset}><KeyRound className="mr-2 h-4 w-4" />Send password reset</DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
                 <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
@@ -760,7 +744,10 @@ export function ClientProfileWorkspace({
         <TabsContent value="coaching" className={WORKSPACE_GRID_CLASS}>
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Core coaching details only. Training, nutrition, billing, and documents stay in their dedicated sections.</p>
+              </div>
               <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
                 <Save className="mr-2 h-4 w-4" />Save
               </Button>
@@ -811,69 +798,21 @@ export function ClientProfileWorkspace({
             <p className="text-[11px] text-muted-foreground">Detailed billing controls live under Business. Detailed messaging & call access live under Communication and Personal Info.</p>
           </Card>
 
-          <div className="space-y-6">
-            <TrainingScheduleCard client={form} />
-            <CoachNutritionOverrideCard userId={form.user_id ?? null} />
-            <Link to="/admin/clients/$id/schedule" params={{ id }} className="block">
-              <Button className="min-h-[52px] w-full bg-gradient-primary text-base font-bold uppercase">
-                <Calendar className="mr-2 h-5 w-5" /> Manage Schedule
-              </Button>
-            </Link>
-            <Link to="/admin/clients/$id/progress" params={{ id }} className="block">
-              <Button variant="outline" className="min-h-[52px] w-full text-base font-semibold">
-                <Calendar className="mr-2 h-5 w-5" /> Open Progress (Photos, Videos, Weight)
-              </Button>
-            </Link>
-            <ClientQuickLinksCard
-              clientId={id}
-              driveFolderLink={form.drive_folder_link}
-              onChangeDriveFolderLink={(v) => set("drive_folder_link", v)}
-            />
-            <Card className="border-border bg-card p-6 space-y-3">
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Billing & Access</h3>
-              {(() => {
-                const src = (form as any).billing_source as string | null;
-                const locked = !!(form as any).billing_source_locked;
-                const isLegacy = src === "trainerize_legacy";
-                const label =
-                  src === "trainerize_legacy" ? "Legacy — JF Effect Trainerize"
-                  : src === "jfeffect_stripe" ? "JF Effect Stripe"
-                  : src === "manual_external" ? "External / Manual"
-                  : src === "complimentary" ? "Complimentary"
-                  : "Not connected";
-                const tone =
-                  src === "trainerize_legacy" ? "bg-amber-500/10 text-amber-700 border-amber-500/30"
-                  : src === "jfeffect_stripe" ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
-                  : src === "manual_external" ? "bg-sky-500/10 text-sky-700 border-sky-500/30"
-                  : src === "complimentary" ? "bg-purple-500/10 text-purple-700 border-purple-500/30"
-                  : "bg-muted text-muted-foreground";
-                return (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${tone}`}>{label}</span>
-                      {locked && <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Locked</span>}
-                    </div>
-                    {isLegacy ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        Billing remains in the legacy Trainerize Stripe account. This app will not create, modify, or duplicate any charge for this client.
-                      </p>
-                    ) : src === "none" || !src ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        No billing source classified. Mark this client to keep webhooks and checkout safe.
-                      </p>
-                    ) : null}
-                    <Link to="/admin/billing-sources">
-                      <Button variant="outline" className="min-h-[44px] w-full justify-start">Open Billing & Legacy Migration</Button>
-                    </Link>
-                  </>
-                );
-              })()}
-            </Card>
-          </div>
-
-          <div className="md:col-span-3">
-            <ClientDriveFolderPanel clientId={id} />
-          </div>
+          <Card className="border-border bg-card p-6 space-y-3">
+            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Setup checklist</h3>
+            {[
+              ["Account access", !!form.user_id, "account"],
+              ["Intake & goals", !!form.intake_completed_at, "goals-setup"],
+              ["Training program", !!form.program_phase, "program-setup"],
+              ["Nutrition", !!form.nutrition_setup_completed_at, "nutrition"],
+              ["Billing", form.payment_status === "Paid" || form.payment_status === "Active Subscription", "billing"],
+            ].map(([label, complete, destination]) => (
+              <button key={String(label)} type="button" onClick={() => setTab(destination as TabValue)} className="flex min-h-[44px] w-full items-center justify-between border-b border-border/60 py-2 text-left last:border-0">
+                <span className="text-sm font-semibold">{String(label)}</span>
+                <Badge variant="outline" className={complete ? "border-success/40 bg-success/10 text-success" : "border-warning/40 bg-warning/10 text-warning"}>{complete ? "Complete" : "Needs setup"}</Badge>
+              </button>
+            ))}
+          </Card>
         </TabsContent>
 
         <TabsContent value="goals-setup" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
@@ -1255,88 +1194,43 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="account" className={WORKSPACE_GRID_CLASS}>
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Login & Access</h3>
-            <AccountStatusBadge status={form.account_status} needsHelp={form.needs_admin_help} />
+            <Badge variant="outline">{describeAccountAccess(form).statusLabel}</Badge>
           </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-4 md:col-span-2">
-              <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                <Field label="Email" value={form.email ?? "—"} />
-                <Field label="Invite sent" value={fmtDate(form.invite_sent_at)} />
-                <Field label="Last resent" value={fmtDate(form.invite_last_resent_at)} />
-                <Field label="Account created" value={fmtDate(form.account_created_at)} />
-                <Field label="Password reset sent" value={fmtDate(form.password_reset_sent_at)} />
-                <Field label="Linked auth user" value={form.user_id ? "Yes" : "No"} />
+          <div className="grid gap-5 md:grid-cols-3">
+            <div className="space-y-3 md:col-span-2">
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <Field label="Account" value={form.user_id || form.last_signed_in_at ? "Created" : "Not created"} />
+                <Field label="Can log in" value={form.portal_access_disabled ? "No — portal disabled" : form.user_id ? "Yes" : "Not yet"} />
+                <Field label="Last sign-in" value={fmtDate(form.last_signed_in_at)} />
+                <Field label="Service access" value={form.status === "Deactivated" ? "Deactivated" : "Active"} />
               </div>
-
-              <div className="space-y-5 pt-2">
-                {/* Setup link */}
-                <div>
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Setup link</div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>{form.invite_sent_at ? "Resend setup email" : "Send setup email"}</ActionButton>
-                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy setup link</ActionButton>
-                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("setup")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS setup link</ActionButton>
+              {(() => {
+                const access = describeAccountAccess(form);
+                const recovery = access.primaryAction === "password_recovery";
+                return (
+                  <div className="space-y-2 border-t border-border pt-4">
+                    <p className="text-sm font-semibold">{access.needsAttention ? "Action required" : "Account is ready"}</p>
+                    <p className="text-xs text-muted-foreground">{recovery ? "Use password recovery for this existing account." : access.stage === "setup_pending" ? "Setup was sent. Resend only if the client needs a fresh link." : "Create the client’s login with one secure setup link."}</p>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <ActionButton className="min-h-[48px]" onAction={recovery ? sendReset : sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={recovery ? <KeyRound className="h-4 w-4" /> : <Mail className="h-4 w-4" />}>
+                        {recovery ? "Send password recovery" : access.stage === "no_account" ? "Send setup" : "Resend setup"}
+                      </ActionButton>
+                      <ActionButton className="min-h-[48px]" variant="outline" onAction={recovery ? copyResetLink : copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                        {recovery ? "Copy recovery link" : "Copy setup link"}
+                      </ActionButton>
+                    </div>
                   </div>
-                </div>
-
-                {/* Password reset */}
-                <div>
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Password reset</div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={sendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<KeyRound className="h-4 w-4" />}>Send password reset</ActionButton>
-                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={copyResetLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>Copy reset link</ActionButton>
-                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("reset")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS reset link</ActionButton>
-                    <SendPasswordResetDialog
-                      targetUserId={form.user_id ?? null}
-                      email={form.email ?? null}
-                      phone={form.phone ?? null}
-                      triggerLabel="Secure password reset"
-                    />
-                  </div>
-                </div>
-
-                {/* Sign-in & access */}
-                <div>
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Sign-in & access</div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={smsLink("magic")} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>SMS sign-in link</ActionButton>
-                    <Button className="min-h-[48px] justify-start" variant="outline" onClick={() => { setPwValue(""); setPwOpen(true); }}>
-                      <KeyRound className="mr-2 h-4 w-4" />Set password
-                    </Button>
-                    <ActionButton className="min-h-[48px] justify-start" variant="outline" onAction={markComplete} loadingLabel="Saving…" successLabel="Done" successToast={false} errorToast={false} icon={<CheckCircle2 className="h-4 w-4" />}>Mark setup complete</ActionButton>
-                    <Button className="min-h-[48px] justify-start" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}>
-                      <AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear admin help flag" : "Mark needs admin help"}
-                    </Button>
-                    {canPov && (
-                      <Button
-                        className="min-h-[48px] justify-start bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
-                        onClick={() => {
-                          if (!form.user_id) {
-                            toast.error("Client has no account yet — send a setup link first.");
-                            return;
-                          }
-                          impersonation.start(
-                            { id, user_id: form.user_id, full_name: form.full_name },
-                            typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
-                          );
-                          navigate({ to: "/portal" });
-                        }}
-                      >
-                        <Eye className="mr-2 h-4 w-4" />Open Client POV
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
-
-            <InviteExpiryPanel
-              expiresAt={form.invite_expires_at}
-              accountCreatedAt={form.account_created_at}
-            />
+            <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Advanced</div>
+              <Button className="min-h-[44px] w-full justify-start" variant="outline" onClick={() => { setPwValue(""); setPwOpen(true); }}><KeyRound className="mr-2 h-4 w-4" />Set password manually</Button>
+              <Button className="min-h-[44px] w-full justify-start" variant={form.needs_admin_help ? "default" : "outline"} onClick={toggleNeedsHelp}><AlertCircle className="mr-2 h-4 w-4" />{form.needs_admin_help ? "Clear help flag" : "Flag access issue"}</Button>
+              <p className="text-[11px] text-muted-foreground">Account authentication is separate from coaching, billing, and feature access.</p>
+            </div>
           </div>
         </Card>
         </TabsContent>
