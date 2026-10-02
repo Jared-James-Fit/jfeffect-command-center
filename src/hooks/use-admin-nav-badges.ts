@@ -52,7 +52,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
     queryFn: async (): Promise<AdminBadgeCounts> => {
       const [clientMessages, liftPending, liftUrgent, mediaPending, supportAlerts] = await Promise.all([
         (supabase.from("messages") as any)
-          .select("client_id", { count: "exact", head: true })
+          .select("client_id")
           .eq("sender_role", "client")
           .is("read_by_admin_at", null)
           .eq("is_internal_note", false)
@@ -74,7 +74,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
           .in("status", ["open", "in_progress"]),
       ]);
       return {
-        messages: clientMessages.count ?? 0,
+        messages: new Set((clientMessages.data ?? []).map((row: any) => row.client_id)).size,
         liftReviews: liftPending.count ?? 0,
         liftUrgent: liftUrgent.count ?? 0,
         checkIns: mediaPending.count ?? 0,

@@ -10,11 +10,11 @@ describe("client profile shell cleanup", () => {
     expect(SHELL).not.toContain("WorkspaceActionCenter");
   });
 
-  it("does not render the Account Setup banner above the workspace nav", () => {
-    const navIdx = SHELL.indexOf("<SectionNav");
-    const bannerIdx = SHELL.indexOf("<SetupStatusBanner");
-    expect(navIdx).toBeGreaterThan(-1);
-    expect(bannerIdx).toBeGreaterThan(navIdx);
+  it("keeps account actions in one canonical Login & Access area", () => {
+    expect(SHELL).not.toContain("<SetupStatusBanner");
+    expect(SHELL).not.toContain("Mark setup complete");
+    expect(SHELL).toContain("Send password recovery");
+    expect(SHELL).toContain("Copy recovery link");
   });
 
   it("renders the workspace nav exactly once, directly inside Tabs", () => {
@@ -71,6 +71,13 @@ describe("describeAccountAccess", () => {
         .statusLabel,
     ).toBe("Access disabled");
     expect(describeAccountAccess({ user_id: "u", account_created_at: "x", last_signed_in_at: "y" }).needsAttention).toBe(true);
+  });
+
+  it("ignores stale invite expiry once an account exists", () => {
+    const a = describeAccountAccess({ user_id: "u", email: "a@b.com", invite_expires_at: "2020-01-01T00:00:00Z" }, Date.parse("2026-01-01T00:00:00Z"));
+    expect(a.stage).toBe("account_no_signin");
+    expect(a.primaryAction).toBe("password_recovery");
+    expect(a.inviteStatusLabel).toBe("Completed");
   });
 
   it("never exposes activity fields handled by App Activity", () => {

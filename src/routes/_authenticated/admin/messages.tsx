@@ -62,7 +62,7 @@ export function MessagesInbox({
   const qc = useQueryClient();
   const clientPov = useClientImpersonation();
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("All");
+  const [filter, setFilter] = useState<Filter>("Inbox");
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
   const [smsOpen, setSmsOpen] = useState(false);
   const [tab, setTab] = useState<"chats" | "groups">("chats");
@@ -237,12 +237,13 @@ export function MessagesInbox({
         const unread = unreadByClient.get(c.id) ?? 0;
         const liftReview = liftReviewsByClient.get(c.id) ?? null;
         const submissions = pendingSubmissions.filter((submission: any) => submission.client_id === c.id);
+        const lastAdminAt = last?.sender_role === "admin" ? Date.parse(last.created_at) : 0;
         const workflow = deriveInboxWorkflow({
           lastMessage: last,
           storedStatus: state?.status,
           pendingLiftReview: !!liftReview,
-          pendingForm: submissions.some((submission: any) => submission.kind === "form"),
-          pendingCheckin: submissions.some((submission: any) => submission.kind === "checkin"),
+          pendingForm: submissions.some((submission: any) => submission.kind === "form" && Date.parse(submission.submitted_at) > lastAdminAt),
+          pendingCheckin: submissions.some((submission: any) => submission.kind === "checkin" && Date.parse(submission.submitted_at) > lastAdminAt),
         });
         return { client: c, state, last, unread, liftReview, workflow };
       })

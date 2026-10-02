@@ -35,7 +35,7 @@ export function deriveInboxWorkflow(input: {
   }
   if (last?.sender_role === "admin") {
     const expectsClient = kinds.includes("checkin_request") || kinds.includes("form_request") || kinds.includes("signature_request");
-    return { state: "waiting_on_client", badge: expectsClient ? "Waiting on client" : "Waiting on client", isFormOrCheckin: expectsClient };
+    return { state: "waiting_on_client", badge: "Waiting on client", isFormOrCheckin: expectsClient };
   }
   return { state: "active", badge: null, isFormOrCheckin: false };
 }

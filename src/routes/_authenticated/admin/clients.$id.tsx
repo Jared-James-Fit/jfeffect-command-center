@@ -706,18 +706,6 @@ export function ClientProfileWorkspace({
         />
 
         <TabsContent value="summary" className={WORKSPACE_GRID_CLASS}>
-          {/* Setup/access alerts live at the top of Summary, never above the nav. */}
-          <div className="md:col-span-3 empty:hidden">
-            <SetupStatusBanner
-              form={form}
-              onSendSetup={sendSetup}
-              onCopySetup={copySetupLink}
-              onSendReset={sendReset}
-              onCopyReset={copyResetLink}
-              onSetPassword={() => { setPwValue(""); setPwOpen(true); }}
-              onGoToAccountTab={() => setTab("account")}
-            />
-          </div>
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
@@ -1983,7 +1971,7 @@ function ClientOverviewSnapshot({
               fallbackAction={form.coaching_package || liveSale ? null : { label: "Add package", onClick: () => onGoToTab("coaching") }}
             />
             <SnapshotField label="Program phase" value={form.program_phase} fallbackAction={form.program_phase ? null : { label: "Add phase", onClick: () => onGoToTab("coaching") }} />
-            <SnapshotField label="Login" value={form.user_id ? "Account active" : null} fallbackAction={form.user_id ? null : { label: "Send setup link", onClick: () => onSendSetup() }} />
+            <SnapshotField label="Login" value={form.user_id ? "Account active" : "Needs setup"} fallbackAction={{ label: "Manage access", onClick: () => onGoToTab("account") }} />
           </div>
         </div>
       </Card>

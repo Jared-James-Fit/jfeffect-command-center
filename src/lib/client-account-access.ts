@@ -51,12 +51,7 @@ export function describeAccountAccess(
   let needsAttention: boolean;
   let stage: ClientAccountAccess["stage"];
   let primaryAction: ClientAccountAccess["primaryAction"];
-  if (accessDisabled) {
-    statusLabel = "Access disabled";
-    needsAttention = true;
-    stage = "access_disabled";
-    primaryAction = "none";
-  } else if (!hasAccount && inviteExpired) {
+  if (!hasAccount && inviteExpired) {
     statusLabel = "Invite expired";
     needsAttention = true;
     stage = "setup_expired";
@@ -83,7 +78,7 @@ export function describeAccountAccess(
     primaryAction = "password_recovery";
   }
 
-  if (missingEmail || input.needs_admin_help) needsAttention = true;
+  if (missingEmail || input.needs_admin_help || accessDisabled) needsAttention = true;
 
   const inviteStatusLabel = inviteSent === null
     ? "Not sent"
