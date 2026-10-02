@@ -3412,6 +3412,7 @@ export type Database = {
           unavailable_training_days: string[] | null
           updated_at: string
           user_id: string | null
+          velocity_input_default: boolean
           warmup_protocol_id: string | null
           water_target_locked_by_coach: boolean
           website: string | null
@@ -3594,6 +3595,7 @@ export type Database = {
           unavailable_training_days?: string[] | null
           updated_at?: string
           user_id?: string | null
+          velocity_input_default?: boolean
           warmup_protocol_id?: string | null
           water_target_locked_by_coach?: boolean
           website?: string | null
@@ -3776,6 +3778,7 @@ export type Database = {
           unavailable_training_days?: string[] | null
           updated_at?: string
           user_id?: string | null
+          velocity_input_default?: boolean
           warmup_protocol_id?: string | null
           water_target_locked_by_coach?: boolean
           website?: string | null
@@ -5388,6 +5391,36 @@ export type Database = {
           submitted_by?: string | null
           timezone?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      exercise_dedupe_audit: {
+        Row: {
+          canonical_id: string
+          canonical_name: string
+          duplicate_id: string
+          duplicate_name: string
+          id: number
+          reason: string
+          remapped_at: string
+        }
+        Insert: {
+          canonical_id: string
+          canonical_name: string
+          duplicate_id: string
+          duplicate_name: string
+          id?: number
+          reason?: string
+          remapped_at?: string
+        }
+        Update: {
+          canonical_id?: string
+          canonical_name?: string
+          duplicate_id?: string
+          duplicate_name?: string
+          id?: number
+          reason?: string
+          remapped_at?: string
         }
         Relationships: []
       }
@@ -14795,6 +14828,7 @@ export type Database = {
           is_bodyweight: boolean
           is_working_set: boolean | null
           load_type: string
+          mean_concentric_velocity_mps: number | null
           normalized_kg: number | null
           normalized_lb: number | null
           notes: string | null
@@ -14826,6 +14860,7 @@ export type Database = {
           is_bodyweight?: boolean
           is_working_set?: boolean | null
           load_type?: string
+          mean_concentric_velocity_mps?: number | null
           normalized_kg?: number | null
           normalized_lb?: number | null
           notes?: string | null
@@ -14857,6 +14892,7 @@ export type Database = {
           is_bodyweight?: boolean
           is_working_set?: boolean | null
           load_type?: string
+          mean_concentric_velocity_mps?: number | null
           normalized_kg?: number | null
           normalized_lb?: number | null
           notes?: string | null
@@ -16091,7 +16127,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           entry_at?: string
-          entry_date?: string
+          entry_date: string
           id?: string
           note?: string | null
           source?: string
@@ -19309,6 +19345,10 @@ export type Database = {
         Args: { _review_id: string }
         Returns: string
       }
+      canonicalize_program_exercise_refs: {
+        Args: { node: Json }
+        Returns: Json
+      }
       claim_message_for_retry: {
         Args: { _message_id: string }
         Returns: {
@@ -19506,6 +19546,8 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      exercise_identity_name: { Args: { value: string }; Returns: string }
+      exercise_identity_singular: { Args: { value: string }; Returns: string }
       expire_overdue_sessions: { Args: never; Returns: number }
       finalize_message_send: {
         Args: { _error?: string; _message_id: string; _status: string }
@@ -19699,6 +19741,10 @@ export type Database = {
       jf_member_has_full_access: {
         Args: { _user_id: string }
         Returns: boolean
+      }
+      jsonb_replace_exact_strings: {
+        Args: { new_text: string; node: Json; old_text: string }
+        Returns: Json
       }
       legal_effective_enforcement: {
         Args: { _doc_id: string; _user_id: string }
