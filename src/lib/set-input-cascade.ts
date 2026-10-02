@@ -4,6 +4,7 @@
  * Programmed ranges always start at their top-end target (6–10 => 10,
  * RPE 7–8 => 8). A change made on set N cascades only to N and the sets
  * below it, matching the existing weight-input mental model.
+ * Wired into the live workout logger; manual lower-set edits are boundaries.
  */
 
 export type CascadedInputField = "reps" | "rpe";
