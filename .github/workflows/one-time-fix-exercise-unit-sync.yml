@@ -10,15 +10,15 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'Add one-time exercise unit sync patch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Make exercise units canonical per exercise
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
           import re
 
@@ -32,7 +32,7 @@ jobs:
               ),
               (
                   '      const exId = r.exercises?.id;\n      const rowKey = `row:${r.id}`;\n      // Per-row override only — two cards with the same exerciseId (e.g.\n      // a primary + secondary backoff of the same lift) must toggle\n      // independently. The persisted client/member preference (saved by\n      // exerciseId) still seeds future workouts via resolveExerciseUnit.\n      const local = unitOverrides[rowKey];',
-                  '      const exId = r.exercises?.id ?? r.exercise_id ?? null;\n      const rowKey = `row:${r.id}`;\n      // Unit choice belongs to the canonical exercise, not the program row.\n      // A top set + backoff (or any repeated card) for the same exercise must\n      // switch together immediately. Rows without a canonical exercise id keep\n      // a row-scoped fallback so unrelated name-only exercises never collide.\n      const preferenceKey = exId ? `exercise:${exId}` : rowKey;\n      const local = unitOverrides[preferenceKey];'
+                  '      const exId = r.exercises?.id ?? r.exercise_id ?? null;\n      const rowKey = `row:${r.id}`;\n      // Unit choice belongs to the canonical exercise, not the program row.\n      // Repeated cards for the same exercise switch together immediately.\n      const preferenceKey = exId ? `exercise:${exId}` : rowKey;\n      const local = unitOverrides[preferenceKey];'
               ),
               (
                   'onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? null, r.id, u)}',
@@ -55,20 +55,14 @@ jobs:
     const previousOverride = unitOverrides[key];
     const prevUnit = resolvedUnitMap[rowKey] ?? unit;
 
-    // Optimistic exercise-level override: every visible card sharing the same
-    // canonical exercise id updates in the same render.
+    // One optimistic override per exercise so top sets/backoffs stay in sync.
     setUnitOverrides((m) => ({ ...m, [key]: next }));
 
     if (client?.id && exerciseId) {
       try {
-        if (adapter) {
-          await adapter.saveExerciseUnitPref({ exerciseId, unit: next });
-        } else {
-          await saveExerciseUnitPref(client.id, exerciseId, next);
-        }
-      } catch (error) {
-        // Never pretend a preference saved. Restore the previous local state
-        // and surface the failure so a refresh cannot surprise the athlete.
+        if (adapter) await adapter.saveExerciseUnitPref({ exerciseId, unit: next });
+        else await saveExerciseUnitPref(client.id, exerciseId, next);
+      } catch {
         setUnitOverrides((m) => {
           const copy = { ...m };
           if (previousOverride === "kg" || previousOverride === "lb") copy[key] = previousOverride;
@@ -88,11 +82,8 @@ jobs:
         setUnitOverrides((m) => ({ ...m, [key]: prevUnit }));
         if (client?.id && exerciseId) {
           try {
-            if (adapter) {
-              await adapter.saveExerciseUnitPref({ exerciseId, unit: prevUnit });
-            } else {
-              await saveExerciseUnitPref(client.id, exerciseId, prevUnit);
-            }
+            if (adapter) await adapter.saveExerciseUnitPref({ exerciseId, unit: prevUnit });
+            else await saveExerciseUnitPref(client.id, exerciseId, prevUnit);
             await qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
           } catch {
             toast.error("Could not restore the previous exercise unit");
@@ -108,12 +99,15 @@ jobs:
               raise SystemExit(f'Expected exactly one setExerciseUnit block; patched {count}')
 
           path.write_text(text)
+          PY
       - name: Verify patch
+        shell: bash
         run: |
-          grep -q 'const preferenceKey = exId ? `exercise:${exId}` : rowKey;' src/components/workout-day/WorkoutDayView.tsx
-          grep -q 'r.exercises?.id ?? r.exercise_id ?? null' src/components/workout-day/WorkoutDayView.tsx
+          grep -Fq 'const preferenceKey = exId ? `exercise:${exId}` : rowKey;' src/components/workout-day/WorkoutDayView.tsx
+          grep -Fq 'r.exercises?.id ?? r.exercise_id ?? null' src/components/workout-day/WorkoutDayView.tsx
           git diff --check
       - name: Commit fix
+        shell: bash
         run: |
           git config user.name "JF Effect Automation"
           git config user.email "actions@users.noreply.github.com"
