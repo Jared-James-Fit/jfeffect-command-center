@@ -222,6 +222,10 @@ export function customSaleToProductInput(d: CustomSaleDraft, opts: { idempotency
     generateStripeLink: d.paymentType !== "free" && priceCents >= 50,
     checkoutMode: (recurring ? "subscription" : "payment") as "subscription" | "payment",
     billingFrequency: recurring ? d.interval : null,
+    paymentCount:
+      recurring && d.durationMode === "fixed"
+        ? Math.max(1, Math.trunc(Number(d.numberOfPayments) || 0))
+        : null,
     sessionsIncluded: sessions,
     sessionFulfillment: d.sessionDelivery,
     isOneOff: !d.saveAsProduct,

@@ -30,8 +30,9 @@ import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { MassMessageDialog } from "@/components/mass-message-dialog";
 import { Megaphone, Users as UsersIcon } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { deriveInboxWorkflow } from "@/lib/inbox-workflow";
 
-const FILTERS = ["All", "Unread", "Needs Response", "High Priority", "Important", "Resolved", "Archived"] as const;
+const FILTERS = ["Inbox", "Your Turn", "Waiting on Client", "Forms & Check-ins", "Unread", "Priority", "Resolved", "Archived"] as const;
 type Filter = typeof FILTERS[number];
 
 export const Route = createFileRoute("/_authenticated/admin/messages")({
@@ -143,6 +144,23 @@ export function MessagesInbox({
     },
   });
 
+  const { data: pendingSubmissions = [] } = useQuery({
+    queryKey: ["message-form-checkin-inbox"],
+    staleTime: 15_000,
+    queryFn: async () => {
+      const [native, checkins] = await Promise.all([
+        (supabase.from("nf_submissions") as any).select("id, client_id, submitted_at, reviewed_at").not("submitted_at", "is", null).is("reviewed_at", null).limit(1000),
+        (supabase.from("messenger_checkins") as any).select("id, client_id, submitted_at, status").eq("status", "completed").not("submitted_at", "is", null).limit(1000),
+      ]);
+      if (native.error) throw native.error;
+      if (checkins.error) throw checkins.error;
+      return [
+        ...(native.data ?? []).map((row: any) => ({ ...row, kind: "form" as const })),
+        ...(checkins.data ?? []).map((row: any) => ({ ...row, kind: "checkin" as const })),
+      ];
+    },
+  });
+
   // Realtime
   useEffect(() => {
     let pending: ReturnType<typeof setTimeout> | null = null;
@@ -164,6 +182,8 @@ export function MessagesInbox({
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, () => {
         scheduleInvalidate(["message-lift-review-inbox"]);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "nf_submissions" }, () => scheduleInvalidate(["message-form-checkin-inbox"]))
+      .on("postgres_changes", { event: "*", schema: "public", table: "messenger_checkins" }, () => scheduleInvalidate(["message-form-checkin-inbox"]))
       .subscribe();
     return () => {
       if (pending) clearTimeout(pending);
@@ -216,7 +236,15 @@ export function MessagesInbox({
         const last = lastByClient.get(c.id);
         const unread = unreadByClient.get(c.id) ?? 0;
         const liftReview = liftReviewsByClient.get(c.id) ?? null;
-        return { client: c, state, last, unread, liftReview };
+        const submissions = pendingSubmissions.filter((submission: any) => submission.client_id === c.id);
+        const workflow = deriveInboxWorkflow({
+          lastMessage: last,
+          storedStatus: state?.status,
+          pendingLiftReview: !!liftReview,
+          pendingForm: submissions.some((submission: any) => submission.kind === "form"),
+          pendingCheckin: submissions.some((submission: any) => submission.kind === "checkin"),
+        });
+        return { client: c, state, last, unread, liftReview, workflow };
       })
       .filter((it) => {
         if (search) {
@@ -226,10 +254,11 @@ export function MessagesInbox({
         const status = it.state?.status ?? "open";
         const priority = it.state?.priority ?? "Normal";
         switch (filter) {
-          case "Unread": return it.unread > 0 || !!it.liftReview;
-          case "Needs Response": return status === "needs_response" || !!it.liftReview;
-          case "High Priority": return priority === "High Priority";
-          case "Important": return priority === "Important";
+          case "Your Turn": return it.workflow.state === "your_turn";
+          case "Waiting on Client": return it.workflow.state === "waiting_on_client";
+          case "Forms & Check-ins": return it.workflow.isFormOrCheckin;
+          case "Unread": return it.unread > 0;
+          case "Priority": return priority === "High Priority" || priority === "Important";
           case "Resolved": return status === "resolved";
           case "Archived": return status === "archived";
           default: return status !== "archived";
@@ -241,7 +270,7 @@ export function MessagesInbox({
         return bt.localeCompare(at);
       });
     return items;
-  }, [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, search, filter]);
+  }, [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, pendingSubmissions, search, filter]);
 
   const selected = clients.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateMap.get(selectedId) : undefined;
@@ -405,7 +434,7 @@ export function MessagesInbox({
         >
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
-          ) : conversations.map(({ client, state, last, unread, liftReview }) => (
+          ) : conversations.map(({ client, state, last, unread, liftReview, workflow }) => (
             <SwipeableRow
               key={client.id}
               className="border-b border-border/60"
@@ -487,9 +516,9 @@ export function MessagesInbox({
                   <UnreadBadge count={unread} />
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {state?.status === "needs_response" && (
+                  {workflow.badge && (
                     <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px]">
-                      Needs Response
+                      {workflow.badge}
                     </Badge>
                   )}
                   {liftReview && (
@@ -570,11 +599,6 @@ export function MessagesInbox({
                   {selectedState?.priority && selectedState.priority !== "Normal" && (
                     <PriorityChip priority={selectedState.priority} />
                   )}
-                  {selectedState?.status === "needs_response" && (
-                    <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px]">
-                      Needs Response
-                    </Badge>
-                  )}
                   {selectedState?.status === "resolved" && (
                     <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 text-[10px]">
                       Resolved
@@ -640,7 +664,6 @@ export function MessagesInbox({
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Status</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => updateStatus("open")}>Open</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => updateStatus("needs_response")}>Needs Response</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => updateStatus("resolved")}>Resolved</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => updateStatus("archived")}>Archived</DropdownMenuItem>
                   <DropdownMenuSeparator />

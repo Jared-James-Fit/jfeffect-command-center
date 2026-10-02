@@ -50,10 +50,13 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
     refetchIntervalInBackground: false,
     placeholderData: (prev) => prev, // keep last known count while refetching
     queryFn: async (): Promise<AdminBadgeCounts> => {
-      const [needsResp, liftPending, liftUrgent, mediaPending, supportAlerts] = await Promise.all([
-        (supabase.from("conversation_state") as any)
+      const [clientMessages, liftPending, liftUrgent, mediaPending, supportAlerts] = await Promise.all([
+        (supabase.from("messages") as any)
           .select("client_id", { count: "exact", head: true })
-          .eq("status", "needs_response"),
+          .eq("sender_role", "client")
+          .is("read_by_admin_at", null)
+          .eq("is_internal_note", false)
+          .in("delivery_status", ["sent", "sending"]),
         (supabase.from("lift_videos") as any)
           .select("id", { count: "exact", head: true })
           .in("status", ["New Upload", "Awaiting Review"]),
@@ -71,7 +74,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
           .in("status", ["open", "in_progress"]),
       ]);
       return {
-        messages: needsResp.count ?? 0,
+        messages: clientMessages.count ?? 0,
         liftReviews: liftPending.count ?? 0,
         liftUrgent: liftUrgent.count ?? 0,
         checkIns: mediaPending.count ?? 0,

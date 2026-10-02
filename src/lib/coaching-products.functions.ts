@@ -110,6 +110,7 @@ const createSchema = z.object({
   // Canonical cadence (preferred). When present it wins over billingInterval
   // and maps through toStripeRecurring() — bi-weekly = week x 2.
   billingFrequency: z.enum(["weekly", "biweekly", "monthly", "yearly"]).optional().nullable(),
+  paymentCount: z.number().int().min(1).max(120).optional().nullable(),
   // Access level (0-5) for display purposes
   accessLevel: z.number().int().min(0).max(5).optional().nullable(),
   isMemberFacing: z.boolean().optional(),
@@ -174,6 +175,10 @@ export const createCoachingProduct = createServerFn({ method: "POST" })
           : { interval: data.billingInterval as string, interval_count: 1 };
         priceParams["recurring[interval]"] = recurring.interval;
         priceParams["recurring[interval_count]"] = recurring.interval_count;
+        if (data.paymentCount) {
+          priceParams["metadata[plan_type]"] = "fixed_term";
+          priceParams["metadata[payment_count]"] = data.paymentCount;
+        }
       }
       const price = await stripeFetch("/prices", {
         method: "POST",
