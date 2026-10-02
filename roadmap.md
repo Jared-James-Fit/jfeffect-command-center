@@ -11,3 +11,8 @@
 - [ ] Consolidate admin Coaching Setup and Login & Access into one task-oriented setup workflow.
 - [ ] Fix setup-link validity/status tracking and verify canonical send/copy/reset actions.
 - [ ] QA existing client profiles across account/setup states without changing client data.
+- [ ] Replace Messaging “Needs Response” with action-based Inbox, Your Turn, Waiting on Client, Forms & Check-ins, Unread, and Priority states.
+- [ ] Verify automated reminders, client replies, submitted forms/check-ins, review/response transitions, and mobile filters.
+- [ ] Reconcile Marc Asugui’s intended 16-session, 4 × CA$160 biweekly Stripe-backed sale without charging him or duplicating records.
+- [ ] Verify Marc’s canonical session entitlement and ledger-backed booking/completion consumption.
+- [ ] Run focused and full QA, production build, publish, then verify the live app.
