@@ -207,6 +207,11 @@ export function PublicAchievements({ badges, name }: { badges: PublicBadge[]; na
  * early leaves the rest for next time. Waits while another dialog/sheet is open
  * so it never stacks on top of the workout recap or other popups.
  */
+// Clients who pressed X during this app launch. In-memory on purpose: it
+// survives navigation but resets on reload/relaunch, so the remaining unseen
+// milestones come back next time. "Seen" itself stays server-side.
+const dismissedThisLaunch = new Set<string>();
+
 export function AchievementCelebrations({ clientId, catalog }: { clientId: string; catalog: CatalogBadge[] }) {
   const qc = useQueryClient();
   const { data: unseen = [] } = useUnseenAchievements(clientId, catalog);
@@ -218,10 +223,10 @@ export function AchievementCelebrations({ clientId, catalog }: { clientId: strin
 
   // Snapshot the queue once per batch so refetches can't reshuffle it mid-reveal.
   useEffect(() => {
-    if (queue.length) return;
+    if (queue.length || dismissedThisLaunch.has(clientId)) return;
     const fresh = unseen.filter((b) => !acked.current.has(b.badge_key));
     if (fresh.length) { setQueue(fresh); setIndex(0); }
-  }, [unseen, queue.length]);
+  }, [unseen, queue.length, clientId]);
 
   // Only open when nothing else modal is on screen.
   useEffect(() => {
@@ -256,9 +261,10 @@ export function AchievementCelebrations({ clientId, catalog }: { clientId: strin
     ack([b.badge_key]); ping();
     if (index < queue.length - 1) setIndex((i) => i + 1); else finish();
   };
-  // Dismissing never acknowledges a milestone. Any unacknowledged badges
-  // remain server-side as unseen and replay on the next app load/login.
-  const close = () => { finish(); };
+  // Dismissing never acknowledges a milestone, and hides the reveal for the
+  // rest of this launch. Unacknowledged badges stay unseen server-side and
+  // replay on the next app load/login.
+  const close = () => { dismissedThisLaunch.add(clientId); finish(); };
 
   const b = ready ? queue[index] : null;
   if (!b) return null;
