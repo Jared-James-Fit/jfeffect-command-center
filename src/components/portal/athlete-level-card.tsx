@@ -13,11 +13,12 @@ import { cn } from "@/lib/utils";
 import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type AchievementMetrics } from "@/lib/athlete-achievements";
 import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
 import { ArrowLeft } from "lucide-react";
+import { LEAGUE_RULES, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
 type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean };
 type LeagueRow = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean };
-const leagueScore=(r?:LeagueRow|null)=>Number(r?.monthly_xp??0)/1000;
+const leagueScore=(r?:LeagueRow|null)=>leaguePointsFromEncoded(r?.monthly_xp);
 
 function useXpEvents(clientId: string) {
   return useQuery({
@@ -73,8 +74,8 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
             const gap = outside && tenth ? Math.max(0, leagueScore(tenth)-leagueScore(leagueMe)) : 0;
             return <span className="shrink-0 text-right">
               <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{outside ? "Your score" : "Your rank"}</span>
-              <span className="block text-lg font-bold leading-tight text-primary">{outside ? leagueScore(leagueMe).toFixed(1) : "#"+leagueMe.rank}</span>
-              <span className="block text-xs font-bold text-muted-foreground">{outside ? gap.toFixed(1)+" pts to Top 10" : leagueScore(leagueMe).toFixed(1)+" pts"}</span>
+              <span className="block text-lg font-bold leading-tight text-primary">{outside ? formatLeaguePoints(leagueScore(leagueMe)) : "#"+leagueMe.rank}</span>
+              <span className="block text-xs font-bold text-muted-foreground">{outside ? formatLeaguePoints(gap)+" pts to Top 10" : formatLeaguePoints(leagueScore(leagueMe))+" pts"}</span>
             </span>;
           })()}
           <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-muted-foreground"/>
@@ -103,7 +104,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
                   <div className="text-lg leading-none">{medal}</div>
                   <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{ordinal}</div>
                   <div className="mt-1 truncate text-xs font-semibold">{r.display_name}</div>
-                  <div className="mt-0.5 text-[11px] font-bold text-primary">{leagueScore(r).toFixed(1)} pts</div>
+                  <div className="mt-0.5 text-[11px] font-bold text-primary">{formatLeaguePoints(leagueScore(r))} pts</div>
                 </button>
               );
             })}
@@ -289,7 +290,7 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
   const since = p?.first_workout_at ? format(new Date(p.first_workout_at), "MMM yyyy") : null;
   const lastWorkout = p?.last_workout_at ? format(new Date(p.last_workout_at), "MMM d") : null;
   const leagueSub = theirLeague?.qualified && theirLeague.rank < 999
-    ? `#${theirLeague.rank} · ${theirLeague.xp.toFixed(1)} pts`
+    ? `#${theirLeague.rank} · ${formatLeaguePoints(theirLeague.xp)} pts`
     : undefined;
 
   return (
@@ -394,7 +395,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     <div className="space-y-4">
       <SheetHeader className="text-left">
         <SheetTitle>{monthName} Performance League</SheetTitle>
-        <SheetDescription>Monthly performance points. Top 10 resets on the 1st. Tap any athlete to view their public profile.</SheetDescription>
+        <SheetDescription>Earn points all month. Tap anyone to see their profile.</SheetDescription>
       </SheetHeader>
 
       {me && !me.qualified && (
@@ -405,8 +406,16 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
       )}
 
       <div className="rounded-2xl border bg-muted/20 p-3">
-        <div className="text-xs font-black">Performance points accumulate all month</div>
-        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground">Training 10 pts/workout · Complete logging 6.25 pts/workout · Bodyweight 2.5 pts/log · Performance improvement rewards progress</div>
+        <div className="text-xs font-black">How to earn points</div>
+        <ul className="mt-2 space-y-1">
+          {LEAGUE_RULES.map((rule) => (
+            <li key={rule.key} className="flex items-baseline justify-between gap-3 text-xs">
+              <span>{rule.label}{"note" in rule && rule.note ? <span className="text-muted-foreground"> · {rule.note}</span> : null}</span>
+              <span className="shrink-0 font-black text-primary">+{rule.points}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2 text-[11px] text-muted-foreground">Resets on the 1st. Log your bodyweight once to join.</div>
       </div>
 
       {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
@@ -420,7 +429,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
                 <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
                 <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
                 <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
-                <div className="text-xs font-black text-primary">{Number(r.xp ?? 0).toFixed(1)} pts</div>
+                <div className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</div>
               </button>
             ) : <div key={i} />)}
           </div>
@@ -430,7 +439,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
                 <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
                 <RankAvatar row={r} size="h-9 w-9" />
                 <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div></div>
-                <span className="text-xs font-black text-primary">{Number(r.xp ?? 0).toFixed(1)} pts</span>
+                <span className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</span>
               </li>
             ))}
           </ul>
@@ -440,23 +449,20 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
       {me?.qualified && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
-          <div className="mt-1 text-2xl font-black text-primary">{Number(me.xp ?? 0).toFixed(1)} <span className="text-sm">pts</span></div>
-          <div className="mt-1 text-xs text-muted-foreground">{plural(me.workouts_completed, "workout")} · {me.fully_logged} fully logged · {Number(me.strength_score ?? 0).toFixed(1)} performance pts · BW verified</div>
+          <div className="mt-1 text-2xl font-black text-primary">{formatLeaguePoints(me.xp)} <span className="text-sm">pts</span></div>
+          <div className="mt-1 text-xs text-muted-foreground">{plural(me.workouts_completed, "workout")} · {me.fully_logged} fully logged · {formatLeaguePoints(leaguePointsFromEncoded(me.strength_score))} improvement pts</div>
           {(() => {
             const tenth = data.filter((r) => r.qualified && r.rank <= 10).sort((a,b)=>a.rank-b.rank).at(-1);
             const gap = me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
             return me.rank > 10 ? (
               <div className="mt-3 rounded-xl bg-background/80 px-3 py-2 text-sm font-bold text-primary">
-                {gap.toFixed(1)} pts to crack the Top 10
+                {formatLeaguePoints(gap)} pts to crack the Top 10
               </div>
             ) : null;
           })()}
         </div>
       )}
 
-      <div className="rounded-xl border bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-bold text-foreground">How scoring works:</span> points keep accumulating throughout the month. Programmed workouts earn 10 points each, fully logged workouts earn 6.25 points each, bodyweight logs earn 2.5 points each, and performance improvement adds points when you beat your prior performance on the same exercises. There is no 110-point maximum. Your Logging Level and Powerlifting Records are separate systems.
-      </div>
     </div>
   );
 }
