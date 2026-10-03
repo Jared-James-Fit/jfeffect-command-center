@@ -19587,6 +19587,9 @@ export type Database = {
           display_name: string
           first_workout_at: string
           is_me: boolean
+          last_workout_at: string
+          month_workouts_completed: number
+          month_workouts_fully_logged: number
           workouts_completed: number
           workouts_fully_logged: number
           xp: number
