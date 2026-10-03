@@ -39,14 +39,14 @@
 create or replace function public.league_tz()
 returns text language sql immutable as $$ select 'America/Winnipeg'::text $$;
 
--- First league month with a tamper-resistant ledger. Earlier months are never
--- finalized with a boost.
 -- Minimum prescribed workouts in a full month to be boost-eligible (prorated
 -- for mid-month joiners). Stops a near-empty program (1-2 sessions) from
 -- being matched to a full training month.
 create or replace function public.league_min_prescribed()
 returns integer language sql immutable as $$ select 6 $$;
 
+-- First league month with a tamper-resistant ledger. Earlier months are never
+-- finalized with a boost.
 create or replace function public.league_boost_start_month()
 returns date language sql immutable as $$ select date '2026-10-01' $$;
 
