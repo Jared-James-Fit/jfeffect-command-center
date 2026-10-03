@@ -1,0 +1,58 @@
+name: One-time workout action layout fix
+on:
+  push:
+    paths:
+      - '.github/workflows/one-time-workout-action-layout.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Improve workout action controls
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/components/workout-day/WorkoutDayView.tsx')
+          s=p.read_text()
+          old='''              className="h-8 w-8 rounded-full p-0 text-muted-foreground"
+              aria-label={`More options for ${name}`}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>'''
+          new='''              className="h-9 min-w-[44px] rounded-full px-2.5 text-xs font-medium text-muted-foreground"
+              aria-label={`More options for ${name}`}
+            >
+              <MoreHorizontal className="mr-1 h-4 w-4" />
+              <span className="hidden min-[390px]:inline">More</span>
+            </Button>'''
+          assert old in s, 'More trigger block not found'
+          s=s.replace(old,new,1)
+          old='''                className="h-8 w-8 rounded-full p-0 text-muted-foreground"
+                aria-label={`Reorder ${name}`}
+              >
+                <GripVertical className="h-4 w-4" />
+              </Button>'''
+          new='''                className="h-9 min-w-[44px] rounded-full px-2.5 text-xs font-medium text-muted-foreground"
+                aria-label={`Reorder ${name}`}
+              >
+                <GripVertical className="mr-1 h-4 w-4" />
+                <span className="hidden min-[390px]:inline">Move</span>
+              </Button>'''
+          assert old in s, 'Reorder trigger block not found'
+          s=s.replace(old,new,1)
+          # Give the action strip a little more room while preserving the existing layout.
+          s=s.replace('''<div className="mt-2 flex items-center gap-1.5">''','''<div className="mt-2 flex items-center gap-1 sm:gap-1.5">''',1)
+          p.write_text(s)
+          PY
+      - name: Remove one-time workflow and commit
+        run: |
+          rm .github/workflows/one-time-workout-action-layout.yml
+          git config user.name 'JF Effect automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/components/workout-day/WorkoutDayView.tsx .github/workflows/one-time-workout-action-layout.yml
+          git commit -m 'Improve mobile More and Move workout controls'
+          git push origin main
