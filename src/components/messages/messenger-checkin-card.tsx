@@ -171,6 +171,13 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
   },
 };
 
+// Form / check-in cards are always blue so "action required" reads differently
+// from coach (red) and client (neutral) bubbles.
+const FORM_CARD =
+  "w-[min(76vw,310px)] max-w-full rounded-2xl border border-blue-200 bg-blue-50 p-3 text-slate-900 shadow-sm dark:border-blue-400/30 dark:bg-blue-950 dark:text-blue-50";
+const FORM_ICON = "bg-blue-600/10 text-blue-600 dark:bg-blue-400/15 dark:text-blue-300";
+const FORM_MUTED = "text-blue-900/70 dark:text-blue-100/70";
+
 function taskQuestions(taskType: MessengerCheckinTaskType) {
   return taskType === "nutrition_review" ? NUTRITION : WEEKLY;
 }
@@ -208,17 +215,17 @@ export function MessengerCheckinRequestCard({
 
   return (
     <>
-      <div className="w-[min(76vw,310px)] rounded-2xl border border-border bg-background/90 p-3 text-foreground shadow-sm">
+      <div className={FORM_CARD}>
         <div className="flex items-start gap-3">
           <span className={cn(
             "grid h-9 w-9 shrink-0 place-items-center rounded-full",
-            done ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary",
+            done ? "bg-emerald-500/10 text-emerald-600" : FORM_ICON,
           )}>
             {done ? <CheckCircle2 className="h-5 w-5" /> : <ClipboardCheck className="h-5 w-5" />}
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold">{titleFor(taskType)}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground">
+            <div className={cn("mt-0.5 text-xs", FORM_MUTED)}>
               {isLoading ? "Loading…" : done ? "Submitted" : "About 60–90 seconds"}
             </div>
           </div>
@@ -226,14 +233,14 @@ export function MessengerCheckinRequestCard({
 
         {!isLoading && !done && role === "client" && (
           <Button
-            className="mt-3 h-10 w-full font-semibold"
+            className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
             onClick={() => setOpen(true)}
           >
             Start check-in <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         )}
         {!isLoading && !done && role === "admin" && (
-          <div className="mt-3 rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <div className="mt-3 rounded-xl bg-blue-600/10 px-3 py-2 text-xs font-medium text-blue-700 dark:bg-blue-400/15 dark:text-blue-200">
             Waiting for client
           </div>
         )}
@@ -566,7 +573,7 @@ export function MessengerCheckinSubmissionCard({
 
   if (isLoading || !data) {
     return (
-      <div className="flex w-[min(76vw,330px)] items-center gap-2 rounded-2xl border border-border bg-background/90 p-3 text-xs text-muted-foreground">
+      <div className={cn(FORM_CARD, "flex items-center gap-2 text-xs")}>
         <Loader2 className="h-4 w-4 animate-spin" /> Loading check-in…
       </div>
     );
@@ -577,12 +584,12 @@ export function MessengerCheckinSubmissionCard({
 
   if (role === "client") {
     return (
-      <div className="w-[min(76vw,310px)] rounded-2xl border border-emerald-500/20 bg-background/90 p-3 text-foreground shadow-sm">
+      <div className={FORM_CARD}>
         <div className="flex items-center gap-2">
           <CheckCircle2 className="h-5 w-5 text-emerald-600" />
           <div>
             <div className="text-sm font-bold">{titleFor(taskType)} sent</div>
-            <div className="text-xs text-muted-foreground">Your coach has the full update.</div>
+            <div className={cn("text-xs", FORM_MUTED)}>Your coach has the full update.</div>
           </div>
         </div>
       </div>
@@ -590,14 +597,14 @@ export function MessengerCheckinSubmissionCard({
   }
 
   return (
-    <div className="w-[min(78vw,390px)] rounded-2xl border border-border bg-background p-3 text-foreground shadow-sm">
+    <div className={cn(FORM_CARD, "w-[min(78vw,390px)]")}>
       <div className="flex items-center gap-2">
-        <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
+        <span className={cn("grid h-9 w-9 place-items-center rounded-full", FORM_ICON)}>
           <Sparkles className="h-5 w-5" />
         </span>
         <div className="min-w-0">
           <div className="text-sm font-bold">{titleFor(taskType)} recap</div>
-          <div className="text-xs text-muted-foreground">AI-assisted coach summary</div>
+          <div className={cn("text-xs", FORM_MUTED)}>AI-assisted coach summary</div>
         </div>
       </div>
 
