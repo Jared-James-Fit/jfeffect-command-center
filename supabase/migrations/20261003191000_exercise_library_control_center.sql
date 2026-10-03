@@ -57,7 +57,7 @@ BEGIN
      WHERE r.exercise_id IS NOT NULL AND NOT coalesce(b.archived, false)
   ), prog AS (
     SELECT x.exercise_id, count(DISTINCT x.block_id)::int programs,
-           count(DISTINCT x.client_id) FILTER (WHERE x.status = 'active')::int active_clients
+           count(DISTINCT x.client_id) FILTER (WHERE lower(x.status) = 'active')::int active_clients
       FROM rows x GROUP BY 1
   ), logged AS (
     SELECT x.exercise_id, count(DISTINCT x.day_id)::int logged_workouts, count(*)::int logged_sets
@@ -65,9 +65,10 @@ BEGIN
      WHERE rr.actual_reps IS NOT NULL OR rr.completed_duration_seconds IS NOT NULL
      GROUP BY 1
   ), tpl AS (
-    SELECT e.id exercise_id, count(*)::int templates
+    -- One regex pass over each template payload (~10 MB total), not one scan per exercise.
+    SELECT m[1]::uuid exercise_id, count(DISTINCT t.id)::int templates
       FROM public.pl_templates t
-      JOIN public.exercises e ON position(e.id::text IN t.payload::text) > 0
+     CROSS JOIN LATERAL regexp_matches(t.payload::text, '"exercise_id": "([0-9a-f-]{36})"', 'g') m
      WHERE NOT coalesce(t.archived, false)
      GROUP BY 1
   )
@@ -99,7 +100,7 @@ BEGIN
     LEFT JOIN public.pl_row_results rr ON rr.row_id = r.id
    WHERE r.exercise_id = _exercise_id AND NOT coalesce(b.archived, false)
    GROUP BY b.client_id, c.preferred_name, c.full_name, b.id, b.name, b.status, b.start_date
-   ORDER BY (b.status = 'active') DESC, b.start_date DESC NULLS LAST
+   ORDER BY (lower(b.status) = 'active') DESC, b.start_date DESC NULLS LAST
    LIMIT 200;
 END;
 $$;

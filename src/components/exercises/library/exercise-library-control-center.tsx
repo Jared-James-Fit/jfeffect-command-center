@@ -680,7 +680,7 @@ function UsageDetail({ exerciseId }: { exerciseId: string }) {
       {data.map((r) => (
         <li key={r.block_id} className="flex items-center gap-2 px-2.5 py-1.5">
           <span className="min-w-0 flex-1 truncate"><b>{r.client_name}</b> · {r.block_name}</span>
-          <span className={cn("rounded px-1 text-[10px] font-bold uppercase", r.block_status === "active" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{r.block_status}</span>
+          <span className={cn("rounded px-1 text-[10px] font-bold uppercase", r.block_status?.toLowerCase() === "active" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>{r.block_status}</span>
           <span className="w-16 text-right tabular-nums text-muted-foreground">{r.logged_sets} sets</span>
         </li>
       ))}
