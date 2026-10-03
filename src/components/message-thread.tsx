@@ -876,10 +876,34 @@ export function MessageThread({
   }, [clientId, role]);
 
   const allMessages = useMemo(() => {
-    if (olderMessages.length === 0) return messages;
     const seen = new Set(messages.map((m) => m.id));
     const uniqueOlder = olderMessages.filter((m) => !seen.has(m.id));
-    return [...uniqueOlder, ...messages];
+    const combined = olderMessages.length === 0 ? messages : [...uniqueOlder, ...messages];
+
+    // A completed messenger check-in creates a client submission bubble. Once
+    // that exists, the original coach request should no longer render as a
+    // second check-in card (and especially must not keep saying “Waiting for
+    // client”). Keep only the completed submission in the visible timeline.
+    const submittedIds = new Set<string>();
+    for (const message of combined) {
+      for (const att of message.attachments ?? []) {
+        if (att?.kind === "checkin_submission" && att.checkin_submission_id) {
+          submittedIds.add(att.checkin_submission_id);
+        }
+      }
+    }
+
+    if (submittedIds.size === 0) return combined;
+    return combined.filter((message) => {
+      const atts = message.attachments ?? [];
+      const completedRequest = atts.some(
+        (att) =>
+          att?.kind === "checkin_request" &&
+          !!att.checkin_submission_id &&
+          submittedIds.has(att.checkin_submission_id),
+      );
+      return !completedRequest;
+    });
   }, [olderMessages, messages]);
 
   const canLoadOlder = messages.length >= 25;
