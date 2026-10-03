@@ -1,4 +1,4 @@
-import React, { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -17,6 +17,7 @@ import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
 import { Textarea } from "@/components/ui/textarea";
+import { AutoGrowTextarea, focusComposerAtEnd } from "@/components/ui/auto-grow-textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -1266,6 +1267,21 @@ export function MessageThread({
     initialUnreadFirstIdRef.current = null;
   }, [clientId]);
 
+  // Composer grew/shrank: if the reader was at the latest message, keep it
+  // glued above the composer like iMessage instead of letting it slide under.
+  const keepLatestVisible = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+  }, []);
+
+  const useSuggestedReply = useCallback((text: string) => {
+    setBody(text);
+    // Focus inside the tap so iOS opens the keyboard; the composer sizes
+    // itself to the inserted text on the next layout pass.
+    focusComposerAtEnd(composerRef.current);
+  }, []);
+
   const startReply = (message: Message) => {
     if (message.deleted_at || message.is_internal_note || message.id.startsWith("optimistic-")) return;
     setReplyingTo(message);
@@ -1873,7 +1889,7 @@ export function MessageThread({
                         message={m}
                         role={role}
                         clientId={clientId}
-                        onUseReply={(text) => setBody(text)}
+                        onUseReply={useSuggestedReply}
                       />
                     ))}
                   </div>
@@ -2286,23 +2302,19 @@ export function MessageThread({
             {/* Priority selector removed for simplicity. */}
 
             {/* Textarea */}
-            <Textarea
+            <AutoGrowTextarea
               ref={composerRef}
               value={body}
+              onHeightChange={keepLatestVisible}
               onChange={(e) => {
                 setBody(e.target.value);
-                const textarea = e.currentTarget;
-                textarea.style.height = "auto";
-                textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
-                textarea.style.overflowY = textarea.scrollHeight > 160 ? "auto" : "hidden";
                 if (e.target.value.trim().length > 0) broadcastTyping(false);
                 else broadcastTyping(true);
               }}
               onBlur={() => broadcastTyping(true)}
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
-              rows={1}
               enterKeyHint="send"
-              className="min-h-[40px] max-h-40 flex-1 resize-none overflow-y-hidden rounded-[22px] border-border/60 bg-background/60 px-4 py-2 text-sm leading-snug focus-visible:ring-1 focus-visible:ring-border focus-visible:border-border"
+              className="min-h-9 max-h-40 flex-1 resize-none rounded-[20px] border-border/60 bg-background/60 px-4 py-[7px] text-base leading-5 md:text-sm md:leading-5 focus-visible:ring-1 focus-visible:ring-border focus-visible:border-border"
               onFocus={() => {
                 // When the on-screen keyboard opens (composer focus), the
                 // outer chat container shrinks via --vv-h. Pin the scroller

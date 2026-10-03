@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getMySupportThread, sendSupportMessage, markMyThreadRead, getLiveSupportStatus } from "@/lib/member-support.functions";
 import { formatTicket } from "@/lib/support-ticket";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { Badge } from "@/components/ui/badge";
 import { Send, Bug, Lightbulb, HelpCircle, Headphones, Radio, Ticket } from "lucide-react";
 import { toast } from "sonner";
@@ -190,8 +190,7 @@ function SupportPage() {
         </div>
 
         <div className="flex items-end gap-2">
-          <Textarea
-            rows={1}
+          <AutoGrowTextarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => {
@@ -201,7 +200,8 @@ function SupportPage() {
               }
             }}
             placeholder="Message support…"
-            className="max-h-28 min-h-11 resize-none rounded-2xl bg-background"
+            enterKeyHint="send"
+            className="max-h-36 min-h-11 flex-1 resize-none rounded-[22px] bg-background px-4 py-[11px] text-base leading-5"
           />
           <Button
             onClick={() => void submit()}

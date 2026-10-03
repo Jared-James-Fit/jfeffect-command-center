@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -977,12 +978,16 @@ export function GroupMessageThread({
                 />
               )}
 
-              <Textarea
+              <AutoGrowTextarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
+                onHeightChange={() => {
+                  const el = scrollerRef.current;
+                  if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+                }}
                 placeholder={`Message ${groupName}…`}
-                rows={1}
-                className="min-h-10 max-h-40 flex-1 resize-none rounded-2xl border-input bg-background px-3 py-2 text-base sm:text-sm"
+                enterKeyHint="send"
+                className="min-h-10 max-h-40 flex-1 resize-none rounded-[20px] border-input bg-background px-4 py-[9px] text-base leading-5 sm:text-sm sm:leading-5"
                 onFocus={() => {
                   const el = scrollerRef.current;
                   if (!el) return;
