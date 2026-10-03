@@ -772,13 +772,12 @@ export function QuickSwapButton({
                 variant="outline"
                 className="w-full"
                 onClick={() => setMode("search")}
-                disabled={!exerciseId}
               >
                 <Search className="mr-2 h-4 w-4" /> Search All Exercises
               </Button>
               {!exerciseId && (
                 <p className="text-sm text-muted-foreground">
-                  This row isn't linked to an exercise, so we can't suggest alternates.
+                  This program row uses a legacy exercise name. Search the Exercise Library to swap it; your selection will link the row to the canonical exercise automatically.
                 </p>
               )}
               {exerciseId && isLoading && (
