@@ -127,6 +127,19 @@ declare
   candidate_30 date;
   inserted_count integer := 0;
 begin
+  -- An unsubmitted check-in whose card was already sent and whose due date
+  -- has passed must not block the next period forever. Retire it (the card
+  -- stays in the chat and can still be submitted) so the next one seeds.
+  update public.client_task_occurrences o
+  set status = 'skipped',
+      updated_at = now(),
+      payload_ref = coalesce(o.payload_ref, '{}'::jsonb)
+        || jsonb_build_object('skip_reason','superseded_unsubmitted')
+  where o.task_type in ('weekly_checkin','nutrition_review')
+    and o.status not in ('completed','skipped')
+    and o.due_local_date < (now() at time zone coalesce(nullif(o.client_tz,''),'UTC'))::date
+    and exists (select 1 from public.messenger_checkins mc where mc.occurrence_id = o.id);
+
   for r in
     select
       c.id as client_id,
