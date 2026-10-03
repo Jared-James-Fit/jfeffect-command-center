@@ -248,7 +248,28 @@ function statsFromEvents(events: XpEvent[]): BadgeStats {
   };
 }
 
-function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: string; myStats: BadgeStats; myBadgeCount: number; onBack: () => void }) {
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+type LeagueStat = { workouts_completed: number; rank: number; qualified: boolean; xp: number };
+
+function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-2xl border bg-card px-3 py-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-xl font-black tabular-nums leading-tight">{value}</div>
+      {sub && <div className="truncate text-[11px] text-muted-foreground">{sub}</div>}
+    </div>
+  );
+}
+
+function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, onBack }: {
+  clientId: string;
+  myStats: BadgeStats;
+  myBadgeCount: number;
+  theirLeague?: LeagueStat;
+  myLeague?: LeagueStat;
+  onBack: () => void;
+}) {
   const { data: p, isPending } = useQuery({
     queryKey: ["athlete-public-profile", clientId],
     staleTime: 5 * 60_000,
@@ -260,6 +281,16 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
   });
   const theirXp = Number(p?.xp ?? 0);
   const { data: publicBadges = [] } = usePublicAchievements(clientId);
+  const monthName = format(new Date(), "MMMM");
+  const lifetimeWorkouts = Number(p?.workouts_completed ?? 0);
+  const monthWorkouts = Number(p?.month_workouts_completed ?? theirLeague?.workouts_completed ?? 0);
+  const fullyLogged = Number(p?.workouts_fully_logged ?? 0);
+  const loggedPct = lifetimeWorkouts > 0 ? Math.round((Math.min(fullyLogged, lifetimeWorkouts) / lifetimeWorkouts) * 100) : 0;
+  const since = p?.first_workout_at ? format(new Date(p.first_workout_at), "MMM yyyy") : null;
+  const lastWorkout = p?.last_workout_at ? format(new Date(p.last_workout_at), "MMM d") : null;
+  const leagueSub = theirLeague?.qualified && theirLeague.rank < 999
+    ? `#${theirLeague.rank} · ${theirLeague.xp.toFixed(1)} pts`
+    : undefined;
 
   return (
     <div className="space-y-5">
@@ -279,6 +310,13 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-2">
+            <StatTile label="Lifetime workouts" value={lifetimeWorkouts.toLocaleString()} sub={since ? `Training since ${since}` : undefined} />
+            <StatTile label={`${monthName} workouts`} value={monthWorkouts.toLocaleString()} sub={leagueSub} />
+            <StatTile label="Fully logged" value={fullyLogged.toLocaleString()} sub={lifetimeWorkouts > 0 ? `${loggedPct}% of workouts` : undefined} />
+            <StatTile label="Last workout" value={lastWorkout ?? "—"} sub={p?.month_workouts_fully_logged != null ? `${p.month_workouts_fully_logged} fully logged in ${monthName}` : undefined} />
+          </div>
+
           {!p.is_me && (
             <div className="overflow-hidden rounded-2xl border bg-card text-sm">
               <div className="grid grid-cols-3 bg-muted/40 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
@@ -287,6 +325,8 @@ function CompareView({ clientId, myStats, myBadgeCount, onBack }: { clientId: st
               {[
                 ["Level", levelForXp(myStats.xp).current.name, levelForXp(theirXp).current.name],
                 ["Lifetime points", Number(myStats?.xp ?? 0).toLocaleString(), Number(theirXp ?? 0).toLocaleString()],
+                ["Lifetime workouts", Number(myStats?.workouts_completed ?? 0).toLocaleString(), lifetimeWorkouts.toLocaleString()],
+                [`${monthName} workouts`, myLeague ? String(myLeague.workouts_completed) : "—", String(monthWorkouts)],
                 ["Badges", String(myBadgeCount), String(publicBadges.length)],
               ].map(([k, a, b]) => (
                 <div key={k} className="grid grid-cols-3 border-t px-3 py-2.5">
@@ -335,7 +375,20 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
   const me = data.find((r) => r.is_me);
   const monthName = format(new Date(), "MMMM");
 
-  if (selected) return <CompareView clientId={selected} myStats={myStats} myBadgeCount={myBadgeCount} onBack={() => onSelectedChange(null)} />;
+  if (selected) {
+    const toStat = (r?: (typeof data)[number]): LeagueStat | undefined =>
+      r ? { workouts_completed: r.workouts_completed, rank: r.rank, qualified: r.qualified, xp: r.xp } : undefined;
+    return (
+      <CompareView
+        clientId={selected}
+        myStats={myStats}
+        myBadgeCount={myBadgeCount}
+        theirLeague={toStat(data.find((r) => r.client_id === selected))}
+        myLeague={toStat(me)}
+        onBack={() => onSelectedChange(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -376,7 +429,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
               <li key={r.client_id} onClick={() => onSelectedChange(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
                 <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
                 <RankAvatar row={r} size="h-9 w-9" />
-                <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{r.workouts_completed} workouts · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div></div>
+                <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div></div>
                 <span className="text-xs font-black text-primary">{Number(r.xp ?? 0).toFixed(1)} pts</span>
               </li>
             ))}
@@ -388,7 +441,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
           <div className="mt-1 text-2xl font-black text-primary">{Number(me.xp ?? 0).toFixed(1)} <span className="text-sm">pts</span></div>
-          <div className="mt-1 text-xs text-muted-foreground">{me.workouts_completed} workouts · {me.fully_logged} fully logged · {Number(me.strength_score ?? 0).toFixed(1)} performance pts · BW verified</div>
+          <div className="mt-1 text-xs text-muted-foreground">{plural(me.workouts_completed, "workout")} · {me.fully_logged} fully logged · {Number(me.strength_score ?? 0).toFixed(1)} performance pts · BW verified</div>
           {(() => {
             const tenth = data.filter((r) => r.qualified && r.rank <= 10).sort((a,b)=>a.rank-b.rank).at(-1);
             const gap = me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
