@@ -1058,9 +1058,17 @@ export function MessageThread({
           }
           return [...existing, newMsg];
         });
-        // Still update conversation state and notification counts
+        // Still update conversation state and notification counts. If this is
+        // a submitted messenger check-in, also refresh its shared check-in
+        // query immediately so an already-open request card never stays in a
+        // stale "Waiting for client" state.
         qc.invalidateQueries({ queryKey: ["conversation-states"] });
         qc.invalidateQueries({ queryKey: ["notifications"] });
+        for (const att of newMsg.attachments ?? []) {
+          if (att?.kind === "checkin_submission" && att.checkin_submission_id) {
+            qc.invalidateQueries({ queryKey: ["messenger-checkin", att.checkin_submission_id] });
+          }
+        }
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `client_id=eq.${clientId}` }, (payload: any) => {
         // For edits/deletes, patch the specific message in cache
@@ -1198,10 +1206,33 @@ export function MessageThread({
     return () => ro.disconnect();
   }, [clientId]);
 
-  const visibleMessages = useMemo(
-    () => role === "admin" ? allMessages : allMessages.filter((m) => !m.is_internal_note),
-    [allMessages, role],
-  );
+  const visibleMessages = useMemo(() => {
+    const base = role === "admin"
+      ? allMessages
+      : allMessages.filter((m) => !m.is_internal_note);
+
+    // A messenger check-in has two persisted timeline events by design:
+    // the coach request and the client's completed submission. Once the
+    // submission exists, showing both cards makes it look like the coach sent
+    // a second check-in. Keep the DB audit trail, but collapse the completed
+    // pair to the submission/recap card in the visible chat. Pending requests
+    // still render normally until the client actually submits.
+    const submittedIds = new Set<string>();
+    for (const message of base) {
+      for (const att of message.attachments ?? []) {
+        if (att?.kind === "checkin_submission" && att.checkin_submission_id) {
+          submittedIds.add(att.checkin_submission_id);
+        }
+      }
+    }
+    if (submittedIds.size === 0) return base;
+
+    return base.filter((message) => !(message.attachments ?? []).some((att) =>
+      att?.kind === "checkin_request" &&
+      !!att.checkin_submission_id &&
+      submittedIds.has(att.checkin_submission_id),
+    ));
+  }, [allMessages, role]);
 
   // Id of the latest message I sent (for inline "Read/Sent" receipt).
   const lastOwnMessageId = useMemo(() => {
