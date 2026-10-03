@@ -52,11 +52,11 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
     queryFn: async (): Promise<AdminBadgeCounts> => {
       const [clientMessages, liftPending, liftUrgent, mediaPending, supportAlerts] = await Promise.all([
         (supabase.from("messages") as any)
-          .select("client_id, sender_role, created_at")
+          .select("client_id")
+          .eq("sender_role", "client")
+          .is("read_by_admin_at", null)
           .eq("is_internal_note", false)
-          .in("delivery_status", ["sent", "sending"])
-          .order("created_at", { ascending: false })
-          .limit(2000),
+          .in("delivery_status", ["sent", "sending"]),
         (supabase.from("lift_videos") as any)
           .select("id", { count: "exact", head: true })
           .in("status", ["New Upload", "Awaiting Review"]),
@@ -74,16 +74,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
           .in("status", ["open", "in_progress"]),
       ]);
       return {
-        messages: (() => {
-          const seen = new Set<string>();
-          let count = 0;
-          for (const row of clientMessages.data ?? []) {
-            if (seen.has(row.client_id)) continue;
-            seen.add(row.client_id);
-            if (row.sender_role === "client") count += 1;
-          }
-          return count;
-        })(),
+        messages: new Set((clientMessages.data ?? []).map((row: any) => row.client_id)).size,
         liftReviews: liftPending.count ?? 0,
         liftUrgent: liftUrgent.count ?? 0,
         checkIns: mediaPending.count ?? 0,

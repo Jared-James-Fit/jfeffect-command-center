@@ -1128,14 +1128,22 @@ export function MessageThread({
     });
   };
 
-  // Mark read when conversation is first opened or switches
+  // Mark read when the thread opens AND whenever a new message arrives while
+  // this thread is open. Previously the effect could fire before messages
+  // loaded, return early, and never retry until the conversation was reopened.
+  const latestMessageId = messages[messages.length - 1]?.id ?? null;
   useEffect(() => {
-    if (!clientId || !messages.length) return;
-    markRead(clientId, role).then(() => {
+    if (!clientId || !latestMessageId) return;
+    let cancelled = false;
+    void markRead(clientId, role).then(() => {
+      if (cancelled) return;
       qc.invalidateQueries({ queryKey: ["conversation-states"] });
+      qc.invalidateQueries({ queryKey: ["last-messages"] });
+      qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
       qc.invalidateQueries({ queryKey: ["notifications"] });
     });
-  }, [clientId, role, qc]);
+    return () => { cancelled = true; };
+  }, [clientId, role, qc, latestMessageId]);
 
   // Track whether the initial scroll has fired for this clientId.
   // On initial open: scroll instantly to bottom (no animation = no glitch).

@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { MessageThread, UnreadBadge, PriorityChip } from "@/components/message-thread";
+import { MessageThread, PriorityChip } from "@/components/message-thread";
 import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
@@ -100,25 +100,18 @@ export function MessagesInbox({
     queryFn: async () => {
       const clientIds = Array.from(new Set(states.map((s) => s.client_id))).filter(Boolean);
       if (clientIds.length === 0) return [] as Message[];
-      // Single bulk fetch instead of N+1 per-client queries. We pull the
-      // most-recent slice of messages across all relevant clients and
-      // take the first row per client_id client-side.
+      // Single bulk fetch instead of N+1 per-client queries. Keep the recent
+      // rows (not only one row per client) so unread counts and manual
+      // mark-unread stay correct even when the latest message was sent by us.
       const { data, error } = await (supabase.from("messages") as any)
         .select("id, client_id, body, sender_role, created_at, read_by_admin_at, is_internal_note, message_type, attachments")
         .in("client_id", clientIds)
         .eq("is_internal_note", false)
         .in("delivery_status", ["sent", "sending"])
         .order("created_at", { ascending: false })
-        .limit(Math.max(500, clientIds.length * 2));
+        .limit(Math.max(1000, clientIds.length * 20));
       if (error) throw error;
-      const seen = new Set<string>();
-      const latest: Message[] = [];
-      for (const m of (data ?? []) as Message[]) {
-        if (seen.has(m.client_id)) continue;
-        seen.add(m.client_id);
-        latest.push(m);
-      }
-      return latest;
+      return (data ?? []) as Message[];
     },
   });
 
@@ -164,20 +157,24 @@ export function MessagesInbox({
   // Realtime
   useEffect(() => {
     let pending: ReturnType<typeof setTimeout> | null = null;
+    const pendingKeys = new Set<string>();
     const scheduleInvalidate = (keys: string[]) => {
+      for (const key of keys) pendingKeys.add(key);
       if (pending) return;
       pending = setTimeout(() => {
         pending = null;
-        for (const k of keys) qc.invalidateQueries({ queryKey: [k] });
-      }, 750);
+        const keysToFlush = Array.from(pendingKeys);
+        pendingKeys.clear();
+        for (const k of keysToFlush) qc.invalidateQueries({ queryKey: [k] });
+      }, 75);
     };
     const ch = supabase
       .channel("admin-inbox")
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
-        scheduleInvalidate(["last-messages", "conversation-states"]);
+        scheduleInvalidate(["last-messages", "conversation-states", "admin-nav-badges"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => {
-        scheduleInvalidate(["conversation-states"]);
+        scheduleInvalidate(["conversation-states", "admin-nav-badges"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, () => {
         scheduleInvalidate(["message-lift-review-inbox"]);
@@ -494,7 +491,7 @@ export function MessagesInbox({
                     {client.full_name}
                   </span>
                   {(last || liftReview) && (
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                    <span className={cn("shrink-0 text-[10px]", unread > 0 ? "font-semibold text-[#007AFF]" : "text-muted-foreground")}>
                       {formatDistanceToNow(
                         parseISO(
                           (liftReview?.latestAt ?? "") > (last?.created_at ?? "")
@@ -507,14 +504,20 @@ export function MessagesInbox({
                   )}
                 </div>
                 <div className="mt-0.5 flex items-center gap-1.5">
-                  <span className={cn("truncate flex-1 text-xs", unread > 0 || liftReview ? "text-foreground" : "text-muted-foreground")}>
+                  <span className={cn("truncate flex-1 text-xs", unread > 0 ? "font-semibold text-foreground" : liftReview ? "text-foreground" : "text-muted-foreground")}>
                     {liftReview && liftReview.latestAt >= (last?.created_at ?? "")
                       ? `Lift review · ${liftReview.count} waiting`
                       : last
                         ? (last.sender_role === "admin" ? "You: " : "") + (last.body || "(attachment)")
                         : "No messages yet"}
                   </span>
-                  <UnreadBadge count={unread} />
+                  {unread > 0 && (
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#007AFF]"
+                      aria-label={`${unread} unread message${unread === 1 ? "" : "s"}`}
+                      title={`${unread} unread`}
+                    />
+                  )}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {workflow.badge && (
