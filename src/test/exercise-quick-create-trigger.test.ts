@@ -13,10 +13,12 @@ const adminLibrary = readFileSync("src/routes/_authenticated/admin/exercises.tsx
 const quickAddDialog = readFileSync("src/components/quick-add-exercise-dialog.tsx", "utf8");
 const quickCreateForm = readFileSync("src/components/exercises/exercise-quick-create-form.tsx", "utf8");
 const programBuilder = readFileSync("src/components/program-builder.tsx", "utf8");
+const controlCenter = readFileSync("src/components/exercises/library/exercise-library-control-center.tsx", "utf8");
 
 describe("Add Exercise trigger is local UI state", () => {
   it("every Add exercise trigger button is type=button (cannot submit a parent form)", () => {
-    const triggers = adminLibrary.match(/<Button[^>]*>\s*<Plus[^>]*\/>\s*Add exercise/g) ?? [];
+    // Desktop text button + mobile icon button, both in the library control center.
+    const triggers = controlCenter.match(/<Button[^>]*onClick=\{actions\.onAdd\}[^>]*>/g) ?? [];
     expect(triggers.length).toBeGreaterThanOrEqual(2);
     for (const trigger of triggers) expect(trigger).toContain('type="button"');
   });
@@ -54,9 +56,9 @@ describe("Add Exercise trigger is local UI state", () => {
 
 describe("admin library stays lightweight on mobile", () => {
   it("windows the exercise grid instead of rendering ~1700 cards", () => {
-    expect(adminLibrary).toContain("const [visibleCount, setVisibleCount] = useState(ADMIN_PAGE)");
-    expect(adminLibrary).toContain("{visible.map((e) => (");
-    expect(adminLibrary).toContain("IntersectionObserver");
+    expect(controlCenter).toContain("const [visible, setVisible] = useState(PAGE)");
+    expect(controlCenter).toContain("const shown = hits.slice(0, visible)");
+    expect(controlCenter).toContain("IntersectionObserver");
   });
 
   it("pauses focus refetching while the quick-create dialog is open", () => {

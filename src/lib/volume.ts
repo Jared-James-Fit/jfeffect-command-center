@@ -102,6 +102,8 @@ export const MUSCLE_GROUPS = [
   "adductors",
   "calves",
   "core",
+  "lower_back",
+  "other",
 ] as const;
 export type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
 
@@ -122,7 +124,12 @@ export const MUSCLE_GROUP_LABELS: Record<string, string> = {
   adductors: "Adductors",
   calves: "Calves",
   core: "Core",
+  lower_back: "Lower back",
+  other: "Other",
 };
+
+/** Secondary muscles count this fraction of a set (primary = full set). */
+export const SECONDARY_MUSCLE_WEIGHT = 0.5;
 
 export function labelForMuscle(m: string): string {
   return MUSCLE_GROUP_LABELS[m] ?? m.replace(/_/g, " ");
@@ -137,7 +144,10 @@ export function multiplierForVariation(v: string | null | undefined): number {
 export interface ExerciseTag {
   id: string;
   primary_movement_pattern?: string | null;
+  /** PRIMARY muscles (keys). */
   muscle_groups?: string[] | null;
+  /** SECONDARY muscles (keys) — counted at SECONDARY_MUSCLE_WEIGHT. */
+  secondary_muscle_groups?: string[] | null;
   lift_family?: string | null;
   variation_type?: string | null;
   counts_toward_volume?: boolean | null;
@@ -234,10 +244,11 @@ export function computeWeeklyVolume(
         m: Map<string, { raw: number; eff: number; ex: Set<string> }>,
         key: string,
         exId: string | null | undefined,
+        weight = 1,
       ) => {
         const cur = m.get(key) ?? { raw: 0, eff: 0, ex: new Set<string>() };
-        cur.raw += sets;
-        cur.eff += eff;
+        cur.raw += sets * weight;
+        cur.eff += eff * weight;
         if (exId) cur.ex.add(exId);
         m.set(key, cur);
       };
@@ -248,9 +259,12 @@ export function computeWeeklyVolume(
       if (muscles.length === 0) {
         addBucket(muscleAcc, "untagged", r.exercise_id);
       } else {
-        // Each muscle bucket gets the FULL set count (sets attribute to every
-        // muscle worked, not divided across them — standard hypertrophy bookkeeping).
+        // Each PRIMARY muscle gets the full set count (not divided across them —
+        // standard hypertrophy bookkeeping); each SECONDARY gets half a set.
         for (const m of muscles) addBucket(muscleAcc, m, r.exercise_id);
+        for (const m of ex?.secondary_muscle_groups ?? []) {
+          if (!muscles.includes(m)) addBucket(muscleAcc, m, r.exercise_id, SECONDARY_MUSCLE_WEIGHT);
+        }
       }
     }
   }

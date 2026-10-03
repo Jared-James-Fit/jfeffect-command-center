@@ -1,8 +1,10 @@
 /**
  * Muscle-group normalization for Performance Insights.
  *
- * Reads `exercises.primary_muscle_group` (primary weight 1.0) and
- * `exercises.muscle_groups[]` (secondary weight 0.5). Free-text values from
+ * Reads an exercise's PRIMARY muscles (`exercises.muscle_groups[]`, falling
+ * back to the legacy `primary_muscle_group` label) at weight 1.0 and its
+ * SECONDARY muscles (`exercises.secondary_muscle_groups[]`) at weight 0.5.
+ * Keys may be snake_case ("upper_back") or labels ("Upper Back"). Free-text values from
  * the library are normalized to a canonical set of 12 groups shown to the
  * athlete. Anything that fails to match is bucketed under "Other" so it can
  * be surfaced separately rather than silently dropped.
@@ -43,7 +45,7 @@ export const MUSCLE_EMOJI: Record<MuscleGroup, string> = {
 /** Canonicalize any free-text muscle label to one of MUSCLE_GROUPS or null. */
 export function normalizeMuscle(input: string | null | undefined): MuscleGroup | null {
   if (!input) return null;
-  const s = String(input).toLowerCase().trim();
+  const s = String(input).toLowerCase().replace(/_/g, " ").trim();
   if (!s) return null;
   if (s.includes("chest") || s.includes("pec")) return "Chest";
   if (s.includes("lat") && !s.includes("plat")) return "Lats";
@@ -81,12 +83,14 @@ export interface MuscleContribution {
  * each secondary counts 0.5, deduped so the same group can never exceed 1.0.
  */
 export function resolveMuscleGroups(
-  primary: string | null | undefined,
+  primary: string | (string | null | undefined)[] | null | undefined,
   secondaries: (string | null | undefined)[] | null | undefined,
 ): MuscleContribution[] {
   const weights = new Map<MuscleGroup, number>();
-  const p = normalizeMuscle(primary);
-  if (p) weights.set(p, 1);
+  for (const raw of Array.isArray(primary) ? primary : [primary]) {
+    const p = normalizeMuscle(raw);
+    if (p) weights.set(p, 1);
+  }
   for (const s of secondaries ?? []) {
     const g = normalizeMuscle(s);
     if (!g) continue;

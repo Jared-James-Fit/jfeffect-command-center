@@ -529,7 +529,7 @@ function TemplateEditor() {
     queryFn: async () =>
       (await supabase
         .from("exercises")
-        .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type, video_url, youtube_url, vimeo_url")
+        .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type, video_url, youtube_url, vimeo_url, primary_movement_pattern, muscle_groups, secondary_muscle_groups, lift_family, variation_type, counts_toward_volume, volume_multiplier")
         .eq("archived", false)
         .limit(10000)
         .order("name")).data ?? [],
