@@ -69,6 +69,8 @@ import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
+import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
+import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
 import {
   DeferredExerciseHistoryButton,
   DeferredExerciseHowToButton,
@@ -2463,11 +2465,11 @@ function WorkoutDay({
               </div>
             )}
             {(rows as any[]).map((r, rowIndex) => (
-              <SwipeDeleteExercise
+              <SwipeToReveal
                 key={r.id}
                 enabled={canEditWorkoutStructure && !readonly}
-                exerciseName={r.exercises?.name ?? r.exercise_name_override ?? "Exercise"}
-                onDelete={() => removeExerciseNow(r.id, r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
+                actionLabel={`Delete ${r.exercises?.name ?? r.exercise_name_override ?? "Exercise"} from this workout`}
+                onAction={() => removeExerciseNow(r.id, r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
               >
               <div className="space-y-1.5">
                 {unsupportedRows[r.id] ? (
@@ -2511,7 +2513,7 @@ function WorkoutDay({
                   />
                 )}
               </div>
-              </SwipeDeleteExercise>
+              </SwipeToReveal>
             ))}
           </div>
         </WorkoutLoadBoundary>
@@ -2861,72 +2863,6 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function SwipeDeleteExercise({
-  enabled,
-  exerciseName,
-  onDelete,
-  children,
-}: {
-  enabled: boolean;
-  exerciseName: string;
-  onDelete: () => void;
-  children: React.ReactNode;
-}) {
-  const [offset, setOffset] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const startX = useRef<number | null>(null);
-  const startOffset = useRef(0);
-  const reveal = 84;
-
-  if (!enabled) return <>{children}</>;
-
-  const begin = (x: number) => {
-    startX.current = x;
-    startOffset.current = offset;
-    setDragging(true);
-  };
-  const move = (x: number) => {
-    if (startX.current == null) return;
-    const delta = x - startX.current;
-    setOffset(Math.max(-reveal, Math.min(0, startOffset.current + delta)));
-  };
-  const end = () => {
-    if (startX.current == null) return;
-    setOffset(offset < -reveal * 0.38 ? -reveal : 0);
-    startX.current = null;
-    setDragging(false);
-  };
-
-  return (
-    <div className="relative overflow-hidden rounded-[1.35rem]">
-      <div className="absolute inset-y-0 right-0 flex w-[84px] items-center justify-center bg-destructive">
-        <button
-          type="button"
-          className="flex h-full w-full flex-col items-center justify-center gap-1 text-xs font-bold text-destructive-foreground"
-          aria-label={`Delete ${exerciseName} from this workout`}
-          onClick={() => { setOffset(0); onDelete(); }}
-        >
-          <Trash2 className="h-5 w-5" />
-          Delete
-        </button>
-      </div>
-      <div
-        className={`relative bg-background touch-pan-y ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
-        style={{ transform: `translate3d(${offset}px,0,0)` }}
-        onTouchStart={(e) => begin(e.touches[0].clientX)}
-        onTouchMove={(e) => move(e.touches[0].clientX)}
-        onTouchEnd={end}
-        onPointerDown={(e) => { if (e.pointerType !== "touch") begin(e.clientX); }}
-        onPointerMove={(e) => { if (e.pointerType !== "touch" && startX.current != null) move(e.clientX); }}
-        onPointerUp={(e) => { if (e.pointerType !== "touch") end(); }}
-        onPointerCancel={end}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
@@ -3156,9 +3092,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   // the category default rather than an explicit programmed rest.
   const fmtRest = (s: number) => (s >= 60 ? `${Math.round(s / 60)} min` : `${s} sec`);
   const restIsExplicit = row.rest_seconds_override != null || row.rest_seconds != null;
-  const restDisplay = effectiveRest != null
-    ? (restIsExplicit ? fmtRest(effectiveRest) : `Auto · ${fmtRest(effectiveRest)}`)
-    : "Auto";
   const [notesOpen, setNotesOpen] = useState(false);
   const [cuesOpen, setCuesOpen] = useState(false);
   const hasNote = Boolean(existingNote?.id);
@@ -3545,36 +3478,18 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {row.notes && <ExerciseNotesBlock notes={row.notes} />}
       {/* Logging actions: keep the common actions visible and quiet.
           Structural editing is isolated behind one compact reorder control. */}
-      <div className="mt-2 flex items-center gap-1.5">
-        {hasGuide && (
+      <ExerciseActionRow
+        name={name}
+        howTo={hasGuide ? (
           <DeferredExerciseHowToButton
             exerciseId={exerciseId}
             fallbackName={name}
-            className="h-8 rounded-full px-2.5 text-xs"
+            className="h-10 shrink-0 gap-0 rounded-full px-3 text-xs @max-[20rem]:h-9 @max-[20rem]:px-2.5"
           />
-        )}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-8 rounded-full px-2.5 text-xs font-medium text-muted-foreground"
-          onClick={() => setNotesOpen(true)}
-        >
-          <StickyNote className="mr-1.5 h-3.5 w-3.5" />
-          {hasNote ? "Notes" : "Note"}
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 rounded-full p-0 text-muted-foreground"
-              aria-label={`More options for ${name}`}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
+        ) : null}
+        hasNote={hasNote}
+        onOpenNote={() => setNotesOpen(true)}
+        moreMenu={(
           <DropdownMenuContent align="start" className="w-52 rounded-xl p-1.5">
             {cues && (
               <DropdownMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
@@ -3604,21 +3519,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               />
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
-        {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-8 w-8 rounded-full p-0 text-muted-foreground"
-                aria-label={`Reorder ${name}`}
-              >
-                <GripVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5">
+        )}
+        reorderMenu={(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) ? (
+          <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5">
               <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Exercise {movePosition} of {moveCount}
               </div>
@@ -3649,19 +3552,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 </>
               )}
             </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        {(exerciseId || name) && (
+        ) : null}
+        rest={(exerciseId || name) ? (
           <RestTimerButton
             seconds={effectiveRest ?? null}
-            label={restDisplay}
+            auto={!restIsExplicit}
             scopeKey={dayId}
             timerId={String(row.id ?? exerciseId ?? name)}
             onStart={() => beginWorkoutSession(dayId)}
-            className="ml-auto shrink-0"
           />
-        )}
-      </div>
+        ) : null}
+      />
       {!readonly && !trackingType.includes("time") && clientId && (() => {
         const firstSet = existingResults.find((x: any) => x.set_index === 1);
         const firstLoad = firstSet?.actual_load;

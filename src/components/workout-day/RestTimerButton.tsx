@@ -30,14 +30,15 @@ import {
  */
 export function RestTimerButton({
   seconds,
-  label,
+  auto = false,
   className,
   onStart,
   scopeKey,
   timerId,
 }: {
   seconds: number | null;
-  label: string;
+  /** True when the rest comes from the category default, not the program. */
+  auto?: boolean;
   className?: string;
   /** Fired when the rest countdown begins — used to auto-start the workout session clock. */
   onStart?: () => void;
@@ -97,23 +98,27 @@ export function RestTimerButton({
     setState(startRestTimer(scopeKey, timerId, seconds as number));
   };
 
+  // Compact by default ("▶ 2:00"); the "Rest" / "Auto rest" label only
+  // appears when the surrounding @container (the card's action row) has room.
+  const clock = seconds && seconds > 0 ? formatClock(seconds) : null;
   if (!mine) {
     return (
       <button
         type="button"
         onClick={start}
         disabled={disabled}
-        aria-label={`Start rest timer for ${label}`}
+        title={clock ? `${auto ? "Auto rest" : "Rest"} ${clock} — tap to start` : "No rest set"}
+        aria-label={clock ? `Start ${clock} ${auto ? "auto " : ""}rest timer` : "Rest timer unavailable"}
         className={cn(
-          "inline-flex h-8 items-center justify-center gap-1 rounded-full border border-primary/25 bg-primary/10 pl-1.5 pr-2.5 text-xs font-semibold tabular-nums text-foreground transition hover:bg-primary/15 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100",
+          "inline-flex h-10 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border border-primary/25 bg-primary/10 pl-1.5 pr-3 text-xs font-semibold tabular-nums text-foreground transition hover:bg-primary/15 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100 @max-[17rem]:h-9 @max-[17rem]:pl-2 @max-[17rem]:pr-2.5",
           className,
         )}
       >
-        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary">
-          <Play className="h-2.5 w-2.5 fill-current" />
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary @max-[17rem]:h-auto @max-[17rem]:w-auto @max-[17rem]:bg-transparent">
+          <Play className="h-3 w-3 fill-current" />
         </span>
-        <span className="text-[11px] font-semibold text-muted-foreground">Rest</span>
-        <span>{label}</span>
+        <span className="hidden text-[11px] font-semibold text-muted-foreground @[26rem]:inline">{auto ? "Auto rest" : "Rest"}</span>
+        <span>{clock ?? "Rest"}</span>
       </button>
     );
   }
@@ -125,7 +130,7 @@ export function RestTimerButton({
   return (
     <div
       className={cn(
-        "inline-flex h-8 items-center gap-1 rounded-full border px-1 ring-2",
+        "inline-flex h-10 shrink-0 items-center gap-0 whitespace-nowrap rounded-full border px-1 ring-2 @max-[17rem]:h-9",
         finished
           ? "border-emerald-500/50 bg-emerald-500/10 ring-emerald-500/10"
           : "border-primary/50 bg-primary/15 ring-primary/10",
@@ -140,17 +145,17 @@ export function RestTimerButton({
           type="button"
           onClick={() => setState(paused ? resumeRestTimer(scopeKey) : pauseRestTimer(scopeKey))}
           aria-label={paused ? "Resume rest timer" : "Pause rest timer"}
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-primary transition hover:bg-primary/15 active:scale-95"
+          className="inline-flex h-7 w-6 shrink-0 items-center justify-center rounded-full text-primary transition hover:bg-primary/15 active:scale-95"
         >
           {paused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
         </button>
       )}
-      <div className="px-1 text-sm font-bold tabular-nums text-foreground">
-        {!finished && <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Resting</span>}
+      <div className="px-0.5 text-sm font-bold tabular-nums text-foreground">
+        {!finished && <span className="mr-1 hidden text-[10px] font-semibold uppercase tracking-wide text-muted-foreground @[27rem]:inline">Resting</span>}
         {display}
-        {paused && <span className="ml-1 text-[10px] font-medium text-muted-foreground">Paused</span>}
+        {paused && <span className="ml-1 hidden text-[10px] font-medium text-muted-foreground @[26rem]:inline">Paused</span>}
         {finished && Date.now() - mine.endsAt > 5000 && (
-          <span className="ml-1 text-[10px] font-medium text-muted-foreground">
+          <span className="ml-1 hidden text-[10px] font-medium text-muted-foreground @[27rem]:inline">
             {formatAgo(Date.now() - mine.endsAt)}
           </span>
         )}
@@ -159,7 +164,7 @@ export function RestTimerButton({
         type="button"
         onClick={start}
         aria-label="Restart rest timer"
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/15 hover:text-foreground active:scale-95"
+        className="hidden h-7 w-7 shrink-0 @[24rem]:inline-flex items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/15 hover:text-foreground active:scale-95"
       >
         <RotateCcw className="h-3 w-3" />
       </button>
@@ -167,7 +172,7 @@ export function RestTimerButton({
         type="button"
         onClick={() => { clearRestTimer(scopeKey); setState(null); }}
         aria-label={finished ? "Dismiss rest timer" : "Stop rest timer"}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/15 hover:text-foreground active:scale-95"
+        className="inline-flex h-7 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/15 hover:text-foreground active:scale-95"
       >
         <X className="h-3 w-3" />
       </button>

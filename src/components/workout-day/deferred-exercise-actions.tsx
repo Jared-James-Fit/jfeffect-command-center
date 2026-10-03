@@ -2,45 +2,6 @@ import { lazy, Suspense, useState } from "react";
 import { ArrowLeftRight, History, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// The workout card's More + reorder triggers live in WorkoutDayView. Keep the
-// existing interaction model, but enforce real mobile touch targets here since
-// this module is loaded with every workout card. This avoids changing the
-// behaviour/menu ownership while fixing the cramped tiny-dot controls.
-if (typeof document !== "undefined" && !document.getElementById("jf-workout-action-touch-styles")) {
-  const style = document.createElement("style");
-  style.id = "jf-workout-action-touch-styles";
-  style.textContent = `
-    button[aria-label^="More options for "],
-    button[aria-label^="Reorder "] {
-      min-width: 44px !important;
-      width: 44px !important;
-      height: 40px !important;
-      padding: 0 !important;
-      border-radius: 9999px !important;
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      flex: 0 0 44px !important;
-      background: color-mix(in oklab, var(--card) 92%, var(--muted)) !important;
-      border: 1px solid var(--border) !important;
-    }
-    button[aria-label^="More options for "] svg,
-    button[aria-label^="Reorder "] svg {
-      width: 18px !important;
-      height: 18px !important;
-    }
-    @media (max-width: 420px) {
-      button[aria-label^="More options for "],
-      button[aria-label^="Reorder "] {
-        min-width: 42px !important;
-        width: 42px !important;
-        flex-basis: 42px !important;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
 const LazyExerciseHistorySheet = lazy(() => import("./deferred-exercise-history-sheet"));
 const LazyExerciseHowToSheet = lazy(() => import("./deferred-exercise-how-to-sheet"));
 const LazyQuickSwapButton = lazy(() =>

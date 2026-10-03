@@ -266,7 +266,7 @@ export function WorkoutReviewEditor({
       <SheetContent
         side="bottom"
         hideCloseButton
-        className="z-[70] flex max-h-[92svh] flex-col rounded-t-3xl p-0"
+        className="z-[70] flex max-h-[92svh] flex-col gap-0 rounded-t-3xl p-0"
       >
         {/* Sticky header — Back pill top-left, then a title/subtitle stack.
             Structured as two rows inside a single header block so the Back
@@ -274,7 +274,11 @@ export function WorkoutReviewEditor({
             attached to the header on iOS, Android, and desktop. */}
         <div
           className="sticky top-0 z-10 border-b border-border/60 bg-background/95 backdrop-blur"
-          style={{ paddingTop: "env(safe-area-inset-top)" }}
+          // The sheet is capped at 92svh, so its top edge already sits 8svh
+          // below the viewport top. Pad only by the part of the safe area
+          // (status bar / Dynamic Island) the sheet actually overlaps — the
+          // full inset left ~50px of dead space above Back.
+          style={{ paddingTop: "max(calc(env(safe-area-inset-top) - 8svh), 0px)" }}
         >
           <div className="flex items-center px-3 pt-2 sm:px-4">
             <button
@@ -287,7 +291,7 @@ export function WorkoutReviewEditor({
               <span>Back</span>
             </button>
           </div>
-          <SheetHeader className="space-y-0.5 px-5 pb-3 pt-1 text-left">
+          <SheetHeader className="min-h-0 space-y-0.5 px-5 pb-3 pt-1 text-left">
             <SheetTitle className="text-lg font-black leading-tight">
               {isEdit ? "Edit your review" : "Workout Review"}
             </SheetTitle>
