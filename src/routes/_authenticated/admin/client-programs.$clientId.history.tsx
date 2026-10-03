@@ -14,6 +14,7 @@ import { ExerciseHistorySheet } from "@/components/exercise-history-sheet";
 import { toast } from "sonner";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { WorkoutReviewSummaryHeader } from "@/components/workout-submission-summary";
+import { RecentRecordsCard, WorkoutRecordsStrip } from "@/components/records/training-records";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/history")({ component: HistoryPage });
@@ -74,7 +75,10 @@ function HistoryPage() {
           <ArrowLeft className="mr-1 h-4 w-4" /> Back to programs
         </Link>
 
+        <RecentRecordsCard clientId={clientId} unit={displayUnit} />
+
         <WorkoutFeedbackSection
+          displayUnit={displayUnit}
           clientId={clientId}
           clientUserId={(client as any)?.user_id ?? null}
           clientName={client?.full_name ?? null}
@@ -178,7 +182,9 @@ function WorkoutFeedbackSection({
   clientId,
   clientUserId,
   clientName,
+  displayUnit = "lb",
 }: {
+  displayUnit?: "kg" | "lb";
   clientId: string;
   clientUserId: string | null;
   clientName: string | null;
@@ -378,6 +384,7 @@ function WorkoutFeedbackSection({
                     />
                   </div>
                 )}
+                <WorkoutRecordsStrip clientId={clientId} dayId={r.day_id} completionId={(r as any).completion_id ?? null} unit={displayUnit} />
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => viewWorkout(r.day_id)}>
                     <Eye className="mr-1 h-3.5 w-3.5" /> View workout

@@ -81,7 +81,7 @@ export function collectSessionPRs(
 export function formatPR(pr: SessionPR): string {
   return pr.assisted
     ? `${pr.exerciseName} — ${pr.reps} reps at ${pr.amount} ${pr.unit} less assistance`
-    : `${pr.exerciseName} — ${pr.reps}-rep PR, +${pr.amount} ${pr.unit}`;
+    : `${pr.exerciseName} — ${pr.reps}-rep ATPR, +${pr.amount} ${pr.unit}`;
 }
 
 export type CardioTakeawayInput = {
@@ -100,8 +100,8 @@ export function buildWorkoutTakeaways(
 ): string[] {
   const out: string[] = [];
 
-  if (prs.length === 1) out.push(`🏆 New PR: ${formatPR(prs[0])}.`);
-  else if (prs.length > 1) out.push(`🏆 ${prs.length} new PRs today — led by ${formatPR(prs[0])}.`);
+  if (prs.length === 1) out.push(`🏆 New ATPR: ${formatPR(prs[0])}.`);
+  else if (prs.length > 1) out.push(`🏆 ${prs.length} new ATPRs today — led by ${formatPR(prs[0])}.`);
 
   if (summary.completionPct >= 100 && summary.prescribedSets > 0) {
     out.push(`✅ Every prescribed set completed (${summary.completedSets}/${summary.prescribedSets}).`);

@@ -578,11 +578,11 @@ export function ClientAnalyticsDashboard({
             <section aria-label="Summary" className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <StatCard
                 icon={<Trophy className="h-4 w-4" />}
-                label="PRs in range"
+                label="ATPRs in range"
                 value={String(summary.prsInRange)}
                 color={ANALYTICS_COLORS.green}
                 tip={
-                  <InfoTip label="About PRs in range" title="PRs in range" align="start">
+                  <InfoTip label="About ATPRs in range" title="ATPRs in range" align="start">
                     New estimated 1RM personal bests logged in this range. A PR
                     counts when a set's estimated 1RM beats every previous
                     logged set for that exercise — first-time logs don't count,
@@ -625,7 +625,7 @@ export function ClientAnalyticsDashboard({
                     ? `+${fmtNum(summary.topLift.delta)} ${displayUnit}`
                     : "—"
                 }
-                sublabel={summary.topLift?.name ?? "No PRs in this range"}
+                sublabel={summary.topLift?.name ?? "No ATPRs in this range"}
                 color={ANALYTICS_COLORS.purple}
                 tip={
                   <InfoTip label="About top e1RM gain" title="Top e1RM gain" align="end">
@@ -712,8 +712,8 @@ export function ClientAnalyticsDashboard({
               <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
                 <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
                   <Trophy className="h-5 w-5 shrink-0 text-primary" />
-                  <span className="truncate">Recent PRs</span>
-                  <InfoTip label="About recent PRs" title="Recent PRs" align="start">
+                  <span className="truncate">Recent ATPRs</span>
+                  <InfoTip label="About recent ATPRs" title="Recent ATPRs" align="start">
                     Every card is a new estimated 1RM personal best: the logged
                     set, the previous best it beat, and the gain. Estimates use
                     the Epley formula — weight × (1 + reps ÷ 30).
@@ -1214,13 +1214,13 @@ function StatCard({
 
 function AnalyticsEmptyPreview() {
   const previewStats = [
-    { icon: <Trophy className="h-4 w-4" />, label: "PRs · 30d", value: "—", color: ANALYTICS_COLORS.green },
+    { icon: <Trophy className="h-4 w-4" />, label: "ATPRs · 30d", value: "—", color: ANALYTICS_COLORS.green },
     { icon: <Flame className="h-4 w-4" />, label: "Sets · 7d", value: "—", color: ANALYTICS_COLORS.red },
     { icon: <Calendar className="h-4 w-4" />, label: "Workouts", value: "—", color: ANALYTICS_COLORS.blue },
     { icon: <TrendingUp className="h-4 w-4" />, label: "Top e1RM gain", value: "—", color: ANALYTICS_COLORS.purple },
   ];
   const sections = [
-    { icon: <Trophy className="h-5 w-5 text-primary" />, title: "Recent PRs", desc: "Every time you beat a previous best, the lift, weight, and gain land here automatically." },
+    { icon: <Trophy className="h-5 w-5 text-primary" />, title: "Recent ATPRs", desc: "Every time you beat a previous best, the lift, weight, and gain land here automatically." },
     { icon: <TrendingUp className="h-5 w-5 text-primary" />, title: "Estimated 1RM progress", desc: "Track strength curves per exercise — your top sets get plotted over time with PR markers." },
     { icon: <Dumbbell className="h-5 w-5 text-primary" />, title: "Weekly volume by muscle", desc: "See how many sets each muscle group is getting so you can balance your training." },
     { icon: <Calendar className="h-5 w-5 text-primary" />, title: "Planned vs actual", desc: "Compare what was programmed against what you actually completed, set by set." },

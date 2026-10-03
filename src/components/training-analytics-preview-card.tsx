@@ -111,7 +111,7 @@ export function TrainingAnalyticsPreviewCard({
             <div className="mt-5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
               <Stat
                 icon={<Trophy className="h-3.5 w-3.5" />}
-                label="PRs · 30d"
+                label="ATPRs · 30d"
                 value={isLoading ? "…" : stats.prs30.length.toString()}
                 accent
               />
@@ -254,7 +254,7 @@ function EmptyPreview() {
   return (
     <>
       <div className="mt-5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
-        <Stat icon={<Trophy className="h-3.5 w-3.5" />} label="PRs · 30d" value="0" accent />
+        <Stat icon={<Trophy className="h-3.5 w-3.5" />} label="ATPRs · 30d" value="0" accent />
         <Stat icon={<Dumbbell className="h-3.5 w-3.5" />} label="Sets · 7d" value="0" />
         <Stat icon={<Flame className="h-3.5 w-3.5" />} label="Top focus" value="—" />
         <Stat icon={<Activity className="h-3.5 w-3.5" />} label="Sessions" value="0" />

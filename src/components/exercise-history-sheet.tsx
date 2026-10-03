@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { ExerciseRecordsForClient } from "@/components/records/training-records";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -272,6 +273,9 @@ export function ExerciseHistorySheet({
             Past logged sets across all blocks. Velocity is mean concentric velocity (m/s), so the same metric is compared session to session.
           </SheetDescription>
         </SheetHeader>
+        <div className="px-4 pt-2 sm:px-0">
+          <ExerciseRecordsForClient clientId={clientId} exerciseId={exerciseId} exerciseName={exerciseName} unit={displayUnit} />
+        </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {[null, 30, 90, 180, 365].map((d) => (

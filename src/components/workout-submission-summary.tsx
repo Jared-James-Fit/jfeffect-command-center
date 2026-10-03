@@ -12,6 +12,9 @@ import {
   type CardioTakeawayInput,
   type SessionPR,
 } from "@/lib/workout-takeaways";
+import type { WorkoutRecords } from "@/lib/training-records";
+import { formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel } from "@/lib/training-records";
+import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
 
 type Props = {
   open: boolean;
@@ -27,13 +30,25 @@ type Props = {
   pain?: boolean | null;
   /** PRs hit during this session (already de-duplicated per exercise). */
   prs?: SessionPR[];
+  /**
+   * Server-derived records for this workout (client workouts). `undefined`
+   * means "not supported here" (falls back to session PRs); `null` = loading.
+   */
+  records?: WorkoutRecords | null;
+  /** Athlete's preferred unit for loads and tonnage. */
+  displayUnit?: "kg" | "lb";
   /** Prescribed cardio status for the same day, when there is one. */
   cardio?: CardioTakeawayInput;
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, cardio, onClose }: Props) {
-  const prList = prs ?? [];
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, displayUnit = "lb", cardio, onClose }: Props) {
+  // Client workouts use the scope-aware server records; the legacy session PR
+  // list only remains for surfaces without them (memberships).
+  const usesRecords = records !== undefined;
+  const prList = usesRecords ? [] : prs ?? [];
+  const recordCount = (records?.records?.length ?? 0) + (tonnageRecordLabel(records?.tonnage) ? 1 : 0);
+  const recordHeadline = recordsHeadline(records);
   const [revealStage, setRevealStage] = useState(0);
   const [displayScore, setDisplayScore] = useState(0);
   const [sharing, setSharing] = useState(false);
@@ -70,9 +85,10 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [open, revealStage, summary.score]);
-  const hasAchievement = prList.length > 0 || summary.score >= 90 || summary.completionPct === 100;
+  const hasAchievement = prList.length > 0 || recordCount > 0 || summary.score >= 90 || summary.completionPct === 100;
   const headline =
-    prList.length > 0 ? (prList.length === 1 ? "NEW PR!" : `${prList.length} NEW PRs!`)
+    recordHeadline ? recordHeadline
+    : prList.length > 0 ? (prList.length === 1 ? "NEW ATPR!" : `${prList.length} NEW ATPRs!`)
     : summary.score >= 90 ? "Crushed it!"
     : summary.score >= 75 ? "Great work!"
     : summary.score >= 50 ? "Solid effort"
@@ -120,9 +136,12 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     ctx.font="800 38px system-ui"; ctx.fillStyle="#a1a1aa"; ctx.fillText("WORKOUT SCORE / 100",540,970);
     ctx.fillStyle="#fff"; ctx.font="800 42px system-ui"; ctx.fillText((workoutTitle??"Workout").slice(0,38),540,1080);
     if(dateLabel){ctx.fillStyle="#a1a1aa";ctx.font="600 30px system-ui";ctx.fillText(dateLabel,540,1130);}
-    if(prList[0]){ctx.fillStyle="#f59e0b";ctx.font="900 34px system-ui";ctx.fillText("NEW PERSONAL RECORD",540,1270);ctx.fillStyle="#fff";ctx.font="800 34px system-ui";ctx.fillText(formatPR(prList[0]).slice(0,48),540,1330);}
+    const topRec = records?.records?.[0];
+    if(topRec){ctx.fillStyle=topRec.atpr?"#f59e0b":"#a78bfa";ctx.font="900 34px system-ui";ctx.fillText(`NEW ${repRecordLabel(topRec)}`,540,1270);ctx.fillStyle="#fff";ctx.font="800 34px system-ui";ctx.fillText(`${topRec.exercise_name} · ${formatLoad(topRec.load_kg, displayUnit)} × ${topRec.reps}`.slice(0,48),540,1330);}
+    else if(prList[0]){ctx.fillStyle="#f59e0b";ctx.font="900 34px system-ui";ctx.fillText("NEW ALL-TIME PR",540,1270);ctx.fillStyle="#fff";ctx.font="800 34px system-ui";ctx.fillText(formatPR(prList[0]).slice(0,48),540,1330);}
     ctx.fillStyle="#fff";ctx.font="800 32px system-ui";ctx.fillText(`${summary.completedSets}/${summary.prescribedSets} SETS COMPLETED`,540,1480);
-    if(summary.totalLifted>0){ctx.fillStyle="#d4d4d8";ctx.font="700 30px system-ui";ctx.fillText(`${summary.totalLiftedFmt} TOTAL VOLUME`,540,1535);}
+    if(records && records.tonnage_kg>0){ctx.fillStyle="#d4d4d8";ctx.font="700 30px system-ui";ctx.fillText(`${formatTonnage(records.tonnage_kg, displayUnit)} TOTAL TONNAGE${tonnageRecordLabel(records.tonnage)?` · ${tonnageRecordLabel(records.tonnage)}`:""}`,540,1535);}
+    else if(summary.totalLifted>0){ctx.fillStyle="#d4d4d8";ctx.font="700 30px system-ui";ctx.fillText(`${summary.totalLiftedFmt} TOTAL TONNAGE`,540,1535);}
     ctx.fillStyle="#71717a";ctx.font="700 27px system-ui";ctx.fillText("BUILT WITH JF EFFECT",540,1770);
     return await new Promise<Blob|null>((res)=>canvas.toBlob(res,"image/png",1));
   };
@@ -155,8 +174,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           </Button>
 
           <div className={`mx-auto flex w-full max-w-[calc(100%-4.5rem)] flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
-            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${prList.length > 0 ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`}>
-              {prList.length > 0 ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
+            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${prList.length > 0 || recordCount > 0 ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`}>
+              {prList.length > 0 || recordCount > 0 ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
               {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
             <div className="mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-primary">Workout complete</div>
@@ -188,6 +207,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
           <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             <NewAchievementReveal open={open} />
+            {records && <NewRecordsSection records={records} unit={displayUnit} />}
             {prList.length > 0 && (
               <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/[0.14] via-amber-500/[0.06] to-background p-4 shadow-sm duration-700">
                 <Sparkles className="absolute right-3 top-3 h-5 w-5 animate-pulse text-amber-500" />
@@ -197,12 +217,12 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                   </div>
                   <div>
                     <div className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Achievement unlocked</div>
-                    <div className="text-base font-black leading-tight text-foreground">{prList.length === 1 ? "New personal record" : `${prList.length} personal records`}</div>
+                    <div className="text-base font-black leading-tight text-foreground">{prList.length === 1 ? "New all-time record" : `${prList.length} all-time records`}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
                   <Trophy className="h-3.5 w-3.5" />
-                  PR breakdown
+                  ATPR breakdown
                 </div>
                 <div className="mt-1.5 space-y-1">
                   {prList.slice(0, 3).map((pr) => (
@@ -255,18 +275,20 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                   />
                 )}
               </div>
-              {summary.totalLifted > 0 && (
+              {records && records.tonnage_kg > 0 ? (
+                <TonnageStat records={records} unit={displayUnit} />
+              ) : summary.totalLifted > 0 && (
                 <div className="flex items-center gap-3 border-t border-border/70 px-3.5 py-3">
                   <Dumbbell className="h-4 w-4 shrink-0 text-primary" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">Total volume</div>
+                    <div className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">Total tonnage</div>
                     <div className="mt-0.5 truncate text-xl font-black leading-tight text-foreground">{summary.totalLiftedFmt}</div>
                   </div>
                 </div>
               )}
             </section>
 
-            {prList.length === 0 && displayTakeaways.length === 0 && (
+            {prList.length === 0 && recordCount === 0 && displayTakeaways.length === 0 && (
               <section className="rounded-2xl border border-primary/20 bg-primary/[0.05] p-3 text-center">
                 <div className="text-[10px] font-black uppercase tracking-[0.14em] text-primary">Baseline logged</div>
                 <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -361,7 +383,7 @@ export function WorkoutReviewSummaryHeader({
     <div className="rounded-xl border border-border bg-muted/30 p-3 mb-3">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <Cell label="Score" value={`${summary.score}/100`} highlight />
-        <Cell label="Total Volume" value={summary.totalLiftedFmt} />
+        <Cell label="Total Tonnage" value={summary.totalLiftedFmt} />
         <Cell label="Completion" value={`${summary.completionPct}%`} />
         <Cell label="Duration" value={durationMin != null && durationMin > 0 ? `${durationMin} min` : "—"} />
         <Cell
