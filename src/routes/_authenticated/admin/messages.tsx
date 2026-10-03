@@ -16,7 +16,7 @@ import { MessageThread, PriorityChip } from "@/components/message-thread";
 import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
-  markUnread, markRead,
+  markUnread, markRead, setConversationWorkflow, type WorkflowStatus,
 } from "@/lib/messages";
 import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, Video } from "lucide-react";
 import { SwipeableRow } from "@/components/ui/swipeable-row";
@@ -30,9 +30,39 @@ import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { MassMessageDialog } from "@/components/mass-message-dialog";
 import { Megaphone, Users as UsersIcon } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { deriveInboxWorkflow } from "@/lib/inbox-workflow";
+import { deriveInboxWorkflow, previewPrefix, WORKFLOW_LABEL, type InboxWorkflowState } from "@/lib/inbox-workflow";
+import { formatReadReceipt } from "@/lib/read-receipt";
+import { Check } from "lucide-react";
 
-const FILTERS = ["Inbox", "Your Turn", "Waiting on Client", "Forms & Check-ins", "Unread", "Priority", "Resolved", "Archived"] as const;
+type StaffInboxRow = {
+  client_id: string;
+  workflow_status: WorkflowStatus;
+  workflow_reason: string | null;
+  workflow_status_updated_at: string | null;
+  workflow_updated_by_name: string | null;
+  last_inbound_at: string | null;
+  last_inbound_kind: string | null;
+  unread: boolean;
+  unread_count: number;
+  archived: boolean;
+};
+
+const WORKFLOW_STYLE: Record<Exclude<InboxWorkflowState, "archived">, string> = {
+  needs_response: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300",
+  waiting_on_client: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  done: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+};
+
+export function WorkflowPill({ state, className }: { state: InboxWorkflowState; className?: string }) {
+  if (state === "archived") return null;
+  return (
+    <span className={cn("inline-flex h-5 items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-black uppercase tracking-wide", WORKFLOW_STYLE[state], className)}>
+      {WORKFLOW_LABEL[state]}
+    </span>
+  );
+}
+
+const FILTERS = ["Inbox", "Needs Response", "Waiting on Client", "Forms & Check-ins", "Unread", "Priority", "Done", "Archived"] as const;
 type Filter = typeof FILTERS[number];
 
 export const Route = createFileRoute("/_authenticated/admin/messages")({
@@ -93,6 +123,18 @@ export function MessagesInbox({
     },
   });
 
+  // Per-staff unread + server workflow status (one row per conversation I can see).
+  const { data: inboxState = [] } = useQuery({
+    queryKey: ["staff-inbox-state"],
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("staff_inbox_state");
+      if (error) throw error;
+      return (data ?? []) as StaffInboxRow[];
+    },
+  });
+  const inboxByClient = useMemo(() => new Map(inboxState.map((r) => [r.client_id, r])), [inboxState]);
+
   const { data: lastMessages = [] } = useQuery({
     queryKey: ["last-messages"],
     enabled: states.length > 0,
@@ -104,7 +146,7 @@ export function MessagesInbox({
       // rows (not only one row per client) so unread counts and manual
       // mark-unread stay correct even when the latest message was sent by us.
       const { data, error } = await (supabase.from("messages") as any)
-        .select("id, client_id, body, sender_role, created_at, read_by_admin_at, is_internal_note, message_type, attachments")
+        .select("id, client_id, body, sender_role, created_at, read_by_admin_at, read_by_client_at, is_automated, is_internal_note, message_type, attachments")
         .in("client_id", clientIds)
         .eq("is_internal_note", false)
         .in("delivery_status", ["sent", "sending"])
@@ -171,10 +213,13 @@ export function MessagesInbox({
     const ch = supabase
       .channel("admin-inbox")
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
-        scheduleInvalidate(["last-messages", "conversation-states", "admin-nav-badges"]);
+        scheduleInvalidate(["last-messages", "conversation-states", "staff-inbox-state", "admin-nav-badges"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => {
-        scheduleInvalidate(["conversation-states", "admin-nav-badges"]);
+        scheduleInvalidate(["conversation-states", "staff-inbox-state", "admin-nav-badges"]);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_staff_reads" }, () => {
+        scheduleInvalidate(["staff-inbox-state", "admin-nav-badges"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, () => {
         scheduleInvalidate(["message-lift-review-inbox"]);
@@ -194,19 +239,12 @@ export function MessagesInbox({
     return m;
   }, [lastMessages]);
 
+  // Blue dot = new inbound client activity *I* (this staff member) haven't viewed.
   const unreadByClient = useMemo(() => {
     const m = new Map<string, number>();
-    const stateMap = new Map(states.map((s) => [s.client_id, s]));
-    for (const msg of lastMessages) {
-      if (msg.sender_role !== "client") continue;
-      const s = stateMap.get(msg.client_id);
-      const lastRead = s?.admin_last_read_at ? new Date(s.admin_last_read_at).getTime() : 0;
-      if (new Date(msg.created_at).getTime() > lastRead) {
-        m.set(msg.client_id, (m.get(msg.client_id) ?? 0) + 1);
-      }
-    }
+    for (const r of inboxState) if (r.unread) m.set(r.client_id, Math.max(1, r.unread_count));
     return m;
-  }, [lastMessages, states]);
+  }, [inboxState]);
 
   const stateMap = useMemo(() => new Map(states.map((s) => [s.client_id, s])), [states]);
 
@@ -233,14 +271,14 @@ export function MessagesInbox({
         const last = lastByClient.get(c.id);
         const unread = unreadByClient.get(c.id) ?? 0;
         const liftReview = liftReviewsByClient.get(c.id) ?? null;
-        const submissions = pendingSubmissions.filter((submission: any) => submission.client_id === c.id);
-        const lastAdminAt = last?.sender_role === "admin" ? Date.parse(last.created_at) : 0;
+        const server = inboxByClient.get(c.id);
         const workflow = deriveInboxWorkflow({
+          workflowStatus: server?.workflow_status ?? (state as any)?.workflow_status,
+          workflowReason: server?.workflow_reason,
+          lastInboundKind: server?.last_inbound_kind,
           lastMessage: last,
           storedStatus: state?.status,
           pendingLiftReview: !!liftReview,
-          pendingForm: submissions.some((submission: any) => submission.kind === "form" && Date.parse(submission.submitted_at) > lastAdminAt),
-          pendingCheckin: submissions.some((submission: any) => submission.kind === "checkin" && Date.parse(submission.submitted_at) > lastAdminAt),
         });
         return { client: c, state, last, unread, liftReview, workflow };
       })
@@ -252,14 +290,14 @@ export function MessagesInbox({
         const status = it.state?.status ?? "open";
         const priority = it.state?.priority ?? "Normal";
         switch (filter) {
-          case "Your Turn": return it.workflow.state === "your_turn";
+          case "Needs Response": return it.workflow.state === "needs_response";
           case "Waiting on Client": return it.workflow.state === "waiting_on_client";
-          case "Forms & Check-ins": return it.workflow.isFormOrCheckin;
-          case "Unread": return it.unread > 0;
-          case "Priority": return priority === "High Priority" || priority === "Important";
-          case "Resolved": return status === "resolved";
+          case "Forms & Check-ins": return it.workflow.isFormOrCheckin && status !== "archived";
+          case "Unread": return it.unread > 0 && status !== "archived";
+          case "Priority": return (priority === "High Priority" || priority === "Important") && status !== "archived";
+          case "Done": return it.workflow.state === "done";
           case "Archived": return status === "archived";
-          default: return status !== "archived" && status !== "resolved";
+          default: return status !== "archived" && (it.workflow.state !== "done" || !!it.last || !!it.liftReview);
         }
       })
       .sort((a, b) => {
@@ -268,7 +306,50 @@ export function MessagesInbox({
         return bt.localeCompare(at);
       });
     return items;
-  }, [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, pendingSubmissions, search, filter]);
+  }, [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, inboxByClient, search, filter]);
+
+  // Live filter counts from the same derivation the rows use.
+  const filterCounts = useMemo(() => {
+    const counts: Partial<Record<Filter, number>> = {};
+    for (const c of clients) {
+      const state = stateMap.get(c.id);
+      if (state?.status === "archived") continue;
+      const server = inboxByClient.get(c.id);
+      const w = deriveInboxWorkflow({
+        workflowStatus: server?.workflow_status ?? (state as any)?.workflow_status,
+        workflowReason: server?.workflow_reason,
+        lastInboundKind: server?.last_inbound_kind,
+        lastMessage: lastByClient.get(c.id),
+        storedStatus: state?.status,
+        pendingLiftReview: liftReviewsByClient.has(c.id),
+      });
+      if (w.state === "needs_response") counts["Needs Response"] = (counts["Needs Response"] ?? 0) + 1;
+      if (w.state === "waiting_on_client") counts["Waiting on Client"] = (counts["Waiting on Client"] ?? 0) + 1;
+      if (w.isFormOrCheckin) counts["Forms & Check-ins"] = (counts["Forms & Check-ins"] ?? 0) + 1;
+      if ((unreadByClient.get(c.id) ?? 0) > 0) counts.Unread = (counts.Unread ?? 0) + 1;
+    }
+    return counts;
+  }, [clients, stateMap, inboxByClient, lastByClient, liftReviewsByClient, unreadByClient]);
+
+  const refreshInbox = () => {
+    qc.invalidateQueries({ queryKey: ["staff-inbox-state"] });
+    qc.invalidateQueries({ queryKey: ["conversation-states"] });
+    qc.invalidateQueries({ queryKey: ["last-messages"] });
+    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+  };
+
+  const changeWorkflow = async (clientId: string, next: WorkflowStatus, opts: { undoFrom?: WorkflowStatus } = {}) => {
+    try {
+      await setConversationWorkflow(clientId, next);
+      refreshInbox();
+      const from = opts.undoFrom;
+      toast.success(`Marked ${WORKFLOW_LABEL[next]}`, from && from !== next ? {
+        action: { label: "Undo", onClick: () => { void setConversationWorkflow(clientId, from).then(refreshInbox); } },
+      } : undefined);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't update status");
+    }
+  };
 
   const selected = clients.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateMap.get(selectedId) : undefined;
@@ -322,17 +403,23 @@ export function MessagesInbox({
   const handleMarkUnread = async () => {
     if (!selectedId) return;
     await markUnread(selectedId, "admin");
-    qc.invalidateQueries({ queryKey: ["conversation-states"] });
-    qc.invalidateQueries({ queryKey: ["last-messages"] });
-    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+    refreshInbox();
+    toast.success("Marked unread");
   };
   const handleMarkRead = async () => {
     if (!selectedId) return;
     await markRead(selectedId, "admin");
-    qc.invalidateQueries({ queryKey: ["conversation-states"] });
-    qc.invalidateQueries({ queryKey: ["last-messages"] });
-    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+    refreshInbox();
   };
+  const selectedWorkflow = selectedId
+    ? deriveInboxWorkflow({
+        workflowStatus: inboxByClient.get(selectedId)?.workflow_status ?? (selectedState as any)?.workflow_status,
+        workflowReason: inboxByClient.get(selectedId)?.workflow_reason,
+        lastInboundKind: inboxByClient.get(selectedId)?.last_inbound_kind,
+        lastMessage: lastByClient.get(selectedId),
+        storedStatus: selectedState?.status,
+      })
+    : null;
 
   // Full-bleed two-pane layout. On <md: stacked — inbox OR conversation.
   // On md+: persistent inbox sidebar (320–360px) + conversation pane.
@@ -418,6 +505,7 @@ export function MessagesInbox({
                 )}
               >
                 {f}
+                {filterCounts[f] ? <span className="ml-1 tabular-nums opacity-75">{filterCounts[f]}</span> : null}
               </button>
             ))}
           </div>
@@ -448,11 +536,16 @@ export function MessagesInbox({
                     } else {
                       await markUnread(client.id, "admin");
                     }
-                    qc.invalidateQueries({ queryKey: ["conversation-states"] });
-                    qc.invalidateQueries({ queryKey: ["last-messages"] });
-                    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+                    refreshInbox();
                   },
                 },
+                ...(workflow.state === "needs_response" ? [{
+                  key: "done",
+                  label: "Done",
+                  color: "primary" as const,
+                  icon: <Check className="h-4 w-4" />,
+                  onSelect: () => changeWorkflow(client.id, "done", { undoFrom: "needs_response" }),
+                }] : []),
                 {
                   key: "archive",
                   label: state?.status === "archived" ? "Unarchive" : "Archive",
@@ -508,7 +601,7 @@ export function MessagesInbox({
                     {liftReview && liftReview.latestAt >= (last?.created_at ?? "")
                       ? `Lift review · ${liftReview.count} waiting`
                       : last
-                        ? (last.sender_role === "admin" ? "You: " : "") + (last.body || "(attachment)")
+                        ? previewPrefix(last as any) + (last.body || "(attachment)")
                         : "No messages yet"}
                   </span>
                   {unread > 0 && (
@@ -519,11 +612,15 @@ export function MessagesInbox({
                     />
                   )}
                 </div>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {workflow.badge && (
-                    <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px]">
-                      {workflow.badge}
-                    </Badge>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {workflow.state !== "done" && <WorkflowPill state={workflow.state} />}
+                  {workflow.detail && workflow.detail !== "Lift review" && (
+                    <span className="text-[10px] font-semibold text-muted-foreground">{workflow.detail}</span>
+                  )}
+                  {workflow.state === "waiting_on_client" && last?.sender_role === "admin" && (
+                    <span className="text-[10px] text-muted-foreground">
+                      {(last as any).read_by_client_at ? formatReadReceipt((last as any).read_by_client_at) : "Sent"}
+                    </span>
                   )}
                   {liftReview && (
                     <Badge
@@ -540,6 +637,18 @@ export function MessagesInbox({
                     </Badge>
                   )}
                   <PriorityChip priority={state?.priority} />
+                  {workflow.state === "needs_response" && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Mark ${client.full_name ?? "conversation"} done`}
+                      onClick={(e) => { e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); } }}
+                      className="ml-auto inline-flex h-7 items-center gap-1 rounded-full border border-border bg-background px-2.5 text-[11px] font-semibold text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-600"
+                    >
+                      <Check className="h-3.5 w-3.5" /> Done
+                    </span>
+                  )}
                 </div>
               </div>
             </button>
@@ -603,14 +712,21 @@ export function MessagesInbox({
                   {selectedState?.priority && selectedState.priority !== "Normal" && (
                     <PriorityChip priority={selectedState.priority} />
                   )}
-                  {selectedState?.status === "resolved" && (
-                    <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 text-[10px]">
-                      Resolved
-                    </Badge>
-                  )}
+                  {selectedWorkflow && <WorkflowPill state={selectedWorkflow.state} />}
                   <span className="truncate">{selected.email}</span>
                 </div>
               </div>
+              {selectedWorkflow?.state === "needs_response" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 shrink-0 gap-1 rounded-full border-emerald-500/40 px-3 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+                  onClick={() => void changeWorkflow(selected.id, "done", { undoFrom: "needs_response" })}
+                  title="No reply needed — clear it from Needs Response"
+                >
+                  <Check className="h-4 w-4" /> <span className="hidden sm:inline">Mark</span> Done
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="icon"
@@ -666,10 +782,16 @@ export function MessagesInbox({
                     <MailOpen className="mr-2 h-4 w-4" /> Mark as read
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Status</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => updateStatus("open")}>Open</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => updateStatus("resolved")}>Resolved</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => updateStatus("archived")}>Archived</DropdownMenuItem>
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Response status</DropdownMenuLabel>
+                  {(["needs_response", "waiting_on_client", "done"] as const).map((w) => (
+                    <DropdownMenuItem key={w} onClick={() => void changeWorkflow(selected.id, w, { undoFrom: selectedWorkflow?.state === "archived" ? undefined : selectedWorkflow?.state as WorkflowStatus })}>
+                      Mark {WORKFLOW_LABEL[w]}{selectedWorkflow?.state === w ? " ✓" : ""}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  {selectedState?.status === "archived"
+                    ? <DropdownMenuItem onClick={() => updateStatus("open")}>Unarchive</DropdownMenuItem>
+                    : <DropdownMenuItem onClick={() => updateStatus("archived")}>Archive conversation</DropdownMenuItem>}
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Priority</DropdownMenuLabel>
                   {PRIORITIES.map((p) => (

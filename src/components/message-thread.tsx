@@ -36,6 +36,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { formatReadReceipt } from "@/lib/read-receipt";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
 import { markRecent } from "@/lib/chat-gifs";
 import { GifThumb } from "@/components/gif-thumb";
@@ -1165,17 +1166,32 @@ export function MessageThread({
   // this thread is open. Previously the effect could fire before messages
   // loaded, return early, and never retry until the conversation was reopened.
   const latestMessageId = messages[messages.length - 1]?.id ?? null;
+  // Read receipts must reflect a person actually looking at this thread, so
+  // a thread mounted in a hidden/backgrounded tab waits until it is visible.
   useEffect(() => {
     if (!clientId || !latestMessageId) return;
     let cancelled = false;
-    void markRead(clientId, role).then(() => {
-      if (cancelled) return;
-      qc.invalidateQueries({ queryKey: ["conversation-states"] });
-      qc.invalidateQueries({ queryKey: ["last-messages"] });
-      qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
-      qc.invalidateQueries({ queryKey: ["notifications"] });
-    });
-    return () => { cancelled = true; };
+    const run = () => {
+      void markRead(clientId, role).then(() => {
+        if (cancelled) return;
+        qc.invalidateQueries({ queryKey: ["conversation-states"] });
+        qc.invalidateQueries({ queryKey: ["staff-inbox-state"] });
+        qc.invalidateQueries({ queryKey: ["last-messages"] });
+        qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+        qc.invalidateQueries({ queryKey: ["notifications"] });
+      });
+    };
+    if (typeof document === "undefined" || document.visibilityState === "visible") {
+      run();
+      return () => { cancelled = true; };
+    }
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", onVisible);
+      run();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
   }, [clientId, role, qc, latestMessageId]);
 
   // Track whether the initial scroll has fired for this clientId.
@@ -1969,8 +1985,8 @@ export function MessageThread({
                     : status === "failed"
                     ? "Not delivered · tap to retry"
                     : readAt
-                    ? `Seen ${format(parseISO(readAt), "h:mm a")}`
-                    : "Delivered";
+                    ? formatReadReceipt(readAt)
+                    : "Sent";
                   return (
                     <div className={cn(
                       "absolute right-1 text-[10px] text-muted-foreground",
