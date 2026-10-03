@@ -51,14 +51,11 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
     placeholderData: (prev) => prev, // keep last known count while refetching
     queryFn: async (): Promise<AdminBadgeCounts> => {
       const [clientMessages, liftPending, liftUrgent, mediaPending, supportAlerts] = await Promise.all([
-        (supabase.from("messages") as any)
-          .select("client_id")
-          .eq("sender_role", "client")
-          .is("read_by_admin_at", null)
-          .eq("is_internal_note", false)
-          .in("delivery_status", ["sent", "sending"]),
+        // Conversations that need *me*: Needs Response or new inbound activity I
+        // haven't seen. Outbound/automated reminders never count.
+        (supabase as any).rpc("staff_inbox_state"),
         (supabase.from("lift_videos") as any)
-          .select("id", { count: "exact", head: true })
+          .select("client_id")
           .in("status", ["New Upload", "Awaiting Review"]),
         (supabase.from("lift_videos") as any)
           .select("id", { count: "exact", head: true })
@@ -74,8 +71,13 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
           .in("status", ["open", "in_progress"]),
       ]);
       return {
-        messages: new Set((clientMessages.data ?? []).map((row: any) => row.client_id)).size,
-        liftReviews: liftPending.count ?? 0,
+        messages: new Set<string>([
+          ...((clientMessages.data ?? []) as any[])
+            .filter((r) => !r.archived && (r.workflow_status === "needs_response" || r.unread))
+            .map((r) => r.client_id as string),
+          ...((liftPending.data ?? []) as any[]).map((r) => r.client_id as string),
+        ]).size,
+        liftReviews: (liftPending.data ?? []).length,
         liftUrgent: liftUrgent.count ?? 0,
         checkIns: mediaPending.count ?? 0,
         supportAlerts: supportAlerts.count ?? 0,
@@ -90,6 +92,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
     const ch = supabase.channel(`admin-nav-badges-${user.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_staff_reads" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_alerts" }, bump)
@@ -119,7 +122,9 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
 export function adminBadgeMap(counts: AdminBadgeCounts | undefined): Record<string, NavBadge> {
   const r: Record<string, NavBadge> = {};
   if (!counts) return r;
-  const messageAttention = counts.messages + counts.liftReviews;
+  // One unit: conversations needing coach attention (lift reviews are already
+  // folded into `messages` as conversations, never double-counted).
+  const messageAttention = counts.messages;
   if (messageAttention > 0) {
     r["/admin/messages"] = { count: messageAttention };
   } else if (counts.liftUrgent > 0) {

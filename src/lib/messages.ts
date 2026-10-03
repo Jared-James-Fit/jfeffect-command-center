@@ -83,6 +83,9 @@ export type ConversationState = {
   admin_last_read_at: string | null;
   client_last_read_at: string | null;
   last_message_at: string | null;
+  workflow_status?: "needs_response" | "waiting_on_client" | "done";
+  workflow_reason?: string | null;
+  last_inbound_at?: string | null;
 };
 
 export const MESSAGE_TYPES = [
@@ -241,6 +244,11 @@ export async function sendMessage(input: {
 
 export async function markRead(clientId: string, role: SenderRole) {
   const now = new Date().toISOString();
+  // Staff unread is per coach/admin: this only clears MY blue dot. It never
+  // changes the conversation's workflow status (Needs Response stays).
+  if (role === "admin") {
+    try { await (db as any).rpc("staff_mark_conversation_read", { _client_id: clientId }); } catch {}
+  }
   // Mark conversation state
   const patch =
     role === "admin"
@@ -266,9 +274,15 @@ export async function markRead(clientId: string, role: SenderRole) {
  * per-message read receipt on that latest incoming message.
  */
 export async function markUnread(clientId: string, role: SenderRole) {
-  const oppRole = role === "admin" ? "client" : "admin";
-  const col = role === "admin" ? "read_by_admin_at" : "read_by_client_at";
-  const readCol = role === "admin" ? "admin_last_read_at" : "client_last_read_at";
+  if (role === "admin") {
+    // Brings back MY blue dot only; workflow status is untouched.
+    await (db as any).rpc("staff_mark_conversation_unread", { _client_id: clientId });
+    return;
+  }
+  // Client side: rewind the client's own read position.
+  const oppRole = "admin";
+  const col = "read_by_client_at";
+  const readCol = "client_last_read_at";
 
   // Find the most recent incoming message from the peer
   const { data: latest } = await (db.from("messages") as any)
@@ -327,6 +341,14 @@ export async function listConversationStates() {
 
 export async function setConversationStatus(clientId: string, status: ConversationState["status"]) {
   await db.from("conversation_state").upsert({ client_id: clientId, status }, { onConflict: "client_id" });
+}
+
+export type WorkflowStatus = "needs_response" | "waiting_on_client" | "done";
+
+/** Coach override: Needs Response / Waiting on Client / Done. Never touches unread. */
+export async function setConversationWorkflow(clientId: string, status: WorkflowStatus) {
+  const { error } = await (db as any).rpc("set_conversation_workflow", { _client_id: clientId, _status: status });
+  if (error) throw error;
 }
 
 export async function setConversationPriority(clientId: string, priority: string) {

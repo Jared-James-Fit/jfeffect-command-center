@@ -836,9 +836,9 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
         {
           client_id: row.client_id,
           status: "needs_response",
-          priority: analysis.urgency === "urgent" || analysis.urgency === "high"
-            ? "Important"
-            : "Needs Response",
+          // "Needs Response" is the workflow status (set by the message trigger),
+          // not a priority. Only genuinely urgent answers raise priority.
+          ...(analysis.urgency === "urgent" || analysis.urgency === "high" ? { priority: "Important" } : {}),
           last_message_at: now,
         },
         { onConflict: "client_id" },
