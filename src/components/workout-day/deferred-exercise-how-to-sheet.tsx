@@ -42,8 +42,15 @@ export default function DeferredExerciseHowToSheet({
     queryKey: ["workout-exercise-guide", exerciseId ?? fallbackName],
     queryFn: async () => {
       const query = supabase.from("exercises").select(GUIDE_COLUMNS);
-      const { data, error } = exerciseId
-        ? await query.eq("id", exerciseId).maybeSingle()
+      // Unlinked rows resolve through the library (exact name or alias) so an
+      // alias shows its canonical exercise's demo video.
+      let id = exerciseId ?? null;
+      if (!id && fallbackName) {
+        const { data: resolved } = await (supabase as any).rpc("resolve_exercise_id", { _name: fallbackName });
+        id = (resolved as string | null) ?? null;
+      }
+      const { data, error } = id
+        ? await query.eq("id", id).maybeSingle()
         : await query.eq("name", fallbackName).maybeSingle();
       if (error) throw error;
       return data as unknown as ExerciseGuide | null;

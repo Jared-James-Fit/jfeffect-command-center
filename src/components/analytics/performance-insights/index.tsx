@@ -57,7 +57,7 @@ export function PerformanceInsights({
       const { data } = await supabase
         .from("pl_row_results")
         .select(
-          "actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, completed_at, pl_exercise_rows(exercises(name, primary_muscle_group, muscle_group, muscle_groups, is_competition_lift, competition_lift_type, lift_family, variation_type, counts_toward_volume, volume_multiplier))",
+          "actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, completed_at, pl_exercise_rows(exercises(name, primary_muscle_group, muscle_group, muscle_groups, secondary_muscle_groups, is_competition_lift, competition_lift_type, lift_family, variation_type, counts_toward_volume, volume_multiplier))",
         )
         .eq("client_id", clientId)
         .not("actual_reps", "is", null)
@@ -79,8 +79,11 @@ export function PerformanceInsights({
           reps: Number(r.actual_reps) || 0,
           rpe: r.actual_rpe ?? null,
           exercise_name: ex.name ?? "Unknown",
-          primary_muscle: ex.primary_muscle_group ?? ex.muscle_group ?? null,
-          secondary_muscles: Array.isArray(ex.muscle_groups) ? ex.muscle_groups : null,
+          primary_muscle:
+            Array.isArray(ex.muscle_groups) && ex.muscle_groups.length > 0
+              ? ex.muscle_groups
+              : ex.primary_muscle_group ?? ex.muscle_group ?? null,
+          secondary_muscles: Array.isArray(ex.secondary_muscle_groups) ? ex.secondary_muscle_groups : null,
           is_competition_lift: !!ex.is_competition_lift,
           competition_lift_type: ex.competition_lift_type ?? null,
           lift_family: ex.lift_family ?? null,

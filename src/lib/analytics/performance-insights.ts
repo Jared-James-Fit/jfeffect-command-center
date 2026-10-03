@@ -22,7 +22,8 @@ export interface InsightSet {
   reps: number;
   rpe: number | null;
   exercise_name: string;
-  primary_muscle: string | null;
+  /** Primary muscle keys/labels (or a single legacy label). */
+  primary_muscle: string | string[] | null;
   secondary_muscles: string[] | null;
   is_competition_lift: boolean;
   competition_lift_type: string | null; // 'squat' | 'bench' | 'deadlift' | null

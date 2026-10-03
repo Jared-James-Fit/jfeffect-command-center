@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { searchLibrary, type ExerciseAlias, type LibraryExercise } from "@/lib/exercise-library";
+import { MuscleTagPicker } from "@/components/exercises/muscle-tag-picker";
 import { useIsCoarsePointer } from "@/hooks/use-touch-viewport";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
@@ -47,11 +49,14 @@ export function ExerciseQuickCreateForm({
   onCancel,
   onCreated,
   submitLabel = "Add",
+  librarySetup = false,
 }: {
   defaultName?: string;
   onCancel: () => void;
   onCreated?: (id: string, name: string) => void;
   submitLabel?: string;
+  /** Admin library: full guided setup (family, aliases, required muscles). */
+  librarySetup?: boolean;
 }) {
   const qc = useQueryClient();
   // Touch devices never auto-focus: Android Chrome pops the soft keyboard +
@@ -71,6 +76,42 @@ export function ExerciseQuickCreateForm({
   const [cues, setCues] = useState("");
   const [commonMistakes, setCommonMistakes] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const [family, setFamily] = useState("");
+  const [aliasText, setAliasText] = useState("");
+  const [muscles, setMuscles] = useState<{ primary: string[]; secondary: string[] }>({ primary: [], secondary: [] });
+
+  // Live duplicate guard: canonical names AND aliases, as the coach types.
+  const { data: lookup = [] } = useQuery({
+    queryKey: ["exercise-create-lookup"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase.from("exercises").select("id,name,archived,exercise_family,equipment,muscle_group,primary_muscle_group,category" as any).eq("archived", false).limit(5000);
+      return (data ?? []) as unknown as LibraryExercise[];
+    },
+  });
+  const { data: aliases = [] } = useQuery({
+    queryKey: ["exercise-aliases"],
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("exercise_aliases").select("alias_key, alias_name, exercise_id, source").order("alias_name");
+      return (data ?? []) as ExerciseAlias[];
+    },
+  });
+  const families = useMemo(
+    () => Array.from(new Set(lookup.map((e) => e.exercise_family).filter(Boolean) as string[])).sort(),
+    [lookup],
+  );
+  const matches = useMemo(() => {
+    const q = name.trim();
+    if (q.length < 3) return [];
+    return searchLibrary(lookup, aliases, q).hits.filter((h) => h.strong).slice(0, 3);
+  }, [lookup, aliases, name]);
+  const pickExisting = (e: LibraryExercise) => {
+    upsertExerciseInLibraryCaches(qc, e as never);
+    toast.success(`Using existing "${e.name}"`);
+    onCreated?.(e.id, e.name);
+  };
+  const needsMuscles = librarySetup && muscles.primary.length === 0;
 
   useEffect(() => { setName(defaultName ?? ""); }, [defaultName]);
 
@@ -102,6 +143,11 @@ export function ExerciseQuickCreateForm({
     if (youtubeUrl.trim()) payload.youtube_url = youtubeUrl.trim();
     if (cues.trim()) payload.cues = cues.trim();
     if (commonMistakes.trim()) payload.common_mistakes = commonMistakes.trim();
+    if (family.trim()) payload.exercise_family = family.trim();
+    if (muscles.primary.length) {
+      payload.muscle_groups = muscles.primary;
+      payload.secondary_muscle_groups = muscles.secondary;
+    }
 
     try {
       // Reuse the canonical library record before creating anything new.
@@ -133,6 +179,13 @@ export function ExerciseQuickCreateForm({
         return;
       }
       upsertExerciseInLibraryCaches(qc, data as never);
+      const aliasNames = aliasText.split(/[,\n]/).map((a) => a.trim()).filter(Boolean);
+      for (const alias of aliasNames) {
+        const { error: aliasError } = await (supabase as any).from("exercise_aliases")
+          .insert({ alias_name: alias, alias_key: alias, exercise_id: (data as any).id, source: "manual" });
+        if (aliasError) toast.error(`Alias “${alias}”: ${aliasError.message}`);
+      }
+      qc.invalidateQueries({ queryKey: ["exercise-aliases"] });
       toast.success(`Added "${(data as any).name}" to library`);
       void invalidateExerciseLibrary(qc);
       onCreated?.((data as any).id, (data as any).name);
@@ -172,7 +225,42 @@ export function ExerciseQuickCreateForm({
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Chest Supported Dumbbell Row"
         />
+        {matches.length > 0 && (
+          <div className="mt-2 space-y-1.5 rounded-lg border border-amber-500/40 bg-amber-50 p-2 dark:bg-amber-500/10">
+            <div className="text-[11px] font-black uppercase tracking-wide text-amber-800 dark:text-amber-300">Possible existing exercise</div>
+            {matches.map((m) => (
+              <div key={m.exercise.id} className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-bold">{m.exercise.name}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {m.reason?.kind === "alias" ? `Alias: ${m.reason.text}` : m.exercise.exercise_family || "Exercise"}
+                  </div>
+                </div>
+                <Button type="button" size="sm" variant="outline" className="h-8 shrink-0" onClick={() => pickExisting(m.exercise)}>Use existing</Button>
+              </div>
+            ))}
+            <div className="text-[11px] text-muted-foreground">Only create a new one if it's a genuinely different movement.</div>
+          </div>
+        )}
       </div>
+
+      {librarySetup && (
+        <>
+          <div>
+            <Label>Exercise family</Label>
+            <Input list="exercise-family-options" value={family} onChange={(e) => setFamily(e.target.value)} placeholder="e.g. Bench Press (auto-detected if blank)" autoComplete="off" />
+            <datalist id="exercise-family-options">{families.map((f) => <option key={f} value={f} />)}</datalist>
+          </div>
+          <div>
+            <Label>Primary &amp; secondary muscles *</Label>
+            <div className="mt-1.5"><MuscleTagPicker primary={muscles.primary} secondary={muscles.secondary} onChange={setMuscles} /></div>
+          </div>
+          <div>
+            <Label>Aliases <span className="font-normal text-muted-foreground">(other names for this exact exercise)</span></Label>
+            <Input value={aliasText} onChange={(e) => setAliasText(e.target.value)} placeholder="e.g. Comp Bench, Flat Barbell Bench" autoComplete="off" />
+          </div>
+        </>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -187,7 +275,7 @@ export function ExerciseQuickCreateForm({
             </SelectContent>
           </Select>
         </div>
-        <div>
+        <div className={librarySetup ? "hidden" : undefined}>
           <Label>Primary muscle</Label>
           <Select value={primaryMuscle} onValueChange={setPrimaryMuscle}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -272,7 +360,8 @@ export function ExerciseQuickCreateForm({
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button
           type="submit"
-          disabled={busy || !name.trim()}
+          disabled={busy || !name.trim() || needsMuscles}
+          title={needsMuscles ? "Pick at least one primary muscle" : undefined}
           className="bg-gradient-primary font-bold uppercase"
         >
           {busy ? "Saving…" : submitLabel}
