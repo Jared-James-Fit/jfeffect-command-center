@@ -76,3 +76,22 @@ export function inheritNewSetInputs<T extends Record<string, any>>(
     ...(previous?.weight != null ? { weight: previous.weight } : {}),
   };
 }
+
+/**
+ * Parse a reps prescription into a range/exact target. Accepts unit suffixes
+ * ("8-12 per leg", "10–12 each side", "6 to 10 reps"); timed prescriptions and
+ * multi-set schemes ("12, 6, 12", "2/3/4/5") are not rep ranges.
+ */
+export function parseRepTarget(text?: string | null): { exact?: number; min?: number; max?: number } {
+  if (!text) return {};
+  const s = String(text).trim();
+  // Timed prescriptions ("30-45 sec/side") are not rep targets.
+  if (/\b(sec|secs|second|seconds|min|mins|minute|minutes)\b|\d\s*s\b/i.test(s)) return {};
+  // Ranges with a unit suffix count too: "8-12 per leg", "10–12 each side",
+  // "6 to 10 reps". Multi-set schemes ("12, 6, 12", "2/3/4/5") are not ranges.
+  const range = s.match(/^(\d+)\s*(?:[-–—]|to)\s*(\d+)(?:\s*(?:reps?|per|each)\b.*|\s*\/.*|\s*)$/i);
+  if (range && !/[,/]\s*\d/.test(s)) return { min: Number(range[1]), max: Number(range[2]) };
+  const n = s.match(/^(\d+)(?:\s*(?:reps?|per|each)\b.*|\s*)$/i);
+  if (n) return { exact: Number(n[1]) };
+  return {};
+}
