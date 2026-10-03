@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { installShakeUndoGuard } from "@/lib/shake-undo-guard";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
   createQueryPersister,
@@ -381,6 +382,8 @@ function RootComponent() {
     initChunkRecovery();
     registerServiceWorker();
     void initNativeShell();
+    // Stop iOS "Undo Typing" prompts when the phone gets jolted mid-workout.
+    return installShakeUndoGuard();
   }, []);
 
   // Build the localStorage persister once on the client. On the server we

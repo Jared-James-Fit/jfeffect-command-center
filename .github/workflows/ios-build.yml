@@ -72,6 +72,14 @@ jobs:
         run: |
           rm -rf ios
           npx cap add ios
+          # Disable iOS shake-to-undo ("Undo Typing" popups mid-workout).
+          APPDELEGATE=ios/App/App/AppDelegate.swift
+          perl -0pi -e 's/(didFinishLaunchingWithOptions[^{]*\{)/$1\n        application.applicationSupportsShakeToEdit = false/' "$APPDELEGATE"
+          if grep -q "applicationSupportsShakeToEdit = false" "$APPDELEGATE"; then
+            echo "✅ Shake-to-undo disabled"
+          else
+            echo "::warning::Could not disable shake-to-undo in AppDelegate.swift"
+          fi
           cat > ios/App/Podfile << 'PODFILE'
           require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
           platform :ios, '16.0'
