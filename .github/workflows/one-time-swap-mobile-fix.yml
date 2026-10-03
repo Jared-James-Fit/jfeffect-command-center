@@ -1,0 +1,51 @@
+name: One-time swap mobile fix
+on:
+  push:
+    paths: ['.github/workflows/one-time-swap-mobile-fix.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - name: Patch swap lifecycle and touch targets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/components/workout-day/deferred-exercise-actions.tsx')
+          s=p.read_text()
+          s=s.replace('''  swapContext?:\n    | { kind: "client" }\n    | {\n        kind: "member";\n        enrollmentId: string;\n        weekIndex: number;\n        dayIndex: number;\n        exerciseIndex: number;\n      };\n}) {\n  const [requested, setRequested] = useState(false);\n\n  if (!requested) {''','''  swapContext?:\n    | { kind: "client" }\n    | {\n        kind: "member";\n        enrollmentId: string;\n        weekIndex: number;\n        dayIndex: number;\n        exerciseIndex: number;\n      };\n  open?: boolean;\n  onOpenChange?: (open: boolean) => void;\n  hideLauncher?: boolean;\n}) {\n  const [requested, setRequested] = useState(false);\n  const controlled = typeof props.open === "boolean";\n  const isOpen = controlled ? !!props.open : requested;\n  const setOpen = (next: boolean) => {\n    if (!controlled) setRequested(next);\n    props.onOpenChange?.(next);\n  };\n\n  if (!isOpen && !props.hideLauncher) {''')
+          s=s.replace('''        onClick={() => setRequested(true)}''','''        onClick={() => setOpen(true)}''',1)
+          s=s.replace('''        {...props}\n        open\n        hideTrigger\n        onOpenChange={(open) => {\n          if (!open) setRequested(false);\n        }}''','''        {...props}\n        open={isOpen}\n        hideTrigger\n        onOpenChange={setOpen}''')
+          p.write_text(s)
+
+          p=Path('src/components/workout-day/WorkoutDayView.tsx')
+          s=p.read_text()
+          needle='''  const [activeUnit, setActiveUnit] = useState<"kg" | "lb">(unit);'''
+          assert needle in s
+          s=s.replace(needle, '''  const [swapOpen, setSwapOpen] = useState(false);\n  const [activeUnit, setActiveUnit] = useState<"kg" | "lb">(unit);''',1)
+          old='''            <DropdownMenuItem asChild>\n              <DeferredQuickSwapButton\n                rowId={row.id}\n                exerciseId={exerciseId}\n                exerciseName={name}\n                muscleGroup={exercise?.muscle_group ?? null}\n                category={exercise?.category ?? null}\n                equipment={(exercise as any)?.equipment ?? null}\n                difficulty={(exercise as any)?.difficulty ?? null}\n                swapContext={swapContext}\n              />\n            </DropdownMenuItem>'''
+          new='''            <DropdownMenuItem\n              className="h-11 rounded-lg text-sm"\n              onSelect={() => setSwapOpen(true)}\n            >\n              <ChevronsUpDown className="mr-2 h-4 w-4 rotate-90" />\n              Swap exercise\n            </DropdownMenuItem>'''
+          assert old in s
+          s=s.replace(old,new,1)
+          # Larger, distinct mobile targets while preserving existing More + Reorder architecture.
+          s=s.replace('''className="h-8 w-8 rounded-full p-0 text-muted-foreground"\n              aria-label={`More options for ${name}`}''','''className="h-10 w-10 shrink-0 rounded-full p-0 text-muted-foreground"\n              aria-label={`More options for ${name}`}''',1)
+          s=s.replace('''className="h-8 w-8 rounded-full p-0 text-muted-foreground"\n                aria-label={`Reorder ${name}`}''','''className="h-10 w-10 shrink-0 rounded-full p-0 text-muted-foreground"\n                aria-label={`Reorder ${name}`}''',1)
+          anchor='''        {(exerciseId || name) && (\n          <RestTimerButton'''
+          insert='''        <DeferredQuickSwapButton\n          rowId={row.id}\n          exerciseId={exerciseId}\n          exerciseName={name}\n          muscleGroup={exercise?.muscle_group ?? null}\n          category={exercise?.category ?? null}\n          equipment={(exercise as any)?.equipment ?? null}\n          difficulty={(exercise as any)?.difficulty ?? null}\n          swapContext={swapContext}\n          open={swapOpen}\n          onOpenChange={setSwapOpen}\n          hideLauncher\n        />\n        {(exerciseId || name) && (\n          <RestTimerButton'''
+          assert anchor in s
+          s=s.replace(anchor,insert,1)
+          p.write_text(s)
+          PY
+      - name: Verify build
+        run: npm ci && npm run build
+      - name: Commit
+        run: |
+          rm .github/workflows/one-time-swap-mobile-fix.yml
+          git config user.name 'JF Effect automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/components/workout-day/WorkoutDayView.tsx src/components/workout-day/deferred-exercise-actions.tsx .github/workflows/one-time-swap-mobile-fix.yml
+          git commit -m 'Fix exercise swap search and mobile action controls'
+          git push origin main
