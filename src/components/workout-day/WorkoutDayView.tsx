@@ -1572,6 +1572,11 @@ function WorkoutDay({
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [lastSummary, setLastSummary] = useState<WorkoutSummary | null>(null);
   const [lastSessionRating, setLastSessionRating] = useState<number | null>(null);
+  // Snapshot the authoritative local session clock at finish. The completion
+  // query can still contain an older draft duration for a render or two, and
+  // the local timer is cleared immediately after persistence. Keeping this
+  // value prevents the celebration screen from showing that stale draft.
+  const [lastFinishedDurationMin, setLastFinishedDurationMin] = useState<number | null>(null);
 
   // ── Celebration screen inputs: session PRs + prescribed-cardio status ────
   const summaryDisplayUnit: "kg" | "lb" =
@@ -1765,10 +1770,18 @@ function WorkoutDay({
       .filter(Boolean)
       .sort()[0] ?? null;
     const sessionSeconds = sessionDurationSeconds(dayId);
-    const activeMin = sessionDurationMin(dayId) ?? estimateDurationFromLogs(firstLogAt);
-    const resolvedDurationMin = Number.isFinite(typedMin) && typedMin > 0
-      ? typedMin
-      : activeMin ?? completion?.actual_duration_min ?? null;
+    const sessionMin = sessionDurationMin(dayId);
+    const fallbackMin = estimateDurationFromLogs(firstLogAt);
+    // The workout-session clock is the source of truth. A hydrated/stale
+    // actualMin draft must never override a valid running timer. Only fall
+    // back to a manually-entered/stored value when no trustworthy timer was
+    // captured for this session.
+    const resolvedDurationMin = sessionMin
+      ?? (Number.isFinite(typedMin) && typedMin > 0 ? typedMin : null)
+      ?? fallbackMin
+      ?? completion?.actual_duration_min
+      ?? null;
+    setLastFinishedDurationMin(resolvedDurationMin);
 
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       saveOfflineCompletion({
@@ -2670,7 +2683,9 @@ function WorkoutDay({
             // the duration tile reflects time the workout view was actually
             // open — matching the live timer badge and the value persisted
             // on Finish.
-            completion?.actual_duration_min ?? sessionDurationMin(dayId) ?? null
+            recapFromSubmitRef.current
+              ? (lastFinishedDurationMin ?? completion?.actual_duration_min ?? null)
+              : (completion?.actual_duration_min ?? sessionDurationMin(dayId) ?? null)
           }
           workoutDate={completion?.completed_at ?? scheduledDate ?? null}
           prs={sessionPRs}
