@@ -1,0 +1,36 @@
+name: One-time fix unlinked exercise swap
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/one-time-fix-unlinked-exercise-swap.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Patch quick swap
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/components/workout-day/QuickSwapButton.tsx')
+          s=p.read_text()
+          old='''                onClick={() => setMode("search")}\n                disabled={!exerciseId}\n              >\n                <Search className="mr-2 h-4 w-4" /> Search All Exercises\n              </Button>\n              {!exerciseId && (\n                <p className="text-sm text-muted-foreground">\n                  This row isn't linked to an exercise, so we can't suggest alternates.\n                </p>\n              )}'''
+          new='''                onClick={() => setMode("search")}\n              >\n                <Search className="mr-2 h-4 w-4" /> Search All Exercises\n              </Button>\n              {!exerciseId && (\n                <p className="text-sm text-muted-foreground">\n                  This program row uses a legacy exercise name. Search the Exercise Library to swap it; your selection will link the row to the canonical exercise automatically.\n                </p>\n              )}'''
+          if old not in s:
+              raise SystemExit('Expected QuickSwapButton block not found; refusing unsafe patch')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Remove one-time workflow
+        run: rm .github/workflows/one-time-fix-unlinked-exercise-swap.yml
+      - name: Commit fix
+        run: |
+          git config user.name 'JF Effect automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/components/workout-day/QuickSwapButton.tsx .github/workflows/one-time-fix-unlinked-exercise-swap.yml
+          git commit -m 'Allow swapping legacy unlinked exercise rows'
+          git push origin main
