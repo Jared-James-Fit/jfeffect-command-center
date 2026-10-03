@@ -44,8 +44,6 @@ jobs:
               </Button>'''
           assert old in s, 'Reorder trigger block not found'
           s=s.replace(old,new,1)
-          # Give the action strip a little more room while preserving the existing layout.
-          s=s.replace('''<div className="mt-2 flex items-center gap-1.5">''','''<div className="mt-2 flex items-center gap-1 sm:gap-1.5">''',1)
           p.write_text(s)
           PY
       - name: Remove one-time workflow and commit
