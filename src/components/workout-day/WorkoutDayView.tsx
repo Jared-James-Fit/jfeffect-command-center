@@ -89,7 +89,7 @@ import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSe
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import { isSetLogComplete } from "@/lib/set-completion";
 import { planCascade, type CascadeOrigin, type CascadeSetState } from "@/lib/set-cascade";
-import { SET_INPUT_CASCADE_EVENT, canCascadeInputTo, markManualInputBoundary, type CascadedInputField } from "@/lib/set-input-cascade";
+import { SET_INPUT_CASCADE_EVENT, canCascadeInputTo, markManualInputBoundary, parseRepTarget, type CascadedInputField } from "@/lib/set-input-cascade";
 import {
   formatLoadDisplay,
   loadColumnLabel,
@@ -152,16 +152,6 @@ import {
 /* -------------------------------------------------------------------------- */
 
 type RangeTarget = { exact?: number; min?: number; max?: number };
-
-function parseRepTarget(text?: string | null): RangeTarget {
-  if (!text) return {};
-  const s = String(text).trim();
-  const range = s.match(/^(\d+)\s*[-–]\s*(\d+)$/);
-  if (range) return { min: Number(range[1]), max: Number(range[2]) };
-  const n = s.match(/^(\d+)$/);
-  if (n) return { exact: Number(n[1]) };
-  return {};
-}
 
 function parseEffortTarget(text?: string | null): RangeTarget {
   if (!text) return {};
@@ -3371,9 +3361,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     for (const idx of targets) {
       const ex = existingResults.find((x: any) => x.set_index === idx) as any;
       const repsNum = ex?.actual_reps != null ? Number(ex.actual_reps) : srcReps;
-      // Keep whatever RPE/RIR the set already has; the cascade never sets it.
+      // Keep any RPE/RIR the set already has; otherwise carry the source set's,
+      // the same way reps are carried.
       const rpeStr =
-        ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? null);
+        ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? srcRpe);
       const rpeNum = rpeStr ? Number(rpeStr) : null;
       const complete = isSetLogComplete({
         requireReps: showReps,
@@ -3854,6 +3845,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               hasUncompletedAfter={hasUncompletedAfter}
               onApplyToRemaining={applyToRemaining}
               cascade={cascade}
+              autoFilled={cascadeOriginRef.current.get(i + 1) === "auto"}
               onCascadeFromSet={cascadeFromSet}
               forceHydrateToken={fillToken}
               forcedFill={fillSnapshot}
@@ -4151,6 +4143,7 @@ function SetRow({
   hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
   forcedFill = null,
   cascade = null,
+  autoFilled = false,
   onCascadeFromSet,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, showReps = true, showTimer = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
@@ -4212,6 +4205,8 @@ function SetRow({
     reps: string;
     rpe: string;
   } | null;
+  /** True when this set's values came from a cascade above (not typed or confirmed by hand). */
+  autoFilled?: boolean;
   /** Called when this set's load is manually changed — starts the cascade. */
   onCascadeFromSet?: (
     fromSetIndex: number,
@@ -4492,7 +4487,7 @@ function SetRow({
       loadType: cascade.loadType,
     };
     if (!repsEdited && existing?.actual_reps == null && cascade.reps) setReps(cascade.reps);
-    // RPE/RIR is deliberately NOT cascaded — that system is untouched.
+    if (!rpeEdited && existing?.actual_rpe_num == null && existing?.actual_rpe == null && cascade.rpe) setRpe(cascade.rpe);
     setOptimisticComplete(
       isSetLogComplete({
         requireReps: showReps,
@@ -5028,7 +5023,10 @@ function SetRow({
     if (typeof window === "undefined") return;
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ rowId: string; fromSetIndex: number; field: CascadedInputField; value: string }>).detail;
-      if (!detail || detail.rowId !== rowId || existing?.completed_at) return;
+      if (!detail || detail.rowId !== rowId) return;
+      // Same rule as weight: sets confirmed by hand are protected, but sets the
+      // weight cascade filled (and auto-completed) still follow edits above.
+      if (existing?.completed_at && !autoFilled) return;
       if (!canCascadeInputTo(rowId, detail.field, detail.fromSetIndex, setIndex)) return;
       if (detail.field === "reps") {
         if (repsEdited) return;
@@ -5041,7 +5039,7 @@ function SetRow({
     };
     window.addEventListener(SET_INPUT_CASCADE_EVENT, handler);
     return () => window.removeEventListener(SET_INPUT_CASCADE_EVENT, handler);
-  }, [rowId, setIndex, existing?.completed_at, repsEdited, rpeEdited]);
+  }, [rowId, setIndex, existing?.completed_at, autoFilled, repsEdited, rpeEdited]);
 
   // ── Exact rep-max PR badge ────────────────────────────────────────────
   // Compares the confirmed set against the historical best for the same
