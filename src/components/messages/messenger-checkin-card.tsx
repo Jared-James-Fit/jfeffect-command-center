@@ -186,6 +186,10 @@ function titleFor(taskType: MessengerCheckinTaskType) {
   return taskType === "nutrition_review" ? "Nutrition Review" : "Weekly Check-In";
 }
 
+export function durationFor(taskType: MessengerCheckinTaskType) {
+  return taskType === "nutrition_review" ? "About 2–3 minutes" : "About 60–90 seconds";
+}
+
 function displayAnswer(v: unknown) {
   if (Array.isArray(v)) return v.join(", ");
   if (typeof v === "number") return `${v}/5`;
@@ -226,7 +230,7 @@ export function MessengerCheckinRequestCard({
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold">{titleFor(taskType)}</div>
             <div className={cn("mt-0.5 text-xs", FORM_MUTED)}>
-              {isLoading ? "Loading…" : done ? "Submitted" : "About 60–90 seconds"}
+              {isLoading ? "Loading…" : done ? "Submitted" : durationFor(taskType)}
             </div>
           </div>
         </div>

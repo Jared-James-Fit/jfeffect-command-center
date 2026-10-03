@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { durationFor } from "@/components/messages/messenger-checkin-card";
 import {
   sendMessengerCheckinRequest,
   type MessengerCheckinTaskType,
@@ -79,6 +80,7 @@ export function MessengerCheckinRequestDialog({
           >
             <ClipboardCheck className="h-5 w-5 text-primary" />
             <div className="mt-3 text-sm font-bold">Weekly Check-In</div>
+            <div className="text-xs text-muted-foreground">{durationFor("weekly_checkin")}</div>
             <div className="mt-1 text-xs text-muted-foreground">Training, nutrition, recovery + new-week focus.</div>
           </button>
 
@@ -94,6 +96,7 @@ export function MessengerCheckinRequestDialog({
           >
             <Salad className="h-5 w-5 text-primary" />
             <div className="mt-3 text-sm font-bold">Nutrition Review</div>
+            <div className="text-xs text-muted-foreground">{durationFor("nutrition_review")}</div>
             <div className="mt-1 text-xs text-muted-foreground">Adherence, hunger, digestion, energy + changes.</div>
           </button>
         </div>

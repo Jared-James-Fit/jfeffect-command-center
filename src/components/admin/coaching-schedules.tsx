@@ -21,10 +21,10 @@ import {
   type TaskOverride,
 } from "@/lib/action-centre.functions";
 
-import { SEMI_MONTHLY_LABEL } from "@/lib/task-cadence";
+import { LAST_FRIDAY_LABEL, SEMI_MONTHLY_LABEL } from "@/lib/task-cadence";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const FREQ = ["weekly", "biweekly", "semi_monthly", "monthly", "custom_days", "daily", "manual"] as const;
+const FREQ = ["weekly", "biweekly", "semi_monthly", "monthly", "monthly_last_friday", "custom_days", "daily", "manual"] as const;
 
 type SchedShape = {
   enabled: boolean;
@@ -93,7 +93,7 @@ function ScheduleForm({
           <SelectContent>
             {FREQ.map((f) => (
               <SelectItem key={f} value={f}>
-                {f === "semi_monthly" ? SEMI_MONTHLY_LABEL : f}
+                {f === "semi_monthly" ? SEMI_MONTHLY_LABEL : f === "monthly_last_friday" ? LAST_FRIDAY_LABEL : f}
               </SelectItem>
             ))}
           </SelectContent>
