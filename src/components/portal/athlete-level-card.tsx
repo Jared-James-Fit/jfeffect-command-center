@@ -14,6 +14,8 @@ import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type Achieve
 import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
 import { ArrowLeft } from "lucide-react";
 import { LEAGUE_RULES, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
+import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
+import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
 type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean };
@@ -66,6 +68,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
           <span className="min-w-0 flex-1">
             <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} Performance League</span>
             <span className="mt-1 flex items-center gap-2 text-xl font-bold tracking-tight">Top 10 <span className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-emerald-600"><span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" /></span>Live</span></span>
+            {isFinalWeek() && <span className="mt-1 inline-flex w-fit items-center rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">🔥 Final week · Boost live</span>}
           </span>
           {!leaguePending && leagueMe?.qualified && (() => {
             const top10 = leagueRows.filter(r=>r.qualified && r.rank!=null && Number(r.rank)<=10).sort((a,b)=>Number(a.rank)-Number(b.rank));
@@ -353,28 +356,40 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
   selected: string | null;
   onSelectedChange: (id: string | null) => void;
 }) {
+  // "This month" or last month's final standings (with boost awards).
+  const [view, setView] = useState<"current" | "previous">("current");
+  const previousMonth = (() => {
+    const [y, m] = leagueToday().split("-").map(Number);
+    const d = new Date(Date.UTC(y, m - 2, 1));
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  })();
   const { data = [], isPending } = useQuery({
-    queryKey: ["athlete-rankings-monthly-view"],
+    queryKey: ["athlete-rankings-monthly-view", view],
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_monthly_athlete_rankings", { _limit: 50 });
+      const { data, error } = await (supabase as any).rpc("get_performance_league", { _month: view === "previous" ? previousMonth : null });
       if (error) throw error;
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
-        xp: leagueScore(r),
+        xp: Number(r.total_points ?? 0),
         rank: r.rank == null ? 999 : Number(r.rank),
         qualified: Boolean(r.qualified),
         workouts_completed: Number(r.workouts_completed ?? 0),
         fully_logged: Number(r.fully_logged ?? 0),
-        strength_score: Number(r.strength_score ?? 0),
-      })) as Array<RankRow & { qualified:boolean; bodyweight_value:number|null; bodyweight_unit:string|null; workouts_completed:number; fully_logged:number; strength_score:number }>;
+        strength_score: Number(r.improvement_points ?? 0) * 1000,
+      })) as Array<RankRow & BoostLeagueRow & { strength_score: number }>;
     },
   });
   const qualified = data.filter((r) => r.qualified && r.rank <= 10);
   const podium = qualified.slice(0, 3);
   const rest = qualified.slice(3);
   const me = data.find((r) => r.is_me);
-  const monthName = format(new Date(), "MMMM");
+  const monthLabelDate = view === "previous" ? new Date(previousMonth + "T12:00:00") : new Date();
+  const monthName = format(monthLabelDate, "MMMM");
+  const finalWeek = view === "current" && (me?.is_final_week ?? isFinalWeek());
+  // Boost rows need the RPC shape; null rank -> skip in threat math.
+  const boostRows = data.map((r) => ({ ...r, rank: r.rank === 999 ? null : r.rank })) as BoostLeagueRow[];
+  const boostMe = boostRows.find((r) => r.is_me);
 
   if (selected) {
     const toStat = (r?: (typeof data)[number]): LeagueStat | undefined =>
@@ -394,9 +409,23 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
   return (
     <div className="space-y-4">
       <SheetHeader className="text-left">
-        <SheetTitle>{monthName} Performance League</SheetTitle>
-        <SheetDescription>Earn points all month. Tap anyone to see their profile.</SheetDescription>
+        <SheetTitle>{monthName} {view === "previous" ? "Final Standings" : "Performance League"}</SheetTitle>
+        <SheetDescription>{view === "previous" ? "Final results, including Final Week Boost awards." : "Earn points all month. Tap anyone to see their profile."}</SheetDescription>
       </SheetHeader>
+
+      <div className="grid grid-cols-2 rounded-xl bg-muted/50 p-1 text-xs font-bold">
+        {(["current", "previous"] as const).map((v) => (
+          <button key={v} type="button" onClick={() => setView(v)}
+            className={cn("min-h-9 rounded-lg transition", view === v ? "bg-background shadow-sm" : "text-muted-foreground")}>
+            {v === "current" ? "This month" : format(new Date(previousMonth + "T12:00:00"), "MMMM")}
+          </button>
+        ))}
+      </div>
+
+      {view === "current" && boostMe?.qualified && (finalWeek
+        ? <><BoostHero me={boostMe} rows={boostRows} /><ThreatBanner rows={boostRows} me={boostMe} /></>
+        : <BoostTeaser me={boostMe} />)}
+      {view === "current" && !boostMe?.qualified && <BoostTeaser />}
 
       {me && !me.qualified && (
         <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
@@ -405,7 +434,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
         </div>
       )}
 
-      <div className="rounded-2xl border bg-muted/20 p-3">
+      {view === "current" && !finalWeek && <div className="rounded-2xl border bg-muted/20 p-3">
         <div className="text-xs font-black">How to earn points</div>
         <ul className="mt-2 space-y-1">
           {LEAGUE_RULES.map((rule) => (
@@ -416,7 +445,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
           ))}
         </ul>
         <div className="mt-2 text-[11px] text-muted-foreground">Resets on the 1st. Log your bodyweight once to join.</div>
-      </div>
+      </div>}
 
       {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">No athletes have qualified for {monthName} yet. Log a bodyweight and complete training to get on the board.</div>
@@ -430,6 +459,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
                 <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
                 <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
                 <div className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</div>
+                {finalWeek && <RowBoost row={{ ...r, rank: r.rank } as BoostLeagueRow} />}
               </button>
             ) : <div key={i} />)}
           </div>
@@ -438,7 +468,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
               <li key={r.client_id} onClick={() => onSelectedChange(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
                 <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
                 <RankAvatar row={r} size="h-9 w-9" />
-                <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div></div>
+                <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div>{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
                 <span className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</span>
               </li>
             ))}
@@ -450,7 +480,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
           <div className="mt-1 text-2xl font-black text-primary">{formatLeaguePoints(me.xp)} <span className="text-sm">pts</span></div>
-          <div className="mt-1 text-xs text-muted-foreground">{plural(me.workouts_completed, "workout")} · {me.fully_logged} fully logged · {formatLeaguePoints(leaguePointsFromEncoded(me.strength_score))} improvement pts</div>
+          <MonthBreakdown me={me as BoostLeagueRow} />
           {(() => {
             const tenth = data.filter((r) => r.qualified && r.rank <= 10).sort((a,b)=>a.rank-b.rank).at(-1);
             const gap = me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
@@ -462,6 +492,19 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
           })()}
         </div>
       )}
+
+      {view === "current" && finalWeek && <div className="rounded-2xl border bg-muted/20 p-3">
+        <div className="text-xs font-black">How to earn points</div>
+        <ul className="mt-2 space-y-1">
+          {LEAGUE_RULES.map((rule) => (
+            <li key={rule.key} className="flex items-baseline justify-between gap-3 text-xs">
+              <span>{rule.label}{"note" in rule && rule.note ? <span className="text-muted-foreground"> · {rule.note}</span> : null}</span>
+              <span className="shrink-0 font-black text-primary">+{rule.points}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-2 text-[11px] text-muted-foreground">Resets on the 1st. Log your bodyweight once to join.</div>
+      </div>}
 
     </div>
   );
