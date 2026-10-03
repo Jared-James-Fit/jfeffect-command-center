@@ -114,6 +114,8 @@ import { SetTimerInput } from "@/components/workout-day/set-timer-input";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { collectSessionPRs } from "@/lib/workout-takeaways";
+import { useWorkoutRecords } from "@/lib/training-records";
+import { WorkoutRecordsContext, SetRecordBadge, useSetRecord } from "@/components/records/training-records";
 import { cardioStatus } from "@/lib/cardio-plan";
 import { toLocalISO, todayLocalISO } from "@/lib/today";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
@@ -1584,6 +1586,18 @@ function WorkoutDay({
       ),
     [rows, results, repMaxBestsByRow, assistedBestsByRow, summaryDisplayUnit],
   );
+  // Server-side records (ATPR / PROGRAM PR / BLOCK PR + tonnage). Re-derived
+  // from the logged sets whenever a set is saved, corrected or removed.
+  const resultsVersion = useMemo(() => {
+    const done = (results as any[]).filter((r) => r.completed_at);
+    return `${done.length}:${done.reduce((m, r) => (String(r.updated_at ?? r.completed_at) > m ? String(r.updated_at ?? r.completed_at) : m), "")}:${done.reduce((sum, r) => sum + (Number(r.normalized_kg) || 0) * (Number(r.actual_reps) || 0), 0).toFixed(1)}`;
+  }, [results]);
+  const isClientWorkout = adapter?.kind !== "member" && !!client?.id;
+  const { data: workoutRecords } = useWorkoutRecords(client?.id, scheduledWorkoutId, dayId, resultsVersion, isClientWorkout);
+  const recordsContextValue = useMemo(
+    () => (isClientWorkout ? { bySetId: new Map((workoutRecords?.records ?? []).map((r) => [r.set_id, r])) } : null),
+    [isClientWorkout, workoutRecords],
+  );
   const cardioDateStr = scheduledDate ? toLocalISO(scheduledDate) : todayLocalISO();
   const { data: cardioDayLog } = useQuery({
     queryKey: ["workout-cardio-status", client?.id, cardioDateStr],
@@ -2107,7 +2121,7 @@ function WorkoutDay({
         : "not_started";
 
   return (
-    <>
+    <WorkoutRecordsContext.Provider value={recordsContextValue}>
       {focusMode && (
         <div
           className="fixed inset-0 z-40 overflow-y-auto overflow-x-hidden bg-background workout-scroll-container"
@@ -2681,6 +2695,8 @@ function WorkoutDay({
           }
           workoutDate={completion?.completed_at ?? scheduledDate ?? null}
           prs={sessionPRs}
+          records={isClientWorkout ? workoutRecords ?? null : undefined}
+          displayUnit={summaryDisplayUnit}
           cardio={cardioTakeaway}
           sessionRating={
             lastSessionRating ??
@@ -2699,7 +2715,7 @@ function WorkoutDay({
           }}
         />
       )}
-    </>
+    </WorkoutRecordsContext.Provider>
   );
 }
 
@@ -4970,16 +4986,25 @@ function SetRow({
     );
   }, [repMaxBests, assistedBests, (existing as any)?.load_type, (existing as any)?.is_bodyweight, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
 
+  // Client workouts: the server record for this exact set (scope-aware).
+  const { hasRecords, record: setRecord } = useSetRecord((existing as any)?.id);
+  const recordForBadge = hasRecords
+    ? (setRecord && existing?.completed_at ? setRecord : null)
+    : null;
+
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
   const prSoundedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!prBadge || !existing?.completed_at) return;
-    const key = `${rowId}:${setIndex}:${existing.completed_at}:${prBadge.reps}:${prBadge.amount}`;
+    if (!existing?.completed_at) return;
+    if (hasRecords ? !recordForBadge : !prBadge) return;
+    const key = recordForBadge
+      ? `${rowId}:${setIndex}:${existing.completed_at}:rec:${recordForBadge.reps}:${recordForBadge.atpr}:${recordForBadge.program_pr}:${recordForBadge.block_pr}`
+      : `${rowId}:${setIndex}:${existing.completed_at}:${prBadge!.reps}:${prBadge!.amount}`;
     if (prSoundedRef.current === key) return;
     prSoundedRef.current = key;
     playUiSound("pr", 0.055);
     haptic("success");
-  }, [prBadge, existing?.completed_at, rowId, setIndex]);
+  }, [prBadge, recordForBadge, hasRecords, existing?.completed_at, rowId, setIndex]);
 
   const prescribedSec = prescribedDurationSeconds ?? null;
 
@@ -5249,15 +5274,19 @@ function SetRow({
         )}
       </div>
     </div>
-    {/* Exact rep-max PR badge — small, inline, never interrupts logging */}
-    {prBadge && (
+    {/* Record badge — one pill, highest scope only, never interrupts logging */}
+    {recordForBadge ? (
+      <div className="px-3 pb-1.5">
+        <SetRecordBadge record={recordForBadge} />
+      </div>
+    ) : prBadge && (!hasRecords || (existing as any)?.load_type === "assisted") && (
       <div className="px-3 pb-1.5">
         <span
           className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-500"
-          title={`New ${prBadge.reps}-rep max — beats your previous best by ${fmtNum(prBadge.amount)} ${prBadge.unit}`}
+          title={`Beats your previous all-time best for ${prBadge.reps} reps by ${fmtNum(prBadge.amount)} ${prBadge.unit}`}
         >
           <Trophy className="h-3 w-3" />
-          {prBadge.reps}RM PR · +{fmtNum(prBadge.amount)} {prBadge.unit}
+          {(existing as any)?.load_type === "assisted" ? `New ${prBadge.reps}-rep ATPR · −${fmtNum(prBadge.amount)} ${prBadge.unit} assist` : `New ${prBadge.reps}-rep ATPR · +${fmtNum(prBadge.amount)} ${prBadge.unit}`}
         </span>
       </div>
     )}

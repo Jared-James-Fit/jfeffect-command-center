@@ -56,7 +56,7 @@ export function ClientTrainingIntelCard({ clientId }: { clientId: string }) {
         <Stat label="Missed workouts" value={String(data.missed)} icon={AlertTriangle} cls={data.missed > 0 ? "text-amber-400" : ""} />
         <Stat label="Last workout" value={data.last_completed_at ? formatDistanceToNow(new Date(data.last_completed_at), { addSuffix: true }) : "—"} />
         <Stat label="Avg duration Δ" value={data.duration_delta_min != null ? `${data.duration_delta_min > 0 ? "+" : ""}${data.duration_delta_min} min` : "Not logged"} icon={Timer} />
-        <Stat label="PRs (30d)" value={String(data.recent_prs.length)} icon={Trophy} cls={data.recent_prs.length > 0 ? "text-violet-400" : ""} />
+        <Stat label="e1RM ATPRs (30d)" value={String(data.recent_prs.length)} icon={Trophy} cls={data.recent_prs.length > 0 ? "text-violet-400" : ""} />
         <Stat label="Client notes" value={String(data.recent_notes.length)} icon={MessageSquare} />
         <Stat label="Pain flags" value={String(data.pain_flags.length)} icon={AlertTriangle} cls={data.pain_flags.length > 0 ? "text-red-400" : ""} />
         {data.event_date && <Stat label="Event" value={data.event_name ?? "—"} hint={data.days_to_event != null ? `${data.days_to_event} days out` : ""} icon={Calendar} />}
@@ -101,7 +101,7 @@ export function ClientTrainingIntelCard({ clientId }: { clientId: string }) {
       )}
 
       {data.recent_prs.length > 0 && (
-        <Section title="Recent PRs" tone="violet">
+        <Section title="Recent e1RM ATPRs" tone="violet">
           {data.recent_prs.slice(0, 5).map((p) => (
             <div key={p.alert_key} className="flex items-center justify-between gap-2 rounded border border-violet-500/30 bg-violet-500/5 p-2 text-xs">
               <div className="min-w-0">

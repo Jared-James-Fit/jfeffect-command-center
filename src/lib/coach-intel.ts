@@ -139,13 +139,13 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
 
   const { data: results = [] } = await sb
     .from("pl_row_results")
-    .select("id, client_id, actual_load, actual_reps, notes, completed_at, pl_exercise_rows(day_id, exercise_name_override, exercises(name))")
+    .select("id, client_id, actual_load, actual_reps, normalized_kg, load_type, notes, completed_at, pl_exercise_rows(day_id, exercise_name_override, exercises(name))")
     .in("client_id", clientIds)
     .gte("completed_at", recentCutoff.toISOString());
 
   const { data: allResults = [] } = await sb
     .from("pl_row_results")
-    .select("client_id, actual_load, actual_reps, completed_at, pl_exercise_rows(exercise_name_override, exercises(name))")
+    .select("client_id, actual_load, actual_reps, normalized_kg, load_type, completed_at, pl_exercise_rows(exercise_name_override, exercises(name))")
     .in("client_id", clientIds)
     .not("actual_load", "is", null)
     .not("actual_reps", "is", null);
@@ -156,7 +156,9 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
     const key = `${r.client_id}::${ex}`;
     const date = r.completed_at ? new Date(r.completed_at) : null;
     if (!date || date >= recentCutoff) continue;
-    const est = epley1RM(Number(r.actual_load) || 0, Number(r.actual_reps) || 0);
+    // Compare in kg so kg and lb logs never mix; external loads only.
+    if ((r.load_type ?? "external") !== "external") continue;
+    const est = epley1RM(Number(r.normalized_kg) || 0, Number(r.actual_reps) || 0);
     if (est > (baseline.get(key) ?? 0)) baseline.set(key, est);
   }
 
@@ -236,14 +238,17 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
     for (const r of myResults) {
       const load = Number(r.actual_load) || 0;
       const reps = Number(r.actual_reps) || 0;
-      if (!load || !reps) continue;
+      const kg = Number(r.normalized_kg) || 0;
+      if (!load || !reps || !kg || (r.load_type ?? "external") !== "external") continue;
       const ex = exerciseOf(r);
       const key = `${c.id}::${ex}`;
-      const est = epley1RM(load, reps);
+      const est = epley1RM(kg, reps);
       const base = localBaseline.get(key) ?? 0;
-      if (base > 0 && est > base) {
+      if (base > 0 && est > base + 0.25) {
+        // Display in the set's own unit; comparison above is unit-safe.
+        const toSetUnit = load / kg;
         prsAll.push({
-          client_id: c.id, exercise: ex, est_1rm: Math.round(est), baseline: Math.round(base),
+          client_id: c.id, exercise: ex, est_1rm: Math.round(est * toSetUnit), baseline: Math.round(base * toSetUnit),
           actual_load: load, actual_reps: reps, date: r.completed_at, result_id: r.id,
           day_id: r.pl_exercise_rows?.day_id ?? null, alert_key: `pr:${r.id}`,
         });
@@ -325,7 +330,7 @@ export const LABEL_META: Record<IntelLabel, { label: string; cls: string }> = {
   needs_review:   { label: "Needs Review",    cls: "border-blue-500/30 bg-blue-500/10 text-blue-400" },
   needs_followup: { label: "Needs Follow-Up", cls: "border-amber-500/30 bg-amber-500/10 text-amber-400" },
   low_compliance: { label: "Low Compliance",  cls: "border-orange-500/30 bg-orange-500/10 text-orange-400" },
-  pr_hit:         { label: "PR Hit",          cls: "border-violet-500/30 bg-violet-500/10 text-violet-400" },
+  pr_hit:         { label: "ATPR Hit",          cls: "border-violet-500/30 bg-violet-500/10 text-violet-400" },
   pain_flag:      { label: "Pain Flag",       cls: "border-red-500/30 bg-red-500/10 text-red-400" },
   event_soon:     { label: "Event Soon",      cls: "border-primary/30 bg-primary/10 text-primary" },
   inactive:       { label: "Inactive",        cls: "border-muted-foreground/30 bg-muted text-muted-foreground" },

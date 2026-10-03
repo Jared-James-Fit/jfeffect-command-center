@@ -23,7 +23,24 @@ export type SummaryResult = {
   completed_at: string | null;
   /** Set duration for timed exercises. A set counts as completed when >0. */
   completed_duration_seconds?: number | null;
+  /** external | bodyweight | assisted — only external load counts as tonnage. */
+  load_type?: string | null;
+  is_bodyweight?: boolean | null;
+  /** false = explicitly a warm-up (excluded from tonnage). */
+  is_working_set?: boolean | null;
 };
+
+/**
+ * Tonnage rule shared with the server records (workout_records RPC):
+ * completed, reps > 0, external load > 0, not a warm-up. Assisted
+ * (assistance kg) and bodyweight sets never count as lifted weight.
+ */
+export function countsTowardTonnage(r: Pick<SummaryResult, "actual_load" | "actual_reps" | "completed_at" | "load_type" | "is_bodyweight" | "is_working_set">): boolean {
+  if (r.completed_at === null) return false;
+  if ((r.load_type ?? "external") !== "external" || r.is_bodyweight) return false;
+  if (r.is_working_set === false) return false;
+  return Number(r.actual_load ?? 0) > 0 && Number(r.actual_reps ?? 0) > 0;
+}
 
 const KG_PER_LB = 0.45359237;
 const LB_PER_KG = 1 / KG_PER_LB;
@@ -95,7 +112,7 @@ export function computeWorkoutSummary(
         const reps = Number(r.actual_reps ?? 0);
         totalReps += reps;
         const load = Number(r.actual_load ?? 0);
-        if (load > 0 && reps > 0) {
+        if (countsTowardTonnage(r)) {
           totalLifted += toUnit(load, r.actual_load_unit, displayUnit) * reps;
         }
         if (r.actual_rpe != null) {

@@ -32,7 +32,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "pain", label: "Pain flags" },
   { key: "missed", label: "Missed workouts" },
   { key: "low_comp", label: "Low compliance" },
-  { key: "pr", label: "PRs" },
+  { key: "pr", label: "ATPRs" },
   { key: "event", label: "Event soon" },
   { key: "powerlifting", label: "Powerlifting" },
   { key: "bodybuilding", label: "Bodybuilding" },
@@ -89,7 +89,7 @@ export function TrainingIntelPage({ embedded = false }: { embedded?: boolean } =
           <SummaryStat icon={ClipboardList} label="Open follow-ups" value={summary.followups} tone="amber" />
           <SummaryStat icon={AlertTriangle} label="Pain flags" value={summary.pain} tone="red" />
           <SummaryStat icon={TrendingDown} label="Missed workouts" value={summary.missed} tone="amber" />
-          <SummaryStat icon={Trophy} label="PRs (30d)" value={summary.prs} tone="violet" />
+          <SummaryStat icon={Trophy} label="ATPRs (30d)" value={summary.prs} tone="violet" />
           <SummaryStat icon={MessageSquare} label="Notes to review" value={summary.notes} />
           <SummaryStat icon={Calendar} label="Event soon" value={summary.events} tone="primary" />
         </div>
@@ -117,7 +117,7 @@ export function TrainingIntelPage({ embedded = false }: { embedded?: boolean } =
             <Section title="Needs follow-up" icon={ClipboardList} clients={sections.followup} variant="followup" allFollowups={followups} />
             <Section title="Pain / discomfort flags" icon={AlertTriangle} clients={sections.pain} variant="pain" />
             <Section title="Missed workouts & low compliance" icon={TrendingDown} clients={sections.missed} variant="missed" />
-            <Section title="PRs & milestones" icon={Trophy} clients={sections.prs} variant="pr" />
+            <Section title="ATPRs & milestones" icon={Trophy} clients={sections.prs} variant="pr" />
             <Section title="Event approaching" icon={Calendar} clients={sections.event} variant="event" />
             <Section title="Recent notes to review" icon={MessageSquare} clients={sections.notes} variant="notes" />
           </div>
@@ -263,7 +263,7 @@ function ClientActionCard({ c, focus, allFollowups }: { c: ClientIntel; focus?: 
       {/* PR events */}
       {focus === "pr" && c.recent_prs.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[10px] uppercase tracking-widest text-violet-400 font-bold">PRs (30d)</div>
+          <div className="text-[10px] uppercase tracking-widest text-violet-400 font-bold">ATPRs (30d)</div>
           {c.recent_prs.slice(0, 4).map((p) => (
             <div key={p.alert_key} className="flex items-center justify-between gap-2 rounded border border-violet-500/30 bg-violet-500/5 p-2 text-xs">
               <div className="min-w-0">
