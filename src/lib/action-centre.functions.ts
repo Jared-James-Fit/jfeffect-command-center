@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { cadenceLabel, nextSemiMonthlyDate } from "@/lib/task-cadence";
+import { cadenceLabel, lastFridayOfMonth, nextLastFridayDate, nextSemiMonthlyDate } from "@/lib/task-cadence";
 
 // ============================================================
 // Types
@@ -20,7 +20,7 @@ export type EffectiveSchedule = {
   task_type: string;
   title: string;
   enabled: boolean;
-  frequency: "weekly" | "biweekly" | "semi_monthly" | "monthly" | "custom_days" | "daily" | "manual";
+  frequency: "weekly" | "biweekly" | "semi_monthly" | "monthly" | "monthly_last_friday" | "custom_days" | "daily" | "manual";
   interval_days: number | null;
   due_day_of_week: number | null;
   due_time_local: string;
@@ -159,7 +159,7 @@ async function resolveClientTz(supabase: any, clientId: string, sched: Effective
 // Next-occurrence computation
 // ============================================================
 
-function computeNextDueUtc(
+export function computeNextDueUtc(
   sched: EffectiveSchedule,
   tz: string,
   after: Date,
@@ -196,6 +196,21 @@ function computeNextDueUtc(
       if (todayDue <= after) includeToday = false;
     }
     const next = nextSemiMonthlyDate(y, m, d, includeToday);
+    return {
+      dueAtUtc: zonedLocalToUtc(next.y, next.m, next.d, hh, mm, ss, tz),
+      localDate: isoLocalDate(next.y, next.m, next.d),
+    };
+  }
+
+  if (sched.frequency === "monthly_last_friday") {
+    // Last Friday of the month. If today is that Friday but its due time has
+    // passed, roll to next month so a completion can never re-seed the same day.
+    let includeToday = true;
+    if (d === lastFridayOfMonth(y, m)) {
+      const todayDue = zonedLocalToUtc(y, m, d, hh, mm, ss, tz);
+      if (todayDue <= after) includeToday = false;
+    }
+    const next = nextLastFridayDate(y, m, d, includeToday);
     return {
       dueAtUtc: zonedLocalToUtc(next.y, next.m, next.d, hh, mm, ss, tz),
       localDate: isoLocalDate(next.y, next.m, next.d),
@@ -430,7 +445,7 @@ export type TaskDefinition = {
   task_type: string;
   title: string;
   enabled: boolean;
-  frequency: "weekly" | "biweekly" | "semi_monthly" | "monthly" | "custom_days" | "daily" | "manual";
+  frequency: "weekly" | "biweekly" | "semi_monthly" | "monthly" | "monthly_last_friday" | "custom_days" | "daily" | "manual";
   interval_days: number | null;
   due_day_of_week: number | null;
   due_time_local: string;
@@ -473,7 +488,7 @@ const definitionPatchSchema = z.object({
   task_type: z.string().min(1).max(64),
   title: z.string().min(1).max(120).optional(),
   enabled: z.boolean().optional(),
-  frequency: z.enum(["weekly", "biweekly", "semi_monthly", "monthly", "custom_days", "daily", "manual"]).optional(),
+  frequency: z.enum(["weekly", "biweekly", "semi_monthly", "monthly", "monthly_last_friday", "custom_days", "daily", "manual"]).optional(),
   interval_days: z.number().int().min(1).max(365).nullable().optional(),
   due_day_of_week: z.number().int().min(0).max(6).nullable().optional(),
   due_time_local: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
@@ -522,7 +537,7 @@ const overridePatchSchema = z.object({
   clientId: z.string().uuid(),
   task_type: z.string().min(1).max(64),
   enabled: z.boolean().nullable().optional(),
-  frequency: z.enum(["weekly", "biweekly", "semi_monthly", "monthly", "custom_days", "daily", "manual"]).nullable().optional(),
+  frequency: z.enum(["weekly", "biweekly", "semi_monthly", "monthly", "monthly_last_friday", "custom_days", "daily", "manual"]).nullable().optional(),
   interval_days: z.number().int().min(1).max(365).nullable().optional(),
   due_day_of_week: z.number().int().min(0).max(6).nullable().optional(),
   due_time_local: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).nullable().optional(),

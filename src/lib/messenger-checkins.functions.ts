@@ -43,11 +43,11 @@ const ANSWER_LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = 
 const TASK_META: Record<MessengerCheckinTaskType, { title: string; body: string }> = {
   weekly_checkin: {
     title: "Weekly Check-In",
-    body: "Weekly check-in reminder — quick update so we can set the right focus for the new week.",
+    body: "Quick 60-second weekly check-in 👇",
   },
   nutrition_review: {
     title: "Nutrition Review",
-    body: "Nutrition review reminder — quick update so I can adjust anything that needs it.",
+    body: "Quick monthly nutrition check-in 👇",
   },
 };
 
@@ -64,6 +64,53 @@ function localDateInTimeZone(tz: string): string {
     return `${map.year}-${map.month}-${map.day}`;
   } catch {
     return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * Duplicate-send guard for automated requests (manual coach requests have no
+ * occurrence and are never blocked). Nutrition: at most one per local calendar
+ * month. Weekly: at most one per 4 days. Keep in sync with the SQL guard in
+ * enqueue_due_messenger_checkins().
+ */
+export function automatedRequestAlreadySent(
+  taskType: MessengerCheckinTaskType,
+  today: string,
+  priorRequestLocalDates: string[],
+): boolean {
+  if (taskType === "nutrition_review") {
+    const month = today.slice(0, 7);
+    return priorRequestLocalDates.some((d) => d.slice(0, 7) === month);
+  }
+  return priorRequestLocalDates.some((d) => {
+    const diff = dayDiff(d, today);
+    return diff >= 0 && diff < 4;
+  });
+}
+
+function localHourInTimeZone(tz: string): number {
+  try {
+    const h = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz || "UTC",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date());
+    return Number(h);
+  } catch {
+    return new Date().getUTCHours();
+  }
+}
+
+function localDateOf(iso: string, tz: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz || "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso.slice(0, 10);
   }
 }
 
@@ -256,11 +303,11 @@ export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
       const daysUntil = dayDiff(today, occ.due_local_date);
       // Never backfill old/overdue requests. Weekly check-ins are due Sunday
       // night but surface on Friday so clients have the full weekend to submit.
-      // Nutrition reviews still surface on their due date.
+      // Nutrition reviews surface on their due date (last Friday), from 9am local.
       const dueNow =
         taskType === "weekly_checkin"
           ? daysUntil >= 0 && daysUntil <= 2
-          : daysUntil === 0;
+          : daysUntil === 0 && localHourInTimeZone(occ.client_tz || "UTC") >= 9;
       if (!dueNow) continue;
 
       const { data: existing } = await sb
@@ -269,6 +316,18 @@ export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
         .eq("occurrence_id", occ.id)
         .maybeSingle();
       if (existing) continue;
+
+      const { data: prior } = await sb
+        .from("messenger_checkins")
+        .select("created_at")
+        .eq("client_id", clientId)
+        .eq("task_type", taskType)
+        .not("occurrence_id", "is", null)
+        .gte("created_at", new Date(Date.now() - 40 * 86_400_000).toISOString());
+      const priorDates = (prior ?? []).map((p: any) =>
+        localDateOf(p.created_at, occ.client_tz || "UTC"),
+      );
+      if (automatedRequestAlreadySent(taskType, today, priorDates)) continue;
 
       await createRequest(sb, {
         clientId,

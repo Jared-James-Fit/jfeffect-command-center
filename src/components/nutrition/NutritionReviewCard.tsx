@@ -10,7 +10,7 @@ import { listActionCentre, type ActionCentreItem } from "@/lib/action-centre.fun
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { isExternalForm, useExternalFormOpener } from "@/lib/external-form-open";
-import { SEMI_MONTHLY_LABEL } from "@/lib/task-cadence";
+import { LAST_FRIDAY_LABEL } from "@/lib/task-cadence";
 
 /**
  * "Nutrition Review" card for the client Nutrition tab — one tap opens the
@@ -116,7 +116,7 @@ export function NutritionReviewCard() {
             </span>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {SEMI_MONTHLY_LABEL}{dueLine}
+            {LAST_FRIDAY_LABEL}{dueLine}
           </p>
         </div>
         <Button
