@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -312,8 +312,7 @@ export function LiftCommentComposer({
 
         {leading}
 
-        <Textarea
-          rows={1}
+        <AutoGrowTextarea
           placeholder={placeholder ?? "Write a reply…"}
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -323,7 +322,7 @@ export function LiftCommentComposer({
               void handleSend();
             }
           }}
-          className="min-h-[36px] max-h-32 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm shadow-none focus-visible:ring-0"
+          className="min-h-9 max-h-32 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-base leading-5 shadow-none focus-visible:ring-0 md:text-sm md:leading-5"
           disabled={disabled || recording}
         />
 
