@@ -12,7 +12,8 @@ import {
   type CardioTakeawayInput,
   type SessionPR,
 } from "@/lib/workout-takeaways";
-import type { WorkoutRecords } from "@/lib/training-records";
+import type { WorkoutPoints, WorkoutRecords } from "@/lib/training-records";
+import { WorkoutPointsCard } from "@/components/records/workout-points-card";
 import { formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel } from "@/lib/training-records";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
 
@@ -35,6 +36,8 @@ type Props = {
    * means "not supported here" (falls back to session PRs); `null` = loading.
    */
   records?: WorkoutRecords | null;
+  /** League + Logging Level points this workout earned (client workouts). */
+  points?: WorkoutPoints | null;
   /** Athlete's preferred unit for loads and tonnage. */
   displayUnit?: "kg" | "lb";
   /** Prescribed cardio status for the same day, when there is one. */
@@ -42,7 +45,7 @@ type Props = {
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, displayUnit = "lb", cardio, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, displayUnit = "lb", cardio, onClose }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
@@ -208,6 +211,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             <NewAchievementReveal open={open} />
             {records && <NewRecordsSection records={records} unit={displayUnit} />}
+            {points && <WorkoutPointsCard points={points} />}
             {prList.length > 0 && (
               <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/[0.14] via-amber-500/[0.06] to-background p-4 shadow-sm duration-700">
                 <Sparkles className="absolute right-3 top-3 h-5 w-5 animate-pulse text-amber-500" />

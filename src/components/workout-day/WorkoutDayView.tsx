@@ -114,7 +114,7 @@ import { SetTimerInput } from "@/components/workout-day/set-timer-input";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { collectSessionPRs } from "@/lib/workout-takeaways";
-import { useWorkoutRecords } from "@/lib/training-records";
+import { useWorkoutPoints, useWorkoutRecords } from "@/lib/training-records";
 import { WorkoutRecordsContext, SetRecordBadge, useSetRecord } from "@/components/records/training-records";
 import { cardioStatus } from "@/lib/cardio-plan";
 import { toLocalISO, todayLocalISO } from "@/lib/today";
@@ -1594,6 +1594,8 @@ function WorkoutDay({
   }, [results]);
   const isClientWorkout = adapter?.kind !== "member" && !!client?.id;
   const { data: workoutRecords } = useWorkoutRecords(client?.id, scheduledWorkoutId, dayId, resultsVersion, isClientWorkout);
+  // Points this workout earned — fetched fresh whenever the recap opens.
+  const { data: workoutPoints } = useWorkoutPoints(client?.id, scheduledWorkoutId, dayId, isClientWorkout && summaryOpen);
   const recordsContextValue = useMemo(
     () => (isClientWorkout
       ? {
@@ -2701,6 +2703,7 @@ function WorkoutDay({
           workoutDate={completion?.completed_at ?? scheduledDate ?? null}
           prs={sessionPRs}
           records={isClientWorkout ? workoutRecords ?? null : undefined}
+          points={isClientWorkout ? workoutPoints ?? null : undefined}
           displayUnit={summaryDisplayUnit}
           cardio={cardioTakeaway}
           sessionRating={
