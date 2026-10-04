@@ -1595,7 +1595,12 @@ function WorkoutDay({
   const isClientWorkout = adapter?.kind !== "member" && !!client?.id;
   const { data: workoutRecords } = useWorkoutRecords(client?.id, scheduledWorkoutId, dayId, resultsVersion, isClientWorkout);
   const recordsContextValue = useMemo(
-    () => (isClientWorkout ? { bySetId: new Map((workoutRecords?.records ?? []).map((r) => [r.set_id, r])) } : null),
+    () => (isClientWorkout
+      ? {
+          bySetId: new Map((workoutRecords?.records ?? []).map((r) => [r.set_id, r])),
+          loadBySetId: new Map((workoutRecords?.load_records ?? []).map((r) => [r.set_id, r])),
+        }
+      : null),
     [isClientWorkout, workoutRecords],
   );
   const cardioDateStr = scheduledDate ? toLocalISO(scheduledDate) : todayLocalISO();
@@ -4987,24 +4992,27 @@ function SetRow({
   }, [repMaxBests, assistedBests, (existing as any)?.load_type, (existing as any)?.is_bodyweight, existing?.completed_at, existing?.actual_reps, existing?.actual_load, existing?.actual_load_unit, unit]);
 
   // Client workouts: the server record for this exact set (scope-aware).
-  const { hasRecords, record: setRecord } = useSetRecord((existing as any)?.id);
+  const { hasRecords, record: setRecord, loadRecord: setLoadRecord } = useSetRecord((existing as any)?.id);
   const recordForBadge = hasRecords
     ? (setRecord && existing?.completed_at ? setRecord : null)
+    : null;
+  const loadRecordForBadge = hasRecords
+    ? (setLoadRecord && existing?.completed_at ? setLoadRecord : null)
     : null;
 
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
   const prSoundedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!existing?.completed_at) return;
-    if (hasRecords ? !recordForBadge : !prBadge) return;
-    const key = recordForBadge
-      ? `${rowId}:${setIndex}:${existing.completed_at}:rec:${recordForBadge.reps}:${recordForBadge.atpr}:${recordForBadge.program_pr}:${recordForBadge.block_pr}`
+    if (hasRecords ? !recordForBadge && !loadRecordForBadge : !prBadge) return;
+    const key = recordForBadge || loadRecordForBadge
+      ? `${rowId}:${setIndex}:${existing.completed_at}:rec:${recordForBadge?.reps}:${recordForBadge?.atpr}:${recordForBadge?.program_pr}:${recordForBadge?.block_pr}:w:${loadRecordForBadge?.atpr}:${loadRecordForBadge?.program_pr}:${loadRecordForBadge?.block_pr}`
       : `${rowId}:${setIndex}:${existing.completed_at}:${prBadge!.reps}:${prBadge!.amount}`;
     if (prSoundedRef.current === key) return;
     prSoundedRef.current = key;
     playUiSound("pr", 0.055);
     haptic("success");
-  }, [prBadge, recordForBadge, hasRecords, existing?.completed_at, rowId, setIndex]);
+  }, [prBadge, recordForBadge, loadRecordForBadge, hasRecords, existing?.completed_at, rowId, setIndex]);
 
   const prescribedSec = prescribedDurationSeconds ?? null;
 
@@ -5275,9 +5283,9 @@ function SetRow({
       </div>
     </div>
     {/* Record badge — one pill, highest scope only, never interrupts logging */}
-    {recordForBadge ? (
+    {recordForBadge || loadRecordForBadge ? (
       <div className="px-3 pb-1.5">
-        <SetRecordBadge record={recordForBadge} />
+        <SetRecordBadge record={recordForBadge} loadRecord={loadRecordForBadge} />
       </div>
     ) : prBadge && (!hasRecords || (existing as any)?.load_type === "assisted") && (
       <div className="px-3 pb-1.5">

@@ -47,7 +47,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
   const prList = usesRecords ? [] : prs ?? [];
-  const recordCount = (records?.records?.length ?? 0) + (tonnageRecordLabel(records?.tonnage) ? 1 : 0);
+  const recordCount = (records?.records?.length ?? 0) + (records?.load_records?.length ?? 0) + (tonnageRecordLabel(records?.tonnage) ? 1 : 0);
   const recordHeadline = recordsHeadline(records);
   const [revealStage, setRevealStage] = useState(0);
   const [displayScore, setDisplayScore] = useState(0);

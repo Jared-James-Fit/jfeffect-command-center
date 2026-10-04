@@ -10,6 +10,7 @@
  *   PROGRAM PR  best during that program
  *   BLOCK PR    best during that block
  *   N-REP …     best for that exact completed rep count in that scope
+ *   WEIGHT …    heaviest load on the lift in that scope, any reps
  *   TONNAGE     Σ qualifying completed load × reps
  */
 import { useQuery } from "@tanstack/react-query";
@@ -46,6 +47,8 @@ export type WorkoutRecords = {
   tonnage_kg: number;
   tonnage: TonnageRecord;
   records: RepRecord[];
+  /** Weight records: the workout's heaviest set on a lift vs every earlier heaviest (any reps). */
+  load_records?: RepRecord[];
   exercise_tonnage: { exercise_key: string; exercise_name: string; tonnage_kg: number }[];
 };
 
@@ -80,6 +83,12 @@ export function alsoLabel(r: { atpr: boolean; program_pr: boolean; block_pr: boo
   // An ATPR is by definition also the program/block best — say it once, quietly.
   if (rest.length === 0) return null;
   return rest.map((s) => SCOPE_LABEL[s]).join(" · ");
+}
+
+/** "WEIGHT ATPR" — heaviest load ever on the lift (any reps), per scope. */
+export function weightRecordLabel(r: { atpr: boolean; program_pr: boolean; block_pr: boolean } | null | undefined): string | null {
+  const s = r ? topScope(r) : null;
+  return s ? `WEIGHT ${SCOPE_LABEL[s]}` : null;
 }
 
 export function tonnageRecordLabel(t: TonnageRecord | null | undefined): string | null {
@@ -165,6 +174,7 @@ export function useExerciseRecords(clientId: string | null | undefined, exercise
 
 export type RecentRecords = {
   records: (Omit<RepRecord, "set_id" | "exercise_key"> & { workout_key: string; at: string })[];
+  load_records?: (Omit<RepRecord, "set_id" | "exercise_key"> & { workout_key: string; at: string })[];
   tonnage: (TonnageRecord & { workout_key: string; at: string; tonnage_kg: number })[];
 };
 
