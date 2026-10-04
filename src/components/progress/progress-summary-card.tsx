@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare, Dumbbell, ClipboardCheck, ChevronRight } from "lucide-react";
+import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare, Dumbbell, ClipboardCheck, ChevronRight, History } from "lucide-react";
 import { CoachCheckinReplies } from "./coach-checkin-replies";
 
 /**
@@ -54,7 +54,7 @@ export function ProgressSummaryCard({
   const { data: latest } = useQuery({
     queryKey: ["progress-snapshot-latest", userId],
     staleTime: 60_000,
-    enabled: !!userId && progressHref.kind !== "portal",
+    enabled: !!userId,
     queryFn: async () => {
       const [bwRes, photoRes, videoRes, measRes] = await Promise.all([
         supabase
@@ -123,6 +123,11 @@ export function ProgressSummaryCard({
       ];
 
   if (progressHref.kind === "portal") {
+    const lastFor: Record<string, string | null> = { photo: latestPhotoAt, video: latestVideoAt, measure: latestMeasAt };
+    const lastAny = [latestPhotoAt, latestVideoAt, latestMeasAt, latestBw?.logged_date ?? null]
+      .filter((d): d is string => !!d)
+      .sort()
+      .pop() ?? null;
     return (
       <Card className="overflow-hidden">
         <div className="border-b border-border px-4 py-3">
@@ -132,6 +137,7 @@ export function ProgressSummaryCard({
         <div className="divide-y divide-border">
           {primary.map((p) => {
             const Icon = p.icon;
+            const last = lastFor[p.action] ?? null;
             return (
               <Link
                 key={p.action}
@@ -143,10 +149,26 @@ export function ProgressSummaryCard({
                   <Icon className="h-4.5 w-4.5 text-primary" />
                 </span>
                 <span className="flex-1 text-sm font-semibold">{p.label}</span>
+                {last ? <span className="text-xs text-muted-foreground">Last {fmtDate(last)}</span> : null}
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </Link>
             );
           })}
+          <Link
+            to="/portal/progress"
+            className="flex min-h-14 items-center gap-3 bg-primary/[0.04] px-4 py-3 transition active:bg-secondary/60 hover:bg-secondary/30"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+              <History className="h-4.5 w-4.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">View Your Progress</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {lastAny ? `Your full history · updated ${fmtDate(lastAny)}` : "Every photo, video & measurement"}
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </Link>
         </div>
       </Card>
     );
