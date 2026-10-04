@@ -4,12 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Apple, Plus, Pencil, Trash2, Copy, Droplet, ShoppingCart } from "lucide-react";
+import { Apple, Plus, Pencil, Trash2, Copy, Droplet, ShoppingCart, BellRing, Send } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { sendNutritionRequestFn } from "@/lib/nutrition-ai-plans.functions";
+import { NUTRITION_PHASES } from "@/lib/nutrition-cardio";
 import { Download } from "lucide-react";
 import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { toast } from "sonner";
 import { NutritionTargetDialog } from "./nutrition-target-dialog";
-import { deriveTarget } from "@/lib/nutrition-cardio";
+import { deriveTarget, phaseLabel } from "@/lib/nutrition-cardio";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { useAuth } from "@/lib/auth";
@@ -23,6 +26,8 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
   const [waterOpen, setWaterOpen] = useState(false);
   const [groceryOpen, setGroceryOpen] = useState(false);
   const { user, role } = useAuth();
+  const sendRequestFn = useServerFn(sendNutritionRequestFn);
+  const [requesting, setRequesting] = useState(false);
 
   // Resolve the client's auth user_id (progress_water_targets is keyed on
   // auth.users.id, but this panel receives clients.id).
@@ -170,8 +175,7 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className={d.tone}>{d.label}</Badge>
-                    <span className="text-sm font-semibold">{t.phase === "Custom" ? t.custom_phase : t.phase}</span>
-                    <span className="text-xs text-muted-foreground">· {t.goal === "Custom" ? t.custom_goal : t.goal}</span>
+                    <span className="text-sm font-semibold">{phaseLabel(t)}</span>
                   </div>
                   <div className="flex gap-1">
                     <Button size="sm" variant="ghost" onClick={() => duplicate(t)}><Copy className="h-4 w-4" /></Button>
@@ -182,7 +186,38 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {t.start_date} → {t.end_date ?? "ongoing"} · {t.structure}
+                  {t.end_date && d.state === "active" ? ` · update due in ${d.daysRemaining} days` : ""}
                 </div>
+                {(d.state === "ending-soon" || d.state === "due-today" || d.state === "past-due") && (
+                  <div className="mt-2 flex flex-col gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                      <BellRing className="h-4 w-4 shrink-0 text-warning" />
+                      {d.state === "past-due"
+                        ? `Nutrition update overdue by ${Math.abs(d.daysRemaining)} day${Math.abs(d.daysRemaining) === 1 ? "" : "s"}`
+                        : d.state === "due-today" ? "Nutrition update due today" : `Nutrition update due in ${d.daysRemaining} day${d.daysRemaining === 1 ? "" : "s"}`}
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1.5 font-bold"
+                      disabled={requesting}
+                      onClick={async () => {
+                        setRequesting(true);
+                        try {
+                          const phase = (NUTRITION_PHASES as readonly string[]).includes(t.phase) && t.phase !== "Custom" ? t.phase : null;
+                          await sendRequestFn({ data: { clientId, phase } });
+                          toast.success("Nutrition update request sent");
+                          qc.invalidateQueries({ queryKey: ["nutrition-requests", clientId] });
+                        } catch (e: any) {
+                          toast.error(e?.message ?? "Couldn't send the request");
+                        } finally {
+                          setRequesting(false);
+                        }
+                      }}
+                    >
+                      <Send className="h-3.5 w-3.5" /> Send update request
+                    </Button>
+                  </div>
+                )}
                 {t.nutrition_target_days?.length > 0 && (
                   <div className="mt-2 grid gap-2 text-xs md:grid-cols-3">
                     {t.nutrition_target_days.sort((a: any, b: any) => a.sort_order - b.sort_order).map((day: any) => (

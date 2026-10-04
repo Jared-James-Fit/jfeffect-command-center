@@ -58,17 +58,18 @@ export function GroceryListSheet({
 }) {
   const getPlanFn = useServerFn(getCoachAssignedMealPlan);
   const [weekOffset, setWeekOffset] = useState<0 | 1>(0);
+  const [span, setSpan] = useState<1 | 2>(1);
   const [hideChecked, setHideChecked] = useState(false);
   const [checked, setChecked] = useState<string[]>([]);
 
   const thisMonday = mondayOf(todayLocalISO());
   const weekStart = toLocalISO(addDays(parseLocalDate(thisMonday)!, weekOffset * 7));
-  const weekEnd = toLocalISO(addDays(parseLocalDate(weekStart)!, 6));
+  const weekEnd = toLocalISO(addDays(parseLocalDate(weekStart)!, 7 * span - 1));
 
   const q = useQuery({
     // Lazy: only fetches once the sheet is opened.
     enabled: !!open && !!clientId,
-    queryKey: [...groceryListKey(clientId, weekStart), viewAsUserId ?? null],
+    queryKey: [...groceryListKey(clientId, weekStart), viewAsUserId ?? null, span],
     staleTime: 0,
     refetchOnMount: "always",
     queryFn: async () => {
@@ -85,19 +86,21 @@ export function GroceryListSheet({
         getClientWorkouts(clientId!),
       ]);
       const client = clientRes.data as any;
-      const weekDates = mondayWeekDates(weekStart);
       const workoutDates = resolveWorkoutDatesFromItems(
         workouts as any[],
         client?.committed_training_days ?? null,
       );
-      const days = resolveClientWeekDays({
-        clientId: clientId!,
-        weekDates,
-        workouts: workoutDates,
-        recurringHighDays: client?.preferred_high_days ?? null,
-        highDayOverrides: (overridesRes.data ?? []) as any[],
-        fullCardioRestDays: client?.full_cardio_rest_days ?? null,
-      });
+      // 1 or 2 weeks of groceries: resolve each week's day types and combine.
+      const days = Array.from({ length: span }, (_, w) =>
+        resolveClientWeekDays({
+          clientId: clientId!,
+          weekDates: mondayWeekDates(toLocalISO(addDays(parseLocalDate(weekStart)!, w * 7))),
+          workouts: workoutDates,
+          recurringHighDays: client?.preferred_high_days ?? null,
+          highDayOverrides: (overridesRes.data ?? []) as any[],
+          fullCardioRestDays: client?.full_cardio_rest_days ?? null,
+        }),
+      ).flat();
       const configuredHighDay = (client?.preferred_high_days ?? [])[0] ?? null;
       // Schedule accuracy signal: program days that carry no resolvable date
       // cannot be counted, so day-type totals may under-report.
@@ -121,29 +124,30 @@ export function GroceryListSheet({
     [planDays, dayCounts],
   );
 
-  // Local-only shopping ticks, keyed by target + week start.
+  // Local-only shopping ticks, keyed by target + week start (+ span).
+  const checkKey = span === 2 ? `${weekStart}:2w` : weekStart;
   useEffect(() => {
     if (!targetId) return;
-    setChecked(readCheckedIdentities(targetId, weekStart));
-  }, [targetId, weekStart]);
+    setChecked(readCheckedIdentities(targetId, checkKey));
+  }, [targetId, checkKey]);
 
   const toggle = (identity: string) => {
     setChecked((prev) => {
       const next = prev.includes(identity) ? prev.filter((x) => x !== identity) : [...prev, identity];
-      if (targetId) writeCheckedIdentities(targetId, weekStart, next);
+      if (targetId) writeCheckedIdentities(targetId, checkKey, next);
       return next;
     });
   };
 
   const clearChecked = () => {
     setChecked([]);
-    if (targetId) clearCheckedIdentities(targetId, weekStart);
+    if (targetId) clearCheckedIdentities(targetId, checkKey);
   };
 
   const aisles = useMemo(() => groupByAisle(result.items), [result.items]);
   const doneCount = result.items.filter((i) => checked.includes(i.identity)).length;
   const copyList = async () => {
-    const text = groceryListText(aisles, `JF Effect grocery list · ${rangeLabel}`);
+    const text = groceryListText(aisles, `JF Effect grocery list · ${span === 2 ? "2 weeks" : "1 week"} · ${rangeLabel}`);
     try {
       if (navigator.share && /iPhone|iPad|Android/i.test(navigator.userAgent)) {
         await navigator.share({ text, title: "Grocery list" });
@@ -162,10 +166,13 @@ export function GroceryListSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="h-[92vh] overflow-y-auto p-0">
-        <SheetHeader className="space-y-1 border-b border-border px-4 pb-3 pt-4 text-left">
-          <SheetTitle className="text-base font-black">Your weekly grocery list</SheetTitle>
+        <SheetHeader className="space-y-1 border-b border-border px-4 pb-3 pt-16 text-left">
+          <SheetTitle className="text-lg font-black">
+            🛒 {span === 2 ? "2 weeks" : "1 week"} of groceries
+          </SheetTitle>
           <SheetDescription className="text-xs">
-            Built automatically from your meal plan and your Training, Rest, and High Days.
+            Everything you need for {span === 2 ? "14 days" : "7 days"} of your meal plan, matched to your Training, Non-Training
+            and High Days.
           </SheetDescription>
           {coachPreview && (
             <div className="text-[11px] font-bold uppercase tracking-widest text-primary">Coach preview</div>
@@ -173,6 +180,18 @@ export function GroceryListSheet({
         </SheetHeader>
 
         <div className="space-y-4 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4">
+          <div className="grid grid-cols-2 rounded-xl bg-muted/60 p-1 text-sm font-bold">
+            {([1, 2] as const).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setSpan(n)}
+                className={cn("min-h-10 rounded-lg transition", span === n ? "bg-background shadow-sm" : "text-muted-foreground")}
+              >
+                {n === 1 ? "1 week" : "2 weeks"}
+              </button>
+            ))}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             {([0, 1] as const).map((off) => (
               <Button
@@ -182,7 +201,7 @@ export function GroceryListSheet({
                 onClick={() => setWeekOffset(off)}
                 className="rounded-full"
               >
-                {off === 0 ? "This Week" : "Next Week"}
+                {off === 0 ? "Starting this week" : "Starting next week"}
               </Button>
             ))}
             <div className="text-xs text-muted-foreground">{rangeLabel}</div>

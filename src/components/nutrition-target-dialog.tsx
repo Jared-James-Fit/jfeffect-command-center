@@ -13,7 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { NUTRITION_PHASES, NUTRITION_GOALS, NUTRITION_STRUCTURES, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
+import { NUTRITION_PHASES, NUTRITION_STRUCTURES, PHASE_GOAL, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
+import { addMonths, addWeeks, format, parseISO } from "date-fns";
 import { FileText, Upload, X, Plus, ChevronDown } from "lucide-react";
 import { todayLocalISO } from "@/lib/today";
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
@@ -49,8 +50,9 @@ type Props = {
   clients?: Array<{ id: string; full_name: string }>;
   initial?: any;
   /** New targets pre-filled from an AI nutrition plan (ignored when `initial` is set). */
-  prefill?: { days: Day[]; structure?: string; food_weighing_rules?: string | null; admin_notes?: string | null; goal?: string | null };
-  onSaved?: () => void;
+  prefill?: { days: Day[]; structure?: string; food_weighing_rules?: string | null; admin_notes?: string | null; phase?: string | null };
+  /** Called after a successful save with the new/updated target id. */
+  onSaved?: (targetId: string) => void;
 };
 
 export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = [], initial, prefill, onSaved }: Props) {
@@ -76,7 +78,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         custom_goal: "",
         structure: "Same Every Day",
         start_date: today,
-        end_date: "",
+        end_date: format(addMonths(parseISO(today), 1), "yyyy-MM-dd"),
         status: "Active",
         ending_soon_days: 7,
         client_notes: "",
@@ -89,6 +91,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       if (prefill) {
         Object.assign(f, {
           structure: prefill.structure ?? "Custom",
+          ...(prefill.phase ? { phase: prefill.phase, goal: PHASE_GOAL[prefill.phase] ?? f.goal } : {}),
           food_weighing_rules: prefill.food_weighing_rules ?? "",
           admin_notes: prefill.admin_notes ?? "",
         });
@@ -141,8 +144,9 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       client_id: form.client_id,
       phase: form.phase,
       custom_phase: form.phase === "Custom" ? form.custom_phase : null,
-      goal: form.goal,
-      custom_goal: form.goal === "Custom" ? form.custom_goal : null,
+      // One Phase / Goal field: the goal text follows the phase.
+      goal: form.phase === "Custom" ? "Custom" : PHASE_GOAL[form.phase] ?? form.goal,
+      custom_goal: form.phase === "Custom" ? form.custom_phase : null,
       structure: form.structure,
       start_date: form.start_date,
       end_date: form.end_date || null,
@@ -183,7 +187,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", form.client_id] });
     void invalidateGroceryList(qc, form.client_id);
-    onSaved?.();
+    onSaved?.(targetId);
     onOpenChange(false);
   };
 
@@ -204,21 +208,19 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
             </div>
           )}
           <div>
-            <Label>Phase</Label>
+            <Label>Phase / Goal</Label>
             <Select value={form.phase} onValueChange={(v) => set("phase", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{NUTRITION_PHASES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {NUTRITION_PHASES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}{PHASE_GOAL[s] ? <span className="text-muted-foreground"> · {PHASE_GOAL[s]}</span> : null}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>Goal</Label>
-            <Select value={form.goal} onValueChange={(v) => set("goal", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{NUTRITION_GOALS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          {form.phase === "Custom" && <div><Label>Custom phase</Label><Input value={form.custom_phase ?? ""} onChange={(e) => set("custom_phase", e.target.value)} /></div>}
-          {form.goal === "Custom" && <div><Label>Custom goal</Label><Input value={form.custom_goal ?? ""} onChange={(e) => set("custom_goal", e.target.value)} /></div>}
+          {form.phase === "Custom" && <div><Label>Custom phase / goal</Label><Input value={form.custom_phase ?? ""} onChange={(e) => set("custom_phase", e.target.value)} placeholder="e.g. Contest prep — 12 weeks out" /></div>}
           <div>
             <Label>Structure</Label>
             <Select value={form.structure} onValueChange={updateStructure}>
@@ -234,7 +236,23 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
             </Select>
           </div>
           <div><Label>Start date</Label><Input type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} /></div>
-          <div><Label>End date</Label><Input type="date" value={form.end_date} onChange={(e) => set("end_date", e.target.value)} /></div>
+          <div>
+            <Label>End date · update due</Label>
+            <Input type="date" value={form.end_date ?? ""} onChange={(e) => set("end_date", e.target.value)} />
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {([["2 wks", 2], ["4 wks", 4], ["6 wks", 6], ["8 wks", 8], ["12 wks", 12]] as const).map(([label, w]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => form.start_date && set("end_date", format(addWeeks(parseISO(form.start_date), w), "yyyy-MM-dd"))}
+                  className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold hover:bg-muted"
+                >
+                  {label}
+                </button>
+              ))}
+              <button type="button" onClick={() => set("end_date", "")} className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold hover:bg-muted">Ongoing</button>
+            </div>
+          </div>
           <div><Label>Ending soon (days)</Label><Input type="number" value={form.ending_soon_days} onChange={(e) => set("ending_soon_days", e.target.value)} /></div>
           <div>
             <Label>Water target</Label>
