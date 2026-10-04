@@ -28,6 +28,9 @@ const DO_NOT_PERSIST_PREFIXES = [
   "form-popup-",
   "setup-prompts-",
   "broadcasts-",
+  // One-time "What's new" popups: seen state must always come fresh from the
+  // server, never from a stale on-device snapshot.
+  "feature-announcement",
   "admin-",
   "chat-gif-favorites",
   "chat-sound-favorites",

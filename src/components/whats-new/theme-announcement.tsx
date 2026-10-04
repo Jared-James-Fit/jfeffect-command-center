@@ -4,8 +4,8 @@
  * - Animated demo: a mini app flips between light and dark on a loop while a
  *   toggle springs across, plus the real toggle so people can try it live.
  * - Closable via Got it, the X, tapping outside or Escape — any close marks it
- *   seen server-side (feature_announcement_views), so it never replays on
- *   another device. After closing, the real header toggle pulses briefly so
+ *   seen server-side (feature_announcement_views, retried until it lands), so
+ *   it never shows again on any device. After closing, the real header toggle pulses briefly so
  *   people know where to find it.
  * - Waits politely: never stacks on top of another open dialog/popup.
  */
@@ -31,11 +31,18 @@ export function ThemeAnnouncementGate() {
   const [open, setOpen] = useState(false);
   const [closed, setClosed] = useState(false);
 
-  const { data: seen } = useQuery({
+  // Server is the source of truth. A per-device marker only covers the gap
+  // if the "seen" write failed (offline, app closed mid-save): the popup
+  // stays dismissed here and the write is retried on the next launch.
+  const pendingKey = userId ? `jf-announcement-pending:${THEME_FEATURE_KEY}:${userId}` : null;
+
+  const { data: seen, isFetchedAfterMount } = useQuery({
     queryKey: ["feature-announcement", THEME_FEATURE_KEY, userId],
     enabled: !!userId,
-    staleTime: Infinity,
-    retry: 1,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    retry: 2,
     queryFn: async () => {
       const { data, error } = await db
         .from("feature_announcement_views")
@@ -45,13 +52,22 @@ export function ThemeAnnouncementGate() {
         .maybeSingle();
       // If the check fails, err on the side of not nagging.
       if (error) return true;
-      return !!data;
+      if (data) {
+        clearPending(pendingKey);
+        return true;
+      }
+      if (hasPending(pendingKey)) {
+        // Dismissed on this device but the save never landed — finish it.
+        void saveSeen(userId!, pendingKey);
+        return true;
+      }
+      return false;
     },
   });
 
   // Show once the app has settled and no other popup is on screen.
   useEffect(() => {
-    if (!userId || seen !== false || closed || open) return;
+    if (!userId || !isFetchedAfterMount || seen !== false || closed || open) return;
     let tries = 0;
     const id = window.setInterval(() => {
       tries++;
@@ -71,16 +87,43 @@ export function ThemeAnnouncementGate() {
     setClosed(true);
     if (userId) {
       qc.setQueryData(["feature-announcement", THEME_FEATURE_KEY, userId], true);
-      void db.from("feature_announcement_views").upsert(
-        { user_id: userId, feature_key: THEME_FEATURE_KEY },
-        { onConflict: "user_id,feature_key", ignoreDuplicates: true },
-      );
+      markPending(pendingKey);
+      void saveSeen(userId, pendingKey);
     }
     // Point at the real button once the dialog has animated away.
     window.setTimeout(() => window.dispatchEvent(new Event(THEME_TOGGLE_HIGHLIGHT_EVENT)), 350);
   };
 
   return <ThemeAnnouncementDialog open={open} onClose={close} />;
+}
+
+function markPending(key: string | null) {
+  if (!key) return;
+  try { localStorage.setItem(key, "1"); } catch { /* storage unavailable */ }
+}
+function hasPending(key: string | null) {
+  if (!key) return false;
+  try { return localStorage.getItem(key) === "1"; } catch { return false; }
+}
+function clearPending(key: string | null) {
+  if (!key) return;
+  try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
+}
+
+/** Record the announcement as seen (idempotent), retrying with backoff. */
+export async function saveSeen(userId: string, pendingKey: string | null, attempts = 4) {
+  for (let i = 0; i < attempts; i++) {
+    const { error } = await db.from("feature_announcement_views").upsert(
+      { user_id: userId, feature_key: THEME_FEATURE_KEY },
+      { onConflict: "user_id,feature_key", ignoreDuplicates: true },
+    );
+    if (!error) {
+      clearPending(pendingKey);
+      return true;
+    }
+    await new Promise((r) => setTimeout(r, 800 * 2 ** i));
+  }
+  return false; // pending marker stays; retried on next launch
 }
 
 export function ThemeAnnouncementDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
