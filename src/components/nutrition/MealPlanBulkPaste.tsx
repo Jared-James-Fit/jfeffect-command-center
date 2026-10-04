@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Copy, ClipboardPaste, Sparkles, Check, Wand2 } from "lucide-react";
 import { toast } from "sonner";
+import { phaseFromPlanText } from "@/lib/nutrition-cardio";
 
 export type ParsedDay = {
   day_label: string;
@@ -16,7 +17,9 @@ export type ParsedDay = {
   sort_order: number;
 };
 
-const EXAMPLE_TEMPLATE = `TRAINING-DAY MENU
+const EXAMPLE_TEMPLATE = `PHASE: Fat Loss
+
+TRAINING-DAY MENU
 
 Meal 1
 300 g zero-fat Greek yogurt
@@ -167,6 +170,7 @@ Seasonings, mustard, hot sauce, zero-calorie drinks and low-calorie flavourings 
 const CHATGPT_PROMPT = `You are a nutrition coach. Build a full meal plan using the EXACT format below so it can be pasted directly into the JF Effect coaching app.
 
 CLIENT DETAILS (fill in):
+- Phase / goal:
 - Bodyweight:
 - Training days per week:
 - Daily calorie target:
@@ -175,6 +179,7 @@ CLIENT DETAILS (fill in):
 - Preferred foods:
 
 FORMAT RULES (strict — do not change headings, do not add extra commentary):
+0. Start with ONE line: PHASE: <Fat Loss | Muscle Gain | Recomp | Maintenance | Performance | Reverse Diet | Lifestyle Reset> — the client's phase / goal. Then a blank line.
 1. Create one menu per day-type the client needs (e.g. TRAINING-DAY MENU, NON-TRAINING-DAY MENU, HIGH-DAY MENU). Each menu header ends with the word MENU in ALL CAPS.
 2. Inside each menu, list "Meal 1", "Meal 2", "Meal 3"… on their own line.
 3. Under each meal, list every food on its own line as: "<amount> g <food>" (use cooked weight for meat, rice, potatoes, vegetables; packaged weight for oats, whey, peanut butter, oils).
@@ -281,7 +286,7 @@ export function parseMealPlan(text: string): ParsedDay[] {
 }
 
 type Props = {
-  onApply: (days: ParsedDay[], foodWeighingRules: string | null) => void;
+  onApply: (days: ParsedDay[], foodWeighingRules: string | null, phase: string | null) => void;
 };
 
 export function MealPlanBulkPaste({ onApply }: Props) {
@@ -314,8 +319,9 @@ export function MealPlanBulkPaste({ onApply }: Props) {
       toast.error("No menus found. Make sure each day starts with a header ending in 'MENU' (e.g. TRAINING-DAY MENU).");
       return;
     }
-    onApply(parsed, parseFoodWeighingRules(text));
-    toast.success(`Imported ${parsed.length} day${parsed.length > 1 ? "s" : ""}`);
+    const phase = phaseFromPlanText(text);
+    onApply(parsed, parseFoodWeighingRules(text), phase);
+    toast.success(`Imported ${parsed.length} day${parsed.length > 1 ? "s" : ""}${phase ? ` · phase: ${phase}` : ""}`);
   };
 
   const preview = text.trim() ? parseMealPlan(text) : [];

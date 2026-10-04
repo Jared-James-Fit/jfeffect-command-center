@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
-import { NUTRITION_PHASES, PHASE_GOAL, phaseFromText } from "@/lib/nutrition-cardio";
+import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
 import { MEAL_PLAN_PROMPT, TARGETS_PROMPT, manualMealPlanPrompt, manualTargetsPrompt } from "@/lib/nutrition-ai-prompts";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -157,7 +157,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       structure: structureFor(days.map((d) => d.day_label)),
       food_weighing_rules: parseFoodWeighingRules(plan.meal_plan_text),
       admin_notes: plan.targets_text ?? null,
-      phase: plan.phase ?? phaseFromText(plan.targets_text?.match(/^Goal:\s*(.+)$/m)?.[1]),
+      phase: plan.phase ?? phaseFromPlanText(plan.meal_plan_text) ?? phaseFromText(plan.targets_text?.match(/^Goal:\s*(.+)$/m)?.[1]),
     };
   }, [plan?.meal_plan_text, plan?.targets_text, plan?.phase]);
 
@@ -241,7 +241,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!plan?.targets_text}
-                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text), "Meal plan prompt")}
+                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase), "Meal plan prompt")}
                   >
                     2 · Meal plan prompt <span className="ml-auto text-[10px] text-muted-foreground">with targets</span>
                   </DropdownMenuItem>

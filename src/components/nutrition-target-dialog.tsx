@@ -60,10 +60,13 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
   const [form, setForm] = useState<any>(null);
   const [days, setDays] = useState<Day[]>([]);
   const [saving, setSaving] = useState(false);
+  /** True while Phase / Goal holds a value detected from a paste (cleared on manual change). */
+  const [phaseAuto, setPhaseAuto] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     const today = todayLocalISO();
+    setPhaseAuto(false);
     if (initial) {
       setForm({ ...initial });
       supabase.from("nutrition_target_days").select("*").eq("target_id", initial.id).order("sort_order").then(({ data }) => {
@@ -92,6 +95,9 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         Object.assign(f, {
           structure: prefill.structure ?? "Custom",
           ...(prefill.phase ? { phase: prefill.phase, goal: PHASE_GOAL[prefill.phase] ?? f.goal } : {}),
+        });
+        setPhaseAuto(!!prefill.phase);
+        Object.assign(f, {
           food_weighing_rules: prefill.food_weighing_rules ?? "",
           admin_notes: prefill.admin_notes ?? "",
         });
@@ -208,8 +214,13 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
             </div>
           )}
           <div>
-            <Label>Phase / Goal</Label>
-            <Select value={form.phase} onValueChange={(v) => set("phase", v)}>
+            <Label className="flex items-center gap-2">
+              Phase / Goal
+              {phaseAuto && (
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">Auto-filled · change anytime</span>
+              )}
+            </Label>
+            <Select value={form.phase} onValueChange={(v) => { setPhaseAuto(false); set("phase", v); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {NUTRITION_PHASES.map((s) => (
@@ -268,9 +279,14 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
         <div className="space-y-3">
           <MealPlanBulkPaste
-            onApply={(parsed: ParsedDay[], rules: string | null) => {
+            onApply={(parsed: ParsedDay[], rules: string | null, phase: string | null) => {
               setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
-              if (rules) setForm((f: any) => ({ ...f, food_weighing_rules: rules }));
+              setForm((f: any) => ({
+                ...f,
+                ...(rules ? { food_weighing_rules: rules } : {}),
+                ...(phase ? { phase, goal: PHASE_GOAL[phase] ?? f.goal } : {}),
+              }));
+              if (phase) setPhaseAuto(true);
             }}
           />
           <div className="flex items-center justify-between">
