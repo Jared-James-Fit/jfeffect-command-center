@@ -191,3 +191,40 @@ export function useRecentRecords(clientId: string | null | undefined, days = 60)
     },
   });
 }
+
+export type WorkoutPoints = {
+  month_start: string;
+  league: {
+    completed: number;
+    fully_logged: number;
+    records: number;
+    record_lifts: { exercise_name: string; scope: RecordScope; points: number }[];
+    record_cap_hit: boolean;
+    total: number;
+  };
+  level: { events: { label: string; event_type: string; xp: number }[]; total: number };
+};
+
+/** Points a finished workout earned: League (this month) + Logging Level. */
+export function useWorkoutPoints(
+  clientId: string | null | undefined,
+  scheduledWorkoutId: string | null | undefined,
+  dayId: string | null | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["workout-points", clientId ?? null, scheduledWorkoutId ?? null, scheduledWorkoutId ? null : dayId ?? null],
+    enabled: enabled && !!clientId && (!!scheduledWorkoutId || !!dayId),
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("workout_points_summary", {
+        _client_id: clientId,
+        _scheduled_workout_id: scheduledWorkoutId ?? null,
+        _day_id: scheduledWorkoutId ? null : dayId ?? null,
+      });
+      if (error) throw error;
+      return (data ?? null) as WorkoutPoints | null;
+    },
+  });
+}
