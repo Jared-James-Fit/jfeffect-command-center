@@ -15,6 +15,7 @@ import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "
 import { ArrowLeft } from "lucide-react";
 import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 import { RecordBadges } from "@/components/portal/record-badges";
+import { LeagueRecapButton } from "@/components/portal/league-recap";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 
@@ -422,6 +423,8 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
           </button>
         ))}
       </div>
+
+      <LeagueRecapButton />
 
       {view === "current" && boostMe?.qualified && (finalWeek
         ? <><BoostHero me={boostMe} rows={boostRows} /><ThreatBanner rows={boostRows} me={boostMe} /></>

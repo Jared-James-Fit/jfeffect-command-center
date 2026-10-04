@@ -9,6 +9,7 @@ import { EventPopupGate } from "@/components/events/event-popup-gate";
 import { HomeScreenSetupGate } from "@/components/home-screen-setup-gate";
 import { FormPopupGate } from "@/components/form-popup-gate";
 import { LegalAcceptanceGate } from "@/components/legal/legal-acceptance-gate";
+import { LeagueRecapGate } from "@/components/portal/league-recap";
 
 function PortalLayout() {
   useActivityHeartbeat();
@@ -26,6 +27,8 @@ function PortalLayout() {
         <FormPopupGate />
         <HomeScreenSetupGate />
         <LegalAcceptanceGate />
+        {/* Previous month's League Recap — first week of each month, once. */}
+        <LeagueRecapGate />
         {/* Birthday card mounts LAST so its dialog stacks above other portal
             gates (setup prompts, event/form popups). */}
         <ClientBirthdayCard />
