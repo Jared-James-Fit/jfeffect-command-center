@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
@@ -10,6 +11,16 @@ import { useTheme } from "@/lib/theme";
 export function ThemeToggle({ className }: { className?: string }) {
   const { theme, toggle } = useTheme();
   const dark = theme === "dark";
+  // Pulses after the "What's new" popup closes, pointing at the real switch.
+  const [highlight, setHighlight] = useState(false);
+  useEffect(() => {
+    const on = () => {
+      setHighlight(true);
+      window.setTimeout(() => setHighlight(false), 3400);
+    };
+    window.addEventListener("jf-theme-toggle-highlight", on);
+    return () => window.removeEventListener("jf-theme-toggle-highlight", on);
+  }, []);
   return (
     <button
       type="button"
@@ -22,6 +33,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         "relative inline-flex h-8 w-[3.25rem] shrink-0 cursor-pointer items-center rounded-full p-[3px] outline-none",
         "transition-colors duration-300 ease-out focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         "active:scale-[0.97] [-webkit-tap-highlight-color:transparent]",
+        highlight && "jf-toggle-highlight",
         dark
           ? "bg-[oklch(0.32_0.03_275)] shadow-[inset_0_1px_2px_oklch(0_0_0/0.45)]"
           : "bg-[oklch(0.92_0.004_80)] shadow-[inset_0_1px_2px_oklch(0_0_0/0.10)]",
