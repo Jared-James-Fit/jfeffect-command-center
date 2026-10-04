@@ -695,3 +695,21 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
 .jf-wn-float { animation: jf-wn-float 3.6s ease-in-out infinite; }
 .jf-wn-tap { animation: jf-wn-tap 1.8s ease-out infinite; }
 .jf-toggle-highlight { animation: jf-toggle-highlight 1.1s ease-out 3; }
+
+/* League record badges: a light sweep on every badge, plus a glow pulse on
+   records set in the last 48h. */
+@keyframes jf-record-shine {
+  0% { transform: translateX(0) skewX(-20deg); opacity: 0; }
+  10% { opacity: 1; }
+  45%, 100% { transform: translateX(420%) skewX(-20deg); opacity: 0; }
+}
+@keyframes jf-record-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--jf-glow), 0 0 0 0 var(--jf-glow); }
+  50% { box-shadow: 0 0 0 1px var(--jf-glow), 0 0 10px 2px var(--jf-glow); }
+}
+.jf-record-shine {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  animation: jf-record-shine 3.4s ease-in-out infinite;
+}
+.jf-record-badge-live { animation: jf-record-pulse 1.6s ease-in-out infinite; }
+.jf-record-badge-live .jf-record-shine { animation-duration: 1.8s; }

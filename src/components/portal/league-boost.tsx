@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { formatLeaguePoints } from "@/lib/league-points";
+import { formatLeaguePoints, LEAGUE_RECORDS_START } from "@/lib/league-points";
 import {
   BOOST_ONE_LINER,
   adherenceTarget,
@@ -131,13 +131,24 @@ export function RowBoost({ row }: { row: LeagueRow }) {
   );
 }
 
+function recordLabel(me: LeagueRow) {
+  const parts = [
+    [me.atpr_lifts ?? 0, "ATPR"],
+    [me.program_pr_lifts ?? 0, "PROGRAM PR"],
+    [me.block_pr_lifts ?? 0, "BLOCK PR"],
+  ].filter(([n]) => (n as number) > 0).map(([n, l]) => `${n} ${l}`);
+  return parts.length ? `Records · ${parts.join(" · ")}` : "Records";
+}
+
 /** Points breakdown — the athlete's point history for the month. */
 export function MonthBreakdown({ me }: { me: LeagueRow }) {
   const lines: Array<[string, number, string?]> = [
     [`Workouts · ${me.workouts_completed}`, me.workout_points],
     [`Fully logged · ${me.fully_logged}`, me.logging_points],
     ["Bodyweight logs", me.bodyweight_points],
-    ["Beat your best", me.improvement_points],
+    me.month_start < LEAGUE_RECORDS_START
+      ? ["Beat your best", me.improvement_points]
+      : [recordLabel(me), me.improvement_points],
   ];
   return (
     <ul className="mt-2 space-y-1 text-xs">

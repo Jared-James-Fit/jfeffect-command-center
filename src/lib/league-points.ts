@@ -7,8 +7,16 @@ export const LEAGUE_RULES = [
   { key: "workout", label: "Completed workout", points: 10 },
   { key: "logging", label: "Fully logged workout", points: 5 },
   { key: "bodyweight", label: "Bodyweight log", points: 5, note: "1 per day" },
-  { key: "improvement", label: "Beat your best on a lift", points: 5, note: "per exercise, per month" },
+  { key: "atpr", label: "New ATPR", points: 10, note: "all-time record" },
+  { key: "program_pr", label: "PROGRAM PR", points: 5 },
+  { key: "block_pr", label: "BLOCK PR", points: 3 },
 ] as const;
+
+/** Record points: best record per lift, per month, capped monthly (DB: league_month_scores). */
+export const LEAGUE_RECORD_CAP = 40;
+export const LEAGUE_RECORDS_NOTE = `Records: best one per lift, per month · up to ${LEAGUE_RECORD_CAP} pts a month.`;
+/** Months before this used the old "beat your best (e1RM)" rule. */
+export const LEAGUE_RECORDS_START = "2026-10-01";
 
 /** The RPC encodes points × 1000 (monthly_xp, strength_score). */
 export function leaguePointsFromEncoded(encoded: number | string | null | undefined): number {
