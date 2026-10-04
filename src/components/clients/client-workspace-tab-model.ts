@@ -5,46 +5,55 @@ import {
   Dumbbell,
   FileText,
   LayoutDashboard,
+  TrendingUp,
 } from "lucide-react";
 
 export type WorkspaceTab =
   | "summary"
-  | "info"
-  | "goals-setup"
-  | "coaching"
-  | "account"
   | "training"
-  | "program-setup"
-  | "analytics"
   | "nutrition"
   | "metrics"
-  | "lift-videos"
   | "documents"
   | "sessions"
   | "purchases"
-  | "billing"
-  | "agreements"
-  | "notes";
+  | "info"
+  | "goals-setup"
+  | "coaching"
+  | "notes"
+  | "account";
 
+/**
+ * Primary bar = the work you do with a client, in the order you do it.
+ * Training also holds program setup; Progress holds metrics, lift
+ * analytics and lift videos; Forms holds agreements; Billing holds sales
+ * and billing. Profile/setup pages live under More.
+ */
 export const CLIENT_WORKSPACE_PRIMARY_TABS = [
   { value: "summary", label: "Summary", icon: LayoutDashboard },
   { value: "training", label: "Training", icon: Dumbbell },
-  { value: "sessions", label: "Sessions", icon: CalendarCheck },
   { value: "nutrition", label: "Nutrition", icon: Apple },
+  { value: "metrics", label: "Progress", icon: TrendingUp },
   { value: "documents", label: "Forms", icon: FileText },
-  { value: "purchases", label: "Sales", icon: DollarSign },
+  { value: "sessions", label: "Sessions", icon: CalendarCheck },
+  { value: "purchases", label: "Billing", icon: DollarSign },
 ] satisfies { value: WorkspaceTab; label: string; icon: typeof LayoutDashboard }[];
 
 export const CLIENT_WORKSPACE_MORE_TABS = [
-  { value: "program-setup", label: "Program setup" },
   { value: "info", label: "Client details" },
   { value: "goals-setup", label: "Goals & intake" },
   { value: "coaching", label: "Coaching setup" },
-  { value: "analytics", label: "Analytics" },
-  { value: "metrics", label: "Progress metrics" },
-  { value: "lift-videos", label: "Lift videos" },
-  { value: "billing", label: "Billing" },
-  { value: "agreements", label: "Agreements" },
   { value: "notes", label: "Coach notes" },
   { value: "account", label: "Login & access" },
 ] satisfies { value: WorkspaceTab; label: string }[];
+
+/** Old tab ids → where that content lives now (links, notifications, bookmarks). */
+export const LEGACY_WORKSPACE_TABS: Record<string, WorkspaceTab> = {
+  "program-setup": "training",
+  analytics: "metrics",
+  "lift-videos": "metrics",
+  agreements: "documents",
+  billing: "purchases",
+  profile: "info",
+  cardio: "nutrition",
+  messages: "summary",
+};
