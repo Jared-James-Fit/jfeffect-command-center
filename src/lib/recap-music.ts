@@ -31,8 +31,12 @@ const MELODY: [number, number, number][] = [
 
 const hz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
+export type RecapSfx = "whoosh" | "tick" | "pop" | "chime" | "sparkle" | "thud" | "fanfare" | "roll" | "rise" | "fall" | "swish" | "shutter";
+
 export type RecapMusic = {
   start: () => Promise<boolean>;
+  /** One-shot sound effect layered over the music (silent when muted). */
+  sfx: (name: RecapSfx, opts?: { pitch?: number; gain?: number; dur?: number }) => void;
   setMuted: (m: boolean) => void;
   duck: (on: boolean) => void;
   stop: () => void;
@@ -45,6 +49,7 @@ export function createRecapMusic(volume = 0.32): RecapMusic | null {
 
   let ctx: AudioContext | null = null;
   let master: GainNode | null = null;
+  let fx: GainNode | null = null;
   let bus: GainNode | null = null;
   let timer: number | null = null;
   let nextBar = 0;
@@ -71,6 +76,10 @@ export function createRecapMusic(volume = 0.32): RecapMusic | null {
     bus = ctx.createGain();
     bus.gain.value = 1;
     bus.connect(lp).connect(comp).connect(master).connect(ctx.destination);
+    // Effects skip the tape filter so they stay crisp, and don't duck.
+    fx = ctx.createGain();
+    fx.gain.value = muted ? 0 : 0.55;
+    fx.connect(ctx.destination);
 
     // Wow/flutter on the filter for that warm, slightly wobbly feel.
     const lfo = ctx.createOscillator();
@@ -218,7 +227,79 @@ export function createRecapMusic(volume = 0.32): RecapMusic | null {
     master.gain.linearRampToValueAtTime(to, now + secs);
   }
 
+
+  function tone(t: number, freq: number, dur: number, vel: number, type: OscillatorType = "sine", glideTo?: number) {
+    const c = ctx!;
+    const o = c.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vel, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(fx!);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
+  function noise(t: number, dur: number, vel: number, type: BiquadFilterType, from: number, to?: number, q = 1) {
+    const c = ctx!;
+    const len = Math.ceil(c.sampleRate * dur);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const s = c.createBufferSource();
+    s.buffer = buf;
+    const f = c.createBiquadFilter();
+    f.type = type;
+    f.Q.value = q;
+    f.frequency.setValueAtTime(from, t);
+    if (to) f.frequency.exponentialRampToValueAtTime(to, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vel, t + dur * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f).connect(g).connect(fx!);
+    s.start(t);
+  }
+
+  function playSfx(name: RecapSfx, o: { pitch?: number; gain?: number; dur?: number } = {}) {
+    if (!ctx || !fx || ctx.state !== "running" || muted || stopped) return;
+    const t = ctx.currentTime + 0.01;
+    const v = o.gain ?? 1;
+    const p = o.pitch ?? 1;
+    switch (name) {
+      case "whoosh": noise(t, 0.45, 0.35 * v, "bandpass", 400, 3200, 0.9); break;
+      case "swish": noise(t, 0.28, 0.22 * v, "bandpass", 2400, 900, 1.2); break;
+      case "tick": tone(t, 1800 * p, 0.05, 0.08 * v, "triangle"); break;
+      case "pop": tone(t, 520 * p, 0.16, 0.35 * v, "sine", 980 * p); tone(t, 1300 * p, 0.08, 0.08 * v, "triangle"); break;
+      case "chime": [0, 4, 7].forEach((st, i) => tone(t + i * 0.06, 880 * p * Math.pow(2, st / 12), 0.9, 0.12 * v, "sine")); break;
+      case "sparkle": for (let i = 0; i < 6; i++) tone(t + i * 0.045, 2000 * p * Math.pow(2, (i * 3) / 12), 0.35, 0.05 * v, "sine"); break;
+      case "thud": tone(t, 140 * p, 0.35, 0.5 * v, "sine", 50); noise(t, 0.12, 0.12 * v, "lowpass", 900); break;
+      case "rise": tone(t, 440 * p, 0.35, 0.14 * v, "triangle", 880 * p); tone(t + 0.18, 1320 * p, 0.5, 0.08 * v, "sine"); break;
+      case "fall": tone(t, 520 * p, 0.45, 0.12 * v, "triangle", 300 * p); break;
+      case "roll": {
+        const dur = o.dur ?? 0.9;
+        for (let k = 0, tt = 0; tt < dur; k++, tt += 0.055) noise(t + tt, 0.07, (0.05 + 0.12 * (tt / dur)) * v, "bandpass", 1600, undefined, 0.7);
+        break;
+      }
+      case "fanfare": {
+        const notes = [0, 4, 7, 12];
+        notes.forEach((st, i) => {
+          const f = 523.25 * p * Math.pow(2, st / 12);
+          tone(t + i * 0.09, f, i === 3 ? 1.4 : 0.3, 0.13 * v, "sawtooth");
+          tone(t + i * 0.09, f, i === 3 ? 1.4 : 0.3, 0.1 * v, "triangle");
+        });
+        noise(t + 0.27, 1.2, 0.08 * v, "highpass", 6000); // cymbal shimmer
+        break;
+      }
+      case "shutter": noise(t, 0.05, 0.4 * v, "highpass", 2500); noise(t + 0.07, 0.06, 0.3 * v, "highpass", 2000); break;
+    }
+  }
+
   return {
+    sfx: playSfx,
     async start() {
       if (stopped) return false;
       try {
@@ -236,7 +317,11 @@ export function createRecapMusic(volume = 0.32): RecapMusic | null {
         return false;
       }
     },
-    setMuted(m) { muted = m; ramp(target(), 0.4); },
+    setMuted(m) {
+      muted = m;
+      ramp(target(), 0.4);
+      if (fx && ctx) fx.gain.setTargetAtTime(m ? 0 : 0.55, ctx.currentTime, 0.05);
+    },
     duck(on) { ducked = on; ramp(target(), 0.5); },
     stop() {
       stopped = true;

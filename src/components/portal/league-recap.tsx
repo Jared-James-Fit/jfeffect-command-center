@@ -15,8 +15,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ArrowDownRight, ArrowUpRight, Clapperboard, Dumbbell, Flame, Medal, Minus, NotebookPen, Scale, Swords, Trophy, Volume2, VolumeX, X } from "lucide-react";
-import { createRecapMusic, readRecapMuted, writeRecapMuted, type RecapMusic } from "@/lib/recap-music";
+import { ArrowDownRight, ArrowUpRight, Clapperboard, Dumbbell, Flame, Medal, Minus, NotebookPen, Scale, Swords, Trophy, Volume2, VolumeX, X, Share2, Download } from "lucide-react";
+import { recapStoryBlob, shareOrSaveImage } from "@/lib/recap-story-card";
+import { createRecapMusic, readRecapMuted, writeRecapMuted, type RecapMusic, type RecapSfx } from "@/lib/recap-music";
 import { UserAvatar } from "@/components/user-avatar";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -343,6 +344,57 @@ function buildSlides(r: LeagueRecap): Slide[] {
   return slides;
 }
 
+
+// ------------------------------------------------------------------ sound cues
+
+type Cue = [ms: number, sfx: RecapSfx, opts?: { pitch?: number; gain?: number; dur?: number }];
+
+/** Sound effects timed to each slide's animation delays. */
+function slideCues(key: string, r: LeagueRecap): Cue[] {
+  const me = r.me;
+  const counting = (start: number, n: number, steps = 10): Cue[] =>
+    Array.from({ length: Math.min(steps, Math.max(1, n)) }, (_, k) => [start + k * 95, "tick", { pitch: 1 + k * 0.06, gain: 0.8 }] as Cue);
+  switch (key) {
+    case "intro": {
+      const letters = monthName(r.month_start).length;
+      return [
+        [0, "whoosh"],
+        ...Array.from({ length: letters }, (_, i) => [250 + i * 55, "tick", { pitch: 0.8 + i * 0.05, gain: 0.6 }] as Cue),
+        [700, "chime"],
+        [1100, "sparkle", { gain: 0.6 }],
+      ];
+    }
+    case "rank": {
+      const change = rankChange(r);
+      return [
+        [0, "whoosh"],
+        [150, "pop"],
+        ...counting(200, me.rank ?? 1),
+        [1250, "thud", { gain: 0.7 }],
+        ...(me.beat_pct != null ? [[800, "sparkle", { gain: 0.7 }] as Cue] : []),
+        ...(change ? [[1100, change.dir === "down" ? "fall" : "rise"] as Cue] : []),
+      ];
+    }
+    case "points":
+      return [
+        [0, "whoosh"],
+        ...counting(150, me.total_points, 11),
+        ...[0, 1, 2, 3, 4].map((i) => [450 + i * 140, "swish", { gain: 0.7 }] as Cue),
+        [1250, "chime", { pitch: 1.12 }],
+      ];
+    case "grind":
+      return [[0, "whoosh"], ...[0, 1, 2, 3].map((i) => [300 + i * 140, "pop", { pitch: 0.9 + i * 0.12, gain: 0.8 }] as Cue)];
+    case "rivals":
+      return [[0, "whoosh"], ...r.rivals.map((_, i) => [400 + i * 260, "swish"] as Cue), [400 + r.rivals.length * 260 + 200, "pop", { pitch: 1.2 }]];
+    case "podium":
+      return [[0, "whoosh"], [150, "roll", { dur: 0.95 }], [400, "thud", { pitch: 0.9 }], [700, "thud"], [1100, "fanfare"], [1150, "sparkle"]];
+    case "outro":
+      return [[0, "whoosh"], [150, "chime", { pitch: 0.75 }], [500, "sparkle"]];
+    default:
+      return [[0, "whoosh"]];
+  }
+}
+
 // ------------------------------------------------------------------ story
 
 export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap; open: boolean; onClose: () => void }) {
@@ -373,6 +425,30 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
     return () => { m?.stop(); music.current = null; setMusicOn(false); };
   }, [open]);
   useEffect(() => { music.current?.duck(paused); }, [paused]);
+  // Fire this slide's sound effects in sync with its animations.
+  useEffect(() => {
+    if (!open || !musicOn) return;
+    const ids = slideCues(slide.key, recap).map(([ms, name, o]) =>
+      window.setTimeout(() => music.current?.sfx(name, o), ms));
+    return () => ids.forEach((id) => window.clearTimeout(id));
+  }, [open, musicOn, slide.key, recap]);
+
+  const [sharing, setSharing] = useState<"share" | "save" | null>(null);
+  const shareRecap = async (mode: "share" | "save") => {
+    setSharing(mode);
+    setPaused(true);
+    try {
+      const blob = await recapStoryBlob(recap, recap.me.display_name);
+      if (!blob) return;
+      music.current?.sfx("shutter");
+      await shareOrSaveImage(blob, `jf-effect-${recap.month_start.slice(0, 7)}-recap.png`, `My ${monthName(recap.month_start)} Recap`, mode);
+    } catch (e) {
+      console.warn("Recap share failed", e);
+    } finally {
+      setSharing(null);
+      setPaused(false);
+    }
+  };
   const ensureMusic = () => { if (!musicOn) void music.current?.start().then(setMusicOn); };
   const toggleMute = () => {
     const m = !muted;
@@ -445,6 +521,15 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
             <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => void shareRecap("share")}
+              disabled={!!sharing}
+              aria-label="Share recap"
+              className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-white backdrop-blur transition hover:bg-white/25 active:scale-95 disabled:opacity-60"
+            >
+              <Share2 className="h-[18px] w-[18px]" />
+            </button>
+            <button
+              type="button"
               onClick={toggleMute}
               aria-label={muted ? "Unmute music" : "Mute music"}
               aria-pressed={!muted}
@@ -479,14 +564,34 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
           {/* Footer */}
           <div className="relative z-20 px-5" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}>
             {last ? (
-              <button
-                type="button"
-                onClick={onClose}
-                className="jf-rc-rise h-12 w-full rounded-2xl bg-white text-[15px] font-black text-black transition active:scale-[0.98]"
-                style={{ animationDelay: "900ms" }}
-              >
-                Let's go 💪
-              </button>
+              <div className="space-y-2">
+                <div className="jf-rc-rise grid grid-cols-2 gap-2" style={{ animationDelay: "700ms" }}>
+                  <button
+                    type="button"
+                    onClick={() => void shareRecap("share")}
+                    disabled={!!sharing}
+                    className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 text-[14px] font-black text-white ring-1 ring-white/20 backdrop-blur transition active:scale-[0.98] disabled:opacity-60"
+                  >
+                    <Share2 className="h-4 w-4" /> {sharing === "share" ? "Preparing…" : "Share"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void shareRecap("save")}
+                    disabled={!!sharing}
+                    className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 text-[14px] font-black text-white ring-1 ring-white/20 backdrop-blur transition active:scale-[0.98] disabled:opacity-60"
+                  >
+                    <Download className="h-4 w-4" /> {sharing === "save" ? "Preparing…" : "Save image"}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="jf-rc-rise h-12 w-full rounded-2xl bg-white text-[15px] font-black text-black transition active:scale-[0.98]"
+                  style={{ animationDelay: "900ms" }}
+                >
+                  Let's go 💪
+                </button>
+              </div>
             ) : (
               <div className="text-center text-[11px] font-semibold text-white/45">Tap to continue · hold to pause</div>
             )}
