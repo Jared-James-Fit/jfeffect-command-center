@@ -144,7 +144,7 @@ function PortalNutrition() {
     setDownloading(true);
     try {
       const { downloadMealPlanPdf } = await import("@/lib/nutrition-targets/meal-plan-pdf");
-      downloadMealPlanPdf({
+      await downloadMealPlanPdf({
         client_name: plan.client_name ?? null,
         coach_name: plan.coach_name ?? null,
         updated_at: plan.updated_at ?? null,

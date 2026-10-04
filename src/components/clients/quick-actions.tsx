@@ -63,7 +63,7 @@ function useClientPdfDownloads(r: DirectoryRow) {
       const { downloadMealPlanPdf } = await import(
         "@/lib/nutrition-targets/meal-plan-pdf"
       );
-      downloadMealPlanPdf({
+      await downloadMealPlanPdf({
         client_name: plan.client_name ?? r.full_name ?? null,
         coach_name: plan.coach_name ?? null,
         updated_at: plan.updated_at ?? null,
@@ -73,6 +73,7 @@ function useClientPdfDownloads(r: DirectoryRow) {
         structure: plan.structure ?? null,
         water: plan.water ?? null,
         client_notes: plan.client_notes ?? null,
+        food_weighing_rules: (plan as any).food_weighing_rules ?? null,
         days: (plan.days ?? []) as any[],
       });
       toast.success("Meal plan PDF downloaded", { id: toastId });

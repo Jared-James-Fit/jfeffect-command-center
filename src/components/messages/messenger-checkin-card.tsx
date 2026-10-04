@@ -21,6 +21,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import {
   getMessengerCheckin,
   submitMessengerCheckin,
@@ -884,3 +885,111 @@ function CheckinAnswersSheet({
     </Sheet>
   );
 }
+
+/**
+ * Native form request (e.g. Nutrition Update Request) styled like the
+ * Weekly Check-In card. Clients fill it in-app in a sheet; coaches see the
+ * status and jump to the result.
+ */
+export function FormRequestChatCard({
+  formId,
+  title,
+  note,
+  clientId,
+  role,
+  sentAt,
+}: {
+  formId: string;
+  title?: string | null;
+  note?: string | null;
+  clientId: string;
+  role: Role;
+  sentAt?: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const qc = useQueryClient();
+  const { data: sub, isLoading } = useQuery({
+    queryKey: ["chat-form-request-status", formId, clientId, sentAt ?? null],
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      let q = (supabase as any)
+        .from("nf_submissions")
+        .select("id, status, submitted_at, created_at")
+        .eq("form_id", formId)
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      // Only count a submission made for THIS request (after it was sent).
+      if (sentAt) q = q.gte("created_at", new Date(new Date(sentAt).getTime() - 60_000).toISOString());
+      const { data } = await q;
+      return (data?.[0] ?? null) as { id: string; status: string; submitted_at: string | null } | null;
+    },
+  });
+  const done = !!sub && sub.status !== "in_progress";
+  const started = !!sub && sub.status === "in_progress";
+  const isNutrition = formId === NUTRITION_FORM_ID;
+  const heading = title || (isNutrition ? "Nutrition Update" : "Form");
+  return (
+    <>
+      <div className={FORM_CARD}>
+        <div className="flex items-start gap-3">
+          <span className={cn(
+            "grid h-9 w-9 shrink-0 place-items-center rounded-full",
+            done ? "bg-emerald-500/10 text-emerald-600" : FORM_ICON,
+          )}>
+            {done ? <CheckCircle2 className="h-5 w-5" /> : <ClipboardCheck className="h-5 w-5" />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold">{heading}</div>
+            <div className={cn("mt-0.5 text-xs", FORM_MUTED)}>
+              {isLoading ? "Loading…" : done ? "Submitted" : started ? "In progress" : isNutrition ? "About 3–4 minutes" : "A few minutes"}
+            </div>
+          </div>
+        </div>
+        {note && !done && <div className={cn("mt-2 text-xs", FORM_MUTED)}>{note}</div>}
+        {!isLoading && !done && role === "client" && (
+          <Button
+            className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
+            onClick={() => setOpen(true)}
+          >
+            {started ? "Continue" : isNutrition ? "Start nutrition update" : "Start form"} <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        )}
+        {!isLoading && !done && role === "admin" && (
+          <div className="mt-3 rounded-xl bg-blue-600/10 px-3 py-2 text-xs font-medium text-blue-700 dark:bg-blue-400/15 dark:text-blue-200">
+            {started ? "Client is filling it out" : "Waiting for client"}
+          </div>
+        )}
+        {done && role === "admin" && (
+          <a
+            href={`/admin/clients/${clientId}?tab=${isNutrition ? "nutrition" : "documents"}`}
+            className="mt-3 flex h-10 w-full items-center justify-center rounded-md border border-emerald-500/25 bg-emerald-500/10 text-sm font-semibold text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
+          >
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            {isNutrition ? "View AI plan" : "View submission"}
+          </a>
+        )}
+        {done && role === "client" && (
+          <div className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700">
+            ✓ Sent to your coach{isNutrition ? " — your new plan is on the way" : ""}
+          </div>
+        )}
+      </div>
+      {role === "client" && open && (
+        <ClientFormSheet
+          formId={formId}
+          title={heading}
+          open={open}
+          onOpenChange={(v) => {
+            setOpen(v);
+            if (!v) qc.invalidateQueries({ queryKey: ["chat-form-request-status", formId] });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+const NUTRITION_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
