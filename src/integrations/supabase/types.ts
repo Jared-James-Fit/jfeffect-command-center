@@ -12867,6 +12867,7 @@ export type Database = {
           custom_goal: string | null
           custom_phase: string | null
           end_date: string | null
+          food_weighing_rules: string | null
           ending_soon_days: number
           goal: string
           goal_direction: string | null
@@ -12898,6 +12899,7 @@ export type Database = {
           custom_goal?: string | null
           custom_phase?: string | null
           end_date?: string | null
+          food_weighing_rules?: string | null
           ending_soon_days?: number
           goal?: string
           goal_direction?: string | null
@@ -12929,6 +12931,7 @@ export type Database = {
           custom_goal?: string | null
           custom_phase?: string | null
           end_date?: string | null
+          food_weighing_rules?: string | null
           ending_soon_days?: number
           goal?: string
           goal_direction?: string | null

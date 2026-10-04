@@ -48,9 +48,12 @@ type Props = {
   clientId?: string;
   clients?: Array<{ id: string; full_name: string }>;
   initial?: any;
+  /** New targets pre-filled from an AI nutrition plan (ignored when `initial` is set). */
+  prefill?: { days: Day[]; structure?: string; food_weighing_rules?: string | null; admin_notes?: string | null; goal?: string | null };
+  onSaved?: () => void;
 };
 
-export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = [], initial }: Props) {
+export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = [], initial, prefill, onSaved }: Props) {
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [days, setDays] = useState<Day[]>([]);
@@ -83,10 +86,19 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         pdf_name: "",
         water: "3.5 L",
       };
+      if (prefill) {
+        Object.assign(f, {
+          structure: prefill.structure ?? "Custom",
+          food_weighing_rules: prefill.food_weighing_rules ?? "",
+          admin_notes: prefill.admin_notes ?? "",
+        });
+      }
       setForm(f);
-      setDays(DEFAULT_NEW_DAYS.map((label, i) => ({ day_label: label, sort_order: i })));
+      setDays(prefill?.days.length
+        ? prefill.days.map((d, i) => ({ ...d, sort_order: i }))
+        : DEFAULT_NEW_DAYS.map((label, i) => ({ day_label: label, sort_order: i })));
     }
-  }, [open, initial, clientId]);
+  }, [open, initial, clientId, prefill]);
 
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
@@ -137,6 +149,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       status: form.status,
       ending_soon_days: Number(form.ending_soon_days) || 7,
       client_notes: form.client_notes,
+      food_weighing_rules: form.food_weighing_rules || null,
       admin_notes: form.admin_notes,
       visible_to_client: form.visible_to_client,
       pdf_url: form.pdf_url || null,
@@ -170,6 +183,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", form.client_id] });
     void invalidateGroceryList(qc, form.client_id);
+    onSaved?.();
     onOpenChange(false);
   };
 
@@ -236,8 +250,9 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
         <div className="space-y-3">
           <MealPlanBulkPaste
-            onApply={(parsed: ParsedDay[]) => {
+            onApply={(parsed: ParsedDay[], rules: string | null) => {
               setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
+              if (rules) setForm((f: any) => ({ ...f, food_weighing_rules: rules }));
             }}
           />
           <div className="flex items-center justify-between">
@@ -286,6 +301,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
         <div className="grid gap-3 md:grid-cols-2">
           <div><Label>Coach notes (visible to client)</Label><Textarea rows={3} value={form.client_notes ?? ""} onChange={(e) => set("client_notes", e.target.value)} /></div>
+          <div><Label>Food-weighing rules (visible to client)</Label><Textarea rows={4} placeholder="Filled automatically from the FOOD-WEIGHING RULES section when you paste a meal plan" value={form.food_weighing_rules ?? ""} onChange={(e) => set("food_weighing_rules", e.target.value)} /></div>
           <div><Label>Private admin notes</Label><Textarea rows={3} value={form.admin_notes ?? ""} onChange={(e) => set("admin_notes", e.target.value)} /></div>
         </div>
 

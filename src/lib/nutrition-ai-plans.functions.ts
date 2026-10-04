@@ -1,0 +1,225 @@
+/**
+ * Native Nutrition Update Request: send it, run the AI on submit, read the
+ * results.
+ */
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  MEAL_PLAN_PROMPT,
+  NUTRITION_REQUEST_FORM_ID,
+  TARGETS_PROMPT,
+  cleanAiText,
+  mealPlanUserPrompt,
+  targetsUserPrompt,
+  type QA,
+} from "@/lib/nutrition-ai-prompts";
+
+async function admin(): Promise<any> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
+}
+
+async function isStaff(supabase: any, userId: string) {
+  const [{ data: a }, { data: c }] = await Promise.all([
+    supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+    supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
+  ]);
+  return !!a || !!c;
+}
+
+function answerValue(a: any): string {
+  if (a.value_text != null && String(a.value_text).trim()) return String(a.value_text);
+  if (a.value_number != null) return String(a.value_number);
+  const j = a.value_json;
+  if (Array.isArray(j)) return j.map((x) => (typeof x === "string" ? x : x?.name ?? x?.label ?? "")).filter(Boolean).join(", ");
+  if (j && typeof j === "object") return JSON.stringify(j);
+  return j != null ? String(j) : "";
+}
+
+async function loadQAs(sb: any, submissionId: string): Promise<{ sub: any; qas: QA[] }> {
+  const { data: sub, error } = await sb
+    .from("nf_submissions")
+    .select("id, form_id, client_id, status, submitted_at, client:client_id(id, full_name, user_id)")
+    .eq("id", submissionId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!sub) throw new Error("Submission not found");
+  const [{ data: questions }, { data: answers }] = await Promise.all([
+    sb.from("nf_questions").select("id, label, order_index, question_type").eq("form_id", sub.form_id).order("order_index"),
+    sb.from("nf_answers").select("question_id, value_text, value_number, value_json").eq("submission_id", submissionId),
+  ]);
+  const byQ = new Map((answers ?? []).map((a: any) => [a.question_id, a]));
+  const qas: QA[] = (questions ?? [])
+    .filter((q: any) => q.question_type !== "file" && q.question_type !== "video")
+    .map((q: any) => ({ label: q.label, value: byQ.has(q.id) ? answerValue(byQ.get(q.id)) : "" }));
+  return { sub, qas };
+}
+
+async function runPlan(sb: any, submissionId: string) {
+  const { sub, qas } = await loadQAs(sb, submissionId);
+  const now = new Date().toISOString();
+  await sb.from("nutrition_ai_plans").upsert(
+    { submission_id: submissionId, client_id: sub.client_id, status: "generating", error: null, updated_at: now },
+    { onConflict: "submission_id" },
+  );
+  try {
+    const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
+    const { generateText } = await import("ai");
+    const gateway = createLovableAiGateway();
+    const { data: g } = await sb.from("global_ai_config").select("default_model").limit(1).maybeSingle();
+    const modelId = g?.default_model || DEFAULT_AI_MODEL;
+
+    const t = await generateText({
+      model: gateway(modelId),
+      system: TARGETS_PROMPT,
+      prompt: targetsUserPrompt(sub.client?.full_name ?? "Client", qas),
+    });
+    const targetsText = cleanAiText(t.text);
+
+    const m = await generateText({
+      model: gateway(modelId),
+      system: MEAL_PLAN_PROMPT,
+      prompt: mealPlanUserPrompt(qas, targetsText),
+    });
+    const mealPlanText = cleanAiText(m.text);
+
+    await sb.from("nutrition_ai_plans").update({
+      status: "ready",
+      targets_text: targetsText,
+      meal_plan_text: mealPlanText,
+      model: modelId,
+      generated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("submission_id", submissionId);
+    return { status: "ready" as const };
+  } catch (e: any) {
+    await sb.from("nutrition_ai_plans").update({
+      status: "error",
+      error: String(e?.message ?? e).slice(0, 500),
+      updated_at: new Date().toISOString(),
+    }).eq("submission_id", submissionId);
+    return { status: "error" as const, error: String(e?.message ?? e) };
+  }
+}
+
+/** Coach sends the native Nutrition Update Request to a client (assign + chat card). */
+export const sendNutritionRequestFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid(), note: z.string().max(500).nullish() }).parse(d))
+  .handler(async ({ data, context }) => {
+    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    const sb = await admin();
+    const formId = NUTRITION_REQUEST_FORM_ID;
+    const { data: form } = await sb.from("nf_forms").select("id, title").eq("id", formId).maybeSingle();
+    if (!form) throw new Error("Nutrition Update Request form is missing");
+
+    await sb.from("nf_assignments").upsert(
+      { form_id: formId, client_id: data.clientId, recurrence: "none", assigned_by: context.userId },
+      { onConflict: "form_id,client_id" },
+    );
+
+    const note = data.note?.trim();
+    const body = note || "Time to update your nutrition 🍽️ Fill this out and I'll build your new targets and meal plan.";
+    const { error } = await sb.from("messages").insert({
+      client_id: data.clientId,
+      sender_id: context.userId,
+      sender_role: "admin",
+      body,
+      attachments: [{
+        type: "link",
+        kind: "form_request",
+        url: `/portal/check-ins/${formId}`,
+        form_id: formId,
+        assignment_client_ids: [data.clientId],
+        request_title: form.title,
+        request_note: note || undefined,
+      }],
+      message_type: "Form",
+      is_internal_note: false,
+      delivery_status: "sent",
+      sent_at: new Date().toISOString(),
+      read_by_admin_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/**
+ * Run (or re-run) the AI for a submission. Clients may trigger it once for
+ * their own fresh submission; staff can regenerate anytime.
+ */
+export const generateNutritionPlanFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ submissionId: z.string().uuid(), force: z.boolean().optional() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = await admin();
+    const staff = await isStaff(context.supabase, context.userId);
+    const { data: sub } = await sb
+      .from("nf_submissions")
+      .select("id, form_id, status, client:client_id(user_id)")
+      .eq("id", data.submissionId)
+      .maybeSingle();
+    if (!sub) throw new Error("Submission not found");
+    if (sub.form_id !== NUTRITION_REQUEST_FORM_ID) throw new Error("Not a nutrition request");
+    if (!staff && sub.client?.user_id !== context.userId) throw new Error("Not allowed");
+    if (sub.status === "in_progress") throw new Error("Submit the form first");
+
+    const { data: existing } = await sb
+      .from("nutrition_ai_plans")
+      .select("status, updated_at")
+      .eq("submission_id", data.submissionId)
+      .maybeSingle();
+    const busy = existing?.status === "generating" && Date.now() - new Date(existing.updated_at).getTime() < 3 * 60_000;
+    if (busy) return { status: "generating" as const };
+    if (existing?.status === "ready" && !(staff && data.force)) return { status: "ready" as const };
+    if (!staff && existing && existing.status !== "error") return { status: existing.status };
+
+    return runPlan(sb, data.submissionId);
+  });
+
+/** Coach view: a client's nutrition requests with answers + AI output. */
+export const listNutritionRequestsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    const sb = await admin();
+    const { data: subs } = await sb
+      .from("nf_submissions")
+      .select("id, status, submitted_at, created_at")
+      .eq("form_id", NUTRITION_REQUEST_FORM_ID)
+      .eq("client_id", data.clientId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    const ids = (subs ?? []).map((s: any) => s.id);
+    const { data: plans } = ids.length
+      ? await sb.from("nutrition_ai_plans").select("*").in("submission_id", ids)
+      : { data: [] };
+    const { data: assignment } = await sb
+      .from("nf_assignments")
+      .select("created_at")
+      .eq("form_id", NUTRITION_REQUEST_FORM_ID)
+      .eq("client_id", data.clientId)
+      .maybeSingle();
+    const out = [];
+    for (const s of subs ?? []) {
+      const plan = (plans ?? []).find((p: any) => p.submission_id === s.id) ?? null;
+      const qas = s.status === "in_progress" ? [] : (await loadQAs(sb, s.id)).qas;
+      out.push({ ...s, plan, answers: qas });
+    }
+    return { requests: out, requestedAt: assignment?.created_at ?? null };
+  });
+
+/** Mark a plan as applied to the client's targets (for the coach's history). */
+export const markNutritionPlanAppliedFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ submissionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    const sb = await admin();
+    const now = new Date().toISOString();
+    await sb.from("nutrition_ai_plans").update({ applied_at: now, applied_by: context.userId, updated_at: now }).eq("submission_id", data.submissionId);
+    await sb.from("nf_submissions").update({ status: "reviewed", reviewed_at: now, reviewed_by: context.userId }).eq("id", data.submissionId);
+    return { ok: true };
+  });

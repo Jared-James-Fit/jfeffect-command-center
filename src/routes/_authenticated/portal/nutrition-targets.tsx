@@ -16,7 +16,7 @@ import { PageHeader } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Download, FileText, Loader2, Target, Utensils, Droplets } from "lucide-react";
+import { ClipboardList, Download, FileText, Loader2, Scale, Target, Utensils, Droplets } from "lucide-react";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { getClientWorkouts } from "@/lib/pl-programs";
@@ -154,6 +154,7 @@ function PortalNutrition() {
         structure: plan.structure ?? null,
         water: plan.water ?? null,
         client_notes: plan.client_notes ?? null,
+        food_weighing_rules: plan.food_weighing_rules ?? null,
         days: days as any[],
       });
     } catch (err) {
@@ -296,6 +297,16 @@ function PortalNutrition() {
               )}
             </Card>
           </SectionErrorBoundary>
+        )}
+
+        {plan?.food_weighing_rules && String(plan.food_weighing_rules).trim() && (
+          <Card className="p-4 md:p-5">
+            <div className="mb-2 flex items-center gap-2">
+              <Scale className="h-4 w-4 text-primary" />
+              <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Food-Weighing Rules</div>
+            </div>
+            <div className="whitespace-pre-wrap text-xs leading-relaxed">{plan.food_weighing_rules}</div>
+          </Card>
         )}
 
         {plan?.client_notes && (

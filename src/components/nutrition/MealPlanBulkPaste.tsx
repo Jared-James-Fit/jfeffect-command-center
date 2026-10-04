@@ -215,6 +215,15 @@ function labelFromHeader(header: string): string {
   return header.replace(/MENU/i, "").trim().replace(/\b\w/g, (m) => m.toUpperCase()) || "Day";
 }
 
+/** The trailing FOOD-WEIGHING RULES block (heading included), or null. */
+export function parseFoodWeighingRules(text: string): string | null {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const start = lines.findIndex((l) => /^FOOD[- ]?WEIGHING\b/i.test(l.trim()));
+  if (start < 0) return null;
+  const body = lines.slice(start + 1).join("\n").trim();
+  return body || null;
+}
+
 export function parseMealPlan(text: string): ParsedDay[] {
   if (!text.trim()) return [];
   const lines = text.replace(/\r\n/g, "\n").split("\n");
@@ -272,7 +281,7 @@ export function parseMealPlan(text: string): ParsedDay[] {
 }
 
 type Props = {
-  onApply: (days: ParsedDay[]) => void;
+  onApply: (days: ParsedDay[], foodWeighingRules: string | null) => void;
 };
 
 export function MealPlanBulkPaste({ onApply }: Props) {
@@ -305,7 +314,7 @@ export function MealPlanBulkPaste({ onApply }: Props) {
       toast.error("No menus found. Make sure each day starts with a header ending in 'MENU' (e.g. TRAINING-DAY MENU).");
       return;
     }
-    onApply(parsed);
+    onApply(parsed, parseFoodWeighingRules(text));
     toast.success(`Imported ${parsed.length} day${parsed.length > 1 ? "s" : ""}`);
   };
 
