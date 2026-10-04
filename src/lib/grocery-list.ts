@@ -64,6 +64,8 @@ const TOTALS_LINE = /^\s*(daily\s+total|totals?|macros?|calories|kcal|protein|ca
 const MACRO_SHORTHAND = /^[\s\d./|,+-]*((\d+(\.\d+)?\s*[pcfg]\b|[pcf]\s*[:=]?\s*\d+)[\s./|,+-]*){2,}$/i;
 const RULE_PROSE = /\b(weigh|weighed|weighing|cooked weight unless|all weights|note|notes|tip|reminder|drink|aim for|optional swap)\b/i;
 
+const MACRO_NAME = /^(of\s+)?(protein|carbs?|carbohydrates?|fats?|fibre|fiber|calories|kcal|sugars?|sodium|net carbs)\.?$/i;
+
 const COUNT_UNITS = new Set([
   "scoop", "scoops", "egg", "eggs", "slice", "slices", "piece", "pieces",
   "serving", "servings", "can", "cans", "packet", "packets", "sachet",
@@ -160,6 +162,8 @@ export function parseIngredientLine(rawLine: string): ParsedIngredient | null {
 
   const name = normalizeWhitespace(rest);
   if (!name || !/[a-zA-Z]/.test(name)) return null;
+  // "24 g protein" / "7 g fibre" are macro lines under "Approximate macros:", not food.
+  if (MACRO_NAME.test(name)) return null;
 
   const identity =
     measure.kind === "mass"
