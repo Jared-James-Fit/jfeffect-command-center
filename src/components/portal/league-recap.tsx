@@ -1,0 +1,548 @@
+/**
+ * Monthly League Recap — a full-screen, Stories-style animated recap of the
+ * previous month: final rank, points, the grind, top 3 rivals and the podium.
+ *
+ * - Auto-advances; tap right/left to skip, press and hold to pause, X/Escape
+ *   to close at any time.
+ * - Built on its own Radix dialog so it also works when opened from inside
+ *   the league sheet (nested dialogs keep pointer events).
+ * - Always uses its own dark, high-contrast palette, so it looks the same in
+ *   light and dark mode.
+ * - LeagueRecapGate shows it once at the start of a new month (seen state is
+ *   server-side); LeagueRecapButton reopens it anytime from the league.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowDownRight, ArrowUpRight, Clapperboard, Dumbbell, Flame, Medal, Minus, NotebookPen, Scale, Swords, Trophy, X } from "lucide-react";
+import { UserAvatar } from "@/components/user-avatar";
+import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
+import { leagueToday } from "@/lib/league-boost";
+import {
+  fetchLeagueRecap, hasSeenFeature, inRecapWindow, markFeatureSeen, monthName, nextMonthName, ordinal,
+  outroLine, previousLeagueMonth, rankChange, recapSeenKey, rivalLine, type LeagueRecap,
+} from "@/lib/league-recap";
+
+const SLIDE_MS = 5600;
+
+// ------------------------------------------------------------------ hooks
+
+function useCountUp(target: number, active: boolean, ms = 1100) {
+  const [v, setV] = useState(active ? 0 : target);
+  useEffect(() => {
+    if (!active) return;
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || !target) { setV(target); return; }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / ms);
+      setV(Math.round(target * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, active, ms]);
+  return v;
+}
+
+function Count({ to, active, className }: { to: number; active: boolean; className?: string }) {
+  const v = useCountUp(to, active);
+  return <span className={cn("tabular-nums", className)}>{v.toLocaleString()}</span>;
+}
+
+// ------------------------------------------------------------------ slides
+
+type Slide = { key: string; bg: string; ms?: number; render: (active: boolean) => ReactNode };
+
+function Rise({ children, delay = 0, className }: { children: ReactNode; delay?: number; className?: string }) {
+  return (
+    <div className={cn("jf-rc-rise", className)} style={{ animationDelay: `${delay}ms` }}>
+      {children}
+    </div>
+  );
+}
+
+function Kicker({ children }: { children: ReactNode }) {
+  return <div className="text-[11px] font-black uppercase tracking-[0.28em] text-white/60">{children}</div>;
+}
+
+function buildSlides(r: LeagueRecap): Slide[] {
+  const month = monthName(r.month_start);
+  const me = r.me;
+  const change = rankChange(r);
+  const athletes = r.league?.athletes ?? 0;
+  const recordsEra = r.month_start >= "2026-10-01";
+  const recordCount = me.atpr_lifts + me.program_pr_lifts + me.block_pr_lifts;
+
+  const bars = [
+    { label: "Workouts", value: me.workout_points, color: "#ef4444" },
+    { label: "Fully logged", value: me.logging_points, color: "#f97316" },
+    { label: "Bodyweight", value: me.bodyweight_points, color: "#22c55e" },
+    { label: recordsEra ? "Records" : "Beat your best", value: me.improvement_points, color: "#eab308" },
+    { label: "Final Week Boost", value: me.match_points, color: "#a855f7" },
+  ].filter((b) => b.value > 0);
+  const barMax = Math.max(1, ...bars.map((b) => b.value));
+
+  const slides: Slide[] = [
+    {
+      key: "intro",
+      bg: "radial-gradient(120% 80% at 50% 0%, #7f1d1d 0%, #1a0a0a 55%, #050505 100%)",
+      ms: 4200,
+      render: () => (
+        <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+          <Rise><Kicker>Performance League</Kicker></Rise>
+          <Rise delay={150}>
+            <div
+              className="mt-4 whitespace-nowrap font-black leading-none tracking-tight text-white"
+              style={{ fontSize: `min(64px, calc((min(100vw, 420px) - 4rem) / ${(month.length * 0.64).toFixed(2)}))` }}
+            >
+              {month.split("").map((ch, i) => (
+                <span key={i} className="jf-rc-letter inline-block" style={{ animationDelay: `${250 + i * 55}ms` }}>{ch}</span>
+              ))}
+            </div>
+          </Rise>
+          <Rise delay={700}><div className="mt-2 text-2xl font-black text-red-400">Recap</div></Rise>
+          <Rise delay={1100}><p className="mt-6 text-base text-white/70">Here's how your month stacked up 👀</p></Rise>
+        </div>
+      ),
+    },
+    {
+      key: "rank",
+      bg: "radial-gradient(110% 70% at 50% 20%, #1e3a8a 0%, #0b1023 55%, #050505 100%)",
+      render: (a) => (
+        <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+          <Rise><Kicker>You finished</Kicker></Rise>
+          {me.rank ? (
+            <>
+              <Rise delay={150}>
+                <div className="jf-rc-pop mt-3 text-[120px] font-black leading-none text-white">
+                  #<Count to={me.rank} active={a} />
+                </div>
+              </Rise>
+              <Rise delay={500}><div className="text-lg font-semibold text-white/75">of {athletes} athletes</div></Rise>
+              {me.beat_pct != null && (
+                <Rise delay={800}>
+                  <div className="mt-6 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-white ring-1 ring-white/15">
+                    You out-ranked {me.beat_pct}% of the league
+                  </div>
+                </Rise>
+              )}
+              {change && (
+                <Rise delay={1100}>
+                  <div className={cn("mt-3 inline-flex items-center gap-1 text-sm font-black",
+                    change.dir === "up" ? "text-emerald-400" : change.dir === "down" ? "text-rose-400" : "text-white/70")}>
+                    {change.dir === "up" ? <ArrowUpRight className="h-4 w-4" /> : change.dir === "down" ? <ArrowDownRight className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                    {change.text}
+                  </div>
+                </Rise>
+              )}
+            </>
+          ) : (
+            <Rise delay={150}>
+              <div className="mt-4 text-3xl font-black text-white">Unranked</div>
+              <p className="mt-3 text-sm text-white/70">Log a bodyweight to get on the board — your points still counted.</p>
+            </Rise>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "points",
+      bg: "radial-gradient(110% 70% at 50% 10%, #78350f 0%, #1c0f05 55%, #050505 100%)",
+      render: (a) => (
+        <div className="flex h-full flex-col justify-center px-7">
+          <Rise><Kicker>Points</Kicker></Rise>
+          <Rise delay={120}>
+            <div className="mt-2 flex items-baseline gap-2">
+              <Count to={me.total_points} active={a} className="text-[84px] font-black leading-none text-white" />
+              <span className="text-2xl font-black text-amber-300">pts</span>
+            </div>
+          </Rise>
+          <div className="mt-6 space-y-3">
+            {bars.map((b, i) => (
+              <Rise key={b.label} delay={350 + i * 140}>
+                <div className="flex items-baseline justify-between text-sm font-semibold text-white/85">
+                  <span>{b.label}</span>
+                  <span className="font-black text-white">+{b.value}</span>
+                </div>
+                <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="jf-rc-bar h-full rounded-full"
+                    style={{ width: `${(b.value / barMax) * 100}%`, background: b.color, animationDelay: `${450 + i * 140}ms` }}
+                  />
+                </div>
+              </Rise>
+            ))}
+          </div>
+          {r.league && (
+            <Rise delay={1200}>
+              <div className="mt-6 text-sm text-white/70">
+                League average <span className="font-black text-white">{r.league.avg_points}</span>
+                {" · "}
+                {me.total_points >= r.league.avg_points
+                  ? <span className="font-black text-emerald-400">You +{me.total_points - r.league.avg_points}</span>
+                  : <span className="font-black text-rose-300">{me.total_points - r.league.avg_points}</span>}
+              </div>
+            </Rise>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "grind",
+      bg: "radial-gradient(110% 70% at 50% 10%, #064e3b 0%, #04140f 55%, #050505 100%)",
+      render: (a) => {
+        const tiles = [
+          { icon: Dumbbell, label: "Workouts", value: me.workouts_completed },
+          { icon: NotebookPen, label: "Fully logged", value: me.fully_logged },
+          { icon: Scale, label: "Bodyweight logs", value: me.bodyweight_logs },
+          recordsEra
+            ? { icon: Trophy, label: me.atpr_lifts ? "ATPRs" : "Records", value: me.atpr_lifts || recordCount }
+            : { icon: Flame, label: "Lifts improved", value: me.improved_exercises },
+        ];
+        return (
+          <div className="flex h-full flex-col justify-center px-7">
+            <Rise><Kicker>The grind</Kicker></Rise>
+            <Rise delay={100}><div className="mt-2 text-3xl font-black leading-tight text-white">You put in the work.</div></Rise>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              {tiles.map((t, i) => (
+                <Rise key={t.label} delay={300 + i * 140}>
+                  <div className="rounded-2xl bg-white/[0.07] p-4 ring-1 ring-white/10">
+                    <t.icon className="h-5 w-5 text-emerald-300" />
+                    <Count to={t.value} active={a} className="mt-2 block text-4xl font-black text-white" />
+                    <div className="text-xs font-semibold uppercase tracking-wide text-white/60">{t.label}</div>
+                  </div>
+                </Rise>
+              ))}
+            </div>
+            {me.adherence_pct != null && me.adherence_pct > 0 && (
+              <Rise delay={1000}>
+                <div className="mt-4 text-sm text-white/70">
+                  Completed <span className="font-black text-white">{Math.round(me.adherence_pct)}%</span> of your prescribed workouts
+                  {me.boost_qualified && <span className="font-black text-amber-300"> · Boost qualified 🔥</span>}
+                </div>
+              </Rise>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
+  if (r.rivals.length) {
+    slides.push({
+      key: "rivals",
+      bg: "radial-gradient(110% 70% at 50% 10%, #4c1d95 0%, #12081f 55%, #050505 100%)",
+      ms: 7600,
+      render: () => (
+        <div className="flex h-full flex-col justify-center px-6">
+          <Rise><Kicker>Head to head</Kicker></Rise>
+          <Rise delay={100}>
+            <div className="mt-2 flex items-center gap-2 text-3xl font-black text-white">
+              <Swords className="h-7 w-7 text-violet-300" /> Your top {r.rivals.length} rivals
+            </div>
+          </Rise>
+          <Rise delay={200}><p className="mt-1 text-sm text-white/65">The athletes who finished closest to you.</p></Rise>
+          <div className="mt-5 space-y-3">
+            {r.rivals.map((rv, i) => {
+              const line = rivalLine(rv.gap);
+              const total = Math.max(1, rv.total_points, me.total_points);
+              return (
+                <div key={rv.display_name + i} className="jf-rc-slide rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10" style={{ animationDelay: `${400 + i * 260}ms` }}>
+                  <div className="flex items-center gap-3">
+                    <UserAvatar src={rv.avatar_url} name={rv.display_name} size={40} expandable={false} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-base font-black text-white">{rv.display_name}</div>
+                      <div className="text-xs text-white/60">
+                        {rv.rank ? `#${rv.rank} · ` : ""}{rv.total_points} pts · {rv.workouts_completed} workouts
+                        {rv.atpr_lifts ? ` · ${rv.atpr_lifts} ATPR` : ""}
+                      </div>
+                    </div>
+                    <span className={cn("shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide",
+                      line.tone === "win" ? "bg-emerald-400/15 text-emerald-300" : line.tone === "loss" ? "bg-amber-400/15 text-amber-300" : "bg-white/10 text-white/80")}>
+                      {line.tone === "win" ? "W" : line.tone === "loss" ? "L" : "T"}
+                    </span>
+                  </div>
+                  {/* You vs them */}
+                  <div className="mt-2.5 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-9 text-[10px] font-bold uppercase text-white/50">You</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                        <div className="jf-rc-bar h-full rounded-full bg-red-500" style={{ width: `${(me.total_points / total) * 100}%`, animationDelay: `${600 + i * 260}ms` }} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-9 truncate text-[10px] font-bold uppercase text-white/50">{rv.display_name.split(" ")[0]}</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                        <div className="jf-rc-bar h-full rounded-full bg-violet-400" style={{ width: `${(rv.total_points / total) * 100}%`, animationDelay: `${600 + i * 260}ms` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className={cn("mt-2 text-xs font-bold", line.tone === "win" ? "text-emerald-300" : line.tone === "loss" ? "text-amber-300" : "text-white/70")}>{line.text}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  if (r.podium.length) {
+    const order = [r.podium[1], r.podium[0], r.podium[2]];
+    slides.push({
+      key: "podium",
+      bg: "radial-gradient(110% 70% at 50% 0%, #854d0e 0%, #1a1205 55%, #050505 100%)",
+      render: () => (
+        <div className="flex h-full flex-col justify-center px-6">
+          <Rise><Kicker>{month} champions</Kicker></Rise>
+          <Rise delay={100}><div className="mt-2 text-3xl font-black text-white">The podium</div></Rise>
+          <div className="mt-8 grid grid-cols-3 items-end gap-2">
+            {order.map((p, i) => p ? (
+              <div key={p.display_name} className="flex flex-col items-center text-center">
+                <div className="jf-rc-rise flex flex-col items-center" style={{ animationDelay: `${p.rank === 1 ? 1100 : p.rank === 2 ? 700 : 400}ms` }}>
+                  <Medal className={cn("h-6 w-6", p.rank === 1 ? "text-yellow-300" : p.rank === 2 ? "text-slate-300" : "text-amber-600")} />
+                  <UserAvatar src={p.avatar_url} name={p.display_name} size={p.rank === 1 ? 56 : 46} expandable={false} className="mt-1" />
+                  <div className={cn("mt-1 w-full truncate text-xs font-black", p.is_me ? "text-red-300" : "text-white")}>{p.display_name}{p.is_me ? " (You)" : ""}</div>
+                  <div className="text-[11px] font-bold text-white/70">{p.total_points} pts</div>
+                </div>
+                <div
+                  className={cn("jf-rc-grow mt-2 w-full rounded-t-xl", p.rank === 1 ? "h-28 bg-gradient-to-b from-yellow-300/70 to-yellow-600/30" : p.rank === 2 ? "h-20 bg-gradient-to-b from-slate-200/60 to-slate-500/25" : "h-14 bg-gradient-to-b from-amber-500/60 to-amber-800/25")}
+                  style={{ animationDelay: `${p.rank === 1 ? 900 : p.rank === 2 ? 500 : 200}ms` }}
+                >
+                  <div className="pt-2 text-center text-lg font-black text-white/90">{p.rank}</div>
+                </div>
+              </div>
+            ) : <div key={i} />)}
+          </div>
+          {me.rank && me.rank > 3 && (
+            <Rise delay={1500}><div className="mt-5 text-center text-sm text-white/70">You were <span className="font-black text-white">{ordinal(me.rank)}</span> — {r.podium[2] ? `${Math.max(0, r.podium[2].total_points - me.total_points)} pts off the podium` : ""}</div></Rise>
+          )}
+        </div>
+      ),
+    });
+  }
+
+  slides.push({
+    key: "outro",
+    bg: "radial-gradient(120% 80% at 50% 100%, #991b1b 0%, #1a0a0a 55%, #050505 100%)",
+    ms: 9000,
+    render: () => (
+      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+        <Rise><Kicker>New month · new board</Kicker></Rise>
+        <Rise delay={150}><div className="mt-4 text-5xl font-black leading-tight text-white">{nextMonthName(r.month_start)} is live</div></Rise>
+        <Rise delay={500}><p className="mt-4 text-base leading-relaxed text-white/75">{outroLine(r)}</p></Rise>
+      </div>
+    ),
+  });
+
+  return slides;
+}
+
+// ------------------------------------------------------------------ story
+
+export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap; open: boolean; onClose: () => void }) {
+  const slides = useMemo(() => buildSlides(recap), [recap]);
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const holdTimer = useRef<number | null>(null);
+  const held = useRef(false);
+  const last = i === slides.length - 1;
+  const slide = slides[i];
+  const ms = slide.ms ?? SLIDE_MS;
+
+  useEffect(() => { if (open) { setI(0); setPaused(false); } }, [open]);
+
+  const next = useCallback(() => setI((v) => Math.min(v + 1, slides.length - 1)), [slides.length]);
+  const prev = useCallback(() => setI((v) => Math.max(v - 1, 0)), []);
+
+  useEffect(() => {
+    if (!open || paused || last) return;
+    const t = window.setTimeout(next, ms);
+    return () => window.clearTimeout(t);
+  }, [open, paused, last, next, ms, i]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") next();
+      if (e.key === "ArrowLeft") prev();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, next, prev]);
+
+  const onPointerDown = () => {
+    held.current = false;
+    holdTimer.current = window.setTimeout(() => { held.current = true; setPaused(true); }, 220);
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (holdTimer.current) window.clearTimeout(holdTimer.current);
+    if (held.current) { held.current = false; setPaused(false); return; }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (e.clientX - rect.left < rect.width * 0.3) prev();
+    else if (!last) next();
+  };
+
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[95] bg-black" />
+        <DialogPrimitive.Content
+          className="fixed inset-0 z-[96] flex select-none flex-col overflow-hidden text-white outline-none md:inset-y-4 md:left-1/2 md:w-[420px] md:-translate-x-1/2 md:rounded-[2rem]"
+          style={{ background: slide.bg, transition: "background 600ms ease" }}
+          aria-describedby={undefined}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <DialogPrimitive.Title className="sr-only">{monthName(recap.month_start)} League Recap</DialogPrimitive.Title>
+
+          {/* Progress */}
+          <div className="relative z-20 flex gap-1 px-3" style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}>
+            {slides.map((s, idx) => (
+              <div key={s.key} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/25">
+                <div
+                  key={idx === i ? `${s.key}-active` : s.key}
+                  className={cn("h-full rounded-full bg-white", idx === i && !last ? "jf-rc-progress" : "")}
+                  style={idx < i || (idx === i && last) ? { width: "100%" } : idx > i ? { width: "0%" } : { animationDuration: `${ms}ms`, animationPlayState: paused ? "paused" : "running" }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="relative z-20 flex items-center justify-between px-4 pt-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-white/80">
+              <Clapperboard className="h-4 w-4" /> {monthName(recap.month_start)} Recap
+            </div>
+            <DialogPrimitive.Close
+              aria-label="Close recap"
+              className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-white backdrop-blur transition hover:bg-white/25 active:scale-95"
+            >
+              <X className="h-5 w-5" />
+            </DialogPrimitive.Close>
+          </div>
+
+          {/* Slide */}
+          <div
+            className="relative z-10 min-h-0 flex-1"
+            onPointerDown={onPointerDown}
+            onPointerUp={onPointerUp}
+            onPointerCancel={() => { if (holdTimer.current) window.clearTimeout(holdTimer.current); setPaused(false); }}
+          >
+            <div key={slide.key} className="h-full">{slide.render(true)}</div>
+          </div>
+
+          {/* Footer */}
+          <div className="relative z-20 px-5" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}>
+            {last ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="jf-rc-rise h-12 w-full rounded-2xl bg-white text-[15px] font-black text-black transition active:scale-[0.98]"
+                style={{ animationDelay: "900ms" }}
+              >
+                Let's go 💪
+              </button>
+            ) : (
+              <div className="text-center text-[11px] font-semibold text-white/45">Tap to continue · hold to pause</div>
+            )}
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
+// ------------------------------------------------------------------ gate + button
+
+/** Shows the previous month's recap once, during the first week of a new month. */
+export function LeagueRecapGate() {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const qc = useQueryClient();
+  const today = leagueToday();
+  const month = previousLeagueMonth(today);
+  const key = recapSeenKey(month);
+  const enabled = !!userId && inRecapWindow(today);
+  const [open, setOpen] = useState(false);
+  const [closed, setClosed] = useState(false);
+
+  const { data: seen, isFetchedAfterMount } = useQuery({
+    queryKey: ["feature-announcement", key, userId],
+    enabled,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    queryFn: () => hasSeenFeature(userId!, key),
+  });
+  const { data: recap } = useQuery({
+    queryKey: ["league-recap", month, userId],
+    enabled: enabled && seen === false,
+    staleTime: 10 * 60_000,
+    queryFn: () => fetchLeagueRecap(month),
+  });
+
+  useEffect(() => {
+    if (!enabled || !isFetchedAfterMount || seen !== false || !recap || closed || open) return;
+    let tries = 0;
+    const id = window.setInterval(() => {
+      tries++;
+      const busy = document.querySelector('[role="dialog"], [role="alertdialog"], [data-vaul-drawer]');
+      if (!busy) { setOpen(true); window.clearInterval(id); }
+      else if (tries > 60) window.clearInterval(id);
+    }, 1500);
+    return () => window.clearInterval(id);
+  }, [enabled, isFetchedAfterMount, seen, recap, closed, open]);
+
+  if (!recap) return null;
+  return (
+    <LeagueRecapStory
+      recap={recap}
+      open={open}
+      onClose={() => {
+        setOpen(false);
+        setClosed(true);
+        qc.setQueryData(["feature-announcement", key, userId], true);
+        if (userId) void markFeatureSeen(userId, key);
+      }}
+    />
+  );
+}
+
+/** Entry point inside the league: replay last month's recap anytime. */
+export function LeagueRecapButton({ className }: { className?: string }) {
+  const { user } = useAuth();
+  const month = previousLeagueMonth();
+  const [open, setOpen] = useState(false);
+  const { data: recap } = useQuery({
+    queryKey: ["league-recap", month, user?.id ?? null],
+    enabled: !!user?.id,
+    staleTime: 10 * 60_000,
+    queryFn: () => fetchLeagueRecap(month),
+  });
+  if (!recap) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(
+          "group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl p-3 text-left text-white shadow-md transition active:scale-[0.99]",
+          className,
+        )}
+        style={{ background: "linear-gradient(120deg, #7f1d1d 0%, #b91c1c 45%, #4c1d95 100%)" }}
+      >
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15"><Clapperboard className="h-5 w-5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-black">Your {monthName(recap.month_start)} Recap</span>
+          <span className="block truncate text-xs text-white/75">
+            {recap.me.rank ? `#${recap.me.rank} · ` : ""}{recap.me.total_points} pts · see your rivals
+          </span>
+        </span>
+        <span className="text-xs font-black text-white/90">Play ▶</span>
+        <span aria-hidden className="jf-record-shine pointer-events-none absolute inset-y-0 -left-1/2 w-1/2" />
+      </button>
+      <LeagueRecapStory recap={recap} open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
