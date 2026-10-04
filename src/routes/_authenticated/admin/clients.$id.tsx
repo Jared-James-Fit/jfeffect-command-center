@@ -1196,18 +1196,68 @@ export function ClientProfileWorkspace({
               </div>
               {(() => {
                 const access = describeAccountAccess(form);
-                const recovery = access.primaryAction === "password_recovery";
+                // Only a client who has actually signed in gets "reset password";
+                // everyone else gets the setup flow (works for invited accounts too).
+                const recovery = access.stage === "live";
+                const lastSetup = form.invite_last_resent_at || form.invite_sent_at;
+                const noEmail = !form.email;
+                const noPhone = !form.phone;
+                const steps = [
+                  { label: "Client record created", done: true, at: form.created_at },
+                  { label: "Setup link sent", done: !!lastSetup, at: lastSetup },
+                  { label: "Signed in to the app", done: !!form.last_signed_in_at, at: form.last_signed_in_at },
+                ];
                 return (
-                  <div className="space-y-2 border-t border-border pt-4">
-                    <p className="text-sm font-semibold">{access.needsAttention ? "Action required" : "Account is ready"}</p>
-                    <p className="text-xs text-muted-foreground">{recovery ? "Use password recovery for this existing account." : access.stage === "setup_pending" ? "Setup was sent. Resend only if the client needs a fresh link." : "Create the client’s login with one secure setup link."}</p>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <ActionButton className="min-h-[48px]" onAction={recovery ? sendReset : sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={recovery ? <KeyRound className="h-4 w-4" /> : <Mail className="h-4 w-4" />}>
-                        {recovery ? "Send password recovery" : access.stage === "no_account" ? "Send setup" : "Resend setup"}
+                  <div className="space-y-4 border-t border-border pt-4">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {recovery ? "Client is set up" : access.stage === "no_account" ? "Get them into the app" : "Waiting on the client to finish setup"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {recovery
+                          ? "Locked out? Send a password reset by email or text."
+                          : "Send the setup link by email and text. It opens a Continue screen, so email scanners can't burn it. Links work once and last 24 hours — resend anytime."}
+                      </p>
+                    </div>
+
+                    <ol className="space-y-1.5" aria-label="Setup progress">
+                      {steps.map((st) => (
+                        <li key={st.label} className="flex items-center gap-2 text-xs">
+                          {st.done
+                            ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                            : <span className="h-4 w-4 shrink-0 rounded-full border-2 border-muted-foreground/40" />}
+                          <span className={st.done ? "font-medium" : "text-muted-foreground"}>{st.label}</span>
+                          {st.at && <span className="ml-auto text-muted-foreground">{fmtDate(st.at)}</span>}
+                        </li>
+                      ))}
+                    </ol>
+
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <ActionButton className="min-h-[48px]" disabled={noEmail} onAction={recovery ? sendReset : sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                        {recovery ? "Email reset link" : lastSetup ? "Resend email" : "Email setup link"}
                       </ActionButton>
-                      <ActionButton className="min-h-[48px]" variant="outline" onAction={recovery ? copyResetLink : copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
-                        {recovery ? "Copy recovery link" : "Copy setup link"}
+                      <ActionButton className="min-h-[48px]" variant="outline" disabled={noPhone || noEmail} onAction={smsLink(recovery ? "reset" : "setup")} loadingLabel="Texting…" successLabel="Texted" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>
+                        {recovery ? "Text reset link" : "Text setup link"}
                       </ActionButton>
+                      <ActionButton className="min-h-[48px]" variant="outline" disabled={noEmail} onAction={recovery ? copyResetLink : copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                        {recovery ? "Copy reset link" : "Copy setup link"}
+                      </ActionButton>
+                    </div>
+
+                    <div className="grid gap-1.5 rounded-md bg-secondary/30 p-3 text-xs sm:grid-cols-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className={noEmail ? "text-warning" : "truncate"}>{form.email || "No email — add one in Info"}</span>
+                      </div>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className={noPhone ? "text-muted-foreground" : "truncate"}>{form.phone || "No phone — add one to text links"}</span>
+                      </div>
+                      {!recovery && (
+                        <p className="text-muted-foreground sm:col-span-2">
+                          Hotmail / Outlook client? Text or copy the link too — those inboxes often send it to Junk.
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
@@ -2084,13 +2134,18 @@ function ClientOverviewSnapshot({
                   <dt className="text-muted-foreground">Invite status</dt>
                   <dd className="font-medium">{access.inviteStatusLabel}</dd>
                 </dl>
+                {access.stage !== "live" && form.email && (
+                  <ActionButton className="min-h-[44px] w-full" onAction={onSendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                    {form.invite_sent_at || form.invite_last_resent_at ? "Resend setup email" : "Email setup link"}
+                  </ActionButton>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
                   className="min-h-[40px] w-full justify-between text-primary"
                   onClick={() => onGoToTab("account")}
                 >
-                  Manage access <span aria-hidden>→</span>
+                  {access.stage === "live" ? "Manage access" : "Text, copy or reset link"} <span aria-hidden>→</span>
                 </Button>
               </Card>
             );
