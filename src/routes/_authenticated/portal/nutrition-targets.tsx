@@ -32,7 +32,6 @@ import {
 } from "@/lib/client-nutrition-day";
 import { TodaysPlanHero } from "@/components/nutrition/TodaysPlanHero";
 import { MacroBreakdown } from "@/components/nutrition/MacroBreakdown";
-import { NutritionReviewCard } from "@/components/nutrition/NutritionReviewCard";
 import { TodaysIntakeCard, LogFoodToolButton } from "@/components/nutrition/TodaysIntakeCard";
 import { CookbookEntryCard } from "@/components/nutrition/CookbookSheet";
 import { NutritionToolsCard } from "@/components/nutrition/NutritionToolsCard";
@@ -299,6 +298,13 @@ function PortalNutrition() {
           </SectionErrorBoundary>
         )}
 
+        {/* Grocery list — right under the meal plan so clients can't miss it. */}
+        {plan && clientId && (
+          <SectionErrorBoundary label="Grocery list">
+            <GroceryListEntryCard clientId={clientId} />
+          </SectionErrorBoundary>
+        )}
+
         {plan?.food_weighing_rules && String(plan.food_weighing_rules).trim() && (
           <Card className="p-4 md:p-5">
             <div className="mb-2 flex items-center gap-2">
@@ -318,11 +324,6 @@ function PortalNutrition() {
             <div className="whitespace-pre-wrap text-xs">{plan.client_notes}</div>
           </Card>
         )}
-
-        {/* 4. Nutrition Review — self-hides when no form is assigned. */}
-        <SectionErrorBoundary label="Nutrition review">
-          <NutritionReviewCard />
-        </SectionErrorBoundary>
 
         {/* 5. Today's Intake — only when food logging is actually in use. */}
         <SectionErrorBoundary label="Today's intake">
@@ -369,7 +370,6 @@ function PortalNutrition() {
                   )}
                   {downloading ? "Preparing…" : "Download Meal Plan PDF"}
                 </Button>
-                <GroceryListEntryCard clientId={clientId} />
                 <RecentAdherenceWidget />
               </div>
             }

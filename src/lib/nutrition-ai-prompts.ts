@@ -31,6 +31,13 @@ CALCULATIONS
 
 - estimate daily expenditure from bodyweight, activity, training, and steps
 - gain goal = calorie surplus
+- fat loss = calorie deficit of 15–25% below expenditure
+- muscle gain = calorie surplus of 5–15% above expenditure
+- recomp = slight deficit of ~5–10%, protein at 1g per lb
+- maintenance / lifestyle reset = calories at expenditure
+- performance = at or slightly above expenditure, carbs around training
+- reverse diet = start at current intake, add 50–100 kcal per week
+- if a COACH-SELECTED PHASE is given, it overrides the client's goal
 
 - protein = 0.8–1g per lb bodyweight
 - fats = 20–30% of calories
@@ -115,8 +122,24 @@ export function answerFor(qas: QA[], ...keywords: string[]): string {
   return hit?.value.trim() ?? "";
 }
 
-export function targetsUserPrompt(clientName: string, qas: QA[]): string {
-  return [`CLIENT DATA`, `Client name: ${clientName}`, "", formatAnswers(qas)].join("\n");
+export function targetsUserPrompt(clientName: string, qas: QA[], phase?: string | null): string {
+  return [
+    `CLIENT DATA`,
+    `Client name: ${clientName}`,
+    phase ? `COACH-SELECTED PHASE: ${phase}` : "",
+    "",
+    formatAnswers(qas),
+  ].filter((l, i) => l !== "" || i === 3).join("\n");
+}
+
+/** Full copy-paste prompt for running pass 1 by hand in ChatGPT/Claude. */
+export function manualTargetsPrompt(clientName: string, qas: QA[], phase?: string | null): string {
+  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(clientName, qas, phase)}`;
+}
+
+/** Full copy-paste prompt for running pass 2 by hand. */
+export function manualMealPlanPrompt(qas: QA[], targetsText: string): string {
+  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText)}`;
 }
 
 /** Pass 2 input: the CLIENT DETAILS block filled from the form + pass-1 targets. */

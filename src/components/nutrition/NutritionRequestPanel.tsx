@@ -7,7 +7,13 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, ChevronDown, ClipboardList, Copy, Loader2, RefreshCw, Send, Sparkles, Wand2 } from "lucide-react";
+import { Check, ChevronDown, ClipboardList, Copy, FileText, Loader2, RefreshCw, Send, Sparkles, Wand2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { supabase } from "@/integrations/supabase/client";
+import { NUTRITION_PHASES, PHASE_GOAL, phaseFromText } from "@/lib/nutrition-cardio";
+import { MEAL_PLAN_PROMPT, TARGETS_PROMPT, manualMealPlanPrompt, manualTargetsPrompt } from "@/lib/nutrition-ai-prompts";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,8 +42,35 @@ type Req = {
     error: string | null;
     generated_at: string | null;
     applied_at: string | null;
+    phase: string | null;
   };
 };
+
+const PHASES = NUTRITION_PHASES.filter((p) => p !== "Custom");
+const AUTO = "__auto";
+
+function PhaseSelect({ value, onChange, autoLabel }: { value: string; onChange: (v: string) => void; autoLabel: string }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value={AUTO}>{autoLabel}</SelectItem>
+        {PHASES.map((p) => (
+          <SelectItem key={p} value={p}>{p}<span className="text-muted-foreground"> · {PHASE_GOAL[p]}</span></SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+async function copyText(text: string, label: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success(`${label} copied — paste it into ChatGPT or Claude`);
+  } catch {
+    toast.error("Couldn't copy");
+  }
+}
 
 function fmt(d?: string | null) {
   return d ? new Date(d).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
@@ -97,6 +130,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const [regenerating, setRegenerating] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [showAnswers, setShowAnswers] = useState(false);
+  const [sendPhase, setSendPhase] = useState<string>(AUTO);
+  const [regenPhase, setRegenPhase] = useState<string>(AUTO);
 
   const key = ["nutrition-requests", clientId];
   const { data, isLoading } = useQuery({
@@ -122,13 +157,14 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       structure: structureFor(days.map((d) => d.day_label)),
       food_weighing_rules: parseFoodWeighingRules(plan.meal_plan_text),
       admin_notes: plan.targets_text ?? null,
+      phase: plan.phase ?? phaseFromText(plan.targets_text?.match(/^Goal:\s*(.+)$/m)?.[1]),
     };
-  }, [plan?.meal_plan_text, plan?.targets_text]);
+  }, [plan?.meal_plan_text, plan?.targets_text, plan?.phase]);
 
   const send = async () => {
     setSending(true);
     try {
-      await sendFn({ data: { clientId, note: note.trim() || null } });
+      await sendFn({ data: { clientId, note: note.trim() || null, phase: sendPhase === AUTO ? null : sendPhase } });
       toast.success("Nutrition update request sent to the client's messages");
       setSendOpen(false);
       setNote("");
@@ -148,7 +184,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         ...old,
         requests: old.requests.map((r: Req, i: number) => i === 0 ? { ...r, plan: { ...(r.plan ?? {}), status: "generating" } } : r),
       }));
-      const res = await genFn({ data: { submissionId: latest.id, force: true } });
+      const res = await genFn({ data: { submissionId: latest.id, force: true, phase: regenPhase === AUTO ? null : regenPhase } });
       if (res.status === "error") toast.error("AI couldn't finish — try again");
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't run the AI");
@@ -189,9 +225,37 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
               : "Send the form → client fills it out → AI builds their targets and meal plan for you to review and apply."}
           </p>
         </div>
-        <Button className="w-full shrink-0 gap-2 bg-gradient-primary font-bold sm:w-auto" onClick={() => setSendOpen(true)}>
-          <Send className="h-4 w-4" /> {latest || data?.requestedAt ? "Send new request" : "Send request"}
-        </Button>
+        <div className="flex w-full shrink-0 gap-2 sm:w-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-1.5" title="Copy the AI prompts to run them manually">
+                <FileText className="h-4 w-4" /> Prompts
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel className="text-xs">Run it manually in ChatGPT / Claude</DropdownMenuLabel>
+              {submitted ? (
+                <>
+                  <DropdownMenuItem onClick={() => copyText(manualTargetsPrompt(data?.clientName ?? "Client", latest!.answers, plan?.phase ?? null), "Targets prompt")}>
+                    1 · Targets prompt <span className="ml-auto text-[10px] text-muted-foreground">with answers</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={!plan?.targets_text}
+                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text), "Meal plan prompt")}
+                  >
+                    2 · Meal plan prompt <span className="ml-auto text-[10px] text-muted-foreground">with targets</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
+              <DropdownMenuItem onClick={() => copyText(TARGETS_PROMPT, "Targets formula")}>Blank targets formula</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => copyText(MEAL_PLAN_PROMPT, "Meal plan formula")}>Blank meal plan formula</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button className="flex-1 gap-2 bg-gradient-primary font-bold sm:flex-none" onClick={() => setSendOpen(true)}>
+            <Send className="h-4 w-4" /> {latest || data?.requestedAt ? "Send new request" : "Send request"}
+          </Button>
+        </div>
       </div>
 
       {submitted && (!plan || plan.status === "generating" || plan.status === "pending") && (
@@ -216,13 +280,23 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           {plan.meal_plan_text && (
             <CopyBlock title="Meal plan · paste-ready" text={plan.meal_plan_text} icon={<Wand2 className="h-4 w-4 text-primary" />} defaultOpen={false} />
           )}
-          <div className="flex flex-col gap-2 sm:flex-row">
+          {plan.phase && (
+            <div className="text-xs text-muted-foreground">
+              Phase used: <span className="font-bold text-foreground">{plan.phase}</span> · {PHASE_GOAL[plan.phase] ?? ""}
+            </div>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button className="gap-2 font-bold" onClick={() => setApplyOpen(true)} disabled={!prefill?.days.length}>
               <Check className="h-4 w-4" /> {plan.applied_at ? "Apply again" : "Review & apply to targets"}
             </Button>
-            <Button variant="outline" className="gap-2" onClick={regenerate} disabled={regenerating}>
-              <RefreshCw className={cn("h-4 w-4", regenerating && "animate-spin")} /> Regenerate
-            </Button>
+            <div className="flex gap-2 sm:ml-auto">
+              <div className="min-w-0 flex-1 sm:w-48 sm:flex-none">
+                <PhaseSelect value={regenPhase} onChange={setRegenPhase} autoLabel="Phase: keep / auto" />
+              </div>
+              <Button variant="outline" className="shrink-0 gap-2" onClick={regenerate} disabled={regenerating}>
+                <RefreshCw className={cn("h-4 w-4", regenerating && "animate-spin")} /> Regenerate
+              </Button>
+            </div>
           </div>
           {prefill && !prefill.days.length && (
             <p className="text-xs text-amber-600">The meal plan didn't parse into days — copy it and paste it into Add Targets, or regenerate.</p>
@@ -255,6 +329,11 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             <DialogTitle>Send Nutrition Update Request</DialogTitle>
             <DialogDescription>Lands in the client's messages as a form card. When they submit, AI builds their targets and meal plan here.</DialogDescription>
           </DialogHeader>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Phase / goal for this plan</Label>
+            <PhaseSelect value={sendPhase} onChange={setSendPhase} autoLabel="Let the client's answer decide" />
+            <p className="text-[11px] text-muted-foreground">Sets the calorie direction the AI uses (deficit, surplus or maintenance).</p>
+          </div>
           <Textarea
             rows={3}
             value={note}
@@ -276,7 +355,15 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           onOpenChange={setApplyOpen}
           clientId={clientId}
           prefill={prefill}
-          onSaved={() => {
+          onSaved={async (targetId) => {
+            // The new plan replaces the old one: archive any other active targets.
+            await supabase
+              .from("nutrition_targets")
+              .update({ status: "Archived" })
+              .eq("client_id", clientId)
+              .neq("id", targetId)
+              .neq("status", "Archived");
+            qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
             if (latest) void appliedFn({ data: { submissionId: latest.id } }).then(() => qc.invalidateQueries({ queryKey: key }));
           }}
         />

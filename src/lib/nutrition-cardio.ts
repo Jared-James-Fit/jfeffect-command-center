@@ -10,6 +10,46 @@ export const NUTRITION_PHASES = [
   "Custom",
 ] as const;
 
+/** One field: the phase IS the goal. Goal text is derived for older screens. */
+export const PHASE_GOAL: Record<string, string> = {
+  "Fat Loss": "Lose body fat",
+  "Muscle Gain": "Build muscle",
+  Maintenance: "Maintain bodyweight",
+  Performance: "Improve performance",
+  "Lifestyle Reset": "Improve health habits",
+  "Reverse Diet": "Raise calories, stay lean",
+  Recomp: "Lose fat and build muscle",
+};
+
+/** Calorie direction per phase — fed to the AI targets formula. */
+export const PHASE_CALORIE_RULE: Record<string, string> = {
+  "Fat Loss": "calorie deficit of 15–25% below expenditure",
+  "Muscle Gain": "calorie surplus of 5–15% above expenditure",
+  Recomp: "slight deficit of ~5–10% below expenditure, protein at 1g per lb",
+  Maintenance: "calories at expenditure",
+  Performance: "calories at or slightly above expenditure, carbs prioritised around training",
+  "Reverse Diet": "start at current intake and add 50–100 kcal per week from carbs/fats toward expenditure",
+  "Lifestyle Reset": "calories at expenditure with simple, repeatable meals",
+};
+
+/** Map free text (form answer, AI "Goal:" line) to a phase. */
+export function phaseFromText(text: string | null | undefined): string | null {
+  const t = String(text ?? "").toLowerCase();
+  if (!t.trim()) return null;
+  if (/recomp/.test(t)) return "Recomp";
+  if (/reverse/.test(t)) return "Reverse Diet";
+  if (/lifestyle|habit/.test(t)) return "Lifestyle Reset";
+  if (/fat loss|lose fat|lose weight|cut|deficit|lean/.test(t)) return "Fat Loss";
+  if (/muscle|gain|bulk|surplus/.test(t)) return "Muscle Gain";
+  if (/perform|strength|athlet|sport/.test(t)) return "Performance";
+  if (/maint/.test(t)) return "Maintenance";
+  return null;
+}
+
+export function phaseLabel(t: { phase?: string | null; custom_phase?: string | null }): string {
+  return (t.phase === "Custom" ? t.custom_phase : t.phase) || "—";
+}
+
 export const NUTRITION_GOALS = [
   "Lose body fat",
   "Build muscle",
