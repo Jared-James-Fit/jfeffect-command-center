@@ -6,6 +6,7 @@ import { NavigationProgress } from "@/components/navigation-progress";
 import { ClientProfileOverlayMount } from "@/components/clients/profile/client-profile-overlay";
 import { MemberProfileOverlayMount } from "@/components/members/member-profile-overlay";
 import { ThemeAnnouncementGate } from "@/components/whats-new/theme-announcement";
+import { ThemeAccountSync } from "@/lib/theme-account-sync";
 
 // Module-level warm session: once the guard has validated a user this app
 // lifetime, in-app revalidations (router.invalidate after mutations, error
@@ -142,6 +143,7 @@ function AuthenticatedLayout() {
       <ClientProfileOverlayMount />
       <MemberProfileOverlayMount />
       <ThemeAnnouncementGate />
+      <ThemeAccountSync />
     </>
   );
 }
