@@ -63,3 +63,25 @@ describe("tonnage = qualifying completed weight × reps", () => {
     expect(s.totalLifted).toBe(220 * 3 + 200 * 4);
   });
 });
+
+describe("weight records (heaviest ever, any reps)", () => {
+  it("labels by scope and never says a bare PR", async () => {
+    const { weightRecordLabel } = await import("@/lib/training-records");
+    expect(weightRecordLabel({ atpr: true, program_pr: false, block_pr: true })).toBe("WEIGHT ATPR");
+    expect(weightRecordLabel({ atpr: false, program_pr: true, block_pr: true })).toBe("WEIGHT PROGRAM PR");
+    expect(weightRecordLabel({ atpr: false, program_pr: false, block_pr: true })).toBe("WEIGHT BLOCK PR");
+    expect(weightRecordLabel({ atpr: false, program_pr: false, block_pr: false })).toBeNull();
+    expect(weightRecordLabel(null)).toBeNull();
+  });
+
+  it("is computed from each workout's heaviest set against earlier completed workouts, any reps", async () => {
+    const { readFileSync } = await import("node:fs");
+    const sql = readFileSync("supabase/migrations/20261004220000_training_load_records.sql", "utf8");
+    expect(sql).toContain("ORDER BY s.workout_key, s.exercise_key, s.load_kg DESC, s.reps DESC, s.set_id");
+    expect(sql).toMatch(/WHERE p\.completed AND p\.exercise_key = h\.exercise_key\s+AND p\.workout_key <> h\.workout_key AND p\.ord < h\.ord/);
+    expect(sql).toContain("'load_records', loads");
+    const league = readFileSync("supabase/migrations/20261004220500_league_records_include_weight.sql", "utf8");
+    expect(league).toContain("from public.client_load_records(c.client_id) y");
+    expect(league).toContain("group by c.client_id, r.exercise_key"); // still one score per lift
+  });
+});
