@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fireAppEvent } from "@/lib/push/app-events.functions";
 
 export type LiftVideoStatus =
   | "New Upload"
@@ -178,6 +179,7 @@ export async function createLiftVideo(input: Partial<LiftVideo> & { client_id: s
   };
   const { data, error } = await db.from("lift_videos").insert(row).select().single();
   if (error) throw error;
+  fireAppEvent("lift_video_uploaded", (data as any)?.id);
   return data as LiftVideo;
 }
 
@@ -227,6 +229,9 @@ export async function addComment(input: {
   };
   const { data, error } = await db.from("lift_video_comments").insert(row).select().single();
   if (error) throw error;
+  if (!input.isInternalNote) {
+    fireAppEvent(input.authorRole === "admin" ? "lift_reviewed" : "client_lift_comment", (data as any)?.id);
+  }
   // When admin/coach posts a public comment, automatically mark as Reviewed
   // (unless it's an internal note). This keeps the admin from having to click
   // "Mark Reviewed" after every reply.

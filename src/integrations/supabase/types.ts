@@ -16778,8 +16778,14 @@ export type Database = {
           lift_reviews: boolean
           master_enabled: boolean
           messages: boolean
+          quiet_end: number
+          quiet_hours_enabled: boolean
+          quiet_start: number
+          reminders: boolean
+          timezone: string | null
           updated_at: string
           user_id: string
+          wins: boolean
           workouts: boolean
         }
         Insert: {
@@ -16790,8 +16796,14 @@ export type Database = {
           lift_reviews?: boolean
           master_enabled?: boolean
           messages?: boolean
+          quiet_end?: number
+          quiet_hours_enabled?: boolean
+          quiet_start?: number
+          reminders?: boolean
+          timezone?: string | null
           updated_at?: string
           user_id: string
+          wins?: boolean
           workouts?: boolean
         }
         Update: {
@@ -16802,9 +16814,48 @@ export type Database = {
           lift_reviews?: boolean
           master_enabled?: boolean
           messages?: boolean
+          quiet_end?: number
+          quiet_hours_enabled?: boolean
+          quiet_start?: number
+          reminders?: boolean
+          timezone?: string | null
           updated_at?: string
           user_id?: string
+          wins?: boolean
           workouts?: boolean
+        }
+        Relationships: []
+      }
+      push_notification_queue: {
+        Row: {
+          category: string | null
+          created_at: string
+          deliver_after: string
+          event_key: string | null
+          id: string
+          payload: Json
+          sent_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          deliver_after: string
+          event_key?: string | null
+          id?: string
+          payload: Json
+          sent_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          deliver_after?: string
+          event_key?: string | null
+          id?: string
+          payload?: Json
+          sent_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }

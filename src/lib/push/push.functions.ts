@@ -76,6 +76,12 @@ const PrefsInput = z.object({
   workouts: z.boolean().optional(),
   billing: z.boolean().optional(),
   coaching_apps: z.boolean().optional(),
+  wins: z.boolean().optional(),
+  reminders: z.boolean().optional(),
+  quiet_hours_enabled: z.boolean().optional(),
+  quiet_start: z.number().int().min(0).max(23).optional(),
+  quiet_end: z.number().int().min(0).max(23).optional(),
+  timezone: z.string().max(64).optional(),
 });
 
 export const updateNotificationPreferences = createServerFn({ method: "POST" })
