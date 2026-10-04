@@ -154,7 +154,7 @@ export function ThemeAnnouncementDialog({ open, onClose }: { open: boolean; onCl
             <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
               Tap the <span className="font-semibold text-foreground">sun / moon switch</span> at the top of the
               screen to flip the whole app between light and dark — easier on the eyes for late-night logging.
-              Your choice is saved on this device.
+              It stays the way you set it — on every device — until you change it.
             </DialogDescription>
           </div>
 
