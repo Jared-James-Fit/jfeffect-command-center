@@ -14,7 +14,8 @@ import {
 } from "@/lib/workout-takeaways";
 import type { WorkoutPoints, WorkoutRecords } from "@/lib/training-records";
 import { WorkoutPointsCard } from "@/components/records/workout-points-card";
-import { formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel } from "@/lib/training-records";
+import { SCOPE_LABEL, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel } from "@/lib/training-records";
+import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
 
 type Props = {
@@ -38,6 +39,8 @@ type Props = {
   records?: WorkoutRecords | null;
   /** League + Logging Level points this workout earned (client workouts). */
   points?: WorkoutPoints | null;
+  /** Shown on the Instagram Story share image. */
+  athleteName?: string | null;
   /** Athlete's preferred unit for loads and tonnage. */
   displayUnit?: "kg" | "lb";
   /** Prescribed cardio status for the same day, when there is one. */
@@ -45,7 +48,7 @@ type Props = {
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, displayUnit = "lb", cardio, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", cardio, onClose }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
@@ -124,29 +127,61 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     ? takeaways.filter((t) => !/^🏆/.test(t.trim()))
     : takeaways;
 
+  // Instagram Story card (1080×1920, safe-zone aware) — see workout-story-card.
+  const storyRecords = (): StoryRecord[] => {
+    const out: StoryRecord[] = [];
+    if (records) {
+      const loads = new Map((records.load_records ?? []).map((l) => [l.set_id, l]));
+      for (const r of records.records ?? []) {
+        const scope = topScope(r);
+        if (!scope) continue;
+        const load = loads.get(r.set_id);
+        const loadScope = load ? topScope(load) : null;
+        if (load) loads.delete(r.set_id);
+        // Same set is a rep record and the heaviest ever → one row.
+        const label = load && loadScope === scope ? `${r.reps}-REP + WEIGHT ${SCOPE_LABEL[scope]}` : repRecordLabel(r)!;
+        out.push({ label, tier: scope, title: r.exercise_name, detail: `${formatLoad(r.load_kg, displayUnit)} × ${r.reps}` });
+        if (load && loadScope && loadScope !== scope) {
+          out.push({ label: weightRecordLabel(load)!, tier: loadScope, title: load.exercise_name, detail: `Heaviest ever · ${formatLoad(load.load_kg, displayUnit)}` });
+        }
+      }
+      for (const l of loads.values()) {
+        const scope = topScope(l);
+        if (scope) out.push({ label: weightRecordLabel(l)!, tier: scope, title: l.exercise_name, detail: `Heaviest ever · ${formatLoad(l.load_kg, displayUnit)} × ${l.reps}` });
+      }
+      const ton = tonnageRecordLabel(records.tonnage);
+      const tonScope = topScope(records.tonnage);
+      if (ton && tonScope) out.push({ label: ton.replace("WORKOUT ", ""), tier: tonScope, title: "Workout Tonnage", detail: formatTonnage(records.tonnage_kg, displayUnit) });
+    } else if (prList[0]) {
+      prList.slice(0, 4).forEach((pr) => out.push({ label: "ALL-TIME PR", tier: "atpr", title: formatPR(pr), detail: "" }));
+    }
+    const rank = { atpr: 0, program_pr: 1, block_pr: 2 } as const;
+    return out.sort((a, b) => rank[a.tier] - rank[b.tier]);
+  };
+
   const buildShareBlob = async (): Promise<Blob | null> => {
     const canvas = shareCanvasRef.current ?? document.createElement("canvas");
     shareCanvasRef.current = canvas;
-    canvas.width = 1080; canvas.height = 1920;
-    const ctx = canvas.getContext("2d"); if (!ctx) return null;
-    ctx.fillStyle = "#09090b"; ctx.fillRect(0,0,1080,1920);
-    const grad=ctx.createLinearGradient(0,0,1080,1920); grad.addColorStop(0,"#ef3340"); grad.addColorStop(.38,"#171717"); grad.addColorStop(1,"#09090b"); ctx.fillStyle=grad; ctx.globalAlpha=.32; ctx.fillRect(0,0,1080,1920); ctx.globalAlpha=1;
-    try { const img=new Image(); img.src="/logo.png"; await new Promise<void>((res)=>{img.onload=()=>res();img.onerror=()=>res();}); if(img.complete&&img.naturalWidth){const w=220,h=w*(img.naturalHeight/img.naturalWidth);ctx.drawImage(img,430,125,w,h);} } catch {}
-    ctx.textAlign="center"; ctx.fillStyle="#fff"; ctx.font="900 38px system-ui"; ctx.fillText("JF EFFECT",540,390);
-    ctx.fillStyle="#ef3340"; ctx.font="900 34px system-ui"; ctx.fillText("WORKOUT COMPLETE",540,485);
-    ctx.fillStyle="#fff"; ctx.font="900 86px system-ui"; ctx.fillText(headline,540,610);
-    ctx.fillStyle="#fff"; ctx.font="900 250px system-ui"; ctx.fillText(String(summary.score),540,900);
-    ctx.font="800 38px system-ui"; ctx.fillStyle="#a1a1aa"; ctx.fillText("WORKOUT SCORE / 100",540,970);
-    ctx.fillStyle="#fff"; ctx.font="800 42px system-ui"; ctx.fillText((workoutTitle??"Workout").slice(0,38),540,1080);
-    if(dateLabel){ctx.fillStyle="#a1a1aa";ctx.font="600 30px system-ui";ctx.fillText(dateLabel,540,1130);}
-    const topRec = records?.records?.[0];
-    if(topRec){ctx.fillStyle=topRec.atpr?"#f59e0b":"#a78bfa";ctx.font="900 34px system-ui";ctx.fillText(`NEW ${repRecordLabel(topRec)}`,540,1270);ctx.fillStyle="#fff";ctx.font="800 34px system-ui";ctx.fillText(`${topRec.exercise_name} · ${formatLoad(topRec.load_kg, displayUnit)} × ${topRec.reps}`.slice(0,48),540,1330);}
-    else if(prList[0]){ctx.fillStyle="#f59e0b";ctx.font="900 34px system-ui";ctx.fillText("NEW ALL-TIME PR",540,1270);ctx.fillStyle="#fff";ctx.font="800 34px system-ui";ctx.fillText(formatPR(prList[0]).slice(0,48),540,1330);}
-    ctx.fillStyle="#fff";ctx.font="800 32px system-ui";ctx.fillText(`${summary.completedSets}/${summary.prescribedSets} SETS COMPLETED`,540,1480);
-    if(records && records.tonnage_kg>0){ctx.fillStyle="#d4d4d8";ctx.font="700 30px system-ui";ctx.fillText(`${formatTonnage(records.tonnage_kg, displayUnit)} TOTAL TONNAGE${tonnageRecordLabel(records.tonnage)?` · ${tonnageRecordLabel(records.tonnage)}`:""}`,540,1535);}
-    else if(summary.totalLifted>0){ctx.fillStyle="#d4d4d8";ctx.font="700 30px system-ui";ctx.fillText(`${summary.totalLiftedFmt} TOTAL TONNAGE`,540,1535);}
-    ctx.fillStyle="#71717a";ctx.font="700 27px system-ui";ctx.fillText("BUILT WITH JF EFFECT",540,1770);
-    return await new Promise<Blob|null>((res)=>canvas.toBlob(res,"image/png",1));
+    const tonnage = records && records.tonnage_kg > 0
+      ? formatTonnage(records.tonnage_kg, displayUnit)
+      : summary.totalLifted > 0 ? summary.totalLiftedFmt : null;
+    const stats = [
+      { label: "Sets", value: `${summary.completedSets}/${summary.prescribedSets}` },
+      ...(tonnage ? [{ label: "Tonnage", value: tonnage }] : []),
+      ...(durationMin && durationMin > 0 ? [{ label: "Minutes", value: String(Math.round(durationMin)) }] : []),
+    ];
+    await drawWorkoutStory(canvas, {
+      athleteName: athleteName?.trim() || null,
+      headline,
+      score: summary.score,
+      workoutTitle: workoutTitle ?? null,
+      dateLabel,
+      records: storyRecords(),
+      stats,
+      leaguePoints: points?.league.total ?? null,
+      levelPoints: points?.level.total ?? null,
+    });
+    return await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png", 1));
   };
   const shareWorkout = async () => {
     setSharing(true); try { const blob=await buildShareBlob(); if(!blob)return; const file=new File([blob],"jf-effect-workout.png",{type:"image/png"}); if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){await navigator.share({files:[file],title:"JF Effect workout"});} else {const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);} } catch(e:any){if(e?.name!=="AbortError") console.warn("Workout share failed",e);} finally {setSharing(false);}
