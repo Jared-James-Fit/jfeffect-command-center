@@ -36,7 +36,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { formatReadReceipt } from "@/lib/read-receipt";
+import { formatReadReceipt, formatReceiptStamp } from "@/lib/read-receipt";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
 import { markRecent } from "@/lib/chat-gifs";
 import { GifThumb } from "@/components/gif-thumb";
@@ -1315,6 +1315,17 @@ export function MessageThread({
     return null;
   }, [visibleMessages, role]);
 
+  // Coach view: the latest message of mine the client has actually read, so
+  // "Read 6:01 PM" stays visible even after newer unread messages go out.
+  const lastReadOwnMessageId = useMemo(() => {
+    if (role !== "admin") return null;
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      const m = visibleMessages[i];
+      if (m.sender_role === role && !m.is_internal_note && !m.deleted_at && m.read_by_client_at) return m.id;
+    }
+    return null;
+  }, [visibleMessages, role]);
+
   // First incoming message that was unread when this thread opened — used
   // to render an iMessage-style "New messages" divider so unread items are
   // still distinguishable after the auto mark-read fires.
@@ -1749,7 +1760,8 @@ export function MessageThread({
                 selectionMode && "cursor-pointer",
                 (() => {
                   const hasR = (reactionsByMsg.get(m.id)?.length ?? 0) > 0;
-                  const hasReceipt = mine && !isDeleted && m.id === lastOwnMessageId && !selectionMode;
+                  const hasReceipt = mine && !isDeleted && !selectionMode &&
+                    (m.id === lastOwnMessageId || m.id === lastReadOwnMessageId);
                   if (hasR && hasReceipt) return "pb-8";
                   if (hasR) return "pb-3";
                   if (hasReceipt) return "pb-4";
@@ -2012,8 +2024,9 @@ export function MessageThread({
                     </div>
                   );
                 })()}
-                {/* Read receipt (only under my latest message) */}
-                {mine && m.id === lastOwnMessageId && !selectionMode && (() => {
+                {/* Read receipt: under my latest message, plus (coach view) the
+                    latest one the client has read. */}
+                {mine && (m.id === lastOwnMessageId || m.id === lastReadOwnMessageId) && !selectionMode && (() => {
                   const readAt = role === "admin" ? m.read_by_client_at : m.read_by_admin_at;
                   const hasReactions = (reactionsByMsg.get(m.id)?.length ?? 0) > 0;
                   const status = m.delivery_status;
@@ -2023,6 +2036,8 @@ export function MessageThread({
                     ? "Not delivered · tap to retry"
                     : readAt
                     ? formatReadReceipt(readAt)
+                    : role === "admin"
+                    ? "Delivered · not read yet"
                     : "Sent";
                   return (
                     <div className={cn(
@@ -2046,7 +2061,23 @@ export function MessageThread({
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuContent align="end" className="w-56">
+                        {!m.is_internal_note && !m.id.startsWith("optimistic-") && (() => {
+                          const readAt = role === "admin" ? m.read_by_client_at : m.read_by_admin_at;
+                          const sentAt = (m as any).sent_at ?? m.created_at;
+                          return (
+                            <>
+                              <div className="space-y-0.5 px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
+                                <div><span className="font-semibold text-foreground">Sent</span> {formatReceiptStamp(sentAt)}</div>
+                                <div>
+                                  <span className={cn("font-semibold", readAt ? "text-primary" : "text-foreground")}>Read</span>{" "}
+                                  {readAt ? formatReceiptStamp(readAt) : "Not yet"}
+                                </div>
+                              </div>
+                              <DropdownMenuSeparator />
+                            </>
+                          );
+                        })()}
                         <div className="flex items-center justify-around px-1 py-1.5">
                           {REACTION_EMOJIS.map((emoji) => (
                             <button

@@ -356,12 +356,19 @@ export const sendMessengerCheckinRequest = createServerFn({ method: "POST" })
     const actor = await resolveClientAccess(context.supabase, context.userId, data.clientId);
     if (actor === "client") throw new Error("Coach access required.");
     const sb = await adminClient();
-    return createRequest(sb, {
+    const created = await createRequest(sb, {
       clientId: data.clientId,
       taskType: data.taskType,
       senderId: context.userId,
       note: data.note ?? null,
     });
+    const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+    await notifyAppEvent(sb, "checkin_requested", {
+      clientId: data.clientId,
+      sourceId: created.id,
+      actorUserId: context.userId,
+    });
+    return created;
   });
 
 export const getMessengerCheckin = createServerFn({ method: "POST" })
@@ -846,6 +853,13 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
         },
         { onConflict: "client_id" },
       );
+
+    const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+    await notifyAppEvent(sb, "checkin_submitted", {
+      clientId: row.client_id,
+      sourceId: row.id,
+      actorUserId: context.userId,
+    });
 
     return {
       ...row,

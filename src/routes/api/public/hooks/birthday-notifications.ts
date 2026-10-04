@@ -4,6 +4,9 @@ import { createFileRoute } from "@tanstack/react-router";
  * Fires web push notifications for every active client whose birthday is
  * today. Deduped per (user_id, year) via push_notification_dedupe so it's
  * safe to run hourly from pg_cron across timezones.
+ *
+ * Also the hourly push tick: releases pushes held during quiet hours, the
+ * 8am-local daily game plan and the monthly recap-ready push.
  */
 export const Route = createFileRoute("/api/public/hooks/birthday-notifications")({
   server: {
@@ -69,14 +72,22 @@ export const Route = createFileRoute("/api/public/hooks/birthday-notifications")
               tag: `bday:${year}`,
               data: { kind: "birthday", clientId: c.id, year },
             },
-            { eventKey: `bday:${c.user_id}:${year}` },
+            { category: "wins", eventKey: `bday:${c.user_id}:${year}` },
           );
           if (r.sent > 0) sent++;
           else if (r.skipped) skipped++;
           results.push({ clientId: c.id, ...r });
         }
 
-        return Response.json({ ok: true, day: `${year}-${month}-${day}`, considered: todays.length, sent, skipped, results });
+        let tick: unknown = null;
+        try {
+          const { runPushTick } = await import("@/lib/push/scheduled-pushes.server");
+          tick = await runPushTick(supabaseAdmin);
+        } catch (e: any) {
+          tick = { error: String(e?.message ?? e) };
+        }
+
+        return Response.json({ ok: true, day: `${year}-${month}-${day}`, considered: todays.length, sent, skipped, results, tick });
       },
     },
   },

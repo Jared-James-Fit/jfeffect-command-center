@@ -17,6 +17,7 @@ import { NUTRITION_PHASES, NUTRITION_STRUCTURES, PHASE_GOAL, dayLabelsForStructu
 import { addMonths, addWeeks, format, parseISO } from "date-fns";
 import { FileText, Upload, X, Plus, ChevronDown } from "lucide-react";
 import { todayLocalISO } from "@/lib/today";
+import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
 
 const QUICK_DAY_TYPES = [
@@ -193,6 +194,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", form.client_id] });
     void invalidateGroceryList(qc, form.client_id);
+    // Let the client know their plan changed (only when they can see it).
+    if (form.visible_to_client && form.status === "Active") fireAppEvent("nutrition_targets_updated", form.client_id);
     onSaved?.(targetId);
     onOpenChange(false);
   };

@@ -39,6 +39,7 @@ import { buildFilloutUrl } from "@/lib/fillout";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
 import { playAppSound } from "@/lib/app-sounds";
+import { fireAppEvent } from "@/lib/push/app-events.functions";
 
 export type ClientFormRendererProps = {
   /** Form to render. */
@@ -218,6 +219,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     }
     await submitSubmission(submission.id);
     playAppSound("success");
+    fireAppEvent("form_submitted", submission.id);
     // Nutrition Update Request: start the AI targets + meal plan for the coach.
     if (formId === NUTRITION_REQUEST_FORM_ID) {
       void import("@/lib/nutrition-ai-plans.functions")
@@ -264,6 +266,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
         submission={submission}
         onMarkSubmitted={async () => {
           await submitSubmission(submission.id);
+          fireAppEvent("form_submitted", submission.id);
           toast.success("Marked as submitted");
           qc.invalidateQueries({ queryKey: ["nf-current-submission", formId, client?.id] });
           qc.invalidateQueries({ queryKey: ["nf-submissions-for-client", client?.id] });

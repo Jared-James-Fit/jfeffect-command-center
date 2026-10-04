@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fireAppEvent } from "@/lib/push/app-events.functions";
 
 const db = supabase as any;
 
@@ -55,6 +56,7 @@ export async function createManualReview(input: {
     .select()
     .single();
   if (error) throw error;
+  if (input.notifyClient ?? true) fireAppEvent("checkin_reviewed", (data as any)?.id);
   return data as ManualCheckInReview;
 }
 

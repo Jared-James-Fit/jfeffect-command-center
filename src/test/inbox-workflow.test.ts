@@ -45,6 +45,6 @@ describe("read receipts", () => {
     expect(formatReadReceipt("2026-10-03T11:47:00", now)).toBe("Read 11:47 AM");
     expect(formatReadReceipt("2026-10-02T20:14:00", now)).toBe("Read yesterday at 8:14 PM");
     expect(formatReadReceipt("2026-09-29T08:05:00", now)).toBe("Read Tue 8:05 AM");
-    expect(formatReadReceipt("2026-08-14T08:05:00", now)).toBe("Read Aug 14");
+    expect(formatReadReceipt("2026-08-14T08:05:00", now)).toBe("Read Aug 14, 8:05 AM");
   });
 });

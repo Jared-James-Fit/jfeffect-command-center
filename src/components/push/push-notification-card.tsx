@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell, BellOff, Smartphone, Share, Plus, CheckCircle2, AlertCircle, Loader2, Volume2, VolumeX } from "lucide-react";
+import { Bell, BellOff, Smartphone, Share, Plus, CheckCircle2, AlertCircle, Loader2, Volume2, VolumeX, Moon } from "lucide-react";
 import { appSoundsEnabled, setAppSoundsEnabled, subscribeAppSounds } from "@/lib/app-sounds";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,13 +32,23 @@ type Prefs = {
   workouts: boolean;
   billing: boolean;
   coaching_apps: boolean;
+  wins: boolean;
+  reminders: boolean;
+  quiet_hours_enabled: boolean;
+  quiet_start: number;
+  quiet_end: number;
+  timezone: string | null;
 };
 
-const CATEGORY_LABELS: Array<{ key: keyof Prefs; label: string; help: string }> = [
+type BoolPref = { [K in keyof Prefs]: Prefs[K] extends boolean ? K : never }[keyof Prefs];
+
+const CATEGORY_LABELS: Array<{ key: BoolPref; label: string; help: string }> = [
   { key: "messages", label: "Messages", help: "New coach or client messages" },
-  { key: "check_ins", label: "Check-Ins", help: "Submissions and coach reviews" },
-  { key: "lift_reviews", label: "Lift Reviews", help: "New videos and review completions" },
-  { key: "workouts", label: "Workouts", help: "Assigned workouts and reminders" },
+  { key: "check_ins", label: "Check-Ins & Forms", help: "Check-in / nutrition requests, submissions, reviews and new plans" },
+  { key: "lift_reviews", label: "Lift Reviews", help: "New videos and coach feedback" },
+  { key: "workouts", label: "Workouts", help: "Assigned workouts and program updates" },
+  { key: "wins", label: "Wins & Milestones", help: "Your monthly recap and big moments" },
+  { key: "reminders", label: "Daily Reminder", help: "One morning nudge max — only if something's due" },
   { key: "billing", label: "Billing", help: "Failed payments and subscription alerts" },
   { key: "coaching_apps", label: "Coaching Applications", help: "Admin only — new applications" },
 ];
@@ -103,14 +113,26 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
 
   const prefs: Prefs = useMemo(() => ({
     master_enabled: true, messages: true, check_ins: true, lift_reviews: true,
-    workouts: true, billing: true, coaching_apps: true,
+    workouts: true, billing: true, coaching_apps: true, wins: true, reminders: true,
+    quiet_hours_enabled: true, quiet_start: 22, quiet_end: 7, timezone: null,
     ...(prefsQ.data ?? {}),
   }), [prefsQ.data]);
 
-  async function setPref<K extends keyof Prefs>(key: K, value: boolean) {
+  async function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
     await updatePrefs({ data: { [key]: value } as any });
     qc.setQueryData(["push", "prefs"], { ...prefs, [key]: value });
   }
+
+  // Keep the server's time zone in sync with this device so quiet hours and
+  // morning reminders land at the right local time.
+  useEffect(() => {
+    if (!prefsQ.data) return;
+    let tz = "";
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* ignore */ }
+    if (tz && (prefsQ.data as any).timezone !== tz) {
+      void updatePrefs({ data: { timezone: tz } }).catch(() => {});
+    }
+  }, [prefsQ.data, updatePrefs]);
 
   async function onEnable() {
     setBusy("enable");
@@ -263,8 +285,51 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
               </div>
             ))}
         </div>
+
+        <div className="rounded-md border border-border p-3 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-sm font-medium"><Moon className="h-3.5 w-3.5 text-primary" /> Quiet Hours</div>
+              <div className="text-xs text-muted-foreground">
+                Non-urgent alerts wait until morning. Messages still arrive — silently.
+              </div>
+            </div>
+            <Switch
+              checked={!!prefs.quiet_hours_enabled}
+              onCheckedChange={(v) => setPref("quiet_hours_enabled", v)}
+              disabled={!prefs.master_enabled}
+            />
+          </div>
+          {prefs.quiet_hours_enabled && prefs.master_enabled && (
+            <div className="flex items-center gap-2 text-xs">
+              <HourSelect value={prefs.quiet_start} onChange={(h) => setPref("quiet_start", h)} />
+              <span className="text-muted-foreground">to</span>
+              <HourSelect value={prefs.quiet_end} onChange={(h) => setPref("quiet_end", h)} />
+            </div>
+          )}
+        </div>
       </div>
     </Card>
+  );
+}
+
+function hourLabel(h: number) {
+  const suffix = h < 12 ? "am" : "pm";
+  const n = h % 12 === 0 ? 12 : h % 12;
+  return `${n}${suffix}`;
+}
+
+function HourSelect({ value, onChange }: { value: number; onChange: (h: number) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+    >
+      {Array.from({ length: 24 }, (_, h) => (
+        <option key={h} value={h}>{hourLabel(h)}</option>
+      ))}
+    </select>
   );
 }
 

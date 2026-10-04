@@ -69,7 +69,7 @@ async function coachPhase(sb: any, clientId: string): Promise<string | null> {
   return (data?.settings as any)?.phase ?? null;
 }
 
-async function runPlan(sb: any, submissionId: string, phaseOverride?: string | null) {
+async function runPlan(sb: any, submissionId: string, phaseOverride?: string | null, notifyStaff = false) {
   const { sub, qas } = await loadQAs(sb, submissionId);
   const selected = phaseOverride ?? (await coachPhase(sb, sub.client_id));
   const goalAnswer = qas.find((q) => /^goal$/i.test(q.label.trim()))?.value ?? "";
@@ -108,6 +108,10 @@ async function runPlan(sb: any, submissionId: string, phaseOverride?: string | n
       generated_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("submission_id", submissionId);
+    if (notifyStaff) {
+      const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+      await notifyAppEvent(sb, "nutrition_plan_ready", { clientId: sub.client_id, sourceId: submissionId });
+    }
     return { status: "ready" as const };
   } catch (e: any) {
     await sb.from("nutrition_ai_plans").update({
@@ -160,6 +164,12 @@ export const sendNutritionRequestFn = createServerFn({ method: "POST" })
       read_by_admin_at: new Date().toISOString(),
     });
     if (error) throw new Error(error.message);
+    const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+    await notifyAppEvent(sb, "nutrition_requested", {
+      clientId: data.clientId,
+      sourceId: `${formId}:${Date.now()}`,
+      actorUserId: context.userId,
+    });
     return { ok: true };
   });
 
@@ -195,7 +205,7 @@ export const generateNutritionPlanFn = createServerFn({ method: "POST" })
     if (existing?.status === "ready" && !(staff && data.force)) return { status: "ready" as const };
     if (!staff && existing && existing.status !== "error") return { status: existing.status };
 
-    return runPlan(sb, data.submissionId, staff ? data.phase ?? null : null);
+    return runPlan(sb, data.submissionId, staff ? data.phase ?? null : null, !staff);
   });
 
 /** Coach view: a client's nutrition requests with answers + AI output. */
