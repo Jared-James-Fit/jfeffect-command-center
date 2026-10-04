@@ -96,7 +96,7 @@ async function runPlan(sb: any, submissionId: string, phaseOverride?: string | n
     const m = await generateText({
       model: gateway(modelId),
       system: MEAL_PLAN_PROMPT,
-      prompt: mealPlanUserPrompt(qas, targetsText),
+      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1])),
     });
     const mealPlanText = cleanAiText(m.text);
 

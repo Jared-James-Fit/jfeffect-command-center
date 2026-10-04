@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/MealPlanBulkPaste";
+import { phaseFromPlanText } from "@/lib/nutrition-cardio";
 import { answerFor, cleanAiText, mealPlanUserPrompt, TARGETS_PROMPT } from "@/lib/nutrition-ai-prompts";
 
 const PLAN = `TRAINING-DAY MENU
@@ -58,6 +59,14 @@ describe("nutrition AI plan", () => {
     expect(p).toContain("- Allergies / dislikes: peanuts");
     expect(p).toContain("- Preferred foods: chicken, rice");
     expect(p).toContain("Training Day: 2400");
+  });
+
+  it("auto-detects the phase from a pasted plan or AI targets", () => {
+    expect(phaseFromPlanText("PHASE: Fat Loss\n\nTRAINING-DAY MENU")).toBe("Fat Loss");
+    expect(phaseFromPlanText("CLIENT OVERVIEW\nName: A\nGoal: Build muscle / gain weight")).toBe("Muscle Gain");
+    expect(phaseFromPlanText("Phase / Goal: Recomp")).toBe("Recomp");
+    expect(phaseFromPlanText("TRAINING-DAY MENU\nMeal 1")).toBeNull();
+    expect(parseMealPlan("PHASE: Maintenance\n\n" + PLAN)).toHaveLength(2);
   });
 
   it("strips markdown the model adds", () => {

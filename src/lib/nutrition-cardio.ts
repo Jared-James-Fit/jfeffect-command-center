@@ -46,6 +46,12 @@ export function phaseFromText(text: string | null | undefined): string | null {
   return null;
 }
 
+/** Phase from a pasted plan's "PHASE:" / "GOAL:" line (e.g. the AI targets or meal plan). */
+export function phaseFromPlanText(text: string | null | undefined): string | null {
+  const m = String(text ?? "").match(/^\s*(?:phase\s*(?:\/\s*goal)?|goal)\s*[:\-–]\s*(.+)$/im);
+  return m ? phaseFromText(m[1]) : null;
+}
+
 export function phaseLabel(t: { phase?: string | null; custom_phase?: string | null }): string {
   return (t.phase === "Custom" ? t.custom_phase : t.phase) || "—";
 }

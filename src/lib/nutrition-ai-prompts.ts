@@ -90,6 +90,7 @@ High Day:`;
 export const MEAL_PLAN_PROMPT = `You are a nutrition coach. Build a full meal plan using the EXACT format below so it can be pasted directly into the JF Effect coaching app.
 
 FORMAT RULES (strict — do not change headings, do not add extra commentary):
+0. Start with ONE line: PHASE: <Fat Loss | Muscle Gain | Recomp | Maintenance | Performance | Reverse Diet | Lifestyle Reset> — the client's phase / goal. Then a blank line.
 1. Create one menu per day-type the client needs (e.g. TRAINING-DAY MENU, NON-TRAINING-DAY MENU, HIGH-DAY MENU). Each menu header ends with the word MENU in ALL CAPS.
 2. Inside each menu, list "Meal 1", "Meal 2", "Meal 3"… on their own line.
 3. Under each meal, list every food on its own line as: "<amount> g <food>" (use cooked weight for meat, rice, potatoes, vegetables; packaged weight for oats, whey, peanut butter, oils).
@@ -138,12 +139,12 @@ export function manualTargetsPrompt(clientName: string, qas: QA[], phase?: strin
 }
 
 /** Full copy-paste prompt for running pass 2 by hand. */
-export function manualMealPlanPrompt(qas: QA[], targetsText: string): string {
-  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText)}`;
+export function manualMealPlanPrompt(qas: QA[], targetsText: string, phase?: string | null): string {
+  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase)}`;
 }
 
 /** Pass 2 input: the CLIENT DETAILS block filled from the form + pass-1 targets. */
-export function mealPlanUserPrompt(qas: QA[], targetsText: string): string {
+export function mealPlanUserPrompt(qas: QA[], targetsText: string, phase?: string | null): string {
   const bw = answerFor(qas, "bodyweight") || answerFor(qas, "weight");
   const days = answerFor(qas, "training days") || answerFor(qas, "days per week");
   const meals = answerFor(qas, "meals per day") || answerFor(qas, "meals");
@@ -151,6 +152,7 @@ export function mealPlanUserPrompt(qas: QA[], targetsText: string): string {
   const love = answerFor(qas, "foods you love") || answerFor(qas, "prefer") || answerFor(qas, "favourite") || answerFor(qas, "favorite");
   return [
     "CLIENT DETAILS:",
+    `- Phase / goal: ${phase || "use the Goal from the TARGETS below"}`,
     `- Bodyweight: ${bw || "see targets"}`,
     `- Training days per week: ${days || "see targets"}`,
     `- Daily calorie target: use the CALORIE TARGETS below for each day-type menu (Training Day, Non Training Day, High Day)`,
