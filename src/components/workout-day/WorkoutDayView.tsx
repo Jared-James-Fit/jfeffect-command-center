@@ -2704,6 +2704,7 @@ function WorkoutDay({
           prs={sessionPRs}
           records={isClientWorkout ? workoutRecords ?? null : undefined}
           points={isClientWorkout ? workoutPoints ?? null : undefined}
+          athleteName={(client as any)?.full_name ?? null}
           displayUnit={summaryDisplayUnit}
           cardio={cardioTakeaway}
           sessionRating={
