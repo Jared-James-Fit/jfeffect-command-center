@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useSidebarPins, MAX_PINS, type PinScope } from "@/lib/sidebar-pins";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/command-palette";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { AdminRole } from "@/lib/admin-route-registry";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
@@ -239,6 +240,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   useExerciseLibraryRealtime();
   useSalesRealtime();
   const { signOut, user, role } = useAuth();
+  const isStaffRole = !!role && role !== "client" && role !== "member";
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
@@ -654,15 +656,21 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               </TooltipTrigger>
               <TooltipContent side="right">Search everything (⌘K)</TooltipContent>
             </Tooltip>
+          ) : null}
+          {iconOnly ? (
+            <div className="mt-1.5 flex justify-center"><ThemeToggle className="origin-center scale-[0.8]" /></div>
           ) : (
-            <button
-              onClick={() => setPaletteOpen(true)}
-              className="flex w-full items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-2 text-left text-xs font-semibold text-foreground shadow-sm hover:bg-primary/10"
-            >
-              <Search className="h-3.5 w-3.5 text-primary" />
-              <span className="flex-1 truncate">Search everything…</span>
-              <kbd className="rounded border border-primary/40 bg-card px-1 py-0.5 text-[9px] font-mono text-primary">⌘K</kbd>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPaletteOpen(true)}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-2 text-left text-xs font-semibold text-foreground shadow-sm hover:bg-primary/10"
+              >
+                <Search className="h-3.5 w-3.5 text-primary" />
+                <span className="flex-1 truncate">Search everything…</span>
+                <kbd className="rounded border border-primary/40 bg-card px-1 py-0.5 text-[9px] font-mono text-primary">⌘K</kbd>
+              </button>
+              <ThemeToggle />
+            </div>
           )}
         </div>
 
@@ -841,16 +849,18 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
             <span className="truncate text-sm font-black tracking-tight">{title}</span>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPaletteOpen(true)}
-              aria-label="Search workout library"
-              className="h-8 shrink-0 gap-1.5 border-primary/40 bg-primary/5 px-2 text-xs font-semibold text-foreground hover:bg-primary/10"
-            >
-              <Search className="h-3.5 w-3.5 text-primary" />
-              <span className="hidden min-[380px]:inline">Workouts</span>
-            </Button>
+            {isStaffRole && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPaletteOpen(true)}
+                aria-label="Search workout library"
+                className="h-8 w-8 shrink-0 px-0"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+            )}
+            <ThemeToggle className="mr-0.5" />
             <SettingsMenu
               items={items}
               meName={me?.name ?? user?.email ?? ""}

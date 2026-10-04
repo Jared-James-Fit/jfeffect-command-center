@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+@import "./styles/dark-palette.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -670,4 +671,9 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   bottom: auto;
   height: var(--vv-h, 100dvh);
   max-height: var(--vv-h, 100dvh);
+}
+
+/* Flip every surface at once when the appearance toggle is tapped. */
+.theme-switching *, .theme-switching *::before, .theme-switching *::after {
+  transition: none !important;
 }
