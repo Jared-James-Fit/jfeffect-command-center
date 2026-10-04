@@ -357,21 +357,17 @@ export function GroceryListEntryCard({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={cn("rounded-lg border border-border bg-card p-4 md:p-5", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-            <ShoppingCart className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-sm font-black uppercase tracking-widest">Grocery List</div>
-            <div className="text-[11px] text-muted-foreground">Everything you need for the next 7 days</div>
-          </div>
+    <div className={cn("overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-4 md:p-5", className)}>
+      <button type="button" onClick={() => setOpen(true)} disabled={!clientId} className="flex w-full items-center gap-3 text-left">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <ShoppingCart className="h-5 w-5" />
         </div>
-        <Button size="sm" onClick={() => setOpen(true)} disabled={!clientId}>
-          View Grocery List
-        </Button>
-      </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-black uppercase tracking-widest">Grocery List</div>
+          <div className="text-[12px] text-muted-foreground">1 or 2 weeks of food from your plan · sorted by store aisle</div>
+        </div>
+        <span className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-black text-primary-foreground">Open</span>
+      </button>
       {open && (
         <GroceryListSheet
           open={open}
