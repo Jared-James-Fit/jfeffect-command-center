@@ -57,6 +57,15 @@ export function previousLeagueMonth(today = leagueToday()): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
+/** The `count` league months before (and including) `monthStart`, newest first. */
+export function recapMonths(monthStart: string, count: number): string[] {
+  const [y, m] = monthStart.split("-").map(Number);
+  return Array.from({ length: count }, (_, k) => {
+    const d = new Date(Date.UTC(y, m - 1 - k, 1));
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  });
+}
+
 export function inRecapWindow(today = leagueToday()): boolean {
   return Number(today.split("-")[2]) <= RECAP_WINDOW_DAYS;
 }

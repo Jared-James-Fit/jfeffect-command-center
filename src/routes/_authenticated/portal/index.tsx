@@ -22,6 +22,7 @@ import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-ca
 import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
+import { LeagueRecapHomeTile } from "@/components/portal/league-recap";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
@@ -320,6 +321,12 @@ function PortalHome() {
         {client?.id && (
           <SectionErrorBoundary label="Performance league">
             <AthleteLevelCard clientId={client.id} />
+          </SectionErrorBoundary>
+        )}
+
+        {client?.id && (
+          <SectionErrorBoundary label="League recap">
+            <LeagueRecapHomeTile />
           </SectionErrorBoundary>
         )}
 
