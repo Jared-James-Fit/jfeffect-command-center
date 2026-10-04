@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { inviteClient } from "@/lib/clients.functions";
 import { toast } from "sonner";
 
 const TYPES = ["Online Coaching", "In-Person Coaching", "Hybrid Coaching", "Powerlifting", "Bodybuilding", "Fat Loss", "Muscle Gain", "Lifestyle"];
@@ -24,6 +26,7 @@ export function AddClientDialog({
   const [email, setEmail] = useState("");
   const [coachingType, setCoachingType] = useState("Online Coaching");
   const [busy, setBusy] = useState(false);
+  const inviteFn = useServerFn(inviteClient);
 
   const submit = async () => {
     const full_name = name.trim();
@@ -41,7 +44,17 @@ export function AddClientDialog({
         .select("id")
         .single();
       if (error) throw error;
-      toast.success("Client created");
+      // New account → send the setup / access email right away.
+      if (data?.id && email.trim()) {
+        try {
+          await inviteFn({ data: { clientId: data.id, redirectTo: `${window.location.origin}/setup` } });
+          toast.success(`Client created — setup email sent to ${email.trim()}`);
+        } catch (e: any) {
+          toast.warning(`Client created, but the setup email failed: ${e?.message ?? "unknown error"}. Use “Send setup link” on their profile.`);
+        }
+      } else {
+        toast.success("Client created — add an email to send their setup link");
+      }
       onOpenChange(false);
       setName(""); setEmail("");
       onCreated?.();
@@ -65,7 +78,7 @@ export function AddClientDialog({
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" autoFocus />
           </div>
           <div>
-            <Label>Email (optional)</Label>
+            <Label>Email <span className="font-normal text-muted-foreground">(setup email is sent automatically)</span></Label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" />
           </div>
           <div>
