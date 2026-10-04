@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { THEME_BOOT_SCRIPT, useThemeSync } from "@/lib/theme";
 import { installShakeUndoGuard } from "@/lib/shake-undo-guard";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
@@ -345,6 +346,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RouteTracker() {
   const { user, loading } = useAuth();
   const location = useLocation();
+  useThemeSync(location.pathname);
   const lastPathRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -360,8 +362,10 @@ function RouteTracker() {
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Applies the saved light/dark preference before first paint. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
