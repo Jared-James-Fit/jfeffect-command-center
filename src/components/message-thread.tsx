@@ -62,9 +62,11 @@ import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { compressImage } from "@/lib/image-compress";
 import {
+  FormHistoryRow,
   MessengerCheckinRequestCard,
   MessengerCheckinSubmissionCard,
 } from "@/components/messages/messenger-checkin-card";
+import { planFormMessages } from "@/lib/form-message-presentation";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
 
 function attachIcon(t: MessageAttachment["type"]) {
@@ -1275,6 +1277,16 @@ export function MessageThread({
     ));
   }, [allMessages, role]);
 
+  // Recurring chat forms: only the current one of each type renders as a big
+  // card; older / finished ones become compact history rows. Decided up front
+  // from the loaded messages so nothing renders expanded and then collapses.
+  // Built from the raw list (requests included) so completed units keep their
+  // original sent/read timestamps even though the request bubble is hidden.
+  const formPlan = useMemo(
+    () => planFormMessages([...olderMessages, ...messages], role === "admin" ? "admin" : "client"),
+    [olderMessages, messages, role],
+  );
+
   // Id of the latest message I sent (for inline "Read/Sent" receipt).
   const lastOwnMessageId = useMemo(() => {
     for (let i = visibleMessages.length - 1; i >= 0; i--) {
@@ -1703,6 +1715,11 @@ export function MessageThread({
                   <span className="h-px flex-1 bg-primary/40" />
                 </div>
               )}
+              {formPlan.get(m.id)?.mode === "compact" ? (
+                <div id={`message-${m.id}`} className="w-full min-w-0">
+                  <FormHistoryRow p={formPlan.get(m.id)!} role={role === "admin" ? "admin" : "client"} />
+                </div>
+              ) : (
               <div
               id={`message-${m.id}`}
               className={cn(
@@ -2094,6 +2111,7 @@ export function MessageThread({
                 )}
               </div>
             </div>
+              )}
             </Fragment>
           );
         })}
