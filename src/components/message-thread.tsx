@@ -68,6 +68,7 @@ import {
   MessengerCheckinSubmissionCard,
 } from "@/components/messages/messenger-checkin-card";
 import { planFormMessages } from "@/lib/form-message-presentation";
+import { playAppSound, registerOpenThread } from "@/lib/app-sounds";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
 
 function attachIcon(t: MessageAttachment["type"]) {
@@ -1070,6 +1071,9 @@ export function MessageThread({
     messageIdsRef.current = new Set(allMessages.map((m) => m.id));
   }, [allMessages]);
 
+  // This thread plays its own message sounds; keep the global listener quiet.
+  useEffect(() => (clientId ? registerOpenThread(clientId) : undefined), [clientId]);
+
   useEffect(() => {
     if (!clientId) return;
     const key = ["messages", clientId, role] as const;
@@ -1100,6 +1104,7 @@ export function MessageThread({
           }
           return [...existing, newMsg];
         });
+        if (newMsg.sender_role !== role && !(newMsg as any).is_internal_note) playAppSound("message");
         // Still update conversation state and notification counts. If this is
         // a submitted messenger check-in, also refresh its shared check-in
         // query immediately so an already-open request card never stays in a
@@ -1623,6 +1628,7 @@ export function MessageThread({
         replyToMessageId: replyTarget?.id ?? null,
         replyPreview,
       });
+      playAppSound("sent");
       // Swap the optimistic row for the persisted row (dedupe if realtime
       // already delivered it via INSERT).
       qc.setQueryData<Message[]>(key, (prev) => {
