@@ -12,7 +12,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { addDays, format } from "date-fns";
-import { Loader2, ShoppingCart } from "lucide-react";
+import { Copy, Lightbulb, Loader2, ShoppingCart } from "lucide-react";
+import { toast } from "sonner";
+import { STORE_AISLE_EMOJI, groceryListText, groupByAisle } from "@/lib/grocery-shop";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -138,6 +140,22 @@ export function GroceryListSheet({
     if (targetId) clearCheckedIdentities(targetId, weekStart);
   };
 
+  const aisles = useMemo(() => groupByAisle(result.items), [result.items]);
+  const doneCount = result.items.filter((i) => checked.includes(i.identity)).length;
+  const copyList = async () => {
+    const text = groceryListText(aisles, `JF Effect grocery list · ${rangeLabel}`);
+    try {
+      if (navigator.share && /iPhone|iPad|Android/i.test(navigator.userAgent)) {
+        await navigator.share({ text, title: "Grocery list" });
+      } else {
+        await navigator.clipboard.writeText(text);
+        toast.success("Grocery list copied — paste it into Notes or a text");
+      }
+    } catch (e: any) {
+      if (e?.name !== "AbortError") toast.error("Couldn't copy the list");
+    }
+  };
+
   const rangeLabel = `${format(parseLocalDate(weekStart)!, "MMM d")} – ${format(parseLocalDate(weekEnd)!, "MMM d, yyyy")}`;
   const hasPlan = !!targetId && result.items.length > 0;
 
@@ -218,25 +236,46 @@ export function GroceryListSheet({
                 </div>
               )}
 
+              <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5">
+                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div className="text-[11px] leading-relaxed text-muted-foreground">
+                  <span className="font-bold text-foreground">Already done for you:</span> your plan uses cooked weights, so meat,
+                  rice and potatoes are converted to what to buy <b>raw / dry</b> and rounded up to real package sizes. Sorted in the
+                  order you walk the store.
+                </div>
+              </div>
+
               <div className="flex flex-wrap items-center gap-2">
+                <div className="mr-auto text-xs font-bold tabular-nums">
+                  {doneCount}/{result.items.length} in your cart
+                </div>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={copyList}>
+                  <Copy className="h-3.5 w-3.5" /> Copy / share
+                </Button>
                 <Button size="sm" variant="outline" onClick={clearChecked} disabled={checked.length === 0}>
-                  Clear Checked
+                  Clear
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setHideChecked((v) => !v)}>
                   {hideChecked ? "Show checked" : "Hide checked"}
                 </Button>
               </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${result.items.length ? (doneCount / result.items.length) * 100 : 0}%` }}
+                />
+              </div>
 
               <div className="space-y-5">
-                {result.sections.map((section) => {
+                {aisles.map((group) => {
                   const visible = hideChecked
-                    ? section.items.filter((i) => !checked.includes(i.identity))
-                    : section.items;
+                    ? group.items.filter((i) => !checked.includes(i.identity))
+                    : group.items;
                   if (visible.length === 0) return null;
                   return (
-                    <div key={section.category} className="space-y-2">
-                      <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                        {section.category}
+                    <div key={group.aisle} className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                        <span aria-hidden>{STORE_AISLE_EMOJI[group.aisle]}</span> {group.aisle}
                       </div>
                       <ul className="space-y-1.5">
                         {visible.map((item) => {
@@ -245,25 +284,24 @@ export function GroceryListSheet({
                             <li key={item.identity}>
                               <label
                                 className={cn(
-                                  "flex min-h-[52px] w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2",
-                                  isChecked && "opacity-55",
+                                  "flex min-h-[56px] w-full cursor-pointer items-start gap-3 rounded-xl border border-border bg-card px-3 py-2.5 transition",
+                                  isChecked && "opacity-50",
                                 )}
                               >
                                 <Checkbox
                                   checked={isChecked}
                                   onCheckedChange={() => toggle(item.identity)}
-                                  className="h-6 w-6 shrink-0"
+                                  className="mt-0.5 h-6 w-6 shrink-0"
                                 />
-                                <span
-                                  className={cn(
-                                    "min-w-0 flex-1 break-words text-sm font-semibold",
-                                    isChecked && "line-through",
+                                <span className="min-w-0 flex-1">
+                                  <span className={cn("block break-words text-sm font-bold capitalize", isChecked && "line-through")}>
+                                    {item.name}
+                                  </span>
+                                  <span className="block text-sm font-black text-primary">{item.buy}</span>
+                                  {item.detail && <span className="block text-[11px] text-muted-foreground">{item.detail}</span>}
+                                  {item.tip && !isChecked && (
+                                    <span className="mt-0.5 block text-[11px] italic text-muted-foreground/90">💡 {item.tip}</span>
                                   )}
-                                >
-                                  {item.name}
-                                </span>
-                                <span className="shrink-0 whitespace-nowrap text-sm font-black tabular-nums">
-                                  {item.quantityLabel}
                                 </span>
                               </label>
                             </li>
@@ -273,6 +311,12 @@ export function GroceryListSheet({
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="rounded-lg border border-border bg-secondary/20 px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                <div className="mb-1 font-black uppercase tracking-widest text-foreground">🇨🇦 Save money</div>
+                No Frills, Food Basics, FreshCo and Walmart are cheapest for staples. Costco wins on chicken, eggs, rice and whey.
+                Buy family packs and freeze what you won't eat in 3 days. Frozen fruit and veg are just as good as fresh.
               </div>
             </>
           )}
