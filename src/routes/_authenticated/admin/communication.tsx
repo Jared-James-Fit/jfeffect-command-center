@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,31 @@ function CommunicationWorkspace() {
   const { tab, client, sub } = Route.useSearch();
   const navigate = useNavigate();
   const viewportLockedTab = tab === "messages" || tab === "support-inbox";
+
+  // Tabs scroll sideways on phones: fade whichever edge has more tabs, and
+  // keep the active tab in view.
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const [tabFade, setTabFade] = useState<string | null>(null);
+  const updateTabFade = () => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const left = el.scrollLeft > 4;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setTabFade(left || right
+      ? `linear-gradient(to right, ${left ? "transparent, #000 28px" : "#000"}, ${right ? "#000 calc(100% - 28px), transparent" : "#000"})`
+      : null);
+  };
+  useEffect(() => {
+    const el = tabsRef.current;
+    const btn = el?.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
+    if (el && btn) {
+      const target = btn.offsetLeft - (el.clientWidth - btn.offsetWidth) / 2;
+      el.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+    }
+    updateTabFade();
+    window.addEventListener("resize", updateTabFade);
+    return () => window.removeEventListener("resize", updateTabFade);
+  }, [tab]);
 
   useMemo(() => {
     try { window.localStorage.setItem(LAST_TAB_KEY, tab); } catch {}
@@ -129,7 +154,10 @@ function CommunicationWorkspace() {
       </div>
       <div className="shrink-0 border-b border-border bg-background/50">
         <div
-          className="-mb-px flex gap-1 overflow-x-auto px-3 md:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          ref={tabsRef}
+          onScroll={updateTabFade}
+          className="-mb-px flex overflow-x-auto px-1.5 md:gap-1 md:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={tabFade ? { WebkitMaskImage: tabFade, maskImage: tabFade } : undefined}
         >
           {TABS.map((t) => {
             const active = t.value === tab;
@@ -137,9 +165,10 @@ function CommunicationWorkspace() {
               <button
                 key={t.value}
                 type="button"
+                data-tab={t.value}
                 onClick={() => setTab(t.value)}
                 className={cn(
-                  "shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-[13px] font-semibold transition-colors md:text-sm md:py-3",
+                  "shrink-0 whitespace-nowrap border-b-2 px-2.5 py-2.5 md:px-3 text-[13px] font-semibold transition-colors md:text-sm md:py-3",
                   active
                     ? "border-primary text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",

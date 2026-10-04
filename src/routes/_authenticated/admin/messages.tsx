@@ -53,11 +53,27 @@ const WORKFLOW_STYLE: Record<Exclude<InboxWorkflowState, "archived">, string> = 
   done: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
 };
 
-export function WorkflowPill({ state, className }: { state: InboxWorkflowState; className?: string }) {
+const WORKFLOW_SHORT: Record<Exclude<InboxWorkflowState, "archived">, string> = {
+  needs_response: "Needs reply",
+  waiting_on_client: "Waiting",
+  done: "Done",
+};
+
+export function WorkflowPill({ state, className, compact }: { state: InboxWorkflowState; className?: string; compact?: boolean }) {
   if (state === "archived") return null;
   return (
-    <span className={cn("inline-flex h-5 items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-black uppercase tracking-wide", WORKFLOW_STYLE[state], className)}>
-      {WORKFLOW_LABEL[state]}
+    <span
+      className={cn("inline-flex h-5 min-w-0 shrink items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-black uppercase tracking-wide", WORKFLOW_STYLE[state], className)}
+      title={WORKFLOW_LABEL[state]}
+    >
+      {compact ? (
+        <>
+          <span className="truncate sm:hidden">{WORKFLOW_SHORT[state]}</span>
+          <span className="hidden truncate sm:inline">{WORKFLOW_LABEL[state]}</span>
+        </>
+      ) : (
+        <span className="truncate">{WORKFLOW_LABEL[state]}</span>
+      )}
     </span>
   );
 }
@@ -667,7 +683,7 @@ export function MessagesInbox({
         {selected ? (
           <>
             <header
-              className="flex items-center gap-2 border-b border-border bg-card/80 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-4"
+              className="flex items-center gap-1.5 border-b border-border bg-card/80 px-2 py-2 backdrop-blur sm:gap-2 supports-[backdrop-filter]:bg-card/60 md:px-4"
               style={
                 embedded
                   ? undefined
@@ -677,7 +693,7 @@ export function MessagesInbox({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 shrink-0 md:hidden"
+                className="-mr-1 h-8 w-8 shrink-0 md:hidden"
                 onClick={clearSelection}
                 aria-label="Back to inbox"
               >
@@ -708,12 +724,12 @@ export function MessagesInbox({
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] text-muted-foreground">
                   {selectedState?.priority && selectedState.priority !== "Normal" && (
                     <PriorityChip priority={selectedState.priority} />
                   )}
-                  {selectedWorkflow && <WorkflowPill state={selectedWorkflow.state} />}
-                  <span className="truncate">{selected.email}</span>
+                  {selectedWorkflow && <WorkflowPill state={selectedWorkflow.state} compact />}
+                  <span className="hidden truncate sm:inline">{selected.email}</span>
                 </div>
               </div>
               {selectedWorkflow?.state === "needs_response" && (
@@ -730,7 +746,7 @@ export function MessagesInbox({
               <Button
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 shrink-0 border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/20"
+                className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/20"
                 title="View client POV"
                 aria-label={`View ${selected.full_name ?? "client"} POV`}
                 onClick={enterSelectedClientPov}
@@ -742,7 +758,7 @@ export function MessagesInbox({
                   asChild
                   variant="outline"
                   size="icon"
-                  className="h-9 w-9 shrink-0 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+                  className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
                   title={`Call ${selected.full_name ?? "client"} (${(selected as any).phone})`}
                 >
                   <a href={`tel:${String((selected as any).phone).replace(/[^+\d]/g, "")}`} aria-label="Call client">
@@ -754,7 +770,7 @@ export function MessagesInbox({
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-9 w-9 shrink-0 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                  className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
                   title={`Send SMS to ${selected.full_name ?? "client"}`}
                   onClick={() => setSmsOpen(true)}
                 >
@@ -763,7 +779,7 @@ export function MessagesInbox({
               ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
+                  <Button variant="ghost" size="icon" className="h-8 w-7 shrink-0 sm:h-9 sm:w-9">
                     <MoreHorizontal className="h-5 w-5" />
                   </Button>
                 </DropdownMenuTrigger>
