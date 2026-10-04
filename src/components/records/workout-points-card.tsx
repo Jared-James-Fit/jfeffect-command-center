@@ -44,7 +44,7 @@ export function WorkoutPointsCard({ points }: { points: WorkoutPoints }) {
   const leagueLines = [
     { label: "Completed workout", n: league.completed },
     { label: "Fully logged", n: league.fully_logged },
-    { label: "Records", n: league.records },
+    { label: "PRs & ATPRs", n: league.records },
   ].filter((l) => l.n > 0);
   const recordsShown = league.record_lifts.reduce((s, r) => s + r.points, 0);
   const capped = league.record_cap_hit && recordsShown > league.records;
@@ -80,14 +80,14 @@ export function WorkoutPointsCard({ points }: { points: WorkoutPoints }) {
                   )}
                   title={`${r.exercise_name} · ${SCOPE_LABEL[r.scope]}`}
                 >
-                  {r.exercise_name} · {SCOPE_LABEL[r.scope]}
+                  <span className="font-black">{SCOPE_LABEL[r.scope]}</span> · {r.exercise_name}
                 </span>
               ))}
             </div>
           )}
           {capped && (
             <div className="mt-1.5 rounded-md bg-amber-500/10 px-1.5 py-1 text-[10px] font-semibold leading-snug text-amber-700 dark:text-amber-300">
-              Monthly record cap reached (40) — {recordsShown} earned, +{league.records} counted
+              Monthly PR cap hit (40 pts) — {recordsShown} earned, +{league.records} counted
             </div>
           )}
         </div>
