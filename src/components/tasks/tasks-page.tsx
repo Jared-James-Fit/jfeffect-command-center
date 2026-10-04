@@ -28,6 +28,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
 import { cn } from "@/lib/utils";
+import { QuickNotesPanel } from "@/components/tasks/quick-notes";
 
 // ---------- Quadrant customization (color + labels), persisted to localStorage ----------
 type QuadStyle = { color: string; title: string; subtitle: string };
@@ -77,29 +78,6 @@ function useAssignees(storageKey: string) {
     try { localStorage.setItem(storageKey, JSON.stringify(assignees)); } catch {}
   }, [assignees, storageKey]);
   return [assignees, setAssignees] as const;
-}
-
-// ---------- Quick Notes (localStorage, autosave) ----------
-type Note = { id: string; title: string; body: string; updatedAt: number };
-
-function useNotes(storageKey: string) {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const loadedRef = useRef(false);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) setNotes(JSON.parse(raw));
-    } catch {}
-    loadedRef.current = true;
-  }, [storageKey]);
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    const t = setTimeout(() => {
-      try { localStorage.setItem(storageKey, JSON.stringify(notes)); } catch {}
-    }, 250);
-    return () => clearTimeout(t);
-  }, [notes, storageKey]);
-  return [notes, setNotes] as const;
 }
 
 const newId = () =>
@@ -407,7 +385,7 @@ export function TasksPage({
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               autoFocus value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search title, notes, assignee…" className="h-9 pl-8 text-sm"
+              placeholder="Search tasks & quick notes…" className="h-9 pl-8 text-sm"
             />
           </div>
         )}
@@ -513,13 +491,17 @@ export function TasksPage({
           storageKey={`${storagePrefix}-task-notes`}
           quadStyles={quadStyles}
           onConvert={async (note, quadrant, assignee) => {
-            const t = (note.title || note.body).trim().slice(0, 200);
+            // Keep the whole note: title (or its first line) becomes the task
+            // title, the full body rides along as the task notes.
+            const firstLine = note.body.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+            const t = (note.title.trim() || firstLine).slice(0, 200);
             if (!t) return;
-            await createTask({ title: t, quadrant, scope, notes: note.title ? note.body : null, assignee_name: assignee });
+            await createTask({ title: t, quadrant, scope, notes: note.body.trim() ? note.body : null, assignee_name: assignee });
             refresh();
-            toast.success("Converted to task");
+            toast.success("Converted to task — note kept");
           }}
           assignees={assignees}
+          search={search}
         />
       </div>
 
@@ -794,147 +776,6 @@ function QuadrantCustomizer({ style, onChange, onReset }: { style: QuadStyle; on
         </Button>
       </PopoverContent>
     </Popover>
-  );
-}
-
-// ---------------------------------------------------------------- quick notes
-
-function QuickNotesPanel({
-  storageKey, quadStyles, assignees, onConvert,
-}: {
-  storageKey: string;
-  quadStyles: Record<TaskQuadrant, QuadStyle>;
-  assignees: Assignee[];
-  onConvert: (note: Note, quadrant: TaskQuadrant, assignee: string | null) => Promise<void>;
-}) {
-  const [notes, setNotes] = useNotes(storageKey);
-  const [selectMode, setSelectMode] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  const addNote = useCallback(() => {
-    const n: Note = { id: newId(), title: "", body: "", updatedAt: Date.now() };
-    setNotes((arr) => [n, ...arr]);
-    setExpanded(n.id);
-  }, [setNotes]);
-
-  const updateNote = (id: string, patch: Partial<Note>) =>
-    setNotes((arr) => arr.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n)));
-  const removeNotes = (ids: string[]) => {
-    const set = new Set(ids);
-    setNotes((arr) => arr.filter((n) => !set.has(n.id)));
-    setSelected(new Set());
-  };
-  const duplicate = (n: Note) => setNotes((arr) => [{ ...n, id: newId(), updatedAt: Date.now() }, ...arr]);
-
-  const allSelected = notes.length > 0 && selected.size === notes.length;
-
-  return (
-    <Card className="overflow-hidden border-border bg-card p-0">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <StickyNote className="h-4 w-4 text-primary" />
-        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick Notes</h2>
-        <Badge variant="outline" className="text-[10px]">{notes.length}</Badge>
-        <div className="ml-auto flex items-center gap-1">
-          {notes.length > 0 && (
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]"
-              onClick={() => { setSelectMode((s) => !s); setSelected(new Set()); }}>
-              {selectMode ? "Cancel" : "Select"}
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={addNote}>
-            <Plus className="mr-1 h-3.5 w-3.5" />Note
-          </Button>
-        </div>
-      </div>
-
-      {selectMode && (
-        <div className="flex items-center justify-between border-t border-border bg-primary/5 px-3 py-1.5">
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]"
-            onClick={() => setSelected(allSelected ? new Set() : new Set(notes.map((n) => n.id)))}>
-            {allSelected ? "Deselect all" : "Select all"}
-          </Button>
-          <span className="text-[11px] font-bold">{selected.size} selected</span>
-          <Button variant="destructive" size="sm" className="h-7 px-2 text-[11px]"
-            disabled={selected.size === 0} onClick={() => removeNotes(Array.from(selected))}>
-            <Trash2 className="mr-1 h-3.5 w-3.5" />Delete
-          </Button>
-        </div>
-      )}
-
-      {notes.length === 0 ? (
-        <div className="border-t border-border px-3 py-3 text-[11px] text-muted-foreground">
-          No notes yet — tap “Note” to jot something down. Auto-saves as you type.
-        </div>
-      ) : (
-        <ul className="divide-y divide-border border-t border-border">
-          {notes.map((n) => {
-            const isOpen = expanded === n.id;
-            const preview = (n.title || n.body || "Untitled note").split("\n")[0];
-            return (
-              <li key={n.id} className="px-3 py-2">
-                <div className="flex items-start gap-2.5">
-                  {selectMode && (
-                    <Checkbox
-                      className="mt-0.5 h-[18px] w-[18px]"
-                      checked={selected.has(n.id)}
-                      onCheckedChange={(v) => setSelected((s) => { const x = new Set(s); v ? x.add(n.id) : x.delete(n.id); return x; })}
-                    />
-                  )}
-                  <button className="min-w-0 flex-1 text-left" onClick={() => setExpanded(isOpen ? null : n.id)}>
-                    <div className="truncate text-sm">{preview}</div>
-                    {!isOpen && n.body && n.title && (
-                      <div className="truncate text-[11px] text-muted-foreground">{n.body}</div>
-                    )}
-                  </button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"><MoreHorizontal className="h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger><ListTodo className="mr-2 h-4 w-4" />Convert to task</DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent>
-                          {QUADRANTS.map((q) => (
-                            <DropdownMenuItem key={q.key} onClick={() => onConvert(n, q.key, null)}>
-                              <span className="mr-2 h-2 w-2 rounded-full" style={{ backgroundColor: quadStyles[q.key].color }} />
-                              {quadStyles[q.key].title}
-                            </DropdownMenuItem>
-                          ))}
-                          {assignees.length > 0 && <DropdownMenuSeparator />}
-                          {assignees.map((a) => (
-                            <DropdownMenuItem key={a.id} onClick={() => onConvert(n, "do", a.name)}>
-                              <Users className="mr-2 h-4 w-4" />{a.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                      <DropdownMenuItem onClick={() => duplicate(n)}><Copy className="mr-2 h-4 w-4" />Duplicate</DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive" onClick={() => removeNotes([n.id])}>
-                        <Trash2 className="mr-2 h-4 w-4" />Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                {isOpen && (
-                  <div className="mt-2 space-y-1.5">
-                    <Input
-                      value={n.title} placeholder="Title (optional)" autoFocus={!n.title && !n.body}
-                      onChange={(e) => updateNote(n.id, { title: e.target.value })} className="h-8 text-sm"
-                    />
-                    <Textarea
-                      value={n.body} placeholder="Write it down…" rows={4}
-                      onChange={(e) => updateNote(n.id, { body: e.target.value })} className="text-sm"
-                    />
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </Card>
   );
 }
 
