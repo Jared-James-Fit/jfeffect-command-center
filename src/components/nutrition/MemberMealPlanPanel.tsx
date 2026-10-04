@@ -32,7 +32,7 @@ export function MemberMealPlanPanel() {
       const { downloadMealPlanPdf } = await import(
         "@/lib/nutrition-targets/meal-plan-pdf"
       );
-      downloadMealPlanPdf({
+      await downloadMealPlanPdf({
         client_name: (plan as any).client_name ?? null,
         coach_name: (plan as any).coach_name ?? null,
         updated_at: (plan as any).updated_at ?? null,

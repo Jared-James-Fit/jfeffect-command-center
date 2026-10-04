@@ -48,6 +48,8 @@ export type ClientFormRendererProps = {
   onClose?: () => void;
 };
 
+const NO_ANSWERS: NfAnswer[] = [];
+
 export function ClientFormRenderer({ formId, embedded = false, onClose }: ClientFormRendererProps) {
   const portalUserId = usePortalUserId();
   const navigate = useNavigate();
@@ -89,7 +91,9 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     queryFn: () => getOrCreateCurrentSubmission(form!, client!.id),
   });
 
-  const { data: answersRaw = [] } = useQuery({
+  // NB: no `= []` default here — a fresh array every render re-fires the
+  // effect below (setLocal) forever ("Maximum update depth exceeded").
+  const { data: answersData } = useQuery({
     queryKey: ["nf-answers", submission?.id],
     enabled: !!submission?.id,
     queryFn: () => listAnswers(submission!.id),
@@ -106,6 +110,8 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     enabled: !!submission?.id && (submission?.status === "reviewed"),
     queryFn: () => getReview(submission!.id),
   });
+
+  const answersRaw = answersData ?? NO_ANSWERS;
 
   const answersMap = useMemo(() => {
     const m: Record<string, NfAnswer | undefined> = {};

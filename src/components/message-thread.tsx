@@ -64,6 +64,7 @@ import { compressImage } from "@/lib/image-compress";
 import {
   FormHistoryRow,
   MessengerCheckinRequestCard,
+  FormRequestChatCard,
   MessengerCheckinSubmissionCard,
 } from "@/components/messages/messenger-checkin-card";
 import { planFormMessages } from "@/lib/form-message-presentation";
@@ -536,6 +537,19 @@ function AttachmentView({
         taskType={att.checkin_task_type}
         role={role}
         onUseReply={role === "admin" ? onUseReply : undefined}
+      />
+    );
+  }
+  if (att.kind === "form_request" && (att as any).form_id) {
+    const a = att as any;
+    return (
+      <FormRequestChatCard
+        formId={a.form_id}
+        title={a.request_title ?? null}
+        note={a.request_note ?? null}
+        clientId={clientId}
+        role={role === "client" ? "client" : "admin"}
+        sentAt={(message as any)?.sent_at ?? (message as any)?.created_at ?? null}
       />
     );
   }
