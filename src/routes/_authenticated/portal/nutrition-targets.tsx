@@ -16,7 +16,8 @@ import { PageHeader } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Download, FileText, Loader2, Scale, Target, Utensils, Droplets } from "lucide-react";
+import { ClipboardList, Download, FileText, Loader2, Scale, ShieldAlert, Target, Utensils, Droplets } from "lucide-react";
+import { NUTRITION_DISCLAIMER, NUTRITION_DISCLAIMER_TITLE } from "@/lib/nutrition-disclaimer";
 import { MealPlanDisplay } from "@/components/meal-plan-display";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { getClientWorkouts } from "@/lib/pl-programs";
@@ -282,10 +283,13 @@ function PortalNutrition() {
                 <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
                   <Utensils className="h-4 w-4" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="text-sm font-black uppercase tracking-widest">Meal Plan</div>
                   <div className="text-[11px] text-muted-foreground">{day.day_label || DAY_TYPE_LABEL[automaticDayType]}</div>
                 </div>
+                <Button size="sm" variant="outline" className="h-9 shrink-0 gap-1.5" onClick={handleDownload} disabled={downloading}>
+                  {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PDF
+                </Button>
               </div>
               {day.notes && String(day.notes).trim() ? (
                 <MealPlanDisplay text={day.notes} collapsibleMeals />
@@ -301,7 +305,7 @@ function PortalNutrition() {
         {/* Grocery list — right under the meal plan so clients can't miss it. */}
         {plan && clientId && (
           <SectionErrorBoundary label="Grocery list">
-            <GroceryListEntryCard clientId={clientId} />
+            <GroceryListEntryCard clientId={clientId} viewAsUserId={impersonatedClient?.user_id ?? null} />
           </SectionErrorBoundary>
         )}
 
@@ -375,6 +379,14 @@ function PortalNutrition() {
             }
           />
         </SectionErrorBoundary>
+
+        {/* Nutrition disclaimer — always last on the page. */}
+        <div className="rounded-xl border border-border bg-secondary/20 p-4 text-[11px] leading-relaxed text-muted-foreground">
+          <div className="mb-1 flex items-center gap-1.5 font-black uppercase tracking-widest text-foreground/80">
+            <ShieldAlert className="h-3.5 w-3.5" /> {NUTRITION_DISCLAIMER_TITLE}
+          </div>
+          {NUTRITION_DISCLAIMER}
+        </div>
       </div>
     </>
   );

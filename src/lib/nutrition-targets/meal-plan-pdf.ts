@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { NUTRITION_DISCLAIMER, NUTRITION_DISCLAIMER_TITLE } from "@/lib/nutrition-disclaimer";
 
 type Day = {
   id?: string;
@@ -57,6 +58,8 @@ export function generateMealPlanPdf(data: MealPlanPdfData): jsPDF {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text("Nutrition Plan", marginX, 54);
+  doc.setFillColor(239, 51, 64);
+  doc.rect(0, 72, pageWidth, 3, "F");
 
   doc.setTextColor(20, 20, 20);
   y = 100;
@@ -188,13 +191,23 @@ export function generateMealPlanPdf(data: MealPlanPdfData): jsPDF {
     y += lines.length * 12 + 8;
   }
 
-  // Disclaimer
-  if (data.disclaimer && data.disclaimer.trim()) {
-    ensureSpace(40);
-    doc.setFont("helvetica", "italic");
+  // Disclaimer — always printed (coach-provided text, or the JF Effect default).
+  {
+    const text = (data.disclaimer && data.disclaimer.trim()) || NUTRITION_DISCLAIMER;
+    ensureSpace(60);
+    doc.setDrawColor(239, 51, 64);
+    doc.setLineWidth(1);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 14;
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    doc.text(NUTRITION_DISCLAIMER_TITLE.toUpperCase(), marginX, y);
+    y += 12;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8.5);
     doc.setTextColor(110, 110, 110);
-    const lines = doc.splitTextToSize(data.disclaimer.trim(), pageWidth - marginX * 2);
+    const lines = doc.splitTextToSize(text, pageWidth - marginX * 2);
     ensureSpace(lines.length * 11);
     doc.text(lines, marginX, y);
     y += lines.length * 11 + 6;

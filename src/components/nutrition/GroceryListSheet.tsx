@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { addDays, format } from "date-fns";
-import { Copy, Lightbulb, Loader2, ShoppingCart } from "lucide-react";
+import { Copy, Download, Lightbulb, Loader2, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { STORE_AISLE_EMOJI, groceryListText, groupByAisle } from "@/lib/grocery-shop";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -160,6 +160,22 @@ export function GroceryListSheet({
     }
   };
 
+  const downloadPdf = async () => {
+    try {
+      const { downloadGroceryListPdf } = await import("@/lib/grocery-list-pdf");
+      downloadGroceryListPdf({
+        clientName: (q.data?.plan?.client_name as string | undefined) ?? null,
+        rangeLabel,
+        spanLabel: span === 2 ? "2 weeks" : "1 week",
+        weekSummary: weekSummaryText(dayCounts),
+        groups: aisles,
+      });
+    } catch (e) {
+      console.error("Grocery PDF failed", e);
+      toast.error("Couldn't create the PDF");
+    }
+  };
+
   const rangeLabel = `${format(parseLocalDate(weekStart)!, "MMM d")} – ${format(parseLocalDate(weekEnd)!, "MMM d, yyyy")}`;
   const hasPlan = !!targetId && result.items.length > 0;
 
@@ -268,6 +284,9 @@ export function GroceryListSheet({
                 <div className="mr-auto text-xs font-bold tabular-nums">
                   {doneCount}/{result.items.length} in your cart
                 </div>
+                <Button size="sm" className="gap-1.5" onClick={downloadPdf}>
+                  <Download className="h-3.5 w-3.5" /> PDF
+                </Button>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={copyList}>
                   <Copy className="h-3.5 w-3.5" /> Copy / share
                 </Button>

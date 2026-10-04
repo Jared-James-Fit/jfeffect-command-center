@@ -35,6 +35,17 @@ describe("Canadian grocery shop info", () => {
     expect(shopInfo({ name: "whole wheat bread", measure: { kind: "count", qty: 14, unit: "slice" } }).buy).toBe("1 × 675 g loaf");
   });
 
+  it("ignores macro lines and keeps soup out of raw meat", () => {
+    const list = buildGroceryList({
+      planDays: [{ day_label: "Training Day", notes: "Meal 1\n90 g chicken breast\nApproximate macros:\n24 g protein\n54 g carbohydrates\n11 g fat\n7 g fibre\n300 g chicken noodle soup" }],
+      dayCounts: { training: 1, non_training: 0, high: 0 },
+    });
+    expect(list.items.map((i) => i.name)).toEqual(["chicken breast", "chicken noodle soup"]);
+    const soup = mass("chicken noodle soup", 2100);
+    expect(soup.aisle).toBe("Canned & Jarred");
+    expect(soup.buy).toBe("4 × 540 ml cans");
+  });
+
   it("does not file peanut butter as dairy", () => {
     expect(mass("natural peanut butter", 224).aisle).toBe("Nut Butters, Oils & Nuts");
     expect(mass("butter", 50).aisle).toBe("Dairy & Eggs");

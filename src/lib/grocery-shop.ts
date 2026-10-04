@@ -92,6 +92,9 @@ const RULES: Rule[] = [
   { match: /\begg whites?\b|\bliquid eggs?\b/, aisle: "Dairy & Eggs", pack: { size: 500, name: "500 g carton" }, tip: "Naturegg / PC egg whites — next to the eggs" },
   { match: /\beggs?\b/, aisle: "Dairy & Eggs", each: { grams: 50, name: "egg", plural: "eggs" }, tip: "Costco 30-packs are the cheapest per egg" },
 
+  // Ready-made soups / stews (before meat, so "chicken noodle soup" isn't raw chicken)
+  { match: /\b(soup|stew|chili|chilli)\b/, aisle: "Canned & Jarred", pack: { size: 540, name: "540 ml can", plural: "540 ml cans" }, tip: "Canned soup aisle — low-sodium (Campbell's, PC, Habitant)" },
+
   // Meat & seafood (cooked → raw)
   { match: /\b(ground|lean|extra lean|mince|minced)\b.*\b(beef|turkey|chicken|pork|bison)\b|\b(beef|turkey|chicken|pork|bison)\b.*\b(ground|mince)\b/, aisle: "Meat & Seafood", toRaw: 1.3, rawWord: "raw", pack: { size: 454, name: "454 g (1 lb) pack", plural: "454 g (1 lb) packs" }, lb: true, tip: "Extra lean has the least fat — check the label for the %" },
   { match: /\b(chicken|turkey) (breast|thigh|tenderloin)s?\b|\bchicken\b/, aisle: "Meat & Seafood", toRaw: 1.33, rawWord: "raw", pack: { size: 1000, name: "family pack (~1 kg)", plural: "family packs (~1 kg each)" }, lb: true, tip: "Boneless, skinless. Family packs or Costco bags are cheapest — freeze what you won't use in 3 days" },
