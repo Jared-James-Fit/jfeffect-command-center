@@ -13,8 +13,9 @@ describe("client profile shell cleanup", () => {
   it("keeps account actions in one canonical Login & Access area", () => {
     expect(SHELL).not.toContain("<SetupStatusBanner");
     expect(SHELL).not.toContain("Mark setup complete");
-    expect(SHELL).toContain("Send password recovery");
-    expect(SHELL).toContain("Copy recovery link");
+    expect(SHELL).toContain("Email reset link");
+    expect(SHELL).toContain("Text setup link");
+    expect(SHELL).toContain("Copy reset link");
   });
 
   it("renders the workspace nav exactly once, directly inside Tabs", () => {

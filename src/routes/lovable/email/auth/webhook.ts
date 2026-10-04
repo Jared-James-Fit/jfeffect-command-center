@@ -133,11 +133,21 @@ export const Route = createFileRoute("/lovable/email/auth/webhook")({
         }
 
         // Build template props from payload.data (HookData structure)
+        // Scanner-safe link: our page exchanges the token only when the person
+        // taps Continue, so Outlook/Gmail link scanners can't "expire" it.
+        const { scannerSafeAuthLink } = await import('@/lib/scanner-safe-auth-link')
+        const safeUrl = scannerSafeAuthLink({
+          url: payload.data.url,
+          tokenHash: payload.data.token_hash ?? payload.data.hashed_token ?? null,
+          actionType: emailType,
+          redirectTo: payload.data.redirect_to ?? null,
+          siteUrl: `https://${ROOT_DOMAIN}`,
+        })
         const templateProps = {
           siteName: SITE_NAME,
           siteUrl: `https://${ROOT_DOMAIN}`,
           recipient: payload.data.email,
-          confirmationUrl: payload.data.url,
+          confirmationUrl: safeUrl ?? payload.data.url,
           token: payload.data.token,
           email: payload.data.email,
           oldEmail: payload.data.old_email,
