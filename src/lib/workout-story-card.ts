@@ -35,7 +35,7 @@ const TIER: Record<StoryRecord["tier"], { from: string; to: string; text: string
 
 type Ctx = CanvasRenderingContext2D;
 
-function font(weight: number, size: number) {
+export function font(weight: number, size: number) {
   return `${weight} ${size}px ${FONT}`;
 }
 
@@ -58,7 +58,7 @@ export function ellipsize(ctx: Ctx, text: string, maxWidth: number) {
   return `${t.trimEnd()}…`;
 }
 
-function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
+export function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -68,7 +68,7 @@ function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: numb
   ctx.closePath();
 }
 
-function loadImage(src: string): Promise<HTMLImageElement | null> {
+export function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((res) => {
     const img = new Image();
     img.onload = () => res(img);
