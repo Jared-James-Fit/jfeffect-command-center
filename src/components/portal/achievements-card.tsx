@@ -21,25 +21,68 @@ const ICONS: Record<string, LucideIcon> = {
   ruler: Ruler, trophy: Trophy, gem: Gem,
 };
 
-const BADGE_PALETTES = [
-  "from-rose-200 via-pink-300 to-red-400 border-rose-500 text-rose-800 shadow-rose-500/30",
-  "from-orange-200 via-amber-300 to-yellow-400 border-orange-500 text-orange-800 shadow-orange-500/30",
-  "from-emerald-200 via-green-300 to-teal-400 border-emerald-500 text-emerald-800 shadow-emerald-500/30",
-  "from-cyan-200 via-sky-300 to-blue-400 border-sky-500 text-blue-800 shadow-sky-500/30",
-  "from-indigo-200 via-violet-300 to-purple-400 border-violet-500 text-violet-800 shadow-violet-500/30",
-  "from-fuchsia-200 via-pink-300 to-purple-400 border-fuchsia-500 text-fuchsia-800 shadow-fuchsia-500/30",
+// Each badge keeps a stable colour identity. Medallion colours are applied as
+// inline styles (not palette utilities) so they look identical in light and
+// dark mode — theme remapping must never wash out the glyph.
+type Medal = { light: string; base: string; deep: string; border: string };
+const BADGE_PALETTES: Medal[] = [
+  { light: "#fda4af", base: "#f43f5e", deep: "#be123c", border: "border-rose-500" },
+  { light: "#fcd34d", base: "#f97316", deep: "#c2410c", border: "border-orange-500" },
+  { light: "#6ee7b7", base: "#10b981", deep: "#047857", border: "border-emerald-500" },
+  { light: "#7dd3fc", base: "#0ea5e9", deep: "#1d4ed8", border: "border-sky-500" },
+  { light: "#c4b5fd", base: "#8b5cf6", deep: "#6d28d9", border: "border-violet-500" },
+  { light: "#f0abfc", base: "#d946ef", deep: "#a21caf", border: "border-fuchsia-500" },
 ];
-const paletteFor = (key:string) => BADGE_PALETTES[[...key].reduce((n,c)=>n+c.charCodeAt(0),0)%BADGE_PALETTES.length];
+const paletteFor = (key: string) => BADGE_PALETTES[[...key].reduce((n, c) => n + c.charCodeAt(0), 0) % BADGE_PALETTES.length];
+
+const RARITY_RING: Record<Rarity, string | null> = {
+  common: null,
+  rare: "#e2e8f0",
+  epic: "#c4b5fd",
+  legendary: "#fbbf24",
+};
 
 export function BadgeIcon({ icon, rarity, locked, size = "md", badgeKey = icon }: { icon: string; rarity: Rarity; locked?: boolean; size?: "sm" | "md" | "lg"; badgeKey?: string }) {
   const Icon = ICONS[icon] ?? Award;
-  const r = RARITY_STYLE[rarity];
-  const dims = size === "lg" ? "h-20 w-20" : size === "sm" ? "h-8 w-8" : "h-12 w-12";
-  const ic = size === "lg" ? "h-9 w-9" : size === "sm" ? "h-4 w-4" : "h-6 w-6";
+  const dims = size === "lg" ? "h-20 w-20" : size === "sm" ? "h-8 w-8" : "h-14 w-14";
+  const ic = size === "lg" ? "h-9 w-9" : size === "sm" ? "h-4 w-4" : "h-7 w-7";
+  if (locked) {
+    return (
+      <span className={cn("relative flex shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border bg-muted/50 text-muted-foreground", dims)}>
+        <Lock className={ic} />
+      </span>
+    );
+  }
+  const m = paletteFor(badgeKey);
+  const ring = RARITY_RING[rarity];
+  const ringPx = size === "sm" ? 1.5 : 2.5;
   return (
-    <span className={cn("relative flex shrink-0 items-center justify-center rounded-full border-2 transition-transform duration-200", dims,
-      locked ? "border-dashed border-border bg-muted/40 text-muted-foreground" : cn("bg-gradient-to-br shadow-lg ring-2 ring-white/80 ring-offset-1", paletteFor(badgeKey), rarity==="legendary"&&"ring-amber-300"))}>
-      {locked ? <Lock className={ic} /> : <><span className="absolute inset-1 rounded-full bg-white/20" /><Icon className={cn(ic,"relative z-10 drop-shadow-sm")} strokeWidth={2.6} /></>}
+    <span
+      className={cn("relative flex shrink-0 items-center justify-center rounded-full transition-transform duration-200", dims)}
+      style={{
+        background: `radial-gradient(circle at 32% 24%, ${m.light} 0%, ${m.base} 52%, ${m.deep} 100%)`,
+        boxShadow: [
+          ring ? `0 0 0 ${ringPx}px ${ring}` : `0 0 0 ${ringPx}px rgba(255,255,255,0.9)`,
+          `0 0 0 ${ringPx + 1}px ${m.deep}40`,
+          `0 6px 14px -4px ${m.deep}aa`,
+          "inset 0 -3px 6px rgba(0,0,0,0.22)",
+          "inset 0 2px 2px rgba(255,255,255,0.45)",
+          rarity === "legendary" ? "0 0 18px 2px rgba(251,191,36,0.45)" : "",
+        ].filter(Boolean).join(", "),
+      }}
+    >
+      {/* Gloss highlight */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-[14%] top-[8%] h-[42%] rounded-full"
+        style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0))" }}
+      />
+      <Icon
+        className={cn(ic, "relative z-10")}
+        color="#ffffff"
+        strokeWidth={2.4}
+        style={{ filter: `drop-shadow(0 1px 1.5px ${m.deep})` }}
+      />
     </span>
   );
 }
@@ -93,8 +136,8 @@ function Tile({ b, onClick }: { b: DetailBadge; onClick: () => void }) {
   const earned = !!b.earned_at;
   return (
     <button type="button" onClick={onClick}
-      className={cn("flex min-h-[112px] flex-col items-center justify-start gap-1 rounded-xl border p-2 text-center transition active:scale-95",
-        earned ? cn("bg-card shadow-md hover:-translate-y-0.5 hover:shadow-lg", paletteFor(b.badge_key).split(" ").find(x=>x.startsWith("border-")),
+      className={cn("flex min-h-[124px] flex-col items-center justify-start gap-1.5 rounded-xl border px-2 pb-2 pt-3 text-center transition active:scale-95",
+        earned ? cn("bg-card shadow-md hover:-translate-y-0.5 hover:shadow-lg", paletteFor(b.badge_key).border,
           b.rarity === "legendary" && "border-2 border-amber-400 bg-gradient-to-b from-amber-50 to-card ring-1 ring-amber-300/60 dark:from-amber-500/10",
           b.rarity === "epic" && "border-violet-400 bg-gradient-to-b from-violet-50 to-card dark:from-violet-500/10") : "border-dashed border-border/70 opacity-70")}>
       <BadgeIcon icon={b.icon_key} rarity={b.rarity} locked={!earned} badgeKey={b.badge_key} />
