@@ -747,6 +747,9 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
     const actor = await resolveClientAccess(context.supabase, context.userId, row.client_id);
     if (actor !== "client") throw new Error("This check-in must be submitted by the client.");
     if (row.status === "completed") return row;
+    if (row.status === "superseded") {
+      throw new Error("This check-in was replaced by a newer one — use the latest check-in in your chat.");
+    }
 
     const taskType = row.task_type as MessengerCheckinTaskType;
     const { data: occurrence } = row.occurrence_id

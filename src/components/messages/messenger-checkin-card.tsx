@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { FormPresentation } from "@/lib/form-message-presentation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
@@ -7,8 +8,10 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/comp
 import { Progress } from "@/components/ui/progress";
 import {
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleDashed,
   ClipboardCheck,
   Flag,
   Loader2,
@@ -216,6 +219,7 @@ export function MessengerCheckinRequestCard({
   const [open, setOpen] = useState(false);
 
   const done = data?.status === "completed";
+  const superseded = data?.status === "superseded";
 
   return (
     <>
@@ -230,20 +234,20 @@ export function MessengerCheckinRequestCard({
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold">{titleFor(taskType)}</div>
             <div className={cn("mt-0.5 text-xs", FORM_MUTED)}>
-              {isLoading ? "Loading…" : done ? "Submitted" : durationFor(taskType)}
+              {isLoading ? "Loading…" : done ? "Submitted" : superseded ? "Replaced by a newer check-in" : durationFor(taskType)}
             </div>
           </div>
         </div>
 
-        {!isLoading && !done && role === "client" && (
+        {!isLoading && !done && !superseded && role === "client" && (
           <Button
             className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
             onClick={() => setOpen(true)}
           >
-            Start check-in <ChevronRight className="ml-1 h-4 w-4" />
+            {taskType === "nutrition_review" ? "Start review" : "Start check-in"} <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         )}
-        {!isLoading && !done && role === "admin" && (
+        {!isLoading && !done && !superseded && role === "admin" && (
           <div className="mt-3 rounded-xl bg-blue-600/10 px-3 py-2 text-xs font-medium text-blue-700 dark:bg-blue-400/15 dark:text-blue-200">
             Waiting for client
           </div>
@@ -715,5 +719,168 @@ function RecapRow({
         <div className="mt-1 text-xs text-muted-foreground">{empty}</div>
       )}
     </div>
+  );
+}
+
+
+function fmtShortDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function fmtDateTime(iso: string) {
+  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * Compact history row for a recurring chat form that is no longer the
+ * current action (older, superseded, or completed). Roughly the height of a
+ * normal chat line; tap to reveal timestamps and open the submitted answers.
+ */
+export function FormHistoryRow({ p, role }: { p: FormPresentation; role: Role }) {
+  const [expanded, setExpanded] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const completed = p.state === "completed";
+  const statusLine = completed
+    ? "Completed"
+    : role === "admin"
+    ? `Not completed · ${p.readAt ? `Read ${fmtShortDate(p.readAt)}` : "Unread"}`
+    : "Not completed";
+
+  return (
+    <div className="mx-auto w-full max-w-sm" data-form-history-row>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition hover:bg-secondary/60 active:bg-secondary"
+      >
+        <span
+          className={cn(
+            "grid h-6 w-6 shrink-0 place-items-center rounded-full",
+            completed ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
+          )}
+        >
+          {completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CircleDashed className="h-3.5 w-3.5" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold leading-tight text-foreground">
+            {titleFor(p.taskType)} · {fmtShortDate(p.sentAt)}
+          </span>
+          <span className="block truncate text-[11px] leading-tight text-muted-foreground">{statusLine}</span>
+        </span>
+        <ChevronDown
+          className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", expanded ? "rotate-0" : "-rotate-90")}
+        />
+      </button>
+
+      {expanded && (
+        <div className="mx-3 mb-1 mt-0.5 space-y-1 border-l-2 border-border pl-4 text-[11px] text-muted-foreground">
+          <div>Sent {fmtDateTime(p.sentAt)}</div>
+          {role === "admin" && <div>{p.readAt ? `Read ${fmtDateTime(p.readAt)}` : "Not opened"}</div>}
+          {p.submittedAt ? (
+            <div>Submitted {fmtDateTime(p.submittedAt)}</div>
+          ) : (
+            <div>Replaced by a newer {titleFor(p.taskType).toLowerCase()}</div>
+          )}
+          {completed && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-1.5 h-8 rounded-full px-3 text-xs font-semibold"
+              onClick={() => setSheetOpen(true)}
+            >
+              View {p.taskType === "nutrition_review" ? "review" : "check-in"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {completed && (
+        <CheckinAnswersSheet
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          submissionId={p.submissionId}
+          taskType={p.taskType}
+          role={role}
+          submittedAt={p.submittedAt}
+        />
+      )}
+    </div>
+  );
+}
+
+function CheckinAnswersSheet({
+  open,
+  onOpenChange,
+  submissionId,
+  taskType,
+  role,
+  submittedAt,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  submissionId: string;
+  taskType: MessengerCheckinTaskType;
+  role: Role;
+  submittedAt: string | null;
+}) {
+  const get = useServerFn(getMessengerCheckin);
+  const { data, isLoading } = useQuery({
+    queryKey: ["messenger-checkin", submissionId],
+    queryFn: () => get({ data: { submissionId } }),
+    staleTime: 30_000,
+    enabled: open,
+  });
+  const answers = (data?.answers ?? {}) as Record<string, any>;
+  const analysis = role === "admin" ? (data?.ai_analysis as any) : null;
+  const when = (data?.submitted_at as string | null) ?? submittedAt;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-3xl p-0">
+        <div className="mx-auto max-w-lg">
+          <SheetHeader className="min-h-0 border-b border-border px-5 py-4 text-left">
+            <SheetTitle>{titleFor(taskType)}</SheetTitle>
+            <p className="text-sm text-muted-foreground">
+              {when ? `Submitted ${fmtDateTime(when)}` : "Submitted"}
+            </p>
+          </SheetHeader>
+          <div className="space-y-3 px-5 py-5">
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+              </div>
+            ) : (
+              <>
+                {analysis && (
+                  <div className="space-y-2">
+                    <RecapRow icon={Trophy} label="Win" items={analysis.wins} empty="No clear win flagged" />
+                    <RecapRow icon={Target} label="Focus" items={analysis.focus} empty="No major focus flagged" />
+                    <RecapRow icon={CheckCircle2} label="Goals" items={analysis.goals} empty="No goal entered" />
+                    <RecapRow
+                      icon={Flag}
+                      label="Red flags"
+                      items={analysis.red_flags}
+                      empty="None"
+                      danger={(analysis.red_flags ?? []).length > 0}
+                    />
+                  </div>
+                )}
+                {Object.entries(answers)
+                  .filter(([, v]) => v !== undefined && v !== null && v !== "" && (!Array.isArray(v) || v.length > 0))
+                  .map(([k, v]) => (
+                    <div key={k} className="rounded-2xl border border-border bg-card p-3">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        {LABELS[taskType][k] ?? k}
+                      </div>
+                      <div className="mt-1 text-sm font-medium">{displayAnswer(v)}</div>
+                    </div>
+                  ))}
+              </>
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
