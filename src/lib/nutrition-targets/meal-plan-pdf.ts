@@ -22,6 +22,7 @@ export type MealPlanPdfData = {
   water?: string | null;
   sleep?: string | null;
   client_notes?: string | null;
+  food_weighing_rules?: string | null;
   disclaimer?: string | null;
   days: Day[];
 };
@@ -165,6 +166,23 @@ export function generateMealPlanPdf(data: MealPlanPdfData): jsPDF {
     doc.setFontSize(10);
     doc.setTextColor(40, 40, 40);
     const lines = doc.splitTextToSize(data.client_notes.trim(), pageWidth - marginX * 2);
+    ensureSpace(lines.length * 12);
+    doc.text(lines, marginX, y);
+    y += lines.length * 12 + 8;
+  }
+
+  // Food-weighing rules
+  if (data.food_weighing_rules && data.food_weighing_rules.trim()) {
+    ensureSpace(60);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(20, 20, 20);
+    doc.text("Food-Weighing Rules", marginX, y);
+    y += 14;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+    const lines = doc.splitTextToSize(data.food_weighing_rules.trim(), pageWidth - marginX * 2);
     ensureSpace(lines.length * 12);
     doc.text(lines, marginX, y);
     y += lines.length * 12 + 8;

@@ -4,14 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ActionButton } from "@/components/action-button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Plus, Pencil, Trash2, Copy, EyeOff, LayoutList, BookOpen, Sparkles, RefreshCw, Link2, Link2Off, AlertTriangle } from "lucide-react";
+import { Heart, Plus, Pencil, Trash2, Copy, EyeOff, LayoutList, Sparkles, Link2, Link2Off, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { CardioTargetDialog } from "./cardio-target-dialog";
 import { CardioProgramBuilderDialog } from "./cardio-program-builder-dialog";
-import { CardioProgramTemplatesDialog } from "./cardio-program-templates-dialog";
 import { CardioApplyDefaultsDialog } from "./cardio-apply-defaults-dialog";
 import { CardioSyncRenameDialog } from "./cardio-sync-rename-dialog";
-import { deriveTarget, formatCalorieTarget, nutritionLabelsFromTargets, findOrphanedCardio, findDefaultFor, DEFAULT_CARDIO_PRESETS, presetToRow } from "@/lib/nutrition-cardio";
+import { deriveTarget, formatCalorieTarget, nutritionLabelsFromTargets, findOrphanedCardio } from "@/lib/nutrition-cardio";
 import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
 import {
   DropdownMenu,
@@ -26,7 +25,6 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
-  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [defaultsOpen, setDefaultsOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -92,33 +90,6 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
     toast.success("Duplicated");
   };
 
-  const syncWithNutrition = async () => {
-    if (nutritionLabels.length === 0) {
-      toast.error("This client has no active nutrition day types yet.");
-      return;
-    }
-    // Step 1: ensure a default exists for each nutrition day type that has a matching preset
-    const inserts: any[] = [];
-    for (const preset of DEFAULT_CARDIO_PRESETS) {
-      if (!nutritionLabels.includes(preset.day_type)) continue;
-      if (!findDefaultFor(targets as any[], preset.day_type)) {
-        inserts.push(presetToRow(preset, clientId));
-      }
-    }
-    if (inserts.length) {
-      const { error } = await supabase.from("cardio_targets").insert(inserts);
-      if (error) return toast.error(error.message);
-    }
-    if (orphaned.length) {
-      setRenameOpen(true);
-    }
-    qc.invalidateQueries({ queryKey: ["cardio-targets", clientId] });
-    qc.invalidateQueries({ queryKey: ["cal-client-cardio", clientId] });
-    qc.invalidateQueries({ queryKey: ["client-cardio-resolved", clientId] });
-    qc.invalidateQueries({ queryKey: ["week-sched-data"] });
-    toast.success(`Synced with nutrition day types${inserts.length ? ` · created ${inserts.length}` : ""}`);
-  };
-
   // Group targets by program_name
   const groups: Record<string, any[]> = {};
   (targets as any[]).forEach((t) => {
@@ -135,12 +106,6 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
         <div className="flex flex-wrap gap-2">
           <ActionButton size="sm" className="flex-1 bg-gradient-primary font-bold uppercase sm:flex-none" onClick={() => setDefaultsOpen(true)}>
             <Sparkles className="mr-1 h-4 w-4" /> Apply Default Cardio
-          </ActionButton>
-          <ActionButton size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={syncWithNutrition} jobLabel="Syncing with nutrition">
-            <RefreshCw className="mr-1 h-4 w-4" /> Sync With Nutrition
-          </ActionButton>
-          <ActionButton size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => setTemplatesOpen(true)}>
-            <BookOpen className="mr-1 h-4 w-4" /> Assign Saved
           </ActionButton>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -237,7 +202,6 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
       )}
       <CardioTargetDialog open={open} onOpenChange={setOpen} clientId={clientId} initial={editing ?? undefined} defaultDayType={defaultDayType} />
       <CardioProgramBuilderDialog open={builderOpen} onOpenChange={setBuilderOpen} clientId={clientId} client={client as any} />
-      <CardioProgramTemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} clientId={clientId} />
       <CardioApplyDefaultsDialog
         open={defaultsOpen}
         onOpenChange={setDefaultsOpen}
