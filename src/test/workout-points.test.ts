@@ -24,7 +24,7 @@ describe("post-workout points summary", () => {
   });
 
   it("card lines always add up to the league total", () => {
-    expect(card).toContain('{ label: "Records", n: league.records }');
+    expect(card).toContain('{ label: "PRs & ATPRs", n: league.records }');
     expect(card).not.toMatch(/n: r\.points/);
   });
 });
