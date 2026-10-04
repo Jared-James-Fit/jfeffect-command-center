@@ -68,7 +68,10 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     }
     setRevealStage(0);
     setDisplayScore(0);
-    const intro = window.setTimeout(() => setRevealStage(1), 450);
+    const intro = window.setTimeout(() => {
+      setRevealStage(1);
+      void import("@/lib/app-sounds").then(({ playAppSound }) => playAppSound(soundRef.current));
+    }, 450);
     const details = window.setTimeout(() => setRevealStage(2), 1450);
     return () => {
       window.clearTimeout(intro);
@@ -91,6 +94,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [open, revealStage, summary.score]);
+  const soundRef = useRef<"celebrate" | "success">("success");
+  soundRef.current = prList.length > 0 || recordCount > 0 ? "celebrate" : "success";
   const hasAchievement = prList.length > 0 || recordCount > 0 || summary.score >= 90 || summary.completionPct === 100;
   const headline =
     recordHeadline ? recordHeadline

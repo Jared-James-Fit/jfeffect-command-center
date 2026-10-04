@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
+import { playAppSound } from "@/lib/app-sounds";
 import {
   getMessengerCheckin,
   submitMessengerCheckin,
@@ -386,6 +387,7 @@ function CheckinWizard({
     setSaving(true);
     try {
       await submit({ data: { submissionId, answers } });
+      playAppSound("success");
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] }),
         qc.invalidateQueries({ queryKey: ["messages", clientId, "client"] }),

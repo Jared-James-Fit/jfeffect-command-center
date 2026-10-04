@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell, BellOff, Smartphone, Share, Plus, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Bell, BellOff, Smartphone, Share, Plus, CheckCircle2, AlertCircle, Loader2, Volume2, VolumeX } from "lucide-react";
+import { appSoundsEnabled, setAppSoundsEnabled, subscribeAppSounds } from "@/lib/app-sounds";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -42,7 +43,38 @@ const CATEGORY_LABELS: Array<{ key: keyof Prefs; label: string; help: string }> 
   { key: "coaching_apps", label: "Coaching Applications", help: "Admin only — new applications" },
 ];
 
+/** Settings: in-app sounds toggle + push notification controls. */
 export function PushNotificationCard({ showCoachingApps = false }: { showCoachingApps?: boolean }) {
+  return (
+    <>
+      <AppSoundsCard />
+      <PushNotificationControls showCoachingApps={showCoachingApps} />
+    </>
+  );
+}
+
+function AppSoundsCard() {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    setOn(appSoundsEnabled());
+    return subscribeAppSounds(setOn);
+  }, []);
+  return (
+    <Card className="border-border bg-card p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <Header icon={on ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />} title="In-App Sounds" />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Soft sounds for new messages, submissions and PRs while the app is open. Follows your phone's silent switch.
+          </p>
+        </div>
+        <Switch checked={on} onCheckedChange={(v) => setAppSoundsEnabled(v)} aria-label="In-app sounds" />
+      </div>
+    </Card>
+  );
+}
+
+function PushNotificationControls({ showCoachingApps = false }: { showCoachingApps?: boolean }) {
   const qc = useQueryClient();
   const getPrefs = useServerFn(getNotificationPreferences);
   const updatePrefs = useServerFn(updateNotificationPreferences);

@@ -38,6 +38,7 @@ import {
 import { buildFilloutUrl } from "@/lib/fillout";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { playAppSound } from "@/lib/app-sounds";
 
 export type ClientFormRendererProps = {
   /** Form to render. */
@@ -216,6 +217,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
       throw new Error(`Please answer required: ${missing.map((m) => m.label).join(", ")}`);
     }
     await submitSubmission(submission.id);
+    playAppSound("success");
     // Nutrition Update Request: start the AI targets + meal plan for the coach.
     if (formId === NUTRITION_REQUEST_FORM_ID) {
       void import("@/lib/nutrition-ai-plans.functions")

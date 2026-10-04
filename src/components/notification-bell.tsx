@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isThreadOpen, playAppSound } from "@/lib/app-sounds";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -182,17 +183,36 @@ function acquireNotificationsChannel(userId: string, qc: QC): () => void {
         qc.invalidateQueries({ queryKey: ["media-nav-badges"] });
       }, NOTIFICATION_REALTIME_DEBOUNCE_MS);
     };
+    // Arrival sounds for things that happen while the app is open somewhere
+    // other than the thread itself (that thread plays its own sound).
+    const onInsert = (table: string) => (payload: any) => {
+      invalidate();
+      if (payload?.eventType !== "INSERT") return;
+      const row = payload.new ?? {};
+      if (table === "messages") {
+        if (row.sender_id === userId || row.is_internal_note || isThreadOpen(row.client_id)) return;
+        playAppSound("message");
+      } else if (table === "group_messages") {
+        if (row.sender_id === userId || isThreadOpen(`group:${row.group_id}`)) return;
+        playAppSound("message");
+      } else if (table === "lift_video_comments") {
+        if (row.author_id === userId) return;
+        playAppSound("notify");
+      } else if (table === "manual_check_in_reviews") {
+        playAppSound("notify");
+      }
+    };
     entry.ch = supabase
       .channel(`notifications-${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, onInsert("messages"))
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lift_video_comments" }, onInsert("lift_video_comments"))
       .on("postgres_changes", { event: "*", schema: "public", table: "agreements" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_exercise_notes" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, onInsert("group_messages"))
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "manual_check_in_reviews" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "manual_check_in_reviews" }, onInsert("manual_check_in_reviews"))
       .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "notification_state", filter: `user_id=eq.${userId}` }, invalidate)
       .subscribe();
