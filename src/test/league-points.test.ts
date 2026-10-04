@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { LEAGUE_RULES, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
+import { LEAGUE_RECORD_CAP, LEAGUE_RECORDS_START, LEAGUE_RULES, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 
 describe("league point display", () => {
   it.each([
@@ -40,7 +40,7 @@ describe("league rules stay in sync", () => {
   const ui = readFileSync("src/components/portal/athlete-level-card.tsx", "utf8");
 
   it("uses the simple point values everywhere", () => {
-    expect(LEAGUE_RULES.map((r) => r.points)).toEqual([10, 5, 5, 5]);
+    expect(LEAGUE_RULES.map((r) => r.points)).toEqual([10, 5, 5, 10, 5, 3]);
     expect(sql).toContain("a.workouts_completed*10 workout_points");
     expect(sql).toContain("a.fully_logged*5 logging_points");
     expect(sql).toContain("a.bw_logs*5 bodyweight_points");
@@ -60,5 +60,30 @@ describe("league rules stay in sync", () => {
     expect(ui).not.toMatch(/strength_score \?\? 0\)\.toFixed/);
     expect(ui).not.toMatch(/gap\.toFixed/);
     expect(ui).not.toContain("6.25");
+  });
+});
+
+describe("training-record points (from Oct 2026)", () => {
+  const sql = readFileSync("supabase/migrations/20261004180000_league_record_points.sql", "utf8");
+  const rules = Object.fromEntries(LEAGUE_RULES.map((r) => [r.key, r.points]));
+
+  it("UI rules match the database: ATPR +10, PROGRAM PR +5, BLOCK PR +3, capped per month", () => {
+    expect(rules).toMatchObject({ atpr: 10, program_pr: 5, block_pr: 3 });
+    expect(sql).toContain(`least(${LEAGUE_RECORD_CAP}, sum(case rl.tier when 3 then 10 when 2 then 5 when 1 then 3 else 0 end))`);
+    expect(sql).toContain(`select date '${LEAGUE_RECORDS_START}'`);
+  });
+
+  it("scores each lift once per month at its best tier, from completed workouts only", () => {
+    expect(sql).toContain("group by c.client_id, r.exercise_key");
+    expect(sql).toMatch(/case when bool_or\(r\.is_atpr\) then 3 when bool_or\(r\.is_program_pr\) then 2 when bool_or\(r\.is_block_pr\) then 1/);
+    expect(sql).toContain("r.completed and r.workout_at >= f.start_at");
+  });
+
+  it("keeps finalized months on the old rule", () => {
+    expect(sql).toContain("else coalesce(i.improved_exercises,0) * 5 end record_or_improvement_points");
+  });
+
+  it("returns record counts for the leaderboard badges", () => {
+    expect(sql).toMatch(/atpr_lifts integer, program_pr_lifts integer, block_pr_lifts integer, last_record_at timestamptz/);
   });
 });

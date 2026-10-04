@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type AchievementMetrics } from "@/lib/athlete-achievements";
 import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
 import { ArrowLeft } from "lucide-react";
-import { LEAGUE_RULES, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
+import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
+import { RecordBadges } from "@/components/portal/record-badges";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 
@@ -444,7 +445,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
             </li>
           ))}
         </ul>
-        <div className="mt-2 text-[11px] text-muted-foreground">Resets on the 1st. Log your bodyweight once to join.</div>
+        <div className="mt-2 text-[11px] text-muted-foreground">{LEAGUE_RECORDS_NOTE} Resets on the 1st. Log your bodyweight once to join.</div>
       </div>}
 
       {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
@@ -459,6 +460,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
                 <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
                 <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
                 <div className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</div>
+                <RecordBadges row={r} size="xs" center className="mt-1" />
                 {finalWeek && <RowBoost row={{ ...r, rank: r.rank } as BoostLeagueRow} />}
               </button>
             ) : <div key={i} />)}
@@ -468,7 +470,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
               <li key={r.client_id} onClick={() => onSelectedChange(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
                 <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
                 <RankAvatar row={r} size="h-9 w-9" />
-                <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div>{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
+                <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div><RecordBadges row={r} size="xs" className="mt-1" />{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
                 <span className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</span>
               </li>
             ))}
@@ -503,7 +505,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
             </li>
           ))}
         </ul>
-        <div className="mt-2 text-[11px] text-muted-foreground">Resets on the 1st. Log your bodyweight once to join.</div>
+        <div className="mt-2 text-[11px] text-muted-foreground">{LEAGUE_RECORDS_NOTE} Resets on the 1st. Log your bodyweight once to join.</div>
       </div>}
 
     </div>

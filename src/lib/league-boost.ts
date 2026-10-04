@@ -40,6 +40,11 @@ export type LeagueRow = {
   is_final_week: boolean;
   month_closed: boolean;
   finalized: boolean;
+  /** Lifts with a record this month, by best tier (each lift counted once). */
+  atpr_lifts?: number;
+  program_pr_lifts?: number;
+  block_pr_lifts?: number;
+  last_record_at?: string | null;
 };
 
 /** Today's date (YYYY-MM-DD) in the league timezone. */
