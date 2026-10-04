@@ -60,6 +60,7 @@ import {
 } from "@/components/admin/client-profile/personal-info-cards";
 import { CoachNutritionOverrideCard } from "@/components/admin/coach-nutrition-override-card";
 import { ClientWorkspaceTabs, type WorkspaceTab } from "@/components/clients/client-workspace-tabs";
+import { LEGACY_WORKSPACE_TABS } from "@/components/clients/client-workspace-tab-model";
 
 // Heavy panels — code-split so visiting a client only loads the active tab's code.
 const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
@@ -126,7 +127,7 @@ function AssignedCoachSelect({ value, onChange }: { value: string | null; onChan
   );
 }
 
-const TAB_VALUES = ["summary", "info", "goals-setup", "coaching", "account", "training", "program-setup", "analytics", "nutrition", "metrics", "lift-videos", "documents", "sessions", "purchases", "billing", "agreements", "notes"] as const;
+const TAB_VALUES = ["summary", "training", "nutrition", "metrics", "documents", "sessions", "purchases", "info", "goals-setup", "coaching", "notes", "account"] as const;
 type TabValue = typeof TAB_VALUES[number];
 
 
@@ -136,7 +137,7 @@ export const Route = createFileRoute("/_authenticated/admin/clients/$id")({
     const parsed = z.object({ tab: z.string().optional() }).parse(s);
     // Redirect deprecated tabs after the Client Profile / Nutrition consolidation.
     // "messages" now lives in the unified inbox, not the client workspace.
-    const remap: Record<string, TabValue> = { profile: "info", cardio: "nutrition", messages: "summary" };
+    const remap: Record<string, TabValue> = LEGACY_WORKSPACE_TABS;
     const t = parsed.tab ? (remap[parsed.tab] ?? parsed.tab) : undefined;
     return { tab: t && (TAB_VALUES as readonly string[]).includes(t) ? (t as TabValue) : undefined };
   },
@@ -680,7 +681,7 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="coaching" className={WORKSPACE_GRID_CLASS}>
-          <Card className="border-border bg-card p-6 md:col-span-2 space-y-4">
+          <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
@@ -733,24 +734,8 @@ export function ClientProfileWorkspace({
                 <Input className="min-h-[44px]" value={form.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} />
               </div>
             </div>
-            <p className="text-[11px] text-muted-foreground">Detailed billing controls live under Business. Detailed messaging & call access live under Communication and Personal Info.</p>
           </Card>
 
-          <Card className="border-border bg-card p-6 space-y-3">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Setup checklist</h3>
-            {[
-              ["Account access", !!form.user_id, "account"],
-              ["Intake & goals", !!form.intake_completed_at, "goals-setup"],
-              ["Training program", !!form.program_phase, "program-setup"],
-              ["Nutrition", !!form.nutrition_setup_completed_at, "nutrition"],
-              ["Billing", form.payment_status === "Paid" || form.payment_status === "Active Subscription", "billing"],
-            ].map(([label, complete, destination]) => (
-              <button key={String(label)} type="button" onClick={() => setTab(destination as TabValue)} className="flex min-h-[44px] w-full items-center justify-between border-b border-border/60 py-2 text-left last:border-0">
-                <span className="text-sm font-semibold">{String(label)}</span>
-                <Badge variant="outline" className={complete ? "border-success/40 bg-success/10 text-success" : "border-warning/40 bg-warning/10 text-warning"}>{complete ? "Complete" : "Needs setup"}</Badge>
-              </button>
-            ))}
-          </Card>
         </TabsContent>
 
         <TabsContent value="goals-setup" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
@@ -795,18 +780,16 @@ export function ClientProfileWorkspace({
           <Suspense fallback={<TabFallback />}>
             <ScheduleManagerShell clientId={id} mode="coach" />
             <TrainingProgramHub clientId={id} clientName={form?.full_name ?? null} />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="program-setup" className={WORKSPACE_GRID_CLASS}>
-          <Suspense fallback={<TabFallback />}>
-            <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
-            <AssignedProgramsCard clientId={id} mode="admin" />
-            <TrainingPhasesPanel clientId={id} />
-            <ImportantDatesPanel clientId={id} />
-            <ClientExerciseNotesCard clientId={id} />
-            <ClientMaxesPanel clientId={id} />
-            <ClientWarmupCard clientId={id} />
+            {/* Program setup (was its own tab) */}
+            <div className={WORKSPACE_GRID_CLASS}>
+              <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
+              <AssignedProgramsCard clientId={id} mode="admin" />
+              <TrainingPhasesPanel clientId={id} />
+              <ImportantDatesPanel clientId={id} />
+              <ClientExerciseNotesCard clientId={id} />
+              <ClientMaxesPanel clientId={id} />
+              <ClientWarmupCard clientId={id} />
+            </div>
           </Suspense>
         </TabsContent>
 
@@ -826,21 +809,13 @@ export function ClientProfileWorkspace({
               canEdit
               showExport
             />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="analytics">
-          <Suspense fallback={<TabFallback />}>
-            <ClientAnalyticsDashboard
-              clientId={id}
-              preferredUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
-              canOpenLog
-            />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="lift-videos" className={WORKSPACE_GRID_CLASS}>
-          <Suspense fallback={<TabFallback />}>
+            <div className="md:col-span-3">
+              <ClientAnalyticsDashboard
+                clientId={id}
+                preferredUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
+                canOpenLog
+              />
+            </div>
             <LiftVideosPanel clientId={id} />
           </Suspense>
         </TabsContent>
@@ -922,6 +897,10 @@ export function ClientProfileWorkspace({
               ))}
             </div>
           </Card>
+          <Suspense fallback={<TabFallback />}>
+            <AgreementStatusPanel client={form} />
+            <AgreementsPanel clientId={id} clientName={form?.full_name} />
+          </Suspense>
         </TabsContent>
 
         {/*
@@ -941,20 +920,8 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="purchases" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
-            <ClientSalesTable clientId={id} />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="billing" className={WORKSPACE_GRID_CLASS}>
-          <Suspense fallback={<TabFallback />}>
             <ClientBillingPanel clientId={id} />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="agreements" className={WORKSPACE_GRID_CLASS}>
-          <Suspense fallback={<TabFallback />}>
-            <AgreementStatusPanel client={form} />
-            <AgreementsPanel clientId={id} clientName={form?.full_name} />
+            <ClientSalesTable clientId={id} />
           </Suspense>
         </TabsContent>
 
@@ -2017,10 +1984,7 @@ function ClientOverviewSnapshot({
             complianceStatus={form.compliance_status}
             homeScreenStatus={form.home_screen_setup_status}
           />
-          <Card className="border-border bg-card p-6 space-y-3">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Training Schedule</h3>
-            <TrainingScheduleCard client={form} />
-          </Card>
+
         </div>
         <div className="space-y-6">
           {/* Profile completion */}
