@@ -2709,6 +2709,7 @@ function WorkoutDay({
           athleteName={(client as any)?.full_name ?? null}
           displayUnit={summaryDisplayUnit}
           cardio={cardioTakeaway}
+          playSounds={recapFromSubmitRef.current}
           sessionRating={
             lastSessionRating ??
             (completion as any)?.session_rating ??
