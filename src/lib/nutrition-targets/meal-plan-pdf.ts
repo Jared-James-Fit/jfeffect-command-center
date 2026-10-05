@@ -10,6 +10,7 @@
 import { jsPDF } from "jspdf";
 import { NUTRITION_DISCLAIMER, NUTRITION_DISCLAIMER_TITLE } from "@/lib/nutrition-disclaimer";
 import { macroSummary, structureMealPlanDay, type PlanMeal } from "@/lib/nutrition-targets/meal-plan-structure";
+import { MEAL_TIMING_LABEL } from "@/lib/nutrition-targets/meal-timing";
 
 type Day = {
   id?: string;
@@ -245,7 +246,18 @@ export function generateMealPlanPdf(data: MealPlanPdfData, logoDataUrl?: string 
     doc.roundedRect(mx, top, cw, 24, 7, 7, "F");
     doc.rect(mx, top + 14, cw, 10, "F");
     font("bold", 9.5, RED);
-    doc.text(clean(meal.title).toUpperCase(), mx + 12, top + 16);
+    const titleText = clean(meal.title).toUpperCase();
+    doc.text(titleText, mx + 12, top + 16);
+    if (meal.timing) {
+      // Pre / Post-Workout pill next to the meal title.
+      const label = MEAL_TIMING_LABEL[meal.timing].toUpperCase();
+      const px = mx + 12 + doc.getTextWidth(titleText) + 8;
+      font("bold", 7, [255, 255, 255]);
+      const pw = doc.getTextWidth(label) + 12;
+      color(meal.timing === "post" ? [16, 140, 96] : [214, 120, 18], "fill");
+      doc.roundedRect(px, top + 7, pw, 13, 6.5, 6.5, "F");
+      doc.text(label, px + 6, top + 16);
+    }
     const ms = macroSummary(meal.macros);
     if (ms) {
       font("bold", 8.5, [90, 50, 55]);

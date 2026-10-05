@@ -18,6 +18,7 @@ import { addMonths, addWeeks, format, parseISO } from "date-fns";
 import { FileText, Upload, X, Plus, ChevronDown } from "lucide-react";
 import { todayLocalISO } from "@/lib/today";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
+import { WorkoutMealTagger } from "@/components/nutrition/WorkoutMealTagger";
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
 
 const QUICK_DAY_TYPES = [
@@ -330,7 +331,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                   className="font-mono text-xs leading-relaxed whitespace-pre"
                   spellCheck={false}
                 />
-                <p className="text-[10px] text-muted-foreground">Paste meals as plain text — line breaks, “Meal N”, “Approx”, and “Daily Total” are auto-styled for the client view.</p>
+                <WorkoutMealTagger text={d.notes ?? ""} onChange={(t) => updateDay(i, "notes", t)} />
+                <p className="text-[10px] text-muted-foreground">Paste meals as plain text — line breaks, “Meal N”, “Approx”, and “Daily Total” are auto-styled for the client view. Tag a meal “(Pre-Workout)” or “(Post-Workout)” above or by typing it on the meal line.</p>
               </div>
             </div>
           ))}

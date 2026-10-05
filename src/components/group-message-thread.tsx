@@ -19,6 +19,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { shouldSendOnEnter } from "@/lib/enter-to-send";
 import {
   type GroupAttachment, type GroupMessage, type GroupReaction,
   listGroupMessages, listGroupReactions, listGroupMembers,
@@ -986,7 +987,7 @@ export function GroupMessageThread({
                   if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
                 }}
                 placeholder={`Message ${groupName}…`}
-                enterKeyHint="send"
+                enterKeyHint="enter"
                 className="min-h-10 max-h-40 flex-1 resize-none rounded-[20px] border-input bg-background px-4 py-[9px] text-base leading-5 sm:text-sm sm:leading-5"
                 onFocus={() => {
                   const el = scrollerRef.current;
@@ -998,7 +999,7 @@ export function GroupMessageThread({
                   setTimeout(pin, 350);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  if (shouldSendOnEnter(e)) {
                     e.preventDefault();
                     void doSend();
                   }

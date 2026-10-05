@@ -1,6 +1,13 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Dumbbell, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  MEAL_TIMING_HINT,
+  MEAL_TIMING_LABEL,
+  detectMealTiming,
+  stripTimingText,
+  type MealTiming,
+} from "@/lib/nutrition-targets/meal-timing";
 
 type Props = {
   text?: string | null;
@@ -26,7 +33,7 @@ const MACRO_TOKEN = /^~?\s*\d+(?:\.\d+)?\s*[pcfPCF]\s*$/;
 const MACRO_COMBINED = /^\s*~?\s*\d+\s*[pP]\s*[\/,]\s*~?\s*\d+\s*[cC]\s*[\/,]\s*~?\s*\d+\s*[fF]\b/;
 
 type Section =
-  | { kind: "meal"; title: string; subtitle?: string; items: string[]; approx?: string; approxMacros?: { title: string; items: string[] } }
+  | { kind: "meal"; title: string; subtitle?: string; timing?: MealTiming; items: string[]; approx?: string; approxMacros?: { title: string; items: string[] } }
   | { kind: "total"; title: string; macros?: string }
   | { kind: "highday"; title: string; items: string[] }
   | { kind: "other"; items: string[] };
@@ -69,9 +76,16 @@ function parse(text: string): Section[] {
       flushApproxBlock();
       // Split parenthesized subtitle: "Meal 3 (Pre/Post Workout Meal)" → title="Meal 3", subtitle="Pre/Post Workout Meal"
       const m = line.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
-      cur = m
-        ? { kind: "meal", title: m[1].trim(), subtitle: m[2].trim(), items: [] }
-        : { kind: "meal", title: line, items: [] };
+      const timing = detectMealTiming(line);
+      let title = m ? m[1].trim() : line;
+      let subtitle = m ? m[2].trim() : undefined;
+      if (timing) {
+        // The tag becomes a badge; keep any other words as the subtitle.
+        subtitle = subtitle ? stripTimingText(subtitle) || undefined : undefined;
+        const cleaned = stripTimingText(title).replace(/[:–—-]\s*$/, "").trim();
+        if (cleaned) title = cleaned;
+      }
+      cur = { kind: "meal", title, subtitle, timing, items: [] };
       sections.push(cur);
       continue;
     }
@@ -174,13 +188,23 @@ export function MealPlanDisplay({ text, className, collapsibleMeals = false }: P
         if (s.kind === "meal") {
           mealIndex += 1;
           const body = (
-            <div key={i} className="rounded-md border border-border bg-secondary/20 px-3 py-2.5">
-              <div className="flex flex-wrap items-baseline gap-x-2">
+            <div
+              key={i}
+              className={cn(
+                "rounded-md border bg-secondary/20 px-3 py-2.5",
+                s.timing === "pre" ? "border-amber-500/50" : s.timing === "post" ? "border-emerald-500/50" : s.timing ? "border-sky-500/50" : "border-border",
+              )}
+            >
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <div className="text-[11px] font-black uppercase tracking-widest text-primary">{titleCase(s.title)}</div>
+                {s.timing && <MealTimingBadge timing={s.timing} />}
                 {s.subtitle && (
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">— {s.subtitle}</div>
                 )}
               </div>
+              {s.timing && (
+                <div className="mt-0.5 text-[11px] text-muted-foreground">{MEAL_TIMING_HINT[s.timing]}</div>
+              )}
               {s.items.length > 0 && (
                 <ul className="mt-1.5 space-y-0.5">
                   {s.items.map((it, j) => (
@@ -213,7 +237,8 @@ export function MealPlanDisplay({ text, className, collapsibleMeals = false }: P
               key={i}
               title={titleCase(s.title)}
               subtitle={s.subtitle}
-              defaultOpen={mealIndex === 0}
+              timing={s.timing}
+              defaultOpen={mealIndex === 0 || !!s.timing}
             >
               {body}
             </CollapsibleMeal>
@@ -264,14 +289,35 @@ export function MealPlanDisplay({ text, className, collapsibleMeals = false }: P
   );
 }
 
+/** Pre / Post-Workout tag shown on a meal. */
+export function MealTimingBadge({ timing, className }: { timing: Exclude<MealTiming, null>; className?: string }) {
+  const Icon = timing === "post" ? Dumbbell : Zap;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider",
+        timing === "pre" && "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+        timing === "post" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+        timing === "pre_post" && "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+        className,
+      )}
+    >
+      <Icon className="h-3 w-3" />
+      {MEAL_TIMING_LABEL[timing]}
+    </span>
+  );
+}
+
 function CollapsibleMeal({
   title,
   subtitle,
+  timing,
   defaultOpen,
   children,
 }: {
   title: string;
   subtitle?: string;
+  timing?: MealTiming;
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
@@ -300,7 +346,10 @@ function CollapsibleMeal({
       className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/20 px-3 py-2.5 text-left transition hover:border-primary/40"
     >
       <span className="min-w-0">
-        <span className="block text-[11px] font-black uppercase tracking-widest text-primary">{title}</span>
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[11px] font-black uppercase tracking-widest text-primary">{title}</span>
+          {timing && <MealTimingBadge timing={timing} />}
+        </span>
         {subtitle && (
           <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {subtitle}
