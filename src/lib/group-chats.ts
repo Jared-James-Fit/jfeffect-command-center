@@ -187,9 +187,9 @@ export async function deleteGroupMessageForEveryone(messageId: string) {
   if (error) throw error;
 }
 
-export async function markGroupRead(groupId: string, userId: string) {
+export async function markGroupRead(groupId: string, userId: string, at: string = new Date().toISOString()) {
   await db.from("chat_group_members")
-    .update({ last_read_at: new Date().toISOString() })
+    .update({ last_read_at: at })
     .eq("group_id", groupId)
     .eq("user_id", userId);
 }

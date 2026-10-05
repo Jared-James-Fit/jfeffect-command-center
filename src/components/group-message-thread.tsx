@@ -39,12 +39,14 @@ import {
 } from "@/components/chat-shared";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
+import { GroupSeenByRow, GroupSeenBySheet } from "@/components/messages/group-seen-by";
+import { readStampFor, seenStateFor } from "@/lib/group-read-receipts";
 import { MeetQuickAction } from "@/components/meet-quick-action";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, Image as ImageIcon, Camera, File as FileIcon,
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
-  CheckCircle2, Circle, CheckSquare, Copy,
+  CheckCircle2, Circle, CheckSquare, Copy, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
@@ -175,18 +177,39 @@ export function GroupMessageThread({
       .on("postgres_changes", { event: "*", schema: "public", table: "group_message_reactions" }, () => {
         qc.invalidateQueries({ queryKey: ["group-reactions", groupId] });
       })
+      // Members' last_read_at drives "Seen by": refresh it live as people open the group.
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_group_members", filter: `group_id=eq.${groupId}` }, () => {
+        qc.invalidateQueries({ queryKey: ["group-members", groupId] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [groupId, qc]);
 
-  // mark read
+  // Mark read, but only while the thread is actually on screen: other members
+  // see this as "Seen", so a group left open in a background tab mustn't count.
+  const latestCreatedAt = messages[messages.length - 1]?.created_at ?? null;
   useEffect(() => {
-    if (!user || messages.length === 0) return;
-    markGroupRead(groupId, user.id).then(() => {
-      qc.invalidateQueries({ queryKey: ["group-unread"] });
-      qc.invalidateQueries({ queryKey: ["group-memberships"] });
-    });
-  }, [groupId, user?.id, messages.length, qc]);
+    if (!user || !latestCreatedAt) return;
+    let cancelled = false;
+    const run = () => {
+      markGroupRead(groupId, user.id, readStampFor(latestCreatedAt)).then(() => {
+        if (cancelled) return;
+        qc.invalidateQueries({ queryKey: ["group-unread"] });
+        qc.invalidateQueries({ queryKey: ["group-memberships"] });
+      });
+    };
+    if (typeof document === "undefined" || document.visibilityState === "visible") {
+      run();
+      return () => { cancelled = true; };
+    }
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", onVisible);
+      run();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
+  }, [groupId, user?.id, latestCreatedAt, qc]);
 
   // autoscroll
   useEffect(() => {
@@ -262,6 +285,17 @@ export function GroupMessageThread({
     }
     return null;
   }, [messages, user?.id]);
+
+  // "Seen by" shows under the newest message, and under my newest one when
+  // others have posted since (so a coach can still see who read their post).
+  const latestMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (!messages[i].deleted_at) return messages[i].id;
+    }
+    return null;
+  }, [messages]);
+  const [seenForId, setSeenForId] = useState<string | null>(null);
+  const seenForMessage = seenForId ? messages.find((x) => x.id === seenForId) ?? null : null;
 
   /* ---------------- Reactions (optimistic) ---------------- */
 
@@ -799,6 +833,10 @@ export function GroupMessageThread({
                               </button>
                             ))}
                           </div>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => { setActionsForId(null); setSeenForId(m.id); }}>
+                            <Eye className="mr-2 h-4 w-4" /> Seen by
+                          </DropdownMenuItem>
                           {mine && (m.body?.length ?? 0) > 0 && (
                             <>
                               <DropdownMenuSeparator />
@@ -834,6 +872,14 @@ export function GroupMessageThread({
                   )}
                 </div>
               </div>
+              {!selectionMode && !isDeleted && (m.id === latestMessageId || m.id === lastOwnMessageId) && (
+                <GroupSeenByRow
+                  state={seenStateFor(m, members, user?.id)}
+                  profileById={profileById}
+                  align={mine ? "end" : "start"}
+                  onOpen={() => setSeenForId(m.id)}
+                />
+              )}
             </Fragment>
           );
         })}
@@ -1138,6 +1184,14 @@ export function GroupMessageThread({
                   </div>
                 )}
                 <div className="mt-3 grid gap-1">
+                  {!m.deleted_at && (
+                    <Button
+                      type="button" variant="ghost" className="h-12 justify-start text-base"
+                      onClick={() => { setSheetForId(null); setSeenForId(m.id); }}
+                    >
+                      <Eye className="mr-3 h-5 w-5" /> Seen by
+                    </Button>
+                  )}
                   {canEdit && (
                     <Button
                       type="button" variant="ghost" className="h-12 justify-start text-base"
@@ -1191,6 +1245,14 @@ export function GroupMessageThread({
           })()}
         </SheetContent>
       </Sheet>
+
+      <GroupSeenBySheet
+        open={!!seenForMessage}
+        onOpenChange={(o) => { if (!o) setSeenForId(null); }}
+        state={seenForMessage ? seenStateFor(seenForMessage, members, user?.id) : null}
+        profileById={profileById}
+        preview={seenForMessage ? (seenForMessage.body || (seenForMessage.attachments?.length ? "Attachment" : "")) : undefined}
+      />
 
       {/* Confirm delete */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
