@@ -46,9 +46,10 @@ export async function getMyCoachId(): Promise<string | null> {
   return data?.id ?? null;
 }
 
-export async function createTask(input: { title: string; quadrant?: TaskQuadrant; assigned_to?: string | null; assignee_name?: string | null; due_at?: string | null; notes?: string | null; scope?: TaskScope }): Promise<void> {
+/** Inserts a task and resolves to its id. */
+export async function createTask(input: { title: string; quadrant?: TaskQuadrant; assigned_to?: string | null; assignee_name?: string | null; due_at?: string | null; notes?: string | null; scope?: TaskScope }): Promise<string> {
   const me = await getMyCoachId();
-  const { error } = await (supabase.from("tasks") as any).insert({
+  const { data, error } = await (supabase.from("tasks") as any).insert({
     title: input.title,
     quadrant: input.quadrant ?? "do",
     assigned_to: input.assigned_to ?? null,
@@ -57,8 +58,9 @@ export async function createTask(input: { title: string; quadrant?: TaskQuadrant
     notes: input.notes ?? null,
     scope: input.scope ?? "admin",
     created_by: me,
-  });
+  }).select("id").single();
   if (error) throw error;
+  return data.id as string;
 }
 
 export async function updateTask(id: string, patch: Partial<Pick<TaskRow, "title" | "notes" | "quadrant" | "due_at" | "assigned_to" | "assignee_name" | "priority" | "position">>): Promise<void> {
