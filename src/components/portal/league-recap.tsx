@@ -15,7 +15,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ArrowDownRight, ArrowUpRight, Clapperboard, Dumbbell, Flame, Medal, Minus, NotebookPen, Scale, Swords, Trophy, Volume2, VolumeX, X, Share2, Download } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Clapperboard, Dumbbell, Flame, Medal, Minus, NotebookPen, Scale, Swords, Trophy, TrendingUp, Volume2, VolumeX, X, Share2, Download } from "lucide-react";
+import { formatLoad, kgTo } from "@/lib/training-records";
 import { recapStoryBlob, shareOrSaveImage } from "@/lib/recap-story-card";
 import { createRecapMusic, readRecapMuted, writeRecapMuted, type RecapMusic, type RecapSfx } from "@/lib/recap-music";
 import { UserAvatar } from "@/components/user-avatar";
@@ -24,8 +25,9 @@ import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonat
 import { cn } from "@/lib/utils";
 import { leagueToday } from "@/lib/league-boost";
 import {
-  fetchLeagueRecap, hasSeenFeature, inRecapWindow, markFeatureSeen, monthName, nextMonthName, ordinal,
-  outroLine, previousLeagueMonth, rankChange, recapMonths, recapSeenKey, rivalLine, type LeagueRecap,
+  fetchLeagueRecap, formatTrainingTime, hasSeenFeature, inRecapWindow, liftComparison, markFeatureSeen, monthName,
+  nextMonthName, ordinal, outroLine, pctChange, previousLeagueMonth, rankChange, recapMonths, recapSeenKey, rivalLine,
+  type LeagueRecap,
 } from "@/lib/league-recap";
 
 const SLIDE_MS = 5600;
@@ -78,7 +80,6 @@ function buildSlides(r: LeagueRecap): Slide[] {
   const change = rankChange(r);
   const athletes = r.league?.athletes ?? 0;
   const recordsEra = r.month_start >= "2026-10-01";
-  const recordCount = me.atpr_lifts + me.program_pr_lifts + me.block_pr_lifts;
 
   const bars = [
     { label: "Workouts", value: me.workout_points, color: "#ef4444" },
@@ -88,6 +89,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
     { label: "Final Week Boost", value: me.match_points, color: "#a855f7" },
   ].filter((b) => b.value > 0);
   const barMax = Math.max(1, ...bars.map((b) => b.value));
+  const lifted = (r.training?.tonnage_kg ?? 0) > 0;
 
   const slides: Slide[] = [
     {
@@ -194,46 +196,11 @@ function buildSlides(r: LeagueRecap): Slide[] {
         </div>
       ),
     },
-    {
-      key: "grind",
-      bg: "radial-gradient(110% 70% at 50% 10%, #064e3b 0%, #04140f 55%, #050505 100%)",
-      render: (a) => {
-        const tiles = [
-          { icon: Dumbbell, label: "Workouts", value: me.workouts_completed },
-          { icon: NotebookPen, label: "Fully logged", value: me.fully_logged },
-          { icon: Scale, label: "Bodyweight logs", value: me.bodyweight_logs },
-          recordsEra
-            ? { icon: Trophy, label: me.atpr_lifts ? "ATPRs" : "Records", value: me.atpr_lifts || recordCount }
-            : { icon: Flame, label: "Lifts improved", value: me.improved_exercises },
-        ];
-        return (
-          <div className="flex h-full flex-col justify-center px-7">
-            <Rise><Kicker>The grind</Kicker></Rise>
-            <Rise delay={100}><div className="mt-2 text-3xl font-black leading-tight text-white">You put in the work.</div></Rise>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              {tiles.map((t, i) => (
-                <Rise key={t.label} delay={300 + i * 140}>
-                  <div className="rounded-2xl bg-white/[0.07] p-4 ring-1 ring-white/10">
-                    <t.icon className="h-5 w-5 text-emerald-300" />
-                    <Count to={t.value} active={a} className="mt-2 block text-4xl font-black text-white" />
-                    <div className="text-xs font-semibold uppercase tracking-wide text-white/60">{t.label}</div>
-                  </div>
-                </Rise>
-              ))}
-            </div>
-            {me.adherence_pct != null && me.adherence_pct > 0 && (
-              <Rise delay={1000}>
-                <div className="mt-4 text-sm text-white/70">
-                  Completed <span className="font-black text-white">{Math.round(me.adherence_pct)}%</span> of your prescribed workouts
-                  {me.boost_qualified && <span className="font-black text-amber-300"> · Boost qualified 🔥</span>}
-                </div>
-              </Rise>
-            )}
-          </div>
-        );
-      },
-    },
   ];
+
+  // Your own training comes first (everyone can relate to it), then the
+  // league. Months without weighted sets keep the classic "grind" slide.
+  slides.splice(1, 0, ...(lifted ? trainingSlides(r) : [grindSlide(r)]));
 
   if (r.rivals.length) {
     slides.push({
@@ -345,6 +312,192 @@ function buildSlides(r: LeagueRecap): Slide[] {
   return slides;
 }
 
+/** Fallback for months with no weighted sets (bodyweight / cardio programs). */
+function grindSlide(r: LeagueRecap): Slide {
+  const me = r.me;
+  const recordsEra = r.month_start >= "2026-10-01";
+  const recordCount = me.atpr_lifts + me.program_pr_lifts + me.block_pr_lifts;
+  return {
+    key: "grind",
+    bg: "radial-gradient(110% 70% at 50% 10%, #064e3b 0%, #04140f 55%, #050505 100%)",
+    render: (a) => {
+      const tiles = [
+        { icon: Dumbbell, label: "Workouts", value: me.workouts_completed },
+        { icon: NotebookPen, label: "Fully logged", value: me.fully_logged },
+        { icon: Scale, label: "Bodyweight logs", value: me.bodyweight_logs },
+        recordsEra
+          ? { icon: Trophy, label: me.atpr_lifts ? "ATPRs" : "Records", value: me.atpr_lifts || recordCount }
+          : { icon: Flame, label: "Lifts improved", value: me.improved_exercises },
+      ];
+      return (
+        <div className="flex h-full flex-col justify-center px-7">
+          <Rise><Kicker>The grind</Kicker></Rise>
+          <Rise delay={100}><div className="mt-2 text-3xl font-black leading-tight text-white">You put in the work.</div></Rise>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            {tiles.map((t, i) => (
+              <Rise key={t.label} delay={300 + i * 140}>
+                <div className="rounded-2xl bg-white/[0.07] p-4 ring-1 ring-white/10">
+                  <t.icon className="h-5 w-5 text-emerald-300" />
+                  <Count to={t.value} active={a} className="mt-2 block text-4xl font-black text-white" />
+                  <div className="text-xs font-semibold uppercase tracking-wide text-white/60">{t.label}</div>
+                </div>
+              </Rise>
+            ))}
+          </div>
+          {me.adherence_pct != null && me.adherence_pct > 0 && (
+            <Rise delay={1000}>
+              <div className="mt-4 text-sm text-white/70">
+                Completed <span className="font-black text-white">{Math.round(me.adherence_pct)}%</span> of your prescribed workouts
+                {me.boost_qualified && <span className="font-black text-amber-300"> · Boost qualified 🔥</span>}
+              </div>
+            </Rise>
+          )}
+        </div>
+      );
+    },
+  };
+}
+
+function trainingSlides(r: LeagueRecap): Slide[] {
+  const t = r.training!;
+  const me = r.me;
+  const unit = t.unit === "kg" ? "kg" : "lb";
+  const prevName = monthName(previousLeagueMonth(r.month_start.slice(0, 8) + "15"));
+  const compare = liftComparison(t.tonnage_kg);
+  const change = pctChange(t.tonnage_kg, t.prev_tonnage_kg);
+  const time = t.minutes > 0 ? formatTrainingTime(t.minutes) : null;
+  const toUnit = (kg: number) => Math.round(kgTo(unit, kg));
+  const prs = me.program_pr_lifts + me.block_pr_lifts;
+  const total = toUnit(t.tonnage_kg).toLocaleString();
+
+  const tiles = [
+    { label: "Workouts", value: String(me.workouts_completed) },
+    time ?? { label: "Sets", value: t.sets.toLocaleString() },
+    { label: "Reps", value: t.reps.toLocaleString() },
+  ];
+
+  const slides: Slide[] = [{
+    key: "lifted",
+    bg: "radial-gradient(110% 70% at 50% 10%, #064e3b 0%, #04140f 55%, #050505 100%)",
+    render: (a) => (
+      <div className="flex h-full flex-col justify-center px-7">
+        <Rise><Kicker>Total weight lifted</Kicker></Rise>
+        <Rise delay={120}>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-2">
+            <span
+              className="font-black leading-none text-white"
+              style={{ fontSize: `min(64px, calc((min(100vw, 420px) - 6.5rem) / ${(total.length * 0.6).toFixed(2)}))` }}
+            >
+              <Count to={toUnit(t.tonnage_kg)} active={a} />
+            </span>
+            <span className="text-2xl font-black text-emerald-300">{unit}</span>
+          </div>
+        </Rise>
+        {compare && (
+          <Rise delay={900}>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-white ring-1 ring-white/15">
+              <span className="text-lg leading-none">{compare.emoji}</span> That's like lifting {compare.text}
+            </div>
+          </Rise>
+        )}
+        {change != null && (
+          <Rise delay={1200}>
+            <div className={cn("mt-3 inline-flex items-center gap-1 text-sm font-black", change >= 0 ? "text-emerald-400" : "text-white/70")}>
+              {change > 0 ? <ArrowUpRight className="h-4 w-4" /> : change < 0 ? <ArrowDownRight className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+              {change === 0 ? `Same as ${prevName}` : `${Math.abs(change)}% ${change > 0 ? "more" : "less"} than ${prevName}`}
+            </div>
+          </Rise>
+        )}
+        <div className="mt-7 grid grid-cols-3 gap-2.5">
+          {tiles.map((x, i) => (
+            <Rise key={x.label} delay={400 + i * 140}>
+              <div className="rounded-2xl bg-white/[0.07] px-3 py-3.5 text-center ring-1 ring-white/10">
+                <div className="truncate text-2xl font-black tabular-nums text-white">{x.value}</div>
+                <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-white/60">{x.label}</div>
+              </div>
+            </Rise>
+          ))}
+        </div>
+        {me.adherence_pct != null && me.adherence_pct > 0 && (
+          <Rise delay={1400}>
+            <div className="mt-4 text-sm text-white/70">
+              Completed <span className="font-black text-white">{Math.round(me.adherence_pct)}%</span> of your planned workouts
+              {me.boost_qualified && <span className="font-black text-amber-300"> · Boost qualified 🔥</span>}
+            </div>
+          </Rise>
+        )}
+      </div>
+    ),
+  }];
+
+  if (t.heaviest || t.gains.length) {
+    slides.push({
+      key: "strength",
+      bg: "radial-gradient(110% 70% at 50% 10%, #134e4a 0%, #061614 55%, #050505 100%)",
+      render: () => (
+        <div className="flex h-full flex-col justify-center px-7">
+          <Rise><Kicker>Getting stronger</Kicker></Rise>
+          {t.heaviest && (
+            <Rise delay={120}>
+              <div className="mt-3 rounded-2xl bg-white/[0.07] p-4 ring-1 ring-white/10">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/55">Heaviest lift</div>
+                <div className="mt-1 text-5xl font-black leading-none text-white">{formatLoad(t.heaviest.load_kg, unit)}</div>
+                <div className="mt-1.5 truncate text-sm font-semibold text-white/75">
+                  {t.heaviest.exercise_name} × {t.heaviest.reps}
+                </div>
+              </div>
+            </Rise>
+          )}
+          {t.gains.length > 0 && (
+            <>
+              <Rise delay={500}>
+                <div className="mt-6 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/55">
+                  <TrendingUp className="h-3.5 w-3.5 text-emerald-300" /> Best strength gains
+                </div>
+              </Rise>
+              <div className="mt-2 space-y-2">
+                {t.gains.map((g, i) => (
+                  <div
+                    key={g.exercise_name}
+                    className="jf-rc-slide flex items-center gap-3 rounded-xl bg-white/[0.06] px-3 py-2.5 ring-1 ring-white/10"
+                    style={{ animationDelay: `${650 + i * 220}ms` }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-black text-white">{g.exercise_name}</div>
+                      <div className="text-[11px] text-white/55">
+                        Est. max {toUnit(g.prev_e1rm_kg)} → {toUnit(g.e1rm_kg)} {unit}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-lg font-black text-emerald-300">
+                      +{Math.max(1, toUnit(g.e1rm_kg) - toUnit(g.prev_e1rm_kg))} {unit}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Rise delay={1400}>
+                <p className="mt-2 text-[11px] leading-snug text-white/45">
+                  Est. max = the most your best set says you could lift for 1 rep.
+                </p>
+              </Rise>
+            </>
+          )}
+          {(me.atpr_lifts > 0 || prs > 0) && (
+            <Rise delay={t.gains.length ? 1600 : 600}>
+              <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-amber-400/15 px-4 py-2 text-sm font-black text-amber-300 ring-1 ring-amber-400/30">
+                <Trophy className="h-4 w-4" />
+                {[
+                  me.atpr_lifts ? `${me.atpr_lifts} all-time PR${me.atpr_lifts === 1 ? "" : "s"}` : null,
+                  prs ? `${prs} program/block PR${prs === 1 ? "" : "s"}` : null,
+                ].filter(Boolean).join(" · ")}
+              </div>
+            </Rise>
+          )}
+        </div>
+      ),
+    });
+  }
+  return slides;
+}
 
 // ------------------------------------------------------------------ sound cues
 
@@ -383,6 +536,24 @@ function slideCues(key: string, r: LeagueRecap): Cue[] {
         ...[0, 1, 2, 3, 4].map((i) => [450 + i * 140, "swish", { gain: 0.7 }] as Cue),
         [1250, "chime", { pitch: 1.12 }],
       ];
+    case "lifted":
+      return [
+        [0, "whoosh"],
+        ...counting(150, 10, 11),
+        ...[0, 1, 2].map((i) => [400 + i * 140, "pop", { pitch: 0.9 + i * 0.12, gain: 0.8 }] as Cue),
+        [900, "sparkle", { gain: 0.7 }],
+        ...(pctChange(r.training?.tonnage_kg ?? 0, r.training?.prev_tonnage_kg ?? 0) != null
+          ? [[1200, (r.training!.tonnage_kg >= r.training!.prev_tonnage_kg ? "rise" : "fall")] as Cue] : []),
+      ];
+    case "strength": {
+      const gains = r.training?.gains.length ?? 0;
+      return [
+        [0, "whoosh"],
+        ...(r.training?.heaviest ? [[150, "thud"] as Cue] : []),
+        ...Array.from({ length: gains }, (_, i) => [650 + i * 220, "swish", { gain: 0.7 }] as Cue),
+        ...(me.atpr_lifts || me.program_pr_lifts || me.block_pr_lifts ? [[gains ? 1600 : 600, "chime", { pitch: 1.12 }] as Cue] : []),
+      ];
+    }
     case "grind":
       return [[0, "whoosh"], ...[0, 1, 2, 3].map((i) => [300 + i * 140, "pop", { pitch: 0.9 + i * 0.12, gain: 0.8 }] as Cue)];
     case "rivals":
