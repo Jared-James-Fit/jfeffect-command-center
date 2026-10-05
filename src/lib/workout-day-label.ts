@@ -48,6 +48,24 @@ export function formatDaySubtitle(day: DayLike | null | undefined): string | nul
   return raw;
 }
 
+/**
+ * Coach day notes the athlete should see inside the logger. Only notes the
+ * coach explicitly marked client-visible are returned (`notes_client_visible`
+ * defaults to false, so private coach notes never leak). The first paragraph
+ * is the always-visible lead (e.g. today's equipment/station flow); anything
+ * after the first blank line is optional detail.
+ */
+export function formatClientDayNotes(
+  day: { notes?: string | null; notes_client_visible?: boolean | null } | null | undefined,
+): { lead: string; detail: string | null } | null {
+  if (day?.notes_client_visible !== true) return null;
+  const text = (day.notes ?? "").trim();
+  if (!text) return null;
+  const [lead, ...rest] = text.split(/\r?\n\s*\r?\n/);
+  const detail = rest.join("\n\n").trim();
+  return { lead: lead.trim(), detail: detail || null };
+}
+
 export interface TrainingDateParts {
   weekday: string;         // "Monday"
   weekdayShort: string;    // "Mon"
