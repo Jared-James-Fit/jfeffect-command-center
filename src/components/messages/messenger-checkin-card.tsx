@@ -63,7 +63,7 @@ const WEEKLY: Q[] = [
   {
     key: "recovery_flags",
     prompt: "Anything we should pay attention to?",
-    helper: "Pick all that apply.",
+    helper: "Pick as many as apply — or “All good” if nothing to flag.",
     type: "multi",
     options: [
       "All good",
@@ -490,28 +490,47 @@ function CheckinWizard({
                 </div>
               )}
 
-              {q.type === "multi" && (
-                <div className="mt-6 grid grid-cols-2 gap-2">
-                  {(q.options ?? []).map((o) => {
-                    const selected = Array.isArray(current) && current.includes(o);
-                    return (
-                      <button
-                        key={o}
-                        type="button"
-                        onClick={() => toggleOption(o)}
-                        className={cn(
-                          "min-h-14 rounded-2xl border px-3 py-2 text-sm font-semibold transition active:scale-[0.98]",
-                          selected
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-card",
-                        )}
-                      >
-                        {o}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {q.type === "multi" && (() => {
+                const picked: string[] = Array.isArray(current) ? current : [];
+                const flags = picked.filter((x) => x !== "All good");
+                return (
+                  <div className="mt-6 space-y-2" data-no-doubletap>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(q.options ?? []).map((o) => {
+                        const selected = picked.includes(o);
+                        const isAllGood = o === "All good";
+                        return (
+                          <button
+                            key={o}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => toggleOption(o)}
+                            className={cn(
+                              "relative flex min-h-14 touch-manipulation select-none items-center justify-center gap-1.5 rounded-2xl border px-3 py-2 text-sm font-semibold transition active:scale-[0.98]",
+                              isAllGood && "col-span-2",
+                              selected
+                                ? isAllGood
+                                  ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-card",
+                            )}
+                          >
+                            {selected && <CheckCircle2 className="h-4 w-4 shrink-0" />}
+                            {isAllGood ? "All good — nothing to flag" : o}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-center text-xs text-muted-foreground">
+                      {flags.length > 0
+                        ? `${flags.length} selected · tap more to add`
+                        : picked.includes("All good")
+                          ? "Nothing to flag this week 👍"
+                          : "Tap every one that applies"}
+                    </p>
+                  </div>
+                );
+              })()}
 
               {q.type === "text" && (
                 <Textarea

@@ -1388,6 +1388,13 @@ export function MessageThread({
     }, 1400);
   };
 
+  // Sheets/dialogs opened from a message (check-ins, forms, payment cards)
+  // are portaled to <body> but still bubble React events through the
+  // message bubble. Bubble gestures must ignore those, or a resting finger in
+  // the sheet starts a long-press / double-tap that swallows the next tap.
+  const fromPortal = (e: React.SyntheticEvent) =>
+    !(e.currentTarget as Node).contains(e.target as Node);
+
   // ---------- Long-press + selection helpers ----------
   const startLongPress = (id: string, x: number, y: number) => {
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
@@ -1423,6 +1430,7 @@ export function MessageThread({
   // chat keeps scrolling naturally; back-gesture (right-edge swipe) is left
   // alone because we only react to leftward dx.
   const onSwipeTouchStart = (e: React.TouchEvent) => {
+    if (fromPortal(e)) return;
     if (e.touches.length !== 1) return;
     const t = e.touches[0];
     swipeRef.current = { x: t.clientX, y: t.clientY, decided: false, horizontal: false };
@@ -1446,6 +1454,7 @@ export function MessageThread({
     }
   };
   const onSwipeTouchEnd = () => {
+    if (!swipeRef.current) return;
     swipeRef.current = null;
     setSwipeX(0);
   };
@@ -1826,9 +1835,9 @@ export function MessageThread({
                   WebkitTouchCallout: "none",
                   WebkitTapHighlightColor: "transparent",
                 }}
-                onContextMenu={(e) => { if (!isDeleted) e.preventDefault(); }}
+                onContextMenu={(e) => { if (!isDeleted && !fromPortal(e)) e.preventDefault(); }}
                 onPointerDown={(e) => {
-                  if (isEditing || isDeleted) return;
+                  if (isEditing || isDeleted || fromPortal(e)) return;
                   if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video")) return;
                   startLongPress(m.id, e.clientX, e.clientY);
                 }}
@@ -1837,7 +1846,7 @@ export function MessageThread({
                 onPointerCancel={cancelLongPress}
                 onPointerLeave={cancelLongPress}
                 onTouchEnd={(e) => {
-                  if (isDeleted || isEditing || selectionMode) return;
+                  if (isDeleted || isEditing || selectionMode || fromPortal(e)) return;
                   const lp = longPressRef.current;
                   if (lp) return; // long-press handler owns this gesture
                   const t = e.changedTouches[0];
@@ -1855,7 +1864,7 @@ export function MessageThread({
                   }
                 }}
                 onDoubleClick={(e) => {
-                  if (isDeleted || isEditing || selectionMode) return;
+                  if (isDeleted || isEditing || selectionMode || fromPortal(e)) return;
                   if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video,img")) return;
                   try {
                     const sel = window.getSelection();
@@ -1864,7 +1873,7 @@ export function MessageThread({
                   void onToggleReaction(m.id, defaultReaction);
                 }}
                 onClickCapture={(e) => {
-                  if (suppressClickRef.current) {
+                  if (suppressClickRef.current && !fromPortal(e)) {
                     suppressClickRef.current = false;
                     e.stopPropagation();
                     e.preventDefault();
