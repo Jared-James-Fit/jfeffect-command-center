@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { PovInput, resolvePovUserId } from "@/lib/client-pov.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import {
@@ -54,8 +55,11 @@ async function loadMember(supabase: any, userId: string) {
 /** Read the member's active targets (returns null if not yet set up). */
 export const getActiveMemberTargets = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context;
+  .inputValidator((d: unknown) => PovInput.parse(d ?? {}))
+  .handler(async ({ data: pov, context }) => {
+    const { supabase } = context;
+    // Coach "View as client" reads the viewed client's targets.
+    const userId = await resolvePovUserId(supabase, context.userId, pov);
     const member = await loadMember(supabase, userId);
     if (member?.id) {
       const { data } = await supabase

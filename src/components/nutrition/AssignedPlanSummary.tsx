@@ -1,3 +1,4 @@
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
@@ -54,9 +55,10 @@ function DayBlock({ title, day }: { title: string; day: Day | undefined }) {
 }
 
 export function AssignedPlanSummary() {
-  const fn = useServerFn(getCoachAssignedMealPlan);
+  const fn = usePovFn(useServerFn(getCoachAssignedMealPlan));
+  const povKey = usePovArgs().viewAsClientId ?? null;
   const q = useQuery({
-    queryKey: ["m-coach-meal-plan-summary"],
+    queryKey: ["m-coach-meal-plan-summary", povKey],
     queryFn: () => fn({}),
     staleTime: 60_000,
   });

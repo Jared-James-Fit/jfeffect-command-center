@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,6 +26,9 @@ import { LiveDot } from "@/hooks/use-chat-presence";
 
 export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const { user, role } = useAuth();
+  // Coach "View as client": show the client's groups and read state.
+  const { isImpersonating } = useClientImpersonation();
+  const viewerId = usePortalUserId() ?? null;
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -55,12 +59,17 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   });
 
   const { data: memberships = [] } = useQuery({
-    queryKey: ["group-memberships", user?.id],
-    enabled: !!user,
-    queryFn: () => listMyGroupMemberships(user!.id),
+    queryKey: ["group-memberships", viewerId],
+    enabled: !!viewerId,
+    queryFn: () => listMyGroupMemberships(viewerId!),
   });
-  const groupRows = Array.isArray(groups) ? groups : [];
   const membershipRows = Array.isArray(memberships) ? memberships : [];
+  const groupRows = useMemo(() => {
+    const rows = Array.isArray(groups) ? groups : [];
+    if (asAdmin || !isImpersonating) return rows;
+    const mine = new Set(membershipRows.map((m) => m.group_id));
+    return rows.filter((g) => mine.has(g.id));
+  }, [groups, asAdmin, isImpersonating, membershipRows]);
 
   const lastReadByGroup = useMemo(
     () => new Map(membershipRows.map((m) => [m.group_id, m.last_read_at])),
@@ -121,7 +130,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
         const last = (lastMsgByGroup as Record<string, any>)?.[g.id];
         const lastReadStr = lastReadByGroup.get(g.id) ?? null;
         const lastRead = lastReadStr ? new Date(lastReadStr).getTime() : 0;
-        const unread = last && new Date(last.created_at).getTime() > lastRead && last.sender_id !== user?.id ? 1 : 0;
+        const unread = last && new Date(last.created_at).getTime() > lastRead && last.sender_id !== (viewerId ?? user?.id) ? 1 : 0;
         return { group: g, last, unread };
       })
       .sort((a, b) => {
@@ -129,7 +138,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
         const bt = b.last?.created_at ?? b.group.updated_at ?? "";
         return bt.localeCompare(at);
       });
-  }, [groupRows, lastMsgByGroup, lastReadByGroup, user?.id]);
+  }, [groupRows, lastMsgByGroup, lastReadByGroup, user?.id, viewerId]);
 
   const selected = groupRows.find((g) => g.id === selectedId);
   const myMembership = selected ? membershipRows.find((m) => m.group_id === selected.id) : undefined;
@@ -392,20 +401,24 @@ function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "c
 /** Hook used by client portal toggle to show "do they have any groups?" + unread badge. */
 export function useMyGroupSummary() {
   const { user } = useAuth();
+  const { isImpersonating } = useClientImpersonation();
+  const viewerId = usePortalUserId() ?? null;
   const { data: rawGroups = [] } = useQuery({
     queryKey: ["chat-groups", false],
     queryFn: listMyGroups,
     enabled: !!user,
   });
-  const groups = Array.isArray(rawGroups) ? rawGroups : [];
   const { data: rawMemberships = [] } = useQuery({
-    queryKey: ["group-memberships", user?.id],
-    enabled: !!user,
-    queryFn: () => listMyGroupMemberships(user!.id),
+    queryKey: ["group-memberships", viewerId],
+    enabled: !!viewerId,
+    queryFn: () => listMyGroupMemberships(viewerId!),
   });
   const memberships = Array.isArray(rawMemberships) ? rawMemberships : [];
+  const allGroups = Array.isArray(rawGroups) ? rawGroups : [];
+  const memberGroupIds = new Set(memberships.map((m: any) => m.group_id));
+  const groups = isImpersonating ? allGroups.filter((g: any) => memberGroupIds.has(g.id)) : allGroups;
   const { data: rawLastMsgs = [] } = useQuery({
-    queryKey: ["group-unread", user?.id],
+    queryKey: ["group-unread", viewerId, groups.map((g: any) => g.id).join(",")],
     enabled: !!user && groups.length > 0,
     queryFn: async () => {
       const ids = groups.map((g: ChatGroup) => g.id);
@@ -428,7 +441,7 @@ export function useMyGroupSummary() {
     seen.add(row.group_id);
     const lastRead = lastReadByGroup.get(row.group_id);
     const lastReadMs = lastRead ? new Date(lastRead).getTime() : 0;
-    if (row.sender_id !== user?.id && new Date(row.created_at).getTime() > lastReadMs) {
+    if (row.sender_id !== viewerId && new Date(row.created_at).getTime() > lastReadMs) {
       unread += 1;
     }
   }

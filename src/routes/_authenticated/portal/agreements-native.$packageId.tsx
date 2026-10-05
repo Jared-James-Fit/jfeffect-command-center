@@ -1,6 +1,8 @@
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { usePovFn } from "@/lib/client-pov-args";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useRef, useState } from "react";
 import { CheckCircle2, ExternalLink, PenLine, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -94,9 +96,11 @@ function SignaturePad({ onChange }: { onChange: (value: string) => void }) {
 
 function ClientNativeAgreementPage() {
   const { packageId } = useParams({ from: "/_authenticated/portal/agreements-native/$packageId" });
-  const getAgreement = useServerFn(getClientNativeAgreement);
+  const getAgreement = usePovFn(useServerFn(getClientNativeAgreement));
   const acknowledge = useServerFn(acknowledgeClientNativeAgreementReview);
-  const getSourcePdf = useServerFn(getClientNativeAgreementSourcePdfUrl);
+  const getSourcePdf = usePovFn(useServerFn(getClientNativeAgreementSourcePdfUrl));
+  // Coach "View as client" can read the agreement but never sign for them.
+  const { isImpersonating } = useClientImpersonation();
   const submitSignature = useServerFn(submitClientNativeAgreementSignature);
   const [reviewed, setReviewed] = useState(false);
   const [method, setMethod] = useState<SignatureMethod>("typed");
@@ -110,7 +114,8 @@ function ClientNativeAgreementPage() {
     retry: false,
   });
   const reviewMutation = useMutation({
-    mutationFn: () => acknowledge({ data: { packageId } }),
+    // In coach POV nothing is recorded on the client's agreement.
+    mutationFn: () => (isImpersonating ? Promise.resolve({ ok: true }) : acknowledge({ data: { packageId } })),
     onSuccess: () => setReviewed(true),
   });
   const signatureMutation = useMutation({
@@ -147,6 +152,7 @@ function ClientNativeAgreementPage() {
 
   const { package: pkg, signer, snapshot, intentWording } = query.data as any;
   const canSign =
+    !isImpersonating &&
     reviewed &&
     typedName.trim() &&
     (method === "typed" || drawnSignature) &&

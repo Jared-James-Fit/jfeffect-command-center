@@ -150,3 +150,23 @@ $function$;
 
 revoke all on function public.get_monthly_athlete_rankings(integer, uuid) from public, anon;
 grant execute on function public.get_monthly_athlete_rankings(integer, uuid) to authenticated, service_role;
+
+-- Announcements as the viewed client sees them (audience + seen state) --------
+create or replace function public.list_portal_broadcasts(_as_user uuid default null)
+returns jsonb
+language sql
+stable
+security definer
+set search_path to 'public'
+as $$
+  with v as (select public.portal_viewer_uid(_as_user) uid)
+  select coalesce(jsonb_agg(to_jsonb(b) || jsonb_build_object('seen', exists (
+           select 1 from public.broadcast_seen s where s.broadcast_id = b.id and s.user_id = v.uid))
+         order by b.publish_at desc), '[]'::jsonb)
+    from public.broadcasts b, v
+   where v.uid is not null
+     and b.status in ('Active', 'Archived')
+     and public.user_can_see_broadcast(v.uid, b.id)
+$$;
+revoke all on function public.list_portal_broadcasts(uuid) from public, anon;
+grant execute on function public.list_portal_broadcasts(uuid) to authenticated, service_role;

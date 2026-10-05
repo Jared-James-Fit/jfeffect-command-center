@@ -1,3 +1,4 @@
+import { usePovFn } from "@/lib/client-pov-args";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -36,7 +37,7 @@ function PortalRecipes() {
     ? [String(c.goals)]
     : [];
 
-  const getTargetsFn = useServerFn(getActiveMemberTargets);
+  const getTargetsFn = usePovFn(useServerFn(getActiveMemberTargets));
   const targetsQ = useQuery({
     queryKey: ["portal-recipes-targets", portalUserId],
     queryFn: () => getTargetsFn({}),

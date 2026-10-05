@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Megaphone } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
+import { supabase } from "@/integrations/supabase/client";
 import { listHistoryBroadcastsForUser, listSeenIdsForUser } from "@/lib/broadcasts";
 import { BroadcastVoicePlayer, BroadcastVideoPlayer } from "@/components/broadcast-media-player";
 import { format } from "date-fns";
@@ -13,17 +15,27 @@ export const Route = createFileRoute("/_authenticated/portal/announcements")({ c
 
 function PortalAnnouncements() {
   const { user } = useAuth();
-  const userId = user?.id;
+  const { isImpersonating } = useClientImpersonation();
+  // Coach "View as client": the client's audience + seen state, not the coach's.
+  const userId = usePortalUserId();
 
   const { data: rows = [], isLoading } = useQuery({
-    queryKey: ["broadcasts-history", userId],
-    enabled: !!userId,
-    queryFn: () => listHistoryBroadcastsForUser(),
+    queryKey: ["broadcasts-history", userId, isImpersonating],
+    enabled: !!userId && !!user,
+    queryFn: async () => {
+      if (!isImpersonating) return listHistoryBroadcastsForUser();
+      const { data, error } = await (supabase as any).rpc("list_portal_broadcasts", { _as_user: userId });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
   });
   const { data: seen = new Set<string>() } = useQuery({
-    queryKey: ["broadcasts-seen", userId],
+    queryKey: ["broadcasts-seen", userId, isImpersonating, rows.length],
     enabled: !!userId,
-    queryFn: () => listSeenIdsForUser(userId!),
+    queryFn: async () =>
+      isImpersonating
+        ? new Set<string>((rows as any[]).filter((r) => r.seen).map((r) => r.id))
+        : listSeenIdsForUser(userId!),
   });
 
   return (

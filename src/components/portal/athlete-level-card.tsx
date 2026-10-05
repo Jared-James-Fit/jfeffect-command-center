@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Info, Trophy, Medal, Zap, ChevronRight, Scale, Crown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -287,6 +287,9 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
       return ((data ?? [])[0] ?? null) as any;
     },
   });
+  // In coach "View as client" the session isn't the client, so match on id too.
+  const povClientId = useClientImpersonation().client?.id ?? null;
+  const isMe = !!p?.is_me || (!!povClientId && clientId === povClientId);
   const theirXp = Number(p?.xp ?? 0);
   const { data: publicBadges = [] } = usePublicAchievements(clientId);
   const monthName = format(new Date(), "MMMM");
@@ -310,7 +313,7 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
       ) : (
         <>
           <div className="flex items-center gap-3 rounded-2xl border bg-card p-4">
-            <RankAvatar row={{ client_id: p.client_id, display_name: p.display_name, avatar_url: p.avatar_url, xp: theirXp, rank: 0, is_me: p.is_me }} size="h-14 w-14" />
+            <RankAvatar row={{ client_id: p.client_id, display_name: p.display_name, avatar_url: p.avatar_url, xp: theirXp, rank: 0, is_me: isMe }} size="h-14 w-14" />
             <div className="min-w-0">
               <div className="truncate text-lg font-black">{p.display_name}</div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Logging level</div><div className="text-sm font-black uppercase tracking-wide text-primary">{levelForXp(theirXp).current.name}</div>
@@ -325,7 +328,7 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
             <StatTile label="Last workout" value={lastWorkout ?? "—"} sub={p?.month_workouts_fully_logged != null ? `${p.month_workouts_fully_logged} fully logged in ${monthName}` : undefined} />
           </div>
 
-          {!p.is_me && (
+          {!isMe && (
             <div className="overflow-hidden rounded-2xl border bg-card text-sm">
               <div className="grid grid-cols-3 bg-muted/40 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
                 <span /><span className="text-center">You</span><span className="truncate text-center">{p.display_name}</span>

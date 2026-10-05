@@ -258,7 +258,7 @@ function AccountPage() {
             <BasicInfoForm
               values={form}
               onChange={(p) => setForm({ ...form, ...p })}
-              emailReadOnly={form.email ?? user.email ?? ""}
+              emailReadOnly={form.email ?? (portalUserId === user.id ? user.email : "") ?? ""}
             />
             <p className="text-[11px] text-muted-foreground">
               Saves automatically. Last updated:{" "}
@@ -273,7 +273,7 @@ function AccountPage() {
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
             <ProfilePictureCapture
               mode="client"
-              userId={user.id}
+              userId={portalUserId ?? user.id}
               currentUrl={form.profile_picture_url}
               onUploaded={updatePicture}
             />

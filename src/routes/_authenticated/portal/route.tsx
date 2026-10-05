@@ -10,9 +10,11 @@ import { HomeScreenSetupGate } from "@/components/home-screen-setup-gate";
 import { FormPopupGate } from "@/components/form-popup-gate";
 import { LegalAcceptanceGate } from "@/components/legal/legal-acceptance-gate";
 import { LeagueRecapGate } from "@/components/portal/league-recap";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 
 function PortalLayout() {
   useActivityHeartbeat();
+  const { isImpersonating } = useClientImpersonation();
   return (
     <>
       <ClientPovBanner />
@@ -22,11 +24,17 @@ function PortalLayout() {
             page — they must never lock the portal. See
             <SetupChecklistBanner /> in /portal/index.tsx. */}
         <Outlet />
-        <BroadcastPopupGate />
-        <EventPopupGate />
-        <FormPopupGate />
-        <HomeScreenSetupGate />
-        <LegalAcceptanceGate />
+        {/* Popup gates run off the signed-in session, so in coach "View as
+            client" they'd show the coach's own popups/legal status — skip. */}
+        {!isImpersonating && (
+          <>
+            <BroadcastPopupGate />
+            <EventPopupGate />
+            <FormPopupGate />
+            <HomeScreenSetupGate />
+            <LegalAcceptanceGate />
+          </>
+        )}
         {/* Previous month's League Recap — first week of each month, once. */}
         <LeagueRecapGate />
         {/* Birthday card mounts LAST so its dialog stacks above other portal

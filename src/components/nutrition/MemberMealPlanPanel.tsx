@@ -1,3 +1,4 @@
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -10,9 +11,10 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export function MemberMealPlanPanel() {
-  const fn = useServerFn(getCoachAssignedMealPlan);
+  const fn = usePovFn(useServerFn(getCoachAssignedMealPlan));
+  const povKey = usePovArgs().viewAsClientId ?? null;
   const q = useQuery({
-    queryKey: ["m-coach-meal-plan"],
+    queryKey: ["m-coach-meal-plan", povKey],
     queryFn: () => fn({}),
     staleTime: 60_000,
   });

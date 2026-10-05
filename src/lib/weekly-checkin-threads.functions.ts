@@ -11,6 +11,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { PovInput, isPovRequest, resolvePovClientId } from "@/lib/client-pov.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const AUTO_ARCHIVE_DAYS = 90;
@@ -98,10 +99,14 @@ export const createCheckinThread = createServerFn({ method: "POST" })
 
 export const listMyCheckinThreads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d: unknown) => PovInput.parse(d ?? {}))
+  .handler(async ({ data: pov, context }) => {
     const { supabase, userId } = context as any;
-    const clientId = await getMyClientId(supabase, userId);
-    const memberId = await getMyMemberId(supabase, userId);
+    // Coach "View as client": the viewed client's threads only.
+    const viewing = isPovRequest(userId, pov);
+    const clientId = viewing ? await resolvePovClientId(supabase, userId, pov) : await getMyClientId(supabase, userId);
+    const memberId = viewing ? null : await getMyMemberId(supabase, userId);
+    if (viewing && !clientId) return { threads: [] };
 
     let query = supabase
       .from("weekly_checkin_threads")

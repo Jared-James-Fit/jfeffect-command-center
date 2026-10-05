@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { PovInput, resolvePovClientId } from "@/lib/client-pov.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const APPT_TYPES = [
@@ -429,9 +430,12 @@ export { writeApptCrmActivity };
 
 export const listMyPortalAppointments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d: unknown) => PovInput.parse(d ?? {}))
+  .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { data: client } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle();
+    // Coach "View as client" reads the viewed client's appointments.
+    const clientId = await resolvePovClientId(supabase, userId, data);
+    const client = clientId ? { id: clientId } : null;
     if (!client) return { upcoming: [], past: [] };
     const now = new Date().toISOString();
     const [{ data: upcoming }, { data: past }] = await Promise.all([

@@ -1,3 +1,4 @@
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -18,9 +19,10 @@ import { useState } from "react";
 export const Route = createFileRoute("/_authenticated/portal/appointments")({ component: PortalAppointments });
 
 function PortalAppointments() {
-  const fn = useServerFn(listMyPortalAppointments);
+  const fn = usePovFn(useServerFn(listMyPortalAppointments));
+  const povKey = usePovArgs().viewAsClientId ?? null;
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["portal-appointments"], queryFn: () => fn() });
+  const { data, isLoading } = useQuery({ queryKey: ["portal-appointments", povKey], queryFn: () => fn() });
 
   // Resolve the effective client (supports admin Client POV, same pattern as
   // the portal Calendar page) so upcoming PT sessions can be merged into the

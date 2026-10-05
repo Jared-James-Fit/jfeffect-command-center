@@ -8,6 +8,7 @@
 import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -46,12 +47,13 @@ function LogSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boo
 }
 
 export function TodaysIntakeCard() {
-  const getDashboard = useServerFn(getNutritionDashboard);
+  const getDashboard = usePovFn(useServerFn(getNutritionDashboard));
+  const povUserId = usePovArgs().viewAsUserId;
   const date = todayISO();
   const [open, setOpen] = useState(false);
 
   const q = useQuery({
-    queryKey: ["nutrition-dashboard", date],
+    queryKey: ["nutrition-dashboard", date, povUserId ?? null],
     queryFn: () => getDashboard({ data: { date } }),
     retry: false,
     staleTime: 30_000,
