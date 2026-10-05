@@ -125,3 +125,32 @@ describe("messages first open", () => {
     expect(messagesRoute).toContain("onPointerDown={() => prefetchThread(client.id)}");
   });
 });
+
+describe("messenger stays current after the app resumes", () => {
+  it("resyncs only when a channel rejoins, not on the first join", async () => {
+    const { onRealtimeRejoin } = await import("@/hooks/use-resync-on-resume");
+    let resyncs = 0;
+    const status = onRealtimeRejoin(() => resyncs++);
+    status("SUBSCRIBED"); // initial join: data was just fetched
+    status("CHANNEL_ERROR");
+    status("TIMED_OUT");
+    expect(resyncs).toBe(0);
+    status("SUBSCRIBED"); // rejoined after a drop: events may be missing
+    expect(resyncs).toBe(1);
+  });
+
+  it("wires resume + rejoin resync into the inbox, threads and group list", () => {
+    const groupPane = readFileSync("src/components/group-chats-pane.tsx", "utf8");
+    for (const src of [messagesRoute, thread, groupThread, groupPane]) {
+      expect(src).toContain("useResyncOnResume(");
+      expect(src).toContain(".subscribe(onRealtimeRejoin(");
+    }
+  });
+
+  it("re-checks lists on open instead of trusting a cache realtime wasn't updating", () => {
+    const groupPane = readFileSync("src/components/group-chats-pane.tsx", "utf8");
+    expect(messagesRoute.match(/refetchOnMount: "always"/g)?.length).toBe(3);
+    expect(groupPane).toContain('refetchOnMount: "always"');
+    expect(groupThread).toContain('refetchOnMount: "always"');
+  });
+});

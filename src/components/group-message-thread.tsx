@@ -38,6 +38,7 @@ import {
   uploadChatAttachment, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
+import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { GroupSeenByRow, GroupSeenBySheet } from "@/components/messages/group-seen-by";
 import { readStampFor, seenStateFor } from "@/lib/group-read-receipts";
@@ -127,6 +128,9 @@ export function GroupMessageThread({
   const { data: rawMessages = [] } = useQuery({
     queryKey: ["group-messages", groupId],
     queryFn: () => listGroupMessages(groupId),
+    // Cached history shows instantly; re-check because realtime for this
+    // group only ran while it was open.
+    refetchOnMount: "always",
     refetchInterval: 300_000,
   });
 
@@ -167,6 +171,13 @@ export function GroupMessageThread({
 
   /* ---------------- Realtime ---------------- */
 
+  const resyncGroup = () => {
+    qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+    qc.invalidateQueries({ queryKey: ["group-reactions", groupId] });
+    qc.invalidateQueries({ queryKey: ["group-members", groupId] });
+  };
+  useResyncOnResume(resyncGroup);
+
   useEffect(() => {
     const ch = supabase
       .channel(`group-thread:${groupId}`)
@@ -181,7 +192,11 @@ export function GroupMessageThread({
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_group_members", filter: `group_id=eq.${groupId}` }, () => {
         qc.invalidateQueries({ queryKey: ["group-members", groupId] });
       })
-      .subscribe();
+      .subscribe(onRealtimeRejoin(() => {
+        qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+        qc.invalidateQueries({ queryKey: ["group-reactions", groupId] });
+        qc.invalidateQueries({ queryKey: ["group-members", groupId] });
+      }));
     return () => { supabase.removeChannel(ch); };
   }, [groupId, qc]);
 

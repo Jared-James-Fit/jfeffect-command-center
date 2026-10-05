@@ -61,6 +61,7 @@ import { playUiSound } from "@/lib/ui-sounds";
 import { haptic } from "@/platform/haptics";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
+import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import {
   FormHistoryRow,
@@ -1045,6 +1046,14 @@ export function MessageThread({
   // This thread plays its own message sounds; keep the global listener quiet.
   useEffect(() => (clientId ? registerOpenThread(clientId) : undefined), [clientId]);
 
+  // Pull anything that arrived while the app was backgrounded / offline.
+  const resyncThread = useCallback(() => {
+    if (!clientId) return;
+    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+    qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
+  }, [clientId, role, qc]);
+  useResyncOnResume(resyncThread, !!clientId);
+
   useEffect(() => {
     if (!clientId) return;
     const key = ["messages", clientId, role] as const;
@@ -1111,9 +1120,9 @@ export function MessageThread({
           qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
         }
       })
-      .subscribe();
+      .subscribe(onRealtimeRejoin(resyncThread));
     return () => { supabase.removeChannel(ch); };
-  }, [clientId, role, qc]);
+  }, [clientId, role, qc, resyncThread]);
 
   // ---------- Realtime typing indicator (iMessage-style) ----------
   // Uses Supabase Realtime broadcast (ephemeral, no DB writes). Peer typing

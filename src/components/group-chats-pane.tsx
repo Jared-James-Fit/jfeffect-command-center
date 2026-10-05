@@ -17,6 +17,7 @@ import {
 } from "@/lib/group-chats";
 import { deleteGroupChats, updateGroupChat } from "@/lib/group-chats.functions";
 import { GroupMessageThread } from "@/components/group-message-thread";
+import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { ManageGroupDialog } from "@/components/manage-group-dialog";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
@@ -71,6 +72,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const { data: lastMsgByGroup = {} as Record<string, any> } = useQuery({
     queryKey: ["group-last-messages", groupRows.map((g) => g.id).join(",")],
     enabled: groupRows.length > 0,
+    refetchOnMount: "always", // realtime only runs while this pane is open
     queryFn: async () => {
       const ids = groupRows.map((g) => g.id);
       try {
@@ -96,6 +98,13 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
     refetchInterval: 30_000,
   });
 
+  const resyncGroups = () => {
+    for (const k of ["chat-groups", "group-memberships", "group-last-messages", "group-unread"]) {
+      qc.invalidateQueries({ queryKey: [k] });
+    }
+  };
+  useResyncOnResume(resyncGroups);
+
   // Realtime invalidation across groups
   useEffect(() => {
     const ch = supabase
@@ -111,7 +120,11 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
         qc.invalidateQueries({ queryKey: ["group-last-messages"] });
         qc.invalidateQueries({ queryKey: ["group-unread"] });
       })
-      .subscribe();
+      .subscribe(onRealtimeRejoin(() => {
+        for (const k of ["chat-groups", "group-memberships", "group-last-messages", "group-unread"]) {
+          qc.invalidateQueries({ queryKey: [k] });
+        }
+      }));
     return () => { supabase.removeChannel(ch); };
   }, [qc]);
 
