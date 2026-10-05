@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import type { FormPresentation } from "@/lib/form-message-presentation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -24,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { playAppSound } from "@/lib/app-sounds";
 import {
+  analyzeMessengerCheckin,
   getMessengerCheckin,
   submitMessengerCheckin,
   type MessengerCheckinTaskType,
@@ -37,6 +39,8 @@ type Q = {
   helper?: string;
   type: "rating" | "single" | "multi" | "text";
   options?: string[];
+  /** Word under each 1–5 rating button. */
+  scale?: [string, string, string, string, string];
   optional?: boolean;
   showWhen?: (answers: Record<string, any>) => boolean;
 };
@@ -44,26 +48,29 @@ type Q = {
 const WEEKLY: Q[] = [
   {
     key: "week_rating",
-    prompt: "How was your week overall?",
-    helper: "1 = rough · 5 = great",
+    prompt: "How did this week go overall?",
+    helper: "Tap a number. 1 = really rough · 5 = amazing.",
     type: "rating",
+    scale: ["Rough", "Meh", "Okay", "Good", "Amazing"],
   },
   {
     key: "training_rating",
-    prompt: "How did training feel?",
-    helper: "Think performance + how sessions felt.",
+    prompt: "How did your workouts feel this week?",
+    helper: "Think strength, energy and how your sessions went.",
     type: "rating",
+    scale: ["Struggled", "Hard", "Okay", "Good", "Great"],
   },
   {
     key: "nutrition_rating",
-    prompt: "How consistent was nutrition?",
-    helper: "1 = way off · 5 = nailed it",
+    prompt: "How well did you stick to your meal plan?",
+    helper: "1 = mostly off plan · 5 = on plan almost every day.",
     type: "rating",
+    scale: ["Off plan", "Some days", "Half", "Most days", "Every day"],
   },
   {
     key: "recovery_flags",
-    prompt: "Anything we should pay attention to?",
-    helper: "Pick as many as apply — or “All good” if nothing to flag.",
+    prompt: "Anything bugging you this week?",
+    helper: "Tap everything that applies — or “All good” if nothing’s wrong.",
     type: "multi",
     options: [
       "All good",
@@ -79,28 +86,29 @@ const WEEKLY: Q[] = [
   },
   {
     key: "pain_details",
-    prompt: "What hurts or what movements are affected?",
+    prompt: "Where does it hurt, and what makes it worse?",
+    helper: "e.g. “Left knee hurts on squats and lunges.”",
     type: "text",
     showWhen: (a) => Array.isArray(a.recovery_flags) && a.recovery_flags.includes("Pain / injury"),
   },
   {
     key: "win",
-    prompt: "Biggest win this week?",
-    helper: "Optional — keep it short.",
+    prompt: "What’s one win you’re proud of this week?",
+    helper: "Anything counts — a PR, hitting your steps, better sleep. Optional.",
     type: "text",
     optional: true,
   },
   {
     key: "help",
     prompt: "Anything you need help with or want changed?",
-    helper: "Optional — this is your chance to flag something.",
+    helper: "Workouts, meals, schedule — just tell me. Optional.",
     type: "text",
     optional: true,
   },
   {
     key: "next_week_goal",
-    prompt: "What do you want to nail next week?",
-    helper: "One clear focus is enough.",
+    prompt: "What’s your #1 focus for next week?",
+    helper: "Keep it simple, e.g. “Hit 8k steps every day.” Optional.",
     type: "text",
     optional: true,
   },
@@ -109,46 +117,48 @@ const WEEKLY: Q[] = [
 const NUTRITION: Q[] = [
   {
     key: "nutrition_rating",
-    prompt: "How consistent was nutrition?",
-    helper: "1 = way off · 5 = nailed it",
+    prompt: "How well did you stick to your meal plan?",
+    helper: "1 = mostly off plan · 5 = on plan almost every day.",
     type: "rating",
+    scale: ["Off plan", "Some days", "Half", "Most days", "Every day"],
   },
   {
     key: "hunger",
-    prompt: "How was hunger / appetite?",
+    prompt: "How hungry have you been?",
     type: "single",
-    options: ["Low", "Good", "High"],
+    options: ["Not very hungry", "Just right", "Hungry a lot"],
   },
   {
     key: "digestion",
-    prompt: "How was digestion?",
+    prompt: "How has your stomach / digestion felt?",
     type: "single",
-    options: ["Good", "Some issues", "Bad"],
+    options: ["Good — no issues", "A few issues (bloating, etc.)", "Bad most days"],
   },
   {
     key: "training_energy",
-    prompt: "How was energy around training?",
-    helper: "1 = drained · 5 = great",
+    prompt: "How’s your energy for workouts?",
+    helper: "1 = drained · 5 = full of energy.",
     type: "rating",
+    scale: ["Drained", "Low", "Okay", "Good", "Full"],
   },
   {
     key: "hardest",
-    prompt: "What was hardest about nutrition?",
-    helper: "Optional.",
+    prompt: "What’s been the hardest part of your nutrition?",
+    helper: "e.g. weekends, cravings, eating out, meal prep. Optional.",
     type: "text",
     optional: true,
   },
   {
     key: "food_changes",
-    prompt: "Any foods or meals you want changed?",
-    helper: "Optional.",
+    prompt: "Any foods or meals you want swapped?",
+    helper: "Tell me what you’re sick of or can’t get. Optional.",
     type: "text",
     optional: true,
   },
   {
     key: "goal",
-    prompt: "Main nutrition goal until the next review?",
-    helper: "One clear target.",
+    prompt: "What’s your #1 nutrition goal until your next review?",
+    helper: "e.g. “Hit my protein every day.” Optional.",
     type: "text",
     optional: true,
   },
@@ -349,6 +359,7 @@ function CheckinWizard({
 }) {
   const qc = useQueryClient();
   const submit = useServerFn(submitMessengerCheckin);
+  const analyze = useServerFn(analyzeMessengerCheckin);
   const [answers, setAnswers] = useState<Record<string, any>>(initialAnswers);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -388,13 +399,16 @@ function CheckinWizard({
     try {
       await submit({ data: { submissionId, answers } });
       playAppSound("success");
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] }),
-        qc.invalidateQueries({ queryKey: ["messages", clientId, "client"] }),
-        qc.invalidateQueries({ queryKey: ["action-centre", clientId] }),
-      ]);
+      // Close right away — refresh and the AI recap happen in the background.
       onOpenChange(false);
       setStep(0);
+      toast.success("Sent to your coach ✅");
+      void qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] });
+      void qc.invalidateQueries({ queryKey: ["messages", clientId, "client"] });
+      void qc.invalidateQueries({ queryKey: ["action-centre", clientId] });
+      void analyze({ data: { submissionId } }).catch(() => {});
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't send — check your connection and try again.");
     } finally {
       setSaving(false);
     }
@@ -457,13 +471,21 @@ function CheckinWizard({
                       type="button"
                       onClick={() => setAnswer(n, true)}
                       className={cn(
-                        "h-14 rounded-2xl border text-lg font-bold transition active:scale-95",
+                        "flex min-h-16 flex-col items-center justify-center gap-0.5 rounded-2xl border px-0.5 transition active:scale-95",
                         current === n
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border bg-card hover:bg-secondary/50",
                       )}
                     >
-                      {n}
+                      <span className="text-lg font-bold leading-none">{n}</span>
+                      {q.scale && (
+                        <span className={cn(
+                          "text-[10px] font-semibold leading-tight",
+                          current === n ? "text-primary-foreground/90" : "text-muted-foreground",
+                        )}>
+                          {q.scale[n - 1]}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -595,11 +617,29 @@ export function MessengerCheckinSubmissionCard({
   onUseReply?: (text: string) => void;
 }) {
   const get = useServerFn(getMessengerCheckin);
+  const analyze = useServerFn(analyzeMessengerCheckin);
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["messenger-checkin", submissionId],
     queryFn: () => get({ data: { submissionId } }),
     staleTime: 30_000,
+    // Coach view: the AI recap fills in a few seconds after submit.
+    refetchInterval: (q) =>
+      role === "admin" && (q.state.data as any)?.status === "completed" && (q.state.data as any)?.ai_status !== "ready"
+        ? 4000
+        : false,
   });
+  // If the recap never ran (client closed the app right after sending),
+  // the coach's view finishes it.
+  const kicked = useRef(false);
+  useEffect(() => {
+    if (role !== "admin" || kicked.current || !data) return;
+    if ((data as any).status !== "completed" || (data as any).ai_status === "ready") return;
+    kicked.current = true;
+    void analyze({ data: { submissionId } })
+      .then(() => qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] }))
+      .catch(() => {});
+  }, [role, data, analyze, submissionId, qc]);
 
   if (isLoading || !data) {
     return (
