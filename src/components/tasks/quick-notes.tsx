@@ -9,6 +9,10 @@
  * - Tapping a note opens a dedicated editor: full screen on mobile (sized to
  *   the visual viewport so the keyboard never covers the text), a large
  *   centered panel on desktop.
+ * - Delete (swipe left, row menu, editor menu, bulk) moves a note to
+ *   Recently Deleted with an Undo toast. Trashed notes are restorable for
+ *   30 days, then purged on the next load. Trash is just a `deletedAt`
+ *   stamp on the same stored note, so nothing else about storage changes.
  * - Auto-saves (debounced, flushed on close / page hide) with a quiet
  *   Saving… / Saved indicator. Storage key + note shape are unchanged, so
  *   existing notes carry over as-is.
@@ -24,12 +28,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   MoreHorizontal, Trash2, Users, ChevronDown, ChevronLeft, Copy, ListTodo, Check, Pencil, CheckSquare, Files, SquarePen,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { QUADRANTS, type TaskQuadrant } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
+import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
 
-export type Note = { id: string; title: string; body: string; updatedAt: number };
+/** `deletedAt` set ⇒ the note is in Recently Deleted. */
+export type Note = { id: string; title: string; body: string; updatedAt: number; deletedAt?: number };
 type QuadStyle = { color: string; title: string; subtitle: string };
 type Assignee = { id: string; name: string };
 export type SaveState = "idle" | "saving" | "saved" | "error";
@@ -42,26 +49,32 @@ const newId = () =>
 export function useNotes(storageKey: string) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  // `ready` flips in the same render that applies the stored notes, so the
+  // initial empty state can never be written over what's in storage.
+  const [ready, setReady] = useState(false);
   const latest = useRef<Note[]>([]);
   const dirty = useRef(false);
-  const loaded = useRef(false);
-  const skipNext = useRef(false);
+  /** JSON currently in storage — lets the save effect skip no-op writes. */
+  const persisted = useRef<string | null>(null);
 
   useEffect(() => {
+    let stored: Note[] = [];
     try {
       const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        skipNext.current = true;
-        setNotes(JSON.parse(raw));
-      }
+      persisted.current = raw;
+      if (raw) stored = JSON.parse(raw);
     } catch { /* storage unavailable — keep in memory */ }
-    loaded.current = true;
+    // Expired trash is dropped here; the save effect persists the purge.
+    setNotes(purgeExpired(stored, Date.now()));
+    setReady(true);
   }, [storageKey]);
 
   const flush = useCallback(() => {
     if (!dirty.current) return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(latest.current));
+      const json = JSON.stringify(latest.current);
+      localStorage.setItem(storageKey, json);
+      persisted.current = json;
       dirty.current = false;
       setSaveState("saved");
     } catch {
@@ -71,13 +84,17 @@ export function useNotes(storageKey: string) {
 
   useEffect(() => {
     latest.current = notes;
-    if (!loaded.current) return;
-    if (skipNext.current) { skipNext.current = false; return; }
+    if (!ready) return;
+    if (JSON.stringify(notes) === (persisted.current ?? "[]")) {
+      // Back to what's stored (e.g. an edit was undone) — nothing pending.
+      if (dirty.current) { dirty.current = false; setSaveState("saved"); }
+      return;
+    }
     dirty.current = true;
     setSaveState("saving");
     const t = window.setTimeout(flush, 400);
     return () => window.clearTimeout(t);
-  }, [notes, flush]);
+  }, [notes, ready, flush]);
 
   // Never lose the last keystrokes: flush when the app is backgrounded,
   // the page is closed, or the panel unmounts.
@@ -109,6 +126,18 @@ function usePersistedFlag(key: string, initial: boolean) {
 }
 
 // ---------------------------------------------------------------- helpers
+
+export const TRASH_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Drop notes that have sat in Recently Deleted longer than TRASH_DAYS. */
+export function purgeExpired<T extends Pick<Note, "deletedAt">>(notes: T[], now: number): T[] {
+  return notes.filter((n) => !n.deletedAt || now - n.deletedAt < TRASH_DAYS * DAY_MS);
+}
+/** Whole days left before a trashed note is purged (min 1 while it still exists). */
+export function trashDaysLeft(deletedAt: number, now: number) {
+  return Math.max(1, Math.ceil((deletedAt + TRASH_DAYS * DAY_MS - now) / DAY_MS));
+}
 
 const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
 
@@ -188,6 +217,37 @@ function useIsDesktop() {
   return d;
 }
 
+/**
+ * A row's ••• menu, opened on tap for touch input. Radix opens on
+ * pointerdown, so a swipe or scroll that starts on ••• would pop it open.
+ * Mouse and keyboard keep Radix's default behavior.
+ */
+function RowMenu({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const touchDown = useRef(false);
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-muted-foreground" aria-label={label}
+          onPointerDown={(e) => {
+            touchDown.current = e.pointerType !== "mouse";
+            // Radix skips its open-on-pointerdown when the event is defaulted.
+            if (touchDown.current) e.preventDefault();
+          }}
+          onClick={() => {
+            if (touchDown.current) setOpen(true);
+            touchDown.current = false;
+          }}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">{children}</DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ---------------------------------------------------------------- panel
 
 /** Rows shown before "Show all" — keeps the panel short at the top of the page. */
@@ -210,13 +270,20 @@ export function QuickNotesPanel({
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
+  /** Permanent delete (from Recently Deleted only). */
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const mounted = useMounted();
   const isDesktop = useIsDesktop();
 
   const searching = search.trim().length > 0;
-  const shown = useMemo(() => sortByRecent(notes.filter((n) => noteMatches(n, search))), [notes, search]);
+  const active = useMemo(() => notes.filter((n) => !n.deletedAt), [notes]);
+  const trashed = useMemo(
+    () => notes.filter((n) => n.deletedAt).sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)),
+    [notes],
+  );
+  const shown = useMemo(() => sortByRecent(active.filter((n) => noteMatches(n, search))), [active, search]);
   const isCollapsed = collapsed && !searching;
   const overflows = !searching && !selectMode && shown.length > COLLAPSED_ROWS;
   const capped = overflows && !showAll;
@@ -232,11 +299,28 @@ export function QuickNotesPanel({
   const updateNote = useCallback((id: string, patch: Partial<Note>) =>
     setNotes((arr) => arr.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n))), [setNotes]);
 
-  const removeNotes = (ids: string[]) => {
+  // updatedAt is left alone so a restored note returns to its old spot.
+  const restoreNotes = useCallback((ids: string[]) => {
+    const set = new Set(ids);
+    setNotes((arr) => arr.map((n) => (set.has(n.id) ? { ...n, deletedAt: undefined } : n)));
+  }, [setNotes]);
+  const trashNotes = (ids: string[]) => {
+    const set = new Set(ids);
+    const now = Date.now();
+    // An untouched brand-new note has nothing worth keeping — drop it outright.
+    setNotes((arr) => arr
+      .filter((n) => !set.has(n.id) || n.title.trim() || n.body.trim())
+      .map((n) => (set.has(n.id) ? { ...n, deletedAt: now } : n)));
+    setSelected(new Set());
+    setSelectMode(false);
+    if (openId && set.has(openId)) setOpenId(null);
+    toast(ids.length > 1 ? `${ids.length} notes moved to Recently Deleted` : "Moved to Recently Deleted", {
+      action: { label: "Undo", onClick: () => restoreNotes(ids) },
+    });
+  };
+  const removeForever = (ids: string[]) => {
     const set = new Set(ids);
     setNotes((arr) => arr.filter((n) => !set.has(n.id)));
-    setSelected(new Set());
-    if (openId && set.has(openId)) setOpenId(null);
   };
   const duplicate = (n: Note) => {
     const copy = { ...n, id: newId(), title: n.title ? `${n.title} (copy)` : n.title, updatedAt: Date.now() };
@@ -251,6 +335,9 @@ export function QuickNotesPanel({
     setOpenId(null);
     window.setTimeout(flush, 0);
   }, [openId, setNotes, flush]);
+
+  // Emptying the trash closes its sheet so the next delete doesn't reopen it.
+  useEffect(() => { if (trashed.length === 0) setTrashOpen(false); }, [trashed.length]);
 
   const openNote = notes.find((n) => n.id === openId) ?? null;
   const allSelected = shown.length > 0 && selected.size === shown.length;
@@ -288,7 +375,7 @@ export function QuickNotesPanel({
           <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", isCollapsed && "-rotate-90")} />
           <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick Notes</h2>
           <span className="text-xs font-semibold tabular-nums text-muted-foreground/70">
-            {searching ? `${shown.length}/${notes.length}` : notes.length}
+            {searching ? `${shown.length}/${active.length}` : active.length}
           </span>
         </button>
         <div className="ml-auto flex items-center">
@@ -297,7 +384,7 @@ export function QuickNotesPanel({
               Cancel
             </Button>
           ) : (
-            notes.length > 1 && (
+            (active.length > 1 || trashed.length > 0) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" aria-label="Quick Notes options">
@@ -305,9 +392,16 @@ export function QuickNotesPanel({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => { setCollapsed(false); setSelectMode(true); }}>
-                    <CheckSquare className="mr-2 h-4 w-4" />Select notes
-                  </DropdownMenuItem>
+                  {active.length > 1 && (
+                    <DropdownMenuItem onClick={() => { setCollapsed(false); setSelectMode(true); }}>
+                      <CheckSquare className="mr-2 h-4 w-4" />Select notes
+                    </DropdownMenuItem>
+                  )}
+                  {trashed.length > 0 && (
+                    <DropdownMenuItem onClick={() => setTrashOpen(true)}>
+                      <Trash2 className="mr-2 h-4 w-4" />Recently Deleted ({trashed.length})
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )
@@ -325,7 +419,7 @@ export function QuickNotesPanel({
               </Button>
               <span className="text-[11px] font-bold">{selected.size} selected</span>
               <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-destructive hover:text-destructive"
-                disabled={selected.size === 0} onClick={() => setConfirmDelete(Array.from(selected))}>
+                disabled={selected.size === 0} onClick={() => trashNotes(Array.from(selected))}>
                 <Trash2 className="mr-1 h-3.5 w-3.5" />Delete
               </Button>
             </div>
@@ -349,46 +443,43 @@ export function QuickNotesPanel({
               {rows.map((n, i) => {
                 const preview = notePreview(n);
                 return (
-                  <li key={n.id} className={cn("flex items-center gap-2 pl-3 pr-1", i > 0 && "border-t border-border/70")}>
-                    {selectMode && (
-                      <Checkbox
-                        className="h-[18px] w-[18px]"
-                        checked={selected.has(n.id)}
-                        onCheckedChange={(v) => setSelected((s) => { const x = new Set(s); if (v) x.add(n.id); else x.delete(n.id); return x; })}
-                        aria-label={`Select ${noteHeading(n)}`}
-                      />
-                    )}
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 py-2.5 text-left"
-                      onClick={() => {
-                        if (selectMode) setSelected((s) => { const x = new Set(s); if (x.has(n.id)) x.delete(n.id); else x.add(n.id); return x; });
-                        else setOpenId(n.id);
-                      }}
-                    >
-                      <div className="truncate text-sm font-semibold leading-snug">{noteHeading(n)}</div>
-                      <div className="truncate text-xs leading-snug text-muted-foreground">{preview || "No additional text"}</div>
-                    </button>
-                    {!selectMode && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-muted-foreground" aria-label="Note actions">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52">
-                          <DropdownMenuItem onClick={async () => { if (await copyText(n.body || n.title)) toast.success("Copied ✓"); }}>
-                            <Copy className="mr-2 h-4 w-4" />Copy
-                          </DropdownMenuItem>
-                          {convertMenu(n)}
-                          <DropdownMenuItem onClick={() => duplicate(n)}><Files className="mr-2 h-4 w-4" />Duplicate</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onClick={() => setConfirmDelete([n.id])}>
-                            <Trash2 className="mr-2 h-4 w-4" />Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                  <li key={n.id} className={cn(i > 0 && "border-t border-border/70")}>
+                    <TaskSwipeRow onSwipeLeft={() => trashNotes([n.id])} disabled={selectMode}>
+                      <div className="flex items-center gap-2 pl-3 pr-1">
+                        {selectMode && (
+                          <Checkbox
+                            className="h-[18px] w-[18px]"
+                            checked={selected.has(n.id)}
+                            onCheckedChange={(v) => setSelected((s) => { const x = new Set(s); if (v) x.add(n.id); else x.delete(n.id); return x; })}
+                            aria-label={`Select ${noteHeading(n)}`}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 py-2.5 text-left"
+                          onClick={() => {
+                            if (selectMode) setSelected((s) => { const x = new Set(s); if (x.has(n.id)) x.delete(n.id); else x.add(n.id); return x; });
+                            else setOpenId(n.id);
+                          }}
+                        >
+                          <div className="truncate text-sm font-semibold leading-snug">{noteHeading(n)}</div>
+                          <div className="truncate text-xs leading-snug text-muted-foreground">{preview || "No additional text"}</div>
+                        </button>
+                        {!selectMode && (
+                          <RowMenu label="Note actions">
+                            <DropdownMenuItem onClick={async () => { if (await copyText(n.body || n.title)) toast.success("Copied ✓"); }}>
+                              <Copy className="mr-2 h-4 w-4" />Copy
+                            </DropdownMenuItem>
+                            {convertMenu(n)}
+                            <DropdownMenuItem onClick={() => duplicate(n)}><Files className="mr-2 h-4 w-4" />Duplicate</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => trashNotes([n.id])}>
+                              <Trash2 className="mr-2 h-4 w-4" />Delete
+                            </DropdownMenuItem>
+                          </RowMenu>
+                        )}
+                      </div>
+                    </TaskSwipeRow>
                   </li>
                 );
               })}
@@ -436,15 +527,53 @@ export function QuickNotesPanel({
           onChange={(patch) => updateNote(openNote.id, patch)}
           onClose={closeEditor}
           onDuplicate={() => { const c = duplicate(openNote); setOpenId(c.id); }}
-          onDelete={() => setConfirmDelete([openNote.id])}
+          onDelete={() => trashNotes([openNote.id])}
           convertMenu={convertMenu(openNote)}
         />
       )}
 
+      <Dialog open={trashOpen && trashed.length > 0} onOpenChange={setTrashOpen}>
+        <DialogContent className="flex max-h-[85dvh] max-w-md flex-col gap-3">
+          <DialogHeader>
+            <DialogTitle>Recently Deleted</DialogTitle>
+            <DialogDescription>Notes are permanently deleted after {TRASH_DAYS} days.</DialogDescription>
+          </DialogHeader>
+          <ul className="-mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {trashed.map((n, i) => (
+              <li key={n.id} className={cn("flex items-center gap-1 px-1", i > 0 && "border-t border-border/70")}>
+                <div className="min-w-0 flex-1 py-2.5">
+                  <div className="truncate text-sm font-semibold leading-snug">{noteHeading(n)}</div>
+                  <div className="truncate text-xs leading-snug text-muted-foreground">
+                    {trashDaysLeft(n.deletedAt!, Date.now())} {trashDaysLeft(n.deletedAt!, Date.now()) === 1 ? "day" : "days"} left
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" className="h-9 px-2 text-xs font-semibold text-primary hover:text-primary" onClick={() => restoreNotes([n.id])}>
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" />Restore
+                </Button>
+                <Button
+                  variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                  aria-label={`Delete ${noteHeading(n)} now`} onClick={() => setConfirmDelete([n.id])}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <DialogFooter className="flex-row justify-between gap-2 sm:justify-between">
+            <Button variant="ghost" className="text-primary hover:text-primary" onClick={() => restoreNotes(trashed.map((n) => n.id))}>
+              Restore all
+            </Button>
+            <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(trashed.map((n) => n.id))}>
+              Delete all
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <DialogContent className="z-[90] max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete {confirmDelete && confirmDelete.length > 1 ? `${confirmDelete.length} notes` : "note"}?</DialogTitle>
+            <DialogTitle>Delete {confirmDelete && confirmDelete.length > 1 ? `${confirmDelete.length} notes` : "note"} permanently?</DialogTitle>
             <DialogDescription>This can't be undone.</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -452,9 +581,8 @@ export function QuickNotesPanel({
             <Button
               variant="destructive"
               onClick={() => {
-                if (confirmDelete) removeNotes(confirmDelete);
+                if (confirmDelete) removeForever(confirmDelete);
                 setConfirmDelete(null);
-                setSelectMode(false);
               }}
             >
               Delete

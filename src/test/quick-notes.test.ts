@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { noteHeading, noteMatches, notePreview, sortByRecent } from "@/components/tasks/quick-notes";
+import {
+  noteHeading, noteMatches, notePreview, purgeExpired, sortByRecent, trashDaysLeft, TRASH_DAYS,
+} from "@/components/tasks/quick-notes";
 
 describe("quick notes", () => {
   it("rows show a heading and a one-line preview", () => {
@@ -23,6 +25,21 @@ describe("quick notes", () => {
     const stored = [{ id: "a", updatedAt: 1 }, { id: "b", updatedAt: 3 }, { id: "c", updatedAt: 2 }];
     expect(sortByRecent(stored).map((n) => n.id)).toEqual(["b", "c", "a"]);
     expect(stored.map((n) => n.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("purges notes only after 30 days in Recently Deleted", () => {
+    const day = 24 * 60 * 60 * 1000;
+    const now = 100 * day;
+    const notes = [
+      { id: "live" },
+      { id: "fresh", deletedAt: now - 2 * day },
+      { id: "edge", deletedAt: now - TRASH_DAYS * day + 1 },
+      { id: "expired", deletedAt: now - TRASH_DAYS * day },
+    ];
+    expect(purgeExpired(notes, now).map((n) => n.id)).toEqual(["live", "fresh", "edge"]);
+    expect(trashDaysLeft(now, now)).toBe(30);
+    expect(trashDaysLeft(now - 2 * day, now)).toBe(28);
+    expect(trashDaysLeft(now - TRASH_DAYS * day + 1, now)).toBe(1);
   });
 
   it("keeps the existing storage key so saved notes carry over", () => {

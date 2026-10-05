@@ -4,7 +4,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Lightweight horizontal swipe wrapper for a task row.
- * Swipe right -> complete, swipe left -> delete. Never blocks vertical scrolling:
+ * Swipe right -> complete, swipe left -> delete; a side with no handler doesn't
+ * move or show its label. Never blocks vertical scrolling:
  * the gesture only engages once horizontal movement clearly dominates.
  */
 export function TaskSwipeRow({
@@ -30,9 +31,11 @@ export function TaskSwipeRow({
     <div className="relative overflow-hidden">
       {/* action backdrops */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-between px-4">
-        <span className={cn("flex items-center gap-1 text-xs font-semibold text-success", dx > 12 ? "opacity-100" : "opacity-0")}>
-          <Check className="h-4 w-4" /> Complete
-        </span>
+        {onSwipeRight ? (
+          <span className={cn("flex items-center gap-1 text-xs font-semibold text-success", dx > 12 ? "opacity-100" : "opacity-0")}>
+            <Check className="h-4 w-4" /> Complete
+          </span>
+        ) : <span />}
         <span className={cn("flex items-center gap-1 text-xs font-semibold text-destructive", dx < -12 ? "opacity-100" : "opacity-0")}>
           Delete <Trash2 className="h-4 w-4" />
         </span>
@@ -57,7 +60,7 @@ export function TaskSwipeRow({
             axis.current = Math.abs(mx) > Math.abs(my) * 1.5 ? "x" : "y";
           }
           if (axis.current !== "x") return;
-          setDx(Math.max(-140, Math.min(140, mx)));
+          setDx(Math.max(onSwipeLeft ? -140 : 0, Math.min(onSwipeRight ? 140 : 0, mx)));
         }}
         onTouchEnd={() => {
           const moved = dx;
