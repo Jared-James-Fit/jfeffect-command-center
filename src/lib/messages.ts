@@ -378,6 +378,42 @@ export async function deleteMessageForEveryone(messageId: string) {
   if (error) throw error;
 }
 
+/**
+ * Admin-only silent delete: removes the messages outright (no placeholder, no
+ * timestamp for the client or coach). A copy is kept in message_deletions,
+ * which only admins can read.
+ */
+export async function adminDeleteMessages(ids: string[], chat: "dm" | "group" = "dm") {
+  if (!ids.length) return 0;
+  const fn = chat === "group" ? "admin_delete_group_messages" : "admin_delete_messages";
+  const { data, error } = await (db as any).rpc(fn, { _ids: ids });
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+export type MessageDeletion = {
+  id: string;
+  message_id: string;
+  chat: "dm" | "group";
+  client_id: string | null;
+  group_id: string | null;
+  sender_role: string | null;
+  body: string | null;
+  attachments: MessageAttachment[] | null;
+  original_created_at: string | null;
+  deleted_by: string | null;
+  deleted_at: string;
+};
+
+/** Admin log of silently deleted messages for one 1:1 chat or group. */
+export async function listMessageDeletions(scope: { clientId?: string; groupId?: string }) {
+  let q = (db as any).from("message_deletions").select("*").order("deleted_at", { ascending: false }).limit(100);
+  q = scope.groupId ? q.eq("group_id", scope.groupId) : q.eq("client_id", scope.clientId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as MessageDeletion[];
+}
+
 /* ------------------------------- Reactions ------------------------------- */
 
 export type MessageReaction = {
