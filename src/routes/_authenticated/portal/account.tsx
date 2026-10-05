@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -35,6 +35,7 @@ const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "a
 
 function AccountPage() {
   const portalUserId = usePortalUserId();
+  const { isImpersonating } = useClientImpersonation();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
@@ -337,11 +338,15 @@ function AccountPage() {
           </div>
         )}
 
-        <div id="legal-safety" className="md:col-span-3 scroll-mt-32">
-          <SectionErrorBoundary label="Legal & Safety">
-            <ClientLegalSafety />
-          </SectionErrorBoundary>
-        </div>
+        {/* Legal status/consents come from the signed-in session, so in coach
+            "View as client" they'd be the coach's, not the client's. */}
+        {!isImpersonating && (
+          <div id="legal-safety" className="md:col-span-3 scroll-mt-32">
+            <SectionErrorBoundary label="Legal & Safety">
+              <ClientLegalSafety />
+            </SectionErrorBoundary>
+          </div>
+        )}
 
         <div id="install-app" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Install App">
