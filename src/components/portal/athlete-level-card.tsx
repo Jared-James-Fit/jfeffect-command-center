@@ -17,6 +17,7 @@ import { ArrowLeft } from "lucide-react";
 import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 import { RecordBadges } from "@/components/portal/record-badges";
 import { LeagueRecapButton } from "@/components/portal/league-recap";
+import { formatWeightLifted, formatWeightLiftedKg } from "@/lib/weight-lifted";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 
@@ -260,6 +261,28 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 type LeagueStat = { workouts_completed: number; rank: number; qualified: boolean; xp: number };
 
+type WeightLifted = { month_lb: number; lifetime_lb: number; month_sessions: number; lifetime_sessions: number };
+
+function useWeightLifted(clientId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["athlete-weight-lifted", clientId],
+    enabled: !!clientId,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WeightLifted | null> => {
+      const { data, error } = await (supabase as any).rpc("get_athlete_weight_lifted", { _client_id: clientId });
+      if (error) throw error;
+      const r = (data ?? [])[0];
+      if (!r) return null;
+      return {
+        month_lb: Number(r.month_lb ?? 0),
+        lifetime_lb: Number(r.lifetime_lb ?? 0),
+        month_sessions: Number(r.month_sessions ?? 0),
+        lifetime_sessions: Number(r.lifetime_sessions ?? 0),
+      };
+    },
+  });
+}
+
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-2xl border bg-card px-3 py-2.5">
@@ -270,8 +293,9 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, onBack }: {
+function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague, myLeague, onBack }: {
   clientId: string;
+  myClientId?: string | null;
   myStats: BadgeStats;
   myBadgeCount: number;
   theirLeague?: LeagueStat;
@@ -291,6 +315,8 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
   const povClientId = useClientImpersonation().client?.id ?? null;
   const isMe = !!p?.is_me || (!!povClientId && clientId === povClientId);
   const theirXp = Number(p?.xp ?? 0);
+  const { data: theirWeight, isPending: weightPending } = useWeightLifted(clientId);
+  const { data: myWeight } = useWeightLifted(!isMe ? myClientId : null);
   const { data: publicBadges = [] } = usePublicAchievements(clientId);
   const monthName = format(new Date(), "MMMM");
   const lifetimeWorkouts = Number(p?.workouts_completed ?? 0);
@@ -299,6 +325,9 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
   const loggedPct = lifetimeWorkouts > 0 ? Math.round((Math.min(fullyLogged, lifetimeWorkouts) / lifetimeWorkouts) * 100) : 0;
   const since = p?.first_workout_at ? format(new Date(p.first_workout_at), "MMM yyyy") : null;
   const lastWorkout = p?.last_workout_at ? format(new Date(p.last_workout_at), "MMM d") : null;
+  const weightValue = (lb?: number) => (theirWeight ? formatWeightLifted(lb ?? 0) : weightPending ? "…" : "—");
+  const weightSub = (n?: number, lb?: number) =>
+    theirWeight ? `${formatWeightLiftedKg(lb ?? 0)} · ${plural(n ?? 0, "session")}` : undefined;
   const leagueSub = theirLeague?.qualified && theirLeague.rank < 999
     ? `#${theirLeague.rank} · ${formatLeaguePoints(theirLeague.xp)} pts`
     : undefined;
@@ -324,6 +353,8 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
           <div className="grid grid-cols-2 gap-2">
             <StatTile label="Lifetime workouts" value={lifetimeWorkouts.toLocaleString()} sub={since ? `Training since ${since}` : undefined} />
             <StatTile label={`${monthName} workouts`} value={monthWorkouts.toLocaleString()} sub={leagueSub} />
+            <StatTile label={`${monthName} weight lifted`} value={weightValue(theirWeight?.month_lb)} sub={weightSub(theirWeight?.month_sessions, theirWeight?.month_lb)} />
+            <StatTile label="Lifetime weight lifted" value={weightValue(theirWeight?.lifetime_lb)} sub={weightSub(theirWeight?.lifetime_sessions, theirWeight?.lifetime_lb)} />
             <StatTile label="Fully logged" value={fullyLogged.toLocaleString()} sub={lifetimeWorkouts > 0 ? `${loggedPct}% of workouts` : undefined} />
             <StatTile label="Last workout" value={lastWorkout ?? "—"} sub={p?.month_workouts_fully_logged != null ? `${p.month_workouts_fully_logged} fully logged in ${monthName}` : undefined} />
           </div>
@@ -338,6 +369,8 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
                 ["Lifetime points", Number(myStats?.xp ?? 0).toLocaleString(), Number(theirXp ?? 0).toLocaleString()],
                 ["Lifetime workouts", Number(myStats?.workouts_completed ?? 0).toLocaleString(), lifetimeWorkouts.toLocaleString()],
                 [`${monthName} workouts`, myLeague ? String(myLeague.workouts_completed) : "—", String(monthWorkouts)],
+                [`${monthName} weight lifted`, myWeight ? formatWeightLifted(myWeight.month_lb) : "—", theirWeight ? formatWeightLifted(theirWeight.month_lb) : "—"],
+                ["Lifetime weight lifted", myWeight ? formatWeightLifted(myWeight.lifetime_lb) : "—", theirWeight ? formatWeightLifted(theirWeight.lifetime_lb) : "—"],
                 ["Badges", String(myBadgeCount), String(publicBadges.length)],
               ].map(([k, a, b]) => (
                 <div key={k} className="grid grid-cols-3 border-t px-3 py-2.5">
@@ -408,6 +441,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     return (
       <CompareView
         clientId={selected}
+        myClientId={me?.client_id ?? null}
         myStats={myStats}
         myBadgeCount={myBadgeCount}
         theirLeague={toStat(data.find((r) => r.client_id === selected))}
