@@ -2018,8 +2018,11 @@ export function MessageThread({
                     ? "Delivered · not read yet"
                     : "Sent";
                   return (
+                    // One line, anchored to the bubble's right edge. Without nowrap
+                    // the label is capped at the bubble's width, so on short
+                    // messages it wraps and the extra lines climb into the bubble.
                     <div className={cn(
-                      "absolute right-1 text-[10px] text-muted-foreground",
+                      "absolute right-1 whitespace-nowrap text-[10px] text-muted-foreground",
                       hasReactions ? "-bottom-8" : "-bottom-4",
                       status === "failed" && "text-destructive",
                     )}>
