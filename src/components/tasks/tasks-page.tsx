@@ -328,6 +328,25 @@ export function TasksPage({
       />
 
       <div className="space-y-3 p-3 pb-40 md:p-6 md:pb-10">
+        {/* Quick Notes */}
+        <QuickNotesPanel
+          storageKey={`${storagePrefix}-task-notes`}
+          quadStyles={quadStyles}
+          onConvert={async (note, quadrant, assignee) => {
+            // Keep the whole note: title (or its first line) becomes the task
+            // title, the full body rides along as the task notes.
+            const firstLine = note.body.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+            const t = (note.title.trim() || firstLine).slice(0, 200);
+            if (!t) return;
+            await createTask({ title: t, quadrant, scope, notes: note.body.trim() ? note.body : null, assignee_name: assignee });
+            refresh();
+            toast.success("Converted to task — note kept");
+          }}
+          assignees={assignees}
+          search={search}
+          hideComposeButton={selectMode}
+        />
+
         {/* Quick add */}
         <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2 py-1.5">
           <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -486,23 +505,6 @@ export function TasksPage({
           </Card>
         )}
 
-        {/* Quick Notes */}
-        <QuickNotesPanel
-          storageKey={`${storagePrefix}-task-notes`}
-          quadStyles={quadStyles}
-          onConvert={async (note, quadrant, assignee) => {
-            // Keep the whole note: title (or its first line) becomes the task
-            // title, the full body rides along as the task notes.
-            const firstLine = note.body.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
-            const t = (note.title.trim() || firstLine).slice(0, 200);
-            if (!t) return;
-            await createTask({ title: t, quadrant, scope, notes: note.body.trim() ? note.body : null, assignee_name: assignee });
-            refresh();
-            toast.success("Converted to task — note kept");
-          }}
-          assignees={assignees}
-          search={search}
-        />
       </div>
 
       {/* Sticky bulk action bar (sits above the mobile bottom nav) */}

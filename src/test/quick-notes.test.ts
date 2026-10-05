@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { noteHeading, noteMatches, notePreview } from "@/components/tasks/quick-notes";
+import { noteHeading, noteMatches, notePreview, sortByRecent } from "@/components/tasks/quick-notes";
 
 describe("quick notes", () => {
   it("rows show a heading and a one-line preview", () => {
@@ -17,6 +17,12 @@ describe("quick notes", () => {
     expect(noteMatches(n, "form message")).toBe(true);
     expect(noteMatches(n, "nutrition")).toBe(false);
     expect(noteMatches(n, "")).toBe(true);
+  });
+
+  it("lists the most recently edited note first without mutating storage order", () => {
+    const stored = [{ id: "a", updatedAt: 1 }, { id: "b", updatedAt: 3 }, { id: "c", updatedAt: 2 }];
+    expect(sortByRecent(stored).map((n) => n.id)).toEqual(["b", "c", "a"]);
+    expect(stored.map((n) => n.id)).toEqual(["a", "b", "c"]);
   });
 
   it("keeps the existing storage key so saved notes carry over", () => {

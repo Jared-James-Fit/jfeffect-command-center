@@ -1,7 +1,11 @@
 /**
  * Quick Notes — lightweight Apple-Notes-style capture inside the Task Manager.
  *
- * - Light list (title + one-line preview), collapsible section.
+ * - Light list (title + one-line preview), collapsible section, sorted by
+ *   most recently edited and capped to a few rows so it can live at the top
+ *   of the Task Manager without burying the tasks.
+ * - New notes come from a floating compose button (bottom-right, thumb
+ *   reach on mobile, always visible on desktop), like Apple Notes.
  * - Tapping a note opens a dedicated editor: full screen on mobile (sized to
  *   the visual viewport so the keyboard never covers the text), a large
  *   centered panel on desktop.
@@ -19,7 +23,7 @@ import {
   DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import {
-  Plus, MoreHorizontal, Trash2, Users, ChevronDown, ChevronLeft, Copy, ListTodo, Check, Pencil, CheckSquare, Files,
+  MoreHorizontal, Trash2, Users, ChevronDown, ChevronLeft, Copy, ListTodo, Check, Pencil, CheckSquare, Files, SquarePen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { QUADRANTS, type TaskQuadrant } from "@/lib/tasks";
@@ -115,6 +119,10 @@ export function notePreview(n: Pick<Note, "title" | "body">) {
   const ls = lines(n.body);
   return (n.title.trim() ? ls[0] : ls[1]) ?? "";
 }
+/** Most recently edited first, like Apple Notes. */
+export function sortByRecent<T extends Pick<Note, "updatedAt">>(notes: T[]): T[] {
+  return [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
+}
 export function noteMatches(n: Pick<Note, "title" | "body">, q: string) {
   const s = q.trim().toLowerCase();
   return !s || `${n.title}\n${n.body}`.toLowerCase().includes(s);
@@ -162,6 +170,12 @@ function useVisualViewportBox(active: boolean) {
   return box;
 }
 
+function useMounted() {
+  const [m, setM] = useState(false);
+  useEffect(() => setM(true), []);
+  return m;
+}
+
 function useIsDesktop() {
   const [d, setD] = useState(false);
   useEffect(() => {
@@ -176,8 +190,11 @@ function useIsDesktop() {
 
 // ---------------------------------------------------------------- panel
 
+/** Rows shown before "Show all" — keeps the panel short at the top of the page. */
+const COLLAPSED_ROWS = 3;
+
 export function QuickNotesPanel({
-  storageKey, quadStyles, assignees, onConvert, search = "",
+  storageKey, quadStyles, assignees, onConvert, search = "", hideComposeButton = false,
 }: {
   storageKey: string;
   quadStyles: Record<TaskQuadrant, QuadStyle>;
@@ -185,6 +202,8 @@ export function QuickNotesPanel({
   onConvert: (note: Note, quadrant: TaskQuadrant, assignee: string | null) => Promise<void>;
   /** Task Manager search text — notes are filtered by it too. */
   search?: string;
+  /** Hide the floating compose button (e.g. while the task bulk bar is up). */
+  hideComposeButton?: boolean;
 }) {
   const { notes, setNotes, saveState, flush } = useNotes(storageKey);
   const [collapsed, setCollapsed] = usePersistedFlag(`${storageKey}-collapsed`, false);
@@ -192,10 +211,16 @@ export function QuickNotesPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const mounted = useMounted();
+  const isDesktop = useIsDesktop();
 
   const searching = search.trim().length > 0;
-  const shown = useMemo(() => notes.filter((n) => noteMatches(n, search)), [notes, search]);
+  const shown = useMemo(() => sortByRecent(notes.filter((n) => noteMatches(n, search))), [notes, search]);
   const isCollapsed = collapsed && !searching;
+  const overflows = !searching && !selectMode && shown.length > COLLAPSED_ROWS;
+  const capped = overflows && !showAll;
+  const rows = capped ? shown.slice(0, COLLAPSED_ROWS) : shown;
 
   const addNote = useCallback(() => {
     const n: Note = { id: newId(), title: "", body: "", updatedAt: Date.now() };
@@ -251,7 +276,7 @@ export function QuickNotesPanel({
   );
 
   return (
-    <section className="pt-2" aria-label="Quick Notes">
+    <section aria-label="Quick Notes">
       {/* Section header */}
       <div className="flex items-center gap-1 px-1">
         <button
@@ -287,9 +312,6 @@ export function QuickNotesPanel({
               </DropdownMenu>
             )
           )}
-          <Button size="sm" variant="ghost" className="h-8 px-2 text-xs font-semibold text-primary hover:text-primary" onClick={addNote}>
-            <Plus className="mr-1 h-4 w-4" />Note
-          </Button>
         </div>
       </div>
 
@@ -310,12 +332,21 @@ export function QuickNotesPanel({
           )}
 
           {shown.length === 0 ? (
-            <p className="px-1 py-3 text-xs text-muted-foreground">
-              {searching ? "No notes match your search." : "No notes yet. Tap + Note to capture something. Notes save automatically."}
-            </p>
+            searching ? (
+              <p className="px-1 py-3 text-xs text-muted-foreground">No notes match your search.</p>
+            ) : (
+              <button
+                type="button"
+                onClick={addNote}
+                className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-xs text-muted-foreground border border-dashed border-border hover:text-foreground"
+              >
+                <SquarePen className="h-4 w-4 shrink-0" />
+                No notes yet. Tap to capture something. Notes save automatically.
+              </button>
+            )
           ) : (
             <ul className="mt-1 overflow-hidden rounded-xl bg-card ring-1 ring-border">
-              {shown.map((n, i) => {
+              {rows.map((n, i) => {
                 const preview = notePreview(n);
                 return (
                   <li key={n.id} className={cn("flex items-center gap-2 pl-3 pr-1", i > 0 && "border-t border-border/70")}>
@@ -361,9 +392,41 @@ export function QuickNotesPanel({
                   </li>
                 );
               })}
+              {overflows && (
+                <li className="border-t border-border/70">
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(!showAll)}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-primary"
+                  >
+                    {capped ? `Show all ${shown.length}` : "Show less"}
+                  </button>
+                </li>
+              )}
             </ul>
           )}
         </>
+      )}
+
+      {/* Compose — floats bottom-right above the mobile nav, like Apple Notes. */}
+      {mounted && !openNote && !selectMode && !hideComposeButton && createPortal(
+        <button
+          type="button"
+          data-viewport-pinned
+          onClick={addNote}
+          aria-label="New note"
+          title="New note"
+          className={cn(
+            "fixed right-4 z-50 flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground",
+            "shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] ring-1 ring-black/10 transition-opacity active:opacity-80",
+            "h-14 w-14 md:right-8 md:h-12 md:w-auto md:px-5",
+          )}
+          style={{ bottom: isDesktop ? "2rem" : "calc(max(env(safe-area-inset-bottom), 6px) + 84px)" }}
+        >
+          <SquarePen className="h-6 w-6 md:h-5 md:w-5" />
+          <span className="hidden text-sm font-semibold md:inline">New note</span>
+        </button>,
+        document.body,
       )}
 
       {openNote && (
