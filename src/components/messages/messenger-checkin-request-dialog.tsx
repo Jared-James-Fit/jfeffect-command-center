@@ -5,6 +5,8 @@ import { ClipboardCheck, Loader2, Salad, Sparkles } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { sendNutritionRequestFn } from "@/lib/nutrition-ai-plans.functions";
 import { NUTRITION_PHASES, PHASE_GOAL } from "@/lib/nutrition-cardio";
+import type { WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { WorkoutMealsSelect } from "@/components/nutrition/WorkoutMealsSelect";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +39,7 @@ export function MessengerCheckinRequestDialog({
   const qc = useQueryClient();
   const [taskType, setTaskType] = useState<MessengerCheckinTaskType | "nutrition_update">("weekly_checkin");
   const [phase, setPhase] = useState<string>("__auto");
+  const [workoutMeals, setWorkoutMeals] = useState<WorkoutMealsMode>("auto");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -44,7 +47,7 @@ export function MessengerCheckinRequestDialog({
     setSending(true);
     try {
       if (taskType === "nutrition_update") {
-        await sendNutrition({ data: { clientId, note: note.trim() || null, phase: phase === "__auto" ? null : phase } });
+        await sendNutrition({ data: { clientId, note: note.trim() || null, phase: phase === "__auto" ? null : phase, workoutMeals } });
         qc.invalidateQueries({ queryKey: ["nutrition-requests", clientId] });
       } else {
         await send({
@@ -62,6 +65,7 @@ export function MessengerCheckinRequestDialog({
       setNote("");
       setTaskType("weekly_checkin");
       setPhase("__auto");
+      setWorkoutMeals("auto");
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Could not send check-in");
@@ -145,6 +149,8 @@ export function MessengerCheckinRequestDialog({
                 ))}
               </SelectContent>
             </Select>
+            <div className="mb-1.5 mt-3 text-xs font-medium text-muted-foreground">Pre / Post-Workout meals</div>
+            <WorkoutMealsSelect value={workoutMeals} onChange={setWorkoutMeals} />
           </div>
         )}
 

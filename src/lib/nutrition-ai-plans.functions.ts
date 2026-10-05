@@ -13,10 +13,12 @@ import {
   mealPlanUserPrompt,
   targetsUserPrompt,
   type QA,
+  type WorkoutMealsMode,
 } from "@/lib/nutrition-ai-prompts";
 import { NUTRITION_PHASES, phaseFromText } from "@/lib/nutrition-cardio";
 
 const phaseSchema = z.enum(NUTRITION_PHASES.filter((p) => p !== "Custom") as [string, ...string[]]);
+const workoutMealsSchema = z.enum(["auto", "pre_post", "post_only", "pre_only", "none"]);
 
 async function admin(): Promise<any> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -59,24 +61,33 @@ async function loadQAs(sb: any, submissionId: string): Promise<{ sub: any; qas: 
   return { sub, qas };
 }
 
-async function coachPhase(sb: any, clientId: string): Promise<string | null> {
+async function coachSettings(sb: any, clientId: string): Promise<{ phase: string | null; workoutMeals: WorkoutMealsMode | null }> {
   const { data } = await sb
     .from("nf_assignments")
     .select("settings")
     .eq("form_id", NUTRITION_REQUEST_FORM_ID)
     .eq("client_id", clientId)
     .maybeSingle();
-  return (data?.settings as any)?.phase ?? null;
+  const st = (data?.settings as any) ?? {};
+  return { phase: st.phase ?? null, workoutMeals: st.workout_meals ?? null };
 }
 
-async function runPlan(sb: any, submissionId: string, phaseOverride?: string | null, notifyStaff = false) {
+async function runPlan(
+  sb: any,
+  submissionId: string,
+  phaseOverride?: string | null,
+  notifyStaff = false,
+  workoutMealsOverride?: WorkoutMealsMode | null,
+) {
   const { sub, qas } = await loadQAs(sb, submissionId);
-  const selected = phaseOverride ?? (await coachPhase(sb, sub.client_id));
+  const coach = await coachSettings(sb, sub.client_id);
+  const selected = phaseOverride ?? coach.phase;
+  const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
   const goalAnswer = qas.find((q) => /^goal$/i.test(q.label.trim()))?.value ?? "";
   const phase = selected ?? phaseFromText(goalAnswer);
   const now = new Date().toISOString();
   await sb.from("nutrition_ai_plans").upsert(
-    { submission_id: submissionId, client_id: sub.client_id, status: "generating", error: null, phase, updated_at: now },
+    { submission_id: submissionId, client_id: sub.client_id, status: "generating", error: null, phase, workout_meals: workoutMeals, updated_at: now },
     { onConflict: "submission_id" },
   );
   try {
@@ -96,7 +107,7 @@ async function runPlan(sb: any, submissionId: string, phaseOverride?: string | n
     const m = await generateText({
       model: gateway(modelId),
       system: MEAL_PLAN_PROMPT,
-      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1])),
+      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals),
     });
     const mealPlanText = cleanAiText(m.text);
 
@@ -127,7 +138,12 @@ async function runPlan(sb: any, submissionId: string, phaseOverride?: string | n
 export const sendNutritionRequestFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ clientId: z.string().uuid(), note: z.string().max(500).nullish(), phase: phaseSchema.nullish() }).parse(d),
+    z.object({
+      clientId: z.string().uuid(),
+      note: z.string().max(500).nullish(),
+      phase: phaseSchema.nullish(),
+      workoutMeals: workoutMealsSchema.nullish(),
+    }).parse(d),
   )
   .handler(async ({ data, context }) => {
     if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
@@ -137,7 +153,7 @@ export const sendNutritionRequestFn = createServerFn({ method: "POST" })
     if (!form) throw new Error("Nutrition Update Request form is missing");
 
     await sb.from("nf_assignments").upsert(
-      { form_id: formId, client_id: data.clientId, recurrence: "none", assigned_by: context.userId, settings: { phase: data.phase ?? null } },
+      { form_id: formId, client_id: data.clientId, recurrence: "none", assigned_by: context.userId, settings: { phase: data.phase ?? null, workout_meals: data.workoutMeals ?? "auto" } },
       { onConflict: "form_id,client_id" },
     );
 
@@ -180,7 +196,12 @@ export const sendNutritionRequestFn = createServerFn({ method: "POST" })
 export const generateNutritionPlanFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ submissionId: z.string().uuid(), force: z.boolean().optional(), phase: phaseSchema.nullish() }).parse(d),
+    z.object({
+      submissionId: z.string().uuid(),
+      force: z.boolean().optional(),
+      phase: phaseSchema.nullish(),
+      workoutMeals: workoutMealsSchema.nullish(),
+    }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const sb = await admin();
@@ -205,7 +226,7 @@ export const generateNutritionPlanFn = createServerFn({ method: "POST" })
     if (existing?.status === "ready" && !(staff && data.force)) return { status: "ready" as const };
     if (!staff && existing && existing.status !== "error") return { status: existing.status };
 
-    return runPlan(sb, data.submissionId, staff ? data.phase ?? null : null, !staff);
+    return runPlan(sb, data.submissionId, staff ? data.phase ?? null : null, !staff, staff ? data.workoutMeals ?? null : null);
   });
 
 /** Coach view: a client's nutrition requests with answers + AI output. */
@@ -243,6 +264,7 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
       requests: out,
       requestedAt: assignment?.created_at ?? null,
       requestedPhase: ((assignment?.settings as any)?.phase as string | null) ?? null,
+      requestedWorkoutMeals: ((assignment?.settings as any)?.workout_meals as WorkoutMealsMode | null) ?? null,
       clientName: client?.full_name ?? "Client",
     };
   });

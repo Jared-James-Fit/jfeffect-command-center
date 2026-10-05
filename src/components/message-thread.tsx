@@ -36,6 +36,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { shouldSendOnEnter } from "@/lib/enter-to-send";
 import { formatReadReceipt, formatReceiptStamp } from "@/lib/read-receipt";
 import { getChatSettings, DEFAULT_REACTION } from "@/lib/chat-settings";
 import { markRecent } from "@/lib/chat-gifs";
@@ -2422,7 +2423,7 @@ export function MessageThread({
               }}
               onBlur={() => broadcastTyping(true)}
               placeholder={role === "client" ? "Message Coach Jared…" : "Reply to client…"}
-              enterKeyHint="send"
+              enterKeyHint="enter"
               className="min-h-9 max-h-40 flex-1 resize-none rounded-[20px] border-border/60 bg-background/60 px-4 py-[7px] text-base leading-5 md:text-sm md:leading-5 focus-visible:ring-1 focus-visible:ring-border focus-visible:border-border"
               onFocus={() => {
                 // When the on-screen keyboard opens (composer focus), the
@@ -2438,7 +2439,7 @@ export function MessageThread({
                 setTimeout(pin, 350);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                if (shouldSendOnEnter(e)) {
                   e.preventDefault(); onSend();
                 }
               }}

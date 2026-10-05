@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
-import { MEAL_PLAN_PROMPT, TARGETS_PROMPT, manualMealPlanPrompt, manualTargetsPrompt } from "@/lib/nutrition-ai-prompts";
+import { MEAL_PLAN_PROMPT, TARGETS_PROMPT, manualMealPlanPrompt, manualTargetsPrompt, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { WorkoutMealsSelect, workoutMealsLabel } from "@/components/nutrition/WorkoutMealsSelect";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,7 @@ type Req = {
     generated_at: string | null;
     applied_at: string | null;
     phase: string | null;
+    workout_meals?: WorkoutMealsMode | null;
   };
 };
 
@@ -132,6 +134,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const [showAnswers, setShowAnswers] = useState(false);
   const [sendPhase, setSendPhase] = useState<string>(AUTO);
   const [regenPhase, setRegenPhase] = useState<string>(AUTO);
+  const [sendWorkoutMeals, setSendWorkoutMeals] = useState<WorkoutMealsMode>("auto");
+  const [regenWorkoutMeals, setRegenWorkoutMeals] = useState<WorkoutMealsMode | null>(null);
 
   const key = ["nutrition-requests", clientId];
   const { data, isLoading } = useQuery({
@@ -164,7 +168,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const send = async () => {
     setSending(true);
     try {
-      await sendFn({ data: { clientId, note: note.trim() || null, phase: sendPhase === AUTO ? null : sendPhase } });
+      await sendFn({ data: { clientId, note: note.trim() || null, phase: sendPhase === AUTO ? null : sendPhase, workoutMeals: sendWorkoutMeals } });
       toast.success("Nutrition update request sent to the client's messages");
       setSendOpen(false);
       setNote("");
@@ -184,7 +188,14 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         ...old,
         requests: old.requests.map((r: Req, i: number) => i === 0 ? { ...r, plan: { ...(r.plan ?? {}), status: "generating" } } : r),
       }));
-      const res = await genFn({ data: { submissionId: latest.id, force: true, phase: regenPhase === AUTO ? null : regenPhase } });
+      const res = await genFn({
+        data: {
+          submissionId: latest.id,
+          force: true,
+          phase: regenPhase === AUTO ? null : regenPhase,
+          workoutMeals: regenWorkoutMeals ?? plan?.workout_meals ?? null,
+        },
+      });
       if (res.status === "error") toast.error("AI couldn't finish — try again");
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't run the AI");
@@ -241,7 +252,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!plan?.targets_text}
-                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase), "Meal plan prompt")}
+                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null), "Meal plan prompt")}
                   >
                     2 · Meal plan prompt <span className="ml-auto text-[10px] text-muted-foreground">with targets</span>
                   </DropdownMenuItem>
@@ -280,20 +291,31 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           {plan.meal_plan_text && (
             <CopyBlock title="Meal plan · paste-ready" text={plan.meal_plan_text} icon={<Wand2 className="h-4 w-4 text-primary" />} defaultOpen={false} />
           )}
-          {plan.phase && (
-            <div className="text-xs text-muted-foreground">
-              Phase used: <span className="font-bold text-foreground">{plan.phase}</span> · {PHASE_GOAL[plan.phase] ?? ""}
+          {(plan.phase || plan.workout_meals) && (
+            <div className="space-y-0.5 text-xs text-muted-foreground">
+              {plan.phase && (
+                <div>Phase used: <span className="font-bold text-foreground">{plan.phase}</span> · {PHASE_GOAL[plan.phase] ?? ""}</div>
+              )}
+              {plan.workout_meals && (
+                <div>Workout meals: <span className="font-bold text-foreground">{workoutMealsLabel(plan.workout_meals)}</span></div>
+              )}
             </div>
           )}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button className="gap-2 font-bold" onClick={() => setApplyOpen(true)} disabled={!prefill?.days.length}>
               <Check className="h-4 w-4" /> {plan.applied_at ? "Apply again" : "Review & apply to targets"}
             </Button>
-            <div className="flex gap-2 sm:ml-auto">
-              <div className="min-w-0 flex-1 sm:w-48 sm:flex-none">
+            <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex">
+              <div className="min-w-0 sm:w-44">
                 <PhaseSelect value={regenPhase} onChange={setRegenPhase} autoLabel="Phase: keep / auto" />
               </div>
-              <Button variant="outline" className="shrink-0 gap-2" onClick={regenerate} disabled={regenerating}>
+              <div className="min-w-0 sm:w-52">
+                <WorkoutMealsSelect
+                  value={regenWorkoutMeals ?? plan.workout_meals ?? "auto"}
+                  onChange={setRegenWorkoutMeals}
+                />
+              </div>
+              <Button variant="outline" className="col-span-2 shrink-0 gap-2 sm:col-span-1" onClick={regenerate} disabled={regenerating}>
                 <RefreshCw className={cn("h-4 w-4", regenerating && "animate-spin")} /> Regenerate
               </Button>
             </div>
@@ -333,6 +355,11 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             <Label className="text-xs">Phase / goal for this plan</Label>
             <PhaseSelect value={sendPhase} onChange={setSendPhase} autoLabel="Let the client's answer decide" />
             <p className="text-[11px] text-muted-foreground">Sets the calorie direction the AI uses (deficit, surplus or maintenance).</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Pre / Post-Workout meals</Label>
+            <WorkoutMealsSelect value={sendWorkoutMeals} onChange={setSendWorkoutMeals} />
+            <p className="text-[11px] text-muted-foreground">The client is asked when they train; this overrides it if you want.</p>
           </div>
           <Textarea
             rows={3}

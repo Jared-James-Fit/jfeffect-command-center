@@ -93,6 +93,12 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
 0. Start with ONE line: PHASE: <Fat Loss | Muscle Gain | Recomp | Maintenance | Performance | Reverse Diet | Lifestyle Reset> — the client's phase / goal. Then a blank line.
 1. Create one menu per day-type the client needs (e.g. TRAINING-DAY MENU, NON-TRAINING-DAY MENU, HIGH-DAY MENU). Each menu header ends with the word MENU in ALL CAPS.
 2. Inside each menu, list "Meal 1", "Meal 2", "Meal 3"… on their own line.
+2b. WORKOUT MEALS — on TRAINING-DAY and HIGH-DAY menus, tag the meal eaten before training as "Meal X (Pre-Workout)" and the first meal after training as "Meal Y (Post-Workout)" — exact spelling, in brackets on the meal line. Order the meals around the client's training time.
+   - Pre-Workout: 60–120 min before training; mostly easy-to-digest carbs + moderate protein, low fat and low fibre.
+   - Post-Workout: within 2 hours after training; 30–50 g protein + carbs, low-to-moderate fat.
+   - Client trains fasted / early morning: no Pre-Workout meal (or a small snack meal if they want one) and make the first meal after training the Post-Workout meal.
+   - Never tag meals on NON-TRAINING-DAY menus.
+   - The COACH WORKOUT MEALS instruction below always wins over these defaults.
 3. Under each meal, list every food on its own line as: "<amount> g <food>" (use cooked weight for meat, rice, potatoes, vegetables; packaged weight for oats, whey, peanut butter, oils).
 4. After each meal add a blank line, then:
    Approximate macros:
@@ -139,12 +145,42 @@ export function manualTargetsPrompt(clientName: string, qas: QA[], phase?: strin
 }
 
 /** Full copy-paste prompt for running pass 2 by hand. */
-export function manualMealPlanPrompt(qas: QA[], targetsText: string, phase?: string | null): string {
-  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase)}`;
+export function manualMealPlanPrompt(
+  qas: QA[],
+  targetsText: string,
+  phase?: string | null,
+  workoutMeals?: WorkoutMealsMode | null,
+): string {
+  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase, workoutMeals)}`;
 }
 
+/** Coach override for pre/post-workout meals (stored on the request). */
+export type WorkoutMealsMode = "auto" | "pre_post" | "post_only" | "pre_only" | "none";
+
+export const WORKOUT_MEALS_OPTIONS: { value: WorkoutMealsMode; label: string }[] = [
+  { value: "auto", label: "Auto — from the client's training time" },
+  { value: "pre_post", label: "Pre + Post-Workout meals" },
+  { value: "post_only", label: "Post-Workout only (trains fasted)" },
+  { value: "pre_only", label: "Pre-Workout only" },
+  { value: "none", label: "No workout meals" },
+];
+
+const WORKOUT_MEALS_RULE: Record<Exclude<WorkoutMealsMode, "auto">, string> = {
+  pre_post: "Include BOTH a Pre-Workout and a Post-Workout meal on every training-day and high-day menu.",
+  post_only: "Client trains fasted: NO Pre-Workout meal. Tag the first meal after training as Post-Workout.",
+  pre_only: "Tag a Pre-Workout meal only; do not tag a Post-Workout meal.",
+  none: "Do NOT tag any Pre-Workout or Post-Workout meals.",
+};
+
 /** Pass 2 input: the CLIENT DETAILS block filled from the form + pass-1 targets. */
-export function mealPlanUserPrompt(qas: QA[], targetsText: string, phase?: string | null): string {
+export function mealPlanUserPrompt(
+  qas: QA[],
+  targetsText: string,
+  phase?: string | null,
+  workoutMeals?: WorkoutMealsMode | null,
+): string {
+  const trainTime = answerFor(qas, "time", "train");
+  const preEat = answerFor(qas, "eat before training");
   const bw = answerFor(qas, "bodyweight") || answerFor(qas, "weight");
   const days = answerFor(qas, "training days") || answerFor(qas, "days per week");
   const meals = answerFor(qas, "meals per day") || answerFor(qas, "meals");
@@ -160,6 +196,9 @@ export function mealPlanUserPrompt(qas: QA[], targetsText: string, phase?: strin
     `- Allergies / dislikes: ${avoid || "none"}`,
     `- Preferred foods: ${love || "no preference"}`,
     meals ? `- Meals per day: ${meals}` : "",
+    `- Usual training time: ${trainTime || "not given — assume late afternoon"}`,
+    preEat ? `- Eating before training: ${preEat}` : "",
+    workoutMeals && workoutMeals !== "auto" ? `- COACH WORKOUT MEALS: ${WORKOUT_MEALS_RULE[workoutMeals]}` : "",
     "",
     "TARGETS (match each menu's Daily Total to these within ±3%):",
     targetsText.trim(),

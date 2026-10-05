@@ -6,7 +6,9 @@
 
 export type PlanFood = { amount: string; name: string };
 export type PlanMacros = { protein?: number; carbs?: number; fat?: number; fibre?: number };
-export type PlanMeal = { title: string; foods: PlanFood[]; macros: PlanMacros | null; notes: string[] };
+import { detectMealTiming, stripTimingText, type MealTiming } from "@/lib/nutrition-targets/meal-timing";
+
+export type PlanMeal = { title: string; foods: PlanFood[]; macros: PlanMacros | null; notes: string[]; timing: MealTiming };
 export type StructuredDay = { meals: PlanMeal[]; notes: string[] };
 
 const MEAL_HEADER = /^(meal\s*\d+|breakfast|lunch|dinner|snack(\s*\d+)?|pre[- ]?workout|post[- ]?workout|intra[- ]?workout)\b\s*:?\s*(.*)$/i;
@@ -34,9 +36,11 @@ export function structureMealPlanDay(text: string | null | undefined): Structure
 
     const header = line.match(MEAL_HEADER);
     if (header) {
-      meal = { title: line.replace(/:\s*$/, ""), foods: [], macros: null, notes: [] };
-      if (header[3]?.trim()) meal.title = `${header[1]}`.replace(/\b\w/g, (c) => c.toUpperCase()) + ` · ${header[3].trim()}`;
-      else meal.title = header[1].replace(/\b\w/g, (c) => c.toUpperCase());
+      const timing = detectMealTiming(line);
+      const rest = stripTimingText(header[3] ?? "").replace(/^[:–—-]\s*/, "").trim();
+      const base = header[1].replace(/\b\w/g, (c) => c.toUpperCase());
+      // A header that is only "Pre-Workout" keeps that as its title.
+      meal = { title: rest ? `${base} · ${rest}` : base, foods: [], macros: null, notes: [], timing };
       out.meals.push(meal);
       inMacros = false;
       skipTotal = false;
