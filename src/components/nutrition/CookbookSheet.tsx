@@ -26,7 +26,7 @@ export function CookbookEntryCard({ viewer }: { viewer: CookbookViewer }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-black uppercase tracking-widest">Cookbook</div>
-          <div className="text-[12px] text-muted-foreground">Browse coach-approved meals and recipes</div>
+          <div className="text-[12px] text-muted-foreground">Easy meals: air fryer, microwave, no-cook &amp; store-bought</div>
         </div>
         <Button className="w-full font-bold sm:w-auto" onClick={() => setOpen(true)}>
           Open Cookbook

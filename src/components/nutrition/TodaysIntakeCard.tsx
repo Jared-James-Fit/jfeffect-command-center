@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Loader2, UtensilsCrossed } from "lucide-react";
 import { getNutritionDashboard } from "@/lib/nutrition-dashboard.functions";
+import { ToolTile } from "./NutritionToolsCard";
 
 const Panel = lazy(() => import("./DailyNutritionPanelLazy"));
 
@@ -91,14 +92,18 @@ export function TodaysIntakeCard() {
   );
 }
 
-/** "Log Food" entry inside Nutrition Tools (used when nothing is logged yet). */
+/** "Log Food" tile inside Nutrition Tools. */
 export function LogFoodToolButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="outline" className="h-11 w-full justify-start" onClick={() => setOpen(true)}>
-        <UtensilsCrossed className="mr-2 h-4 w-4" /> Log Food
-      </Button>
+      <ToolTile
+        icon={UtensilsCrossed}
+        title="Log Food"
+        hint="Track what you ate today"
+        onClick={() => setOpen(true)}
+        accent
+      />
       <LogSheet open={open} onOpenChange={setOpen} />
     </>
   );
