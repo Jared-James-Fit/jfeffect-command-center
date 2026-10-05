@@ -9,6 +9,9 @@
  * - Tapping a note opens a dedicated editor: full screen on mobile (sized to
  *   the visual viewport so the keyboard never covers the text), a large
  *   centered panel on desktop.
+ * - Move to matrix: one tap on a quadrant tile (row menu, editor menu, or
+ *   bulk select) creates the task and moves the note to Recently Deleted,
+ *   with Undo that removes the task and restores the note.
  * - Delete (swipe left, row menu, editor menu, bulk) moves a note to
  *   Recently Deleted with an Undo toast. Trashed notes are restorable for
  *   30 days, then purged on the next load. Trash is just a `deletedAt`
@@ -24,11 +27,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-  DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
+  DropdownMenuSeparator, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
-  MoreHorizontal, Trash2, Users, ChevronDown, ChevronLeft, Copy, ListTodo, Check, Pencil, CheckSquare, Files, SquarePen,
-  RotateCcw,
+  MoreHorizontal, Trash2, ChevronDown, ChevronLeft, Copy, Check, Pencil, CheckSquare, Files, SquarePen,
+  RotateCcw, ArrowRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { QUADRANTS, type TaskQuadrant } from "@/lib/tasks";
@@ -38,7 +41,8 @@ import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
 /** `deletedAt` set ⇒ the note is in Recently Deleted. */
 export type Note = { id: string; title: string; body: string; updatedAt: number; deletedAt?: number };
 type QuadStyle = { color: string; title: string; subtitle: string };
-type Assignee = { id: string; name: string };
+/** What a note becomes in the matrix. */
+export type NoteTaskInput = { title: string; notes: string | null; quadrant: TaskQuadrant };
 export type SaveState = "idle" | "saving" | "saved" | "error";
 
 const newId = () =>
@@ -148,6 +152,19 @@ export function notePreview(n: Pick<Note, "title" | "body">) {
   const ls = lines(n.body);
   return (n.title.trim() ? ls[0] : ls[1]) ?? "";
 }
+/**
+ * Task fields for a note: its title (or first line) becomes the task title
+ * and the rest of the text rides along as the task notes. Null when empty.
+ */
+export function noteToTask(n: Pick<Note, "title" | "body">): Omit<NoteTaskInput, "quadrant"> | null {
+  const bodyLines = n.body.split("\n");
+  const firstIdx = bodyLines.findIndex((l) => l.trim());
+  const title = (n.title.trim() || (firstIdx >= 0 ? bodyLines[firstIdx].trim() : "")).slice(0, 200);
+  if (!title) return null;
+  const rest = n.title.trim() ? n.body : bodyLines.slice(firstIdx + 1).join("\n");
+  return { title, notes: rest.trim() ? rest.trim() : null };
+}
+
 /** Most recently edited first, like Apple Notes. */
 export function sortByRecent<T extends Pick<Note, "updatedAt">>(notes: T[]): T[] {
   return [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -243,7 +260,7 @@ function RowMenu({ label, children }: { label: string; children: React.ReactNode
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">{children}</DropdownMenuContent>
+      <DropdownMenuContent align="end" className="w-60">{children}</DropdownMenuContent>
     </DropdownMenu>
   );
 }
@@ -254,12 +271,14 @@ function RowMenu({ label, children }: { label: string; children: React.ReactNode
 const COLLAPSED_ROWS = 3;
 
 export function QuickNotesPanel({
-  storageKey, quadStyles, assignees, onConvert, search = "", hideComposeButton = false,
+  storageKey, quadStyles, onCreateTask, onDeleteTask, search = "", hideComposeButton = false,
 }: {
   storageKey: string;
   quadStyles: Record<TaskQuadrant, QuadStyle>;
-  assignees: Assignee[];
-  onConvert: (note: Note, quadrant: TaskQuadrant, assignee: string | null) => Promise<void>;
+  /** Creates the matrix task for a note; resolves to the new task id. */
+  onCreateTask: (input: NoteTaskInput) => Promise<string>;
+  /** Removes a task created by a move (Undo). */
+  onDeleteTask: (id: string) => Promise<void>;
   /** Task Manager search text — notes are filtered by it too. */
   search?: string;
   /** Hide the floating compose button (e.g. while the task bulk bar is up). */
@@ -304,7 +323,7 @@ export function QuickNotesPanel({
     const set = new Set(ids);
     setNotes((arr) => arr.map((n) => (set.has(n.id) ? { ...n, deletedAt: undefined } : n)));
   }, [setNotes]);
-  const trashNotes = (ids: string[]) => {
+  const trashNotes = (ids: string[], { quiet = false } = {}) => {
     const set = new Set(ids);
     const now = Date.now();
     // An untouched brand-new note has nothing worth keeping — drop it outright.
@@ -314,6 +333,7 @@ export function QuickNotesPanel({
     setSelected(new Set());
     setSelectMode(false);
     if (openId && set.has(openId)) setOpenId(null);
+    if (quiet) return;
     toast(ids.length > 1 ? `${ids.length} notes moved to Recently Deleted` : "Moved to Recently Deleted", {
       action: { label: "Undo", onClick: () => restoreNotes(ids) },
     });
@@ -342,24 +362,60 @@ export function QuickNotesPanel({
   const openNote = notes.find((n) => n.id === openId) ?? null;
   const allSelected = shown.length > 0 && selected.size === shown.length;
 
-  const convertMenu = (n: Note) => (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger><ListTodo className="mr-2 h-4 w-4" />Convert to task</DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="z-[85]">
-        {QUADRANTS.map((q) => (
-          <DropdownMenuItem key={q.key} onClick={() => onConvert(n, q.key, null)}>
-            <span className="mr-2 h-2 w-2 rounded-full" style={{ backgroundColor: quadStyles[q.key].color }} />
-            {quadStyles[q.key].title}
-          </DropdownMenuItem>
-        ))}
-        {assignees.length > 0 && <DropdownMenuSeparator />}
-        {assignees.map((a) => (
-          <DropdownMenuItem key={a.id} onClick={() => onConvert(n, "do", a.name)}>
-            <Users className="mr-2 h-4 w-4" />{a.name}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+  const moveToMatrix = async (list: Note[], quadrant: TaskQuadrant) => {
+    const movable = list.flatMap((n) => {
+      const t = noteToTask(n);
+      return t ? [{ note: n, task: { ...t, quadrant } }] : [];
+    });
+    if (!movable.length) { toast.error("Write something first, then move it."); return; }
+    const results = await Promise.allSettled(movable.map((m) => onCreateTask(m.task)));
+    const movedIds = movable.filter((_, i) => results[i].status === "fulfilled").map((m) => m.note.id);
+    const taskIds = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+    const where = quadStyles[quadrant].title;
+    if (movedIds.length) {
+      // The note goes to Recently Deleted (not gone) so Undo can bring it back.
+      trashNotes(movedIds, { quiet: true });
+      toast.success(movedIds.length > 1 ? `${movedIds.length} notes moved to ${where}` : `Moved to ${where}`, {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            restoreNotes(movedIds);
+            Promise.all(taskIds.map(onDeleteTask)).catch(() =>
+              toast.error("Note restored, but the task couldn't be removed. Delete it from the matrix."));
+          },
+        },
+      });
+    }
+    const failed = movable.length - movedIds.length;
+    if (failed) toast.error(failed > 1 ? `${failed} notes couldn't be moved. They're still here.` : "Couldn't move the note. It's still here.");
+  };
+
+  /** 2×2 quadrant tiles, laid out like the matrix. One tap moves the note(s). */
+  const moveGrid = (list: () => Note[]) => (
+    <>
+      <DropdownMenuLabel className="pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Move to matrix
+      </DropdownMenuLabel>
+      <div className="grid grid-cols-2 gap-1 px-1 pb-1">
+        {QUADRANTS.map((q) => {
+          const st = quadStyles[q.key];
+          return (
+            <DropdownMenuItem
+              key={q.key}
+              onClick={() => moveToMatrix(list(), q.key)}
+              className="min-h-10 justify-center rounded-md border px-1.5 text-center text-xs font-bold"
+              style={{
+                color: st.color,
+                borderColor: `color-mix(in srgb, ${st.color} 45%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${st.color} 12%, transparent)`,
+              }}
+            >
+              {st.title}
+            </DropdownMenuItem>
+          );
+        })}
+      </div>
+    </>
   );
 
   return (
@@ -418,6 +474,16 @@ export function QuickNotesPanel({
                 {allSelected ? "Deselect all" : "Select all"}
               </Button>
               <span className="text-[11px] font-bold">{selected.size} selected</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" disabled={selected.size === 0}>
+                    <ArrowRightLeft className="mr-1 h-3.5 w-3.5" />Move
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60">
+                  {moveGrid(() => shown.filter((n) => selected.has(n.id)))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-destructive hover:text-destructive"
                 disabled={selected.size === 0} onClick={() => trashNotes(Array.from(selected))}>
                 <Trash2 className="mr-1 h-3.5 w-3.5" />Delete
@@ -467,10 +533,11 @@ export function QuickNotesPanel({
                         </button>
                         {!selectMode && (
                           <RowMenu label="Note actions">
+                            {moveGrid(() => [n])}
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={async () => { if (await copyText(n.body || n.title)) toast.success("Copied ✓"); }}>
                               <Copy className="mr-2 h-4 w-4" />Copy
                             </DropdownMenuItem>
-                            {convertMenu(n)}
                             <DropdownMenuItem onClick={() => duplicate(n)}><Files className="mr-2 h-4 w-4" />Duplicate</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive" onClick={() => trashNotes([n.id])}>
@@ -528,7 +595,7 @@ export function QuickNotesPanel({
           onClose={closeEditor}
           onDuplicate={() => { const c = duplicate(openNote); setOpenId(c.id); }}
           onDelete={() => trashNotes([openNote.id])}
-          convertMenu={convertMenu(openNote)}
+          moveGrid={moveGrid(() => [openNote])}
         />
       )}
 
@@ -597,7 +664,7 @@ export function QuickNotesPanel({
 // ---------------------------------------------------------------- editor
 
 function NoteEditor({
-  note, saveState, onChange, onClose, onDuplicate, onDelete, convertMenu,
+  note, saveState, onChange, onClose, onDuplicate, onDelete, moveGrid,
 }: {
   note: Note;
   saveState: SaveState;
@@ -605,7 +672,7 @@ function NoteEditor({
   onClose: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  convertMenu: React.ReactNode;
+  moveGrid: React.ReactNode;
 }) {
   const isDesktop = useIsDesktop();
   const box = useVisualViewportBox(!isDesktop);
@@ -713,12 +780,13 @@ function NoteEditor({
                   <MoreHorizontal className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="z-[85] w-52">
+              <DropdownMenuContent align="end" className="z-[85] w-60">
+                {moveGrid}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => window.setTimeout(() => { titleRef.current?.focus(); titleRef.current?.select(); }, 50)}>
                   <Pencil className="mr-2 h-4 w-4" />Rename
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onDuplicate}><Files className="mr-2 h-4 w-4" />Duplicate</DropdownMenuItem>
-                {convertMenu}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onClick={onDelete}>
                   <Trash2 className="mr-2 h-4 w-4" />Delete

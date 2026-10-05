@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  noteHeading, noteMatches, notePreview, purgeExpired, sortByRecent, trashDaysLeft, TRASH_DAYS,
+  noteHeading, noteMatches, notePreview, noteToTask, purgeExpired, sortByRecent, trashDaysLeft, TRASH_DAYS,
 } from "@/components/tasks/quick-notes";
 
 describe("quick notes", () => {
@@ -40,6 +40,16 @@ describe("quick notes", () => {
     expect(trashDaysLeft(now, now)).toBe(30);
     expect(trashDaysLeft(now - 2 * day, now)).toBe(28);
     expect(trashDaysLeft(now - TRASH_DAYS * day + 1, now)).toBe(1);
+  });
+
+  it("turns a note into a task without repeating the title in the task notes", () => {
+    expect(noteToTask({ title: "PR Prompt", body: "Have the app track rep PRs\nby load" }))
+      .toEqual({ title: "PR Prompt", notes: "Have the app track rep PRs\nby load" });
+    expect(noteToTask({ title: "", body: "\nFilm squat tutorial\nUse the new lighting" }))
+      .toEqual({ title: "Film squat tutorial", notes: "Use the new lighting" });
+    expect(noteToTask({ title: "Just a title", body: "  " })).toEqual({ title: "Just a title", notes: null });
+    expect(noteToTask({ title: " ", body: "\n " })).toBeNull();
+    expect(noteToTask({ title: "x".repeat(250), body: "" })?.title).toHaveLength(200);
   });
 
   it("keeps the existing storage key so saved notes carry over", () => {
