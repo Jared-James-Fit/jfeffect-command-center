@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check, X, RotateCcw } from "lucide-react";
 import { ActionButton } from "@/components/action-button";
+import { QuestionReferenceImage, getQuestionReferenceImage } from "@/components/forms/question-reference-image";
 import {
   listFormsForClient,
   listQuestions,
@@ -319,6 +320,9 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                 {q.required && <span className="ml-1 text-destructive">*</span>}
               </Label>
               {q.help_text && <p className="mt-1 text-xs text-muted-foreground">{q.help_text}</p>}
+              {getQuestionReferenceImage(q) && (
+                <QuestionReferenceImage src={getQuestionReferenceImage(q)!} label={q.label} />
+              )}
 
               <div className="mt-3">
                 <QuestionInput
