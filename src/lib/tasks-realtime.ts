@@ -27,8 +27,11 @@ export function watchTasksRealtime(opts: {
   name: string;
   table: string;
   filter: string;
-  /** Called for every change event, and once after each (re)subscribe. */
-  onChange: () => void;
+  /**
+   * Called for every change event (with its payload), and once after each
+   * (re)subscribe (with no payload).
+   */
+  onChange: (payload?: unknown) => void;
   doc?: Pick<Document, "addEventListener" | "removeEventListener" | "visibilityState">;
   win?: Pick<Window, "addEventListener" | "removeEventListener" | "setTimeout" | "clearTimeout">;
 }): () => void {
@@ -55,7 +58,7 @@ export function watchTasksRealtime(opts: {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: opts.table, filter: opts.filter },
-        () => opts.onChange(),
+        (payload) => opts.onChange(payload),
       )
       .subscribe((status) => {
         if (disposed || mine !== seq) return;
