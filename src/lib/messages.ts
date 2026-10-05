@@ -380,8 +380,8 @@ export async function deleteMessageForEveryone(messageId: string) {
 
 /**
  * Admin-only silent delete: removes the messages outright (no placeholder, no
- * timestamp for the client or coach). A copy is kept in message_deletions,
- * which only admins can read.
+ * timestamp for the client). A copy is kept in message_deletions, which only
+ * admins and the client's coach can read.
  */
 export async function adminDeleteMessages(ids: string[], chat: "dm" | "group" = "dm") {
   if (!ids.length) return 0;
@@ -405,7 +405,7 @@ export type MessageDeletion = {
   deleted_at: string;
 };
 
-/** Admin log of silently deleted messages for one 1:1 chat or group. */
+/** Staff log of silently deleted messages for one 1:1 chat or group. */
 export async function listMessageDeletions(scope: { clientId?: string; groupId?: string }) {
   let q = (db as any).from("message_deletions").select("*").order("deleted_at", { ascending: false }).limit(100);
   q = scope.groupId ? q.eq("group_id", scope.groupId) : q.eq("client_id", scope.clientId);

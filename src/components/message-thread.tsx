@@ -2248,7 +2248,7 @@ export function MessageThread({
           cancel/retry. RLS hides these rows from clients, so it's only
           rendered for the admin role. */}
       {role === "admin" && clientId && <ScheduledStrip clientId={clientId} />}
-      {isAdmin && clientId && <DeletedMessagesStrip clientId={clientId} />}
+      {role === "admin" && clientId && <DeletedMessagesStrip clientId={clientId} />}
 
       <div
         className={cn(
@@ -2723,7 +2723,7 @@ export function MessageThread({
             <AlertDialogTitle>{confirmDelete?.label ?? "Delete?"}</AlertDialogTitle>
             <AlertDialogDescription>
               {isAdmin
-                ? "Removed for everyone with no trace — the client won't see a placeholder or timestamp. Only admins can see it under “deleted”."
+                ? "Removed for everyone with no trace — the client won't see a placeholder or timestamp. Only coaches and admins can see it under “deleted”."
                 : "This cannot be undone. Both sides will see a \"This message was deleted\" placeholder."}
             </AlertDialogDescription>
           </AlertDialogHeader>
