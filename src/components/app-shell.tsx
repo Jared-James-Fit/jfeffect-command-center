@@ -840,6 +840,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
       {/* Mobile top bar */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* The PWA runs under a translucent iOS status bar, so scrolled page
+            content would print over the clock/battery. This opaque strip
+            covers exactly the status-bar inset (0px in a normal browser tab). */}
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-x-0 top-0 z-[41] bg-background md:hidden"
+          style={{ height: "env(safe-area-inset-top, 0px)" }}
+        />
         <header
           className="flex items-center justify-between gap-2 border-b border-border px-3 pb-3 md:hidden"
           style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
