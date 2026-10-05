@@ -848,7 +848,7 @@ export function GroupMessageThread({
         })}
       </div>
 
-      {isAdmin && <DeletedMessagesStrip groupId={groupId} />}
+      {(isAdmin || authRole === "coach") && <DeletedMessagesStrip groupId={groupId} />}
 
       {/* Composer */}
       {canPost ? (
@@ -1203,7 +1203,7 @@ export function GroupMessageThread({
             <AlertDialogTitle>{confirmDelete?.label ?? "Delete?"}</AlertDialogTitle>
             <AlertDialogDescription>
               {isAdmin
-                ? "Removed for everyone with no trace — members won't see a placeholder or timestamp. Only admins can see it under “deleted”."
+                ? "Removed for everyone with no trace — members won't see a placeholder or timestamp. Only coaches and admins can see it under “deleted”."
                 : "This cannot be undone. Everyone in the group will see a \"This message was deleted\" placeholder."}
             </AlertDialogDescription>
           </AlertDialogHeader>
