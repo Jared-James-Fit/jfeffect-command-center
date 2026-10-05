@@ -378,6 +378,22 @@ export async function deleteMessageForEveryone(messageId: string) {
   if (error) throw error;
 }
 
+/**
+ * Permanently remove a message that was already deleted for everyone (the
+ * "This message was deleted" placeholder). Admin-only by RLS. The deleted_at
+ * filter makes it impossible to hard-delete a live message through this path.
+ */
+export async function purgeDeletedMessage(messageId: string) {
+  const { data, error } = await db
+    .from("messages")
+    .delete()
+    .eq("id", messageId)
+    .not("deleted_at", "is", null)
+    .select("id");
+  if (error) throw error;
+  if (!data?.length) throw new Error("Couldn't remove it. Only admins can clear deleted messages.");
+}
+
 /* ------------------------------- Reactions ------------------------------- */
 
 export type MessageReaction = {

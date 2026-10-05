@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   listMessages, sendMessage, markRead, setConversationStatus, setConversationPriority,
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
-  editMessage, deleteMessageForEveryone,
+  editMessage, deleteMessageForEveryone, purgeDeletedMessage,
   listReactions, toggleReaction, REACTION_EMOJIS,
   listOlderMessages,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
@@ -1897,6 +1897,27 @@ export function MessageThread({
                   <div className="flex items-center gap-1.5 whitespace-pre-wrap break-words">
                     <Trash2 className="h-3 w-3 opacity-70" />
                     <span>This message was deleted</span>
+                    {role === "admin" && !m.id.startsWith("optimistic-") && (
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const key = ["messages", clientId, role] as const;
+                          const prev = qc.getQueryData<Message[]>(key);
+                          // Vanish instantly; put it back if the database refuses.
+                          qc.setQueryData<Message[]>(key, (list) => (list ?? []).filter((x) => x.id !== m.id));
+                          setOlderMessages((list) => list.filter((x) => x.id !== m.id));
+                          try { await purgeDeletedMessage(m.id); }
+                          catch (err: any) {
+                            if (prev) qc.setQueryData(key, prev);
+                            toast.error(err?.message ?? "Couldn't remove it");
+                          }
+                        }}
+                        className="ml-1 rounded-full border border-current/30 px-2 py-0.5 text-[10px] font-semibold not-italic opacity-80 active:scale-95"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 ) : isEditing ? (
                   <div className="space-y-1.5">
