@@ -16,6 +16,8 @@ import {
 import { ClipboardList, FileSignature, UtensilsCrossed, ChevronRight } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
+import { compressImage } from "@/lib/image-compress";
+import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 
 /* ------------------------------- Attachment Types (shared shape) ------------------------------- */
 
@@ -184,21 +186,59 @@ export function fileToAttachmentType(file: File): SharedAttachment["type"] {
   return "file";
 }
 
-/** Upload a file to the message-attachments bucket at a caller-provided path. */
-export async function uploadAttachmentToPath(path: string, file: File): Promise<SharedAttachment> {
-  const { error } = await supabase.storage.from("message-attachments").upload(path, file, {
-    cacheControl: "3600",
-    upsert: false,
-    contentType: file.type || undefined,
+/**
+ * Upload one chat attachment into `message-attachments/<folder>/…`, shared by
+ * 1:1 and group threads. Photos are shrunk first (a chat bubble never needs a
+ * 12 MP original); everything goes through the progress/abort-aware uploader,
+ * which streams small files in one request and uses resumable TUS for big videos.
+ */
+export async function uploadChatAttachment(
+  folder: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<SharedAttachment> {
+  onProgress?.(1);
+  let uploadFile = file;
+  if (file.type.startsWith("image/") && file.type !== "image/gif") {
+    try {
+      const compressed = await compressImage(file, {
+        maxDimension: 1600,
+        quality: 0.82,
+        skipUnder: 300 * 1024,
+      });
+      if (compressed instanceof File) uploadFile = compressed;
+      else if (compressed !== file) {
+        uploadFile = new File(
+          [compressed],
+          file.name.replace(/\.[^.]+$/, "") + ".jpg",
+          { type: "image/jpeg" },
+        );
+      }
+    } catch {
+      // Keep the original if compression isn't supported on this device.
+    }
+  }
+  if (signal?.aborted) throw new Error("Upload cancelled.");
+
+  onProgress?.(3);
+  const ext = uploadFile.name.includes(".") ? uploadFile.name.split(".").pop() : "";
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext ? "." + ext : ""}`;
+  await uploadLiftFileToStorage({
+    file: uploadFile,
+    userId: folder,
+    bucket: "message-attachments",
+    path,
+    onProgress: (pct) => onProgress?.(Math.max(3, pct)),
+    signal,
   });
-  if (error) throw error;
   return {
-    type: fileToAttachmentType(file),
+    type: fileToAttachmentType(uploadFile),
     url: "",
     storage_path: path,
     name: file.name,
-    size: file.size,
-    mime: file.type,
+    size: uploadFile.size,
+    mime: uploadFile.type || file.type,
   };
 }
 

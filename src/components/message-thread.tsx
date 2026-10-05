@@ -46,7 +46,7 @@ import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { ChatSoundCard } from "@/components/chat-sound-card";
 import { ScheduledStrip } from "@/components/messages/scheduled-strip";
 import { ScheduleButton } from "@/components/messages/schedule-button";
-import { renderBodyWithMeet } from "@/components/chat-shared";
+import { renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
@@ -60,8 +60,8 @@ import { toast } from "sonner";
 import { playUiSound } from "@/lib/ui-sounds";
 import { haptic } from "@/platform/haptics";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
-import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
-import { compressImage } from "@/lib/image-compress";
+import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
+import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import {
   FormHistoryRow,
   MessengerCheckinRequestCard,
@@ -123,65 +123,13 @@ function fmtDuration(s?: number) {
   return `${m}:${sec}`;
 }
 
-function fileToAttachmentType(file: File): MessageAttachment["type"] {
-  const m = file.type.toLowerCase();
-  if (m.startsWith("image/")) return "image";
-  if (m.startsWith("video/")) return "video";
-  if (m.startsWith("audio/")) return "audio";
-  if (m === "application/pdf") return "pdf";
-  return "file";
-}
-
-async function uploadAttachment(
+function uploadAttachment(
   clientId: string,
   file: File,
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
 ): Promise<MessageAttachment> {
-  onProgress?.(1);
-
-  // Phone photos are commonly several MB even though a chat preview only needs
-  // a fraction of that resolution. Compress before upload to cut transfer time.
-  let uploadFile = file;
-  if (file.type.startsWith("image/") && file.type !== "image/gif") {
-    try {
-      const compressed = await compressImage(file, {
-        maxDimension: 1600,
-        quality: 0.82,
-        skipUnder: 300 * 1024,
-      });
-      if (compressed instanceof File) uploadFile = compressed;
-      else if (compressed !== file) {
-        uploadFile = new File(
-          [compressed],
-          file.name.replace(/\.[^.]+$/, "") + ".jpg",
-          { type: "image/jpeg" },
-        );
-      }
-    } catch {
-      // Keep the original if compression isn't supported on this device.
-    }
-  }
-
-  onProgress?.(3);
-  const ext = uploadFile.name.includes(".") ? uploadFile.name.split(".").pop() : "";
-  const path = `${clientId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext ? "." + ext : ""}`;
-  await uploadLiftFileToStorage({
-    file: uploadFile,
-    userId: clientId,
-    bucket: "message-attachments",
-    path,
-    onProgress: (pct) => onProgress?.(Math.max(3, pct)),
-    signal,
-  });
-  return {
-    type: fileToAttachmentType(uploadFile),
-    url: "",
-    storage_path: path,
-    name: file.name,
-    size: uploadFile.size,
-    mime: uploadFile.type || file.type,
-  };
+  return uploadChatAttachment(clientId, file, onProgress, signal) as Promise<MessageAttachment>;
 }
 
 /* ------------------------------- Signed URLs ------------------------------- */
@@ -236,7 +184,9 @@ function VideoAttachment({ att }: { att: MessageAttachment }) {
   const signed = useSignedUrlFor(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   if (!src) return null;
-  return <video src={src} controls playsInline preload="none" className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
+  // Local (still uploading) previews are blob: URLs: load metadata so the first frame shows.
+  const local = src.startsWith("blob:");
+  return <video src={local ? `${src}#t=0.1` : src} controls playsInline preload={local ? "metadata" : "none"} className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
 }
 
 function fakePeaks(n = 40, seed = 1) {
@@ -769,6 +719,22 @@ function LiveWaveform({ levels }: { levels: number[] }) {
   );
 }
 
+/**
+ * Query options for a 1:1 thread's latest page. Shared with the inbox so a
+ * row can prefetch on press and the thread opens with history already there.
+ */
+export function threadMessagesQuery(clientId: string, role: SenderRole) {
+  return {
+    queryKey: ["messages", clientId, role] as const,
+    enabled: !!clientId,
+    staleTime: 0,              // Always fetch fresh on mount for latest messages
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 25 }),
+  };
+}
+
 export function MessageThread({
   clientId,
   role,
@@ -799,6 +765,10 @@ export function MessageThread({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; pct: number } | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
+  // Picked photos/videos/files upload in the background; Send never waits on them.
+  const uploads = useDraftUploads<MessageAttachment>();
+  // Messages already sent from the composer but still waiting on their media.
+  const [queuedUploadSends, setQueuedUploadSends] = useState(0);
   const [sending, setSending] = useState(false);
   const [messageType, setMessageType] = useState("General");
   const [internalNote, setInternalNote] = useState(false);
@@ -821,7 +791,10 @@ export function MessageThread({
   const ensureCheckinsFn = useServerFn(ensureDueMessengerCheckins);
   // Defer PWA updates while there's an in-flight composer draft. No unload prompt
   // — chat threads navigate freely and the draft is short-lived.
-  useUnsavedWarning(body.trim().length > 0 || !!replyingTo || sending || uploading, { warnOnUnload: false });
+  useUnsavedWarning(
+    body.trim().length > 0 || !!replyingTo || sending || uploading || uploads.drafts.length > 0 || queuedUploadSends > 0,
+    { warnOnUnload: false },
+  );
   const [preview, setPreview] = useState<{
     blob: Blob; url: string; duration: number; peaks: number[];
   } | null>(null);
@@ -875,24 +848,21 @@ export function MessageThread({
       .catch(() => {});
   }, [role, clientId, ensureCheckinsFn, qc]);
 
-  const { data: messages = [] } = useQuery({
-    queryKey: ["messages", clientId, role],
-    enabled: !!clientId,
-    staleTime: 0,              // Always fetch fresh on mount for latest messages
-    gcTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-    queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 25 }),
-  });
+  const { data: messages = [], isPending: messagesPending } = useQuery(threadMessagesQuery(clientId, role));
 
   const [olderMessages, setOlderMessages] = useState<Message[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
   // Reset the older-messages buffer when switching conversations or roles.
+  // Composer media also resets: an upload picked for one client must never
+  // ride along into the next conversation.
+  const resetUploads = uploads.reset;
   useEffect(() => {
     setOlderMessages([]);
     setReplyingTo(null);
     setFlashMessageId(null);
-  }, [clientId, role]);
+    setAttachments([]);
+    resetUploads();
+  }, [clientId, role, resetUploads]);
 
   const allMessages = useMemo(() => {
     const seen = new Set(messages.map((m) => m.id));
@@ -1094,6 +1064,8 @@ export function MessageThread({
           // swap the temp row for the real one instead of appending a duplicate.
           const tempIdx = existing.findIndex((m) =>
             m.id.startsWith("optimistic-") &&
+            // Still uploading: can't be this row yet (two media-only sends share an empty body).
+            !(m as any).local_upload_ids &&
             m.sender_id === newMsg.sender_id &&
             m.sender_role === newMsg.sender_role &&
             m.body === newMsg.body,
@@ -1472,61 +1444,13 @@ export function MessageThread({
     exitSelection();
   };
 
-  const onPickFiles = async (files: FileList | null) => {
+  const onPickFiles = (files: FileList | null) => {
     if (!files || !files.length) return;
-    const selected = Array.from(files);
-    const valid = selected.filter((f) => {
-      return true;
-    });
-    if (!valid.length) return;
-
-    setUploading(true);
-    const controller = new AbortController();
-    uploadAbortRef.current = controller;
-    const progressByIndex = new Array(valid.length).fill(0);
-    const uploaded = new Array<MessageAttachment | null>(valid.length).fill(null);
-    const label = valid.length === 1 ? valid[0].name : `${valid.length} files`;
-    setUploadProgress({ name: label, pct: 1 });
-
-    const updateOverall = (index: number, pct: number) => {
-      progressByIndex[index] = Math.max(progressByIndex[index], pct);
-      const overall = Math.max(
-        1,
-        Math.round(progressByIndex.reduce((sum, p) => sum + p, 0) / valid.length),
-      );
-      setUploadProgress({ name: label, pct: overall });
-    };
-
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < valid.length) {
-        const i = cursor++;
-        const file = valid[i];
-        uploaded[i] = await uploadAttachment(
-          clientId,
-          file,
-          (pct) => updateOverall(i, pct),
-          controller.signal,
-        );
-      }
-    };
-
-    try {
-      await Promise.all(
-        Array.from({ length: Math.min(2, valid.length) }, () => worker()),
-      );
-      setAttachments((prev) => [
-        ...prev,
-        ...uploaded.filter(Boolean) as MessageAttachment[],
-      ]);
-      setUploadProgress({ name: label, pct: 100 });
-    } catch (e: any) {
-      if (!controller.signal.aborted) toast.error(e?.message ?? "Upload failed");
-    } finally {
-      uploadAbortRef.current = null;
-      window.setTimeout(() => setUploadProgress(null), 250);
-      setUploading(false);
-    }
+    uploads.add(
+      Array.from(files),
+      (file, onProgress, signal) => uploadAttachment(clientId, file, onProgress, signal),
+      (d, e: any) => toast.error(`${d.name}: ${e?.message ?? "upload failed"}`),
+    );
   };
 
   const stopForPreview = async () => {
@@ -1575,11 +1499,21 @@ export function MessageThread({
     }
   };
 
-  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[]; returnMessage?: boolean }) => {
+  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[]; returnMessage?: boolean; withDrafts?: boolean }) => {
     if (!user) return null;
     const text = (opts?.body ?? body).trim();
     const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
-    if (!text && atts.length === 0) return null;
+    if (!text && atts.length === 0 && !(opts?.withDrafts && uploads.drafts.length)) return null;
+    // Media still uploading goes out with this message: the bubble shows
+    // local previews + progress now, the insert happens once uploads land.
+    const drafts = opts?.withDrafts ? uploads.take() : [];
+    const draftPreviews: MessageAttachment[] = drafts.map((d) => ({
+      type: d.kind,
+      url: d.previewUrl ?? "",
+      name: d.name,
+      size: d.file.size,
+      mime: d.file.type,
+    }));
     const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.is_internal_note && !replyingTo.id.startsWith("optimistic-")
       ? replyingTo
       : null;
@@ -1599,7 +1533,6 @@ export function MessageThread({
     // Immediately append a temporary bubble so the composer clears and the
     // message appears with no server round-trip. Replace with the real row
     // when the insert resolves; mark failed on error.
-    const allAtts = [...atts, ...linkAtts];
     const tempId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const nowIso = new Date().toISOString();
     const key = ["messages", clientId, role] as const;
@@ -1609,7 +1542,7 @@ export function MessageThread({
       sender_id: user.id,
       sender_role: role,
       body: text,
-      attachments: allAtts,
+      attachments: [...atts, ...draftPreviews, ...linkAtts],
       message_type: messageType,
       priority: role === "admin" ? priority : null,
       is_internal_note: role === "admin" ? internalNote : false,
@@ -1620,20 +1553,49 @@ export function MessageThread({
       reply_to_message_id: replyTarget?.id ?? null,
       reply_preview: replyPreview,
       delivery_status: "sending",
-    };
+      ...(drafts.length ? { local_upload_ids: drafts.map((d) => d.id) } : {}),
+    } as Message;
     qc.setQueryData<Message[]>(key, (prev) => [...(prev ?? []), optimistic]);
     setBody("");
     setAttachments([]);
     setReplyingTo(null);
     setInternalNote(false);
     broadcastTyping(true);
+    const releaseDrafts = () => {
+      // Give the swapped-in server row a moment to render before freeing blobs.
+      if (drafts.length) window.setTimeout(() => drafts.forEach(releaseDraft), 5000);
+    };
+    let uploaded: MessageAttachment[] = [];
+    if (drafts.length) {
+      setQueuedUploadSends((n) => n + 1);
+      try {
+        uploaded = await Promise.all(drafts.map((d) => d.done));
+      } catch (e: any) {
+        drafts.forEach((d) => d.abort());
+        qc.setQueryData<Message[]>(key, (prev) => (prev ?? []).filter((m) => m.id !== tempId));
+        drafts.forEach(releaseDraft);
+        // Nothing was sent: put the caption back so the coach can re-attach and retry.
+        if (text) setBody((b) => b || text);
+        if (replyTarget) setReplyingTo((r) => r ?? replyTarget);
+        playUiSound("error");
+        haptic("error");
+        toast.error(`Upload failed: ${e?.message ?? "try again"}`);
+        return null;
+      } finally {
+        setQueuedUploadSends((n) => n - 1);
+      }
+      // Uploads done: from here it's a normal optimistic row the realtime INSERT may claim.
+      qc.setQueryData<Message[]>(key, (prev) =>
+        (prev ?? []).map((m) => (m.id === tempId ? ({ ...m, local_upload_ids: undefined } as Message) : m)),
+      );
+    }
     try {
       const sent = await sendMessage({
         clientId,
         senderId: user.id,
         senderRole: role,
         body: text,
-        attachments: allAtts,
+        attachments: [...atts, ...uploaded, ...linkAtts],
         messageType,
         isInternalNote: role === "admin" ? internalNote : false,
         priority: role === "admin" ? priority : undefined,
@@ -1651,6 +1613,7 @@ export function MessageThread({
       });
       playUiSound("message");
       haptic("light");
+      releaseDrafts();
       return sent;
     } catch (e: any) {
       // Mark the optimistic bubble as failed so the user can see it didn't send.
@@ -1663,11 +1626,12 @@ export function MessageThread({
       playUiSound("error");
       haptic("error");
       toast.error(e?.message ?? "Failed to send");
+      releaseDrafts();
       return null;
     }
   };
 
-  const onSend = () => doSend();
+  const onSend = () => doSend({ withDrafts: true });
 
   const priorityIconTone =
     priority === "High Priority" ? "text-destructive"
@@ -1714,7 +1678,17 @@ export function MessageThread({
             </Button>
           </div>
         )}
-        {visibleMessages.length === 0 ? (
+        {visibleMessages.length === 0 && messagesPending ? (
+          // First open: hold the shape of a thread instead of flashing
+          // "No messages yet" before the real history pops in.
+          <div className="flex h-full flex-col justify-end gap-3" aria-busy="true" aria-label="Loading messages">
+            {[["w-2/3", "start"], ["w-1/2", "end"], ["w-3/5", "start"], ["w-2/5", "end"]].map(([w, side], i) => (
+              <div key={i} className={cn("flex", side === "end" ? "justify-end" : "justify-start")}>
+                <div className={cn("h-10 animate-pulse rounded-2xl", w, side === "end" ? "bg-primary/20" : "bg-secondary")} />
+              </div>
+            ))}
+          </div>
+        ) : visibleMessages.length === 0 ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">
             {role === "client" ? "Send your coach a message to start the conversation." : "No messages yet."}
           </div>
@@ -1982,6 +1956,9 @@ export function MessageThread({
                         onUseReply={useSuggestedReply}
                       />
                     ))}
+                    {(m as any).local_upload_ids?.length > 0 && (
+                      <DraftUploadStatus store={uploads.store} ids={(m as any).local_upload_ids} />
+                    )}
                   </div>
                 )}
                 <div className={cn("mt-1 flex items-center gap-2 text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
@@ -2265,12 +2242,14 @@ export function MessageThread({
           </div>
         )}
 
+        <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
+
         {/* Hidden file inputs */}
         <input ref={fileInputRef} type="file" multiple className="hidden"
           onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
         <input ref={photoInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
           onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
-        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+        <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden"
           onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
 
         {recorder.recording ? (
@@ -2329,7 +2308,7 @@ export function MessageThread({
               surface="dm"
               clientIds={[clientId]}
               defaultClientId={clientId}
-              disabled={sending || uploading}
+              disabled={sending}
               canSendGifs={canSendGifs}
               canSendSounds={canSendSounds}
               onPickCamera={() => cameraInputRef.current?.click()}
@@ -2446,9 +2425,9 @@ export function MessageThread({
             />
 
             {/* Voice or Send */}
-            {body.trim() || attachments.length > 0 ? (
+            {body.trim() || attachments.length > 0 || uploads.drafts.length > 0 ? (
               <>
-              {role === "admin" && body.trim() && attachments.length === 0 && !replyingTo && (
+              {role === "admin" && body.trim() && attachments.length === 0 && uploads.drafts.length === 0 && !replyingTo && (
                 <ScheduleButton
                   clientId={clientId}
                   body={body}

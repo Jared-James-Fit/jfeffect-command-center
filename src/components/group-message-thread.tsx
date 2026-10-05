@@ -35,8 +35,10 @@ import { fallbackEmoji } from "@/lib/gif-fallback";
 import {
   AttachmentView, LiveWaveform, WaveformBars, useVoiceRecorder,
   attachIcon, fakePeaks, fmtDuration, fmtTime,
-  uploadAttachmentToPath, LINK_RE, renderBodyWithMeet, type SharedAttachment,
+  uploadChatAttachment, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
+import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
+import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { MeetQuickAction } from "@/components/meet-quick-action";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
@@ -44,14 +46,16 @@ import {
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
   CheckCircle2, Circle, CheckSquare, Copy,
 } from "lucide-react";
-import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 
-async function uploadGroupFile(groupId: string, file: File): Promise<GroupAttachment> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "";
-  const path = `group/${groupId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext ? "." + ext : ""}`;
-  const att = await uploadAttachmentToPath(path, file);
+async function uploadGroupFile(
+  groupId: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<GroupAttachment> {
+  const att = await uploadChatAttachment(`group/${groupId}`, file, onProgress, signal);
   return att as GroupAttachment;
 }
 
@@ -71,6 +75,10 @@ export function GroupMessageThread({
   const [attachments, setAttachments] = useState<GroupAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  // Picked media uploads in the background; Send clears the composer right
+  // away and the message posts once its uploads land.
+  const uploads = useDraftUploads<GroupAttachment>();
+  const [queuedUploadIds, setQueuedUploadIds] = useState<string[]>([]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -79,7 +87,10 @@ export function GroupMessageThread({
   const [preview, setPreview] = useState<{ blob: Blob; url: string; duration: number; peaks: number[] } | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
-  useUnsavedWarning(body.trim().length > 0 || sending || uploading, { warnOnUnload: false });
+  useUnsavedWarning(
+    body.trim().length > 0 || sending || uploading || uploads.drafts.length > 0 || queuedUploadIds.length > 0,
+    { warnOnUnload: false },
+  );
 
   // Editing / actions
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -371,21 +382,17 @@ export function GroupMessageThread({
 
   /* ---------------- Composer actions ---------------- */
 
-  const onPickFiles = async (files: FileList | null) => {
+  const onPickFiles = (files: FileList | null) => {
     if (!files || !files.length) return;
-    setUploading(true);
-    try {
-      const uploaded: GroupAttachment[] = [];
-      for (const f of Array.from(files)) {
-        if (f.size > 50 * 1024 * 1024) { toast.error(`${f.name} is over 50MB`); continue; }
-        uploaded.push(await uploadGroupFile(groupId, f));
-      }
-      setAttachments((prev) => [...prev, ...uploaded]);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Upload failed");
-    } finally {
-      setUploading(false);
-    }
+    const ok = Array.from(files).filter((f) => {
+      if (f.size > 50 * 1024 * 1024) { toast.error(`${f.name} is over 50MB`); return false; }
+      return true;
+    });
+    uploads.add(
+      ok,
+      (file, onProgress, signal) => uploadGroupFile(groupId, file, onProgress, signal),
+      (d, e: any) => toast.error(`${d.name}: ${e?.message ?? "upload failed"}`),
+    );
   };
 
   const stopForPreview = async () => {
@@ -433,37 +440,46 @@ export function GroupMessageThread({
   const doSend = async () => {
     if (!user) return;
     const text = body.trim();
-    if (!text && attachments.length === 0) return;
-    
-    await runJob({ title: "Sending message" }, async () => {
-      // Auto-detect plain URLs typed inline
-      const linkAtts: GroupAttachment[] = [];
-      const matches = text.match(LINK_RE);
-      if (matches) {
-        for (const u of matches.slice(0, 3)) {
-          if (attachments.some((a) => a.url === u)) continue;
-          linkAtts.push({ type: "link", url: u });
-        }
+    if (!text && attachments.length === 0 && uploads.drafts.length === 0) return;
+    const ready = attachments;
+    const drafts = uploads.take();
+    const draftIds = drafts.map((d) => d.id);
+    // Auto-detect plain URLs typed inline
+    const linkAtts: GroupAttachment[] = [];
+    const matches = text.match(LINK_RE);
+    if (matches) {
+      for (const u of matches.slice(0, 3)) {
+        if (ready.some((a) => a.url === u)) continue;
+        linkAtts.push({ type: "link", url: u });
       }
-      setSending(true);
-      try {
-        await sendGroupMessage({
-          groupId,
-          senderId: user.id,
-          senderRole: canManage ? "admin" : "member",
-          body: text,
-          attachments: [...attachments, ...linkAtts],
-        });
-        setBody("");
-        setAttachments([]);
-        qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
-        qc.invalidateQueries({ queryKey: ["chat-groups"] });
-      } finally {
-        setSending(false);
-      }
-    }).catch((e: any) => {
-       toast.error(e?.message ?? "Failed to send");
-    });  };
+    }
+    setBody("");
+    setAttachments([]);
+    if (draftIds.length) setQueuedUploadIds((prev) => [...prev, ...draftIds]);
+    setSending(!draftIds.length);
+    try {
+      const uploaded = draftIds.length ? await Promise.all(drafts.map((d) => d.done)) : [];
+      await sendGroupMessage({
+        groupId,
+        senderId: user.id,
+        senderRole: canManage ? "admin" : "member",
+        body: text,
+        attachments: [...ready, ...uploaded, ...linkAtts],
+      });
+      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+      qc.invalidateQueries({ queryKey: ["chat-groups"] });
+    } catch (e: any) {
+      drafts.forEach((d) => d.abort());
+      // Nothing posted: hand the text back so it can be retried.
+      if (text) setBody((b) => b || text);
+      if (ready.length) setAttachments((a) => (a.length ? a : ready));
+      toast.error(e?.message ?? "Failed to send");
+    } finally {
+      drafts.forEach(releaseDraft);
+      if (draftIds.length) setQueuedUploadIds((prev) => prev.filter((id) => !draftIds.includes(id)));
+      else setSending(false);
+    }
+  };
 
   /* ---------------- Render ---------------- */
 
@@ -840,11 +856,18 @@ export function GroupMessageThread({
             </div>
           )}
 
+          {queuedUploadIds.length > 0 && (
+            <div className="px-1 text-primary">
+              <DraftUploadStatus store={uploads.store} ids={queuedUploadIds} />
+            </div>
+          )}
+          <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
+
           <input ref={fileInputRef} type="file" multiple className="hidden"
             onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
           <input ref={photoInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
             onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
-          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+          <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden"
             onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
 
           {recorder.recording ? (
@@ -894,7 +917,7 @@ export function GroupMessageThread({
                 role={canManage ? "admin" : "member"}
                 surface="group"
                 clientIds={memberClients}
-                disabled={sending || uploading}
+                disabled={sending}
                 canSendGifs={canSendGifs}
                 canSendSounds={canSendSounds}
                 onPickCamera={() => cameraInputRef.current?.click()}
@@ -1006,7 +1029,7 @@ export function GroupMessageThread({
                 }}
               />
 
-              {body.trim() || attachments.length > 0 ? (
+              {body.trim() || attachments.length > 0 || uploads.drafts.length > 0 ? (
                 <Button
                   type="button"
                   onClick={doSend}

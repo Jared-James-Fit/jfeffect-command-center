@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { MessageThread, PriorityChip } from "@/components/message-thread";
+import { MessageThread, PriorityChip, threadMessagesQuery } from "@/components/message-thread";
 import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
@@ -83,21 +83,17 @@ type Filter = typeof FILTERS[number];
 
 export const Route = createFileRoute("/_authenticated/admin/messages")({
   validateSearch: (s) => z.object({ client: z.string().uuid().optional() }).parse(s),
-  component: MessagesRedirect,
-});
-
-function MessagesRedirect() {
-  const { client } = Route.useSearch();
-  const nav = useNavigate();
-  useEffect(() => {
-    nav({
+  // Redirect before anything mounts. The old component-level redirect rendered
+  // an empty page, then navigated a second time once effects ran: a visible
+  // blank frame on every tap of the Messages nav item.
+  beforeLoad: ({ search }) => {
+    throw redirect({
       to: "/admin/communication",
-      search: { tab: "messages", ...(client ? { client } : {}) } as any,
+      search: { tab: "messages", ...(search.client ? { client: search.client } : {}) } as any,
       replace: true,
     });
-  }, [nav, client]);
-  return null;
-}
+  },
+});
 
 export function MessagesInbox({
   initialClient,
@@ -377,6 +373,12 @@ export function MessagesInbox({
     return Date.now() - new Date(last_active_at).getTime() < 3 * 60_000;
   };
 
+  // Start loading a thread on finger-down: the ~150ms before the tap
+  // completes is enough that history is usually there when it opens.
+  const prefetchThread = (id: string) => {
+    void qc.prefetchQuery({ ...threadMessagesQuery(id, "admin"), staleTime: 10_000 });
+  };
+
   const selectClient = (id: string) => {
     setSelectedId(id);
     navigate({ to: "/admin/communication", search: { tab: "messages", client: id } as any, replace: true });
@@ -577,6 +579,7 @@ export function MessagesInbox({
               ]}
             >
             <button
+              onPointerDown={() => prefetchThread(client.id)}
               onClick={() => selectClient(client.id)}
               className={cn(
                 "flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-secondary/40",
