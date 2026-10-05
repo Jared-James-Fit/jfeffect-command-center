@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Info, Trophy, Medal, Zap, ChevronRight, Scale, Crown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { usePortalUserId } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -49,10 +50,11 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
   const { data: earned = [] } = useMyAchievements(clientId);
+  const viewerId = usePortalUserId() ?? null;
   const { data: leagueRows = [], isPending: leaguePending } = useQuery({
-    queryKey:["athlete-rankings-monthly-raw"],
+    queryKey:["athlete-rankings-monthly-raw", viewerId],
     staleTime:60_000,
-    queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:50}); if(error) throw error; return (data??[]) as LeagueRow[]; }
+    queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:50, ...(viewerId ? { _as_user: viewerId } : {})}); if(error) throw error; return (data??[]) as LeagueRow[]; }
   });
   const leagueMe=leagueRows.find(r=>r.client_id===clientId) ?? leagueRows.find(r=>r.is_me);
   const leagueTop=leagueRows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,3);
@@ -365,11 +367,15 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     const d = new Date(Date.UTC(y, m - 2, 1));
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
   })();
+  const viewerId = usePortalUserId() ?? null;
   const { data = [], isPending } = useQuery({
-    queryKey: ["athlete-rankings-monthly-view", view],
+    queryKey: ["athlete-rankings-monthly-view", view, viewerId],
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_performance_league", { _month: view === "previous" ? previousMonth : null });
+      const { data, error } = await (supabase as any).rpc("get_performance_league", {
+        _month: view === "previous" ? previousMonth : null,
+        ...(viewerId ? { _as_user: viewerId } : {}),
+      });
       if (error) throw error;
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
