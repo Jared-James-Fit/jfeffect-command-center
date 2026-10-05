@@ -37,6 +37,10 @@ import { toast } from "sonner";
 import { QUADRANTS, type TaskQuadrant } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
+import { supabase } from "@/integrations/supabase/client";
+import { watchTasksRealtime } from "@/lib/tasks-realtime";
+import { createNotesSync, normalizeIds, type Base, type NotesSync, type SyncStatus } from "@/lib/task-notes-sync";
+import { createSupabaseNotesApi, isMissingTableError, type TaskSyncScope } from "@/lib/task-notes-api";
 
 /** `deletedAt` set ⇒ the note is in Recently Deleted. */
 export type Note = { id: string; title: string; body: string; updatedAt: number; deletedAt?: number };
@@ -50,28 +54,52 @@ const newId = () =>
 
 // ---------------------------------------------------------------- storage
 
-export function useNotes(storageKey: string) {
-  const [notes, setNotes] = useState<Note[]>([]);
+/**
+ * Notes for one Task Manager. They are always kept in localStorage (instant
+ * load, offline buffer, same format as before). With a `syncScope` they are
+ * also mirrored to the database so every device shows the same notes.
+ */
+export function useNotes(storageKey: string, syncScope?: TaskSyncScope) {
+  const [notes, setNotesState] = useState<Note[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   // `ready` flips in the same render that applies the stored notes, so the
   // initial empty state can never be written over what's in storage.
   const [ready, setReady] = useState(false);
+  /** Always the latest notes, updated synchronously (the sync engine reads this). */
+  const notesRef = useRef<Note[]>([]);
   const latest = useRef<Note[]>([]);
   const dirty = useRef(false);
   /** JSON currently in storage — lets the save effect skip no-op writes. */
   const persisted = useRef<string | null>(null);
+  /** False when the stored copy couldn't be read — then it must never delete anything remotely. */
+  const trustLocal = useRef(true);
+  const engine = useRef<NotesSync | null>(null);
+
+  const setNotes = useCallback((u: Note[] | ((prev: Note[]) => Note[])) => {
+    const next = typeof u === "function" ? u(notesRef.current) : u;
+    notesRef.current = next;
+    setNotesState(next);
+  }, []);
 
   useEffect(() => {
     let stored: Note[] = [];
     try {
       const raw = localStorage.getItem(storageKey);
       persisted.current = raw;
-      if (raw) stored = JSON.parse(raw);
-    } catch { /* storage unavailable — keep in memory */ }
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) stored = parsed;
+        else trustLocal.current = false;
+      }
+    } catch {
+      trustLocal.current = false; // storage unavailable or corrupt — keep in memory
+    }
     // Expired trash is dropped here; the save effect persists the purge.
-    setNotes(purgeExpired(stored, Date.now()));
+    // Old non-UUID ids get their stable database id.
+    setNotes(normalizeIds(purgeExpired(stored, Date.now())));
     setReady(true);
-  }, [storageKey]);
+  }, [storageKey, setNotes]);
 
   const flush = useCallback(() => {
     if (!dirty.current) return;
@@ -114,7 +142,55 @@ export function useNotes(storageKey: string) {
     };
   }, [flush]);
 
-  return { notes, setNotes, saveState, flush };
+  // ---- cross-device sync (starts only after the local copy has loaded)
+  useEffect(() => {
+    if (!ready || !syncScope) return;
+    const baseKey = `${storageKey}__sync-base`;
+    const sync = createNotesSync({
+      api: createSupabaseNotesApi(syncScope),
+      loadBase: () => {
+        try { return JSON.parse(localStorage.getItem(baseKey) ?? "{}") as Base; } catch { return {}; }
+      },
+      saveBase: (b) => { try { localStorage.setItem(baseKey, JSON.stringify(b)); } catch { /* best-effort */ } },
+      getLocal: () => notesRef.current,
+      setLocal: (next) => { notesRef.current = next; setNotesState(next as Note[]); },
+      onStatus: setSyncStatus,
+      isUnavailable: isMissingTableError,
+      trustLocalDeletes: trustLocal.current,
+    });
+    engine.current = sync;
+    let stopWatch: (() => void) | undefined;
+    let cancelled = false;
+    void (async () => {
+      await sync.fullSync();
+      if (cancelled || sync.status() === "unavailable") return;
+      const { data } = await supabase.auth.getSession();
+      const uid = data.session?.user.id;
+      if (cancelled || !uid) return;
+      stopWatch = watchTasksRealtime({
+        client: supabase,
+        name: `${storageKey}-sync`,
+        table: "task_quick_notes",
+        filter: `owner_id=eq.${uid}`,
+        onChange: (payload) => sync.onRemoteEvent(payload),
+      });
+    })();
+    return () => {
+      cancelled = true;
+      stopWatch?.();
+      sync.dispose();
+      engine.current = null;
+    };
+  }, [ready, syncScope, storageKey]);
+
+  // Push local edits shortly after typing stops.
+  useEffect(() => {
+    if (!ready || !syncScope || !engine.current) return;
+    const t = window.setTimeout(() => { void engine.current?.pushLocal(); }, 600);
+    return () => window.clearTimeout(t);
+  }, [notes, ready, syncScope]);
+
+  return { notes, setNotes, saveState, syncStatus, flush };
 }
 
 function usePersistedFlag(key: string, initial: boolean) {
@@ -271,9 +347,11 @@ function RowMenu({ label, children }: { label: string; children: React.ReactNode
 const COLLAPSED_ROWS = 3;
 
 export function QuickNotesPanel({
-  storageKey, quadStyles, onCreateTask, onDeleteTask, search = "", hideComposeButton = false,
+  storageKey, syncScope, quadStyles, onCreateTask, onDeleteTask, search = "", hideComposeButton = false,
 }: {
   storageKey: string;
+  /** When set, notes are also saved to the database and shared across devices. */
+  syncScope?: TaskSyncScope;
   quadStyles: Record<TaskQuadrant, QuadStyle>;
   /** Creates the matrix task for a note; resolves to the new task id. */
   onCreateTask: (input: NoteTaskInput) => Promise<string>;
@@ -284,7 +362,7 @@ export function QuickNotesPanel({
   /** Hide the floating compose button (e.g. while the task bulk bar is up). */
   hideComposeButton?: boolean;
 }) {
-  const { notes, setNotes, saveState, flush } = useNotes(storageKey);
+  const { notes, setNotes, saveState, syncStatus, flush } = useNotes(storageKey, syncScope);
   const [collapsed, setCollapsed] = usePersistedFlag(`${storageKey}-collapsed`, false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -591,6 +669,7 @@ export function QuickNotesPanel({
         <NoteEditor
           note={openNote}
           saveState={saveState}
+          syncStatus={syncStatus}
           onChange={(patch) => updateNote(openNote.id, patch)}
           onClose={closeEditor}
           onDuplicate={() => { const c = duplicate(openNote); setOpenId(c.id); }}
@@ -664,10 +743,11 @@ export function QuickNotesPanel({
 // ---------------------------------------------------------------- editor
 
 function NoteEditor({
-  note, saveState, onChange, onClose, onDuplicate, onDelete, moveGrid,
+  note, saveState, syncStatus, onChange, onClose, onDuplicate, onDelete, moveGrid,
 }: {
   note: Note;
   saveState: SaveState;
+  syncStatus: SyncStatus;
   onChange: (patch: Partial<Note>) => void;
   onClose: () => void;
   onDuplicate: () => void;
@@ -726,7 +806,11 @@ function NoteEditor({
   };
 
   const status =
-    saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save" : saveState === "saved" ? "Saved" : "";
+    saveState === "saving" ? "Saving…"
+    : saveState === "error" ? "Couldn't save"
+    : syncStatus === "offline" ? "Saved on this device · will sync"
+    : saveState === "saved" ? "Saved"
+    : "";
 
   const mobileStyle: React.CSSProperties | undefined = !isDesktop && box
     ? { top: box.top, height: box.height }

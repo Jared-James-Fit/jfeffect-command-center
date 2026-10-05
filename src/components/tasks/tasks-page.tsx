@@ -29,6 +29,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
 import { cn } from "@/lib/utils";
 import { QuickNotesPanel } from "@/components/tasks/quick-notes";
+import { watchTasksRealtime } from "@/lib/tasks-realtime";
+import { useTaskPrefSync } from "@/hooks/use-task-pref-sync";
+import { mergeAssignees, mergeQuadrantStyles } from "@/lib/task-prefs-sync";
 
 // ---------- Quadrant customization (color + labels), persisted to localStorage ----------
 type QuadStyle = { color: string; title: string; subtitle: string };
@@ -39,8 +42,13 @@ const DEFAULT_STYLES: Record<TaskQuadrant, QuadStyle> = {
   eliminate: { color: "#ef4444", title: "Eliminate", subtitle: "Not Urgent · Not Important" },
 };
 
-function useQuadrantStyles(storageKey: string) {
+function useQuadrantStyles(storageKey: string, scope: TaskScope) {
   const [styles, setStyles] = useState<Record<TaskQuadrant, QuadStyle>>(DEFAULT_STYLES);
+  useTaskPrefSync<Record<TaskQuadrant, QuadStyle>>({
+    scope, field: "quadrant_styles", storageKey, value: styles,
+    merge: (l, r) => mergeQuadrantStyles(l, r, DEFAULT_STYLES),
+    onAdopt: (next) => setStyles({ ...DEFAULT_STYLES, ...next }),
+  });
   useEffect(() => {
     try {
       const raw = localStorage.getItem(storageKey);
@@ -63,8 +71,13 @@ function tintStyle(color: string) {
 // ---------- Custom Assignees (localStorage) ----------
 type Assignee = { id: string; name: string };
 
-function useAssignees(storageKey: string) {
+function useAssignees(storageKey: string, scope: TaskScope) {
   const [assignees, setAssignees] = useState<Assignee[]>([]);
+  useTaskPrefSync<Assignee[]>({
+    scope, field: "assignees", storageKey, value: assignees,
+    merge: mergeAssignees,
+    onAdopt: setAssignees,
+  });
   const loadedRef = useRef(false);
   useEffect(() => {
     try {
@@ -102,19 +115,23 @@ export function TasksPage({
   const isMobile = useIsMobile();
   const queryKey = useMemo(() => ["tasks", scope] as const, [scope]);
   const { data: tasks = [] } = useQuery({ queryKey, queryFn: () => fetchTasks(scope) });
-  const [assignees, setAssignees] = useAssignees(`${storagePrefix}-task-assignees`);
+  const [assignees, setAssignees] = useAssignees(`${storagePrefix}-task-assignees`, scope);
   const [assigneesOpen, setAssigneesOpen] = useState(false);
   const { styles: quadStyles, update: updateQuadStyle, reset: resetQuadStyle } =
-    useQuadrantStyles(`${storagePrefix}-quadrant-styles`);
+    useQuadrantStyles(`${storagePrefix}-quadrant-styles`, scope);
 
-  // realtime — unchanged canonical source of truth
-  useEffect(() => {
-    const ch = supabase.channel(`${storagePrefix}-tasks-rt`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `scope=eq.${scope}` }, () => {
-        qc.invalidateQueries({ queryKey: ["tasks", scope] });
-      }).subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [qc, storagePrefix, scope]);
+  // realtime — canonical source of truth. Rebuilt on app resume / reconnect
+  // so a phone that slept still shows what was changed on another device.
+  useEffect(
+    () => watchTasksRealtime({
+      client: supabase,
+      name: `${storagePrefix}-tasks-rt`,
+      table: "tasks",
+      filter: `scope=eq.${scope}`,
+      onChange: () => { qc.invalidateQueries({ queryKey: ["tasks", scope] }); },
+    }),
+    [qc, storagePrefix, scope],
+  );
 
   // ---- local cache helpers (optimistic) ----
   const patchLocal = useCallback((fn: (rows: TaskRow[]) => TaskRow[]) => {
@@ -331,6 +348,7 @@ export function TasksPage({
         {/* Quick Notes */}
         <QuickNotesPanel
           storageKey={`${storagePrefix}-task-notes`}
+          syncScope={scope}
           quadStyles={quadStyles}
           onCreateTask={async (input) => {
             const id = await createTask({ ...input, scope });
