@@ -1,35 +1,32 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
-import {
-  Activity,
-  ArrowRight,
-  Dumbbell,
-  Flame,
-  TrendingUp,
-  Trophy,
-} from "lucide-react";
-import { Area, AreaChart, ResponsiveContainer, Tooltip } from "recharts";
+import { ArrowRight, CalendarCheck, Dumbbell, Flame, Trophy, TrendingUp, Zap } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { getClientResults } from "@/lib/pl-programs";
+import { InfoTip } from "@/components/analytics/info-tip";
 import {
-  buildExerciseHistory,
-  getClientResults,
-  recentPRs,
-  weeklyMuscleVolume,
-} from "@/lib/pl-programs";
+  compactWeight,
+  computeMonthHighlights,
+  percentChange,
+  weightComparison,
+  wholeWeight,
+  type Unit,
+} from "@/lib/month-highlights";
 
 /**
- * Compact, eye-catching preview of a client's training analytics. Sits in
- * place of the old "Training Analytics" button — surfaces enough data that
- * the client *wants* to dig in, with a single CTA to the full dashboard.
+ * "Your Month" — the Workouts-tab analytics card. Four plain-English numbers
+ * anyone new to the gym gets at a glance (weight lifted, workouts, PRs, streak)
+ * plus a small athlete corner. The deep-dive dashboard stays one tap away.
  */
 export function TrainingAnalyticsPreviewCard({
   clientId,
-  unit = "lb",
+  unit: unitProp,
 }: {
   clientId: string;
-  unit?: "lb" | "kg";
+  unit?: Unit;
 }) {
   const { data: results = [], isLoading } = useQuery({
     queryKey: ["pl-results-preview", clientId],
@@ -37,152 +34,166 @@ export function TrainingAnalyticsPreviewCard({
     queryFn: () => getClientResults(clientId),
     staleTime: 60_000,
   });
+  const { data: prefUnit } = useQuery({
+    queryKey: ["client-weight-unit", clientId],
+    enabled: !!clientId && !unitProp,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase.from("clients").select("preferred_weight_unit").eq("id", clientId).maybeSingle();
+      return ((data as any)?.preferred_weight_unit === "kg" ? "kg" : "lb") as Unit;
+    },
+  });
+  const unit: Unit = unitProp ?? prefUnit ?? "lb";
 
-  const stats = useMemo(() => {
-    const history = buildExerciseHistory(results as any[]);
-    const prs30 = recentPRs(results as any[], 30);
-    const volume7 = weeklyMuscleVolume(results as any[], 7);
-    const volume14 = weeklyMuscleVolume(results as any[], 14);
-    const sets7 = volume7.reduce((n, v) => n + v.sets, 0);
-    const sets14 = volume14.reduce((n, v) => n + v.sets, 0);
-    const prevWeekSets = Math.max(0, sets14 - sets7);
-    const volumeDelta = sets7 - prevWeekSets;
-    const topMuscle = volume7[0]?.muscle ?? null;
-    const topLift = history[0] ?? null;
-    const spark = (topLift?.points ?? [])
-      .slice(-12)
-      .map((p: any, i: number) => ({ i, v: Number(p.est_1rm) || 0 }));
-    return {
-      history,
-      prs30,
-      sets7,
-      volumeDelta,
-      topMuscle,
-      topLift,
-      spark,
-      totalSessions: new Set(
-        (results as any[]).map((r) => r.date?.slice(0, 10)).filter(Boolean),
-      ).size,
-    };
-  }, [results]);
-
-  const empty = !isLoading && (results as any[]).length === 0;
+  const h = useMemo(() => computeMonthHighlights(results as any[]), [results]);
+  const compare = percentChange(h.weightLb, h.prevSamePointLb);
+  const fun = weightComparison(h.weightLb);
+  // Progress toward matching last month's *full* total — a goal that makes sense mid-month.
+  const goalPct = h.prevMonthTotalLb > 0 ? Math.min(100, Math.round((h.weightLb / h.prevMonthTotalLb) * 100)) : null;
+  const beatLastMonth = h.prevMonthTotalLb > 0 && h.weightLb >= h.prevMonthTotalLb;
+  const workoutDelta = h.workouts - h.prevWorkouts;
+  const empty = !isLoading && !h.hasData;
 
   return (
     <Card className="relative overflow-hidden border-analytics-blue/30 bg-gradient-to-br from-background via-background to-analytics-blue/5 p-0 shadow-analytics-blue">
-      {/* ambient glow */}
       <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-analytics-blue/20 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-analytics-blue/10 blur-3xl" />
 
       <div className="relative p-5 md:p-6">
-        {/* Header */}
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-analytics-blue shadow-analytics-blue ring-1 ring-analytics-blue/40">
-              <Activity className="h-5 w-5 text-white" />
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-analytics-blue">
+              Your {h.monthLabel}
             </div>
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-analytics-blue">
-                Training Analytics
-              </div>
-              <h3 className="text-base font-black leading-tight md:text-lg">
-                Your progress at a glance
-              </h3>
-            </div>
+            <h3 className="text-base font-black leading-tight md:text-lg">How your training is stacking up</h3>
           </div>
-          <Link
-            to="/portal/workouts/analytics"
-            className="hidden sm:block"
-          >
-            <Button
-              size="sm"
-              className="bg-gradient-analytics-blue font-bold uppercase tracking-wider shadow-analytics-blue btn-glow-blue"
-            >
-              Open <ArrowRight className="ml-1 h-3.5 w-3.5" />
+          <Link to="/portal/workouts/analytics" className="hidden shrink-0 sm:block">
+            <Button size="sm" variant="outline" className="font-bold">
+              All analytics <ArrowRight className="ml-1 h-3.5 w-3.5" />
             </Button>
           </Link>
         </div>
 
         {empty ? (
-          <EmptyPreview />
+          <div className="mt-5 rounded-xl border border-dashed border-analytics-blue/30 bg-background/40 p-4 text-center">
+            <Dumbbell className="mx-auto h-6 w-6 text-analytics-blue" />
+            <div className="mt-2 text-sm font-bold">Your numbers start with your first workout</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Log your sets and this fills in automatically: total weight lifted, workouts, PRs and your streak.
+            </p>
+          </div>
         ) : (
           <>
-            {/* Stat grid */}
-            <div className="mt-5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
-              <Stat
-                icon={<Trophy className="h-3.5 w-3.5" />}
-                label="ATPRs · 30d"
-                value={isLoading ? "…" : stats.prs30.length.toString()}
-                accent
-              />
-              <Stat
-                icon={<Dumbbell className="h-3.5 w-3.5" />}
-                label="Sets · 7d"
-                value={isLoading ? "…" : stats.sets7.toString()}
-                delta={
-                  !isLoading && stats.sets7 > 0
-                    ? stats.volumeDelta >= 0
-                      ? `+${stats.volumeDelta}`
-                      : `${stats.volumeDelta}`
-                    : undefined
+            {/* The headline number */}
+            <div className="mt-5 rounded-2xl border border-analytics-blue/25 bg-background/50 p-4 backdrop-blur">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <Dumbbell className="h-3.5 w-3.5 text-analytics-blue" />
+                Total weight lifted
+                <InfoTip label="About total weight lifted" title="Total weight lifted" align="start">
+                  Every set's weight × reps, added up for the month. Bodyweight-only sets aren't included.
+                </InfoTip>
+              </div>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+                <span className="text-4xl font-black tabular-nums leading-none">
+                  {isLoading ? "…" : compactWeight(h.weightLb, unit)}
+                </span>
+                <span className="text-lg font-bold text-muted-foreground">{unit}</span>
+                {compare && (
+                  <span
+                    className={
+                      "ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold " +
+                      (compare.pct >= 0 ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground")
+                    }
+                  >
+                    {compare.pct >= 0
+                      ? `▲ ${compare.pct}% ahead of ${h.prevMonthLabel}'s pace`
+                      : `▼ ${Math.abs(compare.pct)}% behind ${h.prevMonthLabel}'s pace`}
+                  </span>
+                )}
+              </div>
+              {fun && (
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {fun.emoji} That's {fun.text}.
+                </div>
+              )}
+              {goalPct != null && (
+                <div className="mt-3">
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-gradient-analytics-blue transition-all"
+                      style={{ width: `${Math.max(goalPct, 3)}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">
+                    {beatLastMonth
+                      ? `You've already beaten all of ${h.prevMonthLabel} (${wholeWeight(h.prevMonthTotalLb, unit)} ${unit}) 🔥`
+                      : `${goalPct}% of the way to matching ${h.prevMonthLabel} (${wholeWeight(h.prevMonthTotalLb, unit)} ${unit})`}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Three simple wins */}
+            <div className="mt-3 grid grid-cols-3 gap-2.5">
+              <Tile
+                icon={<CalendarCheck className="h-3.5 w-3.5" />}
+                label="Workouts"
+                value={isLoading ? "…" : String(h.workouts)}
+                caption={
+                  h.prevWorkouts > 0 && !isLoading
+                    ? workoutDelta === 0
+                      ? `same as ${h.prevMonthLabel}`
+                      : `${workoutDelta > 0 ? "+" : ""}${workoutDelta} vs ${h.prevMonthLabel}`
+                    : "this month"
                 }
+                good={workoutDelta > 0}
               />
-              <Stat
+              <Tile
+                icon={<Trophy className="h-3.5 w-3.5" />}
+                label="PRs"
+                value={isLoading ? "…" : String(h.prLifts)}
+                caption={h.prLifts === 1 ? "new record this month" : "new records this month"}
+                accent={h.prLifts > 0}
+              />
+              <Tile
                 icon={<Flame className="h-3.5 w-3.5" />}
-                label="Top focus"
-                value={isLoading ? "…" : stats.topMuscle ?? "—"}
-              />
-              <Stat
-                icon={<Activity className="h-3.5 w-3.5" />}
-                label="Sessions"
-                value={isLoading ? "…" : stats.totalSessions.toString()}
+                label="Streak"
+                value={isLoading ? "…" : String(h.streakWeeks)}
+                caption={h.streakWeeks === 1 ? "week in a row" : "weeks in a row"}
+                accent={h.streakWeeks >= 3}
               />
             </div>
 
-            {/* Featured lift */}
-            {stats.topLift && (
-              <div className="mt-4 rounded-xl border border-analytics-blue/20 bg-background/40 p-3 backdrop-blur">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Top lift trend
-                    </div>
-                    <div className="truncate text-sm font-bold">
-                      {stats.topLift.name}
-                    </div>
-                    <div className="mt-0.5 flex items-baseline gap-1.5 text-xs">
-                      <TrendingUp className="h-3 w-3 text-analytics-blue" />
-                      <span className="font-black text-foreground">
-                        {Math.round(stats.topLift.pr?.est_1rm ?? 0)} {unit}
-                      </span>
-                      <span className="text-muted-foreground">est. 1RM</span>
-                    </div>
-                  </div>
-                  {stats.spark.length > 1 && (
-                    <div className="h-12 w-28 shrink-0 md:w-36">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={stats.spark}>
-                          <defs>
-                            <linearGradient id="taSpark" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="var(--analytics-blue)" stopOpacity={0.6} />
-                              <stop offset="100%" stopColor="var(--analytics-blue)" stopOpacity={0} />
-                            </linearGradient>
-                          </defs>
-                          <Tooltip
-                            cursor={false}
-                            contentStyle={{ display: "none" }}
-                          />
-                          <Area
-                            type="monotone"
-                            dataKey="v"
-                            stroke="var(--analytics-blue)"
-                            strokeWidth={2}
-                            fill="url(#taSpark)"
-                            isAnimationActive={false}
-                          />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
+            {/* Athlete corner: just two rows */}
+            {(h.topLift || h.topMuscle) && (
+              <div className="mt-3 rounded-xl border border-border/60 bg-background/40 p-3">
+                <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <Zap className="h-3.5 w-3.5 text-analytics-blue" /> Athlete corner
+                </div>
+                <div className="space-y-2">
+                  {h.topLift && (
+                    <Row
+                      label="Strongest lift"
+                      tip={
+                        <InfoTip label="About estimated 1-rep max" title="Estimated 1-rep max" align="start">
+                          The heaviest weight you could likely lift for a single rep, calculated from your best sets.
+                          It lets you track strength even when you don't test a true max.
+                        </InfoTip>
+                      }
+                      main={h.topLift.name}
+                      sub={`est. max ${wholeWeight(h.topLift.est1rmLb, unit)} ${unit}`}
+                      badge={
+                        h.topLift.gainLb != null && h.topLift.gainLb >= 1
+                          ? `+${wholeWeight(h.topLift.gainLb, unit)} ${unit} in 30 days`
+                          : null
+                      }
+                    />
+                  )}
+                  {h.topMuscle && (
+                    <Row
+                      label="Most trained this week"
+                      main={h.topMuscle.muscle}
+                      sub={`${h.topMuscle.sets} set${h.topMuscle.sets === 1 ? "" : "s"}`}
+                    />
                   )}
                 </div>
               </div>
@@ -190,13 +201,9 @@ export function TrainingAnalyticsPreviewCard({
           </>
         )}
 
-        {/* Mobile CTA */}
         <Link to="/portal/workouts/analytics" className="mt-4 block sm:hidden">
-          <Button
-            className="w-full bg-gradient-analytics-blue font-bold uppercase tracking-wider shadow-analytics-blue btn-glow-blue"
-            size="lg"
-          >
-            Open Full Analytics <ArrowRight className="ml-2 h-4 w-4" />
+          <Button variant="outline" className="w-full font-bold" size="lg">
+            See all analytics <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </Link>
       </div>
@@ -204,98 +211,70 @@ export function TrainingAnalyticsPreviewCard({
   );
 }
 
-function Stat({
+function Tile({
   icon,
   label,
   value,
-  delta,
+  caption,
   accent = false,
+  good = false,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  delta?: string;
+  caption: string;
   accent?: boolean;
+  good?: boolean;
 }) {
   return (
     <div
       className={
-        "rounded-xl border bg-background/50 p-2.5 backdrop-blur " +
-        (accent
-          ? "border-analytics-blue/40 shadow-[0_0_18px_-8px_var(--analytics-blue)]"
-          : "border-border/60")
+        "rounded-xl border bg-background/50 p-3 backdrop-blur " +
+        (accent ? "border-analytics-blue/40 shadow-[0_0_18px_-8px_var(--analytics-blue)]" : "border-border/60")
       }
     >
       <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         <span className={accent ? "text-analytics-blue" : ""}>{icon}</span>
         {label}
       </div>
-      <div className="mt-1 flex items-baseline gap-1.5">
-        <span className="text-lg font-black leading-none">{value}</span>
-        {delta && (
-          <span
-            className={
-              "text-[10px] font-bold " +
-              (delta.startsWith("-")
-                ? "text-muted-foreground"
-                : "text-emerald-500")
-            }
-          >
-            {delta}
-          </span>
-        )}
+      <div className="mt-1 text-2xl font-black leading-none tabular-nums">{value}</div>
+      <div className={"mt-1 text-[11px] leading-tight " + (good ? "font-semibold text-emerald-500" : "text-muted-foreground")}>
+        {caption}
       </div>
     </div>
   );
 }
 
-function EmptyPreview() {
-  const spark = [4, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16].map((v, i) => ({ i, v }));
+function Row({
+  label,
+  main,
+  sub,
+  badge,
+  tip,
+}: {
+  label: string;
+  main: string;
+  sub: string;
+  badge?: string | null;
+  tip?: React.ReactNode;
+}) {
   return (
-    <>
-      <div className="mt-5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
-        <Stat icon={<Trophy className="h-3.5 w-3.5" />} label="ATPRs · 30d" value="0" accent />
-        <Stat icon={<Dumbbell className="h-3.5 w-3.5" />} label="Sets · 7d" value="0" />
-        <Stat icon={<Flame className="h-3.5 w-3.5" />} label="Top focus" value="—" />
-        <Stat icon={<Activity className="h-3.5 w-3.5" />} label="Sessions" value="0" />
-      </div>
-      <div className="mt-4 rounded-xl border border-dashed border-analytics-blue/30 bg-background/40 p-3 backdrop-blur">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Your trend starts here
-            </div>
-            <div className="truncate text-sm font-bold">Log your first working set</div>
-            <div className="mt-0.5 flex items-baseline gap-1.5 text-xs">
-              <TrendingUp className="h-3 w-3 text-analytics-blue" />
-              <span className="text-muted-foreground">
-                PRs, volume & lift trends will appear automatically
-              </span>
-            </div>
-          </div>
-          <div className="h-12 w-28 shrink-0 opacity-50 md:w-36">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={spark}>
-                <defs>
-                  <linearGradient id="taSparkEmpty" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--analytics-blue)" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="var(--analytics-blue)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <Area
-                  type="monotone"
-                  dataKey="v"
-                  stroke="var(--analytics-blue)"
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                  fill="url(#taSparkEmpty)"
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+          {tip}
         </div>
+        <div className="truncate text-sm font-bold">{main}</div>
       </div>
-    </>
+      <div className="shrink-0 text-right">
+        <div className="text-xs font-semibold tabular-nums">{sub}</div>
+        {badge && (
+          <div className="flex items-center justify-end gap-1 text-[11px] font-bold text-emerald-500">
+            <TrendingUp className="h-3 w-3" /> {badge}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
