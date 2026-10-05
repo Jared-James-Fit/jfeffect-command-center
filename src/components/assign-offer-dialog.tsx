@@ -20,6 +20,8 @@ import {
 } from "@/lib/billing-schedule";
 import { assignEntitlementPreview } from "@/lib/product-sessions";
 import { useServerFn } from "@tanstack/react-start";
+import { autoSendPaymentRequestMessage } from "@/lib/sms-links.functions";
+import { autoMessageClientAboutPurchase } from "@/lib/payment-request-message";
 import { createAgreement } from "@/lib/agreements.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
 import { createPaymentShareLink } from "@/lib/payment-share.functions";
@@ -72,6 +74,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [stripeUrl, setStripeUrl] = useState<string | null>(null);
   const autoCalcTermDatesFn = useServerFn(autoCalculatePurchaseTermDates);
   const sendLinkFn = useServerFn(sendPaymentLinkEmail);
+  const autoMessageFn = useServerFn(autoSendPaymentRequestMessage);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [emailNote, setEmailNote] = useState<string | null>(null);
   const [discountCodeId, setDiscountCodeId] = useState<string | null>(null);
@@ -281,17 +284,25 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
         setCheckoutUrl(paymentLink.url);
         try { await navigator.clipboard.writeText(paymentLink.url); } catch {}
         job.completeStep(2); // Resolve or create checkout session
-        // Prefer the existing email sender; fall back to copy/paste.
+        // Auto-message the client in chat (from whoever set this up), then
+        // email as a backup channel.
+        const chat = await autoMessageClientAboutPurchase(autoMessageFn as any, purchase.id);
+        let emailed = false;
         try {
           const sent: any = await sendLinkFn({ data: { id: purchase.id } });
-          setEmailNote(
-            sent?.sent
-              ? `Payment link emailed to ${selectedClient.email ?? "the client"}.`
-              : "Payment link created. Copy and send this link to the client.",
-          );
-        } catch {
-          setEmailNote("Payment link created. Copy and send this link to the client.");
-        }
+          emailed = !!sent?.sent;
+        } catch { /* email is best-effort */ }
+        const chatNote = chat.sent
+          ? "Payment request sent in their messages"
+          : chat.reason === "already_sent"
+            ? "Payment request is already in their messages"
+            : null;
+        const parts = [chatNote, emailed ? `emailed to ${selectedClient.email ?? "the client"}` : null].filter(Boolean);
+        setEmailNote(
+          parts.length
+            ? `${parts.join(" and ")}.`
+            : "Payment link created. Copy and send this link to the client.",
+        );
         job.completeStep(4); // Send checkout link
       } else {
         job.completeStep(2);
