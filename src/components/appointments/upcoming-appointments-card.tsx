@@ -1,3 +1,4 @@
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -21,9 +22,10 @@ function fmtWhen(iso: string) {
 
 export function UpcomingAppointmentsCard({ mode, limit = 5, hideWhenEmpty = false }: { mode: "admin" | "portal"; limit?: number; hideWhenEmpty?: boolean }) {
   const adminFn = useServerFn(listAppointments);
-  const portalFn = useServerFn(listMyPortalAppointments);
+  const portalFn = usePovFn(useServerFn(listMyPortalAppointments));
+  const povKey = usePovArgs().viewAsClientId ?? null;
   const { data, isLoading } = useQuery({
-    queryKey: ["upcoming-appts-card", mode],
+    queryKey: ["upcoming-appts-card", mode, povKey],
     queryFn: async () => {
       if (mode === "admin") {
         const rows: any[] = await adminFn({ data: { range: "upcoming" } as any });

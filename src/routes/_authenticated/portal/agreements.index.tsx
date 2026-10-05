@@ -9,6 +9,7 @@ import { AgreementStatusBadge } from "@/components/agreement-status-badge";
 import { FileText, ExternalLink, CheckCircle2, Download } from "lucide-react";
 import type { Agreement } from "@/lib/agreements";
 import { useServerFn } from "@tanstack/react-start";
+import { usePovFn } from "@/lib/client-pov-args";
 import { getSignedAgreementUrl } from "@/lib/agreements.functions";
 import { listClientNativeAgreements } from "@/lib/native-agreement-client.functions";
 import { toast } from "sonner";
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/portal/agreements/")({
 
 function PortalAgreementsPage() {
   const getUrl = useServerFn(getSignedAgreementUrl);
-  const listNative = useServerFn(listClientNativeAgreements);
+  const listNative = usePovFn(useServerFn(listClientNativeAgreements));
   const portalUserId = usePortalUserId();
   const downloadSigned = async (id: string) => {
     const r: any = await getUrl({ data: { id } });
@@ -51,7 +52,7 @@ function PortalAgreementsPage() {
   });
 
   const { data: nativeAgreements = [] } = useQuery({
-    queryKey: ["portal-native-agreements"],
+    queryKey: ["portal-native-agreements", portalUserId ?? null],
     queryFn: () => listNative(),
   });
 

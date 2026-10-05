@@ -1,3 +1,4 @@
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
@@ -10,9 +11,10 @@ import { getMyRecentAdherenceFn } from "@/lib/nutrition-updates.functions";
  * `nutrition_update_submissions.compliance_pct` (self-reported each cycle).
  */
 export function RecentAdherenceWidget() {
-  const fn = useServerFn(getMyRecentAdherenceFn);
+  const fn = usePovFn(useServerFn(getMyRecentAdherenceFn));
+  const povKey = usePovArgs().viewAsClientId ?? null;
   const q = useQuery({
-    queryKey: ["my-recent-adherence"],
+    queryKey: ["my-recent-adherence", povKey],
     queryFn: () => fn(),
     staleTime: 60_000,
   });
