@@ -32,7 +32,7 @@ import { ActionButton } from "@/components/action-button";
 import { TrainingHelpButton, TrainingHelpSheet } from "@/components/training-help-sheet";
 import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
-import { formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
+import { formatClientDayNotes, formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { format, parseISO, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
@@ -2432,6 +2432,7 @@ function WorkoutDay({
           </div>
         )}
 
+        <DayCoachNotes day={day} />
 
         {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
           <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
@@ -2846,6 +2847,37 @@ function ExerciseNotesBlock({ notes }: { notes: string }) {
         <p className="mt-2 text-xs text-muted-foreground italic whitespace-pre-wrap">{notes}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * Coach notes for the whole session (e.g. station order in a home gym and how
+ * to progress). Rendered only when the coach marked the day's notes
+ * client-visible; the lead paragraph is always shown, the rest on demand.
+ */
+function DayCoachNotes({ day }: { day: { notes?: string | null; notes_client_visible?: boolean | null } | null }) {
+  const [open, setOpen] = useState(false);
+  const notes = formatClientDayNotes(day);
+  if (!notes) return null;
+  return (
+    <Card className="p-3 text-xs">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Coach notes</div>
+      <p className="mt-1 whitespace-pre-wrap text-foreground/90">{notes.lead}</p>
+      {notes.detail && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary"
+            aria-expanded={open}
+          >
+            {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {open ? "Show less" : "Read more"}
+          </button>
+          {open && <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{notes.detail}</p>}
+        </>
+      )}
+    </Card>
   );
 }
 
