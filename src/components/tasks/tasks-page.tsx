@@ -29,6 +29,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
 import { cn } from "@/lib/utils";
 import { QuickNotesPanel } from "@/components/tasks/quick-notes";
+import { watchTasksRealtime } from "@/lib/tasks-realtime";
 
 // ---------- Quadrant customization (color + labels), persisted to localStorage ----------
 type QuadStyle = { color: string; title: string; subtitle: string };
@@ -107,14 +108,18 @@ export function TasksPage({
   const { styles: quadStyles, update: updateQuadStyle, reset: resetQuadStyle } =
     useQuadrantStyles(`${storagePrefix}-quadrant-styles`);
 
-  // realtime — unchanged canonical source of truth
-  useEffect(() => {
-    const ch = supabase.channel(`${storagePrefix}-tasks-rt`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `scope=eq.${scope}` }, () => {
-        qc.invalidateQueries({ queryKey: ["tasks", scope] });
-      }).subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [qc, storagePrefix, scope]);
+  // realtime — canonical source of truth. Rebuilt on app resume / reconnect
+  // so a phone that slept still shows what was changed on another device.
+  useEffect(
+    () => watchTasksRealtime({
+      client: supabase,
+      name: `${storagePrefix}-tasks-rt`,
+      table: "tasks",
+      filter: `scope=eq.${scope}`,
+      onChange: () => { qc.invalidateQueries({ queryKey: ["tasks", scope] }); },
+    }),
+    [qc, storagePrefix, scope],
+  );
 
   // ---- local cache helpers (optimistic) ----
   const patchLocal = useCallback((fn: (rows: TaskRow[]) => TaskRow[]) => {
