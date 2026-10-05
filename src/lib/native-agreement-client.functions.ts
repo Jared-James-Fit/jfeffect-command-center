@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { PovInput, resolvePovClientId, resolvePovUserId, type PovArgs } from "@/lib/client-pov.server";
 import { getSignedPdfUrl, renderAgreementPdf } from "@/lib/native-agreements-pdf.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { isNativeSignatureMethod, requireKnownDateOfBirth } from "@/lib/native-agreement-contract";
@@ -39,14 +40,13 @@ async function resolveClientSigningContext(supabase: any, userId: string, packag
 
 export const listClientNativeAgreements = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d: unknown) => PovInput.parse(d ?? {}))
+  .handler(async ({ data: pov, context }) => {
     const { supabase, userId } = context as any;
-    const { data: client, error: clientError } = await supabase
-      .from("clients")
-      .select("id")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (clientError || !client) throw new Error(clientError?.message ?? "Client profile not found");
+    // Coach "View as client" lists the viewed client's agreements (read-only).
+    const clientId = await resolvePovClientId(supabase, userId, pov);
+    if (!clientId) throw new Error("Client profile not found");
+    const client = { id: clientId };
 
     const { data, error } = await supabase
       .from("na_packages")
@@ -62,9 +62,12 @@ export const listClientNativeAgreements = createServerFn({ method: "GET" })
 
 export const getClientNativeAgreement = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { packageId: string }) => data)
+  .inputValidator((data: { packageId: string } & PovArgs) => data)
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase } = context as any;
+    // Viewing only: coach POV can open it, but signing/acknowledging stays
+    // with the client's own session (those fns never accept POV args).
+    const userId = await resolvePovUserId(supabase, context.userId, data);
     const { pkg, signer, snapshot } = await resolveClientSigningContext(
       supabase,
       userId,
@@ -113,9 +116,10 @@ export const acknowledgeClientNativeAgreementReview = createServerFn({ method: "
 
 export const getClientNativeAgreementSourcePdfUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { packageId: string }) => data)
+  .inputValidator((data: { packageId: string } & PovArgs) => data)
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase } = context as any;
+    const userId = await resolvePovUserId(supabase, context.userId, data);
     const { snapshot } = await resolveClientSigningContext(supabase, userId, data.packageId);
     if (!snapshot.source_pdf_bucket || !snapshot.source_pdf_path) {
       throw new Error("The immutable agreement PDF is not available for this package");
@@ -240,15 +244,12 @@ export const submitClientNativeAgreementSignature = createServerFn({ method: "PO
 
 export const getClientNativeAgreementPdfUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { documentId: string }) => data)
+  .inputValidator((data: { documentId: string } & PovArgs) => data)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { data: client, error: clientError } = await supabase
-      .from("clients")
-      .select("id")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (clientError || !client) throw new Error(clientError?.message ?? "Client profile not found");
+    const clientId = await resolvePovClientId(supabase, userId, data);
+    if (!clientId) throw new Error("Client profile not found");
+    const client = { id: clientId };
 
     const { data: doc, error } = await supabase
       .from("na_documents")

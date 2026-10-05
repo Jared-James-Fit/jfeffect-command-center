@@ -303,3 +303,75 @@ export const postPaymentRequestInChat = createServerFn({ method: "POST" })
     if (gErr) throw new Error(gErr.message);
     return { ok: true, posted: "group" };
   });
+/* ============================================================
+ * 4. Auto-message when a product is assigned
+ * ============================================================
+ * Posted in the client's chat FROM whoever set the product up (admin or
+ * coach) with a personal note + the payment card. Idempotent per purchase:
+ * if this sale's payment card is already in the chat it is not re-sent.
+ */
+
+const AutoSendSchema = z.object({ purchaseId: z.string().uuid() });
+
+export const autoSendPaymentRequestMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => AutoSendSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: rec, error } = await supabase
+      .from("purchase_records")
+      .select("id, client_id, offer_name, full_payable_amount, currency, payment_structure, payment_frequency, is_recurring, payment_status")
+      .eq("id", data.purchaseId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!rec) throw new Error("Purchase not found");
+    await assertAdminOrAssignedCoach(supabase, userId, rec.client_id);
+    if (/^(paid|draft|cancel)/i.test(String(rec.payment_status ?? ""))) {
+      return { sent: false, reason: "not_pending" as const };
+    }
+
+    const { data: existing } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("client_id", rec.client_id)
+      .contains("attachments", [{ kind: "payment_request", purchase_id: rec.id }])
+      .limit(1);
+    if ((existing ?? []).length) return { sent: false, reason: "already_sent" as const };
+
+    const shareLink = await mintShareLinkForPurchase(supabase, userId, rec.id, "https://jfeffect.com");
+    const shareUrl = sanitizeShareUrl(shareLink.shareUrl);
+    if (!shareUrl) return { sent: false, reason: "no_link" as const };
+
+    const { data: client } = await supabase
+      .from("clients")
+      .select("preferred_name, first_name, full_name")
+      .eq("id", rec.client_id)
+      .maybeSingle();
+    const { buildPaymentRequestMessage } = await import("@/lib/payment-request-message");
+    const body = buildPaymentRequestMessage({
+      clientFirstName: client?.preferred_name || client?.first_name || client?.full_name || null,
+      offerName: rec.offer_name,
+      amount: rec.full_payable_amount,
+      currency: rec.currency,
+      paymentStructure: rec.payment_structure,
+      paymentFrequency: rec.payment_frequency,
+      isRecurring: rec.is_recurring,
+      url: shareUrl,
+    });
+    const attachment = await buildPaymentAttachment(rec, shareUrl);
+    const { data: msg, error: insErr } = await supabase
+      .from("messages")
+      .insert({
+        client_id: rec.client_id,
+        sender_id: userId,
+        sender_role: "admin",
+        body,
+        attachments: [attachment],
+        message_type: "Payment",
+        read_by_admin_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    if (insErr) throw new Error(insErr.message);
+    return { sent: true, messageId: msg.id as string };
+  });

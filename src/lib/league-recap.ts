@@ -116,8 +116,14 @@ export function outroLine(recap: LeagueRecap) {
   return "You out-scored your closest rivals. Keep the pressure on.";
 }
 
-export async function fetchLeagueRecap(month: string): Promise<LeagueRecap | null> {
-  const { data, error } = await db.rpc("get_league_month_recap", { _month: month });
+/**
+ * `asUser` = the client being viewed in coach "View as client" mode. The
+ * database only honours it for admins and that client's coach.
+ */
+export async function fetchLeagueRecap(month: string, asUser?: string | null): Promise<LeagueRecap | null> {
+  const args: Record<string, unknown> = { _month: month };
+  if (asUser) args._as_user = asUser;
+  const { data, error } = await db.rpc("get_league_month_recap", args);
   if (error) throw error;
   return (data ?? null) as LeagueRecap | null;
 }

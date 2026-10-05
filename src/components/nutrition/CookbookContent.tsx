@@ -15,10 +15,13 @@ import { cn } from "@/lib/utils";
 import {
   COOKBOOK_CATEGORIES,
   COOKBOOK_FILTERS,
+  COOKBOOK_METHODS,
   COOKBOOK_PAGE_SIZE,
   buildCookbookQuerySpec,
   listCookbookPage,
+  recipeMethodBadge,
   type CookbookCategory,
+  type CookbookMethod,
   type Recipe,
 } from "@/lib/recipes";
 import { getRecipeCardMeta } from "@/lib/recipe-meta";
@@ -27,15 +30,27 @@ import type { CookbookViewer } from "./CookbookSheet";
 export default function CookbookContent({ viewer }: { viewer: CookbookViewer }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<CookbookCategory>("Recommended");
+  const [method, setMethod] = useState<CookbookMethod>("easiest");
   const [filters, setFilters] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // Searching looks through every recipe, not just the selected method.
+  const searching = search.trim().length > 0;
+  const effectiveMethod: CookbookMethod = searching ? "all" : method;
+
   const q = useInfiniteQuery({
-    queryKey: ["cookbook", category, filters, search.trim()],
+    queryKey: ["cookbook", category, effectiveMethod, filters, search.trim()],
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       listCookbookPage(
-        buildCookbookQuerySpec({ category, filters, search, page: pageParam as number, pageSize: COOKBOOK_PAGE_SIZE }),
+        buildCookbookQuerySpec({
+          category,
+          method: effectiveMethod,
+          filters,
+          search,
+          page: pageParam as number,
+          pageSize: COOKBOOK_PAGE_SIZE,
+        }),
       ),
     getNextPageParam: (last, all) => (last.hasMore ? all.length : undefined),
     staleTime: 60_000,
@@ -90,6 +105,38 @@ export default function CookbookContent({ viewer }: { viewer: CookbookViewer }) 
         </div>
       )}
 
+      <div>
+        <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          How do you want to make it?
+        </div>
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          {COOKBOOK_METHODS.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => setMethod(m.value)}
+              aria-pressed={!searching && m.value === method}
+              className={cn(
+                "shrink-0 rounded-lg border px-3 py-2 text-[12px] font-bold transition",
+                !searching && m.value === method
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border bg-card text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {!searching && method === "easiest" && (
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            Store-bought, no-cook, microwave &amp; air fryer meals — fastest first.
+          </div>
+        )}
+        {searching && (
+          <div className="mt-1 text-[11px] text-muted-foreground">Searching all recipes.</div>
+        )}
+      </div>
+
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {COOKBOOK_CATEGORIES.map((c) => (
           <button
@@ -113,7 +160,12 @@ export default function CookbookContent({ viewer }: { viewer: CookbookViewer }) 
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : rows.length === 0 ? (
-        <Card className="p-6 text-center text-sm text-muted-foreground">No recipes match yet.</Card>
+        <Card className="space-y-3 p-6 text-center text-sm text-muted-foreground">
+          <div>No recipes match yet.</div>
+          {effectiveMethod !== "all" && (
+            <Button variant="outline" size="sm" onClick={() => setMethod("all")}>Show all recipes</Button>
+          )}
+        </Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {rows.map((r) => (
@@ -139,6 +191,7 @@ export default function CookbookContent({ viewer }: { viewer: CookbookViewer }) 
 
 function CookbookCard({ recipe, to }: { recipe: Recipe; to: string }) {
   const meta = getRecipeCardMeta(recipe);
+  const badge = recipeMethodBadge(recipe.tags);
   return (
     <Link
       to={to as any}
@@ -161,7 +214,14 @@ function CookbookCard({ recipe, to }: { recipe: Recipe; to: string }) {
         )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-bold leading-snug">{recipe.title}</div>
-          <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{recipe.category}</div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span>{recipe.category}</span>
+            {badge && (
+              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 font-bold normal-case tracking-normal text-primary">
+                {badge}
+              </span>
+            )}
+          </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground tabular-nums">
             {meta.calories != null && (
               <span className="inline-flex items-center gap-1"><Flame className="h-3 w-3" />{meta.calories} kcal</span>

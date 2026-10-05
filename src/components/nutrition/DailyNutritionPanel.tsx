@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
@@ -63,10 +64,11 @@ function sumMacros(meals: any[]) {
 export function DailyNutritionPanel() {
   const qc = useQueryClient();
   const [date, setDate] = useState(todayISO());
-  const getDashboard = useServerFn(getNutritionDashboard);
+  const getDashboard = usePovFn(useServerFn(getNutritionDashboard));
+  const povUserId = usePovArgs().viewAsUserId;
 
   const dashQ = useQuery({
-    queryKey: ["nutrition-dashboard", date],
+    queryKey: ["nutrition-dashboard", date, povUserId ?? null],
     queryFn: () => getDashboard({ data: { date } }),
     retry: false,
   });
@@ -237,7 +239,7 @@ function MacroBar({
 }
 
 function MealRow({ meal, onChanged }: { meal: any; onChanged: () => void }) {
-  const del = useServerFn(deleteMeal);
+  const del = usePovFn(useServerFn(deleteMeal));
   const mutation = useMutation({
     mutationFn: () => del({ data: { id: meal.id } }),
     onSuccess: () => {
@@ -272,7 +274,7 @@ function LogFoodSheet({
   defaultDate: string;
 }) {
   const [open, setOpen] = useState(false);
-  const log = useServerFn(logMeal);
+  const log = usePovFn(useServerFn(logMeal));
   const parse = useServerFn(parseMealFromText);
 
   const [manual, setManual] = useState({ name: "", calories: "", protein_g: "", carbs_g: "", fat_g: "" });
@@ -469,8 +471,8 @@ function SupplementCounter({
   count: number;
   onChange: () => void;
 }) {
-  const log = useServerFn(logSupplement);
-  const undo = useServerFn(undoSupplementLog);
+  const log = usePovFn(useServerFn(logSupplement));
+  const undo = usePovFn(useServerFn(undoSupplementLog));
   return (
     <div className="flex items-center gap-1">
       <Button
@@ -502,7 +504,7 @@ function AddSupplementButton({ onAdded }: { onAdded: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [count, setCount] = useState("1");
-  const up = useServerFn(upsertSupplement);
+  const up = usePovFn(useServerFn(upsertSupplement));
   async function save() {
     if (!name.trim()) return;
     try {
@@ -548,7 +550,7 @@ function DeleteSupplementButton({
   supplement: any;
   onDeleted: () => void;
 }) {
-  const del = useServerFn(deleteSupplement);
+  const del = usePovFn(useServerFn(deleteSupplement));
   const [open, setOpen] = useState(false);
   const mutation = useMutation({
     mutationFn: () => del({ data: { id: supplement.id } }),

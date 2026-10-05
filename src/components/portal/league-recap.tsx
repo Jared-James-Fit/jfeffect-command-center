@@ -20,6 +20,7 @@ import { recapStoryBlob, shareOrSaveImage } from "@/lib/recap-story-card";
 import { createRecapMusic, readRecapMuted, writeRecapMuted, type RecapMusic, type RecapSfx } from "@/lib/recap-music";
 import { UserAvatar } from "@/components/user-avatar";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
 import { leagueToday } from "@/lib/league-boost";
 import {
@@ -607,7 +608,10 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
 /** Shows the previous month's recap once, during the first week of a new month. */
 export function LeagueRecapGate() {
   const { user } = useAuth();
-  const userId = user?.id ?? null;
+  const { isImpersonating } = useClientImpersonation();
+  // The auto-play story is for the real client only; in coach POV the home
+  // tile is there instead (and we must not mark it "seen" for anyone).
+  const userId = isImpersonating ? null : user?.id ?? null;
   const qc = useQueryClient();
   const today = leagueToday();
   const month = previousLeagueMonth(today);
@@ -660,14 +664,14 @@ export function LeagueRecapGate() {
 
 /** Entry point inside the league: replay last month's recap anytime. */
 export function LeagueRecapButton({ className }: { className?: string }) {
-  const { user } = useAuth();
+  const viewerId = usePortalUserId() ?? null;
   const month = previousLeagueMonth();
   const [open, setOpen] = useState(false);
   const { data: recap } = useQuery({
-    queryKey: ["league-recap", month, user?.id ?? null],
-    enabled: !!user?.id,
+    queryKey: ["league-recap", month, viewerId],
+    enabled: !!viewerId,
     staleTime: 10 * 60_000,
-    queryFn: () => fetchLeagueRecap(month),
+    queryFn: () => fetchLeagueRecap(month, viewerId),
   });
   if (!recap) return null;
   return (
@@ -701,8 +705,8 @@ export function LeagueRecapButton({ className }: { className?: string }) {
  * an archive of every past recap.
  */
 export function LeagueRecapHomeTile({ className }: { className?: string }) {
-  const { user } = useAuth();
-  const userId = user?.id ?? null;
+  // The person whose portal this is (the client in coach "View as" mode).
+  const userId = usePortalUserId() ?? null;
   const month = previousLeagueMonth();
   const [playing, setPlaying] = useState<LeagueRecap | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -711,7 +715,7 @@ export function LeagueRecapHomeTile({ className }: { className?: string }) {
     queryKey: ["league-recap", month, userId],
     enabled: !!userId,
     staleTime: 10 * 60_000,
-    queryFn: () => fetchLeagueRecap(month),
+    queryFn: () => fetchLeagueRecap(month, userId),
   });
 
   const months = useMemo(() => recapMonths(month, 12), [month]);
@@ -720,7 +724,7 @@ export function LeagueRecapHomeTile({ className }: { className?: string }) {
       queryKey: ["league-recap", m, userId],
       enabled: !!userId && archiveOpen,
       staleTime: 30 * 60_000,
-      queryFn: () => fetchLeagueRecap(m),
+      queryFn: () => fetchLeagueRecap(m, userId),
     })),
   });
   const past = archive.map((q) => q.data).filter((r): r is LeagueRecap => !!r && (r.me?.total_points ?? 0) > 0);

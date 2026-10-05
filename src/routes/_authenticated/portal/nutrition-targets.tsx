@@ -35,7 +35,7 @@ import { TodaysPlanHero } from "@/components/nutrition/TodaysPlanHero";
 import { MacroBreakdown } from "@/components/nutrition/MacroBreakdown";
 import { TodaysIntakeCard, LogFoodToolButton } from "@/components/nutrition/TodaysIntakeCard";
 import { CookbookEntryCard } from "@/components/nutrition/CookbookSheet";
-import { NutritionToolsCard } from "@/components/nutrition/NutritionToolsCard";
+import { NutritionToolsCard, ToolTile } from "@/components/nutrition/NutritionToolsCard";
 import { GroceryListEntryCard } from "@/components/nutrition/GroceryListSheet";
 import { RecentAdherenceWidget } from "@/components/nutrition/RecentAdherenceWidget";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
@@ -329,6 +329,36 @@ function PortalNutrition() {
           </Card>
         )}
 
+        {/* Nutrition Tools — always open, right under the plan. */}
+        <SectionErrorBoundary label="Nutrition tools">
+          <NutritionToolsCard
+            viewer="client"
+            hasCoachApprovedTargets={!!plan}
+            tiles={
+              <>
+                <LogFoodToolButton />
+                <ToolTile
+                  icon={Download}
+                  title="Meal Plan PDF"
+                  hint={plan ? "Save or print your plan" : "Ready once your coach sends a plan"}
+                  onClick={handleDownload}
+                  disabled={!plan}
+                  busy={downloading}
+                />
+                {plan?.pdf_signed_url && (
+                  <ToolTile
+                    icon={FileText}
+                    title="Coach's PDF"
+                    hint={plan.pdf_name || "Open the file your coach attached"}
+                    href={plan.pdf_signed_url}
+                  />
+                )}
+              </>
+            }
+            footer={<RecentAdherenceWidget />}
+          />
+        </SectionErrorBoundary>
+
         {/* 5. Today's Intake — only when food logging is actually in use. */}
         <SectionErrorBoundary label="Today's intake">
           <TodaysIntakeCard />
@@ -344,40 +374,6 @@ function PortalNutrition() {
         {/* 7. Cookbook entry — recipes load only when opened. */}
         <SectionErrorBoundary label="Cookbook">
           <CookbookEntryCard viewer="client" />
-        </SectionErrorBoundary>
-
-        {/* 8. Compact Nutrition Tools. */}
-        <SectionErrorBoundary label="Nutrition tools">
-          <NutritionToolsCard
-            viewer="client"
-            hasCoachApprovedTargets={!!plan}
-            extras={
-              <div className="space-y-2">
-                <LogFoodToolButton />
-                {plan?.pdf_signed_url && (
-                  <Button asChild variant="outline" className="h-11 w-full justify-start">
-                    <a href={plan.pdf_signed_url} target="_blank" rel="noreferrer">
-                      <FileText className="mr-2 h-4 w-4" /> {plan.pdf_name || "Open PDF"}
-                    </a>
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  className="h-11 w-full justify-start"
-                  onClick={handleDownload}
-                  disabled={downloading || !plan}
-                >
-                  {downloading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="mr-2 h-4 w-4" />
-                  )}
-                  {downloading ? "Preparing…" : "Download Meal Plan PDF"}
-                </Button>
-                <RecentAdherenceWidget />
-              </div>
-            }
-          />
         </SectionErrorBoundary>
 
         {/* Nutrition disclaimer — always last on the page. */}

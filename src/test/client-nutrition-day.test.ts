@@ -8,7 +8,7 @@ import {
   resolvePlanDaySelection,
   weekdayForISO,
 } from "@/lib/client-nutrition-day";
-import { buildCookbookQuerySpec, COOKBOOK_PAGE_SIZE } from "@/lib/recipes";
+import { buildCookbookQuerySpec, COOKBOOK_PAGE_SIZE, recipeMethodBadge } from "@/lib/recipes";
 
 // 2026-08-15 = Saturday, 2026-08-17 = Monday, 2026-08-19 = Wednesday
 const SATURDAY = "2026-08-15";
@@ -199,5 +199,27 @@ describe("cookbook batching / search / filters", () => {
     const spec = buildCookbookQuerySpec({ filters: ["high-protein", "lower-calorie", "quick"] });
     expect(spec.tagGroups).toEqual([["high-protein"], ["low-calorie", "fat-loss", "lower-calorie"]]);
     expect(spec.maxPrepMinutes).toBe(20);
+  });
+
+  it("Desserts maps to Dessert", () => {
+    expect(buildCookbookQuerySpec({ category: "Desserts" }).category).toBe("Dessert");
+  });
+
+  it("Easiest method filters easy tags and sorts fastest first; All keeps newest", () => {
+    const easy = buildCookbookQuerySpec({ method: "easiest" });
+    expect(easy.methodTags).toContain("easy");
+    expect(easy.methodTags).toContain("grab-and-go");
+    expect(easy.orderBy).toBe("prep");
+    expect(easy.tagGroups).toEqual([]);
+    expect(buildCookbookQuerySpec({ method: "pan" }).methodTags).toEqual(["pan", "one-pan"]);
+    const all = buildCookbookQuerySpec({ method: "all" });
+    expect(all.methodTags).toBeNull();
+    expect(all.orderBy).toBe("newest");
+  });
+
+  it("labels how a recipe is made", () => {
+    expect(recipeMethodBadge(["easy", "air-fryer", "dinner"])).toBe("Air fryer");
+    expect(recipeMethodBadge(["easy", "no-cook", "grab-and-go"])).toBe("Store-bought");
+    expect(recipeMethodBadge(["high-protein"])).toBeNull();
   });
 });

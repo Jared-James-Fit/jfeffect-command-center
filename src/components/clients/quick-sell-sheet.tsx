@@ -10,6 +10,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { autoSendPaymentRequestMessage } from "@/lib/sms-links.functions";
+import { autoMessageClientAboutPurchase } from "@/lib/payment-request-message";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +55,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
   const listDiscountsFn = useServerFn(listDiscountCodesFn);
   const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
   const shareFn = useServerFn(createPaymentShareLink);
+  const autoMessageFn = useServerFn(autoSendPaymentRequestMessage);
   const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -160,6 +163,8 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
         discountCodeId,
       );
       const res = { url: shareUrl };
+      // Auto-message the client in chat from whoever is selling.
+      const chat = await autoMessageClientAboutPurchase(autoMessageFn as any, purchase!.id);
 
       qc.invalidateQueries({ queryKey: ["coaching-products"] });
       qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
@@ -169,7 +174,11 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
       toast.success(
         `Checkout link created for ${clientName ?? "client"} — copied to clipboard`,
         {
-          description: "Send this link to the client to complete payment.",
+          description: chat.sent
+            ? "Payment request also sent in their messages."
+            : chat.reason === "already_sent"
+              ? "Their payment request is already in their messages."
+              : "Send this link to the client to complete payment.",
           action: {
             label: "Open",
             onClick: () => window.open(res.url, "_blank", "noopener,noreferrer"),

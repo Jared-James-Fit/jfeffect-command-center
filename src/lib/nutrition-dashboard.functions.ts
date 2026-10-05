@@ -1,6 +1,23 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { PovInput, resolvePovUserId, type PovArgs } from "@/lib/client-pov.server";
+
+const povShape = PovInput.shape;
+
+/**
+ * Session identity, or — in coach "View as client" — the viewed client's
+ * user id. POV reads/writes go through the service client because member
+ * food-log tables are owner-only under RLS; resolvePovUserId has already
+ * confirmed the caller is an admin or that client's coach.
+ */
+async function nutritionCtx(context: any, pov: PovArgs) {
+  const { supabase, userId } = context;
+  if (!pov?.viewAsUserId || pov.viewAsUserId === userId) return { supabase, userId };
+  const uid = await resolvePovUserId(supabase, userId, pov);
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return { supabase: supabaseAdmin as any, userId: uid };
+}
 
 async function loadMember(supabase: any, userId: string) {
   const { data } = await supabase
@@ -73,9 +90,9 @@ function dayBoundsUTC(dateISO: string) {
 // =================== Dashboard read =====================================
 export const getNutritionDashboard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(d))
+  .inputValidator((d) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).extend(povShape).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase, userId } = await nutritionCtx(context, data);
     const member = await loadMember(supabase, userId);
     if (!member?.id) {
       return {
@@ -170,9 +187,9 @@ const MealInput = z.object({
 
 export const logMeal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => MealInput.parse(d))
+  .inputValidator((d) => MealInput.extend(povShape).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase, userId } = await nutritionCtx(context, data);
     const member = await loadMember(supabase, userId);
     if (!member?.id) throw new Error("Member profile not found");
     const { data: inserted, error } = await supabase
@@ -217,10 +234,10 @@ export const updateMeal = createServerFn({ method: "POST" })
       protein_g: z.number().min(0),
       carbs_g: z.number().min(0),
       fat_g: z.number().min(0),
-    }).parse(d),
+    }).extend(povShape).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase, userId } = await nutritionCtx(context, data);
     const { error } = await supabase
       .from("member_meal_logs")
       .update({
@@ -238,9 +255,9 @@ export const updateMeal = createServerFn({ method: "POST" })
 
 export const deleteMeal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).extend(povShape).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase, userId } = await nutritionCtx(context, data);
     const { error } = await supabase
       .from("member_meal_logs")
       .delete()
@@ -252,9 +269,9 @@ export const deleteMeal = createServerFn({ method: "POST" })
 
 export const deletePreset = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).extend(povShape).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase, userId } = await nutritionCtx(context, data);
     const { error } = await supabase
       .from("member_meal_presets")
       .delete()
@@ -273,10 +290,10 @@ export const upsertSupplement = createServerFn({ method: "POST" })
       name: z.string().trim().min(1).max(80),
       daily_target_count: z.number().int().min(1).max(20).default(1),
       active: z.boolean().default(true),
-    }).parse(d),
+    }).extend(povShape).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase, userId } = await nutritionCtx(context, data);
     const member = await loadMember(supabase, userId);
     if (!member?.id) throw new Error("Member profile not found");
     if (data.id) {
@@ -305,9 +322,9 @@ export const upsertSupplement = createServerFn({ method: "POST" })
 
 export const deleteSupplement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).extend(povShape).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase, userId } = await nutritionCtx(context, data);
     const { error } = await supabase
       .from("member_supplements")
       .delete()
@@ -324,10 +341,10 @@ export const logSupplement = createServerFn({ method: "POST" })
       supplement_id: z.string().uuid().optional().nullable(),
       supplement_name: z.string().trim().min(1).max(80),
       dose: z.string().max(60).optional().nullable(),
-    }).parse(d),
+    }).extend(povShape).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase, userId } = await nutritionCtx(context, data);
     const member = await loadMember(supabase, userId);
     if (!member?.id) throw new Error("Member profile not found");
     const { error } = await supabase.from("member_supplement_logs").insert({
@@ -344,10 +361,10 @@ export const logSupplement = createServerFn({ method: "POST" })
 export const undoSupplementLog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ supplement_id: z.string().uuid().nullable().optional(), supplement_name: z.string() }).parse(d),
+    z.object({ supplement_id: z.string().uuid().nullable().optional(), supplement_name: z.string() }).extend(povShape).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { supabase, userId } = await nutritionCtx(context, data);
     // Delete most recent log today matching supplement
     const { start, end } = dayBoundsUTC(new Date().toISOString().slice(0, 10));
     let q = supabase
