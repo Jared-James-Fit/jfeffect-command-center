@@ -9,7 +9,6 @@ import {
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
-import { useMediaNavBadges } from "@/hooks/use-media-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
@@ -18,7 +17,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
-import { TeamPovQuickPicker } from "@/components/team-pov-quick-picker";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -245,8 +243,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
   const clientBadges = useClientNavBadges();
-  const mediaBadges = useMediaNavBadges();
-  const navBadges = useMemo(() => ({ ...clientBadges, ...mediaBadges }), [clientBadges, mediaBadges]);
+  const navBadges = clientBadges;
   const [mode, setMode] = useSidebarMode();
   const isTablet = useIsTablet();
   const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
@@ -961,7 +958,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         role={(role as AdminRole | null) ?? null}
       />
       <ClientPovQuickPicker />
-      <TeamPovQuickPicker />
     </div>
     </TooltipProvider>
   );

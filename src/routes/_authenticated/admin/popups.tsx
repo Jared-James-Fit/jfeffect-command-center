@@ -163,20 +163,6 @@ async function fetchAllPopups(): Promise<UnifiedPopup[]> {
     seenCount: null,
     sentAt: null,
   });
-  out.push({
-    popupType: "task",
-    id: "system:mm",
-    title: `Daily Task Summary — Media Manager`,
-    audience: "media managers",
-    status: "System",
-    statusTone: "system",
-    enabled: true,
-    canToggle: false,
-    editPath: "/media/action-items",
-    seenCount: null,
-    sentAt: null,
-  });
-
   for (const c of (bd.data ?? []) as any[]) {
     const tone: UnifiedPopup["statusTone"] = c.enabled ? "active" : "off";
     out.push({
