@@ -1,15 +1,10 @@
 /**
- * QuickSellSheet — dummy-proof quick sell/payment link sender from the client card.
+ * QuickSellSheet — quick client-specific checkout creator from the client card.
  *
- * Opens a bottom sheet showing all active coaching products.
- * Admin can:
- * 1. Pick a product
- * 2. Copy the payment link to clipboard
- * 3. Open the checkout link in a new tab
- * 4. Send the link to the client via the app's messaging system
- *
- * This is intentionally simple — no new Stripe calls, no new products.
- * It just surfaces the existing payment links from coaching_products.
+ * Opens a bottom sheet showing active coaching products that can be sold either
+ * through an existing generic Payment Link or a Stripe Price-backed checkout.
+ * Client-specific links are tied to purchase_records and reuse open unpaid
+ * intents so retrying Quick Sell does not create duplicate sales.
  */
 
 import { useState } from "react";
@@ -18,7 +13,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
   Copy, ExternalLink, Search, CheckCircle2, Loader2, CreditCard,
@@ -80,7 +74,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
   });
 
   const products = ((data?.items ?? []) as any[])
-    .filter((p) => p.status === "Active" && p.active && p.payment_link_url)
+    .filter((p) => p.status === "Active" && p.active && (p.payment_link_url || p.stripe_price_id))
     .filter((p) => {
       if (!search.trim()) return true;
       const q = search.toLowerCase();
@@ -221,7 +215,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
           </div>
         ) : products.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            {search ? "No products match your search." : "No active products with payment links found. Add products in Admin → Sales → Products & Payments."}
+            {search ? "No products match your search." : "No active products are available for checkout. Add products in Admin → Sales → Products & Payments."}
           </div>
         ) : (
           <div className="space-y-5">
@@ -268,37 +262,40 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
                         {/* Actions when selected */}
                         {isSelected && (
                           <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-                            {/* Option 1: Copy the generic payment link */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full justify-start"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                copyLink(p.payment_link_url, p.id);
-                              }}
-                            >
-                              {isCopied ? (
-                                <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />
-                              ) : (
-                                <Copy className="mr-2 h-4 w-4" />
-                              )}
-                              {isCopied ? "Copied!" : "Copy Payment Link"}
-                            </Button>
+                            {/* Generic Payment Link actions only exist when the product actually has one. */}
+                            {p.payment_link_url && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full justify-start"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyLink(p.payment_link_url, p.id);
+                                  }}
+                                >
+                                  {isCopied ? (
+                                    <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />
+                                  ) : (
+                                    <Copy className="mr-2 h-4 w-4" />
+                                  )}
+                                  {isCopied ? "Copied!" : "Copy Payment Link"}
+                                </Button>
 
-                            {/* Option 2: Open the generic payment link */}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full justify-start"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(p.payment_link_url, "_blank", "noopener,noreferrer");
-                              }}
-                            >
-                              <ExternalLink className="mr-2 h-4 w-4" />
-                              Open Checkout Page
-                            </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full justify-start"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.open(p.payment_link_url, "_blank", "noopener,noreferrer");
+                                  }}
+                                >
+                                  <ExternalLink className="mr-2 h-4 w-4" />
+                                  Open Checkout Page
+                                </Button>
+                              </>
+                            )}
 
                             {/* FIRST50 remains optional and is never price-calculated in the browser. */}
                             {first50ForProduct(p.id) && (
@@ -315,7 +312,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
                               </label>
                             )}
 
-                            {/* Option 3: Create a client-specific checkout (if has Stripe price) */}
+                            {/* Client-specific checkout only needs a valid Stripe Price ID. */}
                             {p.stripe_price_id && (
                               <Button
                                 size="sm"
@@ -336,8 +333,16 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
                             )}
 
                             <p className="text-[11px] text-muted-foreground">
-                              <strong>Copy Payment Link</strong> — generic link anyone can use.<br />
-                              <strong>Create Link for {clientName?.split(" ")[0] ?? "Client"}</strong> — client-specific link tied to their account.
+                              {p.payment_link_url && (
+                                <>
+                                  <strong>Copy Payment Link</strong> — generic link anyone can use.<br />
+                                </>
+                              )}
+                              {p.stripe_price_id && (
+                                <>
+                                  <strong>Create Link for {clientName?.split(" ")[0] ?? "Client"}</strong> — client-specific link tied to their account.
+                                </>
+                              )}
                             </p>
                           </div>
                         )}
