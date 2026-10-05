@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 const {
-  compactWeight, formatTrainingTime, inRecapWindow, liftComparison, monthName, nextMonthName, ordinal, outroLine, pctChange,
+  compactCount, compactWeight, formatTrainingTime, inRecapWindow, liftComparison, monthName, nextMonthName, ordinal, outroLine, pctChange,
   previousLeagueMonth, rankChange, recapSeenKey, rivalLine,
 } = await import("@/lib/league-recap");
 
@@ -69,6 +69,8 @@ describe("monthly league recap", () => {
     expect(formatTrainingTime(45)).toEqual({ value: "45", label: "Minutes" });
     expect(formatTrainingTime(60)).toEqual({ value: "1", label: "Hour" });
     expect(formatTrainingTime(750)).toEqual({ value: "12.5", label: "Hours" });
+    expect(compactCount(1_842)).toBe("1,842");
+    expect(compactCount(12_450)).toBe("12.5K");
     expect(compactWeight(82_760, "lb")).toBe("182K lb");
     expect(compactWeight(20_000, "kg")).toBe("20K kg");
   });

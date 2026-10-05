@@ -25,7 +25,7 @@ import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonat
 import { cn } from "@/lib/utils";
 import { leagueToday } from "@/lib/league-boost";
 import {
-  fetchLeagueRecap, formatTrainingTime, hasSeenFeature, inRecapWindow, liftComparison, markFeatureSeen, monthName,
+  compactCount, fetchLeagueRecap, formatTrainingTime, hasSeenFeature, inRecapWindow, liftComparison, markFeatureSeen, monthName,
   nextMonthName, ordinal, outroLine, pctChange, previousLeagueMonth, rankChange, recapMonths, recapSeenKey, rivalLine,
   type LeagueRecap,
 } from "@/lib/league-recap";
@@ -372,8 +372,8 @@ function trainingSlides(r: LeagueRecap): Slide[] {
 
   const tiles = [
     { label: "Workouts", value: String(me.workouts_completed) },
-    time ?? { label: "Sets", value: t.sets.toLocaleString() },
-    { label: "Reps", value: t.reps.toLocaleString() },
+    time ?? { label: "Sets", value: compactCount(t.sets) },
+    { label: "Reps", value: compactCount(t.reps) },
   ];
 
   const slides: Slide[] = [{
@@ -412,7 +412,7 @@ function trainingSlides(r: LeagueRecap): Slide[] {
           {tiles.map((x, i) => (
             <Rise key={x.label} delay={400 + i * 140}>
               <div className="rounded-2xl bg-white/[0.07] px-3 py-3.5 text-center ring-1 ring-white/10">
-                <div className="truncate text-2xl font-black tabular-nums text-white">{x.value}</div>
+                <div className="text-2xl font-black tabular-nums text-white">{x.value}</div>
                 <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-white/60">{x.label}</div>
               </div>
             </Rise>
@@ -481,14 +481,12 @@ function trainingSlides(r: LeagueRecap): Slide[] {
               </Rise>
             </>
           )}
-          {(me.atpr_lifts > 0 || prs > 0) && (
+          {me.atpr_lifts + prs > 0 && (
             <Rise delay={t.gains.length ? 1600 : 600}>
               <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-amber-400/15 px-4 py-2 text-sm font-black text-amber-300 ring-1 ring-amber-400/30">
-                <Trophy className="h-4 w-4" />
-                {[
-                  me.atpr_lifts ? `${me.atpr_lifts} all-time PR${me.atpr_lifts === 1 ? "" : "s"}` : null,
-                  prs ? `${prs} program/block PR${prs === 1 ? "" : "s"}` : null,
-                ].filter(Boolean).join(" · ")}
+                <Trophy className="h-4 w-4 shrink-0" />
+                {me.atpr_lifts + prs} PR{me.atpr_lifts + prs === 1 ? "" : "s"}
+                {me.atpr_lifts > 0 && <span className="font-bold text-amber-300/80">· {me.atpr_lifts} all-time</span>}
               </div>
             </Rise>
           )}

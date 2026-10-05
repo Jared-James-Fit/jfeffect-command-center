@@ -94,6 +94,12 @@ export function formatTrainingTime(minutes: number): { value: string; label: str
   return { value: String(h), label: h === 1 ? "Hour" : "Hours" };
 }
 
+/** 1,842 stays as is; 12,450 becomes "12.5K" so it fits a small tile. */
+export function compactCount(n: number): string {
+  if (n < 10_000) return n.toLocaleString();
+  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
 /** "182K lb" for tight spaces (share card tiles). */
 export function compactWeight(kg: number, unit: "kg" | "lb") {
   const v = unit === "lb" ? kg / 0.45359237 : kg;
