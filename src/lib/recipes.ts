@@ -170,7 +170,7 @@ export function statusTone(s: RecipeStatus) {
 
 export const COOKBOOK_PAGE_SIZE = 12;
 
-export const COOKBOOK_CATEGORIES = ["Recommended", "Breakfast", "Lunch", "Dinner", "Snacks"] as const;
+export const COOKBOOK_CATEGORIES = ["Recommended", "Breakfast", "Lunch", "Dinner", "Snacks", "Desserts"] as const;
 export type CookbookCategory = (typeof COOKBOOK_CATEGORIES)[number];
 
 export const COOKBOOK_FILTERS = [
@@ -181,12 +181,46 @@ export const COOKBOOK_FILTERS = [
   { value: "quick", label: "Prep Time · Under 20 min", tags: [], maxPrepMinutes: 20 },
 ] as const;
 
+/**
+ * How it's made. "Easiest" is the default view: minimal-effort recipes
+ * (store-bought, no-cook, microwave, air fryer, one pan), fastest first.
+ */
+export const COOKBOOK_METHODS = [
+  { value: "easiest", label: "⚡ Easiest", tags: ["easy", "simple", "grab-and-go", "no-bake"] },
+  { value: "air-fryer", label: "Air Fryer", tags: ["air-fryer"] },
+  { value: "microwave", label: "Microwave", tags: ["microwave"] },
+  { value: "pan", label: "One Pan", tags: ["pan", "one-pan"] },
+  { value: "no-cook", label: "No-Cook", tags: ["no-cook", "no-bake"] },
+  { value: "store-bought", label: "Store-Bought", tags: ["grab-and-go"] },
+  { value: "all", label: "All Recipes", tags: [] },
+] as const;
+export type CookbookMethod = (typeof COOKBOOK_METHODS)[number]["value"];
+
+/** Short badge for a card: how the recipe is made, if tagged. */
+const METHOD_BADGES: Array<[string, string]> = [
+  ["grab-and-go", "Store-bought"],
+  ["air-fryer", "Air fryer"],
+  ["microwave", "Microwave"],
+  ["no-cook", "No-cook"],
+  ["no-bake", "No-cook"],
+  ["pan", "One pan"],
+  ["one-pan", "One pan"],
+];
+export function recipeMethodBadge(tags: string[] | null | undefined): string | null {
+  const t = new Set(tags ?? []);
+  return METHOD_BADGES.find(([tag]) => t.has(tag))?.[1] ?? null;
+}
+
 export type CookbookQuerySpec = {
   /** Recipe `category` column value, or null for "no category filter". */
   category: string | null;
   /** Each group is OR-within, AND-across (tag overlap). */
   tagGroups: string[][];
   maxPrepMinutes: number | null;
+  /** Cooking-method tags (overlap), or null for every method. */
+  methodTags: string[] | null;
+  /** Method views sort fastest first; "All" keeps newest first. */
+  orderBy: "prep" | "newest";
   search: string | null;
   from: number;
   to: number;
@@ -195,6 +229,7 @@ export type CookbookQuerySpec = {
 /** Pure: translate cookbook UI state into a single batched query spec. */
 export function buildCookbookQuerySpec(input: {
   category?: CookbookCategory;
+  method?: CookbookMethod;
   filters?: string[];
   search?: string;
   page?: number;
@@ -206,7 +241,9 @@ export function buildCookbookQuerySpec(input: {
     ? null
     : input.category === "Snacks"
       ? "Snack"
-      : input.category;
+      : input.category === "Desserts"
+        ? "Dessert"
+        : input.category;
 
   const tagGroups: string[][] = [];
   let maxPrepMinutes: number | null = null;
@@ -220,11 +257,15 @@ export function buildCookbookQuerySpec(input: {
   }
 
   const search = (input.search ?? "").trim();
+  const methodDef = COOKBOOK_METHODS.find((m) => m.value === input.method);
+  const methodTags = methodDef && methodDef.tags.length ? [...methodDef.tags] : null;
 
   return {
     category,
     tagGroups,
     maxPrepMinutes,
+    methodTags,
+    orderBy: methodTags ? "prep" : "newest",
     search: search ? search : null,
     from: page * pageSize,
     to: page * pageSize + pageSize - 1,
@@ -239,10 +280,13 @@ export async function listCookbookPage(spec: CookbookQuerySpec): Promise<{ rows:
   let query = db.from("recipes").select("*").eq("status", "Published");
   if (spec.category) query = query.eq("category", spec.category);
   for (const group of spec.tagGroups) query = query.overlaps("tags", group);
+  if (spec.methodTags) query = query.overlaps("tags", spec.methodTags);
   if (spec.maxPrepMinutes != null) query = query.lte("prep_time_minutes", spec.maxPrepMinutes);
   if (spec.search) query = query.ilike("title", `%${spec.search}%`);
+  if (spec.orderBy === "prep") query = query.order("prep_time_minutes", { ascending: true, nullsFirst: false });
   const { data, error } = await query
     .order("published_at", { ascending: false })
+    .order("id", { ascending: true })
     .range(spec.from, spec.to + 1);
   if (error) throw error;
   const rows = (data ?? []) as Recipe[];
