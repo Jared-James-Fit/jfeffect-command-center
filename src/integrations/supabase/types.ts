@@ -4597,42 +4597,130 @@ export type Database = {
           },
         ]
       }
+      conversation_staff_reads: {
+        Row: {
+          client_id: string
+          last_read_at: string | null
+          manual_unread: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          last_read_at?: string | null
+          manual_unread?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          last_read_at?: string | null
+          manual_unread?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_staff_reads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_state: {
         Row: {
           admin_last_read_at: string | null
           client_id: string
           client_last_read_at: string | null
           created_at: string
+          last_inbound_at: string | null
+          last_inbound_kind: string | null
           last_message_at: string | null
           priority: string
           status: string
           updated_at: string
+          workflow_reason: string | null
+          workflow_status: string
+          workflow_status_updated_at: string | null
+          workflow_status_updated_by: string | null
         }
         Insert: {
           admin_last_read_at?: string | null
           client_id: string
           client_last_read_at?: string | null
           created_at?: string
+          last_inbound_at?: string | null
+          last_inbound_kind?: string | null
           last_message_at?: string | null
           priority?: string
           status?: string
           updated_at?: string
+          workflow_reason?: string | null
+          workflow_status?: string
+          workflow_status_updated_at?: string | null
+          workflow_status_updated_by?: string | null
         }
         Update: {
           admin_last_read_at?: string | null
           client_id?: string
           client_last_read_at?: string | null
           created_at?: string
+          last_inbound_at?: string | null
+          last_inbound_kind?: string | null
           last_message_at?: string | null
           priority?: string
           status?: string
           updated_at?: string
+          workflow_reason?: string | null
+          workflow_status?: string
+          workflow_status_updated_at?: string | null
+          workflow_status_updated_by?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "conversation_state_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_workflow_events: {
+        Row: {
+          actor_id: string | null
+          client_id: string
+          created_at: string
+          id: number
+          message_id: string | null
+          reason: string
+          workflow_status: string
+        }
+        Insert: {
+          actor_id?: string | null
+          client_id: string
+          created_at?: string
+          id?: number
+          message_id?: string | null
+          reason: string
+          workflow_status: string
+        }
+        Update: {
+          actor_id?: string | null
+          client_id?: string
+          created_at?: string
+          id?: number
+          message_id?: string | null
+          reason?: string
+          workflow_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_workflow_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
           },
@@ -5394,6 +5482,38 @@ export type Database = {
         }
         Relationships: []
       }
+      exercise_aliases: {
+        Row: {
+          alias_key: string
+          alias_name: string
+          created_at: string
+          exercise_id: string
+          source: string
+        }
+        Insert: {
+          alias_key: string
+          alias_name: string
+          created_at?: string
+          exercise_id: string
+          source?: string
+        }
+        Update: {
+          alias_key?: string
+          alias_name?: string
+          created_at?: string
+          exercise_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_aliases_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exercise_dedupe_audit: {
         Row: {
           canonical_id: string
@@ -5424,6 +5544,42 @@ export type Database = {
         }
         Relationships: []
       }
+      exercise_duplicate_dismissals: {
+        Row: {
+          dismissed_at: string
+          dismissed_by: string | null
+          exercise_a: string
+          exercise_b: string
+        }
+        Insert: {
+          dismissed_at?: string
+          dismissed_by?: string | null
+          exercise_a: string
+          exercise_b: string
+        }
+        Update: {
+          dismissed_at?: string
+          dismissed_by?: string | null
+          exercise_a?: string
+          exercise_b?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_duplicate_dismissals_exercise_a_fkey"
+            columns: ["exercise_a"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_duplicate_dismissals_exercise_b_fkey"
+            columns: ["exercise_b"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exercises: {
         Row: {
           active_video_set: string
@@ -5442,6 +5598,7 @@ export type Database = {
           difficulty: string | null
           equipment: string | null
           exercise_category: string
+          exercise_family: string | null
           id: string
           is_competition_lift: boolean
           is_powerlifting: boolean
@@ -5456,6 +5613,7 @@ export type Database = {
           primary_muscle_group: string | null
           quality_warning: string | null
           safe_to_publish: boolean
+          secondary_muscle_groups: string[]
           secondary_vimeo_embed_url: string | null
           secondary_vimeo_id: string | null
           source_quality: string | null
@@ -5496,6 +5654,7 @@ export type Database = {
           difficulty?: string | null
           equipment?: string | null
           exercise_category?: string
+          exercise_family?: string | null
           id?: string
           is_competition_lift?: boolean
           is_powerlifting?: boolean
@@ -5510,6 +5669,7 @@ export type Database = {
           primary_muscle_group?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
+          secondary_muscle_groups?: string[]
           secondary_vimeo_embed_url?: string | null
           secondary_vimeo_id?: string | null
           source_quality?: string | null
@@ -5550,6 +5710,7 @@ export type Database = {
           difficulty?: string | null
           equipment?: string | null
           exercise_category?: string
+          exercise_family?: string | null
           id?: string
           is_competition_lift?: boolean
           is_powerlifting?: boolean
@@ -5564,6 +5725,7 @@ export type Database = {
           primary_muscle_group?: string | null
           quality_warning?: string | null
           safe_to_publish?: boolean
+          secondary_muscle_groups?: string[]
           secondary_vimeo_embed_url?: string | null
           secondary_vimeo_id?: string | null
           source_quality?: string | null
@@ -5596,6 +5758,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      feature_announcement_views: {
+        Row: {
+          feature_key: string
+          seen_at: string
+          user_id: string
+        }
+        Insert: {
+          feature_key: string
+          seen_at?: string
+          user_id: string
+        }
+        Update: {
+          feature_key?: string
+          seen_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       featured_member_items: {
         Row: {
@@ -6651,6 +6831,112 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      league_month_awards: {
+        Row: {
+          adherence_pct: number
+          ceiling_points: number
+          client_id: string
+          completed_workouts: number
+          coverage: number
+          eligible_workouts: number
+          final_total: number
+          finalized_at: string
+          league_month: string
+          match_points: number
+          qualified: boolean
+          reason: string
+          workout_points: number
+        }
+        Insert: {
+          adherence_pct: number
+          ceiling_points: number
+          client_id: string
+          completed_workouts: number
+          coverage: number
+          eligible_workouts: number
+          final_total: number
+          finalized_at?: string
+          league_month: string
+          match_points: number
+          qualified: boolean
+          reason: string
+          workout_points: number
+        }
+        Update: {
+          adherence_pct?: number
+          ceiling_points?: number
+          client_id?: string
+          completed_workouts?: number
+          coverage?: number
+          eligible_workouts?: number
+          final_total?: number
+          finalized_at?: string
+          league_month?: string
+          match_points?: number
+          qualified?: boolean
+          reason?: string
+          workout_points?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_month_awards_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      league_prescription_snapshots: {
+        Row: {
+          client_id: string
+          day_id: string
+          excuse_reason: string | null
+          excused_at: string | null
+          excused_by: string | null
+          first_seen_at: string
+          last_seen_at: string
+          league_month: string
+          locked_at: string | null
+          removed_at: string | null
+          scheduled_date: string
+        }
+        Insert: {
+          client_id: string
+          day_id: string
+          excuse_reason?: string | null
+          excused_at?: string | null
+          excused_by?: string | null
+          first_seen_at?: string
+          last_seen_at?: string
+          league_month: string
+          locked_at?: string | null
+          removed_at?: string | null
+          scheduled_date: string
+        }
+        Update: {
+          client_id?: string
+          day_id?: string
+          excuse_reason?: string | null
+          excused_at?: string | null
+          excused_by?: string | null
+          first_seen_at?: string
+          last_seen_at?: string
+          league_month?: string
+          locked_at?: string | null
+          removed_at?: string | null
+          scheduled_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_prescription_snapshots_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       legacy_agreement_records: {
         Row: {
@@ -10948,6 +11234,7 @@ export type Database = {
           delivery_status: string
           edited_at: string | null
           id: string
+          is_automated: boolean
           is_internal_note: boolean
           last_attempt_at: string | null
           lease_until: string | null
@@ -10982,6 +11269,7 @@ export type Database = {
           delivery_status?: string
           edited_at?: string | null
           id?: string
+          is_automated?: boolean
           is_internal_note?: boolean
           last_attempt_at?: string | null
           lease_until?: string | null
@@ -11016,6 +11304,7 @@ export type Database = {
           delivery_status?: string
           edited_at?: string | null
           id?: string
+          is_automated?: boolean
           is_internal_note?: boolean
           last_attempt_at?: string | null
           lease_until?: string | null
@@ -11066,6 +11355,8 @@ export type Database = {
           request_message_id: string | null
           status: string
           submitted_at: string | null
+          superseded_at: string | null
+          superseded_by: string | null
           task_type: string
           updated_at: string
         }
@@ -11082,6 +11373,8 @@ export type Database = {
           request_message_id?: string | null
           status?: string
           submitted_at?: string | null
+          superseded_at?: string | null
+          superseded_by?: string | null
           task_type: string
           updated_at?: string
         }
@@ -11098,6 +11391,8 @@ export type Database = {
           request_message_id?: string | null
           status?: string
           submitted_at?: string | null
+          superseded_at?: string | null
+          superseded_by?: string | null
           task_type?: string
           updated_at?: string
         }
@@ -11121,6 +11416,13 @@ export type Database = {
             columns: ["request_message_id"]
             isOneToOne: false
             referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messenger_checkins_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "messenger_checkins"
             referencedColumns: ["id"]
           },
         ]
@@ -12561,6 +12863,75 @@ export type Database = {
         }
         Relationships: []
       }
+      nutrition_ai_plans: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          client_id: string
+          created_at: string
+          error: string | null
+          generated_at: string | null
+          id: string
+          meal_plan_text: string | null
+          model: string | null
+          phase: string | null
+          status: string
+          submission_id: string
+          targets_text: string | null
+          updated_at: string
+          workout_meals: string | null
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          client_id: string
+          created_at?: string
+          error?: string | null
+          generated_at?: string | null
+          id?: string
+          meal_plan_text?: string | null
+          model?: string | null
+          phase?: string | null
+          status?: string
+          submission_id: string
+          targets_text?: string | null
+          updated_at?: string
+          workout_meals?: string | null
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          client_id?: string
+          created_at?: string
+          error?: string | null
+          generated_at?: string | null
+          id?: string
+          meal_plan_text?: string | null
+          model?: string | null
+          phase?: string | null
+          status?: string
+          submission_id?: string
+          targets_text?: string | null
+          updated_at?: string
+          workout_meals?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_ai_plans_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_ai_plans_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: true
+            referencedRelation: "nf_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_automation_settings: {
         Row: {
           cadence_interval_days: number | null
@@ -12870,8 +13241,8 @@ export type Database = {
           custom_goal: string | null
           custom_phase: string | null
           end_date: string | null
-          food_weighing_rules: string | null
           ending_soon_days: number
+          food_weighing_rules: string | null
           goal: string
           goal_direction: string | null
           id: string
@@ -12902,8 +13273,8 @@ export type Database = {
           custom_goal?: string | null
           custom_phase?: string | null
           end_date?: string | null
-          food_weighing_rules?: string | null
           ending_soon_days?: number
+          food_weighing_rules?: string | null
           goal?: string
           goal_direction?: string | null
           id?: string
@@ -12934,8 +13305,8 @@ export type Database = {
           custom_goal?: string | null
           custom_phase?: string | null
           end_date?: string | null
-          food_weighing_rules?: string | null
           ending_soon_days?: number
+          food_weighing_rules?: string | null
           goal?: string
           goal_direction?: string | null
           id?: string
@@ -18808,6 +19179,30 @@ export type Database = {
           },
         ]
       }
+      user_preferences: {
+        Row: {
+          created_at: string
+          theme: string
+          theme_updated_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          theme?: string
+          theme_updated_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          theme?: string
+          theme_updated_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -19332,6 +19727,22 @@ export type Database = {
             }
             Returns: Json
           }
+      admin_make_exercise_alias: {
+        Args: { _canonical: string; _duplicate: string }
+        Returns: Json
+      }
+      apply_conversation_workflow: {
+        Args: {
+          _actor: string
+          _at?: string
+          _client_id: string
+          _message_id?: string
+          _only_if_not_needs_response?: boolean
+          _reason: string
+          _status: string
+        }
+        Returns: undefined
+      }
       apply_default_member_access: {
         Args: { _member_id: string }
         Returns: number
@@ -19355,6 +19766,11 @@ export type Database = {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
       }
+      can_staff_conversation: { Args: { _client_id: string }; Returns: boolean }
+      can_view_client_training: {
+        Args: { _client_id: string }
+        Returns: boolean
+      }
       cancel_scheduled_message: {
         Args: { _message_id: string }
         Returns: {
@@ -19372,6 +19788,7 @@ export type Database = {
           delivery_status: string
           edited_at: string | null
           id: string
+          is_automated: boolean
           is_internal_note: boolean
           last_attempt_at: string | null
           lease_until: string | null
@@ -19406,6 +19823,7 @@ export type Database = {
         Args: { node: Json }
         Returns: Json
       }
+      capture_league_prescriptions: { Args: { _now?: string }; Returns: number }
       claim_message_for_retry: {
         Args: { _message_id: string }
         Returns: {
@@ -19423,6 +19841,7 @@ export type Database = {
           delivery_status: string
           edited_at: string | null
           id: string
+          is_automated: boolean
           is_internal_note: boolean
           last_attempt_at: string | null
           lease_until: string | null
@@ -19470,6 +19889,7 @@ export type Database = {
           delivery_status: string
           edited_at: string | null
           id: string
+          is_automated: boolean
           is_internal_note: boolean
           last_attempt_at: string | null
           lease_until: string | null
@@ -19531,6 +19951,88 @@ export type Database = {
       classify_exercise_muscle: {
         Args: { p_existing: string; p_name: string }
         Returns: string
+      }
+      client_load_records: {
+        Args: { _client_id: string }
+        Returns: {
+          block_id: string
+          completed: boolean
+          exercise_id: string
+          exercise_key: string
+          exercise_name: string
+          is_atpr: boolean
+          is_block_pr: boolean
+          is_program_pr: boolean
+          load_kg: number
+          prep_id: string
+          prev_all_kg: number
+          prev_block_kg: number
+          prev_program_kg: number
+          reps: number
+          set_id: string
+          workout_at: string
+          workout_key: string
+        }[]
+      }
+      client_qualifying_sets: {
+        Args: { _client_id: string }
+        Returns: {
+          block_id: string
+          completed: boolean
+          exercise_id: string
+          exercise_key: string
+          exercise_name: string
+          load_kg: number
+          prep_id: string
+          reps: number
+          set_completed_at: string
+          set_id: string
+          workout_at: string
+          workout_key: string
+        }[]
+      }
+      client_recent_records: {
+        Args: { _client_id: string; _since?: string }
+        Returns: Json
+      }
+      client_rep_records: {
+        Args: { _client_id: string }
+        Returns: {
+          block_id: string
+          completed: boolean
+          exercise_id: string
+          exercise_key: string
+          exercise_name: string
+          is_atpr: boolean
+          is_block_pr: boolean
+          is_program_pr: boolean
+          load_kg: number
+          prep_id: string
+          prev_all_kg: number
+          prev_block_kg: number
+          prev_program_kg: number
+          reps: number
+          set_id: string
+          workout_at: string
+          workout_key: string
+        }[]
+      }
+      client_workout_tonnage: {
+        Args: { _client_id: string }
+        Returns: {
+          block_id: string
+          completed: boolean
+          is_atpr: boolean
+          is_block_pr: boolean
+          is_program_pr: boolean
+          prep_id: string
+          prev_all_kg: number
+          prev_block_kg: number
+          prev_program_kg: number
+          tonnage_kg: number
+          workout_at: string
+          workout_key: string
+        }[]
       }
       coach_has_template_share: {
         Args: { _template_id: string; _user_id: string }
@@ -19597,15 +20099,75 @@ export type Database = {
         Args: { p_entry_id: string; p_user_id: string }
         Returns: undefined
       }
+      dots_points: {
+        Args: { _bw: number; _sex: string; _total: number }
+        Returns: number
+      }
       email_queue_dispatch: { Args: never; Returns: undefined }
       enqueue_due_messenger_checkins: { Args: never; Returns: number }
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      exercise_derived_muscles: {
+        Args: { _category: string; _name: string; _primary_label: string }
+        Returns: Record<string, unknown>
+      }
+      exercise_family_for: {
+        Args: { _category?: string; _name: string }
+        Returns: string
+      }
       exercise_identity_name: { Args: { value: string }; Returns: string }
       exercise_identity_singular: { Args: { value: string }; Returns: string }
+      exercise_library_usage: {
+        Args: never
+        Returns: {
+          active_clients: number
+          exercise_id: string
+          logged_sets: number
+          logged_workouts: number
+          programs: number
+          templates: number
+        }[]
+      }
+      exercise_merge_preview: {
+        Args: { _canonical: string; _duplicate: string }
+        Returns: Json
+      }
+      exercise_muscle_profile: {
+        Args: { _category?: string; _name: string }
+        Returns: {
+          matched: boolean
+          primary_muscles: string[]
+          secondary_muscles: string[]
+        }[]
+      }
+      exercise_records: {
+        Args: {
+          _client_id: string
+          _exercise_id?: string
+          _exercise_name?: string
+        }
+        Returns: Json
+      }
+      exercise_usage_detail: {
+        Args: { _exercise_id: string }
+        Returns: {
+          block_id: string
+          block_name: string
+          block_status: string
+          client_id: string
+          client_name: string
+          last_logged_at: string
+          logged_sets: number
+          program_rows: number
+        }[]
+      }
       expire_overdue_sessions: { Args: never; Returns: number }
+      finalize_league_month: {
+        Args: { _month?: string; _now?: string }
+        Returns: number
+      }
       finalize_message_send: {
         Args: { _error?: string; _message_id: string; _status: string }
         Returns: undefined
@@ -19616,6 +20178,11 @@ export type Database = {
       }
       fn_apply_nutrition_cadence: {
         Args: { _target_id: string }
+        Returns: string
+      }
+      fn_last_friday_of_month: { Args: { _d: string }; Returns: string }
+      fn_next_last_friday: {
+        Args: { _from: string; _include_today?: boolean }
         Returns: string
       }
       fn_next_semi_monthly: { Args: { _from: string }; Returns: string }
@@ -19672,6 +20239,58 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_league_admin: {
+        Args: { _month?: string }
+        Returns: {
+          adherence_pct: number
+          award_reason: string
+          awarded_at: string
+          awarded_match: number
+          bodyweight_points: number
+          boost_possible: boolean
+          boost_qualified: boolean
+          boost_reason: string
+          boost_status: string
+          ceiling_points: number
+          client_id: string
+          completed_eligible: number
+          coverage: number
+          display_name: string
+          eligible_workouts: number
+          improvement_points: number
+          is_final_week: boolean
+          legit_workout_points: number
+          logging_points: number
+          match_target: number
+          month_closed: boolean
+          month_start: string
+          needed_workouts: number
+          open_workouts: number
+          projected_match: number
+          projected_total: number
+          qualified_for_board: boolean
+          rank: number
+          total_points: number
+          workout_points: number
+        }[]
+      }
+      get_league_admin_sessions: {
+        Args: { _client_id: string; _month?: string }
+        Returns: {
+          counted: boolean
+          day_id: string
+          done: boolean
+          excuse_reason: string
+          excused_at: string
+          first_seen_at: string
+          locked_at: string
+          note: string
+          removed_at: string
+          scheduled_date: string
+          title: string
+        }[]
+      }
+      get_league_month_recap: { Args: { _month?: string }; Returns: Json }
       get_membership_cleanup_job_status: {
         Args: never
         Returns: {
@@ -19712,6 +20331,45 @@ export type Database = {
           referral_discount_cents: number
           refund_status: string
           subscription_status: string
+        }[]
+      }
+      get_performance_league: {
+        Args: { _month?: string }
+        Returns: {
+          adherence_pct: number
+          atpr_lifts: number
+          avatar_url: string
+          block_pr_lifts: number
+          bodyweight_points: number
+          bodyweight_unit: string
+          bodyweight_value: number
+          boost_status: string
+          client_id: string
+          completed_eligible: number
+          display_name: string
+          eligible_workouts: number
+          final_week_start: string
+          finalized: boolean
+          fully_logged: number
+          improvement_points: number
+          is_final_week: boolean
+          is_me: boolean
+          last_record_at: string
+          logging_points: number
+          match_points: number
+          match_target: number
+          month_closed: boolean
+          month_start: string
+          needed_workouts: number
+          open_workouts: number
+          program_pr_lifts: number
+          projected_match: number
+          projected_total: number
+          qualified: boolean
+          rank: number
+          total_points: number
+          workout_points: number
+          workouts_completed: number
         }[]
       }
       get_powerlifting_athlete_roster: {
@@ -19767,6 +20425,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      ipf_gl_points: {
+        Args: { _bw: number; _sex: string; _total: number }
+        Returns: number
+      }
       is_active_coach: { Args: { _user_id: string }; Returns: boolean }
       is_admin_or_media_manager: { Args: { _uid: string }; Returns: boolean }
       is_assigned_coach: { Args: { _client_id: string }; Returns: boolean }
@@ -19784,6 +20446,7 @@ export type Database = {
       }
       is_client_owner: { Args: { _client_id: string }; Returns: boolean }
       is_coach_or_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_exercise_library_staff: { Args: never; Returns: boolean }
       is_group_admin: {
         Args: { _group_id: string; _user_id: string }
         Returns: boolean
@@ -19806,6 +20469,90 @@ export type Database = {
         Args: { new_text: string; node: Json; old_text: string }
         Returns: Json
       }
+      league_boost_start_month: { Args: never; Returns: string }
+      league_current_prescriptions: {
+        Args: { _month_end: string; _month_start: string }
+        Returns: {
+          client_id: string
+          day_id: string
+          scheduled_date: string
+        }[]
+      }
+      league_excuse_session: {
+        Args: {
+          _client_id: string
+          _day_id: string
+          _excuse?: boolean
+          _month?: string
+          _reason: string
+        }
+        Returns: undefined
+      }
+      league_is_staff: { Args: never; Returns: boolean }
+      league_min_prescribed: { Args: never; Returns: number }
+      league_month_bounds: {
+        Args: { _month?: string; _now?: string }
+        Returns: {
+          days_in_month: number
+          end_at: string
+          final_week_start: string
+          freeze_at: string
+          month_end: string
+          month_start: string
+          start_at: string
+        }[]
+      }
+      league_month_scores: {
+        Args: { _month?: string; _now?: string }
+        Returns: {
+          adherence_pct: number
+          atpr_lifts: number
+          avatar_url: string
+          base_total: number
+          block_pr_lifts: number
+          bodyweight_logged_at: string
+          bodyweight_logs: number
+          bodyweight_points: number
+          bodyweight_unit: string
+          bodyweight_value: number
+          boost_possible: boolean
+          boost_qualified: boolean
+          boost_reason: string
+          boost_status: string
+          ceiling_points: number
+          client_id: string
+          completed_eligible: number
+          coverage: number
+          display_name: string
+          eligible_workouts: number
+          final_week_start: string
+          finalized: boolean
+          fully_logged: number
+          improved_exercises: number
+          improvement_points: number
+          is_final_week: boolean
+          last_record_at: string
+          legit_workout_points: number
+          logging_points: number
+          match_points: number
+          match_target: number
+          month_closed: boolean
+          month_start: string
+          needed_workouts: number
+          open_workouts: number
+          program_pr_lifts: number
+          projected_match: number
+          projected_total: number
+          qualified: boolean
+          rank: number
+          total_points: number
+          user_id: string
+          workout_points: number
+          workouts_completed: number
+        }[]
+      }
+      league_records_start_month: { Args: never; Returns: string }
+      league_tz: { Args: never; Returns: string }
       legal_effective_enforcement: {
         Args: { _doc_id: string; _user_id: string }
         Returns: string
@@ -19829,6 +20576,7 @@ export type Database = {
           delivery_status: string
           edited_at: string | null
           id: string
+          is_automated: boolean
           is_internal_note: boolean
           last_attempt_at: string | null
           lease_until: string | null
@@ -19930,6 +20678,14 @@ export type Database = {
         Returns: boolean
       }
       member_setup_complete: { Args: { _member_id: string }; Returns: boolean }
+      merge_duplicate_exercise: {
+        Args: { _canonical: string; _dup: string; _reason: string }
+        Returns: undefined
+      }
+      message_attachment_kinds: {
+        Args: { _attachments: Json }
+        Returns: string[]
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -19939,6 +20695,8 @@ export type Database = {
         }
         Returns: number
       }
+      muscle_key_from_label: { Args: { _label: string }; Returns: string }
+      muscle_label_from_key: { Args: { _key: string }; Returns: string }
       na_transition_package: {
         Args: {
           _details?: Json
@@ -20024,6 +20782,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      note_inbound_activity: {
+        Args: { _at: string; _client_id: string; _kind: string }
+        Returns: undefined
       }
       notif_archive: { Args: { items: Json }; Returns: number }
       notif_mark_read: { Args: { items: Json }; Returns: number }
@@ -20152,6 +20914,7 @@ export type Database = {
         Args: { _pt_session_id: string }
         Returns: undefined
       }
+      resolve_exercise_id: { Args: { _name: string }; Returns: string }
       retry_failed_schedule: {
         Args: { _actor: string; _schedule_id: string }
         Returns: {
@@ -20180,6 +20943,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      run_league_automation: { Args: never; Returns: Json }
       run_messenger_checkin_automation: { Args: never; Returns: Json }
       save_progress_bodyweight: {
         Args: {
@@ -20222,6 +20986,34 @@ export type Database = {
           used: number
         }[]
       }
+      set_conversation_workflow: {
+        Args: { _client_id: string; _status: string }
+        Returns: undefined
+      }
+      staff_inbox_state: {
+        Args: never
+        Returns: {
+          archived: boolean
+          client_id: string
+          last_inbound_at: string
+          last_inbound_kind: string
+          my_last_read_at: string
+          unread: boolean
+          unread_count: number
+          workflow_reason: string
+          workflow_status: string
+          workflow_status_updated_at: string
+          workflow_updated_by_name: string
+        }[]
+      }
+      staff_mark_conversation_read: {
+        Args: { _client_id: string }
+        Returns: undefined
+      }
+      staff_mark_conversation_unread: {
+        Args: { _client_id: string }
+        Returns: undefined
+      }
       sync_athlete_achievements: {
         Args: { _client_id: string }
         Returns: undefined
@@ -20241,6 +21033,22 @@ export type Database = {
       user_is_active: { Args: { _user_id: string }; Returns: boolean }
       validate_discount_codes: {
         Args: { _codes: string[]; _customer_id?: string; _product_id?: string }
+        Returns: Json
+      }
+      workout_points_summary: {
+        Args: {
+          _client_id: string
+          _day_id?: string
+          _scheduled_workout_id?: string
+        }
+        Returns: Json
+      }
+      workout_records: {
+        Args: {
+          _client_id: string
+          _day_id?: string
+          _scheduled_workout_id?: string
+        }
         Returns: Json
       }
       xp_client_for_user: { Args: { _uid: string }; Returns: string }
