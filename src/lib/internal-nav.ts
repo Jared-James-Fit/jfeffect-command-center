@@ -189,10 +189,6 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "operations"] },
   { to: "/admin/staff", label: "Staff & Media Managers", icon: UserPlus, group: "Team",
     visibleTo: ["admin", "operations"] },
-  { to: "/admin/approvals", label: "Approvals Queue", icon: ClipboardCheck, group: "Team",
-    visibleTo: ["admin", "operations"], section: "Media & Approvals" },
-  { to: "/admin/media-review", label: "Media Inbox", icon: Film, group: "Team",
-    visibleTo: ["admin", "media_manager", "operations"], section: "Media & Approvals" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team",
     visibleTo: ["admin", "media_manager", "operations"], section: "Media & Approvals" },
 
@@ -470,7 +466,6 @@ export function buildMembershipAdminNav(): NavItem[] {
         { to: "/admin/program-library", label: "Workout Library", icon: Library },
         { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
         { to: "/admin/recipes", label: "Recipes", icon: ChefHat },
-        { to: "/admin/member-resources", label: "Resources", icon: FolderOpen },
         { to: "/admin/membership/challenges", label: "Challenges", icon: Trophy },
       ],
     },
