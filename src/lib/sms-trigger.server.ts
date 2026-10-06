@@ -170,6 +170,8 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
     };
 
     let fired = 0;
+    // Why nothing went out, so a caller can tell the coach (no phone, not on the allowlist…).
+    let skipped: string | undefined;
     for (const auto of automations) {
       const body = renderTemplate(auto.body, baseVars);
       const logBase: any = {
@@ -196,11 +198,13 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
       if (optOut) {
         await supabaseAdmin.from("sms_log").insert({ ...logBase, status: "skipped", error: "opted_out" });
         if (gated) await recordAttempt(supabaseAdmin, { ...attemptBase, decision: "skipped", reason: "opted_out" });
+        skipped = "opted_out";
         continue;
       }
       if (!toPhone) {
         await supabaseAdmin.from("sms_log").insert({ ...logBase, status: "skipped", error: "no_phone" });
         if (gated) await recordAttempt(supabaseAdmin, { ...attemptBase, decision: "skipped", reason: "no_phone" });
+        skipped = "no_phone";
         continue;
       }
 
@@ -217,6 +221,7 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
             reason: "safety_mode_dry_run",
             sms_log_id: logRow?.id ?? null,
           });
+          skipped = "dry_run_mode";
           continue;
         }
         if (safety.mode === "allowlist") {
@@ -232,6 +237,7 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
               reason: "not_on_allowlist",
               sms_log_id: logRow?.id ?? null,
             });
+            skipped = "not_on_allowlist";
             continue;
           }
         }
@@ -262,9 +268,10 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
           reason: e?.message ?? String(e),
           sms_log_id: logRow?.id ?? null,
         });
+        skipped = e?.message ?? String(e);
       }
     }
-    return { fired };
+    return fired > 0 ? { fired } : { fired, reason: skipped };
   } catch (e: any) {
     console.error("[sms-trigger] error", e);
     return { fired: 0, error: e?.message ?? String(e) };

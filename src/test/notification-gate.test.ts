@@ -147,3 +147,16 @@ describe("Membership notification safety gate", () => {
     expect(attempt).toBeUndefined();
   });
 });
+describe("says why a text didn't go out", () => {
+  it("reports no_phone when there is no number to text", async () => {
+    const { sb } = buildSupabase({ mode: "live", memberPhone: null });
+    const out: any = await fireAutomationTrigger(sb, { trigger: "account_created", memberId: "mem-1" });
+    expect(out).toEqual({ fired: 0, reason: "no_phone" });
+  });
+
+  it("reports not_on_allowlist when membership texts are limited to the allowlist", async () => {
+    const { sb } = buildSupabase({ mode: "allowlist", allowlistPhones: ["+15559999999"], memberPhone: "+15551234567" });
+    const out: any = await fireAutomationTrigger(sb, { trigger: "subscription_purchased", memberId: "mem-1" });
+    expect(out).toEqual({ fired: 0, reason: "not_on_allowlist" });
+  });
+});

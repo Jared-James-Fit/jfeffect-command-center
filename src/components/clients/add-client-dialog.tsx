@@ -4,19 +4,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { getSetupLink, inviteClient } from "@/lib/clients.functions";
 import { sendAuthLinkBySms } from "@/lib/sms-links.functions";
-import { normalizePhoneNumber, setupMessageText, smsComposeHref } from "@/lib/setup-message";
-import { AlertCircle, CheckCircle2, Copy, MessageSquare } from "lucide-react";
+import { SetupSentPanel, type SetupOutcome } from "./setup-sent-panel";
+import { normalizePhoneToE164 } from "@/lib/phone-e164";
 import { toast } from "sonner";
 
 const TYPES = ["Online Coaching", "In-Person Coaching", "Hybrid Coaching", "Powerlifting", "Bodybuilding", "Fat Loss", "Muscle Gain", "Lifestyle"];
 
-type Outcome = { ok: true } | { ok: false; error: string };
+type Outcome = SetupOutcome;
 type Sent = {
   clientId: string;
   firstName: string;
@@ -61,7 +60,7 @@ export function AddClientDialog({
   const submit = async () => {
     const full_name = name.trim().replace(/\s+/g, " ");
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPhone = normalizePhoneNumber(phone);
+    const cleanPhone = normalizePhoneToE164(phone);
     if (!full_name) return toast.error("Name is required");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return toast.error("Enter a valid email");
     if (!cleanPhone) return toast.error("Enter a valid mobile number");
@@ -107,17 +106,6 @@ export function AddClientDialog({
       toast.error(e?.message ?? "Failed to create client");
     } finally {
       setBusy(false);
-    }
-  };
-
-  const message = sent?.url ? setupMessageText({ firstName: sent.firstName, url: sent.url }) : "";
-
-  const copyMessage = async () => {
-    try {
-      await navigator.clipboard.writeText(message);
-      toast.success("Setup message copied");
-    } catch {
-      toast.error("Couldn't copy. Select the message and copy it.");
     }
   };
 
@@ -170,33 +158,15 @@ export function AddClientDialog({
               <DialogTitle>Send {sent.firstName}'s setup</DialogTitle>
               <DialogDescription>Their account is ready. Here's how the setup link went out.</DialogDescription>
             </DialogHeader>
-            <ul className="space-y-2 text-sm" aria-label="Setup link delivery">
-              <SentLine label={`Email to ${sent.email}`} outcome={sent.emailed} />
-              <SentLine label={`Text to ${sent.phone}`} outcome={sent.texted} />
-            </ul>
-            {sent.url ? (
-              <div className="space-y-2">
-                <Label htmlFor="setup-message">Setup message</Label>
-                <Textarea id="setup-message" readOnly value={message} rows={6} className="text-sm" onFocus={(e) => e.currentTarget.select()} />
-                <p className="text-xs text-muted-foreground">
-                  Emails can land in spam. Sending this from your own phone is the surest way in.
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Button className="min-h-[44px]" onClick={copyMessage}>
-                    <Copy className="mr-2 h-4 w-4" /> Copy message
-                  </Button>
-                  <Button asChild variant="outline" className="min-h-[44px]">
-                    <a href={smsComposeHref(sent.phone, message)}>
-                      <MessageSquare className="mr-2 h-4 w-4" /> Text from my phone
-                    </a>
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-destructive">
-                Couldn't create a setup link{sent.linkError ? `: ${sent.linkError}` : ""}. Open the client and use Copy setup message.
-              </p>
-            )}
+            <SetupSentPanel
+              firstName={sent.firstName}
+              email={sent.email}
+              phone={sent.phone}
+              emailed={sent.emailed}
+              texted={sent.texted}
+              url={sent.url}
+              linkError={sent.linkError}
+            />
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
               <Button onClick={openClient}>Open client</Button>
@@ -208,16 +178,3 @@ export function AddClientDialog({
   );
 }
 
-function SentLine({ label, outcome }: { label: string; outcome: Outcome }) {
-  return (
-    <li className="flex items-start gap-2">
-      {outcome.ok
-        ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-        : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />}
-      <span className="min-w-0">
-        <span className="font-medium">{label}</span>
-        <span className="text-muted-foreground">{outcome.ok ? " · sent" : ` · not sent: ${outcome.error}`}</span>
-      </span>
-    </li>
-  );
-}

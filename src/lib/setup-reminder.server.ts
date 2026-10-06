@@ -41,7 +41,7 @@ export async function sendSetupReminderEmail(
   supabaseAdmin: any,
   member: MemberLike,
   origin: string,
-  opts: { force?: boolean; customNote?: string } = {},
+  opts: { force?: boolean; customNote?: string; setupUrl?: string } = {},
 ): Promise<SetupReminderEmailResult> {
   try {
     if (!member.email) return { sent: false, reason: 'no_email' }
@@ -98,6 +98,7 @@ export async function sendSetupReminderEmail(
       install_url: `${baseOrigin}/install`,
       support_email: 'jaredjamesfit@gmail.com',
       custom_note: opts.customNote?.trim() || undefined,
+      setup_url: opts.setupUrl || undefined,
     }
 
     const element = React.createElement(template.component, templateData)

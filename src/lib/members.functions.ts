@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
+import { smsNotSentReason } from "@/lib/setup-message";
 
 function genToken(len = 32) {
   const arr = new Uint8Array(len);
@@ -87,6 +88,8 @@ export const getMember = createServerFn({ method: "GET" })
 const CreateMemberInput = z.object({
   email: z.string().email(),
   full_name: z.string().min(1).max(200),
+  /** Mobile number for the setup text. Normalized to +E.164. */
+  phone: z.string().trim().max(40).optional(),
   account_type: z.enum(["app_member", "program_only", "jf_member"]).default("app_member"),
   initial_access_keys: z.array(z.string()).optional(),
   apply_defaults: z.boolean().optional().default(true),
@@ -97,6 +100,8 @@ export const createAppMember = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => CreateMemberInput.parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
+    const phone = data.phone ? normalizePhoneToE164(data.phone) : null;
+    if (data.phone && !phone) throw new Error("Enter a valid mobile number");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const setup_token = genToken();
     const setup_token_expires_at = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
@@ -105,6 +110,7 @@ export const createAppMember = createServerFn({ method: "POST" })
       .insert({
         email: data.email,
         full_name: data.full_name,
+        phone,
         account_type: data.account_type,
         status: "Active",
         setup_token,
@@ -125,13 +131,32 @@ export const createAppMember = createServerFn({ method: "POST" })
     if (data.apply_defaults !== false) {
       await supabaseAdmin.rpc("apply_default_member_access", { _member_id: row.id });
     }
-    // Fire SMS automations registered for the "account_created" trigger.
-    // Skip if subscription_purchased already claimed this member's
-    // onboarding SMS (membership_onboarding:<member_id>:sms).
+    // Same onboarding as a coaching client: the setup link goes out by email and text
+    // straight away, and the coach gets the outcome plus a message to send themselves.
+    type Outcome = { ok: true } | { ok: false; error: string };
+    // Absolute: this link goes into an email and a text.
+    const origin = getOrigin() || "https://jfeffect.com";
+    const setupUrl = `${origin}/member-setup?token=${setup_token}`;
+
+    let emailed: Outcome;
+    try {
+      const { sendSetupReminderEmail } = await import("@/lib/setup-reminder.server");
+      const res = await sendSetupReminderEmail(
+        supabaseAdmin,
+        { id: row.id, email: row.email, full_name: row.full_name },
+        origin,
+        { force: true, setupUrl },
+      );
+      emailed = res.sent ? { ok: true } : { ok: false, error: res.error ?? res.reason };
+    } catch (e: any) {
+      emailed = { ok: false, error: e?.message ?? String(e) };
+    }
+
+    // Text through the "account_created" automation. Skip if subscription_purchased already
+    // claimed this member's onboarding SMS (membership_onboarding:<member_id>:sms).
+    let texted: Outcome;
     try {
       const { fireAutomationTrigger } = await import("@/lib/sms-trigger.server");
-      const origin = getOrigin();
-      const link = `${origin}/member-setup?token=${setup_token}`;
       const dedupeKey = `membership_onboarding:${row.id}:sms`;
       // Atomically claim the dedupe slot before firing. If a row already exists
       // the INSERT conflicts and we skip the send.
@@ -145,16 +170,22 @@ export const createAppMember = createServerFn({ method: "POST" })
         })
         .select("key");
       if (!claimErr && claimed && claimed.length > 0) {
-        await fireAutomationTrigger(supabaseAdmin, {
+        const res: any = await fireAutomationTrigger(supabaseAdmin, {
           trigger: "account_created",
           memberId: row.id,
-          vars: { setup_link: link },
+          vars: { setup_link: setupUrl },
         });
+        texted = res?.fired > 0
+          ? { ok: true }
+          : { ok: false, error: smsNotSentReason(res?.reason ?? res?.error) };
+      } else {
+        texted = { ok: false, error: "a setup text was already sent" };
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("[createAppMember] automation trigger failed", e);
+      texted = { ok: false, error: e?.message ?? String(e) };
     }
-    return { member: row };
+    return { member: row, setupUrl, emailed, texted };
   });
 
 const UpdateMemberInput = z.object({

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { render } from "@react-email/components";
 import { InviteEmail } from "@/lib/email-templates/invite";
 import { RecoveryEmail } from "@/lib/email-templates/recovery";
+import { template as setupReminder } from "@/lib/email-templates/setup-reminder";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const LINK = "https://jfeffect.com/setup?token_hash=abc123&type=invite";
@@ -43,5 +44,25 @@ describe("onboarding emails", () => {
     expect(hook).toContain("invite: 'Set up your JF Effect account'");
     expect(hook).toContain("recovery: 'Set your JF Effect password'");
     expect(hook).not.toContain("You've been invited");
+  });
+});
+
+describe("member setup email", () => {
+  const MEMBER_LINK = "https://jfeffect.com/member-setup?token=abc123";
+
+  it("asks a new member to create their password, with the link as text too", async () => {
+    const data = { first_name: "Bob", setup_url: MEMBER_LINK };
+    const html = await render(React.createElement(setupReminder.component, data));
+    expect(html.split(`href="${MEMBER_LINK}"`).length - 1).toBe(2);
+    expect(html).toContain("Set up my account");
+    expect(html).toContain("Button not working? Copy this link into your browser:");
+    expect((setupReminder.subject as (d: any) => string)(data)).toBe("Bob, your JF Effect account is ready");
+  });
+
+  it("is still the install reminder when there's no setup link", async () => {
+    const html = await render(React.createElement(setupReminder.component, { first_name: "Bob" }));
+    expect(html).toContain("Install JF Effect on my phone");
+    expect(html).not.toContain("Set up my account");
+    expect((setupReminder.subject as (d: any) => string)({ first_name: "Bob" })).toBe("Bob, finish setting up your JF Effect app");
   });
 });

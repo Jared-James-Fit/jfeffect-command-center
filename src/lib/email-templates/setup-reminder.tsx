@@ -10,6 +10,8 @@ export interface SetupReminderProps {
   install_url?: string
   support_email?: string
   custom_note?: string
+  /** A brand-new account's one-time setup link. The email then asks them to create a password. */
+  setup_url?: string
 }
 
 const SetupReminderEmail = (p: SetupReminderProps) => {
@@ -17,19 +19,33 @@ const SetupReminderEmail = (p: SetupReminderProps) => {
   const appUrl = p.app_url || 'https://jfeffect.com/auth'
   const installUrl = p.install_url || 'https://jfeffect.com/install'
   const support = p.support_email || 'jaredjamesfit@gmail.com'
+  const setupUrl = p.setup_url
 
   return (
     <Html lang="en" dir="ltr">
       <Head />
-      <Preview>Finish setting up your JF Effect app — it takes about a minute.</Preview>
+      <Preview>
+        {setupUrl
+          ? 'Your JF Effect account is ready. Create your password to get started.'
+          : 'Finish setting up your JF Effect app — it takes about a minute.'}
+      </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Heading style={h1}>Let's finish setting up your app, {firstName}.</Heading>
-          <Text style={text}>
-            Your JF Effect account is ready — you just haven't installed the app or finished
-            your setup checklist yet. It takes about a minute and means your training, messages,
-            and check‑ins live one tap away on your phone.
-          </Text>
+          <Heading style={h1}>
+            {setupUrl ? `Your JF Effect account is ready, ${firstName}.` : `Let's finish setting up your app, ${firstName}.`}
+          </Heading>
+          {setupUrl ? (
+            <Text style={text}>
+              Tap the button to create your password. It takes about a minute, then your
+              training, messages and check-ins are one tap away on your phone.
+            </Text>
+          ) : (
+            <Text style={text}>
+              Your JF Effect account is ready — you just haven't installed the app or finished
+              your setup checklist yet. It takes about a minute and means your training, messages,
+              and check‑ins live one tap away on your phone.
+            </Text>
+          )}
 
           {p.custom_note ? (
             <Section style={noteSection}>
@@ -37,13 +53,26 @@ const SetupReminderEmail = (p: SetupReminderProps) => {
             </Section>
           ) : null}
 
-          <Section style={ctaSection}>
-            <Button style={button} href={installUrl}>Install JF Effect on my phone</Button>
-          </Section>
+          {setupUrl ? (
+            <>
+              <Section style={ctaSection}>
+                <Button style={button} href={setupUrl}>Set up my account</Button>
+              </Section>
+              {/* Gmail disables buttons in anything it files under Spam; the text link can still be copied. */}
+              <Text style={textTight}>Button not working? Copy this link into your browser:</Text>
+              <Text style={text}><Link href={setupUrl} style={link}>{setupUrl}</Link></Text>
+            </>
+          ) : (
+            <>
+              <Section style={ctaSection}>
+                <Button style={button} href={installUrl}>Install JF Effect on my phone</Button>
+              </Section>
 
-          <Text style={text}>
-            Already installed and just need to sign in? <Link href={appUrl} style={link}>Open the app</Link>.
-          </Text>
+              <Text style={text}>
+                Already installed and just need to sign in? <Link href={appUrl} style={link}>Open the app</Link>.
+              </Text>
+            </>
+          )}
 
           <Hr style={hr} />
 
@@ -68,7 +97,9 @@ export const template = {
   component: SetupReminderEmail,
   subject: (data: Record<string, any>) => {
     const first = (data?.first_name || 'there').toString().trim() || 'there'
-    return `${first}, finish setting up your JF Effect app`
+    return data?.setup_url
+      ? `${first}, your JF Effect account is ready`
+      : `${first}, finish setting up your JF Effect app`
   },
   displayName: 'Setup reminder (admin send)',
   previewData: {
@@ -87,7 +118,7 @@ const h1 = { fontSize: '24px', fontWeight: 'bold' as const, color: '#0b0b0b', ma
 const h2 = { fontSize: '15px', fontWeight: 'bold' as const, color: '#0b0b0b', margin: '24px 0 8px' }
 const text = { fontSize: '15px', color: '#3a3a3a', lineHeight: '1.55', margin: '0 0 14px' }
 const textTight = { fontSize: '14px', color: '#3a3a3a', lineHeight: '1.5', margin: '0 0 4px' }
-const link = { color: '#0b0b0b', textDecoration: 'underline' }
+const link = { color: '#0b0b0b', textDecoration: 'underline', wordBreak: 'break-all' as const }
 const ctaSection = { margin: '20px 0 28px' }
 const noteSection = { backgroundColor: '#f5f5f5', borderRadius: '10px', padding: '14px 16px', margin: '0 0 20px' }
 const noteText = { fontSize: '14px', color: '#3a3a3a', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' as const }

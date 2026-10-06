@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { greetingName, normalizePhoneNumber, setupMessageText, smsComposeHref } from "@/lib/setup-message";
+import { greetingName, setupMessageText, smsComposeHref, smsNotSentReason } from "@/lib/setup-message";
 import { copyTextToClipboard } from "@/lib/copy-text";
 
 const read = (path: string) => readFileSync(path, "utf8");
@@ -28,12 +28,17 @@ describe("setup message", () => {
     expect(greetingName(null)).toBeNull();
   });
 
-  it("normalizes North American numbers and rejects ones that can't be real", () => {
-    expect(normalizePhoneNumber("(204) 555-0123")).toBe("+12045550123");
-    expect(normalizePhoneNumber("1-204-555-0123")).toBe("+12045550123");
-    expect(normalizePhoneNumber("+44 7700 900123")).toBe("+447700900123");
-    expect(normalizePhoneNumber("555-0123")).toBeNull();
-    expect(normalizePhoneNumber("")).toBeNull();
+  it("skips the Continue step for member links, which open on the password form", () => {
+    const msg = setupMessageText({ firstName: "Bob", url: URL, continueStep: false });
+    expect(msg).toContain("Tap it, then create your password.");
+    expect(msg).not.toContain("Continue");
+  });
+
+  it("explains in plain English why a setup text didn't go out", () => {
+    expect(smsNotSentReason("no_phone")).toBe("no mobile number on file");
+    expect(smsNotSentReason("not_on_allowlist")).toContain("allowlist");
+    expect(smsNotSentReason("Twilio error (400)")).toBe("Twilio error (400)");
+    expect(smsNotSentReason(undefined)).toBe("unknown error");
   });
 
   it("opens the coach's Messages app with the whole message", () => {
@@ -75,7 +80,7 @@ describe("new client onboarding wiring", () => {
   const dialog = read("src/components/clients/add-client-dialog.tsx");
 
   it("needs a real email and mobile number to create the client", () => {
-    expect(dialog).toContain("normalizePhoneNumber(phone)");
+    expect(dialog).toContain("normalizePhoneToE164(phone)");
     expect(dialog).toContain('toast.error("Enter a valid mobile number")');
     expect(dialog).toContain("phone: cleanPhone,");
   });
@@ -99,5 +104,28 @@ describe("new client onboarding wiring", () => {
     const sms = read("src/lib/sms-links.functions.ts");
     const fn = sms.slice(sms.indexOf("export const sendAuthLinkBySms"), sms.indexOf("const url = await generateAuthLink("));
     expect(fn).toContain("await assertNotPrivilegedTarget(");
+  });
+});
+
+describe("members onboard the same way as coaching clients", () => {
+  const page = read("src/routes/_authenticated/admin/members.new.tsx");
+  const server = read("src/lib/members.functions.ts");
+  const create = server.slice(server.indexOf("export const createAppMember"), server.indexOf("const UpdateMemberInput"));
+
+  it("needs a real mobile number and shows the same setup step", () => {
+    expect(page).toContain("normalizePhoneToE164(phone)");
+    expect(page).toContain("phone: cleanPhone,");
+    expect(page).toContain("<SetupSentPanel");
+    expect(page).toContain("continueStep={false}");
+    expect(read("src/components/clients/add-client-dialog.tsx")).toContain("<SetupSentPanel");
+  });
+
+  it("stores the phone, then emails and texts the setup link and reports both", () => {
+    expect(create).toContain("        phone,\n");
+    expect(create).toContain("sendSetupReminderEmail(");
+    expect(create).toContain("{ force: true, setupUrl }");
+    expect(create).toContain('trigger: "account_created"');
+    expect(create).toContain("vars: { setup_link: setupUrl }");
+    expect(create).toContain("return { member: row, setupUrl, emailed, texted };");
   });
 });
