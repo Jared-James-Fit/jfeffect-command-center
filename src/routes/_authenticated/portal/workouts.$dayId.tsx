@@ -11,6 +11,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 import { parseLocalDate } from "@/lib/today";
+import { prefetchWorkoutOpen } from "@/lib/workout-prefetch";
+import { portalRouteMyClientKey } from "@/lib/workout-query-keys";
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
   validateSearch: (s: Record<string, unknown>): { readonly?: 1; edit?: 1; review?: 1; recap?: 1; instance?: string } => ({
@@ -26,6 +28,17 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/$dayId")({
     // instances of the same source day keep independent state.
     instance: typeof s.instance === "string" && s.instance.length > 0 ? s.instance : undefined,
   }),
+  // Warm the cache the moment the athlete touches/hovers the link (router
+  // preload "intent") and again on navigation: client, day, exercises and
+  // logged sets load in parallel with the page's JS instead of after it.
+  // Deliberately NOT awaited, so it can never delay or block the page.
+  loaderDeps: ({ search }) => ({ instance: search.instance }),
+  loader: ({ context, params, deps }) => {
+    void prefetchWorkoutOpen(context.queryClient, {
+      dayId: params.dayId,
+      instanceId: (deps as { instance?: string }).instance ?? null,
+    });
+  },
   component: RouteComponent,
   // Capture render/load errors on this route so the page degrades gracefully
   // on mobile instead of showing a hard crash screen, and surface the stack
@@ -79,7 +92,7 @@ function RouteComponent() {
   const portalUserId = usePortalUserId();
   const { client: povClient } = useClientImpersonation();
   const { data: ownClient } = useQuery({
-    queryKey: ["portal-route-my-client", portalUserId],
+    queryKey: portalRouteMyClientKey(portalUserId),
     enabled: !!portalUserId && !povClient?.id,
     queryFn: async () =>
       (await supabase.from("clients").select("id, user_id").eq("user_id", portalUserId!).maybeSingle()).data,
