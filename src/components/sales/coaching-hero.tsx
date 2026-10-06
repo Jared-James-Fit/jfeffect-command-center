@@ -3,47 +3,46 @@ import type { ReactNode } from "react";
 import { MessageCircle, Dumbbell, ClipboardCheck, TrendingUp } from "lucide-react";
 
 export function CoachingHero({
-  eyebrow, headline, sub, primary, secondary,
+  eyebrow, headline, sub, primary, secondary, note,
 }: {
   eyebrow?: string;
   headline: string;
   sub: string;
   primary: ReactNode;
   secondary?: ReactNode;
+  note?: string;
   /** @deprecated kept for backward compatibility — no longer rendered */
   image?: string | null;
 }) {
   return (
-    <section className="relative isolate overflow-hidden border-b border-white/10 bg-[#0a0a0a] text-white">
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_18%_30%,_color-mix(in_oklab,var(--primary)_22%,transparent),transparent_55%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_85%_75%,_color-mix(in_oklab,var(--primary)_14%,transparent),transparent_60%)]" />
-        <div className="absolute inset-0 opacity-[0.04] mix-blend-overlay [background-image:radial-gradient(circle_at_1px_1px,#fff_1px,transparent_0)] [background-size:3px_3px]" />
-      </div>
-
-      <div className="container mx-auto grid gap-12 px-4 py-20 md:py-28 lg:grid-cols-[1.05fr_1fr] lg:items-center">
-        <div className="relative">
+    <section className="relative isolate overflow-hidden">
+      {/* Barely-there brand glow — same calm backdrop as the sign-in screen. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px]"
+        style={{ background: "radial-gradient(60% 100% at 50% 0%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 100%)" }}
+      />
+      <div className="mx-auto grid max-w-5xl gap-12 px-5 pb-14 pt-24 md:pb-20 md:pt-32 lg:grid-cols-[1.1fr_.9fr] lg:items-center">
+        <div className="jf-auth-rise text-center lg:text-left">
           {eyebrow && (
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/50 bg-primary/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3.5 py-1.5 text-[13px] font-semibold text-primary">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
               {eyebrow}
             </div>
           )}
-          <h1 className="mt-6 max-w-[22ch] text-4xl font-black leading-[1.02] tracking-tight md:text-6xl lg:text-[4.25rem]">
+          <h1 className="mx-auto mt-5 max-w-[16ch] text-balance text-[42px] font-semibold leading-[1.04] tracking-[-0.03em] md:text-[64px] lg:mx-0">
             {headline}
           </h1>
-          <p className="mt-5 max-w-xl text-base text-white/75 md:text-lg">{sub}</p>
+          <p className="mx-auto mt-5 max-w-xl text-[19px] leading-relaxed text-muted-foreground lg:mx-0">{sub}</p>
 
-          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
+          <div className="mt-8 flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-center lg:justify-start">
             {primary}
             {secondary}
           </div>
-          <p className="mt-4 text-[11px] uppercase tracking-[0.22em] text-white/55">
-            Application required · Limited client capacity
-          </p>
+          {note && <p className="mt-4 text-[13px] text-muted-foreground">{note}</p>}
         </div>
 
-        <div className="relative mx-auto w-full max-w-[420px] lg:max-w-none">
+        <div className="relative mx-auto w-full max-w-[420px] lg:max-w-none" aria-hidden>
           <CoachingAppPreview />
         </div>
       </div>
@@ -53,7 +52,7 @@ export function CoachingHero({
 
 function CoachingAppPreview() {
   return (
-    <div className="relative mx-auto aspect-[9/19] w-[260px] rounded-[2.4rem] border border-white/[0.08] bg-gradient-to-b from-[#1A1E27] via-[#0d0f13] to-[#000] p-[6px] shadow-[0_40px_90px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.04)_inset] md:w-[300px]">
+    <div className="relative mx-auto aspect-[9/19] w-[260px] rounded-[2.4rem] border border-white/[0.08] bg-gradient-to-b from-[#1A1E27] via-[#0d0f13] to-[#000] p-[6px] shadow-[0_30px_60px_-28px_rgba(0,0,0,0.45),0_0_0_1px_rgba(255,255,255,0.04)_inset] md:w-[300px]">
       <div className="absolute inset-[6px] rounded-[2.05rem] ring-1 ring-white/[0.04]" />
       <div className="absolute left-1/2 top-[10px] z-10 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-black" />
       <div className="relative h-full w-full overflow-hidden rounded-[2rem] bg-[#0A0B0E] text-white">
