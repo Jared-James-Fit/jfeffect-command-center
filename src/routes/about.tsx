@@ -4,8 +4,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { BadgeCheck, CheckCircle2, ChevronDown, MapPin, ShieldCheck, Users } from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
+import { INQUIRY_DM_URL, SOCIAL_URLS } from "@/lib/social-links";
 import { Reveal } from "@/components/sales/reveal";
-import { Block, Group, Heading, IconTile, PrimaryCta, Rail, Stat, Surface, TextLink } from "@/components/sales/apple";
+import { Block, Group, Heading, IconTile, PrimaryCta, Rail, SocialLinks, Stat, Surface, TextLink } from "@/components/sales/apple";
 import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
 import phillipAsset from "@/assets/athletes/phillip.png.asset.json";
 import dwayneAsset from "@/assets/athletes/dwayne.png.asset.json";
@@ -18,9 +19,9 @@ const dwayneAthleteImage = dwayneAsset.url;
 const frederickAthleteImage = frederickAsset.url;
 const elisaAthleteImage = elisaAsset.url;
 
-const TITLE = "About Jared James | Team Canada Powerlifter & JF Effect Founder";
+const TITLE = "About Jared McIntyre | Team Canada Powerlifter & JF Effect Founder";
 const DESCRIPTION =
-  "Meet Jared James, founder of JF Effect: Team Canada powerlifter, 2× international champion, Top 50 all-time 66 kg lifter, certified personal trainer, and coach to 100+ clients.";
+  "Meet Jared McIntyre, founder of JF Effect: Team Canada powerlifter, 2× international champion, Top 50 all-time 66 kg lifter, certified personal trainer, and coach to 100+ clients.";
 const URL = "https://jfeffect.com/about";
 
 type ResultRow = { primary: string; secondary: string };
@@ -402,11 +403,12 @@ export const Route = createFileRoute("/about")({
         children: JSON.stringify({
           "@context": "https://schema.org",
           "@type": "Person",
-          "@id": URL + "#jared-james",
-          name: "Jared James",
+          "@id": URL + "#jared-mcintyre",
+          name: "Jared McIntyre",
           jobTitle: "Personal Trainer, Online Fitness Coach & Strength Coach",
           url: URL,
           worksFor: { "@type": "Organization", name: "JF Effect", url: "https://jfeffect.com" },
+          sameAs: SOCIAL_URLS,
           address: { "@type": "PostalAddress", addressLocality: "Selkirk", addressRegion: "MB", addressCountry: "CA" },
           knowsAbout: ["Personal Training", "Strength Training", "Powerlifting", "Bodybuilding", "Fat Loss Coaching", "Online Fitness Coaching", "Nutrition Coaching"],
           award: ["2026 NAPF North American Champion", "2026 Commonwealth Champion", "2022 MPA Male Athlete of the Year", "2018 MABBA Men's Physique Champion"],
@@ -436,7 +438,7 @@ function AboutJaredPage() {
         />
         <div className="mx-auto grid max-w-5xl gap-10 px-5 pb-12 pt-24 md:pt-32 lg:grid-cols-[1.1fr_.9fr] lg:items-center">
           <div className="jf-auth-rise text-center lg:text-left">
-            <div className="inline-flex items-center rounded-full bg-primary/10 px-3.5 py-1.5 text-[13px] font-semibold text-primary">About Jared James</div>
+            <div className="inline-flex items-center rounded-full bg-primary/10 px-3.5 py-1.5 text-[13px] font-semibold text-primary">About Jared McIntyre</div>
             <h1 className="mx-auto mt-5 max-w-[18ch] text-balance text-[38px] font-semibold leading-[1.05] tracking-[-0.03em] md:text-[56px] lg:mx-0">
               Coach. Team Canada athlete. 2× International Champion.
             </h1>
@@ -448,11 +450,15 @@ function AboutJaredPage() {
               <PrimaryCta to="/coaching/apply">Apply for Coaching</PrimaryCta>
               <TextLink to="/personal-trainer-selkirk">Train with me in person</TextLink>
             </div>
+            <div className="mt-6 flex flex-col items-center gap-2 lg:items-start">
+              <div className="text-[13px] text-muted-foreground">Follow along</div>
+              <SocialLinks />
+            </div>
           </div>
           <div className="relative mx-auto w-full max-w-sm">
             <ScrollImage
               src={jaredHeroImage}
-              alt="Jared James representing Canada in international powerlifting competition"
+              alt="Jared McIntyre representing Canada in international powerlifting competition"
               className="aspect-[4/5] w-full rounded-[28px] object-cover object-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.45)] ring-1 ring-border/70"
               eager
             />
@@ -512,6 +518,29 @@ function AboutJaredPage() {
         </Block>
       </Reveal>
 
+      {/* Straight talk: honesty builds the trust that gets people to apply */}
+      <Reveal>
+        <Block narrow>
+          <Heading eyebrow="What to expect" title="Straight talk, up front." sub="So you know exactly who you'd be working with." />
+          <Group>
+            {[
+              { title: "Honest about what's realistic", body: "Results depend on your starting point, consistency and effort. I don't promise overnight changes, and I won't sell you a shortcut." },
+              { title: "Standards, not hype", body: "I hold clients to the same standards I hold myself to: preparation, execution, honest feedback and adjustment." },
+              { title: "A real person, every time", body: "Your check-ins are read and your plan is adjusted by a coach who knows your numbers, not an auto-reply." },
+              { title: "If I'm not the right fit, I'll say so", body: "I only take on people I'm confident I can help. A no-pressure call comes before any commitment." },
+            ].map((item) => (
+              <div key={item.title} className="flex items-start gap-4 px-5 py-4">
+                <IconTile><CheckCircle2 className="h-5 w-5" aria-hidden /></IconTile>
+                <div className="min-w-0">
+                  <div className="text-[17px] font-semibold leading-snug">{item.title}</div>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{item.body}</p>
+                </div>
+              </div>
+            ))}
+          </Group>
+        </Block>
+      </Reveal>
+
       {/* Client results */}
       <Reveal>
         <Block id="results">
@@ -550,6 +579,19 @@ function AboutJaredPage() {
           <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground">
             Client transformations reflect individual experiences. Results vary based on starting point, consistency, effort, adherence, lifestyle and other individual factors; results are not guaranteed.
           </p>
+        </Block>
+      </Reveal>
+
+      {/* Natural moment to ask: they just saw proof */}
+      <Reveal>
+        <Block narrow className="!py-2 md:!py-4">
+          <div className="text-center">
+            <p className="text-[17px] text-muted-foreground">Like what you see? Your result could be next.</p>
+            <div className="mt-4 flex flex-col items-stretch gap-3 sm:items-center">
+              <PrimaryCta to="/coaching/apply" className="sm:min-w-[280px]">Apply for Coaching</PrimaryCta>
+              <p className="text-[13px] text-muted-foreground">Takes about a minute · No payment to apply</p>
+            </div>
+          </div>
         </Block>
       </Reveal>
 
@@ -744,6 +786,14 @@ function AboutJaredPage() {
               <PrimaryCta to="/coaching/apply" className="sm:min-w-[280px]">Apply for Coaching</PrimaryCta>
               <p className="text-[13px] text-muted-foreground">Takes about a minute · No payment to apply</p>
               <TextLink to="/coaching">See how coaching works</TextLink>
+            </div>
+            <div className="mx-auto mt-10 max-w-md rounded-2xl bg-card p-5 text-center ring-1 ring-border/70">
+              <div className="text-[17px] font-semibold">Not ready to apply? Ask me first.</div>
+              <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">
+                Questions before you decide are welcome. Send me a message, or follow along to see how I train and coach.
+              </p>
+              <div className="mt-3 flex justify-center"><TextLink href={INQUIRY_DM_URL}>Message me on Instagram</TextLink></div>
+              <div className="mt-3 flex justify-center"><SocialLinks /></div>
             </div>
           </div>
         </Block>
