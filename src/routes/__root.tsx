@@ -305,7 +305,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           ],
           serviceType: ["Personal Training", "Online Fitness Coaching", "Powerlifting Coaching", "Nutrition Coaching"],
           founder: { "@type": "Person", name: "Jared James McIntyre", jobTitle: "Personal Trainer & Online Fitness Coach", sameAs: ["https://jaredjamesfit.com"] },
-          sameAs: ["https://jaredjamesfit.com"],
+          sameAs: ["https://jaredjamesfit.com", "https://www.instagram.com/jaredmcintyre_/", "https://www.youtube.com/@jared.mcintyre"],
           openingHoursSpecification: [
             { "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday","Tuesday","Wednesday","Thursday","Friday"], opens: "06:00", closes: "21:00" },
             { "@type": "OpeningHoursSpecification", dayOfWeek: ["Saturday","Sunday"], opens: "08:00", closes: "18:00" },
