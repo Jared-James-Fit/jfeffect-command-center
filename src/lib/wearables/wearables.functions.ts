@@ -2,9 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { PovInput, resolvePovUserId } from "@/lib/client-pov.server";
+import { PovInput, resolvePovClientId, resolvePovUserId } from "@/lib/client-pov.server";
 import { getWearableProvider } from "./providers";
 import { IngestInput } from "./ingest-schema";
+import type { TrainingDay } from "./load-analytics";
 
 const MANUAL_SYNC_COOLDOWN_MS = 5 * 60 * 1000;
 const ProviderInput = z.object({ provider: z.string().min(1).max(32) });
@@ -172,4 +173,30 @@ export const ingestHealthStoreMetrics = createServerFn({ method: "POST" })
       .update({ last_synced_at: new Date().toISOString() })
       .eq("id", conn.id);
     return { ok: true, days: data.rows.length };
+  });
+
+/** Daily hard sets / tonnage for the athlete (or the client a coach is viewing). Gated in SQL. */
+export const getTrainingLoadDays = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    PovInput.extend({ days: z.number().int().min(14).max(180).optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const clientId = await resolvePovClientId(supabase, userId, data);
+    if (!clientId) return { days: [] as TrainingDay[] };
+    const { data: rows, error } = await supabase.rpc("client_daily_training_load", {
+      _client_id: clientId,
+      _days: data.days ?? 90,
+    });
+    if (error) throw new Error(error.message);
+    return {
+      days: ((rows ?? []) as any[]).map((r): TrainingDay => ({
+        day: String(r.day),
+        sets: Number(r.sets) || 0,
+        hard_sets: Number(r.hard_sets) || 0,
+        tonnage_kg: Number(r.tonnage_kg) || 0,
+        avg_rpe: r.avg_rpe == null ? null : Number(r.avg_rpe),
+      })),
+    };
   });

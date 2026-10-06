@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { WEARABLE_PROVIDERS } from "@/lib/wearables/providers";
+import { TrainingRecoveryPanel } from "@/components/portal/training-recovery-panel";
 import {
   resolveDaily,
   summarizeRecoveryFromRows,
@@ -235,6 +236,13 @@ export function WearablesCard() {
             </div>
           )}
         </div>
+      )}
+
+      {recovery && recSeries.length > 0 && (
+        <TrainingRecoveryPanel
+          recovery={recSeries}
+          hrvLabel={recovery.hrvMethod ? `HRV (${recovery.hrvMethod.toUpperCase()})` : "HRV"}
+        />
       )}
 
       {active.map((c) => {

@@ -380,3 +380,91 @@ describe("health-store normalization (phone -> DailyMetric)", () => {
     expect(out[0].resting_hr).toBeNull();
   });
 });
+
+describe("training load vs recovery", () => {
+  const td = (
+    i: number,
+    hard: number,
+    sets = hard + 2,
+  ): import("@/lib/wearables/load-analytics").TrainingDay => ({
+    day: day(i),
+    sets,
+    hard_sets: hard,
+    tonnage_kg: sets * 500,
+    avg_rpe: 8,
+  });
+
+  it("loadRamp flags a spike against the 28-day average and stays unknown with thin history", async () => {
+    const { loadRamp } = await import("@/lib/wearables/load-analytics");
+    // 3 steady weeks at 8 hard sets/week, then a 24-set week.
+    const days = [
+      ...[0, 7, 14].flatMap((w) => [td(w, 4), td(w + 3, 4)]),
+      td(21, 8),
+      td(23, 8),
+      td(25, 8),
+    ];
+    const r = loadRamp(days, day(27))!;
+    expect(r.acuteHardSets).toBe(24);
+    expect(r.state).toBe("ramping");
+    expect(r.ratio).toBeGreaterThan(1.5);
+    expect(loadRamp([td(0, 5), td(2, 5)], day(5))!.state).toBe("unknown");
+    expect(loadRamp([], day(5))).toBeNull();
+  });
+
+  it("loadRamp reads steady for a flat block", async () => {
+    const { loadRamp } = await import("@/lib/wearables/load-analytics");
+    const days = [0, 7, 14, 21].flatMap((w) => [td(w, 4), td(w + 3, 4)]);
+    expect(loadRamp(days, day(27))!.state).toBe("steady");
+  });
+
+  it("nextMorningResponse separates the morning after hard days from rest days", async () => {
+    const { nextMorningResponse } = await import("@/lib/wearables/load-analytics");
+    // Train hard on even days 14..38, rest on odd days. HRV is 80 on mornings after rest
+    // and 60 on mornings after a hard day. Days 0-13 build a flat 80 baseline.
+    const train = Array.from({ length: 13 }, (_, k) => td(14 + k * 2, 6));
+    const rec = series(40, (i) => {
+      if (i < 14) return { hrv_ms: 80, resting_hr: 50 };
+      const prevWasHard = i - 1 >= 14 && (i - 1) % 2 === 0;
+      return prevWasHard ? { hrv_ms: 60, resting_hr: 56 } : { hrv_ms: 80, resting_hr: 50 };
+    });
+    const r = nextMorningResponse(train, rec)!;
+    expect(r.reliable).toBe(true);
+    expect(r.afterHard.n).toBeGreaterThanOrEqual(4);
+    expect(r.afterHard.avgHrvPct!).toBeLessThan(-10);
+    expect(r.afterHard.avgRestingHrDeltaBpm!).toBeGreaterThan(3);
+    expect(Math.abs(r.afterRest.avgHrvPct!)).toBeLessThan(r.afterHard.avgHrvPct! * -1);
+  });
+
+  it("refuses to call it reliable with too few hard days, and returns null with too little data", async () => {
+    const { nextMorningResponse } = await import("@/lib/wearables/load-analytics");
+    // 5 trained days but only 2 count as hard for this athlete.
+    const train = [td(14, 2), td(16, 2), td(18, 2), td(20, 6), td(22, 6)];
+    const rec = series(30, () => ({ hrv_ms: 70, resting_hr: 52 }));
+    const r = nextMorningResponse(train, rec)!;
+    expect(r.afterHard.n).toBe(2);
+    expect(r.reliable).toBe(false);
+    expect(nextMorningResponse([td(14, 6)], rec)).toBeNull();
+    expect(nextMorningResponse(train, [])).toBeNull();
+  });
+});
+
+describe("daily training load RPC contract", () => {
+  const sql = read("supabase/migrations/20261006100000_client_daily_training_load.sql");
+
+  it("is gated to the athlete, their coach or an admin, and is not callable anonymously", () => {
+    expect(sql).toContain("public.can_view_client_training(_client_id)");
+    expect(sql).toContain(
+      "REVOKE ALL ON FUNCTION public.client_daily_training_load(uuid, int) FROM PUBLIC, anon",
+    );
+    expect(sql).toContain(
+      "GRANT EXECUTE ON FUNCTION public.client_daily_training_load(uuid, int) TO authenticated",
+    );
+  });
+
+  it("is read-only, bounded, timezone-aware and never touches XP", () => {
+    expect(sql).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
+    expect(sql).not.toContain("athlete_xp_events");
+    expect(sql).toContain("AT TIME ZONE tz");
+    expect(sql).toContain("least(greatest(_days, 1), 365)");
+  });
+});
