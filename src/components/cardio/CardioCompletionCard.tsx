@@ -57,6 +57,16 @@ type Props = {
   readonly?: boolean;
 };
 
+/**
+ * The Supabase client returns database failures as `{ error }` instead of
+ * throwing, so writes use `.throwOnError()` and land here — never show
+ * "Cardio logged!" for something that wasn't saved.
+ */
+function saveFailed(e: unknown) {
+  console.error("[cardio] save failed", e);
+  toast.error("Couldn't save your cardio. Check your connection and try again.");
+}
+
 export function CardioCompletionCard({ target, clientId, date, readonly = false }: Props) {
   const qc = useQueryClient();
   const dateStr = date ? format(date, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
@@ -77,13 +87,14 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   const { data: completion, isLoading } = useQuery({
     queryKey: ["cardio-completion", clientId, target.id, dateStr],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("cardio_completions")
         .select("*")
         .eq("client_id", clientId)
         .eq("cardio_target_id", target.id)
         .eq("completed_date", dateStr)
         .maybeSingle();
+      if (error) throw error;
       return data ?? null;
     },
     staleTime: 30_000,
@@ -136,7 +147,8 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           .delete()
           .eq("client_id", clientId)
           .eq("cardio_target_id", target.id)
-          .eq("completed_date", dateStr);
+          .eq("completed_date", dateStr)
+          .throwOnError();
         toast.success("Cardio reset to not started");
       } else {
         await (supabase as any)
@@ -151,13 +163,14 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
             cardio_type: target.cardio_type,
             day_type: target.day_type,
             completion_target: "manual",
-          }, { onConflict: "client_id,cardio_target_id,completed_date" });
+          }, { onConflict: "client_id,cardio_target_id,completed_date" })
+          .throwOnError();
         toast.success("Cardio logged!");
       }
       qc.invalidateQueries({ queryKey: ["cardio-completion", clientId, target.id, dateStr] });
       qc.invalidateQueries({ queryKey: ["cardio-summary"] });
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not save");
+      saveFailed(e);
     } finally {
       setSaving(false);
     }
@@ -177,12 +190,13 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           skipped: true,
           cardio_type: target.cardio_type,
           day_type: target.day_type,
-        }, { onConflict: "client_id,cardio_target_id,completed_date" });
+        }, { onConflict: "client_id,cardio_target_id,completed_date" })
+          .throwOnError();
       toast.success("Cardio marked as skipped");
       qc.invalidateQueries({ queryKey: ["cardio-completion", clientId, target.id, dateStr] });
       qc.invalidateQueries({ queryKey: ["cardio-summary"] });
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not save");
+      saveFailed(e);
     } finally {
       setSaving(false);
     }
@@ -225,13 +239,14 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           avg_heart_rate: num(avgHr),
           notes: notes.trim() || null,
           day_type: target.day_type,
-        }, { onConflict: "client_id,cardio_target_id,completed_date" });
+        }, { onConflict: "client_id,cardio_target_id,completed_date" })
+          .throwOnError();
       toast.success("Cardio logged!");
       setExpanded(false);
       qc.invalidateQueries({ queryKey: ["cardio-completion", clientId, target.id, dateStr] });
       qc.invalidateQueries({ queryKey: ["cardio-summary"] });
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not save");
+      saveFailed(e);
     } finally {
       setSaving(false);
     }

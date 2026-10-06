@@ -408,7 +408,7 @@ async function writeApptCrmActivity(opts: {
     `${typeNoun}_status_changed`;
   // Dedupe by appointment + action + resulting start time (so reschedule retries dedupe but new time creates new row).
   const dedupe_key = `appt:${appt.id}:${action}:${appt.starts_at || ""}`;
-  await supabaseAdmin.from("client_crm_activities").upsert({
+  const { error: crmErr } = await supabaseAdmin.from("client_crm_activities").upsert({
     client_id: appt.client_id,
     activity_type,
     title: `${appt.title || appt.appointment_type || "Appointment"} — ${action.replace("_"," ")}`,
@@ -424,6 +424,8 @@ async function writeApptCrmActivity(opts: {
     actor_user_id: actorUserId || null,
     dedupe_key,
   } as any, { onConflict: "client_id,dedupe_key" });
+  // Best-effort timeline entry: never block the status change, but don't fail silently either.
+  if (crmErr) console.error("[appointments] CRM activity write failed", crmErr);
 }
 
 export { writeApptCrmActivity };
