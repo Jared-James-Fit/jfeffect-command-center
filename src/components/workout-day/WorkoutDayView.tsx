@@ -78,7 +78,7 @@ import {
 } from "@/components/workout-day/deferred-exercise-actions";
 import { WorkoutToolsProvider, WorkoutToolsButton } from "@/components/workout-tools/workout-tools";
 import { WorkoutAddExercise } from "@/components/workout-day/workout-add-exercise";
-import { addExerciseToWorkout, reorderWorkoutExercises, removeExerciseFromWorkout } from "@/lib/quick-swap.functions";
+import { addExerciseToWorkout, moveExerciseInFutureWorkouts, reorderWorkoutExercises, removeExerciseFromWorkout } from "@/lib/quick-swap.functions";
 import { convertWeight } from "@/lib/progress-metrics";
 import {
   formatPreviousLiftLoad,
@@ -661,6 +661,7 @@ function WorkoutDay({
   const addExerciseSrv = useServerFn(addExerciseToWorkout);
   const reorderExercisesSrv = useServerFn(reorderWorkoutExercises);
   const removeExerciseSrv = useServerFn(removeExerciseFromWorkout);
+  const moveInFutureSrv = useServerFn(moveExerciseInFutureWorkouts);
   const canEditWorkoutStructure = adapter?.kind !== "member" && /^[0-9a-f-]{36}$/i.test(dayId);
 
   const addExerciseNow = async (
@@ -711,6 +712,44 @@ function WorkoutDay({
     }
   };
 
+  // After a move, offer to carry it to the same workout in later weeks. Off by
+  // default: a one-off tweak for today shouldn't quietly rewrite the program.
+  // The neighbours are captured now so a later move can't change what this does.
+  const offerFutureMove = (ordered: string[], rowId: string, message: string) => {
+    const i = ordered.indexOf(rowId);
+    if (i < 0) return;
+    const prevRowId = ordered[i - 1] ?? null;
+    const nextRowId = ordered[i + 1] ?? null;
+    // The action button closes this toast, so progress/result get their own id.
+    const resultId = "exercise-moved-future";
+    toast.success(message, {
+      id: "exercise-moved",
+      description: "Move it the same way in later weeks of this block?",
+      duration: 8000,
+      action: {
+        label: "Apply",
+        onClick: () => {
+          toast.loading("Updating future workouts…", { id: resultId });
+          moveInFutureSrv({ data: { dayId, rowId, prevRowId, nextRowId } })
+            .then(({ updatedDays, matchedDays }) => {
+              if (updatedDays > 0) {
+                toast.success(`Moved in ${updatedDays} future workout${updatedDays === 1 ? "" : "s"}`, { id: resultId, duration: 4000 });
+              } else if (matchedDays > 0) {
+                toast.message("Future workouts are already in that order", { id: resultId, duration: 4000 });
+              } else {
+                toast.message("No later workouts in this block have that exercise", { id: resultId, duration: 4000 });
+              }
+              // Other days' cached order is now stale.
+              void qc.invalidateQueries({ queryKey: ["pl-day-rows"] });
+            })
+            .catch((error: any) => {
+              toast.error(error?.message ?? "Could not update future workouts", { id: resultId });
+            });
+        },
+      },
+    });
+  };
+
   const moveExerciseNow = async (rowId: string, direction: -1 | 1) => {
     if (!canEditWorkoutStructure) return;
     const ordered = (rows as any[]).map((row) => row.id as string);
@@ -725,6 +764,7 @@ function WorkoutDay({
     try {
       await reorderExercisesSrv({ data: { dayId, orderedRowIds: ordered } });
       await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
+      offerFutureMove(ordered, rowId, direction < 0 ? "Moved up" : "Moved down");
     } catch (error: any) {
       await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
       toast.error(error?.message ?? "Could not move exercise");
@@ -747,7 +787,7 @@ function WorkoutDay({
     try {
       await reorderExercisesSrv({ data: { dayId, orderedRowIds: ordered } });
       await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
-      toast.success(`Moved to exercise ${to + 1}`);
+      offerFutureMove(ordered, rowId, `Moved to exercise ${to + 1}`);
     } catch (error: any) {
       await qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] });
       toast.error(error?.message ?? "Could not move exercise");
