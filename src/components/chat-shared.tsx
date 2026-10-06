@@ -16,6 +16,11 @@ import {
 import { ClipboardList, FileSignature, UtensilsCrossed, ChevronRight } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
+import { ChatVideoTile } from "@/components/chat-video-tile";
+import { captureVideoPoster } from "@/lib/video-poster";
+import { chatUrlCache, useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
+import { compressImage } from "@/lib/image-compress";
+import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 
 /* ------------------------------- Attachment Types (shared shape) ------------------------------- */
 
@@ -27,6 +32,9 @@ export type SharedAttachment = {
   mime?: string;
   duration?: number;
   storage_path?: string;
+  thumbnail_storage_path?: string;
+  width?: number;
+  height?: number;
   peaks?: number[];
   kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share";
   fallback_emoji?: string;
@@ -184,38 +192,100 @@ export function fileToAttachmentType(file: File): SharedAttachment["type"] {
   return "file";
 }
 
-/** Upload a file to the message-attachments bucket at a caller-provided path. */
-export async function uploadAttachmentToPath(path: string, file: File): Promise<SharedAttachment> {
-  const { error } = await supabase.storage.from("message-attachments").upload(path, file, {
-    cacheControl: "3600",
-    upsert: false,
-    contentType: file.type || undefined,
+/**
+ * Upload one chat attachment into `message-attachments/<folder>/…`, shared by
+ * 1:1 and group threads. Photos are shrunk first (a chat bubble never needs a
+ * 12 MP original); everything goes through the progress/abort-aware uploader,
+ * which streams small files in one request and uses resumable TUS for big videos.
+ */
+export async function uploadChatAttachment(
+  folder: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<SharedAttachment> {
+  onProgress?.(1);
+  let uploadFile = file;
+  if (file.type.startsWith("image/") && file.type !== "image/gif") {
+    try {
+      const compressed = await compressImage(file, {
+        maxDimension: 1600,
+        quality: 0.82,
+        skipUnder: 300 * 1024,
+      });
+      if (compressed instanceof File) uploadFile = compressed;
+      else if (compressed !== file) {
+        uploadFile = new File(
+          [compressed],
+          file.name.replace(/\.[^.]+$/, "") + ".jpg",
+          { type: "image/jpeg" },
+        );
+      }
+    } catch {
+      // Keep the original if compression isn't supported on this device.
+    }
+  }
+  if (signal?.aborted) throw new Error("Upload cancelled.");
+
+  onProgress?.(3);
+  const ext = uploadFile.name.includes(".") ? uploadFile.name.split(".").pop() : "";
+  const stem = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const path = `${stem}${ext ? "." + ext : ""}`;
+  const isVideo = fileToAttachmentType(uploadFile) === "video";
+
+  // Grab a still frame while the video uploads (runs alongside it, never blocks it).
+  const posterP = isVideo ? captureVideoPoster(uploadFile) : Promise.resolve(null);
+
+  await uploadLiftFileToStorage({
+    file: uploadFile,
+    userId: folder,
+    bucket: "message-attachments",
+    path,
+    onProgress: (pct) => onProgress?.(Math.max(3, pct)),
+    signal,
   });
-  if (error) throw error;
-  return {
-    type: fileToAttachmentType(file),
+
+  const att: SharedAttachment = {
+    type: fileToAttachmentType(uploadFile),
     url: "",
     storage_path: path,
     name: file.name,
-    size: file.size,
-    mime: file.type,
+    size: uploadFile.size,
+    mime: uploadFile.type || file.type,
   };
+
+  if (isVideo) {
+    // Don't wait long: the poster is a nicety, the message must go out.
+    const poster = await Promise.race([posterP, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+    if (poster) {
+      try {
+        const thumbPath = `${stem}-poster.jpg`;
+        await uploadLiftFileToStorage({
+          file: new File([poster.blob], "poster.jpg", { type: "image/jpeg" }),
+          userId: folder,
+          bucket: "message-attachments",
+          path: thumbPath,
+          signal,
+        });
+        att.thumbnail_storage_path = thumbPath;
+        att.width = poster.width;
+        att.height = poster.height;
+        att.duration = poster.duration || undefined;
+        // The sender's own bubble shows it instantly, no signing round trip.
+        chatUrlCache.seed(thumbPath, URL.createObjectURL(poster.blob));
+      } catch { /* no poster: the bubble falls back to loading the video frame */ }
+    }
+  } else if (att.type === "image" && typeof URL !== "undefined") {
+    // Same for photos: the sender sees their picture without waiting for a signed URL.
+    chatUrlCache.seed(path, URL.createObjectURL(uploadFile));
+  }
+  return att;
 }
 
 /* ------------------------------- Signed URLs ------------------------------- */
 
 export function useSignedUrl(path?: string) {
-  const q = useQuery({
-    queryKey: ["msg-attach", path],
-    enabled: !!path,
-    staleTime: 1000 * 60 * 50,
-    queryFn: async () => {
-      const { data, error } = await supabase.storage.from("message-attachments").createSignedUrl(path!, 60 * 60);
-      if (error) throw error;
-      return data.signedUrl;
-    },
-  });
-  return q.data;
+  return useChatSignedUrl(path);
 }
 
 /* ------------------------------- Waveforms ------------------------------- */
@@ -436,9 +506,20 @@ function ImageAttachment({ att, messageId }: { att: SharedAttachment; messageId?
 
 function VideoAttachment({ att }: { att: SharedAttachment }) {
   const signed = useSignedUrl(att.storage_path);
+  const poster = useSignedUrl(att.thumbnail_storage_path);
   const src = att.storage_path ? signed : att.url;
-  if (!src) return null;
-  return <video src={src} controls playsInline className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
+  return (
+    <ChatVideoTile
+      src={src}
+      poster={poster}
+      expectPoster={!!att.thumbnail_storage_path}
+      width={att.width}
+      height={att.height}
+      duration={att.duration}
+      cacheKey={att.storage_path}
+      name={att.name}
+    />
+  );
 }
 
 function AudioAttachment({

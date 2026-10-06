@@ -1,6 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { saveCommittedSchedule } from "@/lib/schedule-bulk.functions";
+import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1215,6 +1218,7 @@ function TemplateTreeView({ tpl }: { tpl: any }) {
 // ------- Assign dialog with placement -------
 export function AssignDialog({ template, onClose }: { template: any; onClose: () => void }) {
   const qc = useQueryClient();
+  const saveSchedule = useServerFn(saveCommittedSchedule);
   const navigate = useNavigate();
   const [clientId, setClientId] = useState<string>("");
   const [mode, setMode] = useState<string>("");
@@ -1315,14 +1319,9 @@ export function AssignDialog({ template, onClose }: { template: any; onClose: ()
   /** Persist the coach's chosen weekdays so the canonical scheduler uses them. */
   const persistDays = async (days: Weekday[]) => {
     const longDays = days.map((d) => GUARD_WEEKDAY_LABEL[d]);
-    const { data: auth } = await supabase.auth.getUser();
-    await supabase.from("clients").update({
-      committed_training_days: longDays,
-      committed_training_frequency: longDays.length,
-      training_schedule_completed: true,
-      training_schedule_last_updated: new Date().toISOString(),
-      training_schedule_updated_by: auth.user?.id ?? null,
-    } as any).eq("id", clientId);
+    // One server call: saves the days AND re-dates the client's upcoming workouts.
+    await saveSchedule({ data: { clientId, frequency: longDays.length, days: longDays } });
+    invalidateScheduleQueries(qc, { clientId });
     qc.invalidateQueries({ queryKey: ["assign-client-availability", clientId] });
     qc.invalidateQueries({ queryKey: ["client", clientId] });
   };

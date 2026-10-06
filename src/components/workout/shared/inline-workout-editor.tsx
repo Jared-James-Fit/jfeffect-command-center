@@ -20,6 +20,9 @@ import { toLocalISO } from "@/lib/today";
 import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { cn } from "@/lib/utils";
+import { displayExerciseName } from "@/lib/exercise-display-name";
+import { resolveMovementFamily, type MovementFamily } from "@/lib/exercise-family";
+import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 
 /* ──────────────────────────────────────────────────────────────────────────
    InlineWorkoutEditor — focused single-workout editor for coaches/admins.
@@ -47,13 +50,14 @@ type RowData = {
   sort_order: number | null;
   measurement_type: string | null;
   duration_seconds: number | null;
-  exercises: { name: string | null } | null;
+  exercises: { name: string | null; movement_family?: string | null; competition_lift_type?: string | null } | null;
 };
 
 type EditableRow = {
   _dbId: string | null;
   exercise_id: string | null;
-  name: string; // display name (override ?? exercise name)
+  name: string; // display name (library name first, typed name as fallback)
+  family: MovementFamily;
   sets: string;
   reps_text: string;
   rpe: string;
@@ -69,7 +73,8 @@ function toEditable(r: RowData): EditableRow {
   return {
     _dbId: r.id,
     exercise_id: r.exercise_id,
-    name: r.exercise_name_override || r.exercises?.name || "Exercise",
+    name: displayExerciseName(r),
+    family: resolveMovementFamily(r.exercises),
     sets: r.sets != null ? String(r.sets) : "",
     reps_text: r.reps_text ?? "",
     rpe: r.rpe != null ? String(r.rpe) : "",
@@ -133,7 +138,7 @@ export function InlineWorkoutEditor({
       const rowsRes = await supabase
         .from("pl_exercise_rows")
         .select(
-          "id, exercise_id, exercise_name_override, sets, reps_text, rpe, load_lb, load_kg, rest_seconds, notes, sort_order, measurement_type, duration_seconds, exercises(name)",
+          "id, exercise_id, exercise_name_override, sets, reps_text, rpe, load_lb, load_kg, rest_seconds, notes, sort_order, measurement_type, duration_seconds, exercises(name, movement_family, competition_lift_type)",
         )
         .eq("day_id", dayId)
         .order("sort_order", { ascending: true });
@@ -224,7 +229,7 @@ export function InlineWorkoutEditor({
     queryFn: async () => {
       const { data: ex, error } = await supabase
         .from("exercises")
-        .select("id, name, category, muscle_group, equipment, tags")
+        .select("id, name, category, muscle_group, equipment, tags, movement_family, competition_lift_type")
         .eq("archived", false)
         .order("name", { ascending: true })
         .limit(5000);
@@ -246,15 +251,18 @@ export function InlineWorkoutEditor({
   const searchResults = searchOutcome.results.map((r) => r.exercise) as Array<{
     id: string;
     name: string;
+    movement_family?: string | null;
+    competition_lift_type?: string | null;
   }>;
 
-  const addExercise = (ex: { id: string; name: string }) => {
+  const addExercise = (ex: { id: string; name: string; movement_family?: string | null; competition_lift_type?: string | null }) => {
     setRows((rs) => [
       ...rs,
       {
         _dbId: null,
         exercise_id: ex.id,
         name: ex.name,
+        family: resolveMovementFamily(ex),
         sets: "3",
         reps_text: "8",
         rpe: "",
@@ -359,7 +367,7 @@ export function InlineWorkoutEditor({
     const verify = await supabase
       .from("pl_exercise_rows")
       .select(
-        "id, exercise_id, exercise_name_override, sets, reps_text, rpe, load_lb, load_kg, rest_seconds, notes, sort_order, measurement_type, duration_seconds, exercises(name)",
+        "id, exercise_id, exercise_name_override, sets, reps_text, rpe, load_lb, load_kg, rest_seconds, notes, sort_order, measurement_type, duration_seconds, exercises(name, movement_family, competition_lift_type)",
       )
       .eq("day_id", dayId)
       .order("sort_order", { ascending: true });
@@ -469,7 +477,7 @@ export function InlineWorkoutEditor({
               {rows.map((r, i) => (
                 <div key={r._dbId ?? `new-${i}`} className="space-y-2 rounded-lg border border-border/60 p-3">
                   <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-muted-foreground">{i + 1}.</span>
+                    <ExerciseOrderBadge position={i + 1} family={r.family} size="sm" />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold">{r.name}</span>
                     <Button
                       size="icon" variant="ghost" className="h-7 w-7"

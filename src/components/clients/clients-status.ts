@@ -3,6 +3,7 @@ import {
   ClipboardCheck,
   CalendarClock,
   CreditCard,
+  Wallet,
   Dumbbell,
   Apple,
   HeartPulse,
@@ -23,6 +24,7 @@ export type StatusKey =
   | "needs_review"
   | "program_ending"
   | "payment_issues"
+  | "no_payment"
   | "new_clients"
   | "missed_workouts"
   | "inactive";
@@ -32,13 +34,14 @@ export const STATUS_META: Record<
   { label: string; icon: LucideIcon; tone: "neutral" | "warn" | "danger" | "ok" | "info"; hint?: string }
 > = {
   all:              { label: "All Clients",       icon: Users,           tone: "neutral" },
-  needs_setup:      { label: "Needs Setup",       icon: UserRoundCog,    tone: "info",   hint: "Account not yet active" },
-  needs_review:     { label: "Needs Review",      icon: ClipboardCheck,  tone: "warn",   hint: "Check-in awaiting review" },
-  program_ending:   { label: "Program Ending",    icon: CalendarClock,   tone: "warn",   hint: "Current block ends within 14d" },
-  payment_issues:   { label: "Payment Issues",    icon: CreditCard,      tone: "danger", hint: "Failed or overdue payment" },
-  new_clients:      { label: "New Clients",       icon: UserPlus,        tone: "ok",     hint: "Joined in the last 30 days" },
-  missed_workouts:  { label: "Missed Workouts",   icon: XCircle,         tone: "warn",   hint: "2+ missed workouts in last 14 days" },
-  inactive:         { label: "Inactive",          icon: Clock,           tone: "warn",   hint: "No activity in 7+ days with active program" },
+  needs_setup:      { label: "Needs Setup",       icon: UserRoundCog,    tone: "info",   hint: "Clients who haven't signed in to their account yet (invite or password reset still pending)." },
+  needs_review:     { label: "Needs Review",      icon: ClipboardCheck,  tone: "warn",   hint: "Clients who submitted a check-in that's waiting for you to review it." },
+  program_ending:   { label: "Program Ending",    icon: CalendarClock,   tone: "warn",   hint: "Their current training block ends within 14 days and no next block is queued yet." },
+  payment_issues:   { label: "Missed Payment",    icon: CreditCard,      tone: "danger", hint: "A payment failed or is overdue. Follow up so they don't lose access." },
+  no_payment:       { label: "No Payment",        icon: Wallet,          tone: "danger", hint: "No active subscription or paid purchase on file. Send a payment link, or mark them 'no payment needed' from their ⋯ menu." },
+  new_clients:      { label: "New Clients",       icon: UserPlus,        tone: "ok",     hint: "Clients who joined in the last 7 days." },
+  missed_workouts:  { label: "Missed Workouts",   icon: XCircle,         tone: "warn",   hint: "Clients who skipped 2 or more scheduled workouts in the last 14 days." },
+  inactive:         { label: "Inactive",          icon: Clock,           tone: "warn",   hint: "Clients on an active program who haven't opened the app in 7+ days." },
 };
 
 export const TONE_CLASSES: Record<string, { bg: string; text: string; ring: string; iconBg: string }> = {
@@ -49,27 +52,45 @@ export const TONE_CLASSES: Record<string, { bg: string; text: string; ring: stri
   ok:      { bg: "bg-card",           text: "text-foreground",       ring: "ring-emerald-500/30",   iconBg: "bg-emerald-500/15 text-emerald-400" },
 };
 
-export type BadgeDef = { label: string; tone: "danger" | "warn" | "info" | "ok" | "muted"; icon?: LucideIcon };
+export type BadgeDef = { label: string; tone: "danger" | "warn" | "info" | "ok" | "muted"; icon?: LucideIcon; hint: string };
 
-/** Up to 3 most relevant badges for a row, in priority order. */
+/** Up to 4 most relevant badges for a row, in priority order. Each carries a plain-English hint for hover. */
 export function rowBadges(r: DirectoryRow): BadgeDef[] {
   const out: BadgeDef[] = [];
-  if (r.f_payment_issue)       out.push({ label: "Payment Issue", tone: "danger", icon: CreditCard });
+  if (r.f_payment_issue)
+    out.push({ label: "Payment Issue", tone: "danger", icon: CreditCard,
+      hint: "A payment failed or is overdue. Open their billing to fix it before their access is affected." });
   // Only surface "Needs Setup" when the account itself isn't activated yet
   // (invite pending, agreement pending, reset sent). Otherwise a missing
   // optional field like `preferred_training_days` would flag every client.
   const accountActivated = r.account_status === "Account Created" || r.account_status === "Active";
   if (r.f_needs_setup && !accountActivated)
-                               out.push({ label: "Needs Setup",   tone: "info",   icon: UserRoundCog });
-  if (r.f_needs_review)        out.push({ label: "Review Due",    tone: "warn",   icon: ClipboardCheck });
-  // NEW: missed workouts and inactive flags
+    out.push({ label: "Needs Setup", tone: "info", icon: UserRoundCog,
+      hint: "They haven't signed in to their account yet: the invite, agreement or password reset is still pending." });
+  if (r.payment_state === "not_set_up")
+    out.push({ label: "No Payment Set Up", tone: "danger", icon: Wallet,
+      hint: "No active subscription or paid purchase on file. Send a payment link, or mark them 'no payment needed' from the ⋯ menu." });
+  if (r.payment_state === "pending")
+    out.push({ label: "Awaiting Payment", tone: "warn", icon: Clock,
+      hint: "A payment link was sent but hasn't been paid yet." });
+  if (r.f_needs_review)
+    out.push({ label: "Review Due", tone: "warn", icon: ClipboardCheck,
+      hint: "They submitted a check-in that's waiting for your review." });
   if (r.f_missed_workouts && r.missed_workouts_count > 0)
-                               out.push({ label: `${r.missed_workouts_count} Missed`, tone: "warn", icon: XCircle });
-  if (r.f_inactive)            out.push({ label: "Inactive",      tone: "warn",   icon: Clock });
-  if (r.f_program_ending)      out.push({ label: "Ending Soon",   tone: "warn",   icon: CalendarClock });
-  if (r.f_new_client && out.length < 2) out.push({ label: "New",  tone: "ok",     icon: UserPlus });
-  if (out.length === 0)        out.push({ label: "Active", tone: "ok", icon: CheckCircle2 });
-  return out.slice(0, 3);
+    out.push({ label: `${r.missed_workouts_count} Missed`, tone: "warn", icon: XCircle,
+      hint: `${r.missed_workouts_count} scheduled workouts in the last 14 days weren't completed.` });
+  if (r.f_inactive)
+    out.push({ label: "Inactive", tone: "warn", icon: Clock,
+      hint: "They're on an active program but haven't opened the app in 7+ days." });
+  if (r.f_program_ending)
+    out.push({ label: "Ending Soon", tone: "warn", icon: CalendarClock,
+      hint: "Their current training block ends within 14 days and no next block is queued." });
+  if (r.f_new_client && out.length < 2)
+    out.push({ label: "New", tone: "ok", icon: UserPlus, hint: "Joined in the last 7 days." });
+  if (out.length === 0)
+    out.push({ label: "Active", tone: "ok", icon: CheckCircle2,
+      hint: "All good: signed in, paid up, and nothing needs your attention right now." });
+  return out.slice(0, 4);
 }
 
 export const BADGE_TONE: Record<BadgeDef["tone"], string> = {

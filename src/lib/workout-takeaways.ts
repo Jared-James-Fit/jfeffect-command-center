@@ -6,6 +6,7 @@
  * disagree with the set rows. No PR is fabricated — a lift with no history
  * simply produces no PR.
  */
+import { displayExerciseName } from "@/lib/exercise-display-name";
 import { detectAssistedSetPR, detectSetPR } from "./workout-pr";
 import type { PreviousLiftLog } from "./workout-previous-lift";
 import type { WorkoutSummary } from "./workout-summary";
@@ -44,7 +45,7 @@ export function collectSessionPRs(
 ): SessionPR[] {
   const nameByRow = new Map<string, string>();
   for (const r of rows) {
-    nameByRow.set(r.id, r.exercise_name_override || r.exercises?.name || "Exercise");
+    nameByRow.set(r.id, displayExerciseName(r));
   }
 
   const bestByExercise = new Map<string, SessionPR>();

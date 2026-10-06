@@ -382,7 +382,7 @@ function BlockEditor() {
     queryFn: async () =>
       ((await supabase
         .from("exercises")
-        .select("id, name, muscle_group, category, tags, equipment, exercise_category, is_competition_lift, competition_lift_type")
+        .select("id, name, muscle_group, category, tags, equipment, exercise_category, is_competition_lift, competition_lift_type, movement_family")
         .eq("archived", false)
         .limit(10000)
         .order("name")).data ?? []) as any,

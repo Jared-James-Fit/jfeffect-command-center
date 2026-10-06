@@ -863,16 +863,34 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         const { data: exs } = await supabase
           .from("exercises")
           .select(
-            "id, name, video_url, vimeo_embed_url, secondary_vimeo_embed_url, active_video_set, thumbnail_url, cues, common_mistakes, muscle_group, category, pl_lift_group, warmup_protocol_id, is_powerlifting, warmup_notes, default_load_unit, exercise_category, is_competition_lift, competition_lift_type, default_measurement_type, duration_seconds",
+            "id, name, video_url, vimeo_embed_url, secondary_vimeo_embed_url, active_video_set, thumbnail_url, cues, common_mistakes, muscle_group, category, pl_lift_group, warmup_protocol_id, is_powerlifting, warmup_notes, default_load_unit, exercise_category, is_competition_lift, competition_lift_type, movement_family, default_measurement_type, duration_seconds",
           )
           .in("id", swapIds);
         for (const e of (exs ?? []) as any[]) exerciseById.set(e.id, e);
       }
 
+      // The published payload is a metadata snapshot from build time. Resolve the
+      // live movement family (card colour) from the library in one query.
+      const planExerciseIds = Array.from(
+        new Set(rows.map((r) => r?.exercise_id).filter((id): id is string => typeof id === "string" && !!id)),
+      );
+      const familyById = new Map<string, string | null>();
+      if (planExerciseIds.length > 0) {
+        const { data: famRows } = await supabase
+          .from("exercises")
+          .select("id, movement_family")
+          .in("id", planExerciseIds);
+        for (const f of (famRows ?? []) as any[]) familyById.set(f.id, f.movement_family ?? null);
+      }
+
       return rows.map((r, ei) => {
         const overrideId = swapByIndex.get(ei) ?? null;
         if (!overrideId) {
-          return memberRowToPlRow({ row: r, exerciseIndex: ei, dayId });
+          return memberRowToPlRow({
+            row: { ...r, exercise_movement_family: familyById.get(r?.exercise_id) ?? null },
+            exerciseIndex: ei,
+            dayId,
+          });
         }
         const ex = exerciseById.get(overrideId);
         // Merge the swap target onto the original JSON row, preserving
@@ -896,6 +914,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
           exercise_category: ex?.exercise_category ?? null,
           is_competition_lift: ex?.is_competition_lift ?? false,
           competition_lift_type: ex?.competition_lift_type ?? null,
+          exercise_movement_family: ex?.movement_family ?? null,
           // Pass through default_measurement_type so time-based exercises auto-show timer
           default_measurement_type: ex?.default_measurement_type ?? null,
         };
@@ -1101,6 +1120,7 @@ export function memberRowToPlRow(args: {
       exercise_category: r.exercise_category ?? null,
       is_competition_lift: r.is_competition_lift ?? false,
       competition_lift_type: r.competition_lift_type ?? null,
+      movement_family: r.exercise_movement_family ?? null,
       default_measurement_type: r.default_measurement_type ?? null,
       duration_seconds: r.duration_seconds ?? null,
     },

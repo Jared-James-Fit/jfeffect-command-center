@@ -9,7 +9,6 @@ import {
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
-import { useMediaNavBadges } from "@/hooks/use-media-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
@@ -18,7 +17,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
-import { TeamPovQuickPicker } from "@/components/team-pov-quick-picker";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -35,6 +33,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import type { AdminRole } from "@/lib/admin-route-registry";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
+import { useExerciseAliasIndex } from "@/hooks/use-exercise-alias-index";
 import { useSalesRealtime } from "@/hooks/use-sales-realtime";
 import { MORE_BAR_TO, resolveVisibleBarItems } from "@/lib/floating-bar";
 import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
@@ -238,6 +237,7 @@ function useCollapsedSections() {
 export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
   useExerciseLibraryRealtime();
+  useExerciseAliasIndex();
   useSalesRealtime();
   const { signOut, user, role } = useAuth();
   const isStaffRole = !!role && role !== "client" && role !== "member";
@@ -245,8 +245,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
   const clientBadges = useClientNavBadges();
-  const mediaBadges = useMediaNavBadges();
-  const navBadges = useMemo(() => ({ ...clientBadges, ...mediaBadges }), [clientBadges, mediaBadges]);
+  const navBadges = clientBadges;
   const [mode, setMode] = useSidebarMode();
   const isTablet = useIsTablet();
   const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
@@ -840,6 +839,14 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
 
       {/* Mobile top bar */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* The PWA runs under a translucent iOS status bar, so scrolled page
+            content would print over the clock/battery. This opaque strip
+            covers exactly the status-bar inset (0px in a normal browser tab). */}
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-x-0 top-0 z-[41] bg-background md:hidden"
+          style={{ height: "env(safe-area-inset-top, 0px)" }}
+        />
         <header
           className="flex items-center justify-between gap-2 border-b border-border px-3 pb-3 md:hidden"
           style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
@@ -961,7 +968,6 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         role={(role as AdminRole | null) ?? null}
       />
       <ClientPovQuickPicker />
-      <TeamPovQuickPicker />
     </div>
     </TooltipProvider>
   );

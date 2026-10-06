@@ -14,7 +14,7 @@ const KEY_PREFIX = "jf:last-route:";
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1_000; // 7 days
 
 // Routes whose pathnames begin with these prefixes are worth restoring.
-const RESTORABLE_PREFIXES = ["/portal", "/m", "/admin", "/media"];
+const RESTORABLE_PREFIXES = ["/portal", "/m", "/admin"];
 
 // These prefixes are always excluded even if they match a restorable prefix.
 const EXCLUDED_PREFIXES = [

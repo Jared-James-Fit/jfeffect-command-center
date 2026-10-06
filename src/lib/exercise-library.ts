@@ -14,6 +14,9 @@ import { labelForMuscle } from "@/lib/volume";
 
 export type LibraryExercise = SearchableExercise & {
   exercise_family?: string | null;
+  /** squat | bench | deadlift | accessory — card colour. */
+  movement_family?: string | null;
+  competition_lift_type?: string | null;
   muscle_groups?: string[] | null;
   secondary_muscle_groups?: string[] | null;
   needs_muscle_review?: boolean | null;

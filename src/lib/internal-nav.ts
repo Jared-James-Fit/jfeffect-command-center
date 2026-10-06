@@ -189,10 +189,6 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "operations"] },
   { to: "/admin/staff", label: "Staff & Media Managers", icon: UserPlus, group: "Team",
     visibleTo: ["admin", "operations"] },
-  { to: "/admin/approvals", label: "Approvals Queue", icon: ClipboardCheck, group: "Team",
-    visibleTo: ["admin", "operations"], section: "Media & Approvals" },
-  { to: "/admin/media-review", label: "Media Inbox", icon: Film, group: "Team",
-    visibleTo: ["admin", "media_manager", "operations"], section: "Media & Approvals" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team",
     visibleTo: ["admin", "media_manager", "operations"], section: "Media & Approvals" },
 
@@ -280,58 +276,6 @@ const MEMBERSHIP_OVERLAY: Entry[] = [
 ];
 
 /**
- * Media Manager registry — all `/media/*` routes grouped into the same 11
- * workspaces. Media Manager has its own physical route tree (`/media`) with
- * its own narrow permissions, so we cannot point a media-manager sidebar at
- * `/admin/*` URLs (those routes redirect non-admins away). This registry
- * mirrors the IA without changing any route or permission boundary.
- */
-const MEDIA_REGISTRY: NavItem[] = [
-  // ── HOME ──────────────────────────────────────────────────────────
-  { to: "/media", label: "Media Home", icon: HomeIcon, group: "Home" },
-
-  // ── DAILY WORK ────────────────────────────────────────────────────
-  { to: "/media/work", label: "My Work", icon: ListChecks, group: "Daily Work",
-    keywords: ["my work", "tasks", "assigned", "today"] },
-  { to: "/media/inbox", label: "Inbox & Approvals", icon: MessageCircle, group: "Daily Work",
-    keywords: ["inbox", "approvals", "review", "comments"] },
-  { to: "/media/pipeline", label: "Content Pipeline", icon: Layers, group: "Daily Work",
-    keywords: ["pipeline", "kanban", "production", "in progress"] },
-  { to: "/media/calendar", label: "Content Calendar", icon: Calendar, group: "Daily Work",
-    keywords: ["calendar", "content calendar", "schedule", "events"] },
-  { to: "/media/publishing", label: "Publishing Queue", icon: Upload, group: "Daily Work",
-    keywords: ["publishing", "queue", "scheduled", "ready"] },
-
-  // ── CONTENT ───────────────────────────────────────────────────────
-  { to: "/media/drafts", label: "Drafts", icon: FileEdit, group: "Content",
-    keywords: ["drafts", "broadcasts", "announcements"] },
-  { to: "/media/content", label: "Content Library", icon: Film, group: "Content",
-    keywords: ["content", "library", "posts", "videos", "records"] },
-  { to: "/media/assets", label: "Asset Library", icon: FolderOpen, group: "Content",
-    keywords: ["assets", "files", "uploads", "media files"] },
-  { to: "/media/testimonials", label: "Testimonials", icon: Star, group: "Content",
-    keywords: ["testimonials", "reviews", "proof"] },
-  { to: "/media/templates", label: "Templates & Brand Kit", icon: Sparkles, group: "Content",
-    keywords: ["templates", "brand", "kit", "logos", "colors", "fonts"] },
-
-  // ── GROWTH ────────────────────────────────────────────────────────
-  { to: "/media/campaigns", label: "Campaigns", icon: Megaphone, group: "Growth",
-    keywords: ["campaigns", "launches", "promos"] },
-  { to: "/media/pages", label: "Pages & Promo Links", icon: LinkIcon, group: "Growth",
-    keywords: ["pages", "promo", "links", "landing"] },
-  { to: "/media/performance", label: "Performance", icon: BarChart3, group: "Growth",
-    keywords: ["performance", "analytics", "metrics", "reach"] },
-
-  // ── SYSTEM ────────────────────────────────────────────────────────
-  { to: "/media/archive", label: "Archive", icon: Archive, group: "System",
-    keywords: ["archive", "archived", "trash"] },
-  { to: "/media/team", label: "Team", icon: Users, group: "System",
-    keywords: ["team", "people", "members", "roles"] },
-  { to: "/media/settings", label: "Media Settings", icon: Settings, group: "System",
-    keywords: ["settings", "account", "preferences"] },
-];
-
-/**
  * Build the sidebar for a given staff role tag and dashboard mode.
  * Returns `NavItem[]` (already filtered, already grouped via NavItem.group).
  */
@@ -339,13 +283,6 @@ export function buildInternalNav(
   roleTag: StaffRoleTag,
   opts: { mode?: "coaching" | "membership" } = {},
 ): NavItem[] {
-  // Media Manager has its own physical /media route tree with its own
-  // narrower permissions — return the /media-scoped registry directly so
-  // the sidebar does not point at /admin/* routes that the role cannot
-  // access. Admin viewing in Media Manager mode also uses this set.
-  if (roleTag === "media_manager") {
-    return MEDIA_REGISTRY.map((i) => ({ ...i }));
-  }
   const base = REGISTRY.filter((e) => e.visibleTo.includes(roleTag));
   const overlay =
     opts.mode === "membership" && roleTag === "admin" ? MEMBERSHIP_OVERLAY : [];
@@ -529,7 +466,6 @@ export function buildMembershipAdminNav(): NavItem[] {
         { to: "/admin/program-library", label: "Workout Library", icon: Library },
         { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell },
         { to: "/admin/recipes", label: "Recipes", icon: ChefHat },
-        { to: "/admin/member-resources", label: "Resources", icon: FolderOpen },
         { to: "/admin/membership/challenges", label: "Challenges", icon: Trophy },
       ],
     },

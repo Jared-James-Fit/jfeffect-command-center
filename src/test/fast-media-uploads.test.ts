@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 
 describe("fast media upload paths", () => {
   const storage = readFileSync("src/lib/lift-video-storage-upload.ts", "utf8");
-  const messages = readFileSync("src/components/message-thread.tsx", "utf8");
+  // Chat uploads: shared uploader (compression) + background draft queue (concurrency, progress).
+  const chatUpload = readFileSync("src/components/chat-shared.tsx", "utf8");
+  const draftUploads = readFileSync("src/hooks/use-draft-uploads.ts", "utf8");
   const progress = readFileSync("src/components/progress/progress-section.tsx", "utf8");
   const progressLib = readFileSync("src/lib/progress.ts", "utf8");
 
@@ -16,15 +18,15 @@ describe("fast media upload paths", () => {
 
   it("shows upload feedback immediately", () => {
     expect(storage).toContain("args.onProgress?.(1)");
-    expect(messages).toContain('setUploadProgress({ name: label, pct: 1 })');
+    expect(draftUploads).toContain("store.set(id, 1)");
     expect(progress).toContain("requestAnimationFrame");
     expect(progress).toContain('"Preparing…"');
   });
 
   it("compresses chat photos and uploads multiple attachments with bounded concurrency", () => {
-    expect(messages).toContain("compressImage(file");
-    expect(messages).toContain("Math.min(2, valid.length)");
-    expect(messages).toContain("progressByIndex");
+    expect(chatUpload).toContain("compressImage(file");
+    expect(draftUploads).toContain("const MAX_PARALLEL = 2;");
+    expect(draftUploads).toContain("while (active < maxParallel && waiting.length)");
   });
 
   it("starts progress storage and submission work concurrently", () => {

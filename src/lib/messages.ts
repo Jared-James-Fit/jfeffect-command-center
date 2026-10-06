@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isViewingAsClient } from "@/lib/pov-guard";
 
 export type SenderRole = "admin" | "client";
 
@@ -10,6 +11,10 @@ export type MessageAttachment = {
   mime?: string;
   duration?: number;
   storage_path?: string;
+  /** Videos: a small still frame uploaded next to the file, so bubbles don't have to load the video itself. */
+  thumbnail_storage_path?: string;
+  width?: number;
+  height?: number;
   peaks?: number[];
   kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "checkin_request" | "checkin_submission";
   fallback_emoji?: string;
@@ -40,8 +45,34 @@ export type MessageReplyPreview = {
   body: string;
   attachment_type?: MessageAttachment["type"] | null;
   attachment_name?: string | null;
+  /** Storage path of the first photo/video (signed at render time), so replies can show a thumbnail. */
+  attachment_path?: string | null;
+  /** Public URL fallback for media with no storage path (e.g. GIFs). */
+  attachment_url?: string | null;
   is_internal_note?: boolean;
 };
+
+export type ReplyMedia = { type: "image" | "video"; path?: string; url?: string };
+
+/**
+ * The photo/video to show as a reply thumbnail. Prefers the original message
+ * when it's loaded (covers replies sent before previews carried a path), else
+ * what the preview stored.
+ */
+export function replyMediaFor(
+  preview: MessageReplyPreview | null | undefined,
+  source?: Pick<Message, "attachments"> | null,
+): ReplyMedia | null {
+  const first = source?.attachments?.[0];
+  if (first && (first.type === "image" || first.type === "video") && (first.storage_path || first.url)) {
+    return { type: first.type, path: first.storage_path || undefined, url: first.storage_path ? undefined : first.url };
+  }
+  if (preview && (preview.attachment_type === "image" || preview.attachment_type === "video")
+    && (preview.attachment_path || preview.attachment_url)) {
+    return { type: preview.attachment_type, path: preview.attachment_path || undefined, url: preview.attachment_url || undefined };
+  }
+  return null;
+}
 
 export type Message = {
   id: string;
@@ -219,14 +250,14 @@ export async function sendMessage(input: {
   const { data, error } = await db.from("messages").insert(row).select().single();
   if (error) throw error;
   // If the admin replies, the conversation no longer "needs response".
+  // Bookkeeping, not part of delivery: don't make the send wait on it.
   if (input.senderRole === "admin") {
-    try {
-      await db
-        .from("conversation_state")
-        .update({ status: "open" })
-        .eq("client_id", input.clientId)
-        .eq("status", "needs_response");
-    } catch {}
+    void db
+      .from("conversation_state")
+      .update({ status: "open" })
+      .eq("client_id", input.clientId)
+      .eq("status", "needs_response")
+      .then(() => {}, () => {});
   }
   // Fire-and-forget push notification. Never block the send on push failures.
   if (data?.id) {
@@ -243,6 +274,8 @@ export async function sendMessage(input: {
 }
 
 export async function markRead(clientId: string, role: SenderRole) {
+  // A coach viewing as this client must not mark the client's messages as read.
+  if (role === "client" && (await isViewingAsClient(clientId))) return;
   const now = new Date().toISOString();
   // Staff unread is per coach/admin: this only clears MY blue dot. It never
   // changes the conversation's workflow status (Needs Response stays).
