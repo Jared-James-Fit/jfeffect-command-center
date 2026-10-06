@@ -164,6 +164,10 @@ const NUTRITION: Q[] = [
   },
 ];
 
+/** The exact Weekly Check-In questions, for the admin Requests preview. */
+export const WEEKLY_CHECKIN_QUESTIONS = WEEKLY;
+export type CheckinQuestion = Q;
+
 const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
   weekly_checkin: {
     week_rating: "Overall week",

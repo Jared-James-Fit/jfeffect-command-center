@@ -5,6 +5,7 @@ export const TABS = [
   { value: "website-forms",          label: "Website Forms" },
   { value: "applications",           label: "Applications" },
   { value: "submissions",            label: "Submissions" },
+  { value: "requests",               label: "Requests" },
   { value: "reviews",                label: "Reviews" },
   { value: "builder",                label: "Builder" },
   { value: "agreements",             label: "Agreements" },

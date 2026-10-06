@@ -8,6 +8,7 @@ import { FilloutSubmissionsPage } from "@/route-pages/_authenticated/admin/fillo
 import { ApplicationsInbox } from "@/route-pages/_authenticated/admin/sales.coaching-applications";
 import { AgreementsAdminPage } from "@/route-pages/_authenticated/admin/agreements.index";
 import { ReviewsTab } from "@/components/forms/reviews-tab";
+import { RequestsTab } from "@/components/forms/requests-tab";
 import { AiSettingsTab } from "@/components/forms/ai-settings-tab";
 import { SchedulerTab } from "@/components/forms/scheduler-tab";
 import { Card } from "@/components/ui/card";
@@ -81,6 +82,7 @@ export function FormsWorkspacePage() {
       <div>
         {tab === "website-forms" && <WebsiteFormsPanel />}
         {tab === "reviews" && <ReviewsTab />}
+        {tab === "requests" && <RequestsTab />}
         {tab === "builder" && <BuilderRouter sub={sub} />}
         {tab === "submissions" && <SubmissionsRouter sub={sub} />}
         {tab === "applications" && <ApplicationsInbox embedded />}
