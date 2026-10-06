@@ -291,7 +291,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
       });
       if (visibility === "community") {
         toast.success(existing ? "Post updated 🔥" : "You're in the feed 🔥", {
-          action: { label: "View", onClick: () => navigate({ to: "/portal/community" }) },
+          action: { label: "View", onClick: () => navigate({ to: "/portal/workouts", hash: "community" }) },
         });
       } else {
         toast.success("Saved to your profile", { description: "Only you can see it." });

@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
-import { supabase } from "@/integrations/supabase/client";
 import { PostCard } from "@/components/community/post-card";
 import { CommentsSheet } from "@/components/community/comments-sheet";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
-import { markCommunitySeen, useCommunityFeed, useDeletePost, usePostMediaUrls, useReact } from "@/lib/community.queries";
+import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
+import { markCommunitySeen, useCommunityFeed, useDeletePost, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +28,7 @@ function postFromHash(): string | null {
  * profile per person, and a full workout page per post. Shared by the client
  * portal and the coach view. No follower counts, no rankings.
  */
-export function CommunityScreen() {
+export function CommunityScreen({ canShare = false }: { canShare?: boolean }) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const viewerIsStaff = role === "admin" || role === "coach";
@@ -49,16 +49,7 @@ export function CommunityScreen() {
     void markCommunitySeen(qc);
   }, [feed.isSuccess, qc]);
 
-  // Viewer's own unit for loads (athletes: their setting; coaches: app default).
-  const { data: unit = "lb" } = useQuery({
-    queryKey: ["community-unit", user?.id],
-    enabled: !!user?.id,
-    staleTime: 10 * 60 * 1000,
-    queryFn: async (): Promise<"kg" | "lb"> => {
-      const { data } = await supabase.from("clients").select("preferred_weight_unit").eq("user_id", user!.id).maybeSingle();
-      return (data as any)?.preferred_weight_unit === "kg" ? "kg" : "lb";
-    },
-  });
+  const { data: unit = "lb" } = useViewerUnit(user?.id);
 
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
@@ -96,6 +87,7 @@ export function CommunityScreen() {
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Feed
         </Button>
       ) : (
+        <div className="flex items-center justify-between gap-2">
         <div className="inline-flex rounded-full bg-muted p-1" role="tablist" aria-label="Community view">
           {(["feed", "you"] as const).map((k) => (
             <button
@@ -109,6 +101,8 @@ export function CommunityScreen() {
               {k === "feed" ? "Feed" : "You"}
             </button>
           ))}
+        </div>
+        {canShare && <ShareWorkoutButton unit={unit} label="Share" />}
         </div>
       )}
 
@@ -132,7 +126,11 @@ export function CommunityScreen() {
           </Button>
         </div>
       ) : posts.length === 0 ? (
-        <EmptyNote title="Be the first one in" body="Finish a workout, tap Share workout, then Post to JF Community. Your crew will see it here." />
+        <EmptyNote
+          title="Be the first one in"
+          body={canShare ? "Share a session from this month. Your crew sees the work, your coach sees it too." : "When clients share a workout, it shows up here."}
+          action={canShare ? <ShareWorkoutButton unit={unit} label="Share your last workout" variant="block" /> : null}
+        />
       ) : (
         <>
           {posts.map((p) => (
@@ -185,12 +183,13 @@ function PostRow(props: {
   );
 }
 
-function EmptyNote({ title, body }: { title: string; body: string }) {
+function EmptyNote({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return (
     <div className="rounded-3xl border border-dashed border-border bg-card/50 px-6 py-12 text-center">
       <Dumbbell className="mx-auto h-8 w-8 text-muted-foreground/60" />
       <div className="mt-3 text-sm font-bold">{title}</div>
       <p className="mx-auto mt-1 max-w-[32ch] text-[13px] leading-snug text-muted-foreground">{body}</p>
+      {action ? <div className="mx-auto mt-5 max-w-[300px]">{action}</div> : null}
     </div>
   );
 }

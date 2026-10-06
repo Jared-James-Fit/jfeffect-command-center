@@ -63,7 +63,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
   if (size === "tile") {
     return (
       <div className={cn("flex h-full w-full flex-col justify-between p-2.5 text-white", pr ? "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(245,158,11,0.45),#0b0b0e_60%)]" : "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.5),#0b0b0e_60%)]")}>
-        {pr ? <span className="w-max rounded-full bg-amber-400 px-1.5 text-[8px] font-black uppercase text-amber-950">PR</span> : <span />}
+        {pr ? <span className="w-max rounded-full bg-amber-400 px-1.5 text-[8px] font-black uppercase text-[#2b1700]">PR</span> : <span />}
         <div>
           <div className="font-display line-clamp-2 text-[15px] uppercase leading-[1.02]">{stats.workout_title}</div>
           {lift && <div className={cn("font-display mt-0.5 text-[13px] uppercase", pr ? "text-amber-300" : "text-white/80")}>{formatTopSet(lift.detail, unit)}</div>}
@@ -83,7 +83,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
       )}
     >
       {pr && lift?.pr ? (
-        <span className="inline-block rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-950">
+        <span className="inline-block rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-[#2b1700]">
           New {SCOPE_WORD[lift.pr]}
         </span>
       ) : session ? (
