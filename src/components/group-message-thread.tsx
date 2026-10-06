@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -238,8 +238,8 @@ export function GroupMessageThread({
     return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
   }, [groupId, user?.id, latestCreatedAt, qc]);
 
-  // autoscroll
-  useEffect(() => {
+  // autoscroll: before paint, so the group never flashes at the top and then jumps down.
+  useLayoutEffect(() => {
     if (scrollerRef.current) scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
   }, [messages.length]);
 
