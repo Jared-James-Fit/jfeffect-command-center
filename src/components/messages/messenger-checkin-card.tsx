@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { FormPresentation } from "@/lib/form-message-presentation";
+import type { FormPresentation, FormHistoryGroup as FormHistoryGroupData } from "@/lib/form-message-presentation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
@@ -866,6 +866,55 @@ export function FormHistoryRow({ p, role }: { p: FormPresentation; role: Role })
           role={role}
           submittedAt={p.submittedAt}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * One row for ALL older requests of a form type: "Weekly Check-In history ·
+ * 6 filled · 2 missed". Tap to open the individual rows. The point is tracking
+ * (anything missed?), not a log of every old request.
+ */
+export function FormHistoryGroup({ group, role }: { group: FormHistoryGroupData; role: Role }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mx-auto w-full max-w-sm" data-form-history-group>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition hover:bg-secondary/60 active:bg-secondary"
+      >
+        <span
+          className={cn(
+            "grid h-6 w-6 shrink-0 place-items-center rounded-full",
+            group.missed > 0 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
+          )}
+        >
+          {group.missed > 0 ? <CircleDashed className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold leading-tight text-foreground">
+            Earlier {titleFor(group.taskType).toLowerCase()}s
+          </span>
+          <span className="block truncate text-[11px] leading-tight text-muted-foreground">
+            {group.filled} filled
+            {group.missed > 0 && (
+              <span className="font-semibold text-amber-600 dark:text-amber-400"> · {group.missed} missed</span>
+            )}
+          </span>
+        </span>
+        <ChevronDown
+          className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", open ? "rotate-0" : "-rotate-90")}
+        />
+      </button>
+      {open && (
+        <div className="mt-0.5 space-y-0.5">
+          {group.units.map((p) => (
+            <FormHistoryRow key={p.submissionId} p={p} role={role} />
+          ))}
+        </div>
       )}
     </div>
   );

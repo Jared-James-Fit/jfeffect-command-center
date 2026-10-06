@@ -103,3 +103,52 @@ export function planFormMessages(
   }
   return plan;
 }
+
+export type FormHistoryGroup = {
+  taskType: FormTaskType;
+  /** Older units of this type, newest first. */
+  units: FormPresentation[];
+  filled: number;
+  /** Requests that were never answered before a newer one replaced them. */
+  missed: number;
+};
+
+/**
+ * Collapse the older (compact) units of each form type into ONE summary so a
+ * thread with months of check-ins doesn't become a wall of rows, while missed
+ * ones stay countable. Types with a single older unit keep their own row.
+ * Presentation only: no message is removed.
+ *
+ * `orderedMessageIds` is the visible thread order. `leaders` maps the message
+ * that renders the summary (the oldest older unit's message) to its group;
+ * `hidden` holds the other older units' messages, which render nothing.
+ */
+export function groupFormHistory(
+  plan: Map<string, FormPresentation>,
+  orderedMessageIds: string[],
+): { leaders: Map<string, FormHistoryGroup>; hidden: Set<string> } {
+  const byType = new Map<FormTaskType, { msgId: string; p: FormPresentation }[]>();
+  const seen = new Set<string>();
+  for (const msgId of orderedMessageIds) {
+    const p = plan.get(msgId);
+    if (!p || p.mode !== "compact" || seen.has(p.submissionId)) continue;
+    seen.add(p.submissionId);
+    const list = byType.get(p.taskType) ?? [];
+    list.push({ msgId, p });
+    byType.set(p.taskType, list);
+  }
+
+  const leaders = new Map<string, FormHistoryGroup>();
+  const hidden = new Set<string>();
+  for (const [taskType, list] of byType) {
+    if (list.length < 2) continue;
+    leaders.set(list[0].msgId, {
+      taskType,
+      units: list.map((x) => x.p).reverse(),
+      filled: list.filter((x) => x.p.state === "completed").length,
+      missed: list.filter((x) => x.p.state === "superseded").length,
+    });
+    for (const x of list.slice(1)) hidden.add(x.msgId);
+  }
+  return { leaders, hidden };
+}

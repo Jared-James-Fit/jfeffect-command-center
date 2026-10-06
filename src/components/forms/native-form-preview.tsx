@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Eye, Monitor, Smartphone, Upload } from "lucide-react";
+import { QuestionReferenceImage, getQuestionReferenceImage } from "@/components/forms/question-reference-image";
 import {
   shouldShowQuestion,
   type NfForm,
@@ -116,6 +117,9 @@ export function NativeFormPreviewDialog({
                     {q.required && <span className="ml-1 text-destructive">*</span>}
                   </Label>
                   {q.help_text && <p className="mt-1 text-xs text-muted-foreground">{q.help_text}</p>}
+                  {getQuestionReferenceImage(q) && (
+                    <QuestionReferenceImage src={getQuestionReferenceImage(q)!} label={q.label} />
+                  )}
                   <div className="mt-3">
                     <PreviewInput
                       q={q}

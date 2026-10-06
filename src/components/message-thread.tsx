@@ -70,12 +70,13 @@ import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft
 import { ChatVideoTile } from "@/components/chat-video-tile";
 import { ReplyThumb } from "@/components/messages/reply-thumb";
 import {
+  FormHistoryGroup,
   FormHistoryRow,
   MessengerCheckinRequestCard,
   FormRequestChatCard,
   MessengerCheckinSubmissionCard,
 } from "@/components/messages/messenger-checkin-card";
-import { planFormMessages } from "@/lib/form-message-presentation";
+import { groupFormHistory, planFormMessages } from "@/lib/form-message-presentation";
 import { playAppSound, registerOpenThread } from "@/lib/app-sounds";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
 
@@ -1333,6 +1334,12 @@ export function MessageThread({
     () => planFormMessages([...olderMessages, ...messages], role === "admin" ? "admin" : "client"),
     [olderMessages, messages, role],
   );
+  // Older units of each form type collapse into one "history" row with
+  // filled / missed counts instead of one row per old request.
+  const formHistory = useMemo(
+    () => groupFormHistory(formPlan, visibleMessages.map((m) => m.id)),
+    [formPlan, visibleMessages],
+  );
 
   // Id of the latest message I sent (for inline "Read/Sent" receipt).
   const lastOwnMessageId = useMemo(() => {
@@ -1789,6 +1796,15 @@ export function MessageThread({
             {role === "client" ? "Send your coach a message to start the conversation." : "No messages yet."}
           </div>
         ) : visibleMessages.map((m) => {
+          if (formHistory.hidden.has(m.id)) return null;
+          const historyGroup = formHistory.leaders.get(m.id);
+          if (historyGroup) {
+            return (
+              <div key={m.id} id={`message-${m.id}`} className="w-full min-w-0">
+                <FormHistoryGroup group={historyGroup} role={role === "admin" ? "admin" : "client"} />
+              </div>
+            );
+          }
           const mine = m.sender_role === role;
           const isDeleted = !!m.deleted_at;
           const isEditing = editingId === m.id;

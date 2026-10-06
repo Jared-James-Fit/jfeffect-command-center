@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ClipboardCheck, Loader2, Salad, Sparkles } from "lucide-react";
+import { ClipboardCheck, Loader2, Sparkles } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { sendNutritionRequestFn } from "@/lib/nutrition-ai-plans.functions";
 import { NUTRITION_PHASES, PHASE_GOAL } from "@/lib/nutrition-cardio";
@@ -60,7 +60,7 @@ export function MessengerCheckinRequestDialog({
       }
       await qc.invalidateQueries({ queryKey: ["messages", clientId, "admin"] });
       toast.success(
-        taskType === "weekly_checkin" ? "Check-in sent" : taskType === "nutrition_update" ? "Nutrition update request sent" : "Nutrition review sent",
+        taskType === "weekly_checkin" ? "Check-in sent" : "Nutrition update request sent",
       );
       setNote("");
       setTaskType("weekly_checkin");
@@ -89,7 +89,7 @@ export function MessengerCheckinRequestDialog({
             type="button"
             onClick={() => setTaskType("weekly_checkin")}
             className={cn(
-              "rounded-2xl border p-4 text-left transition active:scale-[0.98]",
+              "col-span-2 rounded-2xl border p-4 text-left transition active:scale-[0.98]",
               taskType === "weekly_checkin"
                 ? "border-primary bg-primary/10"
                 : "border-border bg-card",
@@ -101,21 +101,6 @@ export function MessengerCheckinRequestDialog({
             <div className="mt-1 text-xs text-muted-foreground">Training, nutrition, recovery + new-week focus.</div>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setTaskType("nutrition_review")}
-            className={cn(
-              "rounded-2xl border p-4 text-left transition active:scale-[0.98]",
-              taskType === "nutrition_review"
-                ? "border-primary bg-primary/10"
-                : "border-border bg-card",
-            )}
-          >
-            <Salad className="h-5 w-5 text-primary" />
-            <div className="mt-3 text-sm font-bold">Nutrition Review</div>
-            <div className="text-xs text-muted-foreground">{durationFor("nutrition_review")}</div>
-            <div className="mt-1 text-xs text-muted-foreground">Adherence, hunger, digestion, energy + changes.</div>
-          </button>
           <button
             type="button"
             onClick={() => setTaskType("nutrition_update")}
