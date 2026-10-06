@@ -9,6 +9,7 @@ import { derivePurposeLabels, purposeLabelBadgeClass } from "@/lib/exercise-meta
 import { computeWorkoutProgress } from "@/lib/workout-progress";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
+import { errorMessage } from "@/lib/error-message";
 
 /**
  * Read-only inline preview of a workout day. Shows exercise order,
@@ -182,11 +183,11 @@ export function InlineWorkoutPreview({
     );
   }
   if (!rowsQuery.data && rowsQuery.isError) {
-    const error = rowsQuery.error;
+    const reason = errorMessage(rowsQuery.error);
     return (
       <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
         <span className="truncate">
-          Couldn't load exercises{error instanceof Error && error.message ? `: ${error.message}` : "."}
+          Couldn't load exercises{reason ? `: ${reason}` : "."}
         </span>
         <button
           type="button"
