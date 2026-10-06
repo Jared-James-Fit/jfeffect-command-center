@@ -350,7 +350,7 @@ function PortalHome() {
 
         {client?.id && (
           <SectionErrorBoundary label="Devices">
-            <WearablesCard />
+            <WearablesCard mode="summary" />
           </SectionErrorBoundary>
         )}
 

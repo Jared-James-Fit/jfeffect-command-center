@@ -24,6 +24,7 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { SavedIndicator } from "@/components/saved-indicator";
 import { ClientLegalSafety } from "@/components/legal/client-legal-safety";
 import { InstallAppCard } from "@/components/portal/install-app-card";
+import { WearablesCard } from "@/components/portal/wearables-card";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { PushNotificationCard } from "@/components/push/push-notification-card";
 
@@ -207,6 +208,7 @@ function AccountPage() {
                 { id: "training-schedule", label: "Schedule" },
                 { id: "goals-setup", label: "Goals" },
                 { id: "password", label: "Password" },
+                { id: "devices", label: "Devices" },
                 { id: "notifications", label: "Notifications" },
                 { id: "install-app", label: "Install App" },
                 { id: "legal-safety", label: "Legal" },
@@ -351,6 +353,12 @@ function AccountPage() {
         <div id="install-app" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Install App">
             <InstallAppCard />
+          </SectionErrorBoundary>
+        </div>
+
+        <div id="devices" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Devices">
+            <WearablesCard />
           </SectionErrorBoundary>
         </div>
 

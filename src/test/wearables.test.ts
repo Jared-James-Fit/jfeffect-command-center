@@ -468,3 +468,21 @@ describe("daily training load RPC contract", () => {
     expect(sql).toContain("least(greatest(_days, 1), 365)");
   });
 });
+
+describe("where athletes find device setup", () => {
+  it("puts the full setup on the Account page with a quick-jump entry, and a summary on Home", () => {
+    const account = read("src/routes/_authenticated/portal/account.tsx");
+    expect(account).toContain("<WearablesCard />");
+    expect(account).toContain('id: "devices"');
+    expect(account).toContain('id="devices"');
+    expect(read("src/routes/_authenticated/portal/index.tsx")).toContain(
+      '<WearablesCard mode="summary" />',
+    );
+  });
+
+  it("never disappears silently when its data call fails", () => {
+    const card = read("src/components/portal/wearables-card.tsx");
+    expect(card).toMatch(/isError \|\| !data/);
+    expect(card).toContain("aren&apos;t available right now");
+  });
+});

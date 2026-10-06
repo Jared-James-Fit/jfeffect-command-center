@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Moon, HeartPulse, Footprints, Watch, RefreshCw } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
 import { Card } from "@/components/ui/card";
@@ -43,13 +44,17 @@ const STATE_STYLE: Record<RecoveryState, { label: string; cls: string }> = {
 
 const QUERY_KEY = ["wearable-overview"] as const;
 
-export function WearablesCard() {
+/**
+ * mode "full"    : Account page. Connect / reconnect / disconnect / sharing, always shown to the athlete.
+ * mode "summary" : Home. Only appears once a device is connected, with a link to manage it.
+ */
+export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) {
   const qc = useQueryClient();
   const pov = usePovArgs();
   const overviewFn = usePovFn(getWearableOverview);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, error } = useQuery({
     queryKey: [...QUERY_KEY, pov.viewAsClientId ?? "me"],
     staleTime: 60_000,
     queryFn: () => overviewFn({ data: {} }),
@@ -134,12 +139,32 @@ export function WearablesCard() {
     ? (WEARABLE_PROVIDERS.find((p) => p.id === recovery.provider)?.label ?? recovery.provider)
     : null;
 
-  if (isPending || !data) return null;
+  if (isPending) return null;
+  if (isError || !data) {
+    // Never vanish silently: if this fails (migration not applied, network), say so on the settings page.
+    if (mode === "summary") return null;
+    return (
+      <Card className="p-4 space-y-1">
+        <div className="flex items-center gap-2">
+          <Watch className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold">Devices &amp; recovery</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Device connections aren&apos;t available right now. Try again in a moment.
+        </p>
+        {error instanceof Error && error.message && (
+          <p className="text-xs text-muted-foreground/70 break-words">{error.message}</p>
+        )}
+      </Card>
+    );
+  }
 
   const active = data.connections.filter((c) => c.status !== "disconnected");
   const isOwner = data.isOwner;
   // A coach viewing a client who has nothing connected (or isn't sharing) sees nothing.
   if (!isOwner && active.length === 0) return null;
+  // On Home, setup lives in Account; only show the card once there is something to show.
+  if (mode === "summary" && active.length === 0) return null;
 
   const offered = WEARABLE_PROVIDERS.filter((p) => !active.some((c) => c.provider === p.id));
 
@@ -262,7 +287,7 @@ export function WearablesCard() {
             {c.last_error && c.status !== "connected" && (
               <p className="text-xs text-red-400">{c.last_error}</p>
             )}
-            {isOwner && (
+            {isOwner && mode === "full" && (
               <>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm">Share with my coach</span>
@@ -307,7 +332,7 @@ export function WearablesCard() {
         );
       })}
 
-      {isOwner && (
+      {isOwner && mode === "full" && (
         <div className="space-y-2">
           {active.length === 0 && (
             <p className="text-sm text-muted-foreground">
