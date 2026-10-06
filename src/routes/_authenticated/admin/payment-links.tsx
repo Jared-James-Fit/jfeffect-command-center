@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState, useRef, lazy, Suspense } from "react";
+import { useEffect, useMemo, useState, useRef, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,7 @@ import { ProductAccessGrantDialog } from "@/components/product-access-grant-dial
 import { Lock as LockIcon } from "lucide-react";
 import { BILLING_FREQUENCY_OPTIONS, toStripeRecurring, type BillingFrequency } from "@/lib/billing-frequency";
 
-const NewProductModal = lazy(() => import("@/components/products/new-product-modal"));
+const NewProductModal = lazyWithRetry(() => import("@/components/products/new-product-modal"));
 
 export const Route = createFileRoute("/_authenticated/admin/payment-links")({
   component: PaymentLinksRedirect,

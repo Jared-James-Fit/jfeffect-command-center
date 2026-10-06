@@ -73,6 +73,39 @@ export function attemptChunkReload(reason: string): boolean {
   return true;
 }
 
+let holds = 0;
+let lastHandledAt = 0;
+
+/**
+ * Pause the automatic reload while a lazy component is loading. The loader
+ * retries and shows an inline retry/update prompt itself, so a failed fetch
+ * must not also hard-reload the page underneath the user. Call the returned
+ * function once the load has settled. The pause lingers briefly afterwards
+ * because Vite's preload error events can arrive just after the import rejects.
+ */
+export function holdChunkRecovery(): () => void {
+  holds += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    holds = Math.max(0, holds - 1);
+    lastHandledAt = Date.now();
+  };
+}
+
+export function isChunkRecoveryPaused(): boolean {
+  return holds > 0 || Date.now() - lastHandledAt < 3000;
+}
+
+/** Skip the stale-deployment reload (reload only for the page-level failures nothing else handles). */
+function shouldAutoReload(reason: string): boolean {
+  if (!isChunkRecoveryPaused()) return true;
+  // eslint-disable-next-line no-console
+  console.warn("[chunk-recovery] lazy load is handling this failure; skipping reload", { reason });
+  return false;
+}
+
 function clearReloadGuard() {
   if (typeof window === "undefined") return;
   try {
@@ -101,19 +134,19 @@ export function initChunkRecovery() {
     console.warn("[chunk-recovery] vite:preloadError", {
       message: (e.payload as { message?: string })?.message,
     });
-    attemptChunkReload("vite:preloadError");
+    if (shouldAutoReload("vite:preloadError")) attemptChunkReload("vite:preloadError");
   });
 
   // Catch dynamic import rejections that don't go through vite:preloadError.
   window.addEventListener("unhandledrejection", (event) => {
-    if (isChunkLoadError(event.reason)) {
+    if (isChunkLoadError(event.reason) && shouldAutoReload("unhandledrejection")) {
       attemptChunkReload("unhandledrejection");
     }
   });
 
   // Catch <script> load failures for old hashed bundles.
   window.addEventListener("error", (event) => {
-    if (isChunkLoadError(event.error) || isChunkLoadError(event.message)) {
+    if ((isChunkLoadError(event.error) || isChunkLoadError(event.message)) && shouldAutoReload("window.error")) {
       attemptChunkReload("window.error");
     }
   });

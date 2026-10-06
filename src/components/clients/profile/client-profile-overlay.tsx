@@ -1,10 +1,11 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronLeft } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { useOverlayClientId, useCloseClientProfile } from "@/lib/open-client-profile";
 
 // Lazy-load the heavy workspace so it only ships when a client is opened.
-const ClientProfileWorkspace = lazy(async () => {
+const ClientProfileWorkspace = lazyWithRetry(async () => {
   const mod = await import("@/routes/_authenticated/admin/clients.$id");
   return { default: mod.ClientProfileWorkspace };
 });

@@ -7,7 +7,8 @@
  * are untouched (RLS + Published filter as before).
  */
 
-import { lazy, Suspense, useState } from "react";
+import { Suspense, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -37,7 +38,7 @@ export function CookbookEntryCard({ viewer }: { viewer: CookbookViewer }) {
   );
 }
 
-const CookbookBody = lazy(() => import("./CookbookContent"));
+const CookbookBody = lazyWithRetry(() => import("./CookbookContent"));
 
 export function CookbookSheet({
   viewer,

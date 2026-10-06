@@ -1,17 +1,18 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
 import { Loader2 } from "lucide-react";
 import { AssignProgramDialog } from "./assign-program-dialog";
 
-const AssignedProgramsCard = lazy(() =>
+const AssignedProgramsCard = lazyWithRetry(() =>
   import("@/components/assigned-programs-card").then((m) => ({ default: m.AssignedProgramsCard })),
 );
-const NutritionTargetsPanel = lazy(() =>
+const NutritionTargetsPanel = lazyWithRetry(() =>
   import("@/components/nutrition-targets-panel").then((m) => ({ default: m.NutritionTargetsPanel })),
 );
-const CardioTargetsPanel = lazy(() =>
+const CardioTargetsPanel = lazyWithRetry(() =>
   import("@/components/cardio-targets-panel").then((m) => ({ default: m.CardioTargetsPanel })),
 );
 

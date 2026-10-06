@@ -23,6 +23,74 @@ export const INCLINE_TREADMILL_DEFAULT = {
   client_notes: "Complete the session when ANY ONE target is reached. Stop when whichever target comes first.",
 } as const;
 
+export type DefaultCardioConfig = {
+  cardio_type: string;
+  duration_minutes: number;
+  intensity: string;
+  calorie_target_min: number | null;
+  calorie_target_max: number | null;
+  client_notes: string;
+};
+
+/**
+ * Default cardio for "Apply Default Cardio". Every day type is an incline
+ * treadmill walk; day types only differ in starting duration/intensity, which
+ * the coach can tune per row before applying.
+ */
+const DEFAULT_CARDIO_OVERRIDES: Record<string, Partial<DefaultCardioConfig>> = {
+  "Low Day": { duration_minutes: 30, intensity: "Low Intensity" },
+  "Daily": { duration_minutes: 25 },
+};
+
+export function defaultCardioConfigFor(dayLabel: string): DefaultCardioConfig {
+  return {
+    cardio_type: INCLINE_TREADMILL_DEFAULT.cardio_type,
+    duration_minutes: INCLINE_TREADMILL_DEFAULT.duration_minutes,
+    intensity: INCLINE_TREADMILL_DEFAULT.intensity,
+    calorie_target_min: null,
+    calorie_target_max: null,
+    client_notes: INCLINE_TREADMILL_DEFAULT.client_notes,
+    ...DEFAULT_CARDIO_OVERRIDES[dayLabel],
+  };
+}
+
+/**
+ * Training weekdays for a client: the committed schedule is the source of
+ * truth (it is what workouts and the day resolver use); preferred days are only
+ * a fallback for clients who never committed.
+ */
+export function resolveTrainingWeekdays(prefs: {
+  committed_training_days?: unknown;
+  preferred_training_days?: unknown;
+} | null | undefined): CardioWeekday[] {
+  const committed = normalizeCardioWeekdays(prefs?.committed_training_days);
+  return committed.length ? committed : normalizeCardioWeekdays(prefs?.preferred_training_days);
+}
+
+/**
+ * Weekdays to save on a default cardio target. Returning [] keeps the legacy
+ * day-type resolver in charge — used when training days are unknown, because an
+ * explicit schedule beats legacy targets and would otherwise shadow them (e.g.
+ * "Non-Training" covering every day that isn't the high day).
+ */
+export function scheduledWeekdaysForDayType(input: {
+  dayType: string;
+  trainingDays: unknown;
+  highDay: string | null;
+  fullRestDay: string | null;
+}): CardioWeekday[] {
+  const training = new Set(normalizeCardioWeekdays(input.trainingDays));
+  const high = normalizeCardioWeekdays([input.highDay])[0] ?? null;
+  const fullRest = normalizeCardioWeekdays([input.fullRestDay])[0] ?? null;
+  if (input.dayType === "High Day") return high ? [high] : [];
+  if (training.size === 0) return [];
+  if (input.dayType === "Training Day") return CARDIO_WEEKDAYS.filter((d) => training.has(d));
+  if (input.dayType === "Rest Day" || input.dayType === "Non-Training Day") {
+    return CARDIO_WEEKDAYS.filter((d) => !training.has(d) && d !== high && d !== fullRest);
+  }
+  return [];
+}
+
 // Transparent coaching estimates, intentionally rounded rather than pseudo-precise.
 const BASELINE_DURATION_MINUTES = 15;
 const BASELINE_STEPS = 1500;

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { displayExerciseName } from "@/lib/exercise-display-name";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -57,7 +58,7 @@ import {
 } from "@/components/ui/alert-dialog";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
-const TrainingAnalyticsPreviewCard = lazy(() =>
+const TrainingAnalyticsPreviewCard = lazyWithRetry(() =>
   import("@/components/training-analytics-preview-card").then((m) => ({
     default: m.TrainingAnalyticsPreviewCard,
   })),
