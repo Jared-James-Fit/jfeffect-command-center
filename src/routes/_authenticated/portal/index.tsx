@@ -20,6 +20,7 @@ import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
+import { WearablesCard } from "@/components/portal/wearables-card";
 import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
@@ -346,6 +347,12 @@ function PortalHome() {
         ) : clientLoading ? (
           <SectionSkeleton height="h-52" />
         ) : null}
+
+        {client?.id && (
+          <SectionErrorBoundary label="Devices">
+            <WearablesCard />
+          </SectionErrorBoundary>
+        )}
 
         {/* 3 — Water Today */}
         {portalUserId && (

@@ -1,0 +1,386 @@
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, Moon, HeartPulse, Footprints, Watch, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
+import { WEARABLE_PROVIDERS } from "@/lib/wearables/providers";
+import {
+  resolveDaily,
+  summarizeRecovery,
+  trailingAverage,
+  type RecoveryState,
+} from "@/lib/wearables/analytics";
+import {
+  beginWearableConnect,
+  disconnectWearable,
+  getWearableOverview,
+  setWearableSharing,
+  syncWearableNow,
+} from "@/lib/wearables/wearables.functions";
+import { cn } from "@/lib/utils";
+
+const STATE_STYLE: Record<RecoveryState, { label: string; cls: string }> = {
+  good: { label: "Recovered", cls: "bg-emerald-500/15 text-emerald-400" },
+  watch: { label: "Watch", cls: "bg-amber-500/15 text-amber-400" },
+  low: { label: "Low recovery", cls: "bg-red-500/15 text-red-400" },
+  unknown: { label: "Building baseline", cls: "bg-muted text-muted-foreground" },
+};
+
+const QUERY_KEY = ["wearable-overview"] as const;
+
+export function WearablesCard() {
+  const qc = useQueryClient();
+  const pov = usePovArgs();
+  const overviewFn = usePovFn(getWearableOverview);
+  const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
+
+  const { data, isPending } = useQuery({
+    queryKey: [...QUERY_KEY, pov.viewAsClientId ?? "me"],
+    staleTime: 60_000,
+    queryFn: () => overviewFn({ data: {} }),
+  });
+
+  // Result of returning from the provider's authorize page.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const r = url.searchParams.get("wearable");
+    if (!r) return;
+    if (r === "oura_connected") toast.success("Oura connected. Pulling your last 30 days.");
+    else if (r === "oura_denied") toast("Oura connection cancelled.");
+    else toast.error("Couldn't connect Oura. Try again.");
+    url.searchParams.delete("wearable");
+    window.history.replaceState({}, "", url.toString());
+    qc.invalidateQueries({ queryKey: QUERY_KEY });
+  }, [qc]);
+
+  const refresh = () => qc.invalidateQueries({ queryKey: QUERY_KEY });
+
+  const connect = useMutation({
+    mutationFn: async (provider: string) =>
+      (await beginWearableConnect({ data: { provider } })).url,
+    onSuccess: (url) => {
+      window.location.href = url;
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't start the connection."),
+  });
+  const sync = useMutation({
+    mutationFn: (provider: string) => syncWearableNow({ data: { provider } }),
+    onSuccess: (r) => {
+      toast.success(r.days ? `Synced ${r.days} days.` : "Already up to date.");
+      refresh();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Sync failed."),
+  });
+  const share = useMutation({
+    mutationFn: (v: { provider: string; shared: boolean }) => setWearableSharing({ data: v }),
+    onSuccess: refresh,
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't update sharing."),
+  });
+  const disconnect = useMutation({
+    mutationFn: (v: { provider: string; deleteData: boolean }) => disconnectWearable({ data: v }),
+    onSuccess: () => {
+      toast.success("Disconnected.");
+      setConfirmDisconnect(null);
+      refresh();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't disconnect."),
+  });
+
+  const priority = useMemo(
+    () => (data?.connections ?? []).map((c) => c.provider),
+    [data?.connections],
+  );
+  const series = useMemo(
+    () => resolveDaily((data?.metrics ?? []) as any[], priority),
+    [data?.metrics, priority],
+  );
+  const recovery = useMemo(() => summarizeRecovery(series), [series]);
+  const latest = useMemo(
+    () => [...series].reverse().find((d) => d.sleep_minutes != null || d.hrv_ms != null),
+    [series],
+  );
+  const hrvSpark = useMemo(
+    () =>
+      series
+        .filter((d) => d.hrv_ms != null)
+        .slice(-30)
+        .map((d) => ({ d: d.metric_date, v: d.hrv_ms })),
+    [series],
+  );
+
+  if (isPending || !data) return null;
+
+  const active = data.connections.filter((c) => c.status !== "disconnected");
+  const isOwner = data.isOwner;
+  // A coach viewing a client who has nothing connected (or isn't sharing) sees nothing.
+  if (!isOwner && active.length === 0) return null;
+
+  const offered = WEARABLE_PROVIDERS.filter((p) => !active.some((c) => c.provider === p.id));
+
+  return (
+    <Card className="p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <Watch className="h-4 w-4 text-primary" />
+        <h3 className="font-semibold">Devices &amp; recovery</h3>
+        {recovery && (
+          <span
+            className={cn(
+              "ml-auto rounded-full px-2.5 py-0.5 text-xs font-medium",
+              STATE_STYLE[recovery.state].cls,
+            )}
+          >
+            {STATE_STYLE[recovery.state].label}
+          </span>
+        )}
+      </div>
+
+      {active.length > 0 && latest && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat
+              icon={Moon}
+              label="Sleep"
+              value={
+                latest.sleep_minutes != null ? `${(latest.sleep_minutes / 60).toFixed(1)}h` : "–"
+              }
+              sub={
+                trailingAverage(series, "sleep_minutes") != null
+                  ? `7d avg ${(trailingAverage(series, "sleep_minutes")! / 60).toFixed(1)}h`
+                  : undefined
+              }
+            />
+            <Stat
+              icon={Activity}
+              label="HRV"
+              value={latest.hrv_ms != null ? `${Math.round(latest.hrv_ms)} ms` : "–"}
+              sub={
+                recovery?.hrvPctVsBaseline != null
+                  ? `${recovery.hrvPctVsBaseline > 0 ? "+" : ""}${recovery.hrvPctVsBaseline}% vs baseline`
+                  : undefined
+              }
+            />
+            <Stat
+              icon={HeartPulse}
+              label="Resting HR"
+              value={latest.resting_hr != null ? `${Math.round(latest.resting_hr)} bpm` : "–"}
+              sub={
+                recovery?.restingHrDeltaBpm != null
+                  ? `${recovery.restingHrDeltaBpm > 0 ? "+" : ""}${recovery.restingHrDeltaBpm} vs baseline`
+                  : undefined
+              }
+            />
+            <Stat
+              icon={Footprints}
+              label="Steps"
+              value={
+                series[series.length - 1]?.steps != null
+                  ? series[series.length - 1].steps!.toLocaleString()
+                  : "–"
+              }
+              sub={
+                trailingAverage(series, "steps") != null
+                  ? `7d avg ${Math.round(trailingAverage(series, "steps")!).toLocaleString()}`
+                  : undefined
+              }
+            />
+          </div>
+          {recovery && recovery.reasons.length > 0 && (
+            <ul className="text-sm text-muted-foreground list-disc pl-5">
+              {recovery.reasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          )}
+          {hrvSpark.length > 3 && (
+            <div className="h-14">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={hrvSpark}>
+                  <YAxis hide domain={["dataMin - 5", "dataMax + 5"]} />
+                  <Area
+                    type="monotone"
+                    dataKey="v"
+                    stroke="hsl(var(--primary))"
+                    fill="hsl(var(--primary) / 0.15)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
+      {active.map((c) => {
+        const meta = WEARABLE_PROVIDERS.find((p) => p.id === c.provider);
+        return (
+          <div key={c.provider} className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{meta?.label ?? c.provider}</span>
+              <span className="text-xs text-muted-foreground">
+                {c.status === "reconnect_required"
+                  ? "Needs reconnecting"
+                  : c.last_synced_at
+                    ? `Synced ${new Date(c.last_synced_at).toLocaleString()}`
+                    : "Syncing…"}
+              </span>
+            </div>
+            {c.last_error && c.status !== "connected" && (
+              <p className="text-xs text-red-400">{c.last_error}</p>
+            )}
+            {isOwner && (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm">Share with my coach</span>
+                  <Switch
+                    checked={c.shared_with_coach}
+                    onCheckedChange={(v) => share.mutate({ provider: c.provider, shared: v })}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  {c.status === "reconnect_required" ? (
+                    <Button
+                      size="sm"
+                      onClick={() => connect.mutate(c.provider)}
+                      disabled={connect.isPending}
+                    >
+                      Reconnect
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => sync.mutate(c.provider)}
+                      disabled={sync.isPending}
+                    >
+                      <RefreshCw
+                        className={cn("h-3.5 w-3.5 mr-1.5", sync.isPending && "animate-spin")}
+                      />
+                      Sync now
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setConfirmDisconnect(c.provider)}
+                  >
+                    Disconnect
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })}
+
+      {isOwner && (
+        <div className="space-y-2">
+          {active.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Connect a device so your coach can program around your sleep, HRV and resting heart
+              rate, not just your training log.
+            </p>
+          )}
+          <div className="space-y-2">
+            {offered.map((p) => {
+              const ready = p.live && (p.id !== "oura" || data.configured.oura);
+              return (
+                <div key={p.id} className="flex items-center gap-3 rounded-lg border p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium">{p.label}</div>
+                    <div className="text-xs text-muted-foreground truncate">{p.blurb}</div>
+                  </div>
+                  {ready ? (
+                    <Button
+                      size="sm"
+                      onClick={() => connect.mutate(p.id)}
+                      disabled={connect.isPending}
+                    >
+                      Connect
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {p.live ? "Not set up" : "Coming soon"}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <AlertDialog
+        open={!!confirmDisconnect}
+        onOpenChange={(o) => !o && setConfirmDisconnect(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect device?</AlertDialogTitle>
+            <AlertDialogDescription>
+              We stop syncing and delete the access we hold. You can also erase the sleep, HRV and
+              activity history we already saved from this device.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                confirmDisconnect &&
+                disconnect.mutate({ provider: confirmDisconnect, deleteData: false })
+              }
+            >
+              Disconnect, keep history
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() =>
+                confirmDisconnect &&
+                disconnect.mutate({ provider: confirmDisconnect, deleteData: true })
+              }
+            >
+              Disconnect and delete data
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: typeof Moon;
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="rounded-lg bg-muted/40 p-3">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <div className="mt-1 text-lg font-semibold leading-none">{value}</div>
+      {sub && <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div>}
+    </div>
+  );
+}

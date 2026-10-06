@@ -275,6 +275,7 @@ import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/
 import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './routes/api/public/hooks/scheduled-messages-worker'
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
+import { Route as ApiPublicHooksWearablesSyncRouteImport } from './routes/api/public/hooks/wearables-sync'
 import { Route as ApiPublicPushSubscriptionChangeRouteImport } from './routes/api/public/push/subscription-change'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
@@ -291,6 +292,7 @@ import { Route as AuthenticatedAdminNutritionDashboardReviewSubmissionIdRouteImp
 import { Route as AuthenticatedAdminSettingsNotificationsCoachingApplicationsRouteImport } from './routes/_authenticated/admin/settings_.notifications.coaching-applications'
 import { Route as AuthenticatedMFormsAssignmentIdCompleteRouteImport } from './routes/_authenticated/m/forms.$assignmentId.complete'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
+import { Route as ApiPublicWearablesOuraCallbackRouteImport } from './routes/api/public/wearables/oura/callback'
 import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
 
 const IndexRoute = IndexRouteImport.update({
@@ -1822,6 +1824,12 @@ const ApiPublicHooksSmsRemindersRoute =
     path: '/api/public/hooks/sms-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksWearablesSyncRoute =
+  ApiPublicHooksWearablesSyncRouteImport.update({
+    id: '/api/public/hooks/wearables-sync',
+    path: '/api/public/hooks/wearables-sync',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicPushSubscriptionChangeRoute =
   ApiPublicPushSubscriptionChangeRouteImport.update({
     id: '/api/public/push/subscription-change',
@@ -1916,6 +1924,12 @@ const ApiPublicGoogleOauthCallbackRoute =
   ApiPublicGoogleOauthCallbackRouteImport.update({
     id: '/api/public/google/oauth/callback',
     path: '/api/public/google/oauth/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicWearablesOuraCallbackRoute =
+  ApiPublicWearablesOuraCallbackRouteImport.update({
+    id: '/api/public/wearables/oura/callback',
+    path: '/api/public/wearables/oura/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
 const AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute =
@@ -2174,6 +2188,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
+  '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -2206,6 +2221,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
+  '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
@@ -2453,6 +2469,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
+  '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -2485,6 +2502,7 @@ export interface FileRoutesByTo {
   '/admin/settings/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
+  '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
@@ -2739,6 +2757,7 @@ export interface FileRoutesById {
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
+  '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -2771,6 +2790,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings_/notifications/coaching-applications': typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   '/_authenticated/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
+  '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
@@ -3025,6 +3045,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
+    | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -3057,6 +3078,7 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications/coaching-applications'
     | '/m/forms/$assignmentId/complete'
     | '/api/public/google/oauth/callback'
+    | '/api/public/wearables/oura/callback'
     | '/admin/crm/contacts/'
     | '/m/workouts/$enrollmentId/$week/$day'
   fileRoutesByTo: FileRoutesByTo
@@ -3304,6 +3326,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
+    | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -3336,6 +3359,7 @@ export interface FileRouteTypes {
     | '/admin/settings/notifications/coaching-applications'
     | '/m/forms/$assignmentId/complete'
     | '/api/public/google/oauth/callback'
+    | '/api/public/wearables/oura/callback'
     | '/admin/crm/contacts'
     | '/m/workouts/$enrollmentId/$week/$day'
   id:
@@ -3589,6 +3613,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
+    | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -3621,6 +3646,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings_/notifications/coaching-applications'
     | '/_authenticated/m/forms/$assignmentId/complete'
     | '/api/public/google/oauth/callback'
+    | '/api/public/wearables/oura/callback'
     | '/_authenticated/admin/crm/contacts/'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
   fileRoutesById: FileRoutesById
@@ -3675,6 +3701,7 @@ export interface RootRouteChildren {
   ApiPublicHooksScheduledMessagesWorkerRoute: typeof ApiPublicHooksScheduledMessagesWorkerRoute
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
+  ApiPublicHooksWearablesSyncRoute: typeof ApiPublicHooksWearablesSyncRoute
   ApiPublicPushSubscriptionChangeRoute: typeof ApiPublicPushSubscriptionChangeRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
@@ -3682,6 +3709,7 @@ export interface RootRouteChildren {
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
   LovableEmailTransactionalSendRoute: typeof LovableEmailTransactionalSendRoute
   ApiPublicGoogleOauthCallbackRoute: typeof ApiPublicGoogleOauthCallbackRoute
+  ApiPublicWearablesOuraCallbackRoute: typeof ApiPublicWearablesOuraCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -5548,6 +5576,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSmsRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/wearables-sync': {
+      id: '/api/public/hooks/wearables-sync'
+      path: '/api/public/hooks/wearables-sync'
+      fullPath: '/api/public/hooks/wearables-sync'
+      preLoaderRoute: typeof ApiPublicHooksWearablesSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/push/subscription-change': {
       id: '/api/public/push/subscription-change'
       path: '/api/public/push/subscription-change'
@@ -5658,6 +5693,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/google/oauth/callback'
       fullPath: '/api/public/google/oauth/callback'
       preLoaderRoute: typeof ApiPublicGoogleOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/wearables/oura/callback': {
+      id: '/api/public/wearables/oura/callback'
+      path: '/api/public/wearables/oura/callback'
+      fullPath: '/api/public/wearables/oura/callback'
+      preLoaderRoute: typeof ApiPublicWearablesOuraCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/m/workouts/$enrollmentId/$week/$day': {
@@ -6489,6 +6531,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksScheduledSendWorkerRoute:
     ApiPublicHooksScheduledSendWorkerRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
+  ApiPublicHooksWearablesSyncRoute: ApiPublicHooksWearablesSyncRoute,
   ApiPublicPushSubscriptionChangeRoute: ApiPublicPushSubscriptionChangeRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
@@ -6496,17 +6539,8 @@ const rootRouteChildren: RootRouteChildren = {
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
   LovableEmailTransactionalSendRoute: LovableEmailTransactionalSendRoute,
   ApiPublicGoogleOauthCallbackRoute: ApiPublicGoogleOauthCallbackRoute,
+  ApiPublicWearablesOuraCallbackRoute: ApiPublicWearablesOuraCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
