@@ -157,8 +157,9 @@ export async function sendGroupMessage(input: {
   };
   const { data, error } = await db.from("group_messages").insert(row).select().single();
   if (error) throw error;
-  // bump group updated_at for sort order
-  await db.from("chat_groups").update({ updated_at: new Date().toISOString() }).eq("id", input.groupId);
+  // Bump group updated_at for sort order, without making the sender wait for it.
+  void db.from("chat_groups").update({ updated_at: new Date().toISOString() }).eq("id", input.groupId)
+    .then(() => {}, () => {});
   // Fire-and-forget push. Never block the send on push failures.
   if (data?.id) {
     void (async () => {

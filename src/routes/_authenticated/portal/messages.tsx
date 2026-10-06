@@ -41,6 +41,8 @@ function ClientMessages() {
   const { data: client } = useQuery({
     queryKey: ["my-client-id", portalUserId],
     enabled: !!portalUserId,
+    // A person's client row id doesn't change: don't make every open wait on this lookup.
+    staleTime: 30 * 60_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")

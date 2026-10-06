@@ -114,6 +114,8 @@ export function registerServiceWorker() {
  */
 export async function clearAllAppCaches() {
   if (typeof window === "undefined") return;
+  // Signed chat-media URLs belong to the signed-in user.
+  void import("@/hooks/use-chat-signed-urls").then((m) => m.clearChatSignedUrls()).catch(() => {});
   try {
     if ("caches" in window) {
       const keys = await caches.keys();

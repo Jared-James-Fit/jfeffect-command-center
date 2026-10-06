@@ -17,6 +17,8 @@ import { ClipboardList, FileSignature, UtensilsCrossed, ChevronRight } from "luc
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
 import { ChatVideoTile } from "@/components/chat-video-tile";
+import { captureVideoPoster } from "@/lib/video-poster";
+import { chatUrlCache, useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 
@@ -30,6 +32,9 @@ export type SharedAttachment = {
   mime?: string;
   duration?: number;
   storage_path?: string;
+  thumbnail_storage_path?: string;
+  width?: number;
+  height?: number;
   peaks?: number[];
   kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share";
   fallback_emoji?: string;
@@ -224,7 +229,13 @@ export async function uploadChatAttachment(
 
   onProgress?.(3);
   const ext = uploadFile.name.includes(".") ? uploadFile.name.split(".").pop() : "";
-  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext ? "." + ext : ""}`;
+  const stem = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const path = `${stem}${ext ? "." + ext : ""}`;
+  const isVideo = fileToAttachmentType(uploadFile) === "video";
+
+  // Grab a still frame while the video uploads (runs alongside it, never blocks it).
+  const posterP = isVideo ? captureVideoPoster(uploadFile) : Promise.resolve(null);
+
   await uploadLiftFileToStorage({
     file: uploadFile,
     userId: folder,
@@ -233,7 +244,8 @@ export async function uploadChatAttachment(
     onProgress: (pct) => onProgress?.(Math.max(3, pct)),
     signal,
   });
-  return {
+
+  const att: SharedAttachment = {
     type: fileToAttachmentType(uploadFile),
     url: "",
     storage_path: path,
@@ -241,22 +253,39 @@ export async function uploadChatAttachment(
     size: uploadFile.size,
     mime: uploadFile.type || file.type,
   };
+
+  if (isVideo) {
+    // Don't wait long: the poster is a nicety, the message must go out.
+    const poster = await Promise.race([posterP, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+    if (poster) {
+      try {
+        const thumbPath = `${stem}-poster.jpg`;
+        await uploadLiftFileToStorage({
+          file: new File([poster.blob], "poster.jpg", { type: "image/jpeg" }),
+          userId: folder,
+          bucket: "message-attachments",
+          path: thumbPath,
+          signal,
+        });
+        att.thumbnail_storage_path = thumbPath;
+        att.width = poster.width;
+        att.height = poster.height;
+        att.duration = poster.duration || undefined;
+        // The sender's own bubble shows it instantly, no signing round trip.
+        chatUrlCache.seed(thumbPath, URL.createObjectURL(poster.blob));
+      } catch { /* no poster: the bubble falls back to loading the video frame */ }
+    }
+  } else if (att.type === "image" && typeof URL !== "undefined") {
+    // Same for photos: the sender sees their picture without waiting for a signed URL.
+    chatUrlCache.seed(path, URL.createObjectURL(uploadFile));
+  }
+  return att;
 }
 
 /* ------------------------------- Signed URLs ------------------------------- */
 
 export function useSignedUrl(path?: string) {
-  const q = useQuery({
-    queryKey: ["msg-attach", path],
-    enabled: !!path,
-    staleTime: 1000 * 60 * 50,
-    queryFn: async () => {
-      const { data, error } = await supabase.storage.from("message-attachments").createSignedUrl(path!, 60 * 60);
-      if (error) throw error;
-      return data.signedUrl;
-    },
-  });
-  return q.data;
+  return useChatSignedUrl(path);
 }
 
 /* ------------------------------- Waveforms ------------------------------- */
@@ -477,9 +506,20 @@ function ImageAttachment({ att, messageId }: { att: SharedAttachment; messageId?
 
 function VideoAttachment({ att }: { att: SharedAttachment }) {
   const signed = useSignedUrl(att.storage_path);
+  const poster = useSignedUrl(att.thumbnail_storage_path);
   const src = att.storage_path ? signed : att.url;
-  if (!src) return null;
-  return <ChatVideoTile src={src} cacheKey={att.storage_path} name={att.name} />;
+  return (
+    <ChatVideoTile
+      src={src}
+      poster={poster}
+      expectPoster={!!att.thumbnail_storage_path}
+      width={att.width}
+      height={att.height}
+      duration={att.duration}
+      cacheKey={att.storage_path}
+      name={att.name}
+    />
+  );
 }
 
 function AudioAttachment({
