@@ -2,6 +2,8 @@
 // Stays intentionally simple — completion %, with light boost for notes,
 // light penalty for pain. No DB schema changes.
 
+import { displayExerciseName } from "@/lib/exercise-display-name";
+
 export type SummaryRow = {
   id: string;
   sets?: number | null;
@@ -121,7 +123,7 @@ export function computeWorkoutSummary(
         }
       }
     } else {
-      const name = row.exercise_name_override || row.exercises?.name || "Exercise";
+      const name = displayExerciseName(row);
       missedExercises.push(name);
     }
   }

@@ -16,13 +16,14 @@ import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
   estimateDayMinutes, durationRange, PERCENTAGE_BASES, type TrainingStyle,
 } from "@/lib/pl-programs";
-import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, EXERCISE_CARD_COLORS, HighlightedText, usePbDragging, beginPbDrag, endPbDrag } from "@/components/program-builder";
+import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exerciseAccent, HighlightedText, usePbDragging, beginPbDrag, endPbDrag } from "@/components/program-builder";
 import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
+import { resolveMovementFamily } from "@/lib/exercise-family";
+import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
 import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Palette } from "lucide-react";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DayDateButton } from "@/components/workout-day/day-date-button";
@@ -529,7 +530,7 @@ function TemplateEditor() {
     queryFn: async () =>
       (await supabase
         .from("exercises")
-        .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type, video_url, youtube_url, vimeo_url, primary_movement_pattern, muscle_groups, secondary_muscle_groups, lift_family, variation_type, counts_toward_volume, volume_multiplier")
+        .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type, movement_family, video_url, youtube_url, vimeo_url, primary_movement_pattern, muscle_groups, secondary_muscle_groups, lift_family, variation_type, counts_toward_volume, volume_multiplier")
         .eq("archived", false)
         .limit(10000)
         .order("name")).data ?? [],
@@ -2513,7 +2514,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       {rowHasVideo ? <Video className="h-2.5 w-2.5" /> : <VideoOff className="h-2.5 w-2.5" />}
     </span>
   );
-  const accent = exerciseAccent(exMeta, row.card_color);
+  // Colour is the exercise's movement family everywhere (shared module).
+  const family = resolveMovementFamily(exMeta, row.movement_family);
+  const accent = exerciseAccent(exMeta, null, row.movement_family);
   const restCat = resolveCategory(exMeta);
   const restDefault = defaultRestSeconds(exMeta);
   const effectiveRest = effectiveRestSeconds(row, exMeta);
@@ -2666,18 +2669,11 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   if (row.tempo) summaryParts.push(`tempo ${row.tempo}`);
   const restSummary = `rest ${fmtRestSeconds(effectiveRest)}`;
 
-  // Small aesthetic row-number badge. Hidden when no index is provided
-  // (e.g. the standalone single-row card view). Uses muted styling so it
-  // reads as a positional indicator, not part of the prescription.
+  // Order number, derived from the row's current position in the day (never
+  // stored): reorder or delete a row and every card renumbers automatically.
+  // Hidden when no index is provided (standalone single-row view).
   const RowIndexBadge = index == null ? null : (
-    <span
-      className="inline-flex shrink-0 select-none items-center justify-center rounded-full border border-border/60 bg-background/80 px-1.5 text-[10px] font-semibold tabular-nums leading-none text-muted-foreground shadow-sm backdrop-blur-sm"
-      style={{ minWidth: "1.5rem", height: "1.25rem" }}
-      aria-label={`Exercise ${index + 1} of ${row.index_total ?? ""}`}
-      title={`Exercise ${index + 1}`}
-    >
-      {index + 1}
-    </span>
+    <ExerciseOrderBadge position={index + 1} family={family} />
   );
 
   return (
@@ -2947,43 +2943,6 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               </Select>
               <div className="mt-2 text-[10px] text-foreground/70">
                 Current: <span className="font-semibold text-foreground">{TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}</span>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-7 w-7" title="Card color">
-                <Palette className="h-3.5 w-3.5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-2" align="end">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Card color</div>
-              <div className="grid grid-cols-5 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setRow({ ...row, card_color: null })}
-                  className={cn(
-                    "h-6 w-6 rounded-full border-2 bg-background text-[10px] leading-none text-muted-foreground hover:border-foreground",
-                    !row.card_color ? "border-foreground" : "border-border",
-                  )}
-                  title="Default (auto)"
-                >
-                  A
-                </button>
-                {EXERCISE_CARD_COLORS.map((c) => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setRow({ ...row, card_color: c.value })}
-                    className={cn(
-                      "h-6 w-6 rounded-full border-2 transition",
-                      c.swatch,
-                      row.card_color === c.value ? "border-foreground" : "border-transparent hover:border-foreground/50",
-                    )}
-                    title={c.label}
-                    aria-label={c.label}
-                  />
-                ))}
               </div>
             </PopoverContent>
           </Popover>

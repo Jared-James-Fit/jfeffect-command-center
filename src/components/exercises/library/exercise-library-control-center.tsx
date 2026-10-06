@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MOVEMENT_FAMILIES, MOVEMENT_FAMILY_COLOR_NAME, MOVEMENT_FAMILY_LABEL, resolveMovementFamily } from "@/lib/exercise-family";
+import { FamilyDot } from "@/components/exercise-order-badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -409,6 +411,7 @@ function ExerciseRow(p: RowProps) {
         className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-3 py-2.5 text-left lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
+            <FamilyDot family={resolveMovementFamily(e)} />
             <span className="truncate font-bold"><HighlightedExerciseName text={e.name} terms={p.highlightTerms} /></span>
             <VideoBadge e={e} onPreview={p.onPreview} />
             {p.aliases.length > 0 && <Pill tone="primary">{p.aliases.length} alias{p.aliases.length === 1 ? "" : "es"}</Pill>}
@@ -530,6 +533,19 @@ function ExerciseDetail(p: RowProps) {
                 onClick={() => void save({ exercise_family: familyDraft.trim() || null }, "Family updated")}>Save</Button>
             </div>
           ) : <div>{e.exercise_family || "—"}</div>}
+        </Section>
+
+        <Section title="Movement (card colour)" hint="Only an actual squat, bench or deadlift variation gets a lift colour. Leg Curl, Row, Pulldown… stay Accessory.">
+          {p.isAdmin ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <FamilyDot family={resolveMovementFamily(e)} />
+              <select aria-label="Movement family" value={resolveMovementFamily(e)} disabled={busy}
+                onChange={(ev) => void save({ movement_family: ev.target.value }, "Movement updated")}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                {MOVEMENT_FAMILIES.map((f) => <option key={f} value={f}>{MOVEMENT_FAMILY_LABEL[f]} · {MOVEMENT_FAMILY_COLOR_NAME[f]}</option>)}
+              </select>
+            </div>
+          ) : <div className="flex items-center gap-2"><FamilyDot family={resolveMovementFamily(e)} />{MOVEMENT_FAMILY_LABEL[resolveMovementFamily(e)]}</div>}
         </Section>
 
         <Section title={`Aliases (${p.aliases.length})`} hint="Other names that resolve here. They use this exercise's video and muscles.">
