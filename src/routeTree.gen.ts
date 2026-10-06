@@ -16,6 +16,7 @@ import { Route as AccountDeletionRouteImport } from './routes/account-deletion'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as ApplyRouteImport } from './routes/apply'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CoachingAgreementRouteImport } from './routes/coaching-agreement'
 import { Route as DeleteAccountRouteImport } from './routes/delete-account'
 import { Route as InstallRouteImport } from './routes/install'
 import { Route as JoinRouteImport } from './routes/join'
@@ -69,6 +70,7 @@ import { Route as AuthenticatedAdminCheckInsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminClientActionRequestsRouteImport } from './routes/_authenticated/admin/client-action-requests'
 import { Route as AuthenticatedAdminClientPovRouteImport } from './routes/_authenticated/admin/client-pov'
 import { Route as AuthenticatedAdminCoachingRouteImport } from './routes/_authenticated/admin/coaching'
+import { Route as AuthenticatedAdminCoachingAgreementsRouteImport } from './routes/_authenticated/admin/coaching-agreements'
 import { Route as AuthenticatedAdminCommunicationRouteImport } from './routes/_authenticated/admin/communication'
 import { Route as AuthenticatedAdminContentRouteImport } from './routes/_authenticated/admin/content'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
@@ -290,6 +292,11 @@ const ApplyRoute = ApplyRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoachingAgreementRoute = CoachingAgreementRouteImport.update({
+  id: '/coaching-agreement',
+  path: '/coaching-agreement',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DeleteAccountRoute = DeleteAccountRouteImport.update({
@@ -577,6 +584,12 @@ const AuthenticatedAdminCoachingRoute =
   AuthenticatedAdminCoachingRouteImport.update({
     id: '/coaching',
     path: '/coaching',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminCoachingAgreementsRoute =
+  AuthenticatedAdminCoachingAgreementsRouteImport.update({
+    id: '/coaching-agreements',
+    path: '/coaching-agreements',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminCommunicationRoute =
@@ -1693,6 +1706,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
+  '/coaching-agreement': typeof CoachingAgreementRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -1745,6 +1759,7 @@ export interface FileRoutesByFullPath {
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
+  '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
@@ -1942,6 +1957,7 @@ export interface FileRoutesByTo {
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
+  '/coaching-agreement': typeof CoachingAgreementRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -1991,6 +2007,7 @@ export interface FileRoutesByTo {
   '/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
+  '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
@@ -2189,6 +2206,7 @@ export interface FileRoutesById {
   '/app': typeof AppRoute
   '/apply': typeof ApplyRoute
   '/auth': typeof AuthRoute
+  '/coaching-agreement': typeof CoachingAgreementRoute
   '/delete-account': typeof DeleteAccountRoute
   '/install': typeof InstallRoute
   '/join': typeof JoinRoute
@@ -2241,6 +2259,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/client-action-requests': typeof AuthenticatedAdminClientActionRequestsRoute
   '/_authenticated/admin/client-pov': typeof AuthenticatedAdminClientPovRoute
   '/_authenticated/admin/coaching': typeof AuthenticatedAdminCoachingRoute
+  '/_authenticated/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/_authenticated/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/_authenticated/admin/content': typeof AuthenticatedAdminContentRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
@@ -2440,6 +2459,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/apply'
     | '/auth'
+    | '/coaching-agreement'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -2492,6 +2512,7 @@ export interface FileRouteTypes {
     | '/admin/client-action-requests'
     | '/admin/client-pov'
     | '/admin/coaching'
+    | '/admin/coaching-agreements'
     | '/admin/communication'
     | '/admin/content'
     | '/admin/content-ideas'
@@ -2689,6 +2710,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/apply'
     | '/auth'
+    | '/coaching-agreement'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -2738,6 +2760,7 @@ export interface FileRouteTypes {
     | '/admin/client-action-requests'
     | '/admin/client-pov'
     | '/admin/coaching'
+    | '/admin/coaching-agreements'
     | '/admin/communication'
     | '/admin/content'
     | '/admin/content-ideas'
@@ -2935,6 +2958,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/apply'
     | '/auth'
+    | '/coaching-agreement'
     | '/delete-account'
     | '/install'
     | '/join'
@@ -2987,6 +3011,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/client-action-requests'
     | '/_authenticated/admin/client-pov'
     | '/_authenticated/admin/coaching'
+    | '/_authenticated/admin/coaching-agreements'
     | '/_authenticated/admin/communication'
     | '/_authenticated/admin/content'
     | '/_authenticated/admin/content-ideas'
@@ -3186,6 +3211,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRoute
   ApplyRoute: typeof ApplyRoute
   AuthRoute: typeof AuthRoute
+  CoachingAgreementRoute: typeof CoachingAgreementRoute
   DeleteAccountRoute: typeof DeleteAccountRoute
   InstallRoute: typeof InstallRoute
   JoinRoute: typeof JoinRoute
@@ -3286,6 +3312,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/coaching-agreement': {
+      id: '/coaching-agreement'
+      path: '/coaching-agreement'
+      fullPath: '/coaching-agreement'
+      preLoaderRoute: typeof CoachingAgreementRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/delete-account': {
@@ -3657,6 +3690,13 @@ declare module '@tanstack/react-router' {
       path: '/coaching'
       fullPath: '/admin/coaching'
       preLoaderRoute: typeof AuthenticatedAdminCoachingRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/coaching-agreements': {
+      id: '/_authenticated/admin/coaching-agreements'
+      path: '/coaching-agreements'
+      fullPath: '/admin/coaching-agreements'
+      preLoaderRoute: typeof AuthenticatedAdminCoachingAgreementsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/communication': {
@@ -5157,6 +5197,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminClientActionRequestsRoute: typeof AuthenticatedAdminClientActionRequestsRoute
   AuthenticatedAdminClientPovRoute: typeof AuthenticatedAdminClientPovRoute
   AuthenticatedAdminCoachingRoute: typeof AuthenticatedAdminCoachingRoute
+  AuthenticatedAdminCoachingAgreementsRoute: typeof AuthenticatedAdminCoachingAgreementsRoute
   AuthenticatedAdminCommunicationRoute: typeof AuthenticatedAdminCommunicationRoute
   AuthenticatedAdminContentRoute: typeof AuthenticatedAdminContentRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
@@ -5271,6 +5312,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminClientActionRequestsRoute,
     AuthenticatedAdminClientPovRoute: AuthenticatedAdminClientPovRoute,
     AuthenticatedAdminCoachingRoute: AuthenticatedAdminCoachingRoute,
+    AuthenticatedAdminCoachingAgreementsRoute:
+      AuthenticatedAdminCoachingAgreementsRoute,
     AuthenticatedAdminCommunicationRoute: AuthenticatedAdminCommunicationRoute,
     AuthenticatedAdminContentRoute: AuthenticatedAdminContentRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
@@ -5663,6 +5706,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRoute,
   ApplyRoute: ApplyRoute,
   AuthRoute: AuthRoute,
+  CoachingAgreementRoute: CoachingAgreementRoute,
   DeleteAccountRoute: DeleteAccountRoute,
   InstallRoute: InstallRoute,
   JoinRoute: JoinRoute,

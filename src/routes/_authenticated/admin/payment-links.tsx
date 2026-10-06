@@ -149,9 +149,6 @@ type FormState = {
   termLength: string;
   termUnit: string;
   includedFeaturesText: string;
-  agreementRequired: boolean;
-  agreementTemplateId: string | null;
-  agreementBeforeService: boolean;
   status: "Active" | "Draft" | "Archived";
   notes: string;
   imageFile: File | null;
@@ -168,8 +165,7 @@ function emptyForm(): FormState {
     name: "", productType: "Online Coaching", description: "", details: "",
     priceText: "", currency: "CAD", paymentStructure: "One-time payment",
     termLength: "", termUnit: "Months",
-    includedFeaturesText: "", agreementRequired: false, agreementTemplateId: null,
-    agreementBeforeService: false, status: "Active", notes: "",
+    includedFeaturesText: "", status: "Active", notes: "",
     imageFile: null, imagePreview: null,
     stripePriceId: "", checkoutMode: "",
     generateStripeProduct: true, billingInterval: "", accessLevel: "",
@@ -188,9 +184,6 @@ function productToForm(p: Product): FormState {
     termLength: p.term_length ? String(p.term_length) : "",
     termUnit: p.term_unit ?? "Months",
     includedFeaturesText: (p.included_features ?? []).join("\n"),
-    agreementRequired: !!p.agreement_required,
-    agreementTemplateId: p.agreement_template_id ?? null,
-    agreementBeforeService: !!p.agreement_before_service,
     status: (STATUSES.includes((p.status as any)) ? (p.status as any) : "Active") as FormState["status"],
     notes: p.notes ?? "",
     imageFile: null,
@@ -334,15 +327,6 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
   const [manageMode, setManageMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-
-  const { data: agreementTemplates = [] } = useQuery({
-    queryKey: ["agreement-templates-active-for-products"],
-    queryFn: async () => (await supabase
-      .from("agreement_templates")
-      .select("id, name")
-      .eq("archived", false).eq("is_active", true)
-      .order("name")).data ?? [],
-  });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteFn({ data: { id } }),
@@ -736,9 +720,6 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                         <div className="mt-1.5 flex flex-wrap items-center gap-2">
                           <span className="text-sm font-black">{formatPrice(p.price_cents, p.currency)}</span>
                           {statusBadge}
-                          {p.agreement_required && (
-                            <Badge variant="outline" className="text-[10px]"><FileSignature className="mr-1 h-3 w-3" />Agreement</Badge>
-                          )}
                         </div>
                         <div className="mt-2">{primary}</div>
                       </div>
@@ -754,7 +735,6 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
       <ProductFormDialog
         open={editing.open}
         product={editing.product}
-        templates={agreementTemplates as any[]}
         onClose={() => setEditing({ open: false, product: null })}
         onSaved={() => { qc.invalidateQueries({ queryKey: ["coaching-products"] }); setEditing({ open: false, product: null }); }}
       />
@@ -764,7 +744,6 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
           <NewProductModal
             open={newProductOpen}
             defaultWorkspace="coaching"
-            agreementTemplates={agreementTemplates as any[]}
             onClose={() => setNewProductOpen(false)}
             onCreated={() => qc.invalidateQueries({ queryKey: ["coaching-products"] })}
           />
@@ -821,11 +800,10 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
 }
 
 function ProductFormDialog({
-  open, product, templates, onClose, onSaved,
+  open, product, onClose, onSaved,
 }: {
   open: boolean;
   product: Product | null;
-  templates: { id: string; name: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -893,9 +871,6 @@ function ProductFormDialog({
         termLength: form.termLength ? parseInt(form.termLength, 10) : null,
         termUnit: form.termUnit || null,
         includedFeatures,
-        agreementRequired: form.agreementRequired,
-        agreementTemplateId: form.agreementRequired ? form.agreementTemplateId : null,
-        agreementBeforeService: form.agreementRequired ? form.agreementBeforeService : false,
         status: form.status,
         notes: form.notes.trim() || null,
         stripePriceId: form.stripePriceId.trim() || null,
@@ -1129,30 +1104,6 @@ function ProductFormDialog({
           <div className="md:col-span-2">
             <Label>What's included (one per line)</Label>
             <Textarea rows={5} value={form.includedFeaturesText} onChange={(e) => set("includedFeaturesText", e.target.value)} placeholder={"Custom training program\nNutrition targets\nWeekly check-ins"} />
-          </div>
-
-          <div className="md:col-span-2 rounded-md border border-border bg-secondary/20 p-3 space-y-3">
-            <div className="flex items-center gap-3">
-              <Switch checked={form.agreementRequired} onCheckedChange={(v) => set("agreementRequired", v)} />
-              <Label>Agreement required</Label>
-            </div>
-            {form.agreementRequired && (
-              <>
-                <div>
-                  <Label className="text-xs">Required agreement template</Label>
-                  <Select value={form.agreementTemplateId ?? ""} onValueChange={(v) => set("agreementTemplateId", v || null)}>
-                    <SelectTrigger><SelectValue placeholder="Pick a template" /></SelectTrigger>
-                    <SelectContent>
-                      {templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Switch checked={form.agreementBeforeService} onCheckedChange={(v) => set("agreementBeforeService", v)} />
-                  <Label>Must be signed before service starts</Label>
-                </div>
-              </>
-            )}
           </div>
 
           <div className="md:col-span-2">

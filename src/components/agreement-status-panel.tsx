@@ -40,7 +40,7 @@ export function AgreementStatusPanel({ client }: { client: any }) {
     <Card className="border-border bg-card p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <FileSignature className="h-4 w-4" /> Coaching Agreement Status
+          <FileSignature className="h-4 w-4" /> Agreement record (manual override)
         </h3>
         <Badge variant="outline" className={f.agreement_signed ? "border-primary/40 text-primary" : "border-destructive/40 text-destructive"}>
           {f.agreement_signed ? "Signed" : "Not on file"}

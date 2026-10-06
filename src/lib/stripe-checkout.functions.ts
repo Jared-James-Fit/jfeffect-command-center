@@ -16,6 +16,7 @@ import {
   assertFirst50Assignment,
   assertFirst50CanonicalStripeSnapshot,
 } from "@/lib/first50-policy";
+import { AGREEMENT_CHECKOUT_PARAMS } from "@/lib/coaching-agreement/checkout-notice";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -192,6 +193,8 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
       "automatic_tax[enabled]": "true",
       // Require billing address so Stripe Tax can determine the correct rate
       billing_address_collection: "required",
+      // The in-app Coaching Agreement covers every purchase; point at it here.
+      ...AGREEMENT_CHECKOUT_PARAMS,
     };
 
     // Enable invoice creation for one-time payments so customers receive a tax receipt
@@ -453,6 +456,8 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       "automatic_tax[enabled]": "true",
       // Require billing address so Stripe Tax can determine the correct rate
       billing_address_collection: "required",
+      // The in-app Coaching Agreement covers every purchase; point at it here.
+      ...AGREEMENT_CHECKOUT_PARAMS,
     };
     // Link the client's auth user when one exists (never required).
     const { data: clientUser } = await supabase
