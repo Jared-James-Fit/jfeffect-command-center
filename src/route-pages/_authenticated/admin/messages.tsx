@@ -650,6 +650,16 @@ export function MessagesInbox({
               </button>
             ))}
           </div>
+          {filter === "Forms & Check-ins" && (
+            <Link
+              to="/admin/forms"
+              search={{ tab: "requests" } as any}
+              className="mt-1 flex items-center justify-between rounded-lg bg-secondary/50 px-3 py-2 text-[11px] font-semibold text-foreground hover:bg-secondary"
+            >
+              <span>Manage outstanding requests: open, re-send or delete</span>
+              <span aria-hidden>›</span>
+            </Link>
+          )}
         </header>
         <div
           className={cn(

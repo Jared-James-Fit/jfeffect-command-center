@@ -264,6 +264,9 @@ async function createRequest(
   return { ...checkin, request_message_id: message.id };
 }
 
+/** Server-only: used by the admin Requests tracker to re-send a check-in. */
+export { createRequest as createMessengerCheckinRequest };
+
 export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId?: string }) =>
