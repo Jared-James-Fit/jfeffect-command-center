@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyOutbound, waitingState } from "@/lib/inbox-waiting";
-import { deriveRequests, requestChip } from "@/lib/inbox-requests";
+import { deriveRequests, latestToReview, requestChip } from "@/lib/inbox-requests";
 
 const H = 3_600_000;
 const now = Date.parse("2026-10-06T12:00:00Z");
@@ -81,6 +81,43 @@ describe("deriveRequests / requestChip", () => {
     const review = deriveRequests({ checkins: [], messages: [], submissions: [], toReview: [{ client_id: "e", kind: "checkin", submitted_at: ago(1) }] });
     expect(requestChip(review.get("e"), now)).toEqual({ tone: "filled", text: "Filled · review" });
     expect(requestChip(undefined, now)).toBeNull();
+  });
+});
+
+describe("missed requests", () => {
+  const sup = (client: string, h: number) => ({ client_id: client, task_type: "weekly_checkin", status: "superseded", created_at: ago(h) });
+  it("counts recent unanswered-and-replaced requests, ignores ones older than 28 days", () => {
+    const r = deriveRequests({
+      checkins: [sup("a", 24 * 7), sup("a", 24 * 14), sup("a", 24 * 40), { client_id: "a", task_type: "weekly_checkin", status: "completed", created_at: ago(2) }],
+      submissions: [], messages: [], toReview: [], now,
+    });
+    expect(r.get("a")!.missed).toBe(2);
+    expect(requestChip(r.get("a"), now)).toEqual({ tone: "pending", text: "2 missed" });
+  });
+  it("appends missed to the not-filled chip", () => {
+    const r = deriveRequests({
+      checkins: [sup("b", 24 * 8), { client_id: "b", task_type: "weekly_checkin", status: "pending", created_at: ago(5) }],
+      submissions: [], messages: [], toReview: [], now,
+    });
+    expect(requestChip(r.get("b"), now)).toEqual({ tone: "pending", text: "Weekly check-in not filled · 1 missed" });
+  });
+});
+
+describe("latestToReview", () => {
+  const row = (client: string, h: number, type = "weekly_checkin", kind: "checkin" | "form" = "checkin") =>
+    ({ client_id: client, kind, type, submitted_at: ago(h) });
+  it("counts only the latest filled check-in per type, not the whole history", () => {
+    const rows = [row("a", 24 * 2), row("a", 24 * 9), row("a", 24 * 12)];
+    expect(latestToReview(rows, new Map(), now)).toHaveLength(1);
+  });
+  it("a check-in stops needing review once I reply after it, or after 14 days", () => {
+    expect(latestToReview([row("a", 30)], new Map([["a", ago(10)]]), now)).toHaveLength(0);
+    expect(latestToReview([row("a", 30)], new Map([["a", ago(40)]]), now)).toHaveLength(1);
+    expect(latestToReview([row("a", 24 * 15)], new Map(), now)).toHaveLength(0);
+  });
+  it("forms rely on reviewed_at (filtered upstream): latest per form, no reply rule", () => {
+    const rows = [row("a", 5, "f1", "form"), row("a", 50, "f1", "form"), row("a", 6, "f2", "form")];
+    expect(latestToReview(rows, new Map([["a", ago(1)]]), now)).toHaveLength(2);
   });
 });
 
