@@ -27,6 +27,7 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 
 /** Hover text for the one primary button. Payment and check-in shortcuts live in the status badges. */
 const OPEN_CLIENT_HINT = "Open this client's full profile: training, nutrition, messages, billing and more.";
@@ -58,6 +59,26 @@ function RemindButton({ r, primary, close }: { r: DirectoryRow; primary: boolean
   );
 }
 
+/** One-tap "this is handled": closes everything Review Due counts for the client. */
+function MarkReviewedButton({ r, primary, close }: { r: DirectoryRow; primary: boolean; close: () => void }) {
+  const queryClient = useQueryClient();
+  const mark = useMutation({
+    mutationFn: () => markClientReviewsReviewed(r.id),
+    onSuccess: (n) => {
+      toast.success(n > 0 ? `Marked reviewed for ${r.full_name ?? "the client"}` : "Nothing was waiting");
+      refreshReviewQueries(queryClient);
+      close();
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Couldn't mark this reviewed"),
+  });
+  return (
+    <button type="button" className={actionClass(primary)} disabled={mark.isPending} onClick={() => mark.mutate()}>
+      {mark.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <CheckCircle2 aria-hidden />}
+      Mark reviewed
+    </button>
+  );
+}
+
 /** The buttons a status explanation offers, by kind. */
 function ChipActions({
   r, actions, isAdmin, close,
@@ -77,7 +98,9 @@ function ChipActions({
           case "agreement":
             return <ClientNameLink key={a} clientId={r.id} tab="agreements" className={cls} onClick={close}>Open agreement</ClientNameLink>;
           case "reviews":
-            return <Link key={a} to="/admin/check-in-reviews" className={cls} onClick={close}>Review check-ins</Link>;
+            return <Link key={a} to="/admin/messages" search={{ client: r.id }} className={cls} onClick={close}>Open check-in</Link>;
+          case "mark_reviewed":
+            return <MarkReviewedButton key={a} r={r} primary={i === 0} close={close} />;
           case "program":
             return <Link key={a} to="/admin/program-assign/$clientId" params={{ clientId: r.id }} className={cls} onClick={close}>Build next block</Link>;
         }
