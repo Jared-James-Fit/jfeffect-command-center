@@ -1,5 +1,30 @@
 # Wearables: setup and operations
 
+## Go-live checklist (Oura first)
+Do these in order. Nothing shows a Connect button until steps 1 to 4 are done.
+
+1. **Deploy** the branch (merge to `main`). Merges cleanly with `main` as of 6 Oct 2026.
+2. **Apply the migrations**, in this order, in the Supabase SQL editor or your normal migration flow:
+   - `supabase/migrations/20261006140000_wearables_foundation.sql`
+   - `supabase/migrations/20261006150000_client_daily_training_load.sql`
+   If step 2 is skipped, Account > Devices shows "Device connections aren't available right now".
+3. **Register the app with Oura** (Oura developer portal, "Cloud API" applications):
+   - Redirect URI: `https://jfeffect.com/api/public/wearables/oura/callback`
+   - Scopes needed: `personal`, `daily`, `heartrate`
+   - Copy the client ID and client secret.
+   - Oura limits how many users an unapproved app can connect; check the portal for the current cap before inviting everyone.
+4. **Set the environment variables** on the deployed app:
+   - `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET`
+   - `WEARABLES_OAUTH_STATE_SECRET`: any random 32+ char string (`openssl rand -hex 32`)
+   - `SCHEDULED_WORKER_SECRET`: already used by the other workers; reuse it.
+5. **Schedule the sync** (every ~3 hours) by calling `POST https://jfeffect.com/api/public/hooks/wearables-sync`
+   with the header `x-worker-secret: <SCHEDULED_WORKER_SECRET>`. Same mechanism as `nutrition-tick`.
+6. **Test with your own Oura account**: Account > Devices > Connect. Expect your last 30 days within a minute.
+   Compare sleep, HRV and resting HR with what the Oura app shows. The Oura endpoint and field names were
+   written without access to Oura's docs, so this is the real verification.
+7. **Privacy policy** must mention health data (sleep, HRV, heart rate) before inviting clients.
+
+
 ## What is live
 | Source | Path | Status |
 |---|---|---|

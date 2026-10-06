@@ -154,7 +154,7 @@ describe("analytics", () => {
 });
 
 describe("wearables security contract", () => {
-  const migration = read("supabase/migrations/20261006090000_wearables_foundation.sql");
+  const migration = read("supabase/migrations/20261006140000_wearables_foundation.sql");
 
   it("keeps tokens unreachable from client roles", () => {
     expect(migration).toContain(
@@ -449,7 +449,7 @@ describe("training load vs recovery", () => {
 });
 
 describe("daily training load RPC contract", () => {
-  const sql = read("supabase/migrations/20261006100000_client_daily_training_load.sql");
+  const sql = read("supabase/migrations/20261006150000_client_daily_training_load.sql");
 
   it("is gated to the athlete, their coach or an admin, and is not callable anonymously", () => {
     expect(sql).toContain("public.can_view_client_training(_client_id)");
