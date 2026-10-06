@@ -49,15 +49,23 @@ BEGIN
   SELECT coalesce(round(sum(s.load_kg * s.reps), 1), 0) INTO v_tonnage
     FROM public.client_qualifying_sets(pc.client_id) s WHERE s.workout_key = k;
 
+  -- Primary lift = the first programmed exercise with a qualifying set; its
+  -- best set across ALL of its rows (a ramp/top-set row before the work sets
+  -- must not become the headline).
+  WITH qs AS (
+    SELECT s.exercise_key, s.exercise_name, s.reps, s.load_kg, e.sort_order
+      FROM public.client_qualifying_sets(pc.client_id) s
+      JOIN public.pl_row_results r ON r.id = s.set_id
+      JOIN public.pl_exercise_rows e ON e.id = r.row_id
+     WHERE s.workout_key = k
+  ),
+  primary_lift AS (SELECT qs.exercise_key FROM qs ORDER BY qs.sort_order ASC LIMIT 1)
   SELECT jsonb_build_object('exercise_name', t.exercise_name, 'reps', t.reps, 'load_kg', t.load_kg)
     INTO v_top
     FROM (
-      SELECT s.exercise_name, s.reps, s.load_kg
-        FROM public.client_qualifying_sets(pc.client_id) s
-        JOIN public.pl_row_results r ON r.id = s.set_id
-        JOIN public.pl_exercise_rows e ON e.id = r.row_id
-       WHERE s.workout_key = k
-       ORDER BY e.sort_order ASC, (s.load_kg * (1 + s.reps / 30.0)) DESC, s.load_kg DESC
+      SELECT qs.exercise_name, qs.reps, qs.load_kg
+        FROM qs JOIN primary_lift pl ON pl.exercise_key = qs.exercise_key
+       ORDER BY (qs.load_kg * (1 + qs.reps / 30.0)) DESC, qs.load_kg DESC
        LIMIT 1) t;
 
   WITH rec AS (

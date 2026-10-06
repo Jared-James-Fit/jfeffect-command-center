@@ -304,6 +304,11 @@ describe("community platform migration contract", () => {
     expect(migration2).toContain("REVOKE ALL ON FUNCTION public.community_post_json(uuid, uuid) FROM PUBLIC, anon, authenticated;");
     expect(migration2).toContain("REVOKE ALL ON public.community_profiles FROM anon, authenticated;");
   });
+  it("headlines the primary lift's best set across all its rows, not a ramp row", () => {
+    // Regression: a 150 kg ramp row (sort 0) beat the 305 kg work row (sort 1) of the same lift.
+    expect(migration2).toContain("primary_lift AS (SELECT qs.exercise_key FROM qs ORDER BY qs.sort_order ASC LIMIT 1)");
+    expect(migration2).toContain("FROM qs JOIN primary_lift pl ON pl.exercise_key = qs.exercise_key");
+  });
   it("caps bios to match the UI", () => {
     expect(migration2).toContain("char_length(bio) <= 150");
   });
