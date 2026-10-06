@@ -118,6 +118,25 @@ function bestSet(logs: PreviousLiftLog[]): PreviousLiftLog | null {
   })[0] ?? null;
 }
 
+/**
+ * This exercise's logs from OTHER sessions: canonical exercise id first,
+ * conservative normalized-name fallback only when no id match exists.
+ */
+export function matchHistoryLogs(
+  identity: PreviousLiftIdentity,
+  logs: PreviousLiftLog[],
+  currentSessionKey: string,
+): PreviousLiftLog[] {
+  const normalizedName = normalizeExerciseHistoryName(identity.exerciseName);
+  const idMatches = identity.exerciseId ? logs.filter((log) => log.exerciseId === identity.exerciseId) : [];
+  const matches = idMatches.length > 0
+    ? idMatches
+    : normalizedName
+      ? logs.filter((log) => normalizeExerciseHistoryName(log.exerciseName) === normalizedName)
+      : [];
+  return matches.filter((log) => log.sessionKey !== currentSessionKey && occurredAtMs(log) > 0);
+}
+
 /** Select one Last Time set per current workout row from a single history batch. */
 export function selectPreviousLifts(
   identities: PreviousLiftIdentity[],

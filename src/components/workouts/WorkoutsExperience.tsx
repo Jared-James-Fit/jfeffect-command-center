@@ -1122,6 +1122,7 @@ function SelectedDayCard({
         recoveryToday: existingReview.recovery_today ?? null,
         sleepBucket: existingReview.sleep_bucket ?? null,
         sleepNotes: existingReview.sleep_notes ?? null,
+        reviewVersion: existingReview.review_version ?? null,
         editCount: existingReview.review_edit_count ?? 0,
         submittedAt:
           existingReview.review_submitted_at ?? existingReview.created_at ?? null,
