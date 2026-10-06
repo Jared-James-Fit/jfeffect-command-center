@@ -42,14 +42,14 @@ export const WEARABLE_PROVIDERS: readonly WearableProvider[] = [
     label: "Apple Health",
     kind: "health_store",
     live: false,
-    blurb: "Apple Watch, plus Garmin and others that sync to Health",
+    blurb: "Apple Watch. Garmin shares only some data to Apple Health",
   },
   {
     id: "health_connect",
     label: "Health Connect",
     kind: "health_store",
     live: false,
-    blurb: "Android: Garmin, Samsung, Fitbit, Oura and more",
+    blurb: "Android: Garmin, Samsung, Fitbit and more, if they share to Health Connect",
   },
   { id: "whoop", label: "WHOOP", kind: "oauth", live: false, blurb: "Recovery, strain, sleep" },
   {
@@ -57,7 +57,7 @@ export const WEARABLE_PROVIDERS: readonly WearableProvider[] = [
     label: "Garmin",
     kind: "oauth",
     live: false,
-    blurb: "Needs Garmin Health API approval",
+    blurb: "Direct Garmin API needs partner approval (limited right now)",
   },
   { id: "fitbit", label: "Fitbit", kind: "oauth", live: false, blurb: "Sleep, steps, resting HR" },
   {

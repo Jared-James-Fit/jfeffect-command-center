@@ -32,7 +32,19 @@ Do these in order. Nothing shows a Connect button until steps 1 to 4 are done.
 | Apple Health | Phone pushes via `ingestHealthStoreMetrics` | Server + normalizer + bridge built, **native plugin not installed** |
 | Health Connect (Android) | Same | Same |
 
-Garmin and Apple Watch data reach us through Apple Health / Health Connect.
+Apple Watch data reaches us through Apple Health. Garmin is more limited, see below.
+
+## Garmin (read this before promising Garmin support)
+Status of what I could and could not verify (Garmin's own pages were not reachable when this was written):
+- **Direct Garmin Health API**: partner program, legal entities only (no personal use), reportedly paused for new
+  applications, and beat-to-beat HRV data needs a commercial license fee. Treat as not available.
+- **Garmin Connect -> Health Connect (Android)**: reportedly shares sleep stages, heart rate, resting HR and HRV. Best path.
+- **Garmin Connect -> Apple Health (iPhone)**: reportedly shares steps, heart rate, active/resting energy and sleep,
+  but NOT HRV. Resting HR is unconfirmed. Low-quality sources, so verify on a real phone:
+  Apple Health > Browse > Heart > Heart Rate Variability (and Resting Heart Rate, Sleep) > Data Sources & Access.
+  If "Garmin Connect" is not listed, that signal will not arrive.
+- Without HRV, recovery is judged from sleep and resting HR only, which is weaker.
+- Unofficial Garmin Connect scrapers need the athlete's Garmin password and break Garmin's terms. Do not use.
 
 ## Oura
 1. Register an app at Oura. Redirect URI: `https://jfeffect.com/api/public/wearables/oura/callback`.
