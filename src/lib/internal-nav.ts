@@ -94,6 +94,9 @@ const REGISTRY: Entry[] = [
   // ── CLIENTS ──────────────────────────────────────────────────────────
   { to: "/admin/clients", label: "Clients", icon: Users, group: "Clients",
     visibleTo: ["admin", "coach", "assistant_coach", "sales", "support"] },
+  { to: "/admin/coaching-agreements", label: "Coaching Agreements", icon: FileSignature, group: "Clients",
+    visibleTo: ["admin"],
+    keywords: ["agreement", "contract", "waiver", "liability", "signed", "unsigned", "e-sign", "sign", "remind", "resend"] },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardCheck, group: "Clients",
     visibleTo: ["admin", "coach", "assistant_coach"] },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Clients",
@@ -105,7 +108,7 @@ const REGISTRY: Entry[] = [
   { to: "/admin/coaching", label: "Coaching Hub", icon: ClipboardList, group: "Clients",
     visibleTo: ["admin", "coach", "assistant_coach"], section: "Legacy Hubs",
     keywords: ["coaching", "check-ins", "training intelligence", "action requests"] },
-  { to: "/admin/agreements", label: "Client Agreements", icon: FileSignature, group: "Clients",
+  { to: "/admin/agreements", label: "SignNow Agreements (old)", icon: FileSignature, group: "Clients",
     visibleTo: ["admin", "coach"], section: "Setup" },
   { to: "/admin/members", label: "App Members", icon: UserPlus, group: "Clients",
     visibleTo: ["admin"], section: "Setup" },

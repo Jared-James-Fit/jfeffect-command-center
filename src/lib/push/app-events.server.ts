@@ -16,7 +16,9 @@ export type AppEvent =
   | "nutrition_plan_ready"
   | "lift_video_uploaded"
   | "client_lift_comment"
+  | "agreement_signed"
   // → client
+  | "agreement_requested"
   | "checkin_requested"
   | "nutrition_requested"
   | "checkin_reviewed"
@@ -68,6 +70,18 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: (n) => `${n} replied on a lift`,
     body: () => "Tap to read the reply.",
     url: () => "/admin/lift-videos", rateMinutes: 60,
+  },
+  agreement_signed: {
+    to: "staff", category: "billing",
+    title: (n) => `${n} signed their agreement`,
+    body: () => "Coaching Agreement signed. Tap to view the signed copy.",
+    url: (id) => `/admin/clients/${id}?tab=documents`, rateMinutes: 60,
+  },
+  agreement_requested: {
+    to: "client", category: "reminders",
+    title: () => "Your Coaching Agreement",
+    body: (coach) => `${coach} sent your agreement to sign. It takes about 2 minutes.`,
+    url: () => "/portal/agreements?sign=1", rateMinutes: 60,
   },
   checkin_requested: {
     to: "client", category: "check_ins",

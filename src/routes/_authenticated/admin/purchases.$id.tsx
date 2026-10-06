@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClientNameLink } from "@/components/clients/client-name-link";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -14,7 +13,7 @@ import { ArrowLeft, ExternalLink, Trash2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { PAYMENT_RECORD_STATUSES, PURCHASE_RECORD_STATUSES } from "@/lib/offers";
-import { PurchaseAgreementBadge, computePurchaseAgreementStatus } from "@/components/purchase-agreement-status";
+import { ClientAgreementBadge } from "@/components/coaching-agreement/client-agreement-badge";
 import { useServerFn } from "@tanstack/react-start";
 import { getSignedAgreementUrl } from "@/lib/agreements.functions";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -199,20 +198,14 @@ function PurchaseDetail() {
           )}
           <Card className="border-border bg-card p-5 space-y-2">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Agreement & acceptance</h3>
-            <div className="text-sm flex items-center gap-2 flex-wrap">
-              Status:
-              <PurchaseAgreementBadge status={computePurchaseAgreementStatus({
-                requiresAgreement: !!offer?.requires_agreement,
-                agreementBeforeService: !!offer?.agreement_before_service,
-                termStartDate: form.term_start_date,
-                agreements: linkedAgreements as any,
-              })} />
+            <div className="text-sm">
+              <ClientAgreementBadge clientId={form.clients?.id ?? form.client_id} />
             </div>
             <div className="text-xs text-muted-foreground">
-              {offer?.requires_agreement ? `Offer requires a signed agreement${offer.agreement_before_service ? " before service start." : "."}` : "This offer doesn't require a signed agreement."}
+              This purchase is covered by the Coaching Agreement the client signs in the app. Nothing extra is sent with the payment.
             </div>
-            {linkedAgreements.length === 0 && offer?.requires_agreement && (
-              <ClientNameLink clientId={form.clients?.id ?? form.client_id} tab="agreements" className="text-xs text-primary underline">Create or link an agreement for this purchase</ClientNameLink>
+            {linkedAgreements.length > 0 && (
+              <p className="pt-1 text-[11px] uppercase tracking-widest text-muted-foreground">Earlier per-purchase agreement</p>
             )}
             {linkedAgreements.length > 0 && (
               <ul className="space-y-1 pt-1">

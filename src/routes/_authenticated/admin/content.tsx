@@ -2,9 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
-import { AdminTasksPanel } from "./tasks";
-import { ResourceLibrary } from "./resources";
-import { MediaArchivesPage } from "./media-archives";
+import { AdminTasksPanel } from "@/route-pages/_authenticated/admin/tasks";
+import { ResourceLibrary } from "@/route-pages/_authenticated/admin/resources";
+import { MediaArchivesPage } from "@/route-pages/_authenticated/admin/media-archives";
 
 type TabKey = "tasks" | "library" | "archive";
 const TABS: { value: TabKey; label: string }[] = [

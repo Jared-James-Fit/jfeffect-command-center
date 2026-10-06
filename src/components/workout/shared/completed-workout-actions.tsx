@@ -23,6 +23,8 @@ type Props = {
   ctx: WorkoutCompletionCtx;
   hasCoach?: boolean;
   initialReview?: ReviewInitial | null;
+  /** Session RPE to pre-fill on a first review (from today's logged sets). */
+  suggestedSessionRpe?: number | null;
   onReviewSaved?: () => void;
   onViewScore?: (rating: number | null) => void;
   /** Optional: id of an element to scroll to when "View Log" is clicked. */
@@ -43,6 +45,7 @@ export function CompletedWorkoutActions({
   ctx,
   hasCoach,
   initialReview,
+  suggestedSessionRpe = null,
   onReviewSaved,
   onViewScore,
   logAnchorId,
@@ -104,6 +107,7 @@ export function CompletedWorkoutActions({
         ctx={ctx}
         hasCoach={hasCoach}
         initial={initialReview ?? null}
+        suggestedSessionRpe={suggestedSessionRpe}
         onSaved={onReviewSaved}
         onViewScore={onViewScore}
         actAsClientId={actAsClientId ?? null}

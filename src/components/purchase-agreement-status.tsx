@@ -4,6 +4,7 @@ import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { ShieldCheck, AlertTriangle, FileText, CircleSlash } from "lucide-react";
+import { ClientAgreementBadge } from "@/components/coaching-agreement/client-agreement-badge";
 
 export type PurchaseAgreementStatus =
   | "Not Required"
@@ -60,7 +61,11 @@ export function PurchaseAgreementBadge({ status }: { status: PurchaseAgreementSt
   );
 }
 
-/** Live badge for a single purchase row. Fetches agreements linked by purchase_record_id. */
+/**
+ * Live agreement badge for a single purchase row. Purchases are covered by the client's
+ * Coaching Agreement (signed in the app), so that is what shows by default. An older
+ * per-purchase agreement, when one is linked, still shows its own status.
+ */
 export function PurchaseAgreementInlineBadge({
   purchaseId,
   clientId,
@@ -85,7 +90,9 @@ export function PurchaseAgreementInlineBadge({
       return data ?? [];
     },
   });
-  if (!requiresAgreement) return <PurchaseAgreementBadge status="Not Required" />;
+  if (!requiresAgreement || agreements.length === 0) {
+    return <ClientAgreementBadge clientId={clientId} />;
+  }
   const status = computePurchaseAgreementStatus({
     requiresAgreement, agreementBeforeService, termStartDate, agreements: agreements as any,
   });

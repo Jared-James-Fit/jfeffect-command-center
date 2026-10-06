@@ -1,19 +1,20 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { MessagesInbox } from "./messages";
+import { MessagesInbox } from "@/route-pages/_authenticated/admin/messages";
 
 // Only the Messages tab ships with this page. The rest load on first visit so
 // opening Messages doesn't download and parse five unrelated admin screens.
-const AdminBroadcasts = lazy(() => import("./broadcasts").then((m) => ({ default: m.AdminBroadcasts })));
-const SupportInbox = lazy(() => import("./membership.support").then((m) => ({ default: m.SupportInbox })));
-const SupportAlertsPage = lazy(() => import("./support-alerts").then((m) => ({ default: m.SupportAlertsPage })));
-const ChatGifsPage = lazy(() => import("./chat-gifs").then((m) => ({ default: m.ChatGifsPage })));
-const ChatSoundsPage = lazy(() => import("./chat-sounds").then((m) => ({ default: m.ChatSoundsPage })));
-const PopupsManager = lazy(() => import("./popups").then((m) => ({ default: m.PopupsManager })));
+const AdminBroadcasts = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/broadcasts").then((m) => ({ default: m.AdminBroadcasts })));
+const SupportInbox = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/membership.support").then((m) => ({ default: m.SupportInbox })));
+const SupportAlertsPage = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/support-alerts").then((m) => ({ default: m.SupportAlertsPage })));
+const ChatGifsPage = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/chat-gifs").then((m) => ({ default: m.ChatGifsPage })));
+const ChatSoundsPage = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/chat-sounds").then((m) => ({ default: m.ChatSoundsPage })));
+const PopupsManager = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/popups").then((m) => ({ default: m.PopupsManager })));
 
 function TabFallback() {
   return (

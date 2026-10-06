@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const programLibrary = readFileSync("src/routes/_authenticated/admin/program-library.tsx", "utf8");
+const programLibrary = readFileSync("src/route-pages/_authenticated/admin/program-library.tsx", "utf8");
 const membershipLibraryFns = readFileSync("src/lib/membership-library.functions.ts", "utf8");
 const support = readFileSync("src/routes/_authenticated/m/support.tsx", "utf8");
 const nutrition = readFileSync("src/components/nutrition/NutritionDashboard.tsx", "utf8");

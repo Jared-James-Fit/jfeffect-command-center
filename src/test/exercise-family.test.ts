@@ -107,13 +107,13 @@ describe("numbering is derived, never stored", () => {
   });
 
   it("the builder derives the badge from the row's index in the day", () => {
-    const src = read("src/routes/_authenticated/admin/program-library_.$templateId.tsx");
+    const src = read("src/route-pages/_authenticated/admin/program-library_.$templateId.tsx");
     expect(src).toContain("<ExerciseOrderBadge position={index + 1} family={family} />");
     expect(src).not.toMatch(/sort_order\s*=\s*i\s*\+\s*1[^\n]*label/);
   });
 
   it("no card persists a manual number or a per-row colour any more", () => {
-    const src = read("src/routes/_authenticated/admin/program-library_.$templateId.tsx");
+    const src = read("src/route-pages/_authenticated/admin/program-library_.$templateId.tsx");
     expect(src).not.toContain('title="Card color"');
   });
 });

@@ -45,6 +45,13 @@ export async function initNativeShell() {
   try {
     const { App } = await import("@capacitor/app");
     // Surface backgrounded/foregrounded events for session refresh later.
-    App.addListener("appStateChange", () => { /* hook point */ }).catch(() => {});
+    // Top up Apple Health / Health Connect data when the app comes back to the foreground
+    // (only on phones where the athlete connected it; throttled inside).
+    const healthTopUp = () =>
+      import("./health").then((m) => m.autoSyncHealthStore()).catch(() => {});
+    App.addListener("appStateChange", (state: { isActive: boolean }) => {
+      if (state?.isActive) void healthTopUp();
+    }).catch(() => {});
+    void healthTopUp();
   } catch { /* plugin not installed */ }
 }

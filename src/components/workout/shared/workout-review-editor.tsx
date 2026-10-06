@@ -1,22 +1,16 @@
 /**
- * Simplified post-workout review — 3-card status check-out.
+ * Quick post-workout review (v2). One compact screen, minimum ONE tap:
  *
- * Client-facing UX: 3 large status cards + conditional notes field.
- * Target completion time: under 5 seconds.
+ *   Effort  — session RPE 6–10, pre-filled from today's logged set RPEs
+ *   Sleep   — hours last night (optional)
+ *   Energy  — how recovered you felt going in, 1–5 (optional)
+ *   Pain    — No by default; Yes asks where + how bad (feeds coach flags)
+ *   Note    — behind "Add a note"
  *
- * Analytics compatibility:
- *   The existing pl_workout_feedback schema is preserved unchanged.
- *   Status cards map to legacy required fields so all existing reports,
- *   dashboards, and coach history views continue to work:
- *
- *   Feeling Good  → overall_rating: 5, session_rpe: 5, pain: false
- *   Minor Issue   → overall_rating: 3, session_rpe: 7, pain: false
- *   Need Attention → overall_rating: 2, session_rpe: 8, pain: true, pain_level: 5
- *
- *   strength_feel, fatigue_feel, hit_target: preserved in DB, hidden from UI.
- *   Historical submissions remain fully intact.
+ * These are the markers the recovery score and the load suggestions use.
+ * See src/lib/workout-review.ts for the mapping and why v1 was replaced.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -31,80 +25,16 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, AlertTriangle, ChevronDown, ChevronUp, ChevronLeft } from "lucide-react";
+import { Loader2, ChevronLeft, Plus } from "lucide-react";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
-
-// ── Status card definitions ───────────────────────────────────────────────────
-
-type StatusKey = "good" | "minor" | "attention";
-
-const STATUS_CARDS: {
-  key: StatusKey;
-  label: string;
-  subtitle: string;
-  icon: typeof CheckCircle2;
-  // Colour classes
-  border: string;
-  bg: string;
-  activeBorder: string;
-  activeBg: string;
-  activeText: string;
-  iconColor: string;
-  // Legacy field mappings for analytics compatibility
-  overallRating: number;
-  sessionRpe: number;
-  pain: boolean;
-  painLevel: number | null;
-}[] = [
-  {
-    key: "good",
-    label: "Feeling Good",
-    subtitle: "Everything went as expected. No issues to report.",
-    icon: CheckCircle2,
-    border: "border-border",
-    bg: "bg-card",
-    activeBorder: "border-emerald-500",
-    activeBg: "bg-emerald-500/10",
-    activeText: "text-emerald-700",
-    iconColor: "text-emerald-500",
-    overallRating: 5,
-    sessionRpe: 5,
-    pain: false,
-    painLevel: null,
-  },
-  {
-    key: "minor",
-    label: "Minor Issue",
-    subtitle: "Something worth mentioning — low energy, recovery concerns, minor discomfort.",
-    icon: AlertCircle,
-    border: "border-border",
-    bg: "bg-card",
-    activeBorder: "border-amber-500",
-    activeBg: "bg-amber-500/10",
-    activeText: "text-amber-700",
-    iconColor: "text-amber-500",
-    overallRating: 3,
-    sessionRpe: 7,
-    pain: false,
-    painLevel: null,
-  },
-  {
-    key: "attention",
-    label: "Need Attention",
-    subtitle: "Pain, injury, illness, or something affecting training.",
-    icon: AlertTriangle,
-    border: "border-border",
-    bg: "bg-card",
-    activeBorder: "border-red-500",
-    activeBg: "bg-red-500/10",
-    activeText: "text-red-700",
-    iconColor: "text-red-500",
-    overallRating: 2,
-    sessionRpe: 8,
-    pain: true,
-    painLevel: 5,
-  },
-];
+import {
+  EFFORT_OPTIONS,
+  PAIN_AREAS,
+  PAIN_SEVERITY,
+  REVIEW_VERSION,
+  deriveOverallRating,
+  initialEffort,
+} from "@/lib/workout-review";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -124,6 +54,7 @@ export type ReviewInitial = {
   recoveryToday?: number | null;
   sleepBucket?: SleepBucket | null;
   sleepNotes?: string | null;
+  reviewVersion?: number | null;
 };
 
 export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9";
@@ -138,11 +69,11 @@ const SLEEP_OPTIONS: { v: SleepBucket; label: string }[] = [
 ];
 
 const RECOVERY_OPTIONS: { v: number; emoji: string; label: string }[] = [
-  { v: 1, emoji: "😫", label: "Very Poor" },
-  { v: 2, emoji: "🙁", label: "Poor" },
-  { v: 3, emoji: "😐", label: "Average" },
+  { v: 1, emoji: "😫", label: "Wrecked" },
+  { v: 2, emoji: "🙁", label: "Low" },
+  { v: 3, emoji: "😐", label: "Okay" },
   { v: 4, emoji: "🙂", label: "Good" },
-  { v: 5, emoji: "💪", label: "Excellent" },
+  { v: 5, emoji: "💪", label: "Fresh" },
 ];
 
 type Props = {
@@ -154,21 +85,55 @@ type Props = {
   onSaved?: () => Promise<void> | void;
   onViewScore?: (rating: number | null) => void;
   actAsClientId?: string | null;
+  /** Session RPE pre-fill from today's logged sets (first review only). */
+  suggestedSessionRpe?: number | null;
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 
-/** Infer the status key from legacy rating/pain fields for pre-existing reviews. */
-function inferStatus(initial: ReviewInitial | null | undefined): StatusKey | null {
-  if (!initial?.submittedAt) return null;
-  if (initial.pain) return "attention";
-  const r = initial.overallRating ?? 5;
-  if (r >= 4) return "good";
-  if (r >= 3) return "minor";
-  return "attention";
+function Chip({
+  active,
+  onClick,
+  label,
+  children,
+  className,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={label}
+      className={cn(
+        "flex min-h-[44px] flex-col items-center justify-center rounded-xl border-2 px-1 py-1.5 text-xs font-bold leading-tight transition-all active:scale-95",
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border bg-card text-foreground hover:bg-secondary/30",
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function Row({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-sm font-bold">{title}</span>
+        {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 export function WorkoutReviewEditor({
   open,
@@ -179,57 +144,67 @@ export function WorkoutReviewEditor({
   onSaved,
   onViewScore,
   actAsClientId,
+  suggestedSessionRpe = null,
 }: Props) {
   const submit = useServerFn(submitOrEditReview);
   const qc = useQueryClient();
   const isEdit = !!initial?.submittedAt;
 
-  const [status, setStatus] = useState<StatusKey | null>(() => inferStatus(initial));
-  const [note, setNote] = useState<string>(initial?.clientNote ?? "");
+  const [effort, setEffort] = useState<number | null>(() => initialEffort(initial, suggestedSessionRpe));
   const [sleepBucket, setSleepBucket] = useState<SleepBucket | null>(initial?.sleepBucket ?? null);
-  const [sleepNotes, setSleepNotes] = useState<string>(initial?.sleepNotes ?? "");
-  const [sleepNotesOpen, setSleepNotesOpen] = useState<boolean>(!!(initial?.sleepNotes ?? "").trim());
   const [recoveryToday, setRecoveryToday] = useState<number | null>(initial?.recoveryToday ?? null);
+  const [pain, setPain] = useState<boolean>(!!initial?.pain);
+  const [painArea, setPainArea] = useState<string | null>(initial?.pain ? initial?.painArea ?? null : null);
+  const [painLevel, setPainLevel] = useState<number>(initial?.painLevel ?? 5);
+  const [note, setNote] = useState<string>(initial?.clientNote ?? "");
+  const [noteOpen, setNoteOpen] = useState<boolean>(!!(initial?.clientNote ?? "").trim());
 
   useEffect(() => {
     if (!open) return;
-    setStatus(inferStatus(initial));
-    setNote(initial?.clientNote ?? "");
+    setEffort(initialEffort(initial, suggestedSessionRpe));
     setSleepBucket(initial?.sleepBucket ?? null);
-    setSleepNotes(initial?.sleepNotes ?? "");
-    setSleepNotesOpen(!!(initial?.sleepNotes ?? "").trim());
     setRecoveryToday(initial?.recoveryToday ?? null);
-  }, [open, initial?.submittedAt]);
+    setPain(!!initial?.pain);
+    setPainArea(initial?.pain ? initial?.painArea ?? null : null);
+    setPainLevel(initial?.painLevel ?? 5);
+    setNote(initial?.clientNote ?? "");
+    setNoteOpen(!!(initial?.clientNote ?? "").trim());
+  }, [open, initial?.submittedAt, suggestedSessionRpe]);
 
-  const selectedCard = STATUS_CARDS.find((c) => c.key === status) ?? null;
-  const showNotes = status === "minor" || status === "attention";
+  const prefilled = effort != null && effort === suggestedSessionRpe && !isEdit;
+  const canSubmit = effort != null && (!pain || !!painArea);
+
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!selectedCard) throw new Error("Please select a workout status");
-      return submit({
+      if (effort == null) throw new Error("Pick how hard it was");
+      if (pain && !painArea) throw new Error("Pick where it hurts");
+      const overallRating = deriveOverallRating({ pain, sessionRpe: effort, recoveryToday });
+      const res = await submit({
         data: {
           ...ctx,
-          overallRating: selectedCard.overallRating,
-          sessionRpe: selectedCard.sessionRpe,
-          pain: selectedCard.pain,
-          painLevel: selectedCard.painLevel,
+          overallRating,
+          sessionRpe: effort,
+          pain,
           // Constraint pl_workout_feedback_pain_consistency requires:
           // pain=true → pain_level IS NOT NULL AND pain_area IS NOT NULL
-          painArea: selectedCard.pain ? "General" : null,
+          painLevel: pain ? painLevel : null,
+          painArea: pain ? painArea : null,
           painNote: null,
           clientNote: note.trim() ? note.trim() : null,
-          // Preserve legacy optional fields as null (hidden from UI but kept in DB)
-          strengthFeel: null,
-          fatigueFeel: null,
-          hitTarget: null,
-          recoveryToday: recoveryToday,
-          sleepBucket: sleepBucket,
-          sleepNotes: sleepNotes.trim() ? sleepNotes.trim() : null,
+          // Legacy optional fields: preserved in DB, no longer asked.
+          strengthFeel: initial?.strengthFeel ?? null,
+          fatigueFeel: initial?.fatigueFeel ?? null,
+          hitTarget: initial?.hitTarget ?? null,
+          recoveryToday,
+          sleepBucket,
+          sleepNotes: initial?.sleepNotes ?? null,
+          reviewVersion: REVIEW_VERSION,
           actAsClientId: actAsClientId ?? null,
         },
       });
+      return { res, overallRating };
     },
-    onSuccess: async (res: any) => {
+    onSuccess: async ({ res, overallRating }: any) => {
       // Some flows use the review itself as the final completion action.
       // Wait for that parent finalization before showing "Workout complete"
       // or closing the sheet, so the UI never claims success early.
@@ -243,23 +218,21 @@ export function WorkoutReviewEditor({
       }
 
       toast.success(res?.edited ? "Review updated." : "Workout complete.");
-      // Recovery/sleep answers feed the Training Readiness ring. Invalidate
-      // both member and coaching readiness queries so the ring reflects the
-      // just-saved (or edited/cleared) Recovery value immediately.
+      // Review answers feed the Training Readiness ring and tomorrow's load
+      // suggestions — refresh both.
       qc.invalidateQueries({ queryKey: ["training-readiness"] });
+      qc.invalidateQueries({ queryKey: ["load-readiness"] });
       qc.invalidateQueries({
         predicate: (q) => {
           const k = q.queryKey?.[0];
           return typeof k === "string" && (k.startsWith("recovery") || k === "readiness");
         },
       });
-      onViewScore?.(selectedCard?.overallRating ?? null);
+      onViewScore?.(overallRating ?? null);
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.message || "Couldn't save review"),
   });
-
-  const canSubmit = status !== null && !mutation.isPending;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -268,16 +241,11 @@ export function WorkoutReviewEditor({
         hideCloseButton
         className="z-[70] flex max-h-[92svh] flex-col gap-0 rounded-t-3xl p-0"
       >
-        {/* Sticky header — Back pill top-left, then a title/subtitle stack.
-            Structured as two rows inside a single header block so the Back
-            control never overlaps the first review card and always feels
-            attached to the header on iOS, Android, and desktop. */}
         <div
           className="sticky top-0 z-10 border-b border-border/60 bg-background/95 backdrop-blur"
           // The sheet is capped at 92svh, so its top edge already sits 8svh
           // below the viewport top. Pad only by the part of the safe area
-          // (status bar / Dynamic Island) the sheet actually overlaps — the
-          // full inset left ~50px of dead space above Back.
+          // (status bar / Dynamic Island) the sheet actually overlaps.
           style={{ paddingTop: "max(calc(env(safe-area-inset-top) - 8svh), 0px)" }}
         >
           <div className="flex items-center px-3 pt-2 sm:px-4">
@@ -293,197 +261,114 @@ export function WorkoutReviewEditor({
           </div>
           <SheetHeader className="min-h-0 space-y-0.5 px-5 pb-3 pt-1 text-left">
             <SheetTitle className="text-lg font-black leading-tight">
-              {isEdit ? "Edit your review" : "Workout Review"}
+              {isEdit ? "Edit your review" : "Quick check-out"}
             </SheetTitle>
             <SheetDescription className="text-xs">
-              {hasCoach ? "Your coach can see this." : "Notes for your own records."}
+              {hasCoach ? "10 seconds. Your coach sees this." : "10 seconds. Tunes your next session."}
             </SheetDescription>
           </SheetHeader>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 pt-5">
-          {/* 3 large status cards */}
-          <div className="space-y-2">
-            {STATUS_CARDS.map((card) => {
-              const Icon = card.icon;
-              const active = status === card.key;
-              return (
-                <button
-                  key={card.key}
-                  type="button"
-                  onClick={() => setStatus(card.key)}
-                  aria-pressed={active}
-                  className={cn(
-                    "w-full rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.99]",
-                    active
-                      ? `${card.activeBorder} ${card.activeBg}`
-                      : `${card.border} ${card.bg} hover:bg-secondary/30`,
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", active ? card.iconColor : "text-muted-foreground")} />
-                    <div className="min-w-0 flex-1">
-                      <div className={cn("text-base font-bold leading-tight", active ? card.activeText : "text-foreground")}>
-                        {card.label}
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground leading-snug">
-                        {card.subtitle}
-                      </div>
-                    </div>
-                    {active && (
-                      <div className={cn("shrink-0 h-5 w-5 rounded-full flex items-center justify-center", card.activeBg, card.activeBorder, "border")}>
-                        <div className={cn("h-2.5 w-2.5 rounded-full", card.iconColor.replace("text-", "bg-"))} />
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Sleep — segmented one-tap buckets. Feeds Estimated Training Readiness. */}
-          <div className="space-y-2">
-            <div className="flex items-baseline justify-between">
-              <label className="text-sm font-bold">
-                <span aria-hidden="true">😴 </span>Sleep
-              </label>
-              {sleepBucket != null && (
-                <button
-                  type="button"
-                  onClick={() => setSleepBucket(null)}
-                  className="text-[11px] text-muted-foreground underline"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              How many hours did you sleep before this workout?
-            </p>
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
-              {SLEEP_OPTIONS.map((o) => {
-                const active = sleepBucket === o.v;
-                return (
-                  <button
-                    key={o.v}
-                    type="button"
-                    onClick={() => setSleepBucket(o.v)}
-                    aria-pressed={active}
-                    aria-label={`Sleep ${o.label}`}
-                    className={cn(
-                      "flex min-h-[52px] items-center justify-center rounded-xl border-2 px-2 py-2 text-sm font-bold transition-all active:scale-95",
-                      active
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-card text-foreground hover:bg-secondary/30",
-                    )}
-                  >
-                    {o.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Recovery — reflects how recovered they felt BEFORE this session. */}
-          <div className="space-y-2">
-            <div className="flex items-baseline justify-between">
-              <label className="text-sm font-bold">
-                <span aria-hidden="true">💪 </span>Recovery
-              </label>
-              {recoveryToday != null && (
-                <button
-                  type="button"
-                  onClick={() => setRecoveryToday(null)}
-                  className="text-[11px] text-muted-foreground underline"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              How recovered did you feel before today's workout? Think energy, soreness, fatigue.
-            </p>
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5 pt-4">
+          <Row title="How hard was it?" hint={prefilled ? "From your logged RPE" : "Session RPE"}>
             <div className="grid grid-cols-5 gap-1.5">
-              {RECOVERY_OPTIONS.map((o) => {
-                const active = recoveryToday === o.v;
-                return (
-                  <button
-                    key={o.v}
-                    type="button"
-                    onClick={() => setRecoveryToday(o.v)}
-                    aria-pressed={active}
-                    aria-label={`Recovery ${o.label}`}
-                    className={cn(
-                      "flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-xl border-2 px-1 py-2 text-[11px] font-semibold transition-all active:scale-95",
-                      active
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-card text-muted-foreground hover:bg-secondary/30",
-                    )}
-                  >
-                    <span className="text-2xl leading-none" aria-hidden="true">{o.emoji}</span>
-                    <span className="leading-tight">{o.label}</span>
-                  </button>
-                );
-              })}
+              {EFFORT_OPTIONS.map((o) => (
+                <Chip key={o.v} active={effort === o.v} onClick={() => setEffort(o.v)} label={`Effort ${o.v} ${o.label}`}>
+                  <span className="text-base tabular-nums">{o.v}</span>
+                  <span className="text-[10px] font-semibold opacity-80">{o.label}</span>
+                </Chip>
+              ))}
             </div>
-          </div>
+          </Row>
 
-          {/* Coach Notes */}
-          {showNotes ? (
-            <div className="space-y-1.5">
-              <label htmlFor="review-concern" className="text-sm font-bold">
-                Tell your coach what happened
-              </label>
-              <Textarea
-                id="review-concern"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="e.g. shoulder discomfort, knee pain, illness, travel fatigue…"
-                rows={3}
-                maxLength={600}
-                className="resize-none"
-              />
+          <Row title="Sleep last night">
+            <div className="grid grid-cols-6 gap-1">
+              {SLEEP_OPTIONS.map((o) => (
+                <Chip
+                  key={o.v}
+                  active={sleepBucket === o.v}
+                  onClick={() => setSleepBucket(sleepBucket === o.v ? null : o.v)}
+                  label={`Sleep ${o.label}`}
+                  className="px-0.5 text-[11px]"
+                >
+                  {o.label}
+                </Chip>
+              ))}
             </div>
+          </Row>
+
+          <Row title="Energy going in">
+            <div className="grid grid-cols-5 gap-1.5">
+              {RECOVERY_OPTIONS.map((o) => (
+                <Chip
+                  key={o.v}
+                  active={recoveryToday === o.v}
+                  onClick={() => setRecoveryToday(recoveryToday === o.v ? null : o.v)}
+                  label={`Energy ${o.label}`}
+                >
+                  <span className="text-xl leading-none" aria-hidden="true">{o.emoji}</span>
+                  <span className="text-[10px] font-semibold opacity-80">{o.label}</span>
+                </Chip>
+              ))}
+            </div>
+          </Row>
+
+          <Row title="Any pain?">
+            <div className="grid grid-cols-2 gap-1.5">
+              <Chip active={!pain} onClick={() => setPain(false)} label="No pain">No</Chip>
+              <Chip active={pain} onClick={() => { setPain(true); setNoteOpen(true); }} label="Yes, pain">Yes</Chip>
+            </div>
+            {pain && (
+              <div className="space-y-2 pt-1">
+                <div className="flex flex-wrap gap-1.5">
+                  {PAIN_AREAS.map((a) => (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => setPainArea(a)}
+                      aria-pressed={painArea === a}
+                      className={cn(
+                        "h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
+                        painArea === a
+                          ? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-300"
+                          : "border-border bg-card text-foreground hover:bg-secondary/30",
+                      )}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {PAIN_SEVERITY.map((o) => (
+                    <Chip key={o.v} active={painLevel === o.v} onClick={() => setPainLevel(o.v)} label={`Pain ${o.label}`}>
+                      {o.label}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Row>
+
+          {noteOpen ? (
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={pain ? "What happened? Which movement?" : "Anything your coach should know?"}
+              rows={2}
+              maxLength={600}
+              className="resize-none"
+              aria-label="Note"
+            />
           ) : (
-            <div className="space-y-1.5">
-              <label htmlFor="review-note" className="text-sm font-bold text-muted-foreground">
-                {hasCoach ? "Anything your coach should know?" : "Anything you want to note?"}
-                <span className="ml-1 font-normal text-xs">(optional)</span>
-              </label>
-              <Textarea
-                id="review-note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Work stress, travel, nutrition…"
-                rows={2}
-                maxLength={600}
-                className="resize-none"
-              />
-            </div>
-          )}
-
-          {/* Sleep Notes — collapsed by default */}
-          <div className="space-y-2">
             <button
               type="button"
-              onClick={() => setSleepNotesOpen((v) => !v)}
+              onClick={() => setNoteOpen(true)}
               className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
-              aria-expanded={sleepNotesOpen}
             >
-              {sleepNotesOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              Sleep Notes (optional)
+              <Plus className="h-3.5 w-3.5" />
+              Add a note
             </button>
-            {sleepNotesOpen && (
-              <Textarea
-                value={sleepNotes}
-                onChange={(e) => setSleepNotes(e.target.value)}
-                placeholder="e.g. baby kept me awake, night shift, travel, felt very rested…"
-                rows={2}
-                maxLength={400}
-                className="resize-none"
-              />
-            )}
-          </div>
+          )}
 
           {isEdit && initial?.editCount != null && initial.editCount > 0 && (
             <p className="text-[11px] text-muted-foreground">
@@ -499,11 +384,7 @@ export function WorkoutReviewEditor({
           <Button variant="ghost" className="flex-1" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             Close
           </Button>
-          <Button
-            className="flex-1"
-            onClick={() => mutation.mutate()}
-            disabled={!status || mutation.isPending}
-          >
+          <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!canSubmit || mutation.isPending}>
             {mutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             {isEdit ? "Save changes" : "Done"}
           </Button>

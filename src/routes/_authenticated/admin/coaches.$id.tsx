@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClientNameLink } from "@/components/clients/client-name-link";
-import { useMemo, useState, lazy, Suspense } from "react";
+import { useMemo, useState, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { assignClientToCoach, setCoachStatus } from "@/lib/coaches.functions";
 import { useAuth } from "@/lib/auth";
 import { UserAvatar } from "@/components/user-avatar";
-const ProfilePictureCapture = lazy(() =>
+const ProfilePictureCapture = lazyWithRetry(() =>
   import("@/components/profile-picture-capture").then((m) => ({
     default: m.ProfilePictureCapture,
   })),

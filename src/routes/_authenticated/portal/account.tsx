@@ -23,7 +23,9 @@ import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SavedIndicator } from "@/components/saved-indicator";
 import { ClientLegalSafety } from "@/components/legal/client-legal-safety";
+import { AgreementAccountCard } from "@/components/coaching-agreement/agreement-account-card";
 import { InstallAppCard } from "@/components/portal/install-app-card";
+import { WearablesCard } from "@/components/portal/wearables-card";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { PushNotificationCard } from "@/components/push/push-notification-card";
 
@@ -207,8 +209,10 @@ function AccountPage() {
                 { id: "training-schedule", label: "Schedule" },
                 { id: "goals-setup", label: "Goals" },
                 { id: "password", label: "Password" },
+                { id: "devices", label: "Devices" },
                 { id: "notifications", label: "Notifications" },
                 { id: "install-app", label: "Install App" },
+                { id: "coaching-agreement", label: "Agreement" },
                 { id: "legal-safety", label: "Legal" },
                 { id: "billing", label: "Billing" },
                 { id: "delete-account", label: "Delete" },
@@ -338,6 +342,14 @@ function AccountPage() {
           </div>
         )}
 
+        {/* Coaching Agreement: status, sign if needed, and the signed copy to view any time.
+            Read-only for a coach in "View as client". */}
+        <div id="coaching-agreement" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Coaching Agreement">
+            <AgreementAccountCard />
+          </SectionErrorBoundary>
+        </div>
+
         {/* Legal status/consents come from the signed-in session, so in coach
             "View as client" they'd be the coach's, not the client's. */}
         {!isImpersonating && (
@@ -351,6 +363,12 @@ function AccountPage() {
         <div id="install-app" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Install App">
             <InstallAppCard />
+          </SectionErrorBoundary>
+        </div>
+
+        <div id="devices" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Devices">
+            <WearablesCard />
           </SectionErrorBoundary>
         </div>
 

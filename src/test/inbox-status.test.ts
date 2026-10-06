@@ -123,7 +123,7 @@ describe("latestToReview", () => {
 
 import { readFileSync } from "node:fs";
 describe("inbox wiring", () => {
-  const route = readFileSync("src/routes/_authenticated/admin/messages.tsx", "utf8");
+  const route = readFileSync("src/route-pages/_authenticated/admin/messages.tsx", "utf8");
   it("splits Waiting on Client into waiting / follow up, and keeps closers out of it", () => {
     expect(route).toContain('"Follow Up"');
     expect(route).toContain('it.workflow.state === "waiting_on_client" && it.waiting !== "fyi"');

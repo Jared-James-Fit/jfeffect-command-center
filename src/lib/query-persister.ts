@@ -32,6 +32,9 @@ const DO_NOT_PERSIST_PREFIXES = [
   "form-popup-",
   "setup-prompts-",
   "broadcasts-",
+  // Agreement status gates a mandatory popup: a stale "unsigned" snapshot must never
+  // flash on the phone after the client has signed.
+  "coaching-agreement",
   // One-time "What's new" popups: seen state must always come fresh from the
   // server, never from a stale on-device snapshot.
   "feature-announcement",
