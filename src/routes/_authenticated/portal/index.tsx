@@ -27,6 +27,7 @@ import { AgreementDashboardCard } from "@/components/coaching-agreement/agreemen
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { LeagueRecapHomeTile } from "@/components/portal/league-recap";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
+import { CommunityHomeStrip, CommunityNavButton } from "@/components/community/community-entry";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -328,6 +329,13 @@ function PortalHome() {
           </SectionErrorBoundary>
         )}
 
+        {/* Who shared recently — renders nothing if nobody has this week. */}
+        {client?.id && (
+          <SectionErrorBoundary label="Community">
+            <CommunityHomeStrip />
+          </SectionErrorBoundary>
+        )}
+
         {client?.id && (
           <SectionErrorBoundary label="Performance league">
             <AthleteLevelCard clientId={client.id} />
@@ -458,6 +466,8 @@ function GreetingHeader({
         </h1>
         <p className="truncate text-xs text-muted-foreground">Here's what to focus on today.</p>
       </div>
+      <div className="flex items-center gap-2">
+      <CommunityNavButton className="h-11 w-11" />
       <Link
         to="/portal/announcements"
         aria-label="Notifications"
@@ -470,6 +480,7 @@ function GreetingHeader({
           </span>
         )}
       </Link>
+      </div>
     </div>
   );
 }

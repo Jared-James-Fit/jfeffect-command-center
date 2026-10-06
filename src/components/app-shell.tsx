@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
+import { CommunityNavButton } from "@/components/community/community-entry";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
@@ -1764,6 +1765,7 @@ export function PageHeader({
         ) : <span className="md:hidden" />}
         <div className="flex flex-wrap items-center justify-end gap-2">
           {actions}
+          <CommunityNavButton />
           <NotificationBell />
         </div>
       </div>
