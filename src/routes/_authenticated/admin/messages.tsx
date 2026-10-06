@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { MessageThread, PriorityChip } from "@/components/message-thread";
+import { MessageThread, PriorityChip, threadMessagesQuery } from "@/components/message-thread";
 import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
@@ -33,6 +33,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { deriveInboxWorkflow, previewPrefix, WORKFLOW_LABEL, type InboxWorkflowState } from "@/lib/inbox-workflow";
 import { formatReadReceipt } from "@/lib/read-receipt";
 import { Check } from "lucide-react";
+import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 
 type StaffInboxRow = {
   client_id: string;
@@ -83,21 +84,17 @@ type Filter = typeof FILTERS[number];
 
 export const Route = createFileRoute("/_authenticated/admin/messages")({
   validateSearch: (s) => z.object({ client: z.string().uuid().optional() }).parse(s),
-  component: MessagesRedirect,
-});
-
-function MessagesRedirect() {
-  const { client } = Route.useSearch();
-  const nav = useNavigate();
-  useEffect(() => {
-    nav({
+  // Redirect before anything mounts. The old component-level redirect rendered
+  // an empty page, then navigated a second time once effects ran: a visible
+  // blank frame on every tap of the Messages nav item.
+  beforeLoad: ({ search }) => {
+    throw redirect({
       to: "/admin/communication",
-      search: { tab: "messages", ...(client ? { client } : {}) } as any,
+      search: { tab: "messages", ...(search.client ? { client: search.client } : {}) } as any,
       replace: true,
     });
-  }, [nav, client]);
-  return null;
-}
+  },
+});
 
 export function MessagesInbox({
   initialClient,
@@ -132,6 +129,10 @@ export function MessagesInbox({
   const { data: states = [] } = useQuery({
     queryKey: ["conversation-states"],
     staleTime: 30_000,
+    // The inbox's realtime channel only runs while it's mounted, so anything
+    // that arrived while you were elsewhere is unknown to the cache. Show the
+    // cached list instantly, but always re-check on open.
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data, error } = await (supabase.from("conversation_state") as any).select("*");
       if (error) throw error;
@@ -143,6 +144,7 @@ export function MessagesInbox({
   const { data: inboxState = [] } = useQuery({
     queryKey: ["staff-inbox-state"],
     staleTime: 15_000,
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("staff_inbox_state");
       if (error) throw error;
@@ -155,6 +157,7 @@ export function MessagesInbox({
     queryKey: ["last-messages"],
     enabled: states.length > 0,
     staleTime: 30_000,
+    refetchOnMount: "always",
     queryFn: async () => {
       const clientIds = Array.from(new Set(states.map((s) => s.client_id))).filter(Boolean);
       if (clientIds.length === 0) return [] as Message[];
@@ -212,6 +215,12 @@ export function MessagesInbox({
     },
   });
 
+  // Refetch everything the list is built from: realtime can't replay what
+  // happened while the app was backgrounded or the socket was down.
+  const INBOX_KEYS = ["last-messages", "conversation-states", "staff-inbox-state", "admin-nav-badges", "message-lift-review-inbox", "message-form-checkin-inbox"];
+  const resyncInbox = () => { for (const k of INBOX_KEYS) qc.invalidateQueries({ queryKey: [k] }); };
+  useResyncOnResume(resyncInbox);
+
   // Realtime
   useEffect(() => {
     let pending: ReturnType<typeof setTimeout> | null = null;
@@ -242,7 +251,7 @@ export function MessagesInbox({
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "nf_submissions" }, () => scheduleInvalidate(["message-form-checkin-inbox"]))
       .on("postgres_changes", { event: "*", schema: "public", table: "messenger_checkins" }, () => scheduleInvalidate(["message-form-checkin-inbox"]))
-      .subscribe();
+      .subscribe(onRealtimeRejoin(() => scheduleInvalidate(INBOX_KEYS)));
     return () => {
       if (pending) clearTimeout(pending);
       supabase.removeChannel(ch);
@@ -375,6 +384,12 @@ export function MessagesInbox({
   const isClientActive = (last_active_at?: string | null) => {
     if (!last_active_at) return false;
     return Date.now() - new Date(last_active_at).getTime() < 3 * 60_000;
+  };
+
+  // Start loading a thread on finger-down: the ~150ms before the tap
+  // completes is enough that history is usually there when it opens.
+  const prefetchThread = (id: string) => {
+    void qc.prefetchQuery({ ...threadMessagesQuery(id, "admin"), staleTime: 10_000 });
   };
 
   const selectClient = (id: string) => {
@@ -577,6 +592,7 @@ export function MessagesInbox({
               ]}
             >
             <button
+              onPointerDown={() => prefetchThread(client.id)}
               onClick={() => selectClient(client.id)}
               className={cn(
                 "flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-secondary/40",

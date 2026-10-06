@@ -37,23 +37,30 @@ import { fallbackEmoji } from "@/lib/gif-fallback";
 import {
   AttachmentView, LiveWaveform, WaveformBars, useVoiceRecorder,
   attachIcon, fakePeaks, fmtDuration, fmtTime,
-  uploadAttachmentToPath, LINK_RE, renderBodyWithMeet, type SharedAttachment,
+  uploadChatAttachment, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
+import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
+import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
+import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
+import { GroupSeenByRow, GroupSeenBySheet } from "@/components/messages/group-seen-by";
+import { readStampFor, seenStateFor } from "@/lib/group-read-receipts";
 import { MeetQuickAction } from "@/components/meet-quick-action";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, Image as ImageIcon, Camera, File as FileIcon,
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
-  CheckCircle2, Circle, CheckSquare, Copy,
+  CheckCircle2, Circle, CheckSquare, Copy, Eye,
 } from "lucide-react";
-import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 
-async function uploadGroupFile(groupId: string, file: File): Promise<GroupAttachment> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "";
-  const path = `group/${groupId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext ? "." + ext : ""}`;
-  const att = await uploadAttachmentToPath(path, file);
+async function uploadGroupFile(
+  groupId: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<GroupAttachment> {
+  const att = await uploadChatAttachment(`group/${groupId}`, file, onProgress, signal);
   return att as GroupAttachment;
 }
 
@@ -75,6 +82,10 @@ export function GroupMessageThread({
   const [attachments, setAttachments] = useState<GroupAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  // Picked media uploads in the background; Send clears the composer right
+  // away and the message posts once its uploads land.
+  const uploads = useDraftUploads<GroupAttachment>();
+  const [queuedUploadIds, setQueuedUploadIds] = useState<string[]>([]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -83,7 +94,10 @@ export function GroupMessageThread({
   const [preview, setPreview] = useState<{ blob: Blob; url: string; duration: number; peaks: number[] } | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
-  useUnsavedWarning(body.trim().length > 0 || sending || uploading, { warnOnUnload: false });
+  useUnsavedWarning(
+    body.trim().length > 0 || sending || uploading || uploads.drafts.length > 0 || queuedUploadIds.length > 0,
+    { warnOnUnload: false },
+  );
 
   // Editing / actions
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -118,6 +132,9 @@ export function GroupMessageThread({
   const { data: rawMessages = [] } = useQuery({
     queryKey: ["group-messages", groupId],
     queryFn: () => listGroupMessages(groupId),
+    // Cached history shows instantly; re-check because realtime for this
+    // group only ran while it was open.
+    refetchOnMount: "always",
     refetchInterval: 300_000,
   });
 
@@ -158,6 +175,13 @@ export function GroupMessageThread({
 
   /* ---------------- Realtime ---------------- */
 
+  const resyncGroup = () => {
+    qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+    qc.invalidateQueries({ queryKey: ["group-reactions", groupId] });
+    qc.invalidateQueries({ queryKey: ["group-members", groupId] });
+  };
+  useResyncOnResume(resyncGroup);
+
   useEffect(() => {
     const ch = supabase
       .channel(`group-thread:${groupId}`)
@@ -176,18 +200,43 @@ export function GroupMessageThread({
       .on("postgres_changes", { event: "*", schema: "public", table: "group_message_reactions" }, () => {
         qc.invalidateQueries({ queryKey: ["group-reactions", groupId] });
       })
-      .subscribe();
+      // Members' last_read_at drives "Seen by": refresh it live as people open the group.
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_group_members", filter: `group_id=eq.${groupId}` }, () => {
+        qc.invalidateQueries({ queryKey: ["group-members", groupId] });
+      })
+      .subscribe(onRealtimeRejoin(() => {
+        qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+        qc.invalidateQueries({ queryKey: ["group-reactions", groupId] });
+        qc.invalidateQueries({ queryKey: ["group-members", groupId] });
+      }));
     return () => { supabase.removeChannel(ch); };
   }, [groupId, qc]);
 
-  // mark read
+  // Mark read, but only while the thread is actually on screen: other members
+  // see this as "Seen", so a group left open in a background tab mustn't count.
+  const latestCreatedAt = messages[messages.length - 1]?.created_at ?? null;
   useEffect(() => {
-    if (!user || messages.length === 0) return;
-    markGroupRead(groupId, user.id).then(() => {
-      qc.invalidateQueries({ queryKey: ["group-unread"] });
-      qc.invalidateQueries({ queryKey: ["group-memberships"] });
-    });
-  }, [groupId, user?.id, messages.length, qc]);
+    if (!user || !latestCreatedAt) return;
+    let cancelled = false;
+    const run = () => {
+      markGroupRead(groupId, user.id, readStampFor(latestCreatedAt)).then(() => {
+        if (cancelled) return;
+        qc.invalidateQueries({ queryKey: ["group-unread"] });
+        qc.invalidateQueries({ queryKey: ["group-memberships"] });
+      });
+    };
+    if (typeof document === "undefined" || document.visibilityState === "visible") {
+      run();
+      return () => { cancelled = true; };
+    }
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", onVisible);
+      run();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
+  }, [groupId, user?.id, latestCreatedAt, qc]);
 
   // autoscroll
   useEffect(() => {
@@ -263,6 +312,17 @@ export function GroupMessageThread({
     }
     return null;
   }, [messages, user?.id]);
+
+  // "Seen by" shows under the newest message, and under my newest one when
+  // others have posted since (so a coach can still see who read their post).
+  const latestMessageId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (!messages[i].deleted_at) return messages[i].id;
+    }
+    return null;
+  }, [messages]);
+  const [seenForId, setSeenForId] = useState<string | null>(null);
+  const seenForMessage = seenForId ? messages.find((x) => x.id === seenForId) ?? null : null;
 
   /* ---------------- Reactions (optimistic) ---------------- */
 
@@ -396,21 +456,17 @@ export function GroupMessageThread({
 
   /* ---------------- Composer actions ---------------- */
 
-  const onPickFiles = async (files: FileList | null) => {
+  const onPickFiles = (files: FileList | null) => {
     if (!files || !files.length) return;
-    setUploading(true);
-    try {
-      const uploaded: GroupAttachment[] = [];
-      for (const f of Array.from(files)) {
-        if (f.size > 50 * 1024 * 1024) { toast.error(`${f.name} is over 50MB`); continue; }
-        uploaded.push(await uploadGroupFile(groupId, f));
-      }
-      setAttachments((prev) => [...prev, ...uploaded]);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Upload failed");
-    } finally {
-      setUploading(false);
-    }
+    const ok = Array.from(files).filter((f) => {
+      if (f.size > 50 * 1024 * 1024) { toast.error(`${f.name} is over 50MB`); return false; }
+      return true;
+    });
+    uploads.add(
+      ok,
+      (file, onProgress, signal) => uploadGroupFile(groupId, file, onProgress, signal),
+      (d, e: any) => toast.error(`${d.name}: ${e?.message ?? "upload failed"}`),
+    );
   };
 
   const stopForPreview = async () => {
@@ -458,37 +514,46 @@ export function GroupMessageThread({
   const doSend = async () => {
     if (!user) return;
     const text = body.trim();
-    if (!text && attachments.length === 0) return;
-    
-    await runJob({ title: "Sending message" }, async () => {
-      // Auto-detect plain URLs typed inline
-      const linkAtts: GroupAttachment[] = [];
-      const matches = text.match(LINK_RE);
-      if (matches) {
-        for (const u of matches.slice(0, 3)) {
-          if (attachments.some((a) => a.url === u)) continue;
-          linkAtts.push({ type: "link", url: u });
-        }
+    if (!text && attachments.length === 0 && uploads.drafts.length === 0) return;
+    const ready = attachments;
+    const drafts = uploads.take();
+    const draftIds = drafts.map((d) => d.id);
+    // Auto-detect plain URLs typed inline
+    const linkAtts: GroupAttachment[] = [];
+    const matches = text.match(LINK_RE);
+    if (matches) {
+      for (const u of matches.slice(0, 3)) {
+        if (ready.some((a) => a.url === u)) continue;
+        linkAtts.push({ type: "link", url: u });
       }
-      setSending(true);
-      try {
-        await sendGroupMessage({
-          groupId,
-          senderId: user.id,
-          senderRole: canManage ? "admin" : "member",
-          body: text,
-          attachments: [...attachments, ...linkAtts],
-        });
-        setBody("");
-        setAttachments([]);
-        qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
-        qc.invalidateQueries({ queryKey: ["chat-groups"] });
-      } finally {
-        setSending(false);
-      }
-    }).catch((e: any) => {
-       toast.error(e?.message ?? "Failed to send");
-    });  };
+    }
+    setBody("");
+    setAttachments([]);
+    if (draftIds.length) setQueuedUploadIds((prev) => [...prev, ...draftIds]);
+    setSending(!draftIds.length);
+    try {
+      const uploaded = draftIds.length ? await Promise.all(drafts.map((d) => d.done)) : [];
+      await sendGroupMessage({
+        groupId,
+        senderId: user.id,
+        senderRole: canManage ? "admin" : "member",
+        body: text,
+        attachments: [...ready, ...uploaded, ...linkAtts],
+      });
+      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+      qc.invalidateQueries({ queryKey: ["chat-groups"] });
+    } catch (e: any) {
+      drafts.forEach((d) => d.abort());
+      // Nothing posted: hand the text back so it can be retried.
+      if (text) setBody((b) => b || text);
+      if (ready.length) setAttachments((a) => (a.length ? a : ready));
+      toast.error(e?.message ?? "Failed to send");
+    } finally {
+      drafts.forEach(releaseDraft);
+      if (draftIds.length) setQueuedUploadIds((prev) => prev.filter((id) => !draftIds.includes(id)));
+      else setSending(false);
+    }
+  };
 
   /* ---------------- Render ---------------- */
 
@@ -808,6 +873,10 @@ export function GroupMessageThread({
                               </button>
                             ))}
                           </div>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => { setActionsForId(null); setSeenForId(m.id); }}>
+                            <Eye className="mr-2 h-4 w-4" /> Seen by
+                          </DropdownMenuItem>
                           {mine && (m.body?.length ?? 0) > 0 && (
                             <>
                               <DropdownMenuSeparator />
@@ -843,6 +912,14 @@ export function GroupMessageThread({
                   )}
                 </div>
               </div>
+              {!selectionMode && !isDeleted && (m.id === latestMessageId || m.id === lastOwnMessageId) && (
+                <GroupSeenByRow
+                  state={seenStateFor(m, members, user?.id)}
+                  profileById={profileById}
+                  align={mine ? "end" : "start"}
+                  onOpen={() => setSeenForId(m.id)}
+                />
+              )}
             </Fragment>
           );
         })}
@@ -867,11 +944,18 @@ export function GroupMessageThread({
             </div>
           )}
 
+          {queuedUploadIds.length > 0 && (
+            <div className="px-1 text-primary">
+              <DraftUploadStatus store={uploads.store} ids={queuedUploadIds} />
+            </div>
+          )}
+          <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
+
           <input ref={fileInputRef} type="file" multiple className="hidden"
             onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
           <input ref={photoInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
             onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
-          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+          <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden"
             onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
 
           {recorder.recording ? (
@@ -921,7 +1005,7 @@ export function GroupMessageThread({
                 role={canManage ? "admin" : "member"}
                 surface="group"
                 clientIds={memberClients}
-                disabled={sending || uploading}
+                disabled={sending}
                 canSendGifs={canSendGifs}
                 canSendSounds={canSendSounds}
                 onPickCamera={() => cameraInputRef.current?.click()}
@@ -1033,7 +1117,7 @@ export function GroupMessageThread({
                 }}
               />
 
-              {body.trim() || attachments.length > 0 ? (
+              {body.trim() || attachments.length > 0 || uploads.drafts.length > 0 ? (
                 <Button
                   type="button"
                   onClick={doSend}
@@ -1142,6 +1226,14 @@ export function GroupMessageThread({
                   </div>
                 )}
                 <div className="mt-3 grid gap-1">
+                  {!m.deleted_at && (
+                    <Button
+                      type="button" variant="ghost" className="h-12 justify-start text-base"
+                      onClick={() => { setSheetForId(null); setSeenForId(m.id); }}
+                    >
+                      <Eye className="mr-3 h-5 w-5" /> Seen by
+                    </Button>
+                  )}
                   {canEdit && (
                     <Button
                       type="button" variant="ghost" className="h-12 justify-start text-base"
@@ -1195,6 +1287,14 @@ export function GroupMessageThread({
           })()}
         </SheetContent>
       </Sheet>
+
+      <GroupSeenBySheet
+        open={!!seenForMessage}
+        onOpenChange={(o) => { if (!o) setSeenForId(null); }}
+        state={seenForMessage ? seenStateFor(seenForMessage, members, user?.id) : null}
+        profileById={profileById}
+        preview={seenForMessage ? (seenForMessage.body || (seenForMessage.attachments?.length ? "Attachment" : "")) : undefined}
+      />
 
       {/* Confirm delete */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>

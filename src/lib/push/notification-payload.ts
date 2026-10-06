@@ -52,6 +52,52 @@ export function safeDisplayName(raw?: string | null, fallback = "Your coach"): s
   return v.length > 60 ? v.slice(0, 57) + "…" : v;
 }
 
+/** "Jared James" → "Jared". */
+export function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
+/** How a client sees their coach on a lockscreen: "Coach Jared", else "Your coach". */
+export function coachLabel(rawName?: string | null): string {
+  const safe = safeDisplayName(rawName, "");
+  return safe ? `Coach ${firstName(safe)}` : "Your coach";
+}
+
+export type AttachmentLike = { type?: string | null; kind?: string | null } | null | undefined;
+
+/**
+ * What a chat message *is*, never what it says: "sent you a photo",
+ * "sent you a check-in", "sent you a message". Safe for a lockscreen because
+ * it only reads attachment kinds/types, not bodies, names or answers.
+ * `toYou` = 1:1 ("sent you a photo"); false for groups ("sent a photo").
+ */
+export function messageAction(attachments: AttachmentLike[] | null | undefined, toYou: boolean): string {
+  const you = toYou ? " you" : "";
+  const atts = (attachments ?? []).filter(Boolean) as Array<{ type?: string | null; kind?: string | null }>;
+  const kinds = new Set(atts.map((a) => a.kind).filter(Boolean));
+  if (kinds.has("checkin_submission")) return "submitted a check-in";
+  if (kinds.has("checkin_request")) return `sent${you} a check-in`;
+  if (kinds.has("form_request")) return `sent${you} a form to fill out`;
+  if (kinds.has("signature_request")) return `sent${you} something to sign`;
+  if (kinds.has("payment_request")) return `sent${you} a payment request`;
+  if (kinds.has("recipe_share")) return `shared a recipe`;
+  if (kinds.has("gif")) return `sent${you} a GIF`;
+  if (kinds.has("sound")) return `sent${you} a sound`;
+  // Auto-detected links ride along with ordinary text, so they don't count.
+  const media = atts.filter((a) => a.type && a.type !== "link" && a.type !== "youtube" && a.type !== "drive" && a.type !== "sheets");
+  const count = (t: string) => media.filter((a) => a.type === t).length;
+  const photos = count("image");
+  const videos = count("video");
+  if (photos && videos) return `sent${you} ${photos + videos} photos and videos`;
+  if (photos) return photos > 1 ? `sent${you} ${photos} photos` : `sent${you} a photo`;
+  if (videos) return videos > 1 ? `sent${you} ${videos} videos` : `sent${you} a video`;
+  if (count("audio")) return `sent${you} a voice message`;
+  if (media.length) return media.length > 1 ? `sent${you} ${media.length} files` : `sent${you} a file`;
+  return `sent${you} a message`;
+}
+
+const capitalize = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
 function isStaff(role: NotificationRole) {
   return role === "admin" || role === "coach";
 }
@@ -150,6 +196,8 @@ export function buildNotificationPayload(input: {
   ids?: DeepLinkIds;
   /** Mark clearly as a user-triggered test. */
   isTest?: boolean;
+  /** Message/group kinds: the message's attachments, to say what was sent (never what it says). */
+  attachments?: AttachmentLike[] | null;
 }): NormalizedNotification {
   const { kind, role, recipientUserId, sourceId } = input;
   const staff = isStaff(role);
@@ -157,10 +205,18 @@ export function buildNotificationPayload(input: {
   const context = input.contextLabel ? safeDisplayName(input.contextLabel, "") : "";
 
   let title = TITLE[kind];
-  if (name && context) title = `${name} · ${context}`;
+  let body = staff ? SUMMARY[kind].staff : SUMMARY[kind].client;
+  if (kind === "message") {
+    // Chat-app convention: who it's from is the title, what they sent is the body.
+    // Staff see the client's name; clients see "Coach Jared".
+    title = name ?? (staff ? "New message" : "Your coach");
+    body = capitalize(messageAction(input.attachments, true)) + ".";
+  } else if (kind === "group_message") {
+    // Group name on top (that's what you'd open), sender + action below.
+    title = context || "Group chat";
+    body = `${name ? firstName(name) : "Someone"} ${messageAction(input.attachments, false)}.`;
+  } else if (name && context) title = `${name} · ${context}`;
   else if (name) title = `${name} · ${TITLE[kind]}`;
-
-  const body = staff ? SUMMARY[kind].staff : SUMMARY[kind].client;
   const tagId = input.ids?.groupId ?? input.ids?.clientId ?? sourceId;
 
   return {

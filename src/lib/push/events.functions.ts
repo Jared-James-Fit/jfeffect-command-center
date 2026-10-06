@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildNotificationPayload } from "@/lib/push/notification-payload";
+import { buildNotificationPayload, coachLabel, type AttachmentLike } from "@/lib/push/notification-payload";
 
 /**
  * Fire a push notification for a newly inserted message. The middleware
@@ -25,22 +25,29 @@ export const notifyNewMessage = createServerFn({ method: "POST" })
     if (msg.sender_id !== userId) return { skipped: "not_sender" };
 
     // Copy/identity/deep-link all come from the one shared normalizer, which
-    // guarantees no message body ever reaches a lockscreen.
-    const normalized = (recipientUserId: string, role: "client" | "admin") =>
+    // guarantees no message body ever reaches a lockscreen. The title says
+    // who it's from; the body says what kind of thing they sent.
+    const normalized = (recipientUserId: string, role: "client" | "admin", displayName: string | null) =>
       buildNotificationPayload({
         kind: "message",
         role,
         recipientUserId,
         sourceId: msg.id,
+        displayName,
+        attachments: Array.isArray(msg.attachments) ? (msg.attachments as AttachmentLike[]) : [],
         ids: { clientId: msg.client_id },
       });
 
     let results: any[] = [];
     if (msg.sender_role === "admin" || msg.sender_role === "coach") {
-      // Notify the client user
-      const { data: c } = await supabaseAdmin.from("clients").select("user_id").eq("id", msg.client_id).maybeSingle();
+      // Notify the client user, as "Coach <first name>" of whoever sent it.
+      const [{ data: c }, { data: prof }, { data: coach }] = await Promise.all([
+        supabaseAdmin.from("clients").select("user_id").eq("id", msg.client_id).maybeSingle(),
+        supabaseAdmin.from("profiles").select("full_name").eq("id", msg.sender_id).maybeSingle(),
+        supabaseAdmin.from("coaches").select("full_name").eq("user_id", msg.sender_id).maybeSingle(),
+      ]);
       if (c?.user_id) {
-        const n = normalized(c.user_id, "client");
+        const n = normalized(c.user_id, "client", coachLabel((coach as any)?.full_name || (prof as any)?.full_name));
         const r = await sendWebPushToUser(supabaseAdmin, c.user_id,
           { title: n.title, body: n.body, url: n.url, tag: n.tag, data: n.data },
           { category: n.category, eventKey: n.eventKey });
@@ -49,7 +56,11 @@ export const notifyNewMessage = createServerFn({ method: "POST" })
     } else {
       // Client sent → notify admin(s) and assigned coach
       const { data: client } = await supabaseAdmin
-        .from("clients").select("assigned_coach_id").eq("id", msg.client_id).maybeSingle();
+        .from("clients").select("assigned_coach_id, full_name, first_name, last_name").eq("id", msg.client_id).maybeSingle();
+      // Full name: a coach with two Jennifers needs to know which one.
+      const clientName = (client as any)?.full_name
+        || [(client as any)?.first_name, (client as any)?.last_name].filter(Boolean).join(" ")
+        || null;
       const recipients = new Set<string>();
       if (client?.assigned_coach_id) {
         const { data: coach } = await supabaseAdmin
@@ -59,7 +70,7 @@ export const notifyNewMessage = createServerFn({ method: "POST" })
       const { data: admins } = await supabaseAdmin.from("user_roles").select("user_id").eq("role", "admin");
       (admins ?? []).forEach((a: any) => a.user_id && recipients.add(a.user_id));
       for (const uid of recipients) {
-        const n = normalized(uid, "admin");
+        const n = normalized(uid, "admin", clientName);
         const r = await sendWebPushToUser(supabaseAdmin, uid,
           { title: n.title, body: n.body, url: n.url, tag: n.tag, data: n.data },
           { category: n.category, eventKey: n.eventKey });
@@ -125,6 +136,7 @@ export const notifyNewGroupMessage = createServerFn({ method: "POST" })
           sourceId: msg.id,
           displayName: senderName,
           contextLabel: groupName,
+          attachments: Array.isArray(msg.attachments) ? (msg.attachments as AttachmentLike[]) : [],
           ids: { groupId: msg.group_id },
         });
         const r = await sendWebPushToUser(supabaseAdmin, uid,

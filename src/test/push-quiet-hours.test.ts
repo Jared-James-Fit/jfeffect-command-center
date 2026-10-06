@@ -40,8 +40,9 @@ describe("digest copy", () => {
 describe("app events", () => {
   it("keep lockscreen copy content-free", () => {
     for (const spec of Object.values(APP_EVENTS)) {
-      expect(spec.body.length).toBeLessThan(90);
-      expect(spec.body).not.toMatch(/\d+\s*(g|kcal|cal|lbs?|kg)\b/i);
+      const body = spec.body("Coach Jared");
+      expect(body.length).toBeLessThan(90);
+      expect(body).not.toMatch(/\d+\s*(g|kcal|cal|lbs?|kg)\b/i);
       expect(spec.rateMinutes).toBeGreaterThanOrEqual(60);
     }
   });
