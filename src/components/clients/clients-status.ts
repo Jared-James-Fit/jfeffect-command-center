@@ -71,7 +71,7 @@ export const FILTER_GROUPS: {
 ];
 
 /** Buttons a status can offer next to its explanation; the row decides how each one works. */
-export type ChipAction = "billing" | "profile" | "reviews" | "program" | "agreement" | "remind";
+export type ChipAction = "billing" | "profile" | "reviews" | "mark_reviewed" | "program" | "agreement" | "remind";
 
 export type BadgeDef = {
   /** Stable name of the status, so code never has to match on the label text. */
@@ -127,8 +127,8 @@ export function rowBadges(r: DirectoryRow): BadgeDef[] {
       next: "Check their billing, or follow up with them.", actions: ["billing"] });
   if (r.f_needs_review)
     out.push({ id: "review_due", label: "Review Due", tone: "warn", icon: ClipboardCheck,
-      hint: "They submitted a check-in that's waiting for your review.",
-      next: "Open check-in reviews to respond.", actions: ["reviews"] });
+      hint: "They sent a check-in or form that nobody has dealt with yet. It closes by itself when you reply in their chat.",
+      next: "Open their chat to reply, or mark it reviewed if it's already handled.", actions: ["reviews", "mark_reviewed"] });
   if (r.f_missed_workouts && r.missed_workouts_count > 0)
     out.push({ id: "missed", label: `${r.missed_workouts_count} Missed`, tone: "warn", icon: XCircle,
       hint: `${r.missed_workouts_count} scheduled workouts in the last 14 days weren't completed. Two or more is flagged.` });

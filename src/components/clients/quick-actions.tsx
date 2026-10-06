@@ -20,6 +20,7 @@ import { WorkoutArchiveDialog } from "./workout-archive-dialog";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 import { getClientMealPlanForCoach } from "@/lib/nutrition-targets/admin-meal-plan.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { downloadFullTrainingReportForClient } from "@/lib/workouts/download-full-training-report";
@@ -271,6 +272,15 @@ export function ClientMoreMenu({
 }) {
   const qc = useQueryClient();
   const isExempt = r.payment_state === "exempt";
+  const markReviewed = async () => {
+    try {
+      const n = await markClientReviewsReviewed(r.id);
+      toast.success(n > 0 ? "Marked reviewed" : "Nothing was waiting");
+      refreshReviewQueries(qc);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't mark this reviewed");
+    }
+  };
   const setPaymentExempt = async (exempt: boolean) => {
     const { error } = await (supabase as any)
       .from("clients")
@@ -310,6 +320,11 @@ export function ClientMoreMenu({
             <CalendarDays className="h-4 w-4" /> View Schedule
           </ClientNameLink>
         </DropdownMenuItem>
+        {r.f_needs_review && (
+          <DropdownMenuItem onSelect={() => void markReviewed()}>
+            <ClipboardCheck className="mr-2 h-4 w-4" /> Mark check-in reviewed
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Training</DropdownMenuLabel>
