@@ -85,6 +85,7 @@ const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), 
 const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-exercise-notes-card"), "ClientExerciseNotesCard");
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
+const ClientAgreementPanel = lazyDefault(() => import("@/components/coaching-agreement/client-agreement-panel"), "ClientAgreementPanel");
 const ClientSalesTable = lazyDefault(() => import("@/components/admin/client-sales-table"), "ClientSalesTable");
 const PriceCardPickerDialog = lazyDefault(() => import("@/components/price-card-picker-dialog"), "PriceCardPickerDialog");
 const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"), "AgreementsPanel");
@@ -906,6 +907,7 @@ export function ClientProfileWorkspace({
             </div>
           </Card>
           <Suspense fallback={<TabFallback />}>
+            <ClientAgreementPanel clientId={id} clientName={form?.full_name} />
             <AgreementStatusPanel client={form} />
             <AgreementsPanel clientId={id} clientName={form?.full_name} />
           </Suspense>

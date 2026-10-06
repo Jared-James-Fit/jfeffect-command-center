@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -14,12 +15,26 @@ import { getSignedAgreementUrl } from "@/lib/agreements.functions";
 import { listClientNativeAgreements } from "@/lib/native-agreement-client.functions";
 import { toast } from "sonner";
 import { usePortalUserId } from "@/lib/client-impersonation";
+import { AgreementAccountCard } from "@/components/coaching-agreement/agreement-account-card";
+import { useCoachingAgreement } from "@/components/coaching-agreement/agreement-context";
 
 export const Route = createFileRoute("/_authenticated/portal/agreements/")({
+  // `?sign=1` is the deep link used by the "please sign" push notification and email.
+  validateSearch: (search: Record<string, unknown>): { sign?: "1" } =>
+    search.sign === "1" || search.sign === 1 ? { sign: "1" } : {},
   component: PortalAgreementsPage,
 });
 
 function PortalAgreementsPage() {
+  const { sign } = Route.useSearch();
+  const navigate = useNavigate();
+  const { state: agreementState, needsSignature, canSign, openSignFlow } = useCoachingAgreement();
+  // Arriving from "please sign" opens the signing flow straight away, once the status has loaded.
+  useEffect(() => {
+    if (sign !== "1" || !agreementState) return;
+    if (needsSignature && canSign) openSignFlow();
+    navigate({ to: "/portal/agreements", search: {}, replace: true });
+  }, [sign, agreementState, needsSignature, canSign, openSignFlow, navigate]);
   const getUrl = useServerFn(getSignedAgreementUrl);
   const listNative = usePovFn(useServerFn(listClientNativeAgreements));
   const portalUserId = usePortalUserId();
@@ -67,7 +82,7 @@ function PortalAgreementsPage() {
     "Not Sent": 6,
   };
   const needsAction = data
-    .filter((a) => !completedStatuses.includes(a.status as string) && !["Cancelled", "Declined", "Expired"].includes(a.status as string))
+    .filter((a) => !completedStatuses.includes(a.status as string) && !["Cancelled", "Declined", "Expired", "Not Sent"].includes(a.status as string))
     .sort((a, b) => {
       const pa = NEEDS_PRIORITY[a.status as string] ?? 99;
       const pb = NEEDS_PRIORITY[b.status as string] ?? 99;
@@ -84,8 +99,12 @@ function PortalAgreementsPage() {
 
   return (
     <>
-      <PageHeader title="Agreements" subtitle="Review and sign your coaching agreements." />
+      <PageHeader
+        title="Agreements"
+        subtitle="Your Coaching Agreement and any other documents you've signed."
+      />
       <div className="p-6 md:p-8 space-y-6">
+        <AgreementAccountCard />
         {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
           <>
             {needsAction.length > 0 && (
@@ -149,7 +168,7 @@ function PortalAgreementsPage() {
                       <p className="font-semibold truncate">{agreement.custom_title ?? "JF Effect Coaching Agreement"}</p>
                       <p className="text-xs text-muted-foreground">Native v1 · {complete ? "Completed" : "Needs your signature"}</p>
                     </div>
-                    {complete ? <span className="text-xs text-muted-foreground">{ready ? "Signed copy ready" : "Signed copy preparing"}</span> : <Button size="sm" asChild><a href={`/portal/agreements/native/${agreement.id}`}>Review & sign</a></Button>}
+                    {complete ? <span className="text-xs text-muted-foreground">{ready ? "Signed copy ready" : "Signed copy preparing"}</span> : <Button size="sm" asChild><a href={`/portal/agreements-native/${agreement.id}`}>Review & sign</a></Button>}
                   </Card>;
                 })}
               </section>

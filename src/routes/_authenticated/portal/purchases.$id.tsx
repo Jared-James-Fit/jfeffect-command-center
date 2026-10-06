@@ -14,6 +14,7 @@ import { resolvePaymentDisplay, formatMoney } from "@/lib/payment-display";
 import { useServerFn } from "@tanstack/react-start";
 import { resolvePaymentShareLink } from "@/lib/payment-share.functions";
 import { sanitizeShareUrl } from "@/lib/payment-share-link";
+import { useCoachingAgreement } from "@/components/coaching-agreement/agreement-context";
 
 export const Route = createFileRoute("/_authenticated/portal/purchases/$id")({ component: ClientPurchase });
 
@@ -24,6 +25,13 @@ function ClientPurchase() {
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const resolveShareFn = useServerFn(resolvePaymentShareLink);
+  const {
+    state: agreementState,
+    needsSignature: agreementNeeded,
+    canSign: agreementCanSign,
+    openSignFlow,
+  } = useCoachingAgreement();
+  const signedInApp = agreementState?.state?.state === "signed";
 
   const { data: r } = useQuery({
     queryKey: ["my-purchase", id],
@@ -48,6 +56,7 @@ function ClientPurchase() {
   if (!r) return <div className="p-10 text-muted-foreground">Loading…</div>;
 
   const c = r.clients as any;
+  const covered = signedInApp || !!c?.agreement_signed;
   const d = resolvePaymentDisplay({ ...r, latest_ledger: latestLedger ?? null });
   const accept = async () => {
     setBusy(true);
@@ -184,18 +193,49 @@ function ClientPurchase() {
         </div>
 
         <div className="space-y-4">
-          <Card className={`p-5 ${c?.agreement_signed ? "border-primary/40 bg-primary/5" : "border-destructive/40 bg-destructive/5"}`}>
-            <div className="flex items-center gap-2 mb-2"><FileSignature className="h-4 w-4" /><span className="text-xs uppercase tracking-widest">Coaching Agreement</span></div>
-            {c?.agreement_signed ? (
+          <Card
+            className={`p-5 ${covered ? "border-primary/40 bg-primary/5" : "border-amber-500/40 bg-amber-500/5"}`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <FileSignature className="h-4 w-4" />
+              <span className="text-xs uppercase tracking-widest">Coaching Agreement</span>
+            </div>
+            {covered ? (
               <>
                 <Badge className="bg-gradient-primary">Signed</Badge>
-                <p className="text-xs text-muted-foreground mt-2">This purchase is covered by your signed JF Effect / Jared James Fit Coaching Agreement + Liability Waiver.</p>
-                {c.agreement_link && <a href={c.agreement_link} target="_blank" rel="noreferrer"><Button size="sm" variant="outline" className="w-full mt-2">View agreement <ExternalLink className="ml-2 h-3 w-3" /></Button></a>}
+                <p className="text-xs text-muted-foreground mt-2">
+                  This purchase is covered by your signed JF Effect / Jared James Fit Coaching
+                  Agreement + Liability Waiver.
+                </p>
+                {!signedInApp && c?.agreement_link ? (
+                  <a href={c.agreement_link} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="outline" className="w-full mt-2">
+                      View agreement <ExternalLink className="ml-2 h-3 w-3" />
+                    </Button>
+                  </a>
+                ) : (
+                  <Button size="sm" variant="outline" className="w-full mt-2" asChild>
+                    <Link to="/portal/agreements">View my agreement</Link>
+                  </Button>
+                )}
               </>
             ) : (
               <>
-                <Badge variant="outline" className="border-destructive/40 text-destructive">Not signed</Badge>
-                <p className="text-xs text-destructive mt-2">You must complete the JF Effect / Jared James Fit Coaching Agreement + Liability Waiver before services begin.</p>
+                <Badge
+                  variant="outline"
+                  className="border-amber-500/50 text-amber-700 dark:text-amber-400"
+                >
+                  Not signed yet
+                </Badge>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Sign your JF Effect Coaching Agreement to cover this purchase. It takes about 2
+                  minutes, and one signature covers everything you buy.
+                </p>
+                {agreementNeeded && agreementCanSign && (
+                  <Button size="sm" className="w-full mt-2" onClick={openSignFlow}>
+                    Review &amp; sign
+                  </Button>
+                )}
               </>
             )}
           </Card>
