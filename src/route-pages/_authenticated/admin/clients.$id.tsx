@@ -65,6 +65,8 @@ import { ClientWorkspaceTabs, type WorkspaceTab } from "@/components/clients/cli
 import { LEGACY_WORKSPACE_TABS } from "@/components/clients/client-workspace-tab-model";
 import { TAB_VALUES, type TabValue } from "@/components/clients/client-tab-values";
 import { ClientSetupChecklistCard, useClientSetupChecklist } from "@/components/clients/client-setup-checklist-card";
+import { greetingName, setupMessageText } from "@/lib/setup-message";
+import { copyTextToClipboard } from "@/lib/copy-text";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
 const Route = __getRouteApi("/_authenticated/admin/clients/$id");
 
@@ -303,7 +305,7 @@ export function ClientProfileWorkspace({
       await inviteFn({ data: { clientId: id, redirectTo } });
       toast.success("Setup link sent", {
         id: t,
-        description: "Not there in a few minutes? Check spam, or use Copy setup link.",
+        description: "Not there in a few minutes? Check spam, or use Copy setup message.",
       });
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
@@ -311,13 +313,15 @@ export function ClientProfileWorkspace({
     }
   };
 
+  // Copies a ready-to-send message (greeting, link, what to tap), not a bare link.
   const copySetupLink = async () => {
     if (!form.email) return toast.error("Add an email first");
-    const t = toast.loading("Generating link…");
+    const t = toast.loading("Creating setup message…");
     try {
-      const { url } = await getSetupLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/setup` } });
-      await navigator.clipboard.writeText(url);
-      toast.success("Setup link copied", { id: t });
+      const message = getSetupLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/setup` } })
+        .then(({ url }) => setupMessageText({ firstName: greetingName(form), url }));
+      await copyTextToClipboard(message);
+      toast.success("Setup message copied. Paste it into a text or email.", { id: t });
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
@@ -338,11 +342,12 @@ export function ClientProfileWorkspace({
 
   const copyResetLink = async () => {
     if (!form.email) return toast.error("Add an email first");
-    const t = toast.loading("Generating reset link…");
+    const t = toast.loading("Creating reset message…");
     try {
-      const { url } = await getResetLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
-      await navigator.clipboard.writeText(url);
-      toast.success("Reset link copied", { id: t });
+      const message = getResetLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } })
+        .then(({ url }) => setupMessageText({ firstName: greetingName(form), url, kind: "reset" }));
+      await copyTextToClipboard(message);
+      toast.success("Reset message copied. Paste it into a text or email.", { id: t });
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
@@ -683,6 +688,7 @@ export function ClientProfileWorkspace({
               navigate({ to: "/portal" });
             }}
             onSendSetup={sendSetup}
+            onCopySetup={copySetupLink}
             onRequestUpdate={requestUpdate}
             onGoToTab={(t: TabValue) => setTab(t)}
           />
@@ -1171,7 +1177,7 @@ export function ClientProfileWorkspace({
                         {recovery ? "Text reset link" : "Text setup link"}
                       </ActionButton>
                       <ActionButton className="min-h-[48px]" variant="outline" disabled={noEmail} onAction={recovery ? copyResetLink : copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
-                        {recovery ? "Copy reset link" : "Copy setup link"}
+                        {recovery ? "Copy reset message" : "Copy setup message"}
                       </ActionButton>
                     </div>
 
@@ -1683,7 +1689,7 @@ function SetupStatusBanner({
                 {stage === "no_account" ? "Send setup link" : "Resend setup link"}
               </ActionButton>
               <ActionButton size="sm" variant="outline" onAction={onCopySetup} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
-                Copy setup link
+                Copy setup message
               </ActionButton>
             </>
           )}
@@ -1693,7 +1699,7 @@ function SetupStatusBanner({
                 Send reset link
               </ActionButton>
               <ActionButton size="sm" variant="outline" onAction={onCopyReset} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
-                Copy reset link
+                Copy reset message
               </ActionButton>
               <Button size="sm" variant="outline" onClick={onSetPassword}>
                 <KeyRound className="mr-2 h-4 w-4" />Set password
@@ -1862,7 +1868,7 @@ function CommsToggleRow({ title, description, checked, onChange }: { title: stri
 }
 
 function ClientOverviewSnapshot({
-  form, clientId, canPov, embedded = false, onMessage, onPov, onSendSetup, onRequestUpdate, onGoToTab,
+  form, clientId, canPov, embedded = false, onMessage, onPov, onSendSetup, onCopySetup, onRequestUpdate, onGoToTab,
 }: {
   form: any;
   clientId: string;
@@ -1871,6 +1877,7 @@ function ClientOverviewSnapshot({
   onMessage: () => void;
   onPov: () => void;
   onSendSetup: () => unknown | Promise<unknown>;
+  onCopySetup: () => unknown | Promise<unknown>;
   onRequestUpdate: () => unknown | Promise<unknown>;
   onGoToTab: (t: TabValue) => void;
 }) {
@@ -2063,9 +2070,15 @@ function ClientOverviewSnapshot({
                   <dd className="font-medium">{access.inviteStatusLabel}</dd>
                 </dl>
                 {access.stage !== "live" && form.email && (
-                  <ActionButton className="min-h-[44px] w-full" onAction={onSendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
-                    {form.invite_sent_at || form.invite_last_resent_at ? "Resend setup email" : "Email setup link"}
-                  </ActionButton>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <ActionButton className="min-h-[44px] w-full" onAction={onSendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                      {form.invite_sent_at || form.invite_last_resent_at ? "Resend setup email" : "Email setup link"}
+                    </ActionButton>
+                    {/* Emails can land in spam: a message the coach sends from their own phone gets through. */}
+                    <ActionButton className="min-h-[44px] w-full" variant="outline" onAction={onCopySetup} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                      Copy setup message
+                    </ActionButton>
+                  </div>
                 )}
                 <Button
                   variant="ghost"

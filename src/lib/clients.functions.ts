@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { isAlreadyRegisteredError } from "@/lib/invite-errors";
+import { assertNotPrivilegedTarget } from "@/lib/privileged-target.server";
 
 type ClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
 
@@ -15,36 +16,6 @@ async function assertAdmin(supabase: any, userId: string) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Forbidden: admin only");
-}
-
-// SECURITY: Refuse to operate on any auth user that holds a privileged role
-// (admin or coach). Without this guard, a client record that happens to share
-// an email with an admin/coach — or whose user_id was auto-linked to one —
-// would let setup / reset / password operations silently overwrite the
-// admin's credentials.
-async function assertNotPrivilegedTarget(opts: { email?: string | null; userId?: string | null }) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const targetIds = new Set<string>();
-  if (opts.userId) targetIds.add(opts.userId);
-  if (opts.email) {
-    const { data: list } = await supabaseAdmin.auth.admin.listUsers();
-    const match = list.users.find(
-      (u: any) => (u.email || "").toLowerCase() === opts.email!.toLowerCase(),
-    );
-    if (match) targetIds.add(match.id);
-  }
-  if (targetIds.size === 0) return;
-  const { data: roles, error } = await supabaseAdmin
-    .from("user_roles")
-    .select("user_id, role")
-    .in("user_id", Array.from(targetIds))
-    .in("role", ["admin", "coach"]);
-  if (error) throw new Error(error.message);
-  if (roles && roles.length > 0) {
-    throw new Error(
-      "Refusing to send/generate a credential link: the target email is associated with an admin or coach account. Use a different email for this client record.",
-    );
-  }
 }
 
 export const inviteClient = createServerFn({ method: "POST" })
@@ -121,7 +92,7 @@ export const getSetupLink = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await assertAdmin(supabase, userId);
     const { data: client, error } = await supabase
-      .from("clients").select("id, email, user_id").eq("id", data.clientId).single();
+      .from("clients").select("id, email, user_id, last_signed_in_at").eq("id", data.clientId).single();
     if (error) throw new Error(error.message);
     if (!client?.email) throw new Error("Client has no email address");
     await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
@@ -144,12 +115,11 @@ export const getSetupLink = createServerFn({ method: "POST" })
     url.searchParams.set("token_hash", hashedToken);
     url.searchParams.set("type", linkType);
     const now = new Date().toISOString();
-    await supabaseAdmin.from("clients").update({
-      invite_sent_at: now,
-      invite_last_resent_at: now,
-      invite_expires_at: null,
-      account_status: client.user_id ? "Account Created" : "Invite Sent",
-    }).eq("id", client.id);
+    const patch: ClientUpdate = { invite_sent_at: now, invite_last_resent_at: now, invite_expires_at: null };
+    // Still waiting on the client until they actually sign in (mark_client_signed_in then
+    // activates the account). Calling it "Account Created" here hid them from Needs Setup.
+    if (!client.last_signed_in_at) patch.account_status = "Invite Sent";
+    await supabaseAdmin.from("clients").update(patch).eq("id", client.id);
     return { url: url.toString() };
   });
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { mintShareLinkForPurchase } from "@/lib/payment-share.server";
 import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertNotPrivilegedTarget } from "@/lib/privileged-target.server";
 
 /* ============================================================
  * Shared helpers (duplicated from sms.functions.ts to keep this
@@ -54,7 +55,7 @@ async function loadSmsSettings(supabase: any) {
 async function loadClientForSms(supabase: any, clientId: string) {
   const { data, error } = await supabase
     .from("clients")
-    .select("id, email, phone, sms_opt_out, first_name, full_name, user_id, assigned_coach_id")
+    .select("id, email, phone, sms_opt_out, first_name, full_name, user_id, assigned_coach_id, last_signed_in_at")
     .eq("id", clientId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -146,6 +147,8 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
     const settings = await loadSmsSettings(supabase);
     const { client, toPhone } = await loadClientForSms(supabase, data.clientId);
     if (!client.email) throw new Error("Client has no email on file (required to mint link)");
+    // Same guard as the email and copy paths: never text a sign-in link for a staff account.
+    await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id ?? null });
 
     const url = await generateAuthLink({
       clientEmail: client.email,
@@ -171,7 +174,8 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
         patch.invite_sent_at = new Date().toISOString();
         patch.invite_last_resent_at = new Date().toISOString();
         patch.invite_expires_at = null;
-        patch.account_status = client.user_id ? "Account Created" : "Invite Sent";
+        // Waiting on the client until they actually sign in.
+        if (!client.last_signed_in_at) patch.account_status = "Invite Sent";
       }
       if (data.kind === "reset") {
         patch.password_reset_sent_at = new Date().toISOString();
@@ -181,7 +185,8 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
       if (Object.keys(patch).length > 0) {
         await supabase.from("clients").update(patch).eq("id", data.clientId);
       }
-      return { ok: true, sid };
+      // The texted link, so the coach can copy the same one (minting another would cancel it).
+      return { ok: true, sid, url };
     } catch (e: any) {
       await logSmsSend(supabase, { clientId: data.clientId, toPhone, body, kind: "manual", status: "failed", error: e?.message ?? String(e), userId });
       throw e;
