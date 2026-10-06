@@ -7,6 +7,7 @@ import {
   Head,
   Heading,
   Html,
+  Link,
   Preview,
   Text,
 } from '@react-email/components'
@@ -16,27 +17,38 @@ interface RecoveryEmailProps {
   confirmationUrl: string
 }
 
+// Also the onboarding email for a client whose account already exists, so it reads as
+// "set your password", not only "you forgot it". The link is shown as text too, because
+// Gmail disables buttons in anything it files under Spam.
 export const RecoveryEmail = ({
   siteName,
   confirmationUrl,
 }: RecoveryEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>Reset your password for {siteName}</Preview>
+    <Preview>Set a new password for your {siteName} account.</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Reset your JF Effect password</Heading>
+        <Heading style={h1}>Set your {siteName} password</Heading>
         <Text style={text}>
-          We received a request to reset your password for {siteName}. Tap the
-          button below to choose a new password. This link expires in 30 minutes
-          and can only be used once.
+          Tap the button to set a new password and get into your {siteName} account.
         </Text>
         <Button style={button} href={confirmationUrl}>
-          Reset My Password
+          Set my password
         </Button>
+        <Text style={small}>
+          Button not working? Copy this link into your browser:
+          <br />
+          <Link href={confirmationUrl} style={link}>
+            {confirmationUrl}
+          </Link>
+        </Text>
+        <Text style={small}>
+          The link works once. If it has expired, request a new one from the sign-in page
+          or ask your coach.
+        </Text>
         <Text style={footer}>
-          If you didn't request a password reset, you can safely ignore this
-          email. Your password will not be changed.
+          Didn't ask for this? You can ignore this email. Your password won't change.
         </Text>
       </Container>
     </Body>
@@ -59,6 +71,13 @@ const text = {
   lineHeight: '1.5',
   margin: '0 0 25px',
 }
+const small = {
+  fontSize: '12px',
+  color: '#55575d',
+  lineHeight: '1.5',
+  margin: '20px 0 0',
+}
+const link = { color: '#000000', textDecoration: 'underline', wordBreak: 'break-all' as const }
 const button = {
   backgroundColor: '#000000',
   color: '#ffffff',

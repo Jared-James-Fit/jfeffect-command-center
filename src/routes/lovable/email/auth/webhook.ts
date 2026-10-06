@@ -1,13 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router'
 import type { ComponentType } from 'react'
 
+// Specific, branded subjects: a generic invite subject from an unknown sender reads as spam.
 const EMAIL_SUBJECTS: Record<string, string> = {
-  signup: 'Confirm your email',
-  invite: "You've been invited",
-  magiclink: 'Your login link',
-  recovery: 'Reset Your JF Effect Password',
-  email_change: 'Confirm your new email',
-  reauthentication: 'Your verification code',
+  signup: 'Confirm your email for JF Effect',
+  invite: 'Set up your JF Effect account',
+  magiclink: 'Your JF Effect sign-in link',
+  recovery: 'Set your JF Effect password',
+  email_change: 'Confirm your new email for JF Effect',
+  reauthentication: 'Your JF Effect verification code',
 }
 
 async function loadEmailTemplate(emailType: string) {
@@ -30,7 +31,7 @@ async function loadEmailTemplate(emailType: string) {
 }
 
 // Configuration
-const SITE_NAME = "jfeffect-command-center"
+const SITE_NAME = "JF Effect"
 const SENDER_DOMAIN = "notify.jfeffect.com"
 const ROOT_DOMAIN = "jfeffect.com"
 const FROM_DOMAIN = "jfeffect.com"

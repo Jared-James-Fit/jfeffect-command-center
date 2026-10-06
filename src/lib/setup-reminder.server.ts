@@ -10,7 +10,7 @@ import * as React from 'react'
 import { render } from '@react-email/components'
 import { TEMPLATES } from '@/lib/email-templates/registry'
 
-const SITE_NAME = 'jfeffect-command-center'
+const SITE_NAME = 'JF Effect'
 const SENDER_DOMAIN = 'notify.jfeffect.com'
 const FROM_DOMAIN = 'jfeffect.com'
 

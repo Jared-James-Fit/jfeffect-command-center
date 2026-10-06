@@ -117,7 +117,7 @@ export function winnipegLabel(iso: string): string {
   return `${text} CT`;
 }
 
-const SITE_NAME = "jfeffect-command-center";
+const SITE_NAME = "JF Effect";
 const SENDER_DOMAIN = "notify.jfeffect.com";
 const FROM_DOMAIN = "jfeffect.com";
 

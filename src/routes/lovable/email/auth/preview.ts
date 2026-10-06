@@ -22,7 +22,7 @@ async function loadEmailTemplate(type: string) {
 }
 
 // Configuration
-const SITE_NAME = "jfeffect-command-center"
+const SITE_NAME = "JF Effect"
 const ROOT_DOMAIN = "jfeffect.com"
 
 // Sample data for preview mode ONLY (not used in actual email sending).
