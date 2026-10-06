@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
-import { stripeFetch, getStripeKeyForMode, type StripeMode } from "@/lib/stripe.server";
+import { stripeFetch, getStripeKeyForMode, resolveInvoicePaymentRefs, type StripeMode } from "@/lib/stripe.server";
 import {
   buildPromoRowFromSession,
   fetchExpandedCheckoutSession,
   upsertPromoRedemption,
 } from "@/lib/promo-capture";
+import { recordStripePayment } from "@/lib/member-payment-ledger.server";
 import { sendBillingAdminEmail, buildBillingEmailBody } from "@/lib/billing-notify.server";
 import {
   invoiceSubscriptionId,
@@ -909,8 +910,16 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             case "invoice.payment_succeeded": {
               // Newer Stripe API versions nest these refs under `parent`/`payments`.
               const invSubId = invoiceSubscriptionId(obj);
-              const invPiId = invoicePaymentIntentId(obj);
-              const invChargeId = invoiceChargeId(obj);
+              let invPiId = invoicePaymentIntentId(obj);
+              let invChargeId = invoiceChargeId(obj);
+              // Webhook invoices omit `payments`, so the PaymentIntent/charge are
+              // missing; without them the ledger row can't be tied to the Stripe
+              // charge. Resolve them (best-effort) for paid invoices.
+              if ((obj.amount_paid ?? 0) > 0 && obj.id && (!invPiId || !invChargeId)) {
+                const refs = await resolveInvoicePaymentRefs(obj.id, eventApiKey ?? undefined);
+                invPiId ??= refs.paymentIntent;
+                invChargeId ??= refs.charge;
+              }
               if (invSubId) {
                 let sub: any;
                 try {
@@ -934,6 +943,22 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                     // Fire payment-succeeded SMS only on actual paid renewals
                     // (skip the $0 trial-start invoice).
                     if ((obj.amount_paid ?? 0) > 0) {
+                      try {
+                        await recordStripePayment(supabase, member.id, {
+                          stripeInvoiceId: obj.id,
+                          stripePaymentId: invChargeId,
+                          stripePaymentIntentId: invPiId,
+                          stripeCustomerId: obj.customer ?? null,
+                          stripeSubscriptionId: invSubId,
+                          stripeMode: eventMode ?? null,
+                          receiptUrl: obj.hosted_invoice_url ?? null,
+                          amountCents: obj.amount_paid,
+                          currency: obj.currency ?? "usd",
+                          paidAt: new Date((obj.status_transitions?.paid_at ?? event.created) * 1000).toISOString(),
+                        });
+                      } catch (e: any) {
+                        console.error("[stripe-webhook] member ledger record failed", { invoiceId: obj.id, message: e?.message });
+                      }
                       await fireJfSms(member.id, "subscription_payment_succeeded", {
                         amount: obj.amount_paid ? `$${(obj.amount_paid / 100).toFixed(2)}` : "",
                       });

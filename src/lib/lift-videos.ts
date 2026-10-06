@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isViewingAsClient } from "@/lib/pov-guard";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 
 export type LiftVideoStatus =
@@ -376,6 +377,7 @@ export const LIFT_VIDEO_QUICK_REPLIES: string[] = [
 ];
 
 export async function markClientViewed(videoId: string) {
+  if (await isViewingAsClient()) return; // a coach in client POV is not the client viewing it
   await updateLiftVideo(videoId, { client_last_viewed_at: new Date().toISOString() } as any);
 }
 

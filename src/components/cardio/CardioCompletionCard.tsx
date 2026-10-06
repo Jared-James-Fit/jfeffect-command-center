@@ -20,6 +20,12 @@ import { CheckCircle2, Circle, ChevronDown, ChevronUp, Info, Loader2, SkipForwar
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cardioStatus, cardioStatusLabel, formatCardioLogLine } from "@/lib/cardio-plan";
+import {
+  CARDIO_EMPTY_METRICS,
+  deleteCardioCompletion,
+  saveCardioCompletion,
+  type CardioCompletionRow,
+} from "@/lib/cardio-completion";
 import { resolveCardioTargets, resolveCompletionTarget } from "@/lib/cardio-prescription";
 import {
   completionTargetParts,
@@ -77,14 +83,15 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   const { data: completion, isLoading } = useQuery({
     queryKey: ["cardio-completion", clientId, target.id, dateStr],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("cardio_completions")
         .select("*")
         .eq("client_id", clientId)
         .eq("cardio_target_id", target.id)
         .eq("completed_date", dateStr)
-        .maybeSingle();
-      return data ?? null;
+        .limit(1);
+      if (error) throw error;
+      return ((data ?? []) as any[])[0] ?? null;
     },
     staleTime: 30_000,
   });
@@ -126,116 +133,98 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
   const hrZone = target.heart_rate_zone?.trim() || null;
   const effort = target.intensity?.trim() || null;
 
-  async function toggleComplete() {
+  const key = { client_id: clientId, cardio_target_id: target.id, completed_date: dateStr };
+  const queryKey = ["cardio-completion", clientId, target.id, dateStr];
+
+  // Every cardio surface (workout summary, analytics, recovery) keys off
+  // "cardio" somewhere in its first query-key segment.
+  function refreshCardioViews(saved: CardioCompletionRow | null) {
+    qc.setQueryData(queryKey, saved);
+    qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0] ?? "").includes("cardio") });
+  }
+
+  async function run(action: () => Promise<void>) {
     if (readonly || saving) return;
     setSaving(true);
     try {
-      if (isCompleted || isSkipped) {
-        await (supabase as any)
-          .from("cardio_completions")
-          .delete()
-          .eq("client_id", clientId)
-          .eq("cardio_target_id", target.id)
-          .eq("completed_date", dateStr);
-        toast.success("Cardio reset to not started");
-      } else {
-        await (supabase as any)
-          .from("cardio_completions")
-          .upsert({
-            client_id: clientId,
-            cardio_target_id: target.id,
-            completed_date: dateStr,
-            completed: true,
-            skipped: false,
-            duration_minutes: target.duration_minutes ?? null,
-            cardio_type: target.cardio_type,
-            day_type: target.day_type,
-            completion_target: "manual",
-          }, { onConflict: "client_id,cardio_target_id,completed_date" });
-        toast.success("Cardio logged!");
-      }
-      qc.invalidateQueries({ queryKey: ["cardio-completion", clientId, target.id, dateStr] });
-      qc.invalidateQueries({ queryKey: ["cardio-summary"] });
+      await action();
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not save");
+      toast.error(e?.message ? `Couldn't save cardio: ${e.message}` : "Couldn't save cardio. Try again.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function markSkipped() {
-    if (readonly || saving) return;
-    setSaving(true);
-    try {
-      await (supabase as any)
-        .from("cardio_completions")
-        .upsert({
-          client_id: clientId,
-          cardio_target_id: target.id,
-          completed_date: dateStr,
-          completed: false,
-          skipped: true,
-          cardio_type: target.cardio_type,
-          day_type: target.day_type,
-        }, { onConflict: "client_id,cardio_target_id,completed_date" });
-      toast.success("Cardio marked as skipped");
-      qc.invalidateQueries({ queryKey: ["cardio-completion", clientId, target.id, dateStr] });
-      qc.invalidateQueries({ queryKey: ["cardio-summary"] });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not save");
-    } finally {
-      setSaving(false);
+  // One tap: log the prescribed session as done. Tap again to reset.
+  const toggleComplete = () => run(async () => {
+    if (isCompleted || isSkipped) {
+      await deleteCardioCompletion(supabase, key);
+      refreshCardioViews(null);
+      toast.success("Cardio reset to not started");
+      return;
     }
-  }
+    const saved = await saveCardioCompletion(supabase, {
+      ...key,
+      completed: true,
+      skipped: false,
+      duration_minutes: target.duration_minutes ?? null,
+      cardio_type: target.cardio_type,
+      day_type: target.day_type,
+      completion_target: "manual",
+    });
+    refreshCardioViews(saved);
+    toast.success("Cardio logged!");
+  });
 
-  async function saveDetails() {
-    if (readonly || saving) return;
+  const markSkipped = () => run(async () => {
+    const saved = await saveCardioCompletion(supabase, {
+      ...key,
+      ...CARDIO_EMPTY_METRICS,
+      completed: false,
+      skipped: true,
+      cardio_type: target.cardio_type,
+      day_type: target.day_type,
+    });
+    refreshCardioViews(saved);
+    toast.success("Cardio marked as skipped");
+  });
+
+  const saveDetails = () => run(async () => {
     const num = (v: string) => {
       const n = Number(v);
-      return v.trim() !== "" && Number.isFinite(n) ? n : null;
+      return v.trim() !== "" && Number.isFinite(n) && n >= 0 ? n : null;
     };
-    setSaving(true);
-    try {
-      const completedBy = resolveCompletionTarget({
-        duration_minutes: target.duration_minutes,
-        step_target: smartTargets.steps,
-        calorie_target_min: smartTargets.calories,
-        logged_duration_minutes: num(actualDuration),
-        logged_steps: num(steps),
-        logged_calories: num(calories),
-      });
-      await (supabase as any)
-        .from("cardio_completions")
-        .upsert({
-          client_id: clientId,
-          cardio_target_id: target.id,
-          completed_date: dateStr,
-          completed: true,
-          skipped: false,
-          duration_minutes: actualDuration ? parseInt(actualDuration, 10) : target.duration_minutes ?? null,
-          cardio_type: target.cardio_type,
-          rpe: num(rpe),
-          distance: num(distance),
-          distance_unit: num(distance) != null ? distanceUnit : null,
-          avg_speed: num(avgSpeed),
-          incline: num(incline),
-          calories: num(calories),
-          steps: num(steps),
-          completion_target: completedBy ?? "manual",
-          avg_heart_rate: num(avgHr),
-          notes: notes.trim() || null,
-          day_type: target.day_type,
-        }, { onConflict: "client_id,cardio_target_id,completed_date" });
-      toast.success("Cardio logged!");
-      setExpanded(false);
-      qc.invalidateQueries({ queryKey: ["cardio-completion", clientId, target.id, dateStr] });
-      qc.invalidateQueries({ queryKey: ["cardio-summary"] });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not save");
-    } finally {
-      setSaving(false);
-    }
-  }
+    const minutes = num(actualDuration);
+    const completedBy = resolveCompletionTarget({
+      duration_minutes: target.duration_minutes,
+      step_target: smartTargets.steps,
+      calorie_target_min: smartTargets.calories,
+      logged_duration_minutes: minutes,
+      logged_steps: num(steps),
+      logged_calories: num(calories),
+    });
+    const saved = await saveCardioCompletion(supabase, {
+      ...key,
+      completed: true,
+      skipped: false,
+      duration_minutes: minutes != null ? Math.round(minutes) : target.duration_minutes ?? null,
+      cardio_type: target.cardio_type,
+      rpe: num(rpe),
+      distance: num(distance),
+      distance_unit: num(distance) != null ? distanceUnit : null,
+      avg_speed: num(avgSpeed),
+      incline: num(incline),
+      calories: num(calories) != null ? Math.round(num(calories)!) : null,
+      steps: num(steps) != null ? Math.round(num(steps)!) : null,
+      completion_target: completedBy ?? "manual",
+      avg_heart_rate: num(avgHr) != null ? Math.round(num(avgHr)!) : null,
+      notes: notes.trim() || null,
+      day_type: target.day_type,
+    });
+    refreshCardioViews(saved);
+    toast.success("Cardio logged!");
+    setExpanded(false);
+  });
 
   return (
     <Card className={`overflow-hidden transition-colors ${
@@ -369,11 +358,14 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
 
         {!readonly && !expanded && !isCompleted && !isSkipped && (
           <div className="mt-2 flex gap-2">
-            <Button size="sm" className="flex-1" onClick={() => setExpanded(true)}>
-              Log Cardio
+            <Button size="sm" className="flex-1" onClick={toggleComplete} disabled={saving}>
+              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Done
             </Button>
-            <Button size="sm" variant="outline" onClick={markSkipped} disabled={saving}>
-              <SkipForward className="mr-1.5 h-3.5 w-3.5" /> Skip
+            <Button size="sm" variant="outline" className="flex-1" onClick={() => setExpanded(true)} disabled={saving}>
+              Add numbers
+            </Button>
+            <Button size="sm" variant="ghost" onClick={markSkipped} disabled={saving} aria-label="Skip cardio">
+              <SkipForward className="h-3.5 w-3.5" />
             </Button>
           </div>
         )}
@@ -381,28 +373,17 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
         {expanded && !readonly && (
           <div className="mt-3 space-y-3 border-t border-border pt-3">
             <p className="text-[11px] text-muted-foreground">
-              Fill in whatever you tracked — one is enough.
+              Copy it off your watch or machine. One number is enough.
             </p>
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <Label className="text-xs">Minutes</Label>
                 <Input
                   type="number"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   placeholder={target.duration_minutes ? String(target.duration_minutes) : "—"}
                   value={actualDuration}
                   onChange={(e) => setActualDuration(e.target.value)}
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Steps</Label>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder={smartTargets.steps ? String(smartTargets.steps) : "—"}
-                  value={steps}
-                  onChange={(e) => setSteps(e.target.value)}
                   className="h-9 text-sm"
                 />
               </div>
@@ -414,6 +395,39 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                   placeholder={smartTargets.calories ? String(smartTargets.calories) : "—"}
                   value={calories}
                   onChange={(e) => setCalories(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Avg HR</Label>
+                <Input type="number" inputMode="numeric" placeholder="—" value={avgHr} onChange={(e) => setAvgHr(e.target.value)} className="h-9 text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">Distance</Label>
+                <Input type="number" inputMode="decimal" placeholder="—" value={distance} onChange={(e) => setDistance(e.target.value)} className="h-9 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Unit</Label>
+                <select
+                  value={distanceUnit}
+                  onChange={(e) => setDistanceUnit(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="km">km</option>
+                  <option value="mi">mi</option>
+                  <option value="m">m</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Steps</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder={smartTargets.steps ? String(smartTargets.steps) : "—"}
+                  value={steps}
+                  onChange={(e) => setSteps(e.target.value)}
                   className="h-9 text-sm"
                 />
               </div>
@@ -435,24 +449,6 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                     <Label className="text-xs">RPE</Label>
                     <Input type="number" inputMode="decimal" min="1" max="10" step="0.5" placeholder="—" value={rpe} onChange={(e) => setRpe(e.target.value)} className="h-9 text-sm" />
                   </div>
-                  <div>
-                    <Label className="text-xs">Distance</Label>
-                    <Input type="number" inputMode="decimal" placeholder="—" value={distance} onChange={(e) => setDistance(e.target.value)} className="h-9 text-sm" />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Unit</Label>
-                    <select
-                      value={distanceUnit}
-                      onChange={(e) => setDistanceUnit(e.target.value)}
-                      className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                    >
-                      <option value="km">km</option>
-                      <option value="mi">mi</option>
-                      <option value="m">m</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
                   {view.isTreadmill && (
                     <>
                       <div>
@@ -465,10 +461,6 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                       </div>
                     </>
                   )}
-                  <div>
-                    <Label className="text-xs">Avg HR</Label>
-                    <Input type="number" inputMode="numeric" placeholder="—" value={avgHr} onChange={(e) => setAvgHr(e.target.value)} className="h-9 text-sm" />
-                  </div>
                 </div>
                 <div>
                   <Label className="text-xs">Notes</Label>

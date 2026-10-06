@@ -18,7 +18,7 @@ import {
   setConversationStatus, setConversationPriority, PRIORITIES,
   markUnread, markRead, setConversationWorkflow, type WorkflowStatus,
 } from "@/lib/messages";
-import { Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, Video } from "lucide-react";
+import { ClipboardCheck, ClipboardList, Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, Video } from "lucide-react";
 import { SwipeableRow } from "@/components/ui/swipeable-row";
 import { toast } from "sonner";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
@@ -32,6 +32,9 @@ import { Megaphone, Users as UsersIcon } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { deriveInboxWorkflow, previewPrefix, WORKFLOW_LABEL, type InboxWorkflowState } from "@/lib/inbox-workflow";
 import { formatReadReceipt } from "@/lib/read-receipt";
+import { applyMessageChange, INBOX_MESSAGE_COLUMNS } from "@/lib/inbox-cache";
+import { waitingState, type WaitingState } from "@/lib/inbox-waiting";
+import { deriveRequests, oldestPending, requestChip, type RequestChip } from "@/lib/inbox-requests";
 import { Check } from "lucide-react";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 
@@ -79,7 +82,43 @@ export function WorkflowPill({ state, className, compact }: { state: InboxWorkfl
   );
 }
 
-const FILTERS = ["Inbox", "Needs Response", "Waiting on Client", "Forms & Check-ins", "Unread", "Priority", "Done", "Archived"] as const;
+/**
+ * Status pill for a chat where my message was the last one. "Waiting" = I asked
+ * something and it's recent; "Follow up" = it has sat 48h+ unanswered. Closers
+ * ("Perf thanks!") get no pill at all (see lib/inbox-waiting).
+ */
+function WaitingPill({ state }: { state: Exclude<WaitingState, "fyi"> }) {
+  const overdue = state === "overdue";
+  return (
+    <span
+      className={cn(
+        "inline-flex h-5 min-w-0 shrink items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-black uppercase tracking-wide",
+        overdue ? WORKFLOW_STYLE.needs_response : WORKFLOW_STYLE.waiting_on_client,
+      )}
+    >
+      {overdue ? "Follow up" : "Waiting"}
+    </span>
+  );
+}
+
+const REQUEST_CHIP_STYLE: Record<RequestChip["tone"], string> = {
+  overdue: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300",
+  pending: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  filled: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+};
+
+/** Forms / check-ins at a glance: not filled (amber once 48h+ old), or filled and waiting for my review. */
+function RequestStatusChip({ chip }: { chip: RequestChip }) {
+  const Icon = chip.tone === "filled" ? ClipboardCheck : ClipboardList;
+  return (
+    <span className={cn("inline-flex h-5 min-w-0 shrink items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[10px] font-bold", REQUEST_CHIP_STYLE[chip.tone])}>
+      <Icon className="h-3 w-3 shrink-0" />
+      <span className="truncate">{chip.text}</span>
+    </span>
+  );
+}
+
+const FILTERS = ["Inbox", "Needs Response", "Waiting on Client", "Follow Up", "Forms & Check-ins", "Unread", "Priority", "Done", "Archived"] as const;
 type Filter = typeof FILTERS[number];
 
 export const Route = createFileRoute("/_authenticated/admin/messages")({
@@ -165,7 +204,7 @@ export function MessagesInbox({
       // rows (not only one row per client) so unread counts and manual
       // mark-unread stay correct even when the latest message was sent by us.
       const { data, error } = await (supabase.from("messages") as any)
-        .select("id, client_id, body, sender_role, created_at, read_by_admin_at, read_by_client_at, is_automated, is_internal_note, message_type, attachments")
+        .select(INBOX_MESSAGE_COLUMNS)
         .in("client_id", clientIds)
         .eq("is_internal_note", false)
         .in("delivery_status", ["sent", "sending"])
@@ -221,6 +260,32 @@ export function MessagesInbox({
   const resyncInbox = () => { for (const k of INBOX_KEYS) qc.invalidateQueries({ queryKey: [k] }); };
   useResyncOnResume(resyncInbox);
 
+  // "2 minutes" / "about 1 hour" labels only change when something re-renders.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Forms & check-ins I sent vs. filled in (last 60 days). Small: one row per request.
+  const { data: requestStatus } = useQuery({
+    queryKey: ["message-form-checkin-inbox", "status"],
+    staleTime: 15_000,
+    queryFn: async () => {
+      const since = new Date(Date.now() - 60 * 86_400_000).toISOString();
+      const [checkins, subs] = await Promise.all([
+        (supabase.from("messenger_checkins") as any).select("client_id, task_type, status, created_at").gte("created_at", since).limit(3000),
+        (supabase.from("nf_submissions") as any).select("client_id, form_id, submitted_at").not("submitted_at", "is", null).gte("submitted_at", since).limit(3000),
+      ]);
+      if (checkins.error) throw checkins.error;
+      if (subs.error) throw subs.error;
+      return { checkins: checkins.data ?? [], submissions: subs.data ?? [] } as {
+        checkins: Array<{ client_id: string; task_type: string; status: string; created_at: string }>;
+        submissions: Array<{ client_id: string; form_id: string; submitted_at: string | null }>;
+      };
+    },
+  });
+
   // Realtime
   useEffect(() => {
     let pending: ReturnType<typeof setTimeout> | null = null;
@@ -237,8 +302,13 @@ export function MessagesInbox({
     };
     const ch = supabase
       .channel("admin-inbox")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
-        scheduleInvalidate(["last-messages", "conversation-states", "staff-inbox-state", "admin-nav-badges"]);
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload: any) => {
+        // The event already carries the whole row: patch the list now (preview,
+        // time, order and unread dot update immediately) instead of re-downloading
+        // ~1,000 messages. Only the small counters are refetched afterwards.
+        qc.setQueryData<Message[] | undefined>(["last-messages"], (prev) =>
+          applyMessageChange(prev, { eventType: payload.eventType, new: payload.new, old: payload.old }));
+        scheduleInvalidate(["conversation-states", "staff-inbox-state", "admin-nav-badges"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => {
         scheduleInvalidate(["conversation-states", "staff-inbox-state", "admin-nav-badges"]);
@@ -263,6 +333,28 @@ export function MessagesInbox({
     for (const msg of lastMessages) if (!m.has(msg.client_id)) m.set(msg.client_id, msg);
     return m;
   }, [lastMessages]);
+
+  const requestsByClient = useMemo(
+    () =>
+      deriveRequests({
+        checkins: requestStatus?.checkins ?? [],
+        submissions: requestStatus?.submissions ?? [],
+        messages: lastMessages.filter((m) => (m.attachments ?? []).some((a) => a?.kind === "form_request")),
+        toReview: pendingSubmissions.map((p: any) => ({ client_id: p.client_id, kind: p.kind, submitted_at: p.submitted_at })),
+      }),
+    [requestStatus, lastMessages, pendingSubmissions],
+  );
+
+  /** Waiting state + forms chip for one client's row. */
+  const statusFor = (clientId: string, last: Message | undefined, workflowState: string) => {
+    const req = requestsByClient.get(clientId);
+    const hasPendingRequest = !!req?.pending.length;
+    const waiting: WaitingState | null =
+      workflowState === "waiting_on_client"
+        ? waitingState({ last, hasPendingRequest, oldestPendingSince: oldestPending(req) })
+        : null;
+    return { waiting, chip: requestChip(req), hasRequests: !!req && (req.pending.length > 0 || req.toReview > 0) };
+  };
 
   // Blue dot = new inbound client activity *I* (this staff member) haven't viewed.
   const unreadByClient = useMemo(() => {
@@ -305,7 +397,8 @@ export function MessagesInbox({
           storedStatus: state?.status,
           pendingLiftReview: !!liftReview,
         });
-        return { client: c, state, last, unread, liftReview, workflow };
+        const status = statusFor(c.id, last, workflow.state);
+        return { client: c, state, last, unread, liftReview, workflow, ...status };
       })
       .filter((it) => {
         if (search) {
@@ -316,8 +409,10 @@ export function MessagesInbox({
         const priority = it.state?.priority ?? "Normal";
         switch (filter) {
           case "Needs Response": return it.workflow.state === "needs_response";
-          case "Waiting on Client": return it.workflow.state === "waiting_on_client";
-          case "Forms & Check-ins": return it.workflow.isFormOrCheckin && status !== "archived";
+          // Only chats where I'm actually waiting on an answer; closers like "Perf thanks!" aren't.
+          case "Waiting on Client": return it.workflow.state === "waiting_on_client" && it.waiting !== "fyi";
+          case "Follow Up": return it.workflow.state === "waiting_on_client" && it.waiting === "overdue";
+          case "Forms & Check-ins": return (it.workflow.isFormOrCheckin || it.hasRequests) && status !== "archived";
           case "Unread": return it.unread > 0 && status !== "archived";
           case "Priority": return (priority === "High Priority" || priority === "Important") && status !== "archived";
           case "Done": return it.workflow.state === "done";
@@ -326,12 +421,19 @@ export function MessagesInbox({
         }
       })
       .sort((a, b) => {
+        // Inbox: chats waiting on ME float to the top; everything else is newest first.
+        if (filter === "Inbox") {
+          const pa = a.workflow.state === "needs_response" ? 0 : 1;
+          const pb = b.workflow.state === "needs_response" ? 0 : 1;
+          if (pa !== pb) return pa - pb;
+        }
         const at = [a.last?.created_at ?? "", a.liftReview?.latestAt ?? ""].sort().pop() ?? "";
         const bt = [b.last?.created_at ?? "", b.liftReview?.latestAt ?? ""].sort().pop() ?? "";
-        return bt.localeCompare(at);
+        // Follow Up: the longest-unanswered first.
+        return filter === "Follow Up" ? at.localeCompare(bt) : bt.localeCompare(at);
       });
     return items;
-  }, [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, inboxByClient, search, filter]);
+  }, [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, inboxByClient, requestsByClient, search, filter]);
 
   // Live filter counts from the same derivation the rows use.
   const filterCounts = useMemo(() => {
@@ -349,12 +451,14 @@ export function MessagesInbox({
         pendingLiftReview: liftReviewsByClient.has(c.id),
       });
       if (w.state === "needs_response") counts["Needs Response"] = (counts["Needs Response"] ?? 0) + 1;
-      if (w.state === "waiting_on_client") counts["Waiting on Client"] = (counts["Waiting on Client"] ?? 0) + 1;
-      if (w.isFormOrCheckin) counts["Forms & Check-ins"] = (counts["Forms & Check-ins"] ?? 0) + 1;
+      const st = statusFor(c.id, lastByClient.get(c.id), w.state);
+      if (w.state === "waiting_on_client" && st.waiting !== "fyi") counts["Waiting on Client"] = (counts["Waiting on Client"] ?? 0) + 1;
+      if (w.state === "waiting_on_client" && st.waiting === "overdue") counts["Follow Up"] = (counts["Follow Up"] ?? 0) + 1;
+      if (w.isFormOrCheckin || st.hasRequests) counts["Forms & Check-ins"] = (counts["Forms & Check-ins"] ?? 0) + 1;
       if ((unreadByClient.get(c.id) ?? 0) > 0) counts.Unread = (counts.Unread ?? 0) + 1;
     }
     return counts;
-  }, [clients, stateMap, inboxByClient, lastByClient, liftReviewsByClient, unreadByClient]);
+  }, [clients, stateMap, inboxByClient, lastByClient, liftReviewsByClient, unreadByClient, requestsByClient]);
 
   const refreshInbox = () => {
     qc.invalidateQueries({ queryKey: ["staff-inbox-state"] });
@@ -551,7 +655,7 @@ export function MessagesInbox({
         >
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
-          ) : conversations.map(({ client, state, last, unread, liftReview, workflow }) => (
+          ) : conversations.map(({ client, state, last, unread, liftReview, workflow, waiting, chip }) => (
             <SwipeableRow
               key={client.id}
               className="border-b border-border/60"
@@ -570,12 +674,13 @@ export function MessagesInbox({
                     refreshInbox();
                   },
                 },
-                ...(workflow.state === "needs_response" ? [{
+                // Clear a chat that needs nothing more from either side (a reply of mine, or a closer nobody needs to answer).
+                ...(workflow.state === "needs_response" || workflow.state === "waiting_on_client" ? [{
                   key: "done",
                   label: "Done",
                   color: "primary" as const,
                   icon: <Check className="h-4 w-4" />,
-                  onSelect: () => changeWorkflow(client.id, "done", { undoFrom: "needs_response" }),
+                  onSelect: () => changeWorkflow(client.id, "done", { undoFrom: workflow.state as WorkflowStatus }),
                 }] : []),
                 {
                   key: "archive",
@@ -645,13 +750,16 @@ export function MessagesInbox({
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-1">
-                  {workflow.state !== "done" && <WorkflowPill state={workflow.state} />}
+                  {workflow.state === "waiting_on_client"
+                    ? waiting && waiting !== "fyi" && <WaitingPill state={waiting} />
+                    : workflow.state !== "done" && <WorkflowPill state={workflow.state} />}
+                  {chip && <RequestStatusChip chip={chip} />}
                   {workflow.detail && workflow.detail !== "Lift review" && (
                     <span className="text-[10px] font-semibold text-muted-foreground">{workflow.detail}</span>
                   )}
                   {workflow.state === "waiting_on_client" && last?.sender_role === "admin" && (
                     <span className="text-[10px] text-muted-foreground">
-                      {(last as any).read_by_client_at ? formatReadReceipt((last as any).read_by_client_at) : "Sent"}
+                      {(last as any).read_by_client_at ? formatReadReceipt((last as any).read_by_client_at) : "Not read yet"}
                     </span>
                   )}
                   {liftReview && (

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isViewingAsClient } from "@/lib/pov-guard";
 
 export type GroupPermissionMode = "everyone" | "admins_only" | "read_only";
 export type GroupMemberRole = "admin" | "member";
@@ -157,8 +158,9 @@ export async function sendGroupMessage(input: {
   };
   const { data, error } = await db.from("group_messages").insert(row).select().single();
   if (error) throw error;
-  // bump group updated_at for sort order
-  await db.from("chat_groups").update({ updated_at: new Date().toISOString() }).eq("id", input.groupId);
+  // Bump group updated_at for sort order, without making the sender wait for it.
+  void db.from("chat_groups").update({ updated_at: new Date().toISOString() }).eq("id", input.groupId)
+    .then(() => {}, () => {});
   // Fire-and-forget push. Never block the send on push failures.
   if (data?.id) {
     void (async () => {
@@ -188,6 +190,8 @@ export async function deleteGroupMessageForEveryone(messageId: string) {
 }
 
 export async function markGroupRead(groupId: string, userId: string, at: string = new Date().toISOString()) {
+  // Viewing as a client: peeking must not leave a "seen" mark on anyone's membership.
+  if (await isViewingAsClient()) return;
   await db.from("chat_group_members")
     .update({ last_read_at: at })
     .eq("group_id", groupId)

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -40,6 +40,7 @@ import {
   uploadChatAttachment, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
+import { useViewingAsClient } from "@/lib/client-impersonation";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { GroupSeenByRow, GroupSeenBySheet } from "@/components/messages/group-seen-by";
@@ -170,7 +171,9 @@ export function GroupMessageThread({
 
   const myPresenceRole: "admin" | "coach" | "client" | "member" =
     authRole === "admin" ? "admin" : authRole === "coach" ? "coach" : "client";
-  const { others: livePeers } = useGroupPresence(groupId, myPresenceRole);
+  // Coach viewing as a client: don't appear as an active group member, and don't mark anything seen.
+  const viewingAsClient = useViewingAsClient();
+  const { others: livePeers } = useGroupPresence(viewingAsClient ? null : groupId, myPresenceRole);
   const liveUserIds = useMemo(() => new Set(livePeers.map((p) => p.user_id)), [livePeers]);
 
   /* ---------------- Realtime ---------------- */
@@ -216,7 +219,7 @@ export function GroupMessageThread({
   // see this as "Seen", so a group left open in a background tab mustn't count.
   const latestCreatedAt = messages[messages.length - 1]?.created_at ?? null;
   useEffect(() => {
-    if (!user || !latestCreatedAt) return;
+    if (!user || !latestCreatedAt || viewingAsClient) return;
     let cancelled = false;
     const run = () => {
       markGroupRead(groupId, user.id, readStampFor(latestCreatedAt)).then(() => {
@@ -236,10 +239,10 @@ export function GroupMessageThread({
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
-  }, [groupId, user?.id, latestCreatedAt, qc]);
+  }, [groupId, user?.id, latestCreatedAt, qc, viewingAsClient]);
 
-  // autoscroll
-  useEffect(() => {
+  // autoscroll: before paint, so the group never flashes at the top and then jumps down.
+  useLayoutEffect(() => {
     if (scrollerRef.current) scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
   }, [messages.length]);
 

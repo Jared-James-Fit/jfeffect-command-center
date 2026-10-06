@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isViewingAsClient } from "@/lib/pov-guard";
 
 export type SenderRole = "admin" | "client";
 
@@ -10,6 +11,10 @@ export type MessageAttachment = {
   mime?: string;
   duration?: number;
   storage_path?: string;
+  /** Videos: a small still frame uploaded next to the file, so bubbles don't have to load the video itself. */
+  thumbnail_storage_path?: string;
+  width?: number;
+  height?: number;
   peaks?: number[];
   kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "checkin_request" | "checkin_submission";
   fallback_emoji?: string;
@@ -245,14 +250,14 @@ export async function sendMessage(input: {
   const { data, error } = await db.from("messages").insert(row).select().single();
   if (error) throw error;
   // If the admin replies, the conversation no longer "needs response".
+  // Bookkeeping, not part of delivery: don't make the send wait on it.
   if (input.senderRole === "admin") {
-    try {
-      await db
-        .from("conversation_state")
-        .update({ status: "open" })
-        .eq("client_id", input.clientId)
-        .eq("status", "needs_response");
-    } catch {}
+    void db
+      .from("conversation_state")
+      .update({ status: "open" })
+      .eq("client_id", input.clientId)
+      .eq("status", "needs_response")
+      .then(() => {}, () => {});
   }
   // Fire-and-forget push notification. Never block the send on push failures.
   if (data?.id) {
@@ -269,6 +274,8 @@ export async function sendMessage(input: {
 }
 
 export async function markRead(clientId: string, role: SenderRole) {
+  // A coach viewing as this client must not mark the client's messages as read.
+  if (role === "client" && (await isViewingAsClient(clientId))) return;
   const now = new Date().toISOString();
   // Staff unread is per coach/admin: this only clears MY blue dot. It never
   // changes the conversation's workflow status (Needs Response stays).
