@@ -53,6 +53,27 @@ export function invoiceChargeId(invoice: AnyRec): string | null {
   return null;
 }
 
+/**
+ * Map `pi:<id>` / `charge:<id>` -> invoice id for a page of invoices fetched
+ * with `expand[]=data.payments`.
+ *
+ * Newer Stripe API versions dropped `invoice` from Charge objects, so the only
+ * way to tie a subscription charge back to the invoice the app stored is via
+ * the invoice's own `payments` list.
+ */
+export function invoiceIdByPaymentRef(invoices: AnyRec[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const inv of invoices) {
+    const id = str(inv?.["id"]);
+    if (!id) continue;
+    const pi = invoicePaymentIntentId(inv);
+    const ch = invoiceChargeId(inv);
+    if (pi && !out.has(`pi:${pi}`)) out.set(`pi:${pi}`, id);
+    if (ch && !out.has(`charge:${ch}`)) out.set(`charge:${ch}`, id);
+  }
+  return out;
+}
+
 /** Tax total for an invoice, old (`tax`) or new (`total_taxes[]`) shape. */
 export function invoiceTaxMinor(invoice: AnyRec): number {
   if (!invoice) return 0;

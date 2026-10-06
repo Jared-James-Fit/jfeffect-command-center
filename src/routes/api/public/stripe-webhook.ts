@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
-import { stripeFetch, getStripeKeyForMode, type StripeMode } from "@/lib/stripe.server";
+import { stripeFetch, getStripeKeyForMode, resolveInvoicePaymentRefs, type StripeMode } from "@/lib/stripe.server";
 import {
   buildPromoRowFromSession,
   fetchExpandedCheckoutSession,
@@ -909,8 +909,16 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             case "invoice.payment_succeeded": {
               // Newer Stripe API versions nest these refs under `parent`/`payments`.
               const invSubId = invoiceSubscriptionId(obj);
-              const invPiId = invoicePaymentIntentId(obj);
-              const invChargeId = invoiceChargeId(obj);
+              let invPiId = invoicePaymentIntentId(obj);
+              let invChargeId = invoiceChargeId(obj);
+              // Webhook invoices omit `payments`, so the PaymentIntent/charge are
+              // missing; without them the ledger row can't be tied to the Stripe
+              // charge. Resolve them (best-effort) for paid invoices.
+              if ((obj.amount_paid ?? 0) > 0 && obj.id && (!invPiId || !invChargeId)) {
+                const refs = await resolveInvoicePaymentRefs(obj.id, eventApiKey ?? undefined);
+                invPiId ??= refs.paymentIntent;
+                invChargeId ??= refs.charge;
+              }
               if (invSubId) {
                 let sub: any;
                 try {

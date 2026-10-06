@@ -4,6 +4,7 @@ import {
   invoicePaymentIntentId,
   invoiceChargeId,
   invoiceTaxMinor,
+  invoiceIdByPaymentRef,
 } from "@/lib/stripe-invoice-refs";
 
 describe("stripe invoice refs", () => {
@@ -49,5 +50,18 @@ describe("stripe invoice refs", () => {
 
   it("sums itemised taxes", () => {
     expect(invoiceTaxMinor({ total_taxes: [{ amount: 500 }, { amount: 250 }] })).toBe(750);
+  });
+
+  it("indexes invoices by their payment refs (charges have no invoice field)", () => {
+    const idx = invoiceIdByPaymentRef([
+      { id: "in_1", payments: { data: [{ payment: { payment_intent: "pi_1" } }] } },
+      { id: "in_2", payments: { data: [{ payment: { payment_intent: "pi_2", charge: "ch_2" } }] } },
+      { id: "in_3" },
+      null,
+    ]);
+    expect(idx.get("pi:pi_1")).toBe("in_1");
+    expect(idx.get("pi:pi_2")).toBe("in_2");
+    expect(idx.get("charge:ch_2")).toBe("in_2");
+    expect(idx.size).toBe(3);
   });
 });

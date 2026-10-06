@@ -41,6 +41,7 @@ vi.mock("@/lib/stripe.server", () => ({
     return {};
   }),
   getStripeKeyForMode: () => "sk_test_fake_for_tests",
+  resolveInvoicePaymentRefs: vi.fn(async () => ({ paymentIntent: "pi_resolved", charge: "ch_resolved" })),
   detectStripeKeyMode: (k: string) => (k?.startsWith("sk_test_") ? "test" : "live"),
   getStripeKeyDiagnostics: () => ({}),
   formEncode: () => "",
@@ -250,6 +251,10 @@ describe("Stripe webhook — recurring billing sync", () => {
     // Ledger upserted with idempotency key = invoice id.
     const ledger = upserts.find((u) => u.table === "payment_ledger");
     expect(ledger?.row?.external_reference).toBe("in_test_1");
+    // Webhook invoices omit `payments`; the ids are resolved so the Billing page
+    // can tie the row to the Stripe charge.
+    expect(ledger?.row?.stripe_payment_intent_id).toBe("pi_resolved");
+    expect(ledger?.row?.stripe_charge_id).toBe("ch_resolved");
   });
 
   it("duplicate delivery of the same invoice.payment_succeeded event is idempotent", async () => {
