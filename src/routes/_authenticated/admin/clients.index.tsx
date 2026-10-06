@@ -3,7 +3,7 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -24,6 +24,8 @@ import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
+import { filtersFromSearch, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
+import { STATUS_META } from "@/components/clients/clients-status";
 import { ClientToolbar } from "@/components/clients/client-toolbar";
 import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
@@ -51,6 +53,7 @@ function LifecycleTabs({ value }: { value: "active" | "archived" | "deactivated"
                   ...prev,
                   lifecycle: o.key === "active" ? undefined : o.key,
                   status: "all",
+                  flags: undefined,
                   page: 1,
                 }),
                 resetScroll: false,
@@ -73,7 +76,10 @@ function LifecycleTabs({ value }: { value: "active" | "archived" | "deactivated"
 
 const searchSchema = z.object({
   search:        fallback(z.string(),                                                       "").default(""),
+  // Older single-filter spelling; still read so a bookmarked link works. The filters now live in `flags`.
   status:        fallback(z.enum(["all","needs_setup","needs_review","program_ending","payment_issues","no_payment","new_clients","missed_workouts","inactive"]), "all").default("all"),
+  // Comma-separated filter keys, e.g. "no_contract,no_nutrition". A client must match all of them.
+  flags:         fallback(z.string(),                                                       "").default(""),
   coachingType:  fallback(z.string(),                                                       "all").default("all"),
   coachId:       fallback(z.string().uuid().optional(),                                     undefined as any),
   sort:          fallback(z.enum(["attention","recent","name","ending","activity"]),       "name").default("name"),
@@ -115,6 +121,10 @@ function ClientsDirectoryPage() {
 
   const lifecycle = search.lifecycle ?? "active";
   const isActiveLifecycle = lifecycle === "active";
+  const flags = useMemo(
+    () => filtersFromSearch({ status: search.status, flags: search.flags }),
+    [search.status, search.flags],
+  );
 
   const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["clients-directory", search],
@@ -122,7 +132,7 @@ function ClientsDirectoryPage() {
       listFn({
         data: {
           search: search.search || "",
-          status: search.status,
+          flags,
           coachingType: search.coachingType,
           coachId: search.coachId ?? null,
           sort: search.sort,
@@ -149,7 +159,7 @@ function ClientsDirectoryPage() {
   // narrowed — the page heading already shows the active-client total.
   const hasActiveFilters = !!(
     search.search ||
-    search.status !== "all" ||
+    flags.length > 0 ||
     search.coachingType !== "all" ||
     search.coachId
   );
@@ -191,6 +201,10 @@ function ClientsDirectoryPage() {
           sort={search.sort}
           isAdmin={isAdmin}
           resultLabel={resultLabel}
+          flags={flags}
+          counts={counts}
+          total={total}
+          loading={isFetching && !data}
         />
 
         {isError ? (
@@ -203,7 +217,13 @@ function ClientsDirectoryPage() {
             {Array.from({ length: 6 }).map((_, i) => <ClientRowSkeleton key={i} />)}
           </ul>
         ) : rows.length === 0 ? (
-          <EmptyState hasFilters={hasActiveFilters} lifecycle={lifecycle} onClear={() => navigate({ search: () => ({}), resetScroll: false })} />
+          <EmptyState
+            hasFilters={hasActiveFilters}
+            flags={flags}
+            lifecycle={lifecycle}
+            // Back to the default view, but stay on the same tab (Active / Archived / Deactivated).
+            onClear={() => navigate({ search: (prev: any) => ({ lifecycle: prev.lifecycle }), resetScroll: false })}
+          />
         ) : (
           <ul className="space-y-2">
             {rows.map((r) => (
@@ -255,7 +275,18 @@ function ClientsDirectoryPage() {
   );
 }
 
-function EmptyState({ hasFilters, lifecycle, onClear }: { hasFilters: boolean; lifecycle: string; onClear: () => void }) {
+function EmptyState({
+  hasFilters,
+  flags,
+  lifecycle,
+  onClear,
+}: {
+  hasFilters: boolean;
+  flags: DirectoryFilterKey[];
+  lifecycle: string;
+  onClear: () => void;
+}) {
+  const labels = flags.map((k) => STATUS_META[k].label);
   const emptyTitle =
     lifecycle === "archived"
       ? "No archived clients"
@@ -273,7 +304,11 @@ function EmptyState({ hasFilters, lifecycle, onClear }: { hasFilters: boolean; l
         </div>
         <div className="mt-1 text-sm text-muted-foreground">
           {hasFilters
-            ? "Try clearing filters or adjusting your search."
+            ? labels.length === 1
+              ? `Nobody matches “${labels[0]}” right now. Try clearing it or adjusting your search.`
+              : labels.length > 1
+                ? `Nobody matches all of: ${labels.join(", ")}. Remove one to widen the list.`
+                : "Try clearing filters or adjusting your search."
             : lifecycle === "active"
               ? "Add your first client to get started."
               : "Nothing here right now."}
