@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { parseISO } from "date-fns";
+import { goalsScheduleFromCommitted } from "@/lib/client-goals/schema";
 import {
   normalizeCommittedDays,
   planCommittedRealign,
@@ -604,6 +605,17 @@ export const saveCommittedSchedule = createServerFn({ method: "POST" })
       action: "training_schedule_updated",
       details: { committed_training_frequency: data.frequency, committed_training_days: days },
     });
+
+    // Keep the Goals & Setup schedule answers equal to these days (the goals summary and
+    // program matching read them). Update only: saving Goals copies them in for a new row.
+    const goalsSchedule = goalsScheduleFromCommitted({ committed_training_frequency: data.frequency, committed_training_days: days });
+    if (goalsSchedule) {
+      const { error: goalsErr } = await supabaseAdmin
+        .from("client_goals_setup")
+        .update(goalsSchedule)
+        .eq("client_id", data.clientId);
+      if (goalsErr) console.error("[saveCommittedSchedule] goals schedule sync failed", goalsErr.message);
+    }
 
     try {
       // Changing the committed schedule is the explicit instruction to realign

@@ -13,13 +13,14 @@ import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, CheckCircle2, AlertTr
 import { toast } from "sonner";
 import { ChipGrid } from "./chip-grid";
 import {
-  MAIN_GOALS, TRAINING_DAYS, WEEKDAYS, WEEKDAY_LABELS, WORKOUT_LENGTHS,
+  MAIN_GOALS, WORKOUT_LENGTHS,
   EXPERIENCE_LEVELS, TRAINING_STYLES, TRAINING_LOCATIONS, EQUIPMENT_OPTIONS,
   NUTRITION_GOALS, NUTRITION_PREFS, NUTRITION_CHALLENGES, NUTRITION_CHALLENGES_MAX,
   EDITABLE_GOALS_FIELDS,
   type ClientGoalsSetupRow,
 } from "@/lib/client-goals/schema";
 import { saveGoalsSetupFn } from "@/lib/client-goals/goals.functions";
+import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import {
   classifyLocation,
   EQUIPMENT_GROUPS,
@@ -63,6 +64,20 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
         .maybeSingle();
       if (error) throw error;
       return data as ClientGoalsSetupRow | null;
+    },
+  });
+
+  // The training days are asked once, as the committed schedule that workouts follow.
+  const { data: scheduleClient } = useQuery({
+    queryKey: ["client", clientId, "committed-schedule"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, committed_training_frequency, committed_training_days, training_schedule_completed, training_schedule_last_updated")
+        .eq("id", clientId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -223,7 +238,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
 
       <Card className="p-4 sm:p-5">
         {step === 0 && <GoalsStep value={local} setField={setField} />}
-        {step === 1 && <AvailabilityStep value={local} setField={setField} />}
+        {step === 1 && <AvailabilityStep value={local} setField={setField} scheduleClient={scheduleClient} />}
         {step === 2 && <ExperienceStep value={local} setField={setField} />}
         {step === 3 && <EquipmentStep value={local} setField={setField} />}
         {step === 4 && <NutritionStep value={local} setField={setField} />}
@@ -378,33 +393,27 @@ function GoalsStep({ value, setField }: StepProps) {
 }
 
 /* ---------- Step 2: Training availability ---------- */
-function AvailabilityStep({ value, setField }: StepProps) {
+function AvailabilityStep({ value, setField, scheduleClient }: StepProps & { scheduleClient: any }) {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Q required>How many days per week can you realistically train?</Q>
-        <ChipGrid
-          options={TRAINING_DAYS}
-          value={value.training_days_per_week ?? null}
-          onChange={(v) => setField("training_days_per_week", v)}
-          labelFor={(n) => `${n} days`}
-        />
-      </div>
-      <div className="space-y-3">
-        <Q>Which days are you available?</Q>
-        <ChipGrid
-          options={WEEKDAYS}
-          value={(value.available_weekdays ?? []) as any}
-          onChange={(v) => {
-            const order = WEEKDAYS as readonly string[];
-            const sorted = [...(v as string[])].sort(
-              (a, b) => order.indexOf(a) - order.indexOf(b),
-            );
-            setField("available_weekdays", sorted as any);
-          }}
-          multi
-          labelFor={(d) => WEEKDAY_LABELS[d as keyof typeof WEEKDAY_LABELS]}
-        />
+        <Q required>Which days will you train?</Q>
+        <p className="text-xs text-muted-foreground">
+          Your workouts are scheduled on these days. You can change them anytime.
+        </p>
+        {scheduleClient ? (
+          <TrainingScheduleCard
+            key={JSON.stringify([scheduleClient.committed_training_frequency, scheduleClient.committed_training_days])}
+            client={scheduleClient}
+            editable
+            compact
+            defaultEditing={!scheduleClient.training_schedule_completed}
+          />
+        ) : (
+          <div className="flex h-20 items-center justify-center text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+          </div>
+        )}
       </div>
       <div className="space-y-3">
         <Q required>How long can each workout be?</Q>

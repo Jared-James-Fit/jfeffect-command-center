@@ -149,13 +149,15 @@ export const clientGoalsSetupSchema = z.object({
  * Everything else (id, client_id, timestamps, review/audit fields) must be
  * stripped before sending to the server so we never accidentally overwrite
  * server-owned data and never trip "unknown column" errors.
+ *
+ * training_days_per_week and available_weekdays are not here: they are a copy of the
+ * client's committed training schedule (the days workouts land on), written only from
+ * it. See goalsScheduleFromCommitted.
  */
 export const EDITABLE_GOALS_FIELDS = [
   "main_goal",
   "main_goal_other",
   "goal_target",
-  "training_days_per_week",
-  "available_weekdays",
   "workout_length_minutes",
   "training_experience",
   "training_styles",
@@ -173,6 +175,22 @@ export const EDITABLE_GOALS_FIELDS = [
   "injuries_details",
   "final_notes",
 ] as const;
+
+/**
+ * The Goals & Setup schedule answers, taken from the client's committed training schedule.
+ * Onboarding asks the schedule once, through the committed schedule; these copies keep the
+ * goals summary and program matching on the days workouts actually land. Null until set.
+ */
+export function goalsScheduleFromCommitted(client: {
+  committed_training_frequency?: number | null;
+  committed_training_days?: readonly string[] | null;
+} | null | undefined): { training_days_per_week: number; available_weekdays: (typeof WEEKDAYS)[number][] } | null {
+  const days = new Set(client?.committed_training_days ?? []);
+  const available_weekdays = WEEKDAYS.filter((k) => days.has(WEEKDAY_LABELS[k]));
+  const frequency = client?.committed_training_frequency ?? available_weekdays.length;
+  if (!frequency || available_weekdays.length === 0) return null;
+  return { training_days_per_week: frequency, available_weekdays };
+}
 
 export type ClientGoalsSetupPatch = z.infer<typeof clientGoalsSetupSchema>;
 

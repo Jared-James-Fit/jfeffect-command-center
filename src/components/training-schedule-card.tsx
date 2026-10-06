@@ -78,6 +78,8 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
       qc.invalidateQueries({ queryKey: ["my-client-schedule-gate"] });
       qc.invalidateQueries({ queryKey: ["client-training-schedule"] });
       qc.invalidateQueries({ queryKey: ["cal-client-data"] });
+      // Goals & Setup carries a copy of these days.
+      qc.invalidateQueries({ queryKey: ["client-goals-setup", client.id] });
       invalidateScheduleQueries(qc, { clientId: client.id });
       void invalidateGroceryList(qc, client.id);
     };

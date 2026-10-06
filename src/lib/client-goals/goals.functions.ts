@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { clientGoalsSetupSchema, EDITABLE_GOALS_FIELDS } from "@/lib/client-goals/schema";
+import { clientGoalsSetupSchema, EDITABLE_GOALS_FIELDS, goalsScheduleFromCommitted } from "@/lib/client-goals/schema";
 
 const clientIdInput = z.object({ clientId: z.string().uuid() });
 
@@ -61,6 +61,14 @@ export const saveGoalsSetupFn = createServerFn({ method: "POST" })
     if (body.injuries_has === false) body.injuries_details = null;
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // The schedule answers are a copy of the committed training schedule, never typed here.
+    const { data: committed } = await supabaseAdmin
+      .from("clients")
+      .select("committed_training_frequency, committed_training_days")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    Object.assign(body, goalsScheduleFromCommitted(committed) ?? {});
+
     const { error } = await supabaseAdmin
       .from("client_goals_setup")
       .upsert(body as any, { onConflict: "client_id" });
