@@ -107,7 +107,7 @@ export function actionStyle(a: DirectoryNextAction, urgent: boolean): string {
     return "bg-destructive text-destructive-foreground hover:bg-destructive/90";
   }
   if (a.kind === "next_phase" || a.kind === "nutrition" || a.kind === "cardio") {
-    return "bg-amber-500 text-amber-950 hover:bg-amber-500/90";
+    return "bg-amber-500 text-black hover:bg-amber-500/90";
   }
   if (a.kind === "open") {
     return "bg-secondary text-secondary-foreground hover:bg-secondary/80";
