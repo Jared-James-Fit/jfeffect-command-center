@@ -33,6 +33,39 @@ export function mergeMetric(
   return out as DailyMetric;
 }
 
+/**
+ * Merge-and-upsert normalized days for one athlete+provider. Shared by cloud pulls
+ * (Oura) and device pushes (Apple Health / Health Connect). Idempotent per day.
+ */
+export async function saveDailyMetrics(
+  admin: any,
+  userId: string,
+  provider: string,
+  rows: DailyMetric[],
+): Promise<void> {
+  if (!rows.length) return;
+  const dates = rows.map((r) => r.metric_date).sort();
+  const { data: existing } = await admin
+    .from("wearable_daily_metrics")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("provider", provider)
+    .gte("metric_date", dates[0])
+    .lte("metric_date", dates[dates.length - 1]);
+  const prior = new Map<string, any>(
+    (existing ?? []).map((r: any) => [r.metric_date as string, r]),
+  );
+  const payload = rows.map((r) => ({
+    ...mergeMetric(prior.get(r.metric_date), r),
+    user_id: userId,
+    provider,
+  }));
+  const { error } = await admin
+    .from("wearable_daily_metrics")
+    .upsert(payload, { onConflict: "user_id,provider,metric_date" });
+  if (error) throw new Error(`Saving metrics failed: ${error.message}`);
+}
+
 export type SyncResult = {
   ok: boolean;
   days: number;
@@ -97,27 +130,7 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
     const { start, end } = syncWindow(claimed.last_synced_at);
     const rows = normalizeOura(await fetchOuraCollections(token!, start, end));
 
-    if (rows.length) {
-      const { data: existing } = await supabaseAdmin
-        .from("wearable_daily_metrics")
-        .select("*")
-        .eq("user_id", claimed.user_id)
-        .eq("provider", claimed.provider)
-        .gte("metric_date", start)
-        .lte("metric_date", end);
-      const prior = new Map<string, any>(
-        (existing ?? []).map((r: any) => [r.metric_date as string, r]),
-      );
-      const payload = rows.map((r) => ({
-        ...mergeMetric(prior.get(r.metric_date), r),
-        user_id: claimed.user_id,
-        provider: claimed.provider,
-      }));
-      const { error } = await supabaseAdmin
-        .from("wearable_daily_metrics")
-        .upsert(payload, { onConflict: "user_id,provider,metric_date" });
-      if (error) throw new Error(`Saving metrics failed: ${error.message}`);
-    }
+    await saveDailyMetrics(supabaseAdmin, claimed.user_id, claimed.provider, rows);
 
     await release({ last_synced_at: new Date().toISOString(), last_error: null });
     return { ok: true, days: rows.length };

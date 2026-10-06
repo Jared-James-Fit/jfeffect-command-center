@@ -183,3 +183,33 @@ describe("wearables security contract", () => {
     }
   });
 });
+
+describe("health-store ingest validation", () => {
+  const row = { ...emptyMetric("2026-10-05"), steps: 8000, hrv_ms: 55 };
+
+  it("accepts a normal batch", async () => {
+    const { IngestInput } = await import("@/lib/wearables/ingest-schema");
+    expect(IngestInput.safeParse({ provider: "apple_health", rows: [row] }).success).toBe(true);
+  });
+
+  it("rejects out-of-range values, future dates, duplicate days and oversize batches", async () => {
+    const { IngestInput } = await import("@/lib/wearables/ingest-schema");
+    const bad = (rows: unknown[], provider = "apple_health") =>
+      IngestInput.safeParse({ provider, rows }).success;
+    expect(bad([{ ...row, steps: -1 }])).toBe(false);
+    expect(bad([{ ...row, resting_hr: 400 }])).toBe(false);
+    expect(bad([{ ...row, metric_date: "2999-01-01" }])).toBe(false);
+    expect(bad([row, row])).toBe(false);
+    expect(bad([row], "oura")).toBe(false); // cloud providers cannot be pushed from the client
+    expect(bad(Array.from({ length: 121 }, (_, i) => ({ ...row, metric_date: day(i - 60) })))).toBe(
+      false,
+    );
+  });
+
+  it("derives the user from the session, never from client input", () => {
+    const src = read("src/lib/wearables/wearables.functions.ts");
+    const fn = src.slice(src.indexOf("ingestHealthStoreMetrics"));
+    expect(fn).toContain("const { userId } = context");
+    expect(fn).not.toMatch(/data\.user_?[iI]d/);
+  });
+});

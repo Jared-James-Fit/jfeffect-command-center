@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { PovInput, resolvePovUserId } from "@/lib/client-pov.server";
 import { getWearableProvider } from "./providers";
+import { IngestInput } from "./ingest-schema";
 
 const MANUAL_SYNC_COOLDOWN_MS = 5 * 60 * 1000;
 const ProviderInput = z.object({ provider: z.string().min(1).max(32) });
@@ -140,4 +141,35 @@ export const setWearableSharing = createServerFn({ method: "POST" })
       .eq("provider", data.provider);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+/**
+ * Called by the native app after the athlete grants Apple Health / Health Connect access.
+ * The phone sends already-normalized daily rows; we validate, merge and store them under
+ * the caller's own user id (never one supplied by the client).
+ */
+export const ingestHealthStoreMetrics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => IngestInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as any;
+    const { supabaseAdmin: typedAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = typedAdmin as any; // generated types predate the wearable tables
+    const { data: conn, error } = await supabaseAdmin
+      .from("wearable_connections")
+      .upsert(
+        // Re-granting access reconnects; the sharing flag is deliberately not touched here.
+        { user_id: userId, provider: data.provider, status: "connected", last_error: null },
+        { onConflict: "user_id,provider" },
+      )
+      .select("id")
+      .single();
+    if (error || !conn) throw new Error("Couldn't register the device.");
+    const { saveDailyMetrics } = await import("./sync.server");
+    await saveDailyMetrics(supabaseAdmin, userId, data.provider, data.rows);
+    await supabaseAdmin
+      .from("wearable_connections")
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq("id", conn.id);
+    return { ok: true, days: data.rows.length };
   });
