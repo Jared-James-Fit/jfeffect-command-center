@@ -6,7 +6,9 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { saveCommittedSchedule } from "@/lib/schedule-bulk.functions";
+import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -37,6 +39,7 @@ export function AvailabilityGuardDialog({
   open, onOpenChange, guard, clientId, clientName, workoutTitles, busy, onConfirm,
 }: Props) {
   const qc = useQueryClient();
+  const saveSchedule = useServerFn(saveCommittedSchedule);
   const required = guard.requiredDays;
   const [days, setDays] = useState<Weekday[]>(guard.selectedDays.slice(0, required));
   const [saving, setSaving] = useState(false);
@@ -65,23 +68,20 @@ export function AvailabilityGuardDialog({
   const saveAvailability = async () => {
     setSaving(true);
     const longDays = days.map((d) => GUARD_WEEKDAY_LABEL[d]);
-    const { data: auth } = await supabase.auth.getUser();
-    const { error } = await supabase
-      .from("clients")
-      .update({
-        committed_training_days: longDays,
-        committed_training_frequency: longDays.length,
-        training_schedule_completed: true,
-        training_schedule_last_updated: new Date().toISOString(),
-        training_schedule_updated_by: auth.user?.id ?? null,
-      } as any)
-      .eq("id", clientId);
+    let res: Awaited<ReturnType<typeof saveSchedule>>;
+    try {
+      // One server call: saves the days AND re-dates the client's upcoming workouts.
+      res = await saveSchedule({ data: { clientId, frequency: longDays.length, days: longDays } });
+    } catch (e) {
+      setSaving(false);
+      return toast.error(e instanceof Error ? e.message : "Could not save availability");
+    }
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (res.realignError) toast.error(`Availability saved, but the calendar did not update: ${res.realignError}`);
     toast.success("Training availability saved");
     qc.invalidateQueries({ queryKey: ["planner-client", clientId] });
     qc.invalidateQueries({ queryKey: ["client", clientId] });
-    qc.invalidateQueries({ queryKey: ["client-schedule", clientId] });
+    invalidateScheduleQueries(qc, { clientId });
     onConfirm(days);
   };
 

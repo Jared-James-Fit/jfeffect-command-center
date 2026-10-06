@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { WORKSPACE_CONTAINER_CLASS, WORKSPACE_GRID_CLASS } from "@/components/workspace/workspace-container";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
+import { omitScheduleFields } from "@/lib/committed-schedule-realign";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
@@ -242,7 +243,9 @@ export function ClientProfileWorkspace({
   const isDirty = useMemo(() => {
     if (!data || !form) return false;
     try {
-      return JSON.stringify(form) !== JSON.stringify(data);
+      // Schedule columns are owned by the Training Schedule card, which saves
+      // them itself; they must not make the profile look "unsaved".
+      return JSON.stringify(omitScheduleFields(form)) !== JSON.stringify(omitScheduleFields(data));
     } catch {
       return false;
     }
@@ -272,7 +275,11 @@ export function ClientProfileWorkspace({
     if (saving) return;
     setSaving(true);
     try {
-      const { id: _id, created_at, updated_at, ...patch } = form;
+      // Never write the schedule columns back from this (possibly stale) copy
+      // of the row — that would undo a schedule change without realigning the
+      // client's workouts. The Training Schedule card owns those fields.
+      const { id: _id, created_at, updated_at, ...rest } = form;
+      const patch = omitScheduleFields(rest) as any;
       const { error } = await supabase.from("clients").update(patch).eq("id", id);
       if (error) return toast.error(error.message);
       toast.success("Saved");
@@ -782,7 +789,7 @@ export function ClientProfileWorkspace({
             <TrainingProgramHub clientId={id} clientName={form?.full_name ?? null} />
             {/* Program setup (was its own tab) */}
             <div className={WORKSPACE_GRID_CLASS}>
-              <div className="md:col-span-3"><TrainingScheduleCard client={form} /></div>
+              <div className="md:col-span-3"><TrainingScheduleCard key={JSON.stringify([data?.committed_training_days, data?.committed_training_frequency])} client={data ?? form} /></div>
               <AssignedProgramsCard clientId={id} mode="admin" />
               <TrainingPhasesPanel clientId={id} />
               <ImportantDatesPanel clientId={id} />
