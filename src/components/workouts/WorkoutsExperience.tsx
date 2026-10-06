@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { displayExerciseName } from "@/lib/exercise-display-name";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -1662,7 +1663,7 @@ function DayPreviewSheet({
         .limit(8);
       return (data ?? []).map((r: any) => ({
         id: r.id,
-        name: r.exercise_name_override || r.exercises?.name || "Exercise",
+        name: displayExerciseName(r),
       }));
     },
   });

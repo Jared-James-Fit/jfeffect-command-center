@@ -10,6 +10,8 @@ import { Search, Star, GripVertical, Check, Loader2, AlertCircle, Circle, Plus, 
 import { cn } from "@/lib/utils";
 import { QuickAddExerciseDialog } from "@/components/quick-add-exercise-dialog";
 import { searchExercises } from "@/lib/exercise-search";
+import { familyStripeClass, isMovementFamily, resolveMovementFamily } from "@/lib/exercise-family";
+import { FamilyDot } from "@/components/exercise-order-badge";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -602,6 +604,8 @@ export interface ExerciseRef {
   category?: string | null;
   equipment?: string | null;
   tags?: string[] | null;
+  movement_family?: string | null;
+  competition_lift_type?: string | null;
 }
 
 /**
@@ -652,6 +656,13 @@ const QUICK_FILTERS = [
 ];
 
 function exerciseMatchesFilter(ex: ExerciseRef, f: string): boolean {
+  // The four family chips are exact: they use the exercise's movement family
+  // (so "Leg Curl" never shows up under Deadlift, "Pause Squat" always shows
+  // under Squat) instead of text-matching names.
+  const famFilter = f.toLowerCase().trim() === "accessories" ? "accessory" : f.toLowerCase().trim();
+  if (isMovementFamily(famFilter) && (ex.movement_family || ex.competition_lift_type)) {
+    return resolveMovementFamily(ex) === famFilter;
+  }
   const hay = [ex.name, ex.muscle_group, ex.category, ex.equipment, ...(ex.tags ?? [])]
     .filter(Boolean)
     .join(" ")
@@ -982,6 +993,7 @@ function ExerciseItem({
       )}
     >
       <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+      <FamilyDot family={resolveMovementFamily(ex)} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-xs">
           <HighlightedText text={ex.name} query={query} terms={terms} />
@@ -1156,31 +1168,21 @@ export function movementAccent(name?: string | null, override?: string | null): 
 }
 
 /**
- * Metadata-driven card accent. Uses exercise category and competition-lift
- * type — never matches on the exercise name. Prefer this over `movementAccent`
- * in new code. A per-row `override` (row.card_color) still wins.
+ * Card accent stripe. Colour comes from the exercise's movement family only
+ * (squat yellow / bench blue / deadlift green / accessory red) via the shared
+ * `exercise-family` module — never from the exercise name, its muscles, or the
+ * unused per-row `card_color`, so every screen shows the same colour.
+ * `_override` is accepted for call-site compatibility and ignored.
  */
 export function exerciseAccent(
   ex?: {
-    is_competition_lift?: boolean | null;
+    movement_family?: string | null;
     competition_lift_type?: "squat" | "bench" | "deadlift" | null;
-    exercise_category?: "competition" | "variation" | "assistance" | null;
   } | null,
-  override?: string | null,
+  _override?: string | null,
+  rowMovementFamily?: string | null,
 ): string {
-  if (override) {
-    const found = EXERCISE_CARD_COLORS.find((c) => c.value === override);
-    if (found) return found.cls;
-  }
-  if (ex?.is_competition_lift) {
-    switch (ex.competition_lift_type) {
-      case "squat":    return "bg-yellow-500/70";
-      case "bench":    return "bg-sky-500/70";
-      case "deadlift": return "bg-emerald-500/70";
-    }
-  }
-  if (ex?.exercise_category === "variation") return "bg-amber-500/70";
-  return "bg-red-500/70";
+  return familyStripeClass(ex, rowMovementFamily);
 }
 
 // ---------------- Edit scope dialog ----------------

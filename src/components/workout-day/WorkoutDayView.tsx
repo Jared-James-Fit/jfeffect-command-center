@@ -16,6 +16,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { exerciseAccent } from "@/components/program-builder";
+import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
+import { formatDualLoad } from "@/lib/dual-load";
+import { resolveMovementFamily } from "@/lib/exercise-family";
 import {
   derivePurposeLabels,
   effectiveRestSeconds,
@@ -243,7 +246,7 @@ function formatPrescription(p: {
     // Time-based prescription: "3 × 45 sec @ 20 lb | RPE 7"
     const dur = p.durationSeconds && p.durationSeconds > 0 ? formatDuration(p.durationSeconds) : "—";
     let load = "";
-    if (p.suggestedWeight != null) load = `@ ${fmtNum(p.suggestedWeight)} ${p.unit}`;
+    if (p.suggestedWeight != null) load = `@ ${formatDualLoad(Number(fmtNum(p.suggestedWeight)), p.unit)}`;
     let effort = "";
     if (p.rpe != null && String(p.rpe).trim() !== "") effort = `| RPE ${p.rpe}`;
     else if (p.rir != null && String(p.rir).trim() !== "") effort = `| ${p.rir} RIR`;
@@ -254,7 +257,7 @@ function formatPrescription(p: {
   const reps = repsRaw ? repsRaw.replace(/\s*-\s*/g, "–") : "?";
   let load = "";
   if (p.suggestedWeight != null) {
-    load = `@ ${fmtNum(p.suggestedWeight)} ${p.unit}`;
+    load = `@ ${formatDualLoad(Number(fmtNum(p.suggestedWeight)), p.unit)}`;
   } else if (
     p.percentage &&
     !p.manualOverride &&
@@ -637,7 +640,7 @@ function WorkoutDay({
       } else {
         const { data, error } = await sb
           .from("pl_exercise_rows")
-          .select("*, exercises(id,name,cues,muscle_group,category,equipment,difficulty,pl_lift_group,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)")
+          .select("*, exercises(id,name,cues,muscle_group,category,equipment,difficulty,pl_lift_group,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,movement_family,default_measurement_type)")
           .eq("day_id", dayId)
           .order("sort_order");
         // Surface RLS / network errors to react-query so the failure
@@ -2226,6 +2229,7 @@ function WorkoutDay({
                       swapContext={swapContextForRow(adapter, dayId, r.id)}
                       canMoveUp={canEditWorkoutStructure && rowIndex > 0}
                       canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
+                      position={rowIndex + 1}
                       movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
                       moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
                       onMoveUp={() => void moveExerciseNow(r.id, -1)}
@@ -2521,7 +2525,8 @@ function WorkoutDay({
                     swapContext={swapContextForRow(adapter, dayId, r.id)}
                     canMoveUp={canEditWorkoutStructure && rowIndex > 0}
                     canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
-                    movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
+                    position={rowIndex + 1}
+                      movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
                     moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
                     onMoveUp={() => void moveExerciseNow(r.id, -1)}
                     onMoveDown={() => void moveExerciseNow(r.id, 1)}
@@ -2744,7 +2749,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
         "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold",
         suspicious ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-primary/10 text-primary",
       )}>
-        Suggested Load: {load} {unit}
+        Suggested Load: {formatDualLoad(load, unit)}
         <Popover>
           <PopoverTrigger asChild>
             <button type="button" aria-label="What does Suggested Load mean?" className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-foreground/10">
@@ -2921,7 +2926,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3136,10 +3141,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         exercise_category: exercise.exercise_category ?? null,
         is_competition_lift: exercise.is_competition_lift ?? null,
         competition_lift_type: exercise.competition_lift_type ?? null,
+        movement_family: exercise.movement_family ?? null,
         name: exercise.name ?? null,
       }
     : null;
-  const accent = exerciseAccent(exMeta, row.card_color);
+  // One colour rule for every screen: the exercise's movement family.
+  const family = resolveMovementFamily(exMeta, row.movement_family);
+  const accent = exerciseAccent(exMeta, null, row.movement_family);
   const category = resolveCategory(exMeta);
   const effectiveRest = effectiveRestSeconds(
     { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
@@ -3452,7 +3460,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       <div className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full opacity-90 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          {position != null && <ExerciseOrderBadge position={position} family={family} className="mt-px" />}
+          <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
+        </div>
         {!readonly && onUnitChange && (
           <div className="shrink-0">
             <UnitToggle unit={activeUnit} onChange={handleUnitToggle} compact />

@@ -33,6 +33,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import type { AdminRole } from "@/lib/admin-route-registry";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
+import { useExerciseAliasIndex } from "@/hooks/use-exercise-alias-index";
 import { useSalesRealtime } from "@/hooks/use-sales-realtime";
 import { MORE_BAR_TO, resolveVisibleBarItems } from "@/lib/floating-bar";
 import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
@@ -236,6 +237,7 @@ function useCollapsedSections() {
 export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
   useKeyboardOpen();
   useExerciseLibraryRealtime();
+  useExerciseAliasIndex();
   useSalesRealtime();
   const { signOut, user, role } = useAuth();
   const isStaffRole = !!role && role !== "client" && role !== "member";
