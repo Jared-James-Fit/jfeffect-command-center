@@ -216,7 +216,6 @@ export function PriceCardPickerDialog({ open, onClose, fixedClientId }: { open: 
                     <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
                       {p.payment_structure && <span className="rounded border border-border px-1.5 py-0.5">{p.payment_structure}</span>}
                       {term && <span className="rounded border border-border px-1.5 py-0.5">{term}</span>}
-                      {p.agreement_required && <span className="rounded border border-border px-1.5 py-0.5">Agreement</span>}
                     </div>
                     <div className="flex gap-2 pt-1">
                       <Button

@@ -22,6 +22,7 @@ import { HomeWaterCard } from "@/components/home/home-water-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
 import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
+import { AgreementDashboardCard } from "@/components/coaching-agreement/agreement-dashboard-card";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { LeagueRecapHomeTile } from "@/components/portal/league-recap";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
@@ -304,6 +305,12 @@ function PortalHome() {
       {/* 2 — Profile-missing fallback (workouts moved off the dashboard
             for perf — clients reach training via Quick Actions / nav). */}
         {clientSettled && !client ? <NoProfileCard /> : null}
+
+        {/* 2a — Mandatory Coaching Agreement. Shown on every visit until signed;
+            hides itself once signed (and in coach "View as client"). */}
+        <SectionErrorBoundary label="Coaching agreement">
+          <AgreementDashboardCard />
+        </SectionErrorBoundary>
 
         {/* 2b — Non-blocking onboarding checklist (replaces the old hard-lock
             gates for profile picture / basic info / training schedule / goals). */}

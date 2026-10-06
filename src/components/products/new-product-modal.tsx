@@ -56,7 +56,6 @@ const FIELD_LABELS: Record<string, string> = {
   fixedPaymentCount: "Number of payments",
   serviceDuration: "Access duration",
   sessionsIncluded: "Sessions included",
-  agreementTemplateId: "Agreement template",
   startDate: "Start date",
 };
 
@@ -239,11 +238,6 @@ type FormState = {
   sessionDelivery: SessionDelivery;
   accessPreset: AccessPreset;
 
-  // agreement
-  agreementRequired: boolean;
-  agreementTemplateId: string | null;
-  agreementBeforeService: boolean;
-
   // selling
   selfPurchase: boolean;
   allowPromotionCodes: boolean;
@@ -286,9 +280,6 @@ function initialForm(defaultWorkspace: "coaching" | "membership"): FormState {
     sessionExpiryDays: "",
     sessionDelivery: "first_payment",
     accessPreset: defaultAccessPreset(category),
-    agreementRequired: false,
-    agreementTemplateId: null,
-    agreementBeforeService: false,
     selfPurchase: true,
     allowPromotionCodes: true,
     // Coach-controlled by default: clients cannot cancel themselves unless
@@ -397,8 +388,6 @@ function validate(f: FormState): FieldErrors {
   }
   if (f.startRule === "specific_date" && !/^\d{4}-\d{2}-\d{2}$/.test(f.startDate))
     errs.startDate = "Pick the start date";
-  if (f.agreementRequired && !f.agreementTemplateId)
-    errs.agreementTemplateId = "Pick an agreement template";
   return errs;
 }
 
@@ -409,7 +398,6 @@ function validate(f: FormState): FieldErrors {
 export type NewProductModalProps = {
   open: boolean;
   defaultWorkspace?: "coaching" | "membership";
-  agreementTemplates?: { id: string; name: string }[];
   onClose: () => void;
   onCreated?: (result: { id?: string; paymentLinkUrl?: string | null }) => void;
 };
@@ -417,7 +405,6 @@ export type NewProductModalProps = {
 export default function NewProductModal({
   open,
   defaultWorkspace = "coaching",
-  agreementTemplates = [],
   onClose,
   onCreated,
 }: NewProductModalProps) {
@@ -616,11 +603,6 @@ export default function NewProductModal({
         termLength,
         termUnit,
         includedFeatures: included,
-        agreementRequired: form.agreementRequired,
-        agreementTemplateId: form.agreementRequired
-          ? form.agreementTemplateId
-          : null,
-        agreementBeforeService: form.agreementRequired,
         status: form.status,
         notes: notesFinal,
         imagePath: imagePath ?? null,
@@ -1028,51 +1010,6 @@ export default function NewProductModal({
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       Controls what the client can access after purchase.
                     </p>
-                  </div>
-
-                  <div className="rounded-md border border-border px-3 py-2">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <Switch
-                        checked={form.agreementRequired}
-                        onCheckedChange={(v) => set("agreementRequired", v)}
-                      />
-                      <span className="text-sm">Require agreement before access</span>
-                    </label>
-                    {form.agreementRequired && (
-                      <div className="mt-3 space-y-2">
-                        <div>
-                          <Label className="text-xs">Agreement template <Req /></Label>
-                          <Select
-                            value={form.agreementTemplateId ?? ""}
-                            onValueChange={(v) => set("agreementTemplateId", v || null)}
-                          >
-                            <SelectTrigger
-                              ref={registerField("agreementTemplateId") as any}
-                              className={showErr("agreementTemplateId") ? "border-destructive" : ""}
-                            >
-                              <SelectValue placeholder="Pick a template" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {agreementTemplates.map((t) => (
-                                <SelectItem key={t.id} value={t.id}>
-                                  {t.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {showErr("agreementTemplateId") && (
-                            <FieldError msg={errors.agreementTemplateId!} />
-                          )}
-                        </div>
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Switch
-                            checked={form.agreementBeforeService}
-                            onCheckedChange={(v) => set("agreementBeforeService", v)}
-                          />
-                          <span className="text-xs">Must be signed before service starts</span>
-                        </label>
-                      </div>
-                    )}
                   </div>
                 </div>
               </Section>
@@ -1519,7 +1456,6 @@ function SummaryContent({
         {form.paymentType !== "free" && form.allowPromotionCodes && (
           <div>Promotion codes enabled</div>
         )}
-        {form.agreementRequired && <div>Agreement required</div>}
         <div>
           Workspace:{" "}
           <span className="capitalize text-foreground">{form.workspace}</span>

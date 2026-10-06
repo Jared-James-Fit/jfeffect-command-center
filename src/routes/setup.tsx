@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,15 @@ import { useServerFn } from "@tanstack/react-start";
 import { acceptCoachInvite } from "@/lib/coaches.functions";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
+import { FileSignature } from "lucide-react";
+import { getAgreementSigningContext } from "@/lib/coaching-agreement.functions";
+
+// The signing flow carries the full agreement text, so it only loads when this step is reached.
+const AgreementSignFlow = lazy(() =>
+  import("@/components/coaching-agreement/agreement-sign-flow").then((m) => ({
+    default: m.AgreementSignFlow,
+  })),
+);
 
 export const Route = createFileRoute("/setup")({
   head: () => ({ meta: [{ title: "Set up your account — JF Effect" }] }),
@@ -19,7 +28,9 @@ export const Route = createFileRoute("/setup")({
 
 function SetupPage() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<"loading" | "confirm" | "ready" | "social" | "expired" | "done">("loading");
+  const [phase, setPhase] = useState<
+    "loading" | "confirm" | "ready" | "agreement" | "social" | "expired" | "done"
+  >("loading");
   const [verifying, setVerifying] = useState(false);
   const [email, setEmail] = useState<string>("");
   const [fullName, setFullName] = useState<string>("");
@@ -29,6 +40,9 @@ function SetupPage() {
   const [busy, setBusy] = useState(false);
   const [socials, setSocials] = useState<Record<string, string | null>>({});
   const acceptCoachFn = useServerFn(acceptCoachInvite);
+  const getAgreementContext = useServerFn(getAgreementSigningContext);
+  const [signOpen, setSignOpen] = useState(false);
+  const signedRef = useRef(false);
 
   useEffect(() => {
     // SECURITY: Never trust a pre-existing session here. If an admin (or any
@@ -117,12 +131,28 @@ function SetupPage() {
     if (isCoachInvite) {
       try { await acceptCoachFn({ data: undefined as any }); } catch { /* non-fatal */ }
     }
-    setBusy(false);
     toast.success("Password saved.");
     if (isCoachInvite) {
+      setBusy(false);
       setPhase("done");
       setTimeout(() => navigate({ to: "/admin", replace: true }), 500);
       return;
+    }
+    await continueAfterPassword();
+    setBusy(false);
+  };
+
+  // After the password: offer the Coaching Agreement (part of account setup). Anything
+  // that isn't a client who still needs to sign carries straight on to the next step.
+  const continueAfterPassword = async () => {
+    try {
+      const ctx = await getAgreementContext();
+      if (ctx.state.state === "needs_signature") {
+        setPhase("agreement");
+        return;
+      }
+    } catch {
+      /* not a client, or unavailable: carry on */
     }
     setPhase("social");
   };
@@ -219,6 +249,41 @@ function SetupPage() {
         </>
       )}
 
+      {phase === "agreement" && (
+        <div className="space-y-5 text-center">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
+            <FileSignature className="h-7 w-7" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black tracking-tight">Sign your Coaching Agreement</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Every client signs one agreement. It covers every service and purchase, so you only do
+              this once. It takes about 2 minutes.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              onClick={() => setSignOpen(true)}
+              className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+            >
+              Review &amp; sign
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setPhase("social")}
+              className="w-full"
+            >
+              I'll do this later
+            </Button>
+          </div>
+          <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
+            You'll see a reminder in the app until it's signed.
+          </p>
+        </div>
+      )}
+
       {phase === "social" && (
         <div className="space-y-5">
           <div className="text-center">
@@ -252,6 +317,22 @@ function SetupPage() {
       )}
 
       {phase === "done" && <p className="text-center text-sm text-muted-foreground">Taking you to your dashboard…</p>}
+
+      {phase === "agreement" && (
+        <Suspense fallback={null}>
+          <AgreementSignFlow
+            open={signOpen}
+            onSigned={() => {
+              signedRef.current = true;
+            }}
+            onOpenChange={(next) => {
+              setSignOpen(next);
+              // Once signed and closed, carry on to the next setup step.
+              if (!next && signedRef.current) setPhase("social");
+            }}
+          />
+        </Suspense>
+      )}
     </Shell>
   );
 }
