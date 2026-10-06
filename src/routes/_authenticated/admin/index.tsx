@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
+import { CommunityCoachCard } from "@/components/community/community-entry";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, Suspense } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -616,6 +618,11 @@ function AdminDashboard() {
             </>
           )}
         </Card>
+
+        {/* ---------------- COMMUNITY: one-tap coach props (hidden when nothing was shared this week) */}
+        <SectionErrorBoundary label="Community">
+          <CommunityCoachCard />
+        </SectionErrorBoundary>
 
         {/* ---------------- CLIENT PULSE ---------------- */}
         <Card className="border-border bg-card p-4">

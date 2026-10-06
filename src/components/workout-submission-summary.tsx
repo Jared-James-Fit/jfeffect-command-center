@@ -1,5 +1,6 @@
 import { NewAchievementReveal } from "@/components/portal/new-achievement-reveal";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download } from "lucide-react";
@@ -20,7 +21,7 @@ import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/re
 
 // The share composer (photo/video pipeline, upload client) is only fetched the
 // first time someone taps Share workout, so the recap itself stays light.
-const ShareComposer = lazy(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
+const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
 
 type Props = {
   open: boolean;

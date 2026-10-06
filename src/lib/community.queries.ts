@@ -244,6 +244,8 @@ export function useDeletePost() {
 export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-feed"] });
   qc.invalidateQueries({ queryKey: ["community-my-post"] });
+  qc.invalidateQueries({ queryKey: ["community-recent-completions"] });
+  qc.invalidateQueries({ queryKey: ["community-profile"] });
 }
 
 /* ---- post detail / profile ------------------------------------------ */
@@ -309,4 +311,43 @@ export async function markCommunitySeen(qc: ReturnType<typeof useQueryClient>) {
   } finally {
     qc.setQueryData<CommunityActivity>(communityKeys.activity, (old) => (old ? { ...old, unseen: 0, seen_at: new Date().toISOString() } : old));
   }
+}
+
+/* ---- "Share a workout" picker --------------------------------------- */
+
+export type RecentCompletion = {
+  completion_id: string;
+  completed_at: string;
+  title: string;
+  duration_min: number | null;
+  post_id: string | null;
+  visibility: CommunityVisibility | null;
+  athlete_name: string | null;
+};
+
+/** The athlete's own finished sessions (last 30 days), with any post already made. */
+export function useRecentCompletions(enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-recent-completions"],
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<RecentCompletion[]> => {
+      const { data, error } = await db.rpc("community_recent_completions", { _limit: 8 });
+      if (error) throw error;
+      return (data ?? []) as RecentCompletion[];
+    },
+  });
+}
+
+/** The viewer's own unit for loads (athletes: their setting; coaches: app default lb). */
+export function useViewerUnit(userId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["community-unit", userId ?? null],
+    enabled: !!userId,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<"kg" | "lb"> => {
+      const { data } = await supabase.from("clients").select("preferred_weight_unit").eq("user_id", userId!).maybeSingle();
+      return (data as { preferred_weight_unit?: string } | null)?.preferred_weight_unit === "kg" ? "kg" : "lb";
+    },
+  });
 }
