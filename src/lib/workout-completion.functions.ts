@@ -810,6 +810,9 @@ const ReviewInput = z.intersection(
       .nullable()
       .optional(),
     sleepNotes: z.string().nullable().optional(),
+    // 2 = quick check-out with a real self-reported session RPE (see
+    // src/lib/workout-review.ts). Absent on legacy clients.
+    reviewVersion: z.number().int().min(1).max(9).nullable().optional(),
     // When an admin/coach is in Client POV mode, the signed-in user has no
     // `clients` row of their own. Pass the impersonated client's id and we
     // resolve scope from that — after verifying the caller really is an
@@ -931,6 +934,7 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
         recovery_today: data.recoveryToday ?? null,
         sleep_bucket: data.sleepBucket ?? null,
         sleep_notes: data.sleepNotes ?? null,
+        review_version: data.reviewVersion ?? null,
       } as any;
 
       if (existing?.id) {

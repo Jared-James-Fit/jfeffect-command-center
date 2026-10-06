@@ -2,7 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SalesPageShell, Section } from "@/components/sales/sales-page-shell";
+import { SalesPageShell } from "@/components/sales/sales-page-shell";
+import { Block, PrimaryCta } from "@/components/sales/apple";
 import {
   ArrowLeft, CheckCircle2, CalendarClock, Loader2, Clock, Video,
 } from "lucide-react";
@@ -11,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { submitCoachingApplication } from "@/lib/coaching-applications.functions";
 import {
   computeAvailableSlots, bookSlotPublic, getBookingLinkPublic,
@@ -66,12 +68,18 @@ function SimpleQuickApply() {
     set("source_page", params.get("from") || "coaching_apply");
   }, []);
 
-  const valid =
-    form.full_name.trim().length >= 2 &&
-    /.+@.+\..+/.test(form.email.trim()) &&
-    /^[\d\s+\-()]{7,}$/.test(form.phone.trim()) &&
-    /^@?[A-Za-z0-9._]{1,30}$/.test(form.instagram.trim()) &&
-    !!form.main_goal && form.target_outcome.trim().length > 0 && !!form.timeline;
+  const checks: Array<[string, boolean]> = [
+    ["name", form.full_name.trim().length >= 2],
+    ["email", /.+@.+\..+/.test(form.email.trim())],
+    ["phone", /^[\d\s+\-()]{7,}$/.test(form.phone.trim())],
+    ["Instagram", /^@?[A-Za-z0-9._]{1,30}$/.test(form.instagram.trim())],
+    ["goal", !!form.main_goal],
+    ["result", form.target_outcome.trim().length > 0],
+    ["start date", !!form.timeline],
+  ];
+  const missing = checks.filter(([, ok]) => !ok).map(([label]) => label);
+  const done = checks.length - missing.length;
+  const valid = checks.every(([, ok]) => ok);
 
   const mutation = useMutation({
     mutationFn: () => submit({ data: {
@@ -86,39 +94,81 @@ function SimpleQuickApply() {
 
   if (result) return <PostSubmit result={result} />;
 
+  const fieldCls = "h-12 rounded-xl bg-background text-[17px] md:text-[17px]";
+
   return (
     <SalesPageShell>
-      <Section className="!py-8 md:!py-12">
-        <div className="mx-auto max-w-xl">
-          <Card className="p-5 md:p-8">
-            <div className="mb-6">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">JF Effect Coaching</p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">Apply for Coaching</h1>
-              <p className="mt-2 text-sm text-muted-foreground">A few quick details so we can understand what you need and how to reach you.</p>
+      <Block narrow className="!py-8 md:!py-12">
+        <div className="jf-auth-rise">
+          <div className="mb-6 text-center">
+            <p className="text-[13px] font-semibold text-primary">JF Effect Coaching</p>
+            <h1 className="mt-1.5 text-[32px] font-semibold leading-tight tracking-[-0.02em] md:text-[40px]">Apply for Coaching</h1>
+            <p className="mx-auto mt-2 max-w-sm text-[16px] leading-relaxed text-muted-foreground">
+              A few quick details so we know what you need and how to reach you. No payment to apply.
+            </p>
+          </div>
+
+          <form
+            className="space-y-6 rounded-2xl bg-card p-5 ring-1 ring-border/70 md:p-7"
+            onSubmit={(event) => { event.preventDefault(); if (valid) mutation.mutate(); }}
+          >
+            <div className="space-y-4">
+              <div className="space-y-1.5"><Label htmlFor="full_name" className="text-[14px]">Full name</Label><Input id="full_name" required autoComplete="name" className={fieldCls} value={form.full_name} onChange={(e) => set("full_name", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label htmlFor="email" className="text-[14px]">Email</Label><Input id="email" type="email" inputMode="email" required autoComplete="email" autoCapitalize="none" className={fieldCls} value={form.email} onChange={(e) => set("email", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label htmlFor="phone" className="text-[14px]">Phone number</Label><Input id="phone" type="tel" inputMode="tel" required autoComplete="tel" className={fieldCls} value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label htmlFor="instagram" className="text-[14px]">Instagram</Label><Input id="instagram" required autoComplete="off" autoCapitalize="none" autoCorrect="off" placeholder="@username" className={fieldCls} value={form.instagram} onChange={(e) => set("instagram", e.target.value)} /><p className="text-[13px] text-muted-foreground">Your @username. We may reach out there too.</p></div>
             </div>
-            <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (valid) mutation.mutate(); }}>
-              <div className="space-y-2"><Label htmlFor="full_name">Full Name</Label><Input id="full_name" required autoComplete="name" value={form.full_name} onChange={(e) => set("full_name", e.target.value)} /></div>
-              <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" required autoComplete="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></div>
-              <div className="space-y-2"><Label htmlFor="phone">Phone Number</Label><Input id="phone" type="tel" required autoComplete="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
-              <div className="space-y-2"><Label htmlFor="instagram">Instagram @</Label><Input id="instagram" required autoComplete="off" placeholder="@username" value={form.instagram} onChange={(e) => set("instagram", e.target.value)} /><p className="text-xs text-muted-foreground">Enter @username or username.</p></div>
-              <ChoiceGrid label="What are you looking for help with?" options={SIMPLE_GOALS} value={form.main_goal} onChange={(value) => set("main_goal", value)} />
-              <div className="space-y-2"><Label htmlFor="target_outcome">What result are you trying to achieve?</Label><Textarea id="target_outcome" required rows={3} maxLength={250} placeholder="Tell me the main result you want." value={form.target_outcome} onChange={(e) => set("target_outcome", e.target.value)} className="resize-none text-base" /></div>
-              <ChoiceGrid label="When are you looking to get started?" options={SIMPLE_TIMELINES} value={form.timeline} onChange={(value) => set("timeline", value)} />
-              <input aria-hidden="true" tabIndex={-1} className="hidden" value={form.honeypot} onChange={(e) => set("honeypot", e.target.value)} />
-              <Button type="submit" size="lg" className="h-14 w-full text-base font-black" disabled={!valid || mutation.isPending}>
-                {mutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Applying…</> : "Apply for Coaching"}
-              </Button>
-              <p className="text-center text-xs text-muted-foreground">Takes about 30–60 seconds.</p>
-            </form>
-          </Card>
+            <ChoiceGrid label="What do you want help with?" options={SIMPLE_GOALS} value={form.main_goal} onChange={(value) => set("main_goal", value)} />
+            <div className="space-y-1.5"><Label htmlFor="target_outcome" className="text-[15px] font-medium">What result are you after?</Label><Textarea id="target_outcome" required rows={3} maxLength={250} placeholder="Tell me the main result you want." value={form.target_outcome} onChange={(e) => set("target_outcome", e.target.value)} className="resize-none rounded-xl bg-background text-[17px] md:text-[17px]" /><p className="text-right text-[12px] tabular-nums text-muted-foreground">{form.target_outcome.length}/250</p></div>
+            <ChoiceGrid label="When do you want to start?" options={SIMPLE_TIMELINES} value={form.timeline} onChange={(value) => set("timeline", value)} />
+            <input aria-hidden="true" tabIndex={-1} className="hidden" value={form.honeypot} onChange={(e) => set("honeypot", e.target.value)} />
+
+            <div className="space-y-3">
+              <button
+                type="submit"
+                disabled={!valid || mutation.isPending}
+                className="flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-primary text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] disabled:opacity-50 disabled:shadow-none"
+              >
+                {mutation.isPending ? <><Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Sending…</> : "Apply for Coaching"}
+              </button>
+              <p className="text-center text-[13px] text-muted-foreground" aria-live="polite">
+                {valid
+                  ? "Next you'll pick a time for a quick call."
+                  : `${done} of ${checks.length} done · still needed: ${missing.join(", ")}`}
+              </p>
+            </div>
+          </form>
         </div>
-      </Section>
+      </Block>
     </SalesPageShell>
   );
 }
 
 function ChoiceGrid<T extends string>({ label, options, value, onChange }: { label: string; options: readonly { v: T; l: string }[]; value: string; onChange: (value: string) => void }) {
-  return <fieldset className="space-y-2"><legend className="text-sm font-medium leading-none">{label}</legend><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{options.map((option) => <button key={option.v} type="button" onClick={() => onChange(option.v)} className={"min-h-[48px] rounded-xl border px-4 py-3 text-left text-sm font-semibold transition active:scale-[0.99] " + (value === option.v ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background hover:border-primary/40 hover:bg-muted")}>{option.l}</button>)}</div></fieldset>;
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-[15px] font-medium leading-none">{label}</legend>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((option) => {
+          const active = value === option.v;
+          return (
+            <button
+              key={option.v}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(option.v)}
+              className={cn(
+                "min-h-[52px] rounded-xl px-4 py-3 text-left text-[16px] font-medium transition active:scale-[0.985]",
+                active ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted/60 ring-1 ring-border/70 hover:bg-muted",
+              )}
+            >
+              {option.l}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
 }
 
 
@@ -142,17 +192,17 @@ function PostSubmit({ result }: {
   if (!result.booking_slug) {
     return (
       <SalesPageShell>
-        <Section className="!py-12">
+        <Block narrow className="!py-12">
           <div className="mx-auto max-w-xl">
-            <Card className="p-8 text-center">
-              <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-400" />
-              <h1 className="mt-3 text-2xl md:text-3xl font-black tracking-tight">Application received.</h1>
+            <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">
+              <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" aria-hidden />
+              <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] md:text-[34px]">Application received.</h1>
               <p className="mt-3 text-sm text-muted-foreground">
                 We've received your application and will reach out shortly.
               </p>
             </Card>
           </div>
-        </Section>
+        </Block>
       </SalesPageShell>
     );
   }
@@ -163,31 +213,41 @@ function PostSubmit({ result }: {
 
   return (
     <SalesPageShell>
-      <Section className="!py-12">
+      <Block narrow className="!py-12">
         <div className="mx-auto max-w-xl">
           {view === "intro" && (
-            <Card className="p-8 text-center">
-              <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-400" />
-              <h1 className="mt-3 text-2xl md:text-3xl font-black tracking-tight">
+            <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">
+              <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" aria-hidden />
+              <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] md:text-[34px]">
                 Application received.
               </h1>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Your application has been sent to the JF Effect team. The next step is to choose a time for a quick coaching call.
+              <p className="mt-2 text-[16px] leading-relaxed text-muted-foreground">
+                Your application is with the JF Effect team. One quick step left: pick a time for a short coaching call.
               </p>
+              <ol className="mx-auto mt-6 max-w-xs space-y-2.5 text-left text-[15px]">
+                {[
+                  ["Applied", true],
+                  ["Pick a time for your call", false],
+                  ["We map your plan together", false],
+                ].map(([label, ok], i) => (
+                  <li key={i} className="flex items-center gap-3">
+                    <span className={"grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold " + (ok ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground")}>
+                      {ok ? "✓" : i + 1}
+                    </span>
+                    <span className={ok ? "text-muted-foreground line-through" : "font-medium"}>{label as string}</span>
+                  </li>
+                ))}
+              </ol>
               <div className="mt-7 space-y-3">
-                <Button
-                  size="lg"
-                  className="h-14 w-full text-base font-black"
-                  onClick={() => setView("picker")}
-                >
-                  <CalendarClock className="mr-2 h-5 w-5" /> Book Your Call
-                </Button>
+                <PrimaryCta full onClick={() => setView("picker")}>
+                  <CalendarClock className="h-5 w-5" aria-hidden /> Book your call
+                </PrimaryCta>
                 <button
                   type="button"
                   onClick={() => nav({ to: "/coaching" })}
-                  className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  className="text-[14px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 >
-                  Finish Without Booking
+                  I'll book later
                 </button>
               </div>
             </Card>
@@ -205,7 +265,7 @@ function PostSubmit({ result }: {
             />
           )}
         </div>
-      </Section>
+      </Block>
     </SalesPageShell>
   );
 }
@@ -387,11 +447,11 @@ function BookedScreen({
   });
   return (
     <SalesPageShell>
-      <Section className="!py-12">
+      <Block narrow className="!py-12">
         <div className="mx-auto max-w-xl">
-          <Card className="p-8 text-center">
-            <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-400" />
-            <h1 className="mt-3 text-2xl md:text-3xl font-black tracking-tight">Your call is booked.</h1>
+          <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">
+            <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" aria-hidden />
+            <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] md:text-[34px]">Your call is booked.</h1>
             {firstName && <p className="mt-1 text-sm text-muted-foreground">Thanks, {firstName} — see you then.</p>}
 
             <div className="mt-6 space-y-2 text-left text-sm">
@@ -415,7 +475,7 @@ function BookedScreen({
             </div>
           </Card>
         </div>
-      </Section>
+      </Block>
     </SalesPageShell>
   );
 }

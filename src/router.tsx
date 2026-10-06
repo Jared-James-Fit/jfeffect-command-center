@@ -12,7 +12,11 @@ export const getRouter = () => {
       queries: {
         staleTime: 2 * 60_000,       // treat data as fresh for 2min
         gcTime: 10 * 60_000,         // keep cached data for 10min after unmount
-        refetchOnWindowFocus: false, // don't refetch on every tab switch
+        // Refetch stale data (older than staleTime) when the app comes back to
+        // the foreground. Without this an installed iPhone PWA keeps showing
+        // whatever it loaded before it was backgrounded, so changes made on
+        // desktop never appear until a hard reload.
+        refetchOnWindowFocus: true,
         refetchOnReconnect: "always",
         retry: 1,                    // a single retry instead of the default 3
       },

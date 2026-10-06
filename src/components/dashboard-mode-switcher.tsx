@@ -1,6 +1,6 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useDashboardMode, type DashboardMode } from "@/lib/dashboard-mode";
-import { Briefcase, Sparkles, Film } from "lucide-react";
+import { Briefcase, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function DashboardModeSwitcher() {
@@ -10,16 +10,12 @@ export function DashboardModeSwitcher() {
 
   const select = (m: DashboardMode) => {
     setMode(m);
-    if (m === "media") {
-      if (!pathname.startsWith("/media")) navigate({ to: "/media" });
-      return;
-    }
     if (m === "membership") {
       if (!pathname.startsWith("/admin/membership")) navigate({ to: "/admin/membership" });
       return;
     }
     // coaching
-    if (pathname.startsWith("/admin/membership") || pathname.startsWith("/media")) {
+    if (pathname.startsWith("/admin/membership")) {
       navigate({ to: "/admin" });
     }
   };
@@ -31,7 +27,6 @@ export function DashboardModeSwitcher() {
       </span>
       <Tab active={mode === "coaching"} onClick={() => select("coaching")} icon={<Briefcase className="h-3.5 w-3.5" />} label="Coaching" />
       <Tab active={mode === "membership"} onClick={() => select("membership")} icon={<Sparkles className="h-3.5 w-3.5" />} label="Membership" />
-      <Tab active={mode === "media"} onClick={() => select("media")} icon={<Film className="h-3.5 w-3.5" />} label="Media Manager" />
     </div>
   );
 }

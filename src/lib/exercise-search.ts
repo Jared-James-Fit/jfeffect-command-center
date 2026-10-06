@@ -26,7 +26,37 @@ export type SearchableExercise = {
   primary_movement_pattern?: string | null;
   difficulty?: string | null;
   tags?: string[] | null;
+  /** Other names for this exact exercise ("Comp Bench"). Optional — see the alias index. */
+  aliases?: readonly string[] | null;
 };
+
+/* ------------------------------------------------------------------ */
+/* Alias index                                                         */
+/* ------------------------------------------------------------------ */
+
+let aliasIndex: ReadonlyMap<string, readonly string[]> = new Map();
+
+/**
+ * Register the library's aliases (exercise_aliases rows) once; every search
+ * surface then understands them without each picker loading aliases itself.
+ * Searching an alias returns the CANONICAL exercise, never a duplicate.
+ */
+export function setExerciseAliasIndex(
+  rows: ReadonlyArray<{ exercise_id: string; alias_name: string }>,
+): void {
+  const next = new Map<string, string[]>();
+  for (const r of rows) {
+    if (!r?.exercise_id || !r.alias_name) continue;
+    const list = next.get(r.exercise_id) ?? [];
+    list.push(r.alias_name);
+    next.set(r.exercise_id, list);
+  }
+  aliasIndex = next;
+}
+
+function aliasesFor(ex: SearchableExercise): readonly string[] {
+  return ex.aliases ?? aliasIndex.get(ex.id) ?? [];
+}
 
 /* ------------------------------------------------------------------ */
 /* Normalisation                                                       */
@@ -67,9 +97,23 @@ function canonicalExerciseKey(input: string | null | undefined): string {
     .join(" ");
 }
 
+/** Word-order-insensitive key. Direction phrases ("high to low") are never folded. */
+function orderInsensitiveKey(input: string | null | undefined): string {
+  const key = canonicalExerciseKey(input);
+  if (!key || /(^| )to( |$)/.test(key)) return "";
+  return Array.from(new Set(key.split(" "))).sort().join(" ");
+}
+
+/**
+ * The existing library exercise a requested name already refers to, or null.
+ * Order: canonical name -> alias -> same words in another order. Used before
+ * any create so a differently-worded name reuses the exercise instead of
+ * adding a duplicate.
+ */
 export function findCanonicalExerciseMatch<T extends SearchableExercise>(
   list: readonly T[],
   requestedName: string,
+  aliases: ReadonlyArray<{ exercise_id: string; alias_name: string }> = [],
 ): T | null {
   const identity = canonicalExerciseIdentity(requestedName);
   const key = canonicalExerciseKey(requestedName);
@@ -77,7 +121,19 @@ export function findCanonicalExerciseMatch<T extends SearchableExercise>(
   const matches = list.filter(
     (exercise) => !exercise.archived && canonicalExerciseKey(exercise.name) === key,
   );
-  if (matches.length === 0) return null;
+  if (matches.length === 0) {
+    const live = new Map(list.filter((e) => !e.archived).map((e) => [e.id, e] as const));
+    const viaAlias = aliases.find(
+      (a) => live.has(a.exercise_id) && canonicalExerciseKey(a.alias_name) === key,
+    );
+    if (viaAlias) return live.get(viaAlias.exercise_id) ?? null;
+    const loose = orderInsensitiveKey(requestedName);
+    if (!loose) return null;
+    const reordered = list.filter(
+      (exercise) => !exercise.archived && orderInsensitiveKey(exercise.name) === loose,
+    );
+    return reordered.length === 1 ? reordered[0] : null;
+  }
   // Prefer the established, concise canonical name over role-prefixed,
   // punctuation-only, singular/plural, or shorthand duplicates.
   return [...matches].sort((a, b) => {
@@ -475,10 +531,36 @@ function computeTier(query: ParsedQuery, hay: Haystacks, complete: boolean): Sea
   return complete ? SEARCH_TIER.metadataComplete : SEARCH_TIER.partial;
 }
 
+function betterMatch<T extends SearchableExercise>(a: ScoredExercise<T>, b: ScoredExercise<T>): boolean {
+  if (a.tier !== b.tier) return a.tier < b.tier;
+  if (a.complete !== b.complete) return a.complete;
+  return a.score > b.score;
+}
+
 export function scoreExercise<T extends SearchableExercise>(
   exercise: T,
   query: ParsedQuery,
   hay = buildHaystacks(exercise),
+): ScoredExercise<T> | null {
+  let best = scoreAgainst(exercise, query, hay);
+  if (query.terms.length === 0) return best;
+  // An alias is just another name for the SAME exercise: score it as one and
+  // keep whichever name matches best, but always return the canonical exercise.
+  for (const alias of aliasesFor(exercise)) {
+    const name = normalizeText(alias);
+    if (!name) continue;
+    const cand = scoreAgainst(exercise, query, { ...hay, name, nameWords: name.split(" ") });
+    if (cand && (!best || betterMatch(cand, best))) {
+      best = { ...cand, highlights: [], reason: `Also known as “${alias}”` };
+    }
+  }
+  return best;
+}
+
+function scoreAgainst<T extends SearchableExercise>(
+  exercise: T,
+  query: ParsedQuery,
+  hay: Haystacks,
 ): ScoredExercise<T> | null {
   if (query.terms.length === 0) {
     return { exercise, score: 0, tier: SEARCH_TIER.partial, complete: true, highlights: [] };

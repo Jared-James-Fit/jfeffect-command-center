@@ -1,16 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, lazy, Suspense } from "react";
+import { useMemo, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 
-const CoachesPage = lazy(() =>
-  import("./coaches.index").then((m) => ({ default: m.CoachesPage })),
+const CoachesPage = lazyWithRetry(() =>
+  import("@/route-pages/_authenticated/admin/coaches.index").then((m) => ({ default: m.CoachesPage })),
 );
-const StaffPage = lazy(() =>
-  import("./staff").then((m) => ({ default: m.StaffPage })),
+const StaffPage = lazyWithRetry(() =>
+  import("@/route-pages/_authenticated/admin/staff").then((m) => ({ default: m.StaffPage })),
 );
-const BusinessSystemsHub = lazy(() =>
-  import("./business-systems").then((m) => ({ default: m.BusinessSystemsHub })),
+const BusinessSystemsHub = lazyWithRetry(() =>
+  import("@/route-pages/_authenticated/admin/business-systems").then((m) => ({ default: m.BusinessSystemsHub })),
 );
 
 const TabFallback = () => (

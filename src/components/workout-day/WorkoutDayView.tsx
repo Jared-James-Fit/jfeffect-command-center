@@ -9,13 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2, Trash2, GripVertical } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2, Trash2, GripVertical, Target } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { exerciseAccent } from "@/components/program-builder";
+import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
+import { formatDualLoad } from "@/lib/dual-load";
+import { resolveMovementFamily } from "@/lib/exercise-family";
 import {
   derivePurposeLabels,
   effectiveRestSeconds,
@@ -83,11 +86,25 @@ import { convertWeight } from "@/lib/progress-metrics";
 import {
   formatPreviousLiftLoad,
   selectPreviousLifts,
+  matchHistoryLogs,
   type PreviousLift,
   type PreviousLiftIdentity,
   type PreviousLiftLog,
 } from "@/lib/workout-previous-lift";
 import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSetPR } from "@/lib/workout-pr";
+import { trustedSessionRpe } from "@/lib/workout-review";
+import {
+  buildLoadModel,
+  parseRpe,
+  suggestedSessionRpe as computeSuggestedSessionRpe,
+  planningTarget,
+  predictReadiness,
+  suggestSetLoad,
+  NEUTRAL_READINESS,
+  type LoadModel,
+  type LoadSuggestion,
+  type Readiness,
+} from "@/lib/load-suggestion";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import { isSetLogComplete } from "@/lib/set-completion";
 import { planCascade, type CascadeOrigin, type CascadeSetState } from "@/lib/set-cascade";
@@ -243,7 +260,7 @@ function formatPrescription(p: {
     // Time-based prescription: "3 × 45 sec @ 20 lb | RPE 7"
     const dur = p.durationSeconds && p.durationSeconds > 0 ? formatDuration(p.durationSeconds) : "—";
     let load = "";
-    if (p.suggestedWeight != null) load = `@ ${fmtNum(p.suggestedWeight)} ${p.unit}`;
+    if (p.suggestedWeight != null) load = `@ ${formatDualLoad(Number(fmtNum(p.suggestedWeight)), p.unit)}`;
     let effort = "";
     if (p.rpe != null && String(p.rpe).trim() !== "") effort = `| RPE ${p.rpe}`;
     else if (p.rir != null && String(p.rir).trim() !== "") effort = `| ${p.rir} RIR`;
@@ -254,7 +271,7 @@ function formatPrescription(p: {
   const reps = repsRaw ? repsRaw.replace(/\s*-\s*/g, "–") : "?";
   let load = "";
   if (p.suggestedWeight != null) {
-    load = `@ ${fmtNum(p.suggestedWeight)} ${p.unit}`;
+    load = `@ ${formatDualLoad(Number(fmtNum(p.suggestedWeight)), p.unit)}`;
   } else if (
     p.percentage &&
     !p.manualOverride &&
@@ -637,7 +654,7 @@ function WorkoutDay({
       } else {
         const { data, error } = await sb
           .from("pl_exercise_rows")
-          .select("*, exercises(id,name,cues,muscle_group,category,equipment,difficulty,pl_lift_group,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)")
+          .select("*, exercises(id,name,cues,muscle_group,category,equipment,difficulty,pl_lift_group,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,movement_family,default_measurement_type)")
           .eq("day_id", dayId)
           .order("sort_order");
         // Surface RLS / network errors to react-query so the failure
@@ -943,6 +960,57 @@ function WorkoutDay({
     () => selectPreviousLifts(previousLiftIdentities, previousLiftLogs, currentHistorySessionKey),
     [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey],
   );
+  // Pre-fill for the review's effort question: today's logged working-set RPEs.
+  const reviewSessionRpe = useMemo(
+    () => computeSuggestedSessionRpe(
+      (results as any[]).filter((r) => r.completed_at).map((r) => r.actual_rpe_num ?? r.actual_rpe),
+    ),
+    [results],
+  );
+
+  // Per-row history for RPE-based load suggestions — same batch, same matching
+  // rules as Last Time, current session excluded.
+  const loadHistoryByRow = useMemo(() => {
+    const map = new Map<string, PreviousLiftLog[]>();
+    for (const identity of previousLiftIdentities) {
+      map.set(identity.rowId, matchHistoryLogs(identity, previousLiftLogs, currentHistorySessionKey));
+    }
+    return map;
+  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey]);
+
+  // Predicted readiness from the most recent OTHER workout review. Only v2
+  // reviews carry a real session RPE (legacy ones mapped status → fake RPE).
+  const { data: lastReview = null } = useQuery({
+    queryKey: ["load-readiness", historyOwnerId, dayId],
+    enabled: secondaryHydrationReady && adapter?.kind !== "member" && !!historyOwnerId,
+    staleTime: 5 * 60_000,
+    retry: 1,
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from("pl_workout_feedback")
+        .select("review_submitted_at, session_rpe, pain, sleep_bucket, recovery_today, review_version")
+        .eq("client_id", historyOwnerId)
+        .neq("day_id", dayId)
+        .order("review_submitted_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) return null;
+      return data ?? null;
+    },
+  });
+  const readiness = useMemo<Readiness>(
+    () => lastReview
+      ? predictReadiness({
+          submittedAt: lastReview.review_submitted_at ?? null,
+          sessionRpe: trustedSessionRpe(lastReview),
+          pain: !!lastReview.pain,
+          sleepBucket: lastReview.sleep_bucket ?? null,
+          recoveryToday: lastReview.recovery_today ?? null,
+        })
+      : NEUTRAL_READINESS,
+    [lastReview],
+  );
+
   // Exact rep-max PR baselines: best historical set per rep count (1–12) for
   // every row, computed locally from the SAME batched history query as
   // Last Time (no extra DB round-trips). The current session is excluded so
@@ -2210,6 +2278,8 @@ function WorkoutDay({
                       clientId={client?.id}
                       previousLift={previousLiftByRow.get(r.id) ?? null}
                       repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
+                      loadHistory={loadHistoryByRow.get(r.id) ?? null}
+                      readiness={readiness}
                       assistedBests={assistedBestsByRow.get(r.id) ?? null}
                       blockId={blockId}
                       topSetBasis={topSetBasisForRow(r, rowIndex)}
@@ -2226,6 +2296,7 @@ function WorkoutDay({
                       swapContext={swapContextForRow(adapter, dayId, r.id)}
                       canMoveUp={canEditWorkoutStructure && rowIndex > 0}
                       canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
+                      position={rowIndex + 1}
                       movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
                       moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
                       onMoveUp={() => void moveExerciseNow(r.id, -1)}
@@ -2286,6 +2357,7 @@ function WorkoutDay({
             {completion?.completed_at && client?.id && (
               <div className="mx-auto max-w-3xl px-4 pb-4">
                 <CompletedWorkoutActions
+                  suggestedSessionRpe={reviewSessionRpe}
                   ctx={{ kind: "client", dayId, scheduledWorkoutId }}
                   hasCoach
                   actAsClientId={isImpersonating ? client.id : null}
@@ -2305,6 +2377,7 @@ function WorkoutDay({
                           recoveryToday: existingReview.recovery_today ?? null,
                           sleepBucket: existingReview.sleep_bucket ?? null,
                           sleepNotes: existingReview.sleep_notes ?? null,
+                    reviewVersion: existingReview.review_version ?? null,
                           editCount: existingReview.review_edit_count ?? 0,
                           submittedAt: existingReview.review_submitted_at ?? existingReview.created_at ?? null,
                         }
@@ -2506,6 +2579,8 @@ function WorkoutDay({
                     clientId={client?.id}
                     previousLift={previousLiftByRow.get(r.id) ?? null}
                     repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
+                      loadHistory={loadHistoryByRow.get(r.id) ?? null}
+                      readiness={readiness}
                     assistedBests={assistedBestsByRow.get(r.id) ?? null}
                     blockId={blockId}
                       topSetBasis={topSetBasisForRow(r, rowIndex)}
@@ -2521,7 +2596,8 @@ function WorkoutDay({
                     swapContext={swapContextForRow(adapter, dayId, r.id)}
                     canMoveUp={canEditWorkoutStructure && rowIndex > 0}
                     canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
-                    movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
+                    position={rowIndex + 1}
+                      movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
                     moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
                     onMoveUp={() => void moveExerciseNow(r.id, -1)}
                     onMoveDown={() => void moveExerciseNow(r.id, 1)}
@@ -2576,6 +2652,7 @@ function WorkoutDay({
 
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
+                  suggestedSessionRpe={reviewSessionRpe}
             ctx={{ kind: "client", dayId, scheduledWorkoutId }}
             hasCoach
             actAsClientId={isImpersonating ? client.id : null}
@@ -2595,6 +2672,7 @@ function WorkoutDay({
                     recoveryToday: existingReview.recovery_today ?? null,
                     sleepBucket: existingReview.sleep_bucket ?? null,
                     sleepNotes: existingReview.sleep_notes ?? null,
+                    reviewVersion: existingReview.review_version ?? null,
                     editCount: existingReview.review_edit_count ?? 0,
                     submittedAt:
                       existingReview.review_submitted_at ??
@@ -2620,6 +2698,7 @@ function WorkoutDay({
 
       {!completion?.completed_at && client?.id && autoFinishReady && (
         <WorkoutReviewEditor
+          suggestedSessionRpe={reviewSessionRpe}
           open={quickFinishReviewOpen}
           onOpenChange={setQuickFinishReviewOpen}
           ctx={
@@ -2649,6 +2728,7 @@ function WorkoutDay({
                   recoveryToday: existingReview.recovery_today ?? null,
                   sleepBucket: existingReview.sleep_bucket ?? null,
                   sleepNotes: existingReview.sleep_notes ?? null,
+                    reviewVersion: existingReview.review_version ?? null,
                   editCount: existingReview.review_edit_count ?? 0,
                   submittedAt:
                     existingReview.review_submitted_at ??
@@ -2730,6 +2810,55 @@ function WorkoutDay({
   );
 }
 
+/**
+ * Exercise-level RPE suggestion: the range for today's working sets, what it's
+ * planned for, and why (history / today's sets / readiness / layoff).
+ */
+function LoadSuggestionCard({
+  hint,
+  model,
+  plan,
+}: {
+  hint: LoadSuggestion | null;
+  model: LoadModel;
+  plan: { reps: number; rpe: number };
+}) {
+  if (model.status === "calibrating" || !hint) {
+    if (model.historySessions === 0) return null;
+    return (
+      <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+        <Target className="h-3 w-3" aria-hidden="true" />
+        Load suggestions unlock after a week of logs with RPE
+      </div>
+    );
+  }
+  const range = hint.low === hint.high
+    ? `${fmtNum(hint.target)} ${hint.unit}`
+    : `${fmtNum(hint.low)}–${fmtNum(hint.high)} ${hint.unit}`;
+  const why =
+    model.source === "history"
+      ? model.readiness.reasons.length
+        ? `eased for ${model.readiness.reasons[0]}`
+        : model.staleDays
+          ? `eased back after ${Math.round(model.staleDays / 7)} weeks off`
+          : `from your last ${Math.min(model.historySessions, 8)} sessions`
+      : "updated from today's sets";
+  return (
+    <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/5 px-2.5 py-1.5">
+      <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+      <div className="min-w-0 leading-tight">
+        <div className="text-sm font-bold tabular-nums text-foreground">
+          {range}
+          <span className="ml-1.5 text-[11px] font-medium text-muted-foreground">
+            {plan.reps} reps @ RPE {fmtNum(plan.rpe)}
+          </span>
+        </div>
+        <div className="truncate text-[11px] text-muted-foreground">Suggested · {why}</div>
+      </div>
+    </div>
+  );
+}
+
 function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: "kg" | "lb"; exerciseName: string }) {
   const nav = useWorkoutNavigation();
   // Cheap suspicious-load heuristic: extreme absolute values flag a likely unit / data error.
@@ -2744,7 +2873,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
         "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold",
         suspicious ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-primary/10 text-primary",
       )}>
-        Suggested Load: {load} {unit}
+        Suggested Load: {formatDualLoad(load, unit)}
         <Popover>
           <PopoverTrigger asChild>
             <button type="button" aria-label="What does Suggested Load mean?" className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-foreground/10">
@@ -2921,7 +3050,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, loadHistory = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3136,10 +3265,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         exercise_category: exercise.exercise_category ?? null,
         is_competition_lift: exercise.is_competition_lift ?? null,
         competition_lift_type: exercise.competition_lift_type ?? null,
+        movement_family: exercise.movement_family ?? null,
         name: exercise.name ?? null,
       }
     : null;
-  const accent = exerciseAccent(exMeta, row.card_color);
+  // One colour rule for every screen: the exercise's movement family.
+  const family = resolveMovementFamily(exMeta, row.movement_family);
+  const accent = exerciseAccent(exMeta, null, row.movement_family);
   const category = resolveCategory(exMeta);
   const effectiveRest = effectiveRestSeconds(
     { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
@@ -3234,6 +3366,31 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const rirTarget = useMemo(() => parseEffortTarget(row.rir), [row.rir]);
   // When the program prescribes RIR and not RPE, the input column behaves as RIR.
   const showRir = !!row.rir && !row.rpe;
+
+  // RPE-based load suggestion (history + today's sets + predicted readiness).
+  // A coach's fixed load or top-set back-off stays the only suggestion.
+  const coachOwnsLoad = !!row.manual_override || row.percentage_basis === "top_set";
+  const loadPlan = useMemo(
+    () => planningTarget({ repTarget, rpeTarget, rirTarget }),
+    [repTarget, rpeTarget, rirTarget],
+  );
+  const loadModel = useMemo<LoadModel | null>(() => {
+    if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== "external" || !loadPlan) return null;
+    const today = existingResults
+      .filter((r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external")
+      .sort((a: any, b: any) => a.set_index - b.set_index)
+      .map((r: any) => ({
+        load: Number(displayLoadInUnit(r, activeUnit)),
+        reps: Number(r.actual_reps),
+        rpe: parseRpe(r.actual_rpe_num ?? r.actual_rpe),
+      }))
+      .filter((x) => x.load > 0 && x.reps > 0);
+    return buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness });
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness]);
+  const loadHint = useMemo<LoadSuggestion | null>(
+    () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
+    [loadModel, loadPlan],
+  );
 
   // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
   // into all later un-completed sets of this same exercise. Never overwrites
@@ -3452,7 +3609,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       <div className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full opacity-90 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          {position != null && <ExerciseOrderBadge position={position} family={family} className="mt-px" />}
+          <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
+        </div>
         {!readonly && onUnitChange && (
           <div className="shrink-0">
             <UnitToggle unit={activeUnit} onChange={handleUnitToggle} compact />
@@ -3507,6 +3667,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             />
           )}
         </div>
+      )}
+      {loadModel && loadPlan && (
+        <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} />
       )}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge
@@ -3796,6 +3959,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               targetRpe={row.rpe}
               targetRir={row.rir}
               suggestedWeight={suggestedWeight}
+              loadHint={loadHint}
               autoFillSuggestedWeight={row.percentage_basis === "top_set" && percentageBackoffWeight != null}
               lastTimeWeight={activeUnit === "kg" ? (previousLift?.normalizedKg ?? null) : (previousLift?.normalizedLb ?? null)}
               repTarget={repTarget}
@@ -4094,7 +4258,7 @@ function NoteHistoryItem({ note }: { note: any }) {
 
 function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
-  targetReps, targetRpe, targetRir, suggestedWeight, autoFillSuggestedWeight = false, lastTimeWeight,
+  targetReps, targetRpe, targetRir, suggestedWeight, loadHint = null, autoFillSuggestedWeight = false, lastTimeWeight,
   repTarget, rpeTarget, rirTarget,
   repMaxBests = null,
   assistedBests = null,
@@ -4110,6 +4274,7 @@ function SetRow({
   onTimerCascade,
   onRemoveSet,
 }: {
+  loadHint?: LoadSuggestion | null;
   rowId: string;
   workoutId?: string | null;
   exerciseId?: string | null;
@@ -5229,7 +5394,7 @@ function SetRow({
           // previous set in this exercise → Last Time → prescribed load.
           (displayLoadInUnit(prevExisting, unit) != null && Number(displayLoadInUnit(prevExisting, unit)) > 0
             ? Number(displayLoadInUnit(prevExisting, unit))
-            : null) ?? lastTimeWeight ?? suggestedWeight ?? null
+            : null) ?? loadHint?.target ?? lastTimeWeight ?? suggestedWeight ?? null
         }
         disabled={readonly}
         focusMode={focusMode}
@@ -5350,6 +5515,25 @@ function SetRow({
       </div>
     )}
 
+    {/* RPE-based suggestion for this set — one tap fills it, never auto-confirms */}
+    {!readonly && !isConfirmed && !hideWeight && loadHint && loadType === "external" && (
+      <div className="px-3 pb-1.5">
+        <button
+          type="button"
+          onClick={() => setLoad(fmtNum(loadHint.target))}
+          aria-label={`Use suggested ${fmtNum(loadHint.target)} ${loadHint.unit}`}
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
+        >
+          <Target className="h-3 w-3" aria-hidden="true" />
+          {loadHint.low === loadHint.high
+            ? `${fmtNum(loadHint.target)} ${loadHint.unit}`
+            : `${fmtNum(loadHint.low)}–${fmtNum(loadHint.high)} ${loadHint.unit}`}
+          {Number(load) !== loadHint.target && loadHint.low !== loadHint.high && (
+            <span className="font-normal text-primary/80">· use {fmtNum(loadHint.target)}</span>
+          )}
+        </button>
+      </div>
+    )}
     {/* Quick-fill chip row — Suggested values are visible but never auto-confirm */}
     {/* Copy Previous — compact secondary action for set 2+ */}
     {!readonly && !isConfirmed && setIndex > 1 && prevExisting?.completed_at && (() => {

@@ -16,6 +16,8 @@
  *   card_color                 (manual override; otherwise category default)
  */
 
+import { resolveMovementFamily } from "@/lib/exercise-family";
+
 export type ExerciseCategory = "competition" | "variation" | "assistance";
 export type CompetitionLiftType = "squat" | "bench" | "deadlift" | null;
 
@@ -23,6 +25,8 @@ export interface ExerciseMeta {
   exercise_category?: ExerciseCategory | null;
   is_competition_lift?: boolean | null;
   competition_lift_type?: CompetitionLiftType;
+  /** squat | bench | deadlift | accessory — drives card colour (see exercise-family.ts). */
+  movement_family?: string | null;
   name?: string | null;
 }
 
@@ -33,18 +37,17 @@ export function resolveCategory(ex?: ExerciseMeta | null): ExerciseCategory {
   return "assistance";
 }
 
-/** Default card color for an exercise based on its metadata. */
+/**
+ * Card colour NAME for an exercise (yellow / blue / green / red). Delegates to
+ * the movement family so there is exactly one colour rule in the app.
+ */
 export function defaultCardColor(ex?: ExerciseMeta | null): string {
-  if (ex?.is_competition_lift) {
-    switch (ex.competition_lift_type) {
-      case "squat":    return "yellow";
-      case "bench":    return "sky";
-      case "deadlift": return "emerald";
-    }
+  switch (resolveMovementFamily(ex)) {
+    case "squat":    return "yellow";
+    case "bench":    return "blue";
+    case "deadlift": return "green";
+    default:         return "red";
   }
-  // variations get amber, everything else (assistance) gets red
-  if (resolveCategory(ex) === "variation") return "amber";
-  return "red";
 }
 
 /**

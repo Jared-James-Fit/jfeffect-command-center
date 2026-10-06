@@ -25,7 +25,6 @@ function AdminLayout() {
     pathname.startsWith("/admin/membership") ||
     pathname.startsWith("/admin/members") ||
     pathname.startsWith("/admin/member-plans") ||
-    pathname.startsWith("/admin/member-resources") ||
     pathname === "/admin/sales/membership" ||
     pathname === "/admin/legal" ||
     (pathname === "/admin/communication" && search?.tab === "support-inbox");
@@ -37,7 +36,6 @@ function AdminLayout() {
   // running the membership workspace.
   useEffect(() => {
     if (isMembershipWorkspacePath && mode !== "membership") setDashboardMode("membership");
-    if (mode === "media") setDashboardMode(isMembershipWorkspacePath ? "membership" : "coaching");
   }, [isMembershipWorkspacePath, mode]);
   useEffect(() => {
     if (loading || !role) return;
@@ -46,11 +44,7 @@ function AdminLayout() {
       navigate({ to: "/m", replace: true });
       return;
     }
-    if (role === "media_manager") {
-      navigate({ to: "/media", replace: true });
-      return;
-    }
-    // Any other role (client / unknown) → portal
+    // Any other role (client / unknown / the retired media_manager) → portal
     navigate({ to: "/portal", replace: true });
   }, [role, loading, navigate]);
 

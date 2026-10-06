@@ -13,6 +13,12 @@ import { Lock } from "lucide-react";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
 import { setRecurringHighDays, setFullCardioRestDays, DEFAULT_HIGH_WEEKDAY } from "@/lib/high-day-schedule";
 import { todayLocalISO } from "@/lib/today";
+import {
+  INCLINE_TREADMILL_DEFAULT,
+  defaultCardioConfigFor,
+  resolveTrainingWeekdays,
+  scheduledWeekdaysForDayType,
+} from "@/lib/cardio-prescription";
 
 type Props = {
   open: boolean;
@@ -33,68 +39,6 @@ function countByLabel(days: any[]): Record<string, number> {
     out[l] = (out[l] ?? 0) + 1;
   }
   return out;
-}
-
-/** Sensible default cardio config per nutrition day type. */
-const DEFAULT_CONFIG: Record<string, {
-  cardio_type: string;
-  duration_minutes: number;
-  intensity: string;
-  calorie_target_min: number | null;
-  calorie_target_max: number | null;
-  client_notes: string;
-}> = {
-  "Training Day": {
-    cardio_type: "Incline Treadmill Walk",
-    duration_minutes: 15,
-    intensity: "Zone 2",
-    calorie_target_min: null,
-    calorie_target_max: null,
-    client_notes: "Incline 5 · speed 2–3 mph. Complete the session when ANY ONE target is reached; stop when whichever target comes first.",
-  },
-  "Rest Day": {
-    cardio_type: "Incline Treadmill Walk",
-    duration_minutes: 15,
-    intensity: "Zone 2",
-    calorie_target_min: null,
-    calorie_target_max: null,
-    client_notes: "Incline 5 · speed 2–3 mph. Complete the session when ANY ONE target is reached; stop when whichever target comes first.",
-  },
-  "High Day": {
-    cardio_type: "Incline Treadmill Walk",
-    duration_minutes: 15,
-    intensity: "Zone 2",
-    calorie_target_min: null,
-    calorie_target_max: null,
-    client_notes: "Incline 5 · speed 2–3 mph. Complete the session when ANY ONE target is reached; stop when whichever target comes first.",
-  },
-  "Low Day": {
-    cardio_type: "Outdoor Walking",
-    duration_minutes: 30,
-    intensity: "Low Intensity",
-    calorie_target_min: null,
-    calorie_target_max: null,
-    client_notes: "Easy walk on low-calorie days. Keep fatigue minimal.",
-  },
-  "Daily": {
-    cardio_type: "Incline Walking",
-    duration_minutes: 25,
-    intensity: "Zone 2",
-    calorie_target_min: null,
-    calorie_target_max: null,
-    client_notes: "Daily cardio session.",
-  },
-};
-
-function defaultConfigFor(label: string) {
-  return DEFAULT_CONFIG[label] ?? {
-    cardio_type: "Outdoor Walking",
-    duration_minutes: 25,
-    intensity: "Low Intensity",
-    calorie_target_min: null,
-    calorie_target_max: null,
-    client_notes: "",
-  };
 }
 
 /**
@@ -158,6 +102,9 @@ export function CardioApplyDefaultsDialog({
   // Count how many days/week each label occupies in the nutrition plan
   const labelCounts = useMemo(() => countByLabel(nutritionDays), [nutritionDays]);
 
+  // Committed schedule first (what workouts use), preferred days as fallback.
+  const trainingWeekdays = useMemo(() => resolveTrainingWeekdays(clientPrefs), [clientPrefs]);
+
   // Effective label list: use nutrition plan labels, fall back to sensible defaults
   const effectiveLabels = useMemo(() => {
     if (nutritionLabels.length > 0) return nutritionLabels;
@@ -206,14 +153,14 @@ export function CardioApplyDefaultsDialog({
       setFullRestWeekday(existing);
     } else {
       // Default: pick a non-training, non-high weekday
-      const training = new Set<string>(clientPrefs?.preferred_training_days ?? []);
+      const training = new Set<string>(trainingWeekdays);
       const pick = (WEEK_DAYS as readonly WeekDay[]).find(
         (d) => !training.has(d) && d !== highDayWeekday,
       );
       setFullRestEnabled(false);
       setFullRestWeekday(pick ?? "Saturday");
     }
-  }, [open, clientPrefs?.full_cardio_rest_days, clientPrefs?.preferred_training_days, highDayWeekday]);
+  }, [open, clientPrefs?.full_cardio_rest_days, trainingWeekdays, highDayWeekday]);
 
   const anyExisting = existing.some(
     (e) => effectiveLabels.includes(e.day_type) && !e.program_name,
@@ -225,7 +172,7 @@ export function CardioApplyDefaultsDialog({
 
     const init: RowDraft[] = effectiveLabels.map((label) => {
       const existingRow = findDefaultFor(existing, label);
-      const cfg = defaultConfigFor(label);
+      const cfg = defaultCardioConfigFor(label);
 
       // Determine frequency for this label
       let freq: number;
@@ -257,7 +204,9 @@ export function CardioApplyDefaultsDialog({
         frequency_str: String(freq),
         locked,
         duration_minutes: existingRow?.duration_minutes ?? cfg.duration_minutes,
-        cardio_type: existingRow?.cardio_type ?? cfg.cardio_type,
+        // Always the treadmill default, even when "Update existing" is chosen:
+        // that is what lets this dialog convert older Outdoor/other rows.
+        cardio_type: cfg.cardio_type,
         intensity: existingRow?.intensity ?? cfg.intensity,
       };
     });
@@ -304,15 +253,13 @@ export function CardioApplyDefaultsDialog({
     });
   };
 
-  const scheduledWeekdaysFor = (dayType: string): string[] => {
-    const training = new Set<string>(clientPrefs?.preferred_training_days ?? []);
-    if (dayType === "Training Day") return Array.from(training);
-    if (dayType === "High Day") return [highDayWeekday];
-    if (dayType === "Rest Day" || dayType === "Non-Training Day") {
-      return (WEEK_DAYS as readonly WeekDay[]).filter((day) => !training.has(day) && day !== highDayWeekday && (!fullRestEnabled || day !== fullRestWeekday));
-    }
-    return [];
-  };
+  const scheduledWeekdaysFor = (dayType: string): string[] =>
+    scheduledWeekdaysForDayType({
+      dayType,
+      trainingDays: trainingWeekdays,
+      highDay: highDayWeekday,
+      fullRestDay: fullRestEnabled ? fullRestWeekday : null,
+    });
 
   const apply = async () => {
     if (!isValid) {
@@ -340,14 +287,13 @@ export function CardioApplyDefaultsDialog({
       const freq = parseFreq(row.frequency_str);
       if (freq <= 0) continue;
       const existingRow = findDefaultFor(existing, row.day_type);
-      const cfg = defaultConfigFor(row.day_type);
+      const cfg = defaultCardioConfigFor(row.day_type);
       const targetStartDate = (clientPrefs as any)?.active_block_start_date ?? todayLocalISO();
       const payload = {
         client_id: clientId,
         day_type: row.day_type,
         custom_day_type: null,
         cardio_type: row.cardio_type,
-        custom_type: null,
         intensity: row.intensity,
         frequency_per_week: freq,
         // Once known, weekdays become the one schedule consumed by calendar, client logging and analytics.
@@ -357,7 +303,16 @@ export function CardioApplyDefaultsDialog({
         calorie_target_min: cfg.calorie_target_min,
         calorie_target_max: cfg.calorie_target_max,
         show_calories_to_client: cfg.calorie_target_min != null,
-        client_notes: existingRow?.client_notes || cfg.client_notes,
+        // Don't keep a stale "outdoor walk" note on a row that is now treadmill.
+        client_notes: existingRow?.client_notes && !/outdoor/i.test(existingRow.client_notes)
+          ? existingRow.client_notes
+          : cfg.client_notes,
+        // Treadmill settings are what the client card shows; keep coach-tuned values.
+        custom_type: null,
+        incline: existingRow?.incline ?? INCLINE_TREADMILL_DEFAULT.incline,
+        speed_min_mph: existingRow?.speed_min_mph ?? INCLINE_TREADMILL_DEFAULT.speed_min_mph,
+        speed_max_mph: existingRow?.speed_max_mph ?? INCLINE_TREADMILL_DEFAULT.speed_max_mph,
+        completion_rule: INCLINE_TREADMILL_DEFAULT.completion_rule,
         start_date: targetStartDate,
         status: "Active",
         enabled: true,
@@ -454,7 +409,7 @@ export function CardioApplyDefaultsDialog({
 
         {/* Compact weekly preview */}
         <WeeklyPreview
-          trainingDays={clientPrefs?.preferred_training_days ?? []}
+          trainingDays={trainingWeekdays}
           highDayWeekday={highDayWeekday}
           fullRestEnabled={fullRestEnabled}
           fullRestWeekday={fullRestWeekday}

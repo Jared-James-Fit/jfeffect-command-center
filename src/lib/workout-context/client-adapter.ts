@@ -269,7 +269,7 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       const { data, error } = await sb
         .from("pl_exercise_rows")
         .select(
-          "*, exercises(id,name,cues,muscle_group,category,equipment,difficulty,pl_lift_group,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,default_measurement_type)",
+          "*, exercises(id,name,cues,muscle_group,category,equipment,difficulty,pl_lift_group,default_load_unit,default_load_type,exercise_category,is_competition_lift,competition_lift_type,movement_family,default_measurement_type)",
         )
         .eq("day_id", dayId)
         .order("sort_order");
@@ -354,7 +354,7 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       const { data, error } = await sb
         .from("pl_exercise_rows")
         .select(
-          "*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type)",
+          "*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,common_mistakes,muscle_group,category,pl_lift_group,warmup_protocol_id,is_powerlifting,warmup_notes,default_load_unit,exercise_category,is_competition_lift,competition_lift_type,movement_family)",
         )
         .eq("day_id", dayId)
         .order("sort_order");

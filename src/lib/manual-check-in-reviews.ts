@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isViewingAsClient } from "@/lib/pov-guard";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 
 const db = supabase as any;
@@ -92,10 +93,12 @@ export async function listUnreadForClientUser(clientId: string) {
 }
 
 export async function markReviewSeen(id: string) {
+  if (await isViewingAsClient()) return;
   await db.from("manual_check_in_reviews").update({ seen_at: new Date().toISOString() }).eq("id", id).is("seen_at", null);
 }
 
 export async function markReviewRead(id: string) {
+  if (await isViewingAsClient()) return;
   const now = new Date().toISOString();
   const { error } = await db.from("manual_check_in_reviews").update({ read_at: now, dismissed_at: now }).eq("id", id);
   if (error) throw error;
@@ -206,6 +209,7 @@ export async function postReviewMessage(input: {
 }
 
 export async function markThreadRead(reviewId: string, role: "coach" | "client") {
+  if (role === "client" && (await isViewingAsClient())) return;
   const col = role === "coach" ? "coach_last_read_at" : "client_last_read_at";
   await db.from("manual_check_in_reviews").update({ [col]: new Date().toISOString() }).eq("id", reviewId);
 }

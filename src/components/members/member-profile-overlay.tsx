@@ -1,11 +1,12 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { useOverlayMemberId, useCloseMemberProfile } from "@/lib/open-member-profile";
 
 // Lazy-load the workspace so it only ships when a member is opened.
-const MemberProfileWorkspace = lazy(async () => {
-  const mod = await import("@/routes/_authenticated/admin/members.$memberId");
+const MemberProfileWorkspace = lazyWithRetry(async () => {
+  const mod = await import("@/route-pages/_authenticated/admin/members.$memberId");
   return { default: mod.MemberProfileWorkspace };
 });
 

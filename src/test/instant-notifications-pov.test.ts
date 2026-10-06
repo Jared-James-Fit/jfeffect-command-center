@@ -25,7 +25,7 @@ describe("instant notification center", () => {
 });
 
 describe("messages client POV shortcuts", () => {
-  const messages = readFileSync("src/routes/_authenticated/admin/messages.tsx", "utf8");
+  const messages = readFileSync("src/route-pages/_authenticated/admin/messages.tsx", "utf8");
   const banner = readFileSync("src/components/client-pov-banner.tsx", "utf8");
   const picker = readFileSync("src/components/client-pov-quick-picker.tsx", "utf8");
 

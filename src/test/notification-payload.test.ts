@@ -5,6 +5,8 @@ import {
   notificationDeepLink,
   safeDisplayName,
   CATEGORY_BY_KIND,
+  coachLabel,
+  messageAction,
 } from "@/lib/push/notification-payload";
 import { groceryListKey, invalidateGroceryList } from "@/lib/grocery-query-keys";
 
@@ -24,7 +26,26 @@ describe("notification payload privacy", () => {
     expect(visible).not.toContain(UUID);
     expect(visible).not.toContain(secret);
     expect(visible).not.toMatch(/https?:\/\/|fcm|web\.push|endpoint|p256dh|auth=/i);
-    expect(n.body).toBe("You have a new message.");
+    expect(n.title).toBe("Your coach");
+    expect(n.body).toBe("Sent you a message.");
+  });
+
+  it("titles a 1:1 message with who sent it and says what kind of thing it is", () => {
+    const toCoach = buildNotificationPayload({
+      kind: "message", role: "admin", recipientUserId: "u", sourceId: "m",
+      displayName: "Jennifer Merrells",
+      attachments: [{ type: "image" }, { type: "image" }],
+    });
+    expect(toCoach.title).toBe("Jennifer Merrells");
+    expect(toCoach.body).toBe("Sent you 2 photos.");
+
+    const toClient = buildNotificationPayload({
+      kind: "message", role: "client", recipientUserId: "u", sourceId: "m",
+      displayName: coachLabel("Jared James"),
+      attachments: [{ type: "link", kind: "checkin_request" }],
+    });
+    expect(toClient.title).toBe("Coach Jared");
+    expect(toClient.body).toBe("Sent you a check-in.");
   });
 
   it("keeps group chat copy content-free but names sender and group", () => {
@@ -37,8 +58,8 @@ describe("notification payload privacy", () => {
       contextLabel: "Winter Shred",
       ids: { groupId: UUID },
     });
-    expect(n.title).toBe("Jared James · Winter Shred");
-    expect(n.body).toBe("New message in a group chat.");
+    expect(n.title).toBe("Winter Shred");
+    expect(n.body).toBe("Jared sent a message.");
     expect(n.url).toBe(`/admin/communication?tab=groups#group=${UUID}`);
   });
 
@@ -54,6 +75,27 @@ describe("notification payload privacy", () => {
     });
     expect(n.title.startsWith("Test · ")).toBe(true);
     expect(n.body).toMatch(/test notification/i);
+  });
+});
+
+describe("message action copy", () => {
+  it("describes what was sent from attachment kinds/types only", () => {
+    expect(messageAction([], true)).toBe("sent you a message");
+    expect(messageAction([{ type: "link" }], true)).toBe("sent you a message"); // auto-detected link in text
+    expect(messageAction([{ type: "video" }], false)).toBe("sent a video");
+    expect(messageAction([{ type: "image" }, { type: "video" }], true)).toBe("sent you 2 photos and videos");
+    expect(messageAction([{ type: "audio" }], true)).toBe("sent you a voice message");
+    expect(messageAction([{ type: "pdf" }], true)).toBe("sent you a file");
+    expect(messageAction([{ type: "link", kind: "checkin_submission" }], true)).toBe("submitted a check-in");
+    expect(messageAction([{ type: "link", kind: "signature_request" }], true)).toBe("sent you something to sign");
+    expect(messageAction([{ type: "link", kind: "recipe_share" }], false)).toBe("shared a recipe");
+    expect(messageAction([{ type: "image", kind: "gif" }], true)).toBe("sent you a GIF");
+  });
+
+  it("shows clients their coach by first name and never an id", () => {
+    expect(coachLabel("Jared James")).toBe("Coach Jared");
+    expect(coachLabel(UUID)).toBe("Your coach");
+    expect(coachLabel(null)).toBe("Your coach");
   });
 });
 
@@ -107,5 +149,24 @@ describe("grocery query keys", () => {
     expect(state(groceryListKey("c1", "2026-08-17")).isInvalidated).toBe(true);
     expect(state(groceryListKey("c2", "2026-08-17")).isInvalidated).toBe(false);
     expect(state(["nutrition-targets", "c1"]).isInvalidated).toBe(false);
+  });
+});
+
+describe("app event lockscreen copy", () => {
+  it("names the client in every coach-facing title and the coach in every client-facing body", async () => {
+    const { APP_EVENTS } = await import("@/lib/push/app-events.server");
+    for (const [event, spec] of Object.entries(APP_EVENTS)) {
+      if (spec.to === "staff") {
+        expect(spec.title("Jennifer Merrells"), event).toContain("Jennifer Merrells");
+      } else {
+        expect(spec.body("Coach Jared"), event).toContain("Coach Jared");
+        expect(spec.title("Coach Jared"), event).not.toBe("Coach Feedback"); // was ambiguous between check-ins and lifts
+      }
+      // Titles alone must say what this is, not just a name.
+      expect(spec.title("X").replace("X", "").trim().length, event).toBeGreaterThan(3);
+    }
+    expect(APP_EVENTS.checkin_submitted.title("Jennifer Merrells")).toBe("Check-in from Jennifer Merrells");
+    expect(APP_EVENTS.lift_reviewed.title("Coach Jared")).toBe("Lift feedback");
+    expect(APP_EVENTS.checkin_reviewed.title("Coach Jared")).toBe("Check-in reviewed");
   });
 });

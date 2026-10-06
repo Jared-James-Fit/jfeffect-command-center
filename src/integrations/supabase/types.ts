@@ -5447,6 +5447,7 @@ export type Database = {
           is_powerlifting: boolean
           legacy_youtube_url: string | null
           lift_family: string | null
+          movement_family: string | null
           muscle_group: string | null
           muscle_groups: string[]
           name: string
@@ -5501,6 +5502,7 @@ export type Database = {
           is_powerlifting?: boolean
           legacy_youtube_url?: string | null
           lift_family?: string | null
+          movement_family?: string | null
           muscle_group?: string | null
           muscle_groups?: string[]
           name: string
@@ -5555,6 +5557,7 @@ export type Database = {
           is_powerlifting?: boolean
           legacy_youtube_url?: string | null
           lift_family?: string | null
+          movement_family?: string | null
           muscle_group?: string | null
           muscle_groups?: string[]
           name?: string

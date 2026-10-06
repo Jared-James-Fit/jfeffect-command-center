@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
+import { displayExerciseName } from "@/lib/exercise-display-name";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -56,7 +58,7 @@ import {
 } from "@/components/ui/alert-dialog";
 // Lazy: this card pulls recharts (~120KB). Defer it so the main Workouts
 // view can render without waiting on the chart bundle.
-const TrainingAnalyticsPreviewCard = lazy(() =>
+const TrainingAnalyticsPreviewCard = lazyWithRetry(() =>
   import("@/components/training-analytics-preview-card").then((m) => ({
     default: m.TrainingAnalyticsPreviewCard,
   })),
@@ -1120,6 +1122,7 @@ function SelectedDayCard({
         recoveryToday: existingReview.recovery_today ?? null,
         sleepBucket: existingReview.sleep_bucket ?? null,
         sleepNotes: existingReview.sleep_notes ?? null,
+        reviewVersion: existingReview.review_version ?? null,
         editCount: existingReview.review_edit_count ?? 0,
         submittedAt:
           existingReview.review_submitted_at ?? existingReview.created_at ?? null,
@@ -1662,7 +1665,7 @@ function DayPreviewSheet({
         .limit(8);
       return (data ?? []).map((r: any) => ({
         id: r.id,
-        name: r.exercise_name_override || r.exercises?.name || "Exercise",
+        name: displayExerciseName(r),
       }));
     },
   });

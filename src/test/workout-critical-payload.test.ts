@@ -33,8 +33,8 @@ describe("workout critical payload contract", () => {
 
     expect(view).toContain("adapter.listRowResultsRaw(dayId, rowIds)");
     expect(adapter).toContain("async listRowResultsRaw(dayId: string, knownRowIds?: string[])");
-    expect(actions).toContain('lazy(() => import("./deferred-exercise-history-sheet"))');
-    expect(actions).toContain('lazy(() => import("./deferred-exercise-how-to-sheet"))');
+    expect(actions).toContain('lazyWithRetry(() => import("./deferred-exercise-history-sheet")');
+    expect(actions).toContain('lazyWithRetry(() => import("./deferred-exercise-how-to-sheet")');
     expect(actions).toContain('import("./QuickSwapButton")');
   });
 });

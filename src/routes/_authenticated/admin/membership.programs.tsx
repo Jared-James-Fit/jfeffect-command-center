@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MembershipLeaf } from "@/components/admin/membership-leaf";
-import { ProgramLibrary } from "./program-library";
+import { ProgramLibrary } from "@/route-pages/_authenticated/admin/program-library";
 
 export const Route = createFileRoute("/_authenticated/admin/membership/programs")({
   component: MembershipProgramsPage,

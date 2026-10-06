@@ -4,10 +4,10 @@ import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { SalesPageEditor } from "@/components/admin/sales-page-editor";
-import { PaymentLinksPage } from "./payment-links";
-import { DiscountCodesPage } from "./discount-codes";
-import { AdminTransactionsPage } from "./transactions";
-import { BillingSourcesPage } from "./billing-sources";
+import { PaymentLinksPage } from "@/route-pages/_authenticated/admin/payment-links";
+import { DiscountCodesPage } from "@/route-pages/_authenticated/admin/discount-codes";
+import { AdminTransactionsPage } from "@/route-pages/_authenticated/admin/transactions";
+import { BillingSourcesPage } from "@/route-pages/_authenticated/admin/billing-sources";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";

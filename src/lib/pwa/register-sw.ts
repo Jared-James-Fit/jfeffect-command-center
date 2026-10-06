@@ -17,6 +17,20 @@ export function subscribeSw(fn: () => void): () => void {
   listeners.add(fn);
   return () => { listeners.delete(fn); };
 }
+/**
+ * A lazy chunk could not be fetched even after a retry, which on a live site
+ * almost always means this running bundle is older than the deployment. The
+ * service worker never notices that (it only precaches icons), so surface the
+ * normal "Update" prompt instead of letting the UI fail. Skipped when offline,
+ * where a failed fetch says nothing about the build.
+ */
+export function flagUpdateAvailable() {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  if (status === "blocked" || status === "update-available") return;
+  status = "update-available";
+  notify();
+}
+
 export async function applyUpdate() {
   if (triggerUpdate) await triggerUpdate();
   else if (typeof window !== "undefined") window.location.reload();
@@ -114,6 +128,8 @@ export function registerServiceWorker() {
  */
 export async function clearAllAppCaches() {
   if (typeof window === "undefined") return;
+  // Signed chat-media URLs belong to the signed-in user.
+  void import("@/hooks/use-chat-signed-urls").then((m) => m.clearChatSignedUrls()).catch(() => {});
   try {
     if ("caches" in window) {
       const keys = await caches.keys();
