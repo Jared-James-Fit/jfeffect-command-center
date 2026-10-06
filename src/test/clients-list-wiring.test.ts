@@ -32,10 +32,7 @@ describe("statuses explain themselves on a tap", () => {
   it.each([
     "Coaching type",
     "Assigned coach",
-    "Last active",
-    "Last signed in",
     "Missed workouts",
-    "Last seen",
     "Block dates",
     "Time left in the block",
     "Block progress",
@@ -53,6 +50,23 @@ describe("statuses explain themselves on a tap", () => {
     expect(pill).toContain("<StatusTip");
     expect(pill).toContain("onAction()");
     expect(row).toMatch(/title=\{ended \? "Program has ended" : "No next block queued"\}/);
+  });
+
+  it("shows when they were last seen once, not twice, and the missed tag only when the status row can't", () => {
+    expect(row).toContain("const seen = lastSeenChip(r)");
+    expect(row).toContain("title={seen.title}");
+    // The old standalone line (and its own grid column) is gone.
+    expect(row).not.toContain('title="Last seen"');
+    expect(row).not.toContain("Never signed in");
+    expect(row).toContain("xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto]");
+    expect(row).not.toContain("_auto_auto]");
+    expect(row).toContain('badges.some((b) => b.id === "missed")');
+    expect(row).toContain("&& !missedShownAsBadge");
+  });
+
+  it("has no leftover filter-row code from before the new filters", () => {
+    expect(existsSync("src/components/clients/summary-cards.tsx")).toBe(false);
+    expect(read("src/components/clients/clients-status.ts")).not.toContain("TONE_CLASSES");
   });
 
   it("only lets admins send a reminder, and never to someone who can't receive it", () => {
@@ -90,6 +104,11 @@ describe("the filters reach the database", () => {
     expect(toolbar).toContain("<ActiveFilterSummary");
     expect(toolbar).toContain("<ClientFilterSheet");
     expect(toolbar).not.toContain("More Filters");
+  });
+
+  it("points admins at the bulk reminder when they filter by unsigned contract", () => {
+    expect(toolbar).toContain('isAdmin && flags.includes("no_contract")');
+    expect(toolbar).toContain('to="/admin/coaching-agreements"');
   });
 
   it("explains the filters it offers and says several mean all of them", () => {

@@ -70,18 +70,23 @@ export const FILTER_GROUPS: {
   { key: "account", label: "Account", keys: ["needs_setup", "new_clients"] },
 ];
 
-export const TONE_CLASSES: Record<string, { bg: string; text: string; ring: string; iconBg: string }> = {
-  neutral: { bg: "bg-card",           text: "text-foreground",       ring: "ring-border",           iconBg: "bg-muted text-muted-foreground" },
-  info:    { bg: "bg-card",           text: "text-foreground",       ring: "ring-blue-500/30",      iconBg: "bg-blue-500/15 text-blue-400" },
-  warn:    { bg: "bg-card",           text: "text-foreground",       ring: "ring-amber-500/30",     iconBg: "bg-amber-500/15 text-amber-400" },
-  danger:  { bg: "bg-card",           text: "text-foreground",       ring: "ring-destructive/40",   iconBg: "bg-destructive/15 text-destructive" },
-  ok:      { bg: "bg-card",           text: "text-foreground",       ring: "ring-emerald-500/30",   iconBg: "bg-emerald-500/15 text-emerald-400" },
-};
-
 /** Buttons a status can offer next to its explanation; the row decides how each one works. */
 export type ChipAction = "billing" | "profile" | "reviews" | "program" | "agreement" | "remind";
 
 export type BadgeDef = {
+  /** Stable name of the status, so code never has to match on the label text. */
+  id:
+    | "payment_issue"
+    | "needs_setup"
+    | "no_payment"
+    | "awaiting_payment"
+    | "review_due"
+    | "missed"
+    | "inactive"
+    | "program_ending"
+    | "new"
+    | "active"
+    | "contract";
   label: string;
   tone: "danger" | "warn" | "info" | "ok" | "muted";
   icon?: LucideIcon;
@@ -101,7 +106,7 @@ function owesContract(r: DirectoryRow): boolean {
 export function rowBadges(r: DirectoryRow): BadgeDef[] {
   const out: BadgeDef[] = [];
   if (r.f_payment_issue)
-    out.push({ label: "Payment Issue", tone: "danger", icon: CreditCard,
+    out.push({ id: "payment_issue", label: "Payment Issue", tone: "danger", icon: CreditCard,
       hint: "A payment failed or is overdue. Their access may be affected.",
       next: "Open their billing and fix it.", actions: ["billing"] });
   // Only surface "Needs Setup" when the account itself isn't activated yet
@@ -109,36 +114,36 @@ export function rowBadges(r: DirectoryRow): BadgeDef[] {
   // `preferred_training_days` would flag every client.
   const accountActivated = r.account_status === "Account Created" || r.account_status === "Active";
   if (r.f_needs_setup && !accountActivated)
-    out.push({ label: "Needs Setup", tone: "info", icon: UserRoundCog,
+    out.push({ id: "needs_setup", label: "Needs Setup", tone: "info", icon: UserRoundCog,
       hint: "They haven't signed in to their account yet. The invite or password reset is still pending.",
       next: "Open their profile and resend the invite.", actions: ["profile"] });
   if (r.payment_state === "not_set_up")
-    out.push({ label: "No Payment Set Up", tone: "danger", icon: Wallet,
+    out.push({ id: "no_payment", label: "No Payment Set Up", tone: "danger", icon: Wallet,
       hint: "No active subscription or paid purchase on file.",
       next: "Send a payment link, or mark them 'no payment needed' from the ⋯ menu.", actions: ["billing"] });
   if (r.payment_state === "pending")
-    out.push({ label: "Awaiting Payment", tone: "warn", icon: Clock,
+    out.push({ id: "awaiting_payment", label: "Awaiting Payment", tone: "warn", icon: Clock,
       hint: "A payment link was sent but hasn't been paid yet.",
       next: "Check their billing, or follow up with them.", actions: ["billing"] });
   if (r.f_needs_review)
-    out.push({ label: "Review Due", tone: "warn", icon: ClipboardCheck,
+    out.push({ id: "review_due", label: "Review Due", tone: "warn", icon: ClipboardCheck,
       hint: "They submitted a check-in that's waiting for your review.",
       next: "Open check-in reviews to respond.", actions: ["reviews"] });
   if (r.f_missed_workouts && r.missed_workouts_count > 0)
-    out.push({ label: `${r.missed_workouts_count} Missed`, tone: "warn", icon: XCircle,
+    out.push({ id: "missed", label: `${r.missed_workouts_count} Missed`, tone: "warn", icon: XCircle,
       hint: `${r.missed_workouts_count} scheduled workouts in the last 14 days weren't completed. Two or more is flagged.` });
   if (r.f_inactive)
-    out.push({ label: "Inactive", tone: "warn", icon: Clock,
+    out.push({ id: "inactive", label: "Inactive", tone: "warn", icon: Clock,
       hint: "They're on an active program but haven't opened the app in 7+ days." });
   if (r.f_program_ending)
-    out.push({ label: "Program Ending", tone: "warn", icon: CalendarClock,
+    out.push({ id: "program_ending", label: "Program Ending", tone: "warn", icon: CalendarClock,
       hint: "Their current training block ends within 14 days and no next block is queued.",
       next: "Build the next block so they don't run out.", actions: ["program"] });
   if (r.f_new_client && out.length < 2)
-    out.push({ label: "New", tone: "ok", icon: UserPlus, hint: "Joined in the last 7 days." });
+    out.push({ id: "new", label: "New", tone: "ok", icon: UserPlus, hint: "Joined in the last 7 days." });
   // "All good" would contradict an agreement that still needs signing.
   if (out.length === 0 && !owesContract(r))
-    out.push({ label: "Active", tone: "ok", icon: CheckCircle2,
+    out.push({ id: "active", label: "Active", tone: "ok", icon: CheckCircle2,
       hint: "All good: signed in, paid up, signed the agreement, and nothing needs your attention right now." });
   return out.slice(0, 4);
 }
@@ -161,6 +166,52 @@ const ago = (iso: string | null | undefined) => {
   }
 };
 
+const stamp = (iso: string) => {
+  try {
+    return format(parseISO(iso), "MMM d, yyyy h:mm a");
+  } catch {
+    return "a while ago";
+  }
+};
+
+export type SeenChip = {
+  label: string;
+  title: string;
+  body: string;
+  /** Amber after 7 days without opening the app, red after 14. */
+  tone: "danger" | "warn" | "muted";
+};
+
+/**
+ * The one "when did they last use the app" indicator on a card. It covers all three cases (last
+ * activity, only a sign-in, never signed in), so the card never repeats it.
+ */
+export function lastSeenChip(r: DirectoryRow): SeenChip {
+  if (r.last_active_at) {
+    const days = r.days_inactive ?? 0;
+    return {
+      label: `Last seen ${ago(r.last_active_at) ?? "a while ago"}`,
+      title: "Last seen",
+      body: `Last used the app ${stamp(r.last_active_at)}. Turns amber after 7 days and red after 14 days without activity.`,
+      tone: days >= 14 ? "danger" : days >= 7 ? "warn" : "muted",
+    };
+  }
+  if (r.last_login_at) {
+    return {
+      label: `Signed in ${ago(r.last_login_at) ?? "a while ago"}`,
+      title: "Last signed in",
+      body: `Last signed in ${stamp(r.last_login_at)}.`,
+      tone: "muted",
+    };
+  }
+  return {
+    label: "Never signed in",
+    title: "Never signed in",
+    body: "They haven't opened the app yet.",
+    tone: "muted",
+  };
+}
+
 /**
  * The Coaching Agreement status, shown on every client (signed or not). Null only when the row
  * has no agreement information at all (a database that predates it).
@@ -176,36 +227,36 @@ export function contractBadge(r: DirectoryRow): BadgeDef | null {
     case "signed": {
       const on = day(r.coaching_agreement_signed_at);
       const version = r.coaching_agreement_version;
-      return { label: "Contract Signed", tone: "ok", icon: FileCheck2,
+      return { id: "contract", label: "Contract Signed", tone: "ok", icon: FileCheck2,
         hint: `Signed the Coaching Agreement${version ? ` (version ${version})` : ""}${on ? ` on ${on}` : ""}. One signature covers everything they buy.`,
         next: "Open the Forms tab to see the signed copy.", actions: ["agreement"] };
     }
     case "never_signed":
-      return { label: "Contract Not Signed", tone: "danger", icon: FileSignature,
+      return { id: "contract", label: "Contract Not Signed", tone: "danger", icon: FileSignature,
         hint: `Hasn't signed the Coaching Agreement yet. They see it as a popup each time they open the app until they do.${remindedNote}`,
         next: remind, actions: ["remind", "agreement"] };
     case "admin_request": {
       const on = day(r.coaching_agreement_requested_at);
-      return { label: "Re-Sign Requested", tone: "warn", icon: FileClock,
+      return { id: "contract", label: "Re-Sign Requested", tone: "warn", icon: FileClock,
         hint: `They were asked to sign the Coaching Agreement again${on ? ` (${on})` : ""} and haven't yet. They see it each time they open the app.${remindedNote}`,
         next: remind, actions: ["remind", "agreement"] };
     }
     case "new_version": {
       const version = r.coaching_agreement_version;
-      return { label: "Needs New Version", tone: "warn", icon: FileClock,
+      return { id: "contract", label: "Needs New Version", tone: "warn", icon: FileClock,
         hint: `They signed an older Coaching Agreement${version ? ` (version ${version})` : ""}. They need to sign the updated one.${remindedNote}`,
         next: remind, actions: ["remind", "agreement"] };
     }
     case "exempt":
       return r.coaching_agreement_exempt_kind === "offline_signed"
-        ? { label: "Signed On Paper", tone: "muted", icon: FileCheck2,
+        ? { id: "contract", label: "Signed On Paper", tone: "muted", icon: FileCheck2,
             hint: "Marked as signed on paper, so the app won't ask them to sign.",
             next: "Open the Forms tab to change this.", actions: ["agreement"] }
-        : { label: "Contract Not Required", tone: "muted", icon: FileSignature,
+        : { id: "contract", label: "Contract Not Required", tone: "muted", icon: FileSignature,
             hint: "Marked as not needing to sign (staff, a test account, family), so the app won't ask them to.",
             next: "Open the Forms tab to change this.", actions: ["agreement"] };
     case "no_account":
-      return { label: "No App Account", tone: "muted", icon: Smartphone,
+      return { id: "contract", label: "No App Account", tone: "muted", icon: Smartphone,
         hint: "They haven't created their app account yet, so they can't sign the Coaching Agreement. They'll be asked as soon as they sign in.",
         next: "Send their invite from their profile.", actions: ["profile"] };
   }

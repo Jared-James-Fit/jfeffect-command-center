@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DirectoryCounts } from "@/lib/clients-directory.functions";
@@ -103,12 +103,15 @@ export function ActiveFilterSummary({
   loading,
   onToggle,
   onClear,
+  extra,
 }: {
   flags: DirectoryFilterKey[];
   total: number;
   loading: boolean;
   onToggle: (key: DirectoryFilterKey) => void;
   onClear: () => void;
+  /** One more line under the list, for a next step that suits the current filters. */
+  extra?: ReactNode;
 }) {
   if (flags.length === 0) return null;
   const heading =
@@ -153,6 +156,7 @@ export function ActiveFilterSummary({
           );
         })}
       </ul>
+      {extra}
     </div>
   );
 }
