@@ -18,6 +18,8 @@ import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { WorkoutArchiveDialog } from "./workout-archive-dialog";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { getClientMealPlanForCoach } from "@/lib/nutrition-targets/admin-meal-plan.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { downloadFullTrainingReportForClient } from "@/lib/workouts/download-full-training-report";
@@ -112,7 +114,7 @@ export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top">Quick actions</TooltipContent>
+        <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">Quick actions: assign a program, schedule a workout, send a payment link, download reports.</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel className="text-xs">Training Program</DropdownMenuLabel>
@@ -259,11 +261,25 @@ export function ClientMoreMenu({
   r,
   trigger,
   onArchive,
+  tip,
 }: {
   r: DirectoryRow;
   trigger: React.ReactNode;
   onArchive?: (r: DirectoryRow) => void;
+  /** Optional hover hint for the trigger (needs a surrounding TooltipProvider). */
+  tip?: string;
 }) {
+  const qc = useQueryClient();
+  const isExempt = r.payment_state === "exempt";
+  const setPaymentExempt = async (exempt: boolean) => {
+    const { error } = await (supabase as any)
+      .from("clients")
+      .update({ payment_status: exempt ? "Complimentary" : "Not Sent" })
+      .eq("id", r.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(exempt ? "Marked as no payment needed" : "Payment is required again");
+    qc.invalidateQueries({ queryKey: ["clients-directory"] });
+  };
   const [assignOpen, setAssignOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
@@ -272,7 +288,16 @@ export function ClientMoreMenu({
   return (
     <>
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      {tip ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">{tip}</TooltipContent>
+        </Tooltip>
+      ) : (
+        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      )}
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="text-xs">{r.full_name}</DropdownMenuLabel>
         <DropdownMenuItem asChild>
@@ -380,6 +405,12 @@ export function ClientMoreMenu({
             <CreditCard className="h-4 w-4" /> Manage Package
           </ClientNameLink>
         </DropdownMenuItem>
+        {(r.payment_state === "not_set_up" || r.payment_state === "pending" || isExempt) && (
+          <DropdownMenuItem onSelect={() => void setPaymentExempt(!isExempt)}>
+            <CreditCard className="mr-2 h-4 w-4" />
+            {isExempt ? "Require payment again" : "Mark: no payment needed"}
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Account</DropdownMenuLabel>

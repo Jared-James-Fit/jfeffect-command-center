@@ -450,7 +450,7 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
         </Card>
 
         <div className="text-xs text-muted-foreground">
-          Showing {filtered.length.toLocaleString()} of {data.length.toLocaleString()} rows from the live Stripe account plus pending JF Effect payment requests. Stripe-only rows stay visible even when they are not linked to a client purchase.
+          Showing {filtered.length.toLocaleString()} of {data.length.toLocaleString()} rows from the live Stripe account, payments recorded outside Stripe (e-transfer, cash), and pending JF Effect payment requests. Stripe-only rows stay visible even when they are not linked to a client purchase.
         </div>
       </div>
 

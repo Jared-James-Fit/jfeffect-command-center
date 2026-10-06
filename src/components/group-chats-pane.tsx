@@ -125,8 +125,19 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
         qc.invalidateQueries({ queryKey: ["chat-groups"] });
         qc.invalidateQueries({ queryKey: ["group-memberships"] });
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, () => {
-        qc.invalidateQueries({ queryKey: ["group-last-messages"] });
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, (payload: any) => {
+        const row = payload?.new;
+        if (payload?.eventType === "INSERT" && row?.group_id && row?.created_at) {
+          // The event carries the row: show the new preview/time now, no refetch.
+          qc.setQueriesData<Record<string, any>>({ queryKey: ["group-last-messages"] }, (prev) => {
+            if (!prev) return prev;
+            const cur = prev[row.group_id];
+            if (cur && new Date(cur.created_at).getTime() >= new Date(row.created_at).getTime()) return prev;
+            return { ...prev, [row.group_id]: { group_id: row.group_id, created_at: row.created_at, body: row.body, sender_id: row.sender_id } };
+          });
+        } else {
+          qc.invalidateQueries({ queryKey: ["group-last-messages"] });
+        }
         qc.invalidateQueries({ queryKey: ["group-unread"] });
       })
       .subscribe(onRealtimeRejoin(() => {

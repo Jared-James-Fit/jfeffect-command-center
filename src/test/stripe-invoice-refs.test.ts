@@ -4,6 +4,8 @@ import {
   invoicePaymentIntentId,
   invoiceChargeId,
   invoiceTaxMinor,
+  invoiceIdByPaymentRef,
+  invoicePaymentRecordId,
 } from "@/lib/stripe-invoice-refs";
 
 describe("stripe invoice refs", () => {
@@ -49,5 +51,36 @@ describe("stripe invoice refs", () => {
 
   it("sums itemised taxes", () => {
     expect(invoiceTaxMinor({ total_taxes: [{ amount: 500 }, { amount: 250 }] })).toBe(750);
+  });
+
+  it("indexes invoices by their payment refs (charges have no invoice field)", () => {
+    const idx = invoiceIdByPaymentRef([
+      { id: "in_1", payments: { data: [{ payment: { payment_intent: "pi_1" } }] } },
+      { id: "in_2", payments: { data: [{ payment: { payment_intent: "pi_2", charge: "ch_2" } }] } },
+      { id: "in_3" },
+      null,
+    ]);
+    expect(idx.get("pi:pi_1")).toBe("in_1");
+    expect(idx.get("pi:pi_2")).toBe("in_2");
+    expect(idx.get("charge:ch_2")).toBe("in_2");
+    expect(idx.size).toBe(3);
+  });
+
+  it("ignores cancelled attempts and reads payment records (invoice paid outside Stripe)", () => {
+    // Shape of Colten's e-transfer invoice: a record payment plus an abandoned card attempt.
+    const inv = {
+      id: "in_colten",
+      payments: {
+        data: [
+          { status: "paid", payment: { type: "payment_record", payment_record: "pr_1" } },
+          { status: "canceled", payment: { type: "payment_intent", payment_intent: "pi_abandoned" } },
+        ],
+      },
+    };
+    expect(invoicePaymentIntentId(inv)).toBeNull();
+    expect(invoiceChargeId(inv)).toBeNull();
+    expect(invoicePaymentRecordId(inv)).toBe("pr_1");
+    expect(invoiceIdByPaymentRef([inv]).size).toBe(0);
+    expect(invoicePaymentRecordId({ payments: { data: [{ status: "paid", payment: { type: "payment_intent", payment_intent: "pi_1" } }] } })).toBeNull();
   });
 });

@@ -25,7 +25,6 @@ function AdminLayout() {
     pathname.startsWith("/admin/membership") ||
     pathname.startsWith("/admin/members") ||
     pathname.startsWith("/admin/member-plans") ||
-    pathname.startsWith("/admin/member-resources") ||
     pathname === "/admin/sales/membership" ||
     pathname === "/admin/legal" ||
     (pathname === "/admin/communication" && search?.tab === "support-inbox");

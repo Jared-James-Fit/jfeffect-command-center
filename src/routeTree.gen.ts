@@ -51,7 +51,6 @@ import { Route as SignupJfRouteImport } from './routes/signup.jf'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as AuthenticatedAdminAccountRouteImport } from './routes/_authenticated/admin/account'
 import { Route as AuthenticatedAdminAppointmentsRouteImport } from './routes/_authenticated/admin/appointments'
-import { Route as AuthenticatedAdminApprovalsRouteImport } from './routes/_authenticated/admin/approvals'
 import { Route as AuthenticatedAdminAppsRouteImport } from './routes/_authenticated/admin/apps'
 import { Route as AuthenticatedAdminArchivesRouteImport } from './routes/_authenticated/admin/archives'
 import { Route as AuthenticatedAdminAthleteRecordsRouteImport } from './routes/_authenticated/admin/athlete-records'
@@ -85,7 +84,6 @@ import { Route as AuthenticatedAdminLegacyMigrationRouteImport } from './routes/
 import { Route as AuthenticatedAdminLegalRouteImport } from './routes/_authenticated/admin/legal'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
 import { Route as AuthenticatedAdminMediaArchivesRouteImport } from './routes/_authenticated/admin/media-archives'
-import { Route as AuthenticatedAdminMediaReviewRouteImport } from './routes/_authenticated/admin/media-review'
 import { Route as AuthenticatedAdminMembershipRouteImport } from './routes/_authenticated/admin/membership'
 import { Route as AuthenticatedAdminMembershipLibraryRouteImport } from './routes/_authenticated/admin/membership-library'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin/messages'
@@ -173,9 +171,6 @@ import { Route as AuthenticatedAdminEventsFormatGuideRouteImport } from './route
 import { Route as AuthenticatedAdminMemberPlansIndexRouteImport } from './routes/_authenticated/admin/member-plans.index'
 import { Route as AuthenticatedAdminMemberPlansPlanIdRouteImport } from './routes/_authenticated/admin/member-plans.$planId'
 import { Route as AuthenticatedAdminMemberPlansNewRouteImport } from './routes/_authenticated/admin/member-plans.new'
-import { Route as AuthenticatedAdminMemberResourcesIndexRouteImport } from './routes/_authenticated/admin/member-resources.index'
-import { Route as AuthenticatedAdminMemberResourcesResourceIdRouteImport } from './routes/_authenticated/admin/member-resources.$resourceId'
-import { Route as AuthenticatedAdminMemberResourcesNewRouteImport } from './routes/_authenticated/admin/member-resources.new'
 import { Route as AuthenticatedAdminMembersIndexRouteImport } from './routes/_authenticated/admin/members.index'
 import { Route as AuthenticatedAdminMembersMemberIdRouteImport } from './routes/_authenticated/admin/members.$memberId'
 import { Route as AuthenticatedAdminMembersNewRouteImport } from './routes/_authenticated/admin/members.new'
@@ -477,12 +472,6 @@ const AuthenticatedAdminAppointmentsRoute =
     path: '/appointments',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
-const AuthenticatedAdminApprovalsRoute =
-  AuthenticatedAdminApprovalsRouteImport.update({
-    id: '/approvals',
-    path: '/approvals',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
 const AuthenticatedAdminAppsRoute = AuthenticatedAdminAppsRouteImport.update({
   id: '/apps',
   path: '/apps',
@@ -675,12 +664,6 @@ const AuthenticatedAdminMediaArchivesRoute =
   AuthenticatedAdminMediaArchivesRouteImport.update({
     id: '/media-archives',
     path: '/media-archives',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminMediaReviewRoute =
-  AuthenticatedAdminMediaReviewRouteImport.update({
-    id: '/media-review',
-    path: '/media-review',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminMembershipRoute =
@@ -1185,24 +1168,6 @@ const AuthenticatedAdminMemberPlansNewRoute =
   AuthenticatedAdminMemberPlansNewRouteImport.update({
     id: '/member-plans/new',
     path: '/member-plans/new',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminMemberResourcesIndexRoute =
-  AuthenticatedAdminMemberResourcesIndexRouteImport.update({
-    id: '/member-resources/',
-    path: '/member-resources/',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminMemberResourcesResourceIdRoute =
-  AuthenticatedAdminMemberResourcesResourceIdRouteImport.update({
-    id: '/member-resources/$resourceId',
-    path: '/member-resources/$resourceId',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminMemberResourcesNewRoute =
-  AuthenticatedAdminMemberResourcesNewRouteImport.update({
-    id: '/member-resources/new',
-    path: '/member-resources/new',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminMembersIndexRoute =
@@ -1762,7 +1727,6 @@ export interface FileRoutesByFullPath {
   '/coaching/': typeof CoachingIndexRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
-  '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/athlete-records': typeof AuthenticatedAdminAthleteRecordsRoute
@@ -1796,7 +1760,6 @@ export interface FileRoutesByFullPath {
   '/admin/legal': typeof AuthenticatedAdminLegalRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
-  '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/admin/membership-library': typeof AuthenticatedAdminMembershipLibraryRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
@@ -1878,8 +1841,6 @@ export interface FileRoutesByFullPath {
   '/admin/events/format-guide': typeof AuthenticatedAdminEventsFormatGuideRoute
   '/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
-  '/admin/member-resources/$resourceId': typeof AuthenticatedAdminMemberResourcesResourceIdRoute
-  '/admin/member-resources/new': typeof AuthenticatedAdminMemberResourcesNewRoute
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
@@ -1953,7 +1914,6 @@ export interface FileRoutesByFullPath {
   '/admin/crm/': typeof AuthenticatedAdminCrmIndexRoute
   '/admin/events/': typeof AuthenticatedAdminEventsIndexRoute
   '/admin/member-plans/': typeof AuthenticatedAdminMemberPlansIndexRoute
-  '/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
   '/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
@@ -2013,7 +1973,6 @@ export interface FileRoutesByTo {
   '/coaching': typeof CoachingIndexRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
-  '/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/admin/athlete-records': typeof AuthenticatedAdminAthleteRecordsRoute
@@ -2047,7 +2006,6 @@ export interface FileRoutesByTo {
   '/admin/legal': typeof AuthenticatedAdminLegalRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
-  '/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/admin/membership-library': typeof AuthenticatedAdminMembershipLibraryRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/native-forms': typeof AuthenticatedAdminNativeFormsRoute
@@ -2128,8 +2086,6 @@ export interface FileRoutesByTo {
   '/admin/events/format-guide': typeof AuthenticatedAdminEventsFormatGuideRoute
   '/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
-  '/admin/member-resources/$resourceId': typeof AuthenticatedAdminMemberResourcesResourceIdRoute
-  '/admin/member-resources/new': typeof AuthenticatedAdminMemberResourcesNewRoute
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
@@ -2203,7 +2159,6 @@ export interface FileRoutesByTo {
   '/admin/crm': typeof AuthenticatedAdminCrmIndexRoute
   '/admin/events': typeof AuthenticatedAdminEventsIndexRoute
   '/admin/member-plans': typeof AuthenticatedAdminMemberPlansIndexRoute
-  '/admin/member-resources': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/admin/members': typeof AuthenticatedAdminMembersIndexRoute
   '/admin/membership': typeof AuthenticatedAdminMembershipIndexRoute
   '/admin/products-history': typeof AuthenticatedAdminProductsHistoryIndexRoute
@@ -2268,7 +2223,6 @@ export interface FileRoutesById {
   '/coaching/': typeof CoachingIndexRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
-  '/_authenticated/admin/approvals': typeof AuthenticatedAdminApprovalsRoute
   '/_authenticated/admin/apps': typeof AuthenticatedAdminAppsRoute
   '/_authenticated/admin/archives': typeof AuthenticatedAdminArchivesRoute
   '/_authenticated/admin/athlete-records': typeof AuthenticatedAdminAthleteRecordsRoute
@@ -2302,7 +2256,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/legal': typeof AuthenticatedAdminLegalRoute
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
   '/_authenticated/admin/media-archives': typeof AuthenticatedAdminMediaArchivesRoute
-  '/_authenticated/admin/media-review': typeof AuthenticatedAdminMediaReviewRoute
   '/_authenticated/admin/membership': typeof AuthenticatedAdminMembershipRouteWithChildren
   '/_authenticated/admin/membership-library': typeof AuthenticatedAdminMembershipLibraryRoute
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
@@ -2384,8 +2337,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/events/format-guide': typeof AuthenticatedAdminEventsFormatGuideRoute
   '/_authenticated/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/_authenticated/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
-  '/_authenticated/admin/member-resources/$resourceId': typeof AuthenticatedAdminMemberResourcesResourceIdRoute
-  '/_authenticated/admin/member-resources/new': typeof AuthenticatedAdminMemberResourcesNewRoute
   '/_authenticated/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
   '/_authenticated/admin/members/new': typeof AuthenticatedAdminMembersNewRoute
   '/_authenticated/admin/membership/access-checklist': typeof AuthenticatedAdminMembershipAccessChecklistRoute
@@ -2459,7 +2410,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/crm/': typeof AuthenticatedAdminCrmIndexRoute
   '/_authenticated/admin/events/': typeof AuthenticatedAdminEventsIndexRoute
   '/_authenticated/admin/member-plans/': typeof AuthenticatedAdminMemberPlansIndexRoute
-  '/_authenticated/admin/member-resources/': typeof AuthenticatedAdminMemberResourcesIndexRoute
   '/_authenticated/admin/members/': typeof AuthenticatedAdminMembersIndexRoute
   '/_authenticated/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
   '/_authenticated/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
@@ -2524,7 +2474,6 @@ export interface FileRouteTypes {
     | '/coaching/'
     | '/admin/account'
     | '/admin/appointments'
-    | '/admin/approvals'
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/athlete-records'
@@ -2558,7 +2507,6 @@ export interface FileRouteTypes {
     | '/admin/legal'
     | '/admin/lift-videos'
     | '/admin/media-archives'
-    | '/admin/media-review'
     | '/admin/membership'
     | '/admin/membership-library'
     | '/admin/messages'
@@ -2640,8 +2588,6 @@ export interface FileRouteTypes {
     | '/admin/events/format-guide'
     | '/admin/member-plans/$planId'
     | '/admin/member-plans/new'
-    | '/admin/member-resources/$resourceId'
-    | '/admin/member-resources/new'
     | '/admin/members/$memberId'
     | '/admin/members/new'
     | '/admin/membership/access-checklist'
@@ -2715,7 +2661,6 @@ export interface FileRouteTypes {
     | '/admin/crm/'
     | '/admin/events/'
     | '/admin/member-plans/'
-    | '/admin/member-resources/'
     | '/admin/members/'
     | '/admin/membership/'
     | '/admin/products-history/'
@@ -2775,7 +2720,6 @@ export interface FileRouteTypes {
     | '/coaching'
     | '/admin/account'
     | '/admin/appointments'
-    | '/admin/approvals'
     | '/admin/apps'
     | '/admin/archives'
     | '/admin/athlete-records'
@@ -2809,7 +2753,6 @@ export interface FileRouteTypes {
     | '/admin/legal'
     | '/admin/lift-videos'
     | '/admin/media-archives'
-    | '/admin/media-review'
     | '/admin/membership-library'
     | '/admin/messages'
     | '/admin/native-forms'
@@ -2890,8 +2833,6 @@ export interface FileRouteTypes {
     | '/admin/events/format-guide'
     | '/admin/member-plans/$planId'
     | '/admin/member-plans/new'
-    | '/admin/member-resources/$resourceId'
-    | '/admin/member-resources/new'
     | '/admin/members/$memberId'
     | '/admin/members/new'
     | '/admin/membership/access-checklist'
@@ -2965,7 +2906,6 @@ export interface FileRouteTypes {
     | '/admin/crm'
     | '/admin/events'
     | '/admin/member-plans'
-    | '/admin/member-resources'
     | '/admin/members'
     | '/admin/membership'
     | '/admin/products-history'
@@ -3029,7 +2969,6 @@ export interface FileRouteTypes {
     | '/coaching/'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
-    | '/_authenticated/admin/approvals'
     | '/_authenticated/admin/apps'
     | '/_authenticated/admin/archives'
     | '/_authenticated/admin/athlete-records'
@@ -3063,7 +3002,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/legal'
     | '/_authenticated/admin/lift-videos'
     | '/_authenticated/admin/media-archives'
-    | '/_authenticated/admin/media-review'
     | '/_authenticated/admin/membership'
     | '/_authenticated/admin/membership-library'
     | '/_authenticated/admin/messages'
@@ -3145,8 +3083,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/events/format-guide'
     | '/_authenticated/admin/member-plans/$planId'
     | '/_authenticated/admin/member-plans/new'
-    | '/_authenticated/admin/member-resources/$resourceId'
-    | '/_authenticated/admin/member-resources/new'
     | '/_authenticated/admin/members/$memberId'
     | '/_authenticated/admin/members/new'
     | '/_authenticated/admin/membership/access-checklist'
@@ -3220,7 +3156,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/crm/'
     | '/_authenticated/admin/events/'
     | '/_authenticated/admin/member-plans/'
-    | '/_authenticated/admin/member-resources/'
     | '/_authenticated/admin/members/'
     | '/_authenticated/admin/membership/'
     | '/_authenticated/admin/products-history/'
@@ -3598,13 +3533,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAppointmentsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
-    '/_authenticated/admin/approvals': {
-      id: '/_authenticated/admin/approvals'
-      path: '/approvals'
-      fullPath: '/admin/approvals'
-      preLoaderRoute: typeof AuthenticatedAdminApprovalsRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
     '/_authenticated/admin/apps': {
       id: '/_authenticated/admin/apps'
       path: '/apps'
@@ -3834,13 +3762,6 @@ declare module '@tanstack/react-router' {
       path: '/media-archives'
       fullPath: '/admin/media-archives'
       preLoaderRoute: typeof AuthenticatedAdminMediaArchivesRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/media-review': {
-      id: '/_authenticated/admin/media-review'
-      path: '/media-review'
-      fullPath: '/admin/media-review'
-      preLoaderRoute: typeof AuthenticatedAdminMediaReviewRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/membership': {
@@ -4450,27 +4371,6 @@ declare module '@tanstack/react-router' {
       path: '/member-plans/new'
       fullPath: '/admin/member-plans/new'
       preLoaderRoute: typeof AuthenticatedAdminMemberPlansNewRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/member-resources/': {
-      id: '/_authenticated/admin/member-resources/'
-      path: '/member-resources'
-      fullPath: '/admin/member-resources/'
-      preLoaderRoute: typeof AuthenticatedAdminMemberResourcesIndexRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/member-resources/$resourceId': {
-      id: '/_authenticated/admin/member-resources/$resourceId'
-      path: '/member-resources/$resourceId'
-      fullPath: '/admin/member-resources/$resourceId'
-      preLoaderRoute: typeof AuthenticatedAdminMemberResourcesResourceIdRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/member-resources/new': {
-      id: '/_authenticated/admin/member-resources/new'
-      path: '/member-resources/new'
-      fullPath: '/admin/member-resources/new'
-      preLoaderRoute: typeof AuthenticatedAdminMemberResourcesNewRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/members/': {
@@ -5239,7 +5139,6 @@ const AuthenticatedAdminClientsIdRouteWithChildren =
 interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAccountRoute: typeof AuthenticatedAdminAccountRoute
   AuthenticatedAdminAppointmentsRoute: typeof AuthenticatedAdminAppointmentsRoute
-  AuthenticatedAdminApprovalsRoute: typeof AuthenticatedAdminApprovalsRoute
   AuthenticatedAdminAppsRoute: typeof AuthenticatedAdminAppsRoute
   AuthenticatedAdminArchivesRoute: typeof AuthenticatedAdminArchivesRoute
   AuthenticatedAdminAthleteRecordsRoute: typeof AuthenticatedAdminAthleteRecordsRoute
@@ -5273,7 +5172,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminLegalRoute: typeof AuthenticatedAdminLegalRoute
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
   AuthenticatedAdminMediaArchivesRoute: typeof AuthenticatedAdminMediaArchivesRoute
-  AuthenticatedAdminMediaReviewRoute: typeof AuthenticatedAdminMediaReviewRoute
   AuthenticatedAdminMembershipRoute: typeof AuthenticatedAdminMembershipRouteWithChildren
   AuthenticatedAdminMembershipLibraryRoute: typeof AuthenticatedAdminMembershipLibraryRoute
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
@@ -5318,8 +5216,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminEventsFormatGuideRoute: typeof AuthenticatedAdminEventsFormatGuideRoute
   AuthenticatedAdminMemberPlansPlanIdRoute: typeof AuthenticatedAdminMemberPlansPlanIdRoute
   AuthenticatedAdminMemberPlansNewRoute: typeof AuthenticatedAdminMemberPlansNewRoute
-  AuthenticatedAdminMemberResourcesResourceIdRoute: typeof AuthenticatedAdminMemberResourcesResourceIdRoute
-  AuthenticatedAdminMemberResourcesNewRoute: typeof AuthenticatedAdminMemberResourcesNewRoute
   AuthenticatedAdminMembersMemberIdRoute: typeof AuthenticatedAdminMembersMemberIdRoute
   AuthenticatedAdminMembersNewRoute: typeof AuthenticatedAdminMembersNewRoute
   AuthenticatedAdminProductsHistoryOfferIdRoute: typeof AuthenticatedAdminProductsHistoryOfferIdRoute
@@ -5337,7 +5233,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCrmIndexRoute: typeof AuthenticatedAdminCrmIndexRoute
   AuthenticatedAdminEventsIndexRoute: typeof AuthenticatedAdminEventsIndexRoute
   AuthenticatedAdminMemberPlansIndexRoute: typeof AuthenticatedAdminMemberPlansIndexRoute
-  AuthenticatedAdminMemberResourcesIndexRoute: typeof AuthenticatedAdminMemberResourcesIndexRoute
   AuthenticatedAdminMembersIndexRoute: typeof AuthenticatedAdminMembersIndexRoute
   AuthenticatedAdminProductsHistoryIndexRoute: typeof AuthenticatedAdminProductsHistoryIndexRoute
   AuthenticatedAdminSalesIndexRoute: typeof AuthenticatedAdminSalesIndexRoute
@@ -5352,7 +5247,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
   {
     AuthenticatedAdminAccountRoute: AuthenticatedAdminAccountRoute,
     AuthenticatedAdminAppointmentsRoute: AuthenticatedAdminAppointmentsRoute,
-    AuthenticatedAdminApprovalsRoute: AuthenticatedAdminApprovalsRoute,
     AuthenticatedAdminAppsRoute: AuthenticatedAdminAppsRoute,
     AuthenticatedAdminArchivesRoute: AuthenticatedAdminArchivesRoute,
     AuthenticatedAdminAthleteRecordsRoute:
@@ -5395,7 +5289,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminLegalRoute: AuthenticatedAdminLegalRoute,
     AuthenticatedAdminLiftVideosRoute: AuthenticatedAdminLiftVideosRoute,
     AuthenticatedAdminMediaArchivesRoute: AuthenticatedAdminMediaArchivesRoute,
-    AuthenticatedAdminMediaReviewRoute: AuthenticatedAdminMediaReviewRoute,
     AuthenticatedAdminMembershipRoute:
       AuthenticatedAdminMembershipRouteWithChildren,
     AuthenticatedAdminMembershipLibraryRoute:
@@ -5459,10 +5352,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminMemberPlansPlanIdRoute,
     AuthenticatedAdminMemberPlansNewRoute:
       AuthenticatedAdminMemberPlansNewRoute,
-    AuthenticatedAdminMemberResourcesResourceIdRoute:
-      AuthenticatedAdminMemberResourcesResourceIdRoute,
-    AuthenticatedAdminMemberResourcesNewRoute:
-      AuthenticatedAdminMemberResourcesNewRoute,
     AuthenticatedAdminMembersMemberIdRoute:
       AuthenticatedAdminMembersMemberIdRoute,
     AuthenticatedAdminMembersNewRoute: AuthenticatedAdminMembersNewRoute,
@@ -5489,8 +5378,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminEventsIndexRoute: AuthenticatedAdminEventsIndexRoute,
     AuthenticatedAdminMemberPlansIndexRoute:
       AuthenticatedAdminMemberPlansIndexRoute,
-    AuthenticatedAdminMemberResourcesIndexRoute:
-      AuthenticatedAdminMemberResourcesIndexRoute,
     AuthenticatedAdminMembersIndexRoute: AuthenticatedAdminMembersIndexRoute,
     AuthenticatedAdminProductsHistoryIndexRoute:
       AuthenticatedAdminProductsHistoryIndexRoute,

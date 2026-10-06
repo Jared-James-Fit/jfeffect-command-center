@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isViewingAsClient } from "@/lib/pov-guard";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -83,11 +84,14 @@ export function CheckInReviewThread({ review, viewerRole, autoMarkRead = true, c
     if (!autoMarkRead) return;
     markThreadRead(review.id, viewerRole).catch(() => {});
     if (viewerRole === "client" && !review.read_at) {
-      // also legacy read_at so existing dot/badge clears
-      (supabase.from("manual_check_in_reviews") as any)
-        .update({ read_at: new Date().toISOString() })
-        .eq("id", review.id)
-        .then(() => {});
+      // also legacy read_at so existing dot/badge clears (never while a coach is viewing as the client)
+      void isViewingAsClient().then((pov) => {
+        if (pov) return;
+        (supabase.from("manual_check_in_reviews") as any)
+          .update({ read_at: new Date().toISOString() })
+          .eq("id", review.id)
+          .then(() => {});
+      });
     }
   }, [review.id, viewerRole, autoMarkRead, messages.length]);
 

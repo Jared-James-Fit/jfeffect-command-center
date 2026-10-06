@@ -1,4 +1,4 @@
-import React, { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -62,6 +62,9 @@ import { playUiSound } from "@/lib/ui-sounds";
 import { haptic } from "@/platform/haptics";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
+import { useChatSignedUrls } from "@/hooks/use-chat-signed-urls";
+import { useViewingAsClient } from "@/lib/client-impersonation";
+import { belongsInInbox, resolveOptimistic, upsertRow } from "@/lib/inbox-cache";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { ChatVideoTile } from "@/components/chat-video-tile";
@@ -145,58 +148,48 @@ function uploadAttachment(
 
 /* ------------------------------- Signed URLs ------------------------------- */
 
-// Batch signed-URL resolver. One createSignedUrls() call for all attachment
-// paths in the visible thread, cached shorter than the signed URL TTL. Prevents per-attachment
-// waterfalls that made media pop in slowly.
+// Signed URLs come from the shared cache (src/hooks/use-chat-signed-urls.ts):
+// signed once per path, one batched call for whatever is missing, and the same
+// URL string for the life of the path, so media never reloads when other
+// messages arrive.
 const EMPTY_URL_RECORD: Record<string, string> = {};
 
-function useSignedUrls(paths: string[]) {
-  const sorted = useMemo(() => {
-    const uniq = Array.from(new Set(paths.filter(Boolean)));
-    uniq.sort();
-    return uniq;
-  }, [paths]);
-  const key = sorted.join("|");
-  const q = useQuery<Record<string, string>>({
-    queryKey: ["msg-attach-batch", key],
-    enabled: sorted.length > 0,
-    staleTime: 1000 * 60 * 50,
-    gcTime: 1000 * 60 * 55,
-    queryFn: async () => {
-      const { data, error } = await supabase.storage
-        .from("message-attachments")
-        .createSignedUrls(sorted, 3600);
-      if (error) throw error;
-      const record: Record<string, string> = {};
-      for (const item of data ?? []) {
-        if (item?.path && item.signedUrl) record[item.path] = item.signedUrl;
-      }
-      return record;
-    },
-  });
-  return q.data ?? EMPTY_URL_RECORD;
-}
-
-const SignedUrlContext = createContext<Record<string, string>>(EMPTY_URL_RECORD);
+const SignedUrlContext = createContext<{ urls: Record<string, string>; pending: boolean }>({
+  urls: EMPTY_URL_RECORD,
+  pending: false,
+});
 
 function useSignedUrlFor(path?: string): string | undefined {
-  const record = useContext(SignedUrlContext);
-  return path ? record[path] : undefined;
+  return useContext(SignedUrlContext).urls[path ?? ""];
 }
 
 /* ------------------------------- Attachment Renderers ------------------------------- */
 
 function ImageAttachment({ att, messageId }: { att: MessageAttachment; messageId?: string }) {
   const signed = useSignedUrlFor(att.storage_path);
-  return <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} />;
+  const { pending } = useContext(SignedUrlContext);
+  // While the shared batch is in flight, don't let every image sign itself too.
+  return <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} deferSign={!signed && pending} />;
 }
 
 function VideoAttachment({ att }: { att: MessageAttachment }) {
   const signed = useSignedUrlFor(att.storage_path);
+  const poster = useSignedUrlFor(att.thumbnail_storage_path);
   const src = att.storage_path ? signed : att.url;
-  if (!src) return null;
-  // Tap opens it full screen and plays (also for local, still-uploading previews).
-  return <ChatVideoTile src={src} cacheKey={att.storage_path} name={att.name} />;
+  // One tap plays it full screen. The tile shows (and reserves room for) the poster
+  // immediately, even while the video's own link is still being signed.
+  return (
+    <ChatVideoTile
+      src={src}
+      poster={poster}
+      expectPoster={!!att.thumbnail_storage_path}
+      width={att.width}
+      height={att.height}
+      duration={att.duration}
+      cacheKey={att.storage_path}
+      name={att.name}
+    />
+  );
 }
 
 function fakePeaks(n = 40, seed = 1) {
@@ -766,6 +759,10 @@ export function MessageThread({
   peerAvatarPath?: string | null;
 }) {
   const { user, role: appRole } = useAuth();
+  // A coach viewing as this client: look, but leave no trace (no read receipts,
+  // no "online", no typing, no auto-created check-ins).
+  const viewingAsClient = useViewingAsClient();
+  const povClient = role === "client" && viewingAsClient;
   // Admins (not coaches) can silently delete any message in the chat.
   const isAdmin = role === "admin" && appRole === "admin";
   const qc = useQueryClient();
@@ -850,7 +847,7 @@ export function MessageThread({
   // Recurring check-ins arrive as real chat requests instead of Home-page
   // form cards. Client opens are an idempotent safety trigger for due reminders.
   useEffect(() => {
-    if (role !== "client" || !clientId) return;
+    if (role !== "client" || !clientId || povClient) return;
     void ensureCheckinsFn({ data: { clientId } })
       .then((res) => {
         if (res?.created) {
@@ -858,7 +855,7 @@ export function MessageThread({
         }
       })
       .catch(() => {});
-  }, [role, clientId, ensureCheckinsFn, qc]);
+  }, [role, clientId, ensureCheckinsFn, qc, povClient]);
 
   const { data: messages = [], isPending: messagesPending } = useQuery(threadMessagesQuery(clientId, role));
 
@@ -949,6 +946,7 @@ export function MessageThread({
       if (!atts?.length) continue;
       for (const a of atts) {
         if (a?.storage_path) out.push(a.storage_path);
+        if (a?.thumbnail_storage_path) out.push(a.thumbnail_storage_path);
       }
     }
     // Replies to media whose original isn't loaded still show a thumbnail.
@@ -962,7 +960,8 @@ export function MessageThread({
     }
     return out;
   }, [allMessages, replySources]);
-  const signedUrlMap = useSignedUrls(attachmentPaths);
+  const signedUrls = useChatSignedUrls(attachmentPaths);
+  const signedUrlMap = signedUrls.urls;
 
   const loadOlder = async () => {
     if (loadingOlder) return;
@@ -1206,6 +1205,7 @@ export function MessageThread({
   }, [clientId, user?.id, role]);
 
   const broadcastTyping = (stopped = false) => {
+    if (povClient) return;
     const ch = typingChannelRef.current;
     if (!ch || !user?.id) return;
     const now = Date.now();
@@ -1226,7 +1226,7 @@ export function MessageThread({
   // Read receipts must reflect a person actually looking at this thread, so
   // a thread mounted in a hidden/backgrounded tab waits until it is visible.
   useEffect(() => {
-    if (!clientId || !latestMessageId) return;
+    if (!clientId || !latestMessageId || povClient) return;
     let cancelled = false;
     const run = () => {
       void markRead(clientId, role).then(() => {
@@ -1249,60 +1249,52 @@ export function MessageThread({
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
-  }, [clientId, role, qc, latestMessageId]);
+  }, [clientId, role, qc, latestMessageId, povClient]);
 
-  // Track whether the initial scroll has fired for this clientId.
-  // On initial open: scroll instantly to bottom (no animation = no glitch).
-  // On new message: only scroll if already near the bottom (within 200px).
+  // Bottom-pinning, done without visible jumps:
+  //  - the first scroll to the latest message runs in a layout effect, i.e.
+  //    before the browser paints, so the thread never flashes at the top first;
+  //  - `pinnedRef` tracks whether the reader is at the bottom; while they are,
+  //    anything that makes the thread taller (an image or video poster loading,
+  //    a reaction appearing, the keyboard opening) keeps them there, and the
+  //    moment they scroll up we stop touching their position.
   const initialScrollDoneRef = React.useRef<string | null>(null);
+  const pinnedRef = useRef(true);
+  const onThreadScroll = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el || !messages.length) return;
-
-    const isInitialLoad = initialScrollDoneRef.current !== clientId;
-
-    if (isInitialLoad) {
-      // Initial open: scroll to bottom immediately and keep pinned for 1.5s
-      // so images loading in don't leave the user stuck mid-thread.
-      el.scrollTop = el.scrollHeight;
+    if (initialScrollDoneRef.current !== clientId) {
       initialScrollDoneRef.current = clientId ?? null;
-      // Keep pinning for 1.5s to catch late-loading images/attachments
-      const pin = () => { el.scrollTop = el.scrollHeight; };
-      const t1 = setTimeout(pin, 100);
-      const t2 = setTimeout(pin, 300);
-      const t3 = setTimeout(pin, 600);
-      const t4 = setTimeout(pin, 1000);
-      const t5 = setTimeout(pin, 1500);
-      return () => {
-        clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
-        clearTimeout(t4); clearTimeout(t5);
-      };
-    } else {
-      // New message arrived: only auto-scroll if user is near the bottom.
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distance < 200) {
-        let r1 = 0, r2 = 0;
-        r1 = requestAnimationFrame(() => {
-          r2 = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
-        });
-        return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
-      }
+      pinnedRef.current = true;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+    // New message: follow it only if the reader was already at the bottom.
+    if (pinnedRef.current || el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+      el.scrollTop = el.scrollHeight;
+      pinnedRef.current = true;
     }
   }, [messages.length, clientId]);
 
-  useEffect(() => {
+  // Watch the thread's content (not just the scroller's own box) so late-loading
+  // media can't push the latest message out of view.
+  const contentCount = allMessages.length;
+  useLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
-      // Only auto-pin when the user is already near the bottom so we don't
-      // yank them away while they're reading older messages.
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distance < 120) el.scrollTop = el.scrollHeight;
+      if (pinnedRef.current) el.scrollTop = el.scrollHeight;
     });
     ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
     return () => ro.disconnect();
-  }, [clientId]);
+  }, [clientId, contentCount]);
 
   const visibleMessages = useMemo(() => {
     const base = role === "admin"
@@ -1651,6 +1643,11 @@ export function MessageThread({
       ...(drafts.length ? { local_upload_ids: drafts.map((d) => d.id) } : {}),
     } as Message;
     qc.setQueryData<Message[]>(key, (prev) => [...(prev ?? []), optimistic]);
+    // Coach side: the inbox row (preview, time, order) reflects this send at once.
+    const patchInbox = (fn: (prev: Message[] | undefined) => Message[] | undefined) => {
+      if (role === "admin") qc.setQueryData<Message[] | undefined>(["last-messages"], fn);
+    };
+    if (belongsInInbox(optimistic)) patchInbox((prev) => (prev ? upsertRow(prev, optimistic) : prev));
     setBody("");
     setAttachments([]);
     setReplyingTo(null);
@@ -1668,6 +1665,7 @@ export function MessageThread({
       } catch (e: any) {
         drafts.forEach((d) => d.abort());
         qc.setQueryData<Message[]>(key, (prev) => (prev ?? []).filter((m) => m.id !== tempId));
+        patchInbox((prev) => resolveOptimistic(prev, tempId, null));
         drafts.forEach(releaseDraft);
         // Nothing was sent: put the caption back so the coach can re-attach and retry.
         if (text) setBody((b) => b || text);
@@ -1698,6 +1696,7 @@ export function MessageThread({
         replyPreview,
       });
       playAppSound("sent");
+      patchInbox((prev) => resolveOptimistic(prev, tempId, sent));
       // Swap the optimistic row for the persisted row (dedupe if realtime
       // already delivered it via INSERT).
       qc.setQueryData<Message[]>(key, (prev) => {
@@ -1711,6 +1710,7 @@ export function MessageThread({
       releaseDrafts();
       return sent;
     } catch (e: any) {
+      patchInbox((prev) => resolveOptimistic(prev, tempId, null));
       // Mark the optimistic bubble as failed so the user can see it didn't send.
       qc.setQueryData<Message[]>(key, (prev) =>
         (prev ?? []).map((m) => m.id === tempId
@@ -1734,7 +1734,7 @@ export function MessageThread({
     : "text-muted-foreground";
 
   return (
-    <SignedUrlContext.Provider value={signedUrlMap}>
+    <SignedUrlContext.Provider value={signedUrls}>
     <div className={cn(
       "flex flex-col",
       fullBleed
@@ -1750,6 +1750,7 @@ export function MessageThread({
           "flex-1 min-h-0 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch]",
           fullBleed ? "px-3 py-4 sm:px-6" : "p-3 sm:p-4",
         )}
+        onScroll={onThreadScroll}
         onTouchStart={onSwipeTouchStart}
         onTouchMove={onSwipeTouchMove}
         onTouchEnd={onSwipeTouchEnd}

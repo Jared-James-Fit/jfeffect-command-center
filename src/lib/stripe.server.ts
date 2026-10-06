@@ -77,3 +77,50 @@ export async function stripeFetch(
   if (!res.ok) throw new Error(json?.error?.message || `Stripe error (${res.status})`);
   return json;
 }
+
+/**
+ * Latest charge id for a PaymentIntent. Best-effort: returns null on any error.
+ */
+export async function latestChargeForPaymentIntent(
+  paymentIntentId: string,
+  apiKey?: string,
+): Promise<string | null> {
+  try {
+    const pi: any = await stripeFetch(`/payment_intents/${encodeURIComponent(paymentIntentId)}`, { apiKey });
+    const c = pi?.latest_charge;
+    return typeof c === "string" ? c : c?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the PaymentIntent and charge behind a paid invoice.
+ *
+ * Newer Stripe API versions leave both off the Invoice object (and off
+ * webhook payloads); they live in the expandable `payments` list. Without them
+ * the ledger row cannot be tied back to the Stripe charge. Best-effort:
+ * returns nulls on any error so callers never fail a payment over it.
+ */
+export async function resolveInvoicePaymentRefs(
+  invoiceId: string,
+  apiKey?: string,
+): Promise<{ paymentIntent: string | null; charge: string | null }> {
+  try {
+    const inv: any = await stripeFetch(`/invoices/${encodeURIComponent(invoiceId)}?expand[]=payments`, { apiKey });
+    let paymentIntent: string | null = null;
+    let charge: string | null = null;
+    for (const p of (inv?.payments?.data ?? []) as any[]) {
+      // Skip cancelled/open attempts; only the settled payment counts.
+      if (p?.status !== undefined && p.status !== "paid") continue;
+      const pi = p?.payment?.payment_intent;
+      const ch = p?.payment?.charge;
+      paymentIntent ??= typeof pi === "string" ? pi : pi?.id ?? null;
+      charge ??= typeof ch === "string" ? ch : ch?.id ?? null;
+    }
+    if (paymentIntent && !charge) charge = await latestChargeForPaymentIntent(paymentIntent, apiKey);
+    return { paymentIntent, charge };
+  } catch {
+    return { paymentIntent: null, charge: null };
+  }
+}
