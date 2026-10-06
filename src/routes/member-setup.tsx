@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { redeemSetupToken } from "@/lib/members.functions";
+import { PASSWORD_RULES, passwordIsValid } from "@/lib/account-recovery.constants";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -38,7 +39,7 @@ function MemberSetupPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password) return toast.error("Please enter a password");
+    if (!passwordIsValid(password)) return toast.error(`Use at least ${PASSWORD_RULES.minLength} characters`);
     if (password !== confirm) return toast.error("Passwords don't match");
     setBusy(true);
     try {

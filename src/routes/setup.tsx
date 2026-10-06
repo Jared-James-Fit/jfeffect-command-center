@@ -14,6 +14,8 @@ import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
 import { FileSignature } from "lucide-react";
 import { getAgreementSigningContext } from "@/lib/coaching-agreement.functions";
+import { PASSWORD_RULES, passwordIsValid } from "@/lib/account-recovery.constants";
+import { opensOnContinue, readAuthLinkSearch, supabasePreconnectLinks } from "@/lib/auth-link-page";
 
 // The signing flow carries the full agreement text, so it only loads when this step is reached.
 const AgreementSignFlow = lazyWithRetry(() =>
@@ -23,15 +25,22 @@ const AgreementSignFlow = lazyWithRetry(() =>
 );
 
 export const Route = createFileRoute("/setup")({
-  head: () => ({ meta: [{ title: "Set up your account — JF Effect" }] }),
+  validateSearch: readAuthLinkSearch,
+  head: () => ({ meta: [{ title: "Set up your account — JF Effect" }], links: supabasePreconnectLinks() }),
   component: SetupPage,
 });
 
 function SetupPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
+  // A link with its token opens straight on Continue, rendered by the server, instead of
+  // a "Verifying your link…" placeholder that stays up while the app loads.
   const [phase, setPhase] = useState<
     "loading" | "confirm" | "ready" | "agreement" | "social" | "expired" | "done"
-  >("loading");
+  >(opensOnContinue(search) ? "confirm" : "loading");
+  // Continue only works once the app has started; until then the button says so.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const [verifying, setVerifying] = useState(false);
   const [email, setEmail] = useState<string>("");
   const [fullName, setFullName] = useState<string>("");
@@ -69,13 +78,16 @@ function SetupPage() {
         return;
       }
 
-      // Clear any other account's session before exchanging the token.
-      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-
       if (tokenHash) {
+        // Clear any other account's session; verifyTokenHash does it again right before
+        // the exchange, so the Continue screen doesn't wait on it.
+        void supabase.auth.signOut({ scope: "local" }).catch(() => {});
         if (!cancelled) setPhase("confirm");
         return;
       }
+
+      // Clear any other account's session before the hash exchange installs the new one.
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
 
       const sub = supabase.auth.onAuthStateChange((_event, session) => {
         if (cancelled) return;
@@ -117,7 +129,7 @@ function SetupPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password) return toast.error("Please enter a password");
+    if (!passwordIsValid(password)) return toast.error(`Use at least ${PASSWORD_RULES.minLength} characters`);
     if (password !== confirm) return toast.error("Passwords don't match");
     // SECURITY: confirm we're operating on the user we verified, not some
     // pre-existing session.
@@ -198,10 +210,10 @@ function SetupPage() {
           </p>
           <Button
             onClick={verifyTokenHash}
-            disabled={verifying}
+            disabled={verifying || !hydrated}
             className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
           >
-            {verifying ? "Verifying…" : "Continue setup"}
+            {!hydrated ? "Loading…" : verifying ? "Verifying…" : "Continue setup"}
           </Button>
         </div>
       )}
@@ -237,7 +249,7 @@ function SetupPage() {
             </div>
             <div>
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Create password</Label>
-              <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="Pick any password" />
+              <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder={`At least ${PASSWORD_RULES.minLength} characters`} autoComplete="new-password" />
             </div>
             <div>
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Confirm password</Label>

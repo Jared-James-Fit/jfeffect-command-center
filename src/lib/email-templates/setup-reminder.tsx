@@ -58,6 +58,7 @@ const SetupReminderEmail = (p: SetupReminderProps) => {
               <Section style={ctaSection}>
                 <Button style={button} href={setupUrl}>Set up my account</Button>
               </Section>
+              <Text style={textTight}>The page can take a few seconds to open, so give it a moment.</Text>
               {/* Gmail disables buttons in anything it files under Spam; the text link can still be copied. */}
               <Text style={textTight}>Button not working? Copy this link into your browser:</Text>
               <Text style={text}><Link href={setupUrl} style={link}>{setupUrl}</Link></Text>

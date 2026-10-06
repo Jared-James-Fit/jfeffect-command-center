@@ -8,22 +8,30 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Check, X } from "lucide-react";
-import { validatePassword, passwordIsValid } from "@/lib/account-recovery.constants";
+import { PASSWORD_RULES, validatePassword, passwordIsValid } from "@/lib/account-recovery.constants";
+import { opensOnContinue, readAuthLinkSearch, supabasePreconnectLinks } from "@/lib/auth-link-page";
 import {
   consumeRecoveryToken,
   validateRecoveryToken,
 } from "@/lib/account-recovery.functions";
 
 export const Route = createFileRoute("/reset-password")({
-  head: () => ({ meta: [{ title: "Reset password — JF Effect" }] }),
+  validateSearch: readAuthLinkSearch,
+  head: () => ({ meta: [{ title: "Reset password — JF Effect" }], links: supabasePreconnectLinks() }),
   component: ResetPage,
 });
 
 function ResetPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
+  // A link with its token opens straight on Continue, rendered by the server, instead of
+  // a "Verifying your link…" placeholder that stays up while the app loads.
   const [phase, setPhase] = useState<
     "loading" | "confirm" | "ready" | "expired" | "done"
-  >("loading");
+  >(opensOnContinue(search) ? "confirm" : "loading");
+  // Continue only works once the app has started; until then the button says so.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const [verifying, setVerifying] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -52,6 +60,14 @@ function ResetPage() {
         // No valid recovery token in the URL — do not allow password change.
         await supabase.auth.signOut({ scope: "local" }).catch(() => {});
         if (!cancelled) setPhase("expired");
+        return;
+      }
+
+      if (hasQueryToken && !rt) {
+        // Clear any other session; verifyTokenHash does it again right before the
+        // exchange, so the Continue screen doesn't wait on it.
+        void supabase.auth.signOut({ scope: "local" }).catch(() => {});
+        if (!cancelled) setPhase("confirm");
         return;
       }
 
@@ -91,8 +107,10 @@ function ResetPage() {
           setPhase("ready");
         }
       });
+      // Read the current phase, not the one captured at mount, or a link that already
+      // opened the password form gets flipped to "expired" after 4 seconds.
       setTimeout(() => {
-        if (!cancelled && phase === "loading") setPhase("expired");
+        if (!cancelled) setPhase((p) => (p === "loading" ? "expired" : p));
       }, 4000);
       return () => sub.data.subscription.unsubscribe();
     })();
@@ -118,7 +136,7 @@ function ResetPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordIsValid(password)) {
-      return toast.error("Password does not meet all requirements");
+      return toast.error(`Use at least ${PASSWORD_RULES.minLength} characters`);
     }
     if (password !== confirm) return toast.error("Passwords don't match");
 
@@ -166,7 +184,7 @@ function ResetPage() {
   };
 
   const rules = validatePassword(password);
-  const allOk = rules.length && rules.upper && rules.lower && rules.digit && rules.special;
+  const allOk = rules.length;
   const matches = password.length > 0 && password === confirm;
 
   return (
@@ -186,10 +204,10 @@ function ResetPage() {
                 <p className="text-sm text-muted-foreground">Tap continue to verify your link.</p>
                 <Button
                   onClick={verifyTokenHash}
-                  disabled={verifying}
+                  disabled={verifying || !hydrated}
                   className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
                 >
-                  {verifying ? "Verifying…" : "Continue"}
+                  {!hydrated ? "Loading…" : verifying ? "Verifying…" : "Continue"}
                 </Button>
               </div>
             )}
@@ -211,7 +229,7 @@ function ResetPage() {
                 <div className="text-center">
                   <h2 className="text-xl font-black tracking-tight">Create a New Password</h2>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Pick something strong — at least 10 characters with a mix of letters, numbers and symbols.
+                    At least {PASSWORD_RULES.minLength} characters. That's the only rule.
                   </p>
                 </div>
                 <form onSubmit={submit} className="mt-6 w-full space-y-4">
@@ -240,11 +258,7 @@ function ResetPage() {
                   </div>
                   <ul className="space-y-1 rounded-md border border-border/60 bg-muted/30 p-3 text-[11px]">
                     {[
-                      { ok: rules.length, label: "At least 10 characters" },
-                      { ok: rules.upper, label: "One uppercase letter" },
-                      { ok: rules.lower, label: "One lowercase letter" },
-                      { ok: rules.digit, label: "One number" },
-                      { ok: rules.special, label: "One special character" },
+                      { ok: rules.length, label: `At least ${PASSWORD_RULES.minLength} characters` },
                     ].map((r) => (
                       <li key={r.label} className="flex items-center gap-2">
                         {r.ok ? (

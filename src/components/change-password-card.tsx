@@ -60,7 +60,7 @@ export function ChangePasswordCard({ className }: { className?: string }) {
           <Input type={pwd.showNext ? "text" : "password"} value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} required autoComplete="new-password" />
         </div>
         <div className="md:col-span-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] text-muted-foreground">Minimum 8 characters. Use a mix of letters and numbers. You'll stay signed in after the change.</p>
+          <p className="text-[11px] text-muted-foreground">At least 8 characters. You'll stay signed in after the change.</p>
           <ActionButton
             type="submit"
             onAction={submit}

@@ -12,6 +12,7 @@ import {
   recoverySmsBody,
   confirmationSmsBody,
   passwordIsValid,
+  PASSWORD_RULES,
   maskEmail,
   maskPhone,
   normalizePhoneE164,
@@ -403,13 +404,13 @@ export const consumeRecoveryToken = createServerFn({ method: "POST" })
     z
       .object({
         token: z.string().min(10).max(200),
-        newPassword: z.string().min(10).max(256),
+        newPassword: z.string().min(PASSWORD_RULES.minLength).max(256),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
     if (!passwordIsValid(data.newPassword)) {
-      throw new Error("Password does not meet the requirements.");
+      throw new Error(`Use at least ${PASSWORD_RULES.minLength} characters.`);
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const ip = getClientIp();

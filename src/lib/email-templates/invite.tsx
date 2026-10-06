@@ -40,6 +40,9 @@ export const InviteEmail = ({
           Set up my account
         </Button>
         <Text style={small}>
+          The page can take a few seconds to open, so give it a moment.
+        </Text>
+        <Text style={small}>
           Button not working? Copy this link into your browser:
           <br />
           <Link href={confirmationUrl} style={link}>

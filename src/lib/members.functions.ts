@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 import { smsNotSentReason } from "@/lib/setup-message";
+import { PASSWORD_RULES } from "@/lib/account-recovery.constants";
 
 function genToken(len = 32) {
   const arr = new Uint8Array(len);
@@ -389,7 +390,7 @@ export const updateMyMarketingPrefs = createServerFn({ method: "POST" })
 
 const RedeemInput = z.object({
   token: z.string().min(20).max(128),
-  password: z.string().min(1).max(72),
+  password: z.string().min(PASSWORD_RULES.minLength, `Use at least ${PASSWORD_RULES.minLength} characters`).max(72),
 });
 
 export const redeemSetupToken = createServerFn({ method: "POST" })

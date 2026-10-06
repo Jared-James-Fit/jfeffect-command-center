@@ -23,28 +23,20 @@ export function confirmationSmsBody() {
   return `JF Effect: Your password was just changed. If this wasn't you, contact support immediately.`;
 }
 
-// Password rules
+// Password rule: one simple requirement, the same on every screen that sets a password
+// (client setup, member setup, password reset, membership sign-up).
 export const PASSWORD_RULES = {
-  minLength: 10,
-  upper: /[A-Z]/,
-  lower: /[a-z]/,
-  digit: /[0-9]/,
-  special: /[^A-Za-z0-9]/,
+  minLength: 8,
 };
 
 export function validatePassword(pw: string) {
   return {
     length: pw.length >= PASSWORD_RULES.minLength,
-    upper: PASSWORD_RULES.upper.test(pw),
-    lower: PASSWORD_RULES.lower.test(pw),
-    digit: PASSWORD_RULES.digit.test(pw),
-    special: PASSWORD_RULES.special.test(pw),
   };
 }
 
 export function passwordIsValid(pw: string) {
-  const v = validatePassword(pw);
-  return v.length && v.upper && v.lower && v.digit && v.special;
+  return validatePassword(pw).length;
 }
 
 export function maskEmail(email: string | null | undefined): string {
