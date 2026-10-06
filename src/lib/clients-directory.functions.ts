@@ -5,6 +5,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  DIRECTORY_FILTER_KEYS,
+  emptyCounts,
+  type DirectoryCounts,
+} from "@/lib/clients-directory-filters";
+import type { ExemptKind, RosterStatus } from "@/lib/coaching-agreement/rules";
+
+export type { DirectoryCounts };
 
 export type DirectoryNextAction = {
   kind:
@@ -67,18 +75,18 @@ export type DirectoryRow = {
   days_inactive: number | null;
   f_missed_workouts: boolean;
   f_inactive: boolean;
-};
-
-export type DirectoryCounts = {
-  all: number;
-  needs_setup: number;
-  needs_review: number;
-  program_ending: number;
-  payment_issues: number;
-  no_payment: number;
-  new_clients: number;
-  missed_workouts: number;
-  inactive: number;
+  /**
+   * Coaching Agreement status, decided in the database exactly as the admin Agreements roster
+   * decides it. Optional so a row from a database that predates it simply shows no chip.
+   */
+  coaching_agreement_status?: RosterStatus | null;
+  coaching_agreement_signed_at?: string | null;
+  coaching_agreement_version?: string | null;
+  coaching_agreement_requested_at?: string | null;
+  coaching_agreement_exempt_kind?: ExemptKind | null;
+  coaching_agreement_reminded_at?: string | null;
+  /** Hasn't signed (or must sign again) and isn't exempt. */
+  f_no_contract?: boolean;
 };
 
 export type DirectoryResult = {
@@ -89,20 +97,12 @@ export type DirectoryResult = {
 
 const InputSchema = z.object({
   search: z.string().optional().default(""),
-  status: z
-    .enum([
-      "all",
-      "needs_setup",
-      "needs_review",
-      "program_ending",
-      "payment_issues",
-      "no_payment",
-      "new_clients",
-      "missed_workouts",
-      "inactive",
-    ])
+  // Every filter a client must match (all of them, not any).
+  flags: z
+    .array(z.enum(DIRECTORY_FILTER_KEYS))
+    .max(DIRECTORY_FILTER_KEYS.length)
     .optional()
-    .default("all"),
+    .default([]),
   coachingType: z.string().optional().default("all"),
   coachId: z.string().uuid().optional().nullable(),
   sort: z
@@ -126,13 +126,13 @@ export const listClientsDirectoryFn = createServerFn({ method: "POST" })
       "admin_clients_directory",
       {
         p_search: data.search || null,
-        p_status: data.status,
         p_coaching_type: data.coachingType,
         p_coach_id: data.coachId ?? null,
         p_sort: data.sort,
         p_limit: data.size,
         p_offset: offset,
         p_lifecycle: data.lifecycle,
+        p_flags: data.flags,
       } as any,
     );
     if (error) throw new Error(error.message);
@@ -140,16 +140,7 @@ export const listClientsDirectoryFn = createServerFn({ method: "POST" })
     return {
       rows: (payload.rows ?? []) as DirectoryRow[],
       total: Number(payload.total ?? 0),
-      counts: (payload.counts ?? {
-        all: 0,
-        needs_setup: 0,
-        needs_review: 0,
-        program_ending: 0,
-        payment_issues: 0,
-        no_payment: 0,
-        new_clients: 0,
-        missed_workouts: 0,
-        inactive: 0,
-      }) as DirectoryCounts,
+      // Fill every key, so a database that predates a filter shows 0 rather than blank.
+      counts: { ...emptyCounts(), ...((payload.counts ?? {}) as Partial<DirectoryCounts>) },
     };
   });
