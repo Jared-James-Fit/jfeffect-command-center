@@ -21,7 +21,7 @@ import img98 from "@/assets/transformations/98.png.asset.json";
 import img102 from "@/assets/transformations/102.png.asset.json";
 import img108 from "@/assets/transformations/108.png.asset.json";
 
-const PHOTOS = [
+export const TRANSFORMATION_PHOTOS = [
   img1, img2, img15, img16, img18, img21, img22, img23, img26, img31,
   img35, img38, img42, img44, img48, img53, img71, img98, img102, img108,
 ];
@@ -60,7 +60,7 @@ export function TransformationsStrip({
 
         {/* Mobile-first: 2-col grid, 3-col on sm, 4-col on lg. Lazy-loaded, fixed aspect to prevent CLS. */}
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
-          {PHOTOS.map((p, idx) => (
+          {TRANSFORMATION_PHOTOS.map((p, idx) => (
             <img
               key={idx}
               src={p.url}
