@@ -25,7 +25,7 @@ export type LiftStorageUploadArgs = {
   file: File;
   userId: string;
   /** Defaults to the existing lift-videos bucket; message attachments opt in explicitly. */
-  bucket?: "lift-videos" | "message-attachments" | "progress-media";
+  bucket?: "lift-videos" | "message-attachments" | "progress-media" | "community-media";
   /** Preserve callers' established storage paths when they already own path generation. */
   path?: string;
   onProgress?: (pct: number) => void;

@@ -17,8 +17,9 @@ const Input = z.object({
     "lift_reviewed",
     "checkin_reviewed",
     "nutrition_targets_updated",
+    "community_coach_recognition",
   ]),
-  /** Record id (submission / video / comment / review), or client id for targets. */
+  /** Record id (submission / video / comment / review / community post), or client id for targets. */
   id: z.string().uuid(),
 });
 
@@ -80,6 +81,20 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
           .eq("id", data.id).maybeSingle();
         if (!r || r.coach_user_id !== userId || r.notify_client === false) return { skipped: true };
         clientId = r.client_id;
+        break;
+      }
+      case "community_coach_recognition": {
+        // Staff only, on a post that is actually shared, and only if this
+        // person really reacted or commented on it (the caller just names the post).
+        if (!(await isStaff())) return { skipped: true };
+        const { data: p } = await db.from("community_posts").select("client_id, visibility, author_user_id").eq("id", data.id).maybeSingle();
+        if (!p || p.visibility !== "community" || p.author_user_id === userId) return { skipped: true };
+        const [{ count: reacted }, { count: commented }] = await Promise.all([
+          db.from("community_reactions").select("post_id", { count: "exact", head: true }).eq("post_id", data.id).eq("user_id", userId),
+          db.from("community_comments").select("id", { count: "exact", head: true }).eq("post_id", data.id).eq("author_user_id", userId),
+        ]);
+        if (!reacted && !commented) return { skipped: true };
+        clientId = p.client_id;
         break;
       }
       case "nutrition_targets_updated": {

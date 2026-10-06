@@ -2789,6 +2789,9 @@ function WorkoutDay({
           athleteName={(client as any)?.full_name ?? null}
           displayUnit={summaryDisplayUnit}
           cardio={cardioTakeaway}
+          // Sharing is the athlete's own choice: not offered on membership
+          // workouts, and never from a coach's "View as client" session.
+          completionId={isClientWorkout && !isImpersonating && completion?.completed_at ? completion.id ?? null : null}
           sessionRating={
             lastSessionRating ??
             (completion as any)?.session_rating ??

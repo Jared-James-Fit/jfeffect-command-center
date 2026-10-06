@@ -72,6 +72,7 @@ import { Route as AuthenticatedAdminClientPovRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminCoachingRouteImport } from './routes/_authenticated/admin/coaching'
 import { Route as AuthenticatedAdminCoachingAgreementsRouteImport } from './routes/_authenticated/admin/coaching-agreements'
 import { Route as AuthenticatedAdminCommunicationRouteImport } from './routes/_authenticated/admin/communication'
+import { Route as AuthenticatedAdminCommunityRouteImport } from './routes/_authenticated/admin/community'
 import { Route as AuthenticatedAdminContentRouteImport } from './routes/_authenticated/admin/content'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminDiscountCodesRouteImport } from './routes/_authenticated/admin/discount-codes'
@@ -138,6 +139,7 @@ import { Route as AuthenticatedPortalAppointmentsRouteImport } from './routes/_a
 import { Route as AuthenticatedPortalCalendarRouteImport } from './routes/_authenticated/portal/calendar'
 import { Route as AuthenticatedPortalCheckInRouteImport } from './routes/_authenticated/portal/check-in'
 import { Route as AuthenticatedPortalCheckInsRouteImport } from './routes/_authenticated/portal/check-ins'
+import { Route as AuthenticatedPortalCommunityRouteImport } from './routes/_authenticated/portal/community'
 import { Route as AuthenticatedPortalEventsRouteImport } from './routes/_authenticated/portal/events'
 import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_authenticated/portal/exercises'
 import { Route as AuthenticatedPortalGoalsSetupRouteImport } from './routes/_authenticated/portal/goals-setup'
@@ -600,6 +602,12 @@ const AuthenticatedAdminCommunicationRoute =
     path: '/communication',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminCommunityRoute =
+  AuthenticatedAdminCommunityRouteImport.update({
+    id: '/community',
+    path: '/community',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminContentRoute =
   AuthenticatedAdminContentRouteImport.update({
     id: '/content',
@@ -976,6 +984,12 @@ const AuthenticatedPortalCheckInsRoute =
   AuthenticatedPortalCheckInsRouteImport.update({
     id: '/check-ins',
     path: '/check-ins',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalCommunityRoute =
+  AuthenticatedPortalCommunityRouteImport.update({
+    id: '/community',
+    path: '/community',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalEventsRoute =
@@ -1775,6 +1789,7 @@ export interface FileRoutesByFullPath {
   '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
+  '/admin/community': typeof AuthenticatedAdminCommunityRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
@@ -1839,6 +1854,7 @@ export interface FileRoutesByFullPath {
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
+  '/portal/community': typeof AuthenticatedPortalCommunityRoute
   '/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
@@ -2025,6 +2041,7 @@ export interface FileRoutesByTo {
   '/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
+  '/admin/community': typeof AuthenticatedAdminCommunityRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
@@ -2088,6 +2105,7 @@ export interface FileRoutesByTo {
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
+  '/portal/community': typeof AuthenticatedPortalCommunityRoute
   '/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
@@ -2279,6 +2297,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/coaching': typeof AuthenticatedAdminCoachingRoute
   '/_authenticated/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/_authenticated/admin/communication': typeof AuthenticatedAdminCommunicationRoute
+  '/_authenticated/admin/community': typeof AuthenticatedAdminCommunityRoute
   '/_authenticated/admin/content': typeof AuthenticatedAdminContentRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
@@ -2343,6 +2362,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
   '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
+  '/_authenticated/portal/community': typeof AuthenticatedPortalCommunityRoute
   '/_authenticated/portal/events': typeof AuthenticatedPortalEventsRouteWithChildren
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/_authenticated/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
@@ -2534,6 +2554,7 @@ export interface FileRouteTypes {
     | '/admin/coaching'
     | '/admin/coaching-agreements'
     | '/admin/communication'
+    | '/admin/community'
     | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/discount-codes'
@@ -2598,6 +2619,7 @@ export interface FileRouteTypes {
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/check-ins'
+    | '/portal/community'
     | '/portal/events'
     | '/portal/exercises'
     | '/portal/goals-setup'
@@ -2784,6 +2806,7 @@ export interface FileRouteTypes {
     | '/admin/coaching'
     | '/admin/coaching-agreements'
     | '/admin/communication'
+    | '/admin/community'
     | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/discount-codes'
@@ -2847,6 +2870,7 @@ export interface FileRouteTypes {
     | '/portal/calendar'
     | '/portal/check-in'
     | '/portal/check-ins'
+    | '/portal/community'
     | '/portal/events'
     | '/portal/exercises'
     | '/portal/goals-setup'
@@ -3037,6 +3061,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/coaching'
     | '/_authenticated/admin/coaching-agreements'
     | '/_authenticated/admin/communication'
+    | '/_authenticated/admin/community'
     | '/_authenticated/admin/content'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/discount-codes'
@@ -3101,6 +3126,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/calendar'
     | '/_authenticated/portal/check-in'
     | '/_authenticated/portal/check-ins'
+    | '/_authenticated/portal/community'
     | '/_authenticated/portal/events'
     | '/_authenticated/portal/exercises'
     | '/_authenticated/portal/goals-setup'
@@ -3734,6 +3760,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCommunicationRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/community': {
+      id: '/_authenticated/admin/community'
+      path: '/community'
+      fullPath: '/admin/community'
+      preLoaderRoute: typeof AuthenticatedAdminCommunityRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/content': {
       id: '/_authenticated/admin/content'
       path: '/content'
@@ -4194,6 +4227,13 @@ declare module '@tanstack/react-router' {
       path: '/check-ins'
       fullPath: '/portal/check-ins'
       preLoaderRoute: typeof AuthenticatedPortalCheckInsRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/community': {
+      id: '/_authenticated/portal/community'
+      path: '/community'
+      fullPath: '/portal/community'
+      preLoaderRoute: typeof AuthenticatedPortalCommunityRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/events': {
@@ -5241,6 +5281,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCoachingRoute: typeof AuthenticatedAdminCoachingRoute
   AuthenticatedAdminCoachingAgreementsRoute: typeof AuthenticatedAdminCoachingAgreementsRoute
   AuthenticatedAdminCommunicationRoute: typeof AuthenticatedAdminCommunicationRoute
+  AuthenticatedAdminCommunityRoute: typeof AuthenticatedAdminCommunityRoute
   AuthenticatedAdminContentRoute: typeof AuthenticatedAdminContentRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminDiscountCodesRoute: typeof AuthenticatedAdminDiscountCodesRoute
@@ -5357,6 +5398,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminCoachingAgreementsRoute:
       AuthenticatedAdminCoachingAgreementsRoute,
     AuthenticatedAdminCommunicationRoute: AuthenticatedAdminCommunicationRoute,
+    AuthenticatedAdminCommunityRoute: AuthenticatedAdminCommunityRoute,
     AuthenticatedAdminContentRoute: AuthenticatedAdminContentRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminDiscountCodesRoute: AuthenticatedAdminDiscountCodesRoute,
@@ -5637,6 +5679,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
   AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRouteWithChildren
+  AuthenticatedPortalCommunityRoute: typeof AuthenticatedPortalCommunityRoute
   AuthenticatedPortalEventsRoute: typeof AuthenticatedPortalEventsRouteWithChildren
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
   AuthenticatedPortalGoalsSetupRoute: typeof AuthenticatedPortalGoalsSetupRoute
@@ -5670,6 +5713,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
     AuthenticatedPortalCheckInsRoute:
       AuthenticatedPortalCheckInsRouteWithChildren,
+    AuthenticatedPortalCommunityRoute: AuthenticatedPortalCommunityRoute,
     AuthenticatedPortalEventsRoute: AuthenticatedPortalEventsRouteWithChildren,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
     AuthenticatedPortalGoalsSetupRoute: AuthenticatedPortalGoalsSetupRoute,
