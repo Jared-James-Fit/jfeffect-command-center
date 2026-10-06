@@ -156,10 +156,20 @@ export const ingestHealthStoreMetrics = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const { supabaseAdmin: typedAdmin } = await import("@/integrations/supabase/client.server");
     const supabaseAdmin = typedAdmin as any; // generated types predate the wearable tables
+    const { data: existing } = await supabaseAdmin
+      .from("wearable_connections")
+      .select("id, status")
+      .eq("user_id", userId)
+      .eq("provider", data.provider)
+      .maybeSingle();
+    // A disconnect is respected until the athlete taps Connect again on a device.
+    if (existing?.status === "disconnected" && !data.reconnect) {
+      return { ok: false as const, days: 0 };
+    }
     const { data: conn, error } = await supabaseAdmin
       .from("wearable_connections")
       .upsert(
-        // Re-granting access reconnects; the sharing flag is deliberately not touched here.
+        // The sharing flag is deliberately not touched here.
         { user_id: userId, provider: data.provider, status: "connected", last_error: null },
         { onConflict: "user_id,provider" },
       )
@@ -172,7 +182,7 @@ export const ingestHealthStoreMetrics = createServerFn({ method: "POST" })
       .from("wearable_connections")
       .update({ last_synced_at: new Date().toISOString() })
       .eq("id", conn.id);
-    return { ok: true, days: data.rows.length };
+    return { ok: true as const, days: data.rows.length };
   });
 
 /** Daily hard sets / tonnage for the athlete (or the client a coach is viewing). Gated in SQL. */

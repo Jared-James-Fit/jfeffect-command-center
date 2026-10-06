@@ -1,13 +1,14 @@
 /**
  * Native health-store bridge (Apple HealthKit on iOS, Health Connect on Android).
  *
- * The Capacitor plugin is INJECTED, not imported, so this file builds without the
- * native dependency. See docs/WEARABLES.md for the one-time wiring
- * (`bun add @capgo/capacitor-health` + the 3-line call site).
+ * The plugin JS ships in the web bundle, but the NATIVE half only exists in app builds
+ * made with HealthKit / Health Connect enabled (see docs/WEARABLES.md). Older app
+ * builds in people's hands do not have it, so always go through loadHealthPlugin().
  *
  * Flow: request read access -> read the last N days -> normalize on-device ->
  * sanitize -> push to the server (ingestHealthStoreMetrics), which re-validates.
  */
+import { Capacitor } from "@capacitor/core";
 import { getPlatform, isNative } from "./index";
 import {
   normalizeHealthStore,
@@ -33,7 +34,7 @@ export type HealthPluginLike = {
     startDate: string;
     endDate: string;
     bucket: "day";
-    aggregation: "sum";
+    aggregation: "sum" | "min";
   }): Promise<{ samples: AggregatedBucket[] }>;
 };
 
@@ -44,6 +45,7 @@ export const HEALTH_READ_TYPES = [
   "sleep",
   "heartRateVariability",
   "restingHeartRate",
+  "heartRate", // fallback resting HR (daily minimum) for watches that don't write resting HR, e.g. Garmin on iPhone
 ];
 
 const SAMPLE_LIMIT = 5000; // the plugin default is 100, far too low for sleep stages
@@ -56,7 +58,51 @@ export function healthStoreProvider(): "apple_health" | "health_connect" | null 
 
 export type HealthSyncResult =
   | { ok: true; days: number }
-  | { ok: false; reason: "unavailable" | "no_data" | "error"; message?: string };
+  | { ok: false; reason: "unavailable" | "no_data" | "disconnected" | "error"; message?: string };
+
+export type HealthPluginLoad =
+  | { plugin: HealthPluginLike; reason: null }
+  /** web: not in the phone app. needs_update: app build without the native health plugin. */
+  | { plugin: null; reason: "web" | "needs_update" };
+
+export async function loadHealthPlugin(): Promise<HealthPluginLoad> {
+  if (!healthStoreProvider()) return { plugin: null, reason: "web" };
+  if (!Capacitor.isPluginAvailable("Health")) return { plugin: null, reason: "needs_update" };
+  const { Health } = await import("@capgo/capacitor-health");
+  return { plugin: Health as unknown as HealthPluginLike, reason: null };
+}
+
+// Per-device convenience only ("this phone syncs health data"). The server connection
+// row stays the source of truth; a disconnect anywhere stops background syncs here.
+const DEVICE_FLAG = "jf-health-sync";
+const AUTO_SYNC_EVERY_MS = 3 * 3600 * 1000;
+
+function readFlag(): { provider: string; lastSync: number } | null {
+  try {
+    const raw = window.localStorage.getItem(DEVICE_FLAG);
+    return raw ? (JSON.parse(raw) as { provider: string; lastSync: number }) : null;
+  } catch {
+    return null;
+  }
+}
+function writeFlag(v: { provider: string; lastSync: number } | null) {
+  try {
+    if (v) window.localStorage.setItem(DEVICE_FLAG, JSON.stringify(v));
+    else window.localStorage.removeItem(DEVICE_FLAG);
+  } catch {
+    /* storage unavailable: background sync just won't run */
+  }
+}
+export const clearHealthDeviceSync = () => writeFlag(null);
+
+/** Called when the app returns to the foreground. Quietly tops up the last week. */
+export async function autoSyncHealthStore(): Promise<void> {
+  const flag = readFlag();
+  if (!flag || Date.now() - flag.lastSync < AUTO_SYNC_EVERY_MS) return;
+  const { plugin } = await loadHealthPlugin();
+  if (!plugin) return;
+  await syncHealthStore(plugin, { days: 7 });
+}
 
 /**
  * `requestAccess: true` shows the OS permission sheet (do this from a user tap).
@@ -66,6 +112,8 @@ export type HealthSyncResult =
 export async function syncHealthStore(
   plugin: HealthPluginLike,
   opts: { days?: number; requestAccess?: boolean } = {},
+  // requestAccess doubles as "the athlete tapped Connect": only that may re-enable a
+  // connection they disconnected. Background syncs never do.
 ): Promise<HealthSyncResult> {
   const provider = healthStoreProvider();
   if (!provider) return { ok: false, reason: "unavailable" };
@@ -86,18 +134,18 @@ export async function syncHealthStore(
       safe(plugin.readSamples({ dataType, ...range(from), limit: SAMPLE_LIMIT, ascending: true }), {
         samples: [] as HealthSample[],
       });
-    const daily = (dataType: string) =>
-      safe(
-        plugin.queryAggregated({ dataType, ...range(start), bucket: "day", aggregation: "sum" }),
-        { samples: [] as AggregatedBucket[] },
-      );
+    const daily = (dataType: string, aggregation: "sum" | "min" = "sum") =>
+      safe(plugin.queryAggregated({ dataType, ...range(start), bucket: "day", aggregation }), {
+        samples: [] as AggregatedBucket[],
+      });
 
-    const [steps, kcal, sleep, hrv, rhr] = await Promise.all([
+    const [steps, kcal, sleep, hrv, rhr, minHr] = await Promise.all([
       daily("steps"),
       daily("calories"),
       samples("sleep", sleepStart),
       samples("heartRateVariability", sleepStart),
       samples("restingHeartRate", start),
+      daily("heartRate", "min"),
     ]);
 
     const rows = sanitizeMetrics(
@@ -107,11 +155,19 @@ export async function syncHealthStore(
         sleep: sleep.samples,
         hrv: hrv.samples,
         restingHr: rhr.samples,
+        minHeartRate: minHr.samples,
       }) as unknown as Record<string, unknown>[],
     );
     if (!rows.length) return { ok: false, reason: "no_data" };
 
-    const res = await ingestHealthStoreMetrics({ data: { provider, rows } });
+    const res = await ingestHealthStoreMetrics({
+      data: { provider, rows, reconnect: !!opts.requestAccess },
+    });
+    if (!res.ok) {
+      writeFlag(null); // disconnected elsewhere: stop background syncs on this phone
+      return { ok: false, reason: "disconnected" };
+    }
+    writeFlag({ provider, lastSync: Date.now() });
     return { ok: true, days: res.days };
   } catch (e: any) {
     return { ok: false, reason: "error", message: e?.message };

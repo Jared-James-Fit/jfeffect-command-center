@@ -38,6 +38,8 @@ export const DailyMetricInput = z.object({
 
 export const IngestInput = z.object({
   provider: z.enum(HEALTH_STORE_PROVIDERS),
+  /** true only for an explicit Connect tap; background syncs must not undo a disconnect. */
+  reconnect: z.boolean().default(false),
   rows: z
     .array(DailyMetricInput)
     .min(1)

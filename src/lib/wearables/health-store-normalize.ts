@@ -28,6 +28,8 @@ export type HealthStoreInput = {
   sleep?: HealthSample[];
   hrv?: HealthSample[];
   restingHr?: HealthSample[];
+  /** Daily minimum heart rate. Only used when the device writes no resting HR (e.g. Garmin on iPhone). */
+  minHeartRate?: AggregatedBucket[];
 };
 
 export const ASLEEP_STATES = new Set(["asleep", "rem", "deep", "light"]);
@@ -149,6 +151,15 @@ export function normalizeHealthStore(
     if (!cur || Date.parse(r.endDate) > Date.parse(cur.endDate)) rhr.set(date, r);
   }
   for (const [date, r] of rhr) get(date).resting_hr = Math.round(r.value * 10) / 10;
+
+  // Fallback: the day's lowest heart rate (normally during sleep). Only fills days with no
+  // resting HR, and recovery baselines never mix sources, so the two definitions never meet.
+  for (const b of input.minHeartRate ?? []) {
+    if (!finite(b.value) || b.value < 25 || b.value > 150) continue;
+    const date = toLocalDate(b.startDate);
+    if (rhr.has(date)) continue;
+    get(date).resting_hr = Math.round(b.value * 10) / 10;
+  }
 
   return [...byDay.values()]
     .filter((m) => METRIC_FIELDS.some((f) => m[f] != null))

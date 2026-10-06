@@ -18,7 +18,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
-import { WEARABLE_PROVIDERS } from "@/lib/wearables/providers";
+import {
+  clearHealthDeviceSync,
+  healthStoreProvider,
+  loadHealthPlugin,
+  syncHealthStore,
+  type HealthPluginLike,
+  type HealthSyncResult,
+} from "@/platform/health";
+import { WEARABLE_PROVIDERS, getWearableProvider } from "@/lib/wearables/providers";
 import { TrainingRecoveryPanel } from "@/components/portal/training-recovery-panel";
 import {
   resolveDaily,
@@ -76,19 +84,71 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
 
   const refresh = () => qc.invalidateQueries({ queryKey: QUERY_KEY });
 
+  // Phone health store (Apple Health in the iOS app, Health Connect in the Android app).
+  const deviceStore = healthStoreProvider();
+  const [healthPlugin, setHealthPlugin] = useState<HealthPluginLike | null>(null);
+  const [healthState, setHealthState] = useState<"loading" | "ready" | "web" | "needs_update">(
+    "loading",
+  );
+  useEffect(() => {
+    let alive = true;
+    loadHealthPlugin()
+      .then((r) => {
+        if (!alive) return;
+        setHealthPlugin(r.plugin);
+        setHealthState(r.plugin ? "ready" : (r.reason ?? "web"));
+      })
+      .catch(() => alive && setHealthState("needs_update"));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const reportHealth = (r: HealthSyncResult, connecting: boolean) => {
+    if (r.ok) {
+      toast.success(connecting ? `Connected. Synced ${r.days} days.` : `Synced ${r.days} days.`);
+      refresh();
+    } else if (r.reason === "no_data") {
+      toast(
+        "No health data found yet. Check iPhone Settings > Health > Data Access & Devices > JF Effect, and that your watch app shares sleep and heart rate to Health.",
+        { duration: 9000 },
+      );
+    } else if (r.reason === "disconnected") {
+      toast("This device was disconnected. Tap Connect to turn it back on.");
+      refresh();
+    } else {
+      toast.error(r.message ?? "Couldn't read health data on this phone.");
+    }
+  };
+
   const connect = useMutation({
-    mutationFn: async (provider: string) =>
-      (await beginWearableConnect({ data: { provider } })).url,
-    onSuccess: (url) => {
-      window.location.href = url;
+    mutationFn: async (provider: string) => {
+      if (getWearableProvider(provider)?.kind === "health_store") {
+        if (!healthPlugin) throw new Error("Open the JF Effect app on your phone to connect.");
+        return { health: await syncHealthStore(healthPlugin, { requestAccess: true }) };
+      }
+      return { url: (await beginWearableConnect({ data: { provider } })).url };
+    },
+    onSuccess: (r) => {
+      if ("url" in r && r.url) window.location.href = r.url;
+      else if ("health" in r && r.health) reportHealth(r.health, true);
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't start the connection."),
   });
   const sync = useMutation({
-    mutationFn: (provider: string) => syncWearableNow({ data: { provider } }),
+    mutationFn: async (provider: string) => {
+      if (getWearableProvider(provider)?.kind === "health_store") {
+        if (!healthPlugin) throw new Error("Sync runs from the JF Effect app on your phone.");
+        return { health: await syncHealthStore(healthPlugin, { days: 14 }) };
+      }
+      return { cloud: await syncWearableNow({ data: { provider } }) };
+    },
     onSuccess: (r) => {
-      toast.success(r.days ? `Synced ${r.days} days.` : "Already up to date.");
-      refresh();
+      if ("health" in r && r.health) return reportHealth(r.health, false);
+      if ("cloud" in r && r.cloud) {
+        toast.success(r.cloud.days ? `Synced ${r.cloud.days} days.` : "Already up to date.");
+        refresh();
+      }
     },
     onError: (e: any) => toast.error(e?.message ?? "Sync failed."),
   });
@@ -99,7 +159,8 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
   });
   const disconnect = useMutation({
     mutationFn: (v: { provider: string; deleteData: boolean }) => disconnectWearable({ data: v }),
-    onSuccess: () => {
+    onSuccess: (_r, v) => {
+      if (v.provider === deviceStore) clearHealthDeviceSync();
       toast.success("Disconnected.");
       setConfirmDisconnect(null);
       refresh();
@@ -297,7 +358,12 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
                   />
                 </div>
                 <div className="flex gap-2">
-                  {c.status === "reconnect_required" ? (
+                  {getWearableProvider(c.provider)?.kind === "health_store" &&
+                  (c.provider !== deviceStore || !healthPlugin) ? (
+                    <span className="self-center text-xs text-muted-foreground">
+                      Syncs from your phone when you open the JF Effect app
+                    </span>
+                  ) : c.status === "reconnect_required" ? (
                     <Button
                       size="sm"
                       onClick={() => connect.mutate(c.provider)}
@@ -341,30 +407,47 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
             </p>
           )}
           <div className="space-y-2">
-            {offered.map((p) => {
-              const ready = p.live && (p.id !== "oura" || data.configured.oura);
-              return (
-                <div key={p.id} className="flex items-center gap-3 rounded-lg border p-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium">{p.label}</div>
-                    <div className="text-xs text-muted-foreground truncate">{p.blurb}</div>
+            {offered
+              // In the phone app, only offer that phone's own health store.
+              .filter((p) => p.kind !== "health_store" || !deviceStore || p.id === deviceStore)
+              .map((p) => {
+                const isStore = p.kind === "health_store";
+                const ready =
+                  p.live &&
+                  (isStore
+                    ? healthState === "ready" && p.id === deviceStore
+                    : p.id !== "oura" || data.configured.oura);
+                const status = !p.live
+                  ? "Coming soon"
+                  : isStore
+                    ? healthState === "needs_update"
+                      ? "Update the app to connect"
+                      : healthState === "loading"
+                        ? ""
+                        : p.id === "apple_health"
+                          ? "Connect in the iPhone app"
+                          : "Connect in the Android app"
+                    : "Not set up";
+                return (
+                  <div key={p.id} className="flex items-center gap-3 rounded-lg border p-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{p.label}</div>
+                      <div className="text-xs text-muted-foreground truncate">{p.blurb}</div>
+                    </div>
+                    {ready ? (
+                      <Button
+                        size="sm"
+                        onClick={() => connect.mutate(p.id)}
+                        disabled={connect.isPending}
+                      >
+                        Connect
+                      </Button>
+                    ) : (
+                      <span className="text-right text-xs text-muted-foreground">{status}</span>
+                    )}
                   </div>
-                  {ready ? (
-                    <Button
-                      size="sm"
-                      onClick={() => connect.mutate(p.id)}
-                      disabled={connect.isPending}
-                    >
-                      Connect
-                    </Button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      {p.live ? "Not set up" : "Coming soon"}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       )}

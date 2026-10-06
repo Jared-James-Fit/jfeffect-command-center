@@ -486,3 +486,51 @@ describe("where athletes find device setup", () => {
     expect(card).toContain("aren&apos;t available right now");
   });
 });
+
+describe("Apple Health / Health Connect go-live", () => {
+  it("falls back to the day's minimum heart rate only when no resting HR exists (Garmin on iPhone)", async () => {
+    const { normalizeHealthStore } = await import("@/lib/wearables/health-store-normalize");
+    const utc = (iso: string) => iso.slice(0, 10);
+    const out = normalizeHealthStore(
+      {
+        restingHr: [
+          { value: 52, startDate: "2026-10-04T08:00:00Z", endDate: "2026-10-04T08:00:00Z" },
+        ],
+        minHeartRate: [
+          { startDate: "2026-10-04T00:00:00Z", value: 44 }, // resting HR exists: ignored
+          { startDate: "2026-10-05T00:00:00Z", value: 47 }, // no resting HR: used
+          { startDate: "2026-10-06T00:00:00Z", value: 12 }, // sensor glitch: ignored
+        ],
+      },
+      utc,
+    );
+    const byDate = Object.fromEntries(out.map((m) => [m.metric_date, m.resting_hr]));
+    expect(byDate).toEqual({ "2026-10-04": 52, "2026-10-05": 47 });
+  });
+
+  it("background syncs can't undo a disconnect; only an explicit Connect tap can", async () => {
+    const { IngestInput } = await import("@/lib/wearables/ingest-schema");
+    const row = { ...emptyMetric("2026-10-05"), steps: 5000 };
+    expect(IngestInput.parse({ provider: "apple_health", rows: [row] }).reconnect).toBe(false);
+    const fn = read("src/lib/wearables/wearables.functions.ts");
+    expect(fn).toContain('existing?.status === "disconnected" && !data.reconnect');
+    const bridge = read("src/platform/health.ts");
+    expect(bridge).toContain("reconnect: !!opts.requestAccess");
+    expect(bridge).toMatch(/autoSyncHealthStore[\s\S]*syncHealthStore\(plugin, \{ days: 7 \}\)/);
+  });
+
+  it("never calls the native plugin on the web or in app builds that lack it", () => {
+    const bridge = read("src/platform/health.ts");
+    expect(bridge).toContain('Capacitor.isPluginAvailable("Health")');
+    expect(bridge).toContain('reason: "needs_update"');
+    const card = read("src/components/portal/wearables-card.tsx");
+    expect(card).toContain("Update the app to connect");
+    expect(card).toContain("Connect in the iPhone app");
+  });
+
+  it("ships the plugin with a one-package lockfile change", () => {
+    expect(read("package.json")).toContain('"@capgo/capacitor-health": "^8.11.4"');
+    expect(read("bun.lock")).toContain('"@capgo/capacitor-health@8.11.4"');
+    expect(read("package-lock.json")).toContain('"node_modules/@capgo/capacitor-health"');
+  });
+});
