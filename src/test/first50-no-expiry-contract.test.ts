@@ -15,7 +15,7 @@ const mappingMigration = readFileSync(
   "utf8",
 );
 const adminSource = readFileSync(
-  resolve(process.cwd(), "src/routes/_authenticated/admin/discount-codes.tsx"),
+  resolve(process.cwd(), "src/route-pages/_authenticated/admin/discount-codes.tsx"),
   "utf8",
 );
 const checkoutSource = readFileSync(

@@ -29,7 +29,7 @@ import type { ExerciseRef } from "@/components/program-builder";
 import {
   StructureCanvas,
   appendRowToFirstDay,
-} from "@/routes/_authenticated/admin/program-library_.$templateId";
+} from "@/route-pages/_authenticated/admin/program-library_.$templateId";
 import { BlockWarmupPanel } from "@/components/block-warmup-panel";
 import { AutoSchedulePanel } from "@/components/auto-schedule-panel";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";

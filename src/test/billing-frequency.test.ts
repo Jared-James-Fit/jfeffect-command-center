@@ -28,7 +28,7 @@ describe("billing frequency dropdown", () => {
   it("is rendered by the product modal and admin payment-links form", () => {
     for (const file of [
       "src/components/products/new-product-modal.tsx",
-      "src/routes/_authenticated/admin/payment-links.tsx",
+      "src/route-pages/_authenticated/admin/payment-links.tsx",
     ]) {
       const src = readFileSync(file, "utf8");
       expect(src).toContain("BILLING_FREQUENCY_OPTIONS");

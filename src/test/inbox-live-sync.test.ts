@@ -49,7 +49,7 @@ describe("inbox cache patching", () => {
 });
 
 describe("inbox wiring", () => {
-  const route = readFileSync("src/routes/_authenticated/admin/messages.tsx", "utf8");
+  const route = readFileSync("src/route-pages/_authenticated/admin/messages.tsx", "utf8");
   const thread = readFileSync("src/components/message-thread.tsx", "utf8");
   it("patches the list from realtime and no longer re-downloads it on every message event", () => {
     expect(route).toContain("applyMessageChange(");

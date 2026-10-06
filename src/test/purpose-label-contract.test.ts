@@ -82,7 +82,7 @@ describe("canonical purpose-label contract", () => {
   });
 
   it("keeps the program editor’s manual role override as the canonical edit value", () => {
-    const source = readFileSync("src/routes/_authenticated/admin/program-library_.$templateId.tsx", "utf8");
+    const source = readFileSync("src/route-pages/_authenticated/admin/program-library_.$templateId.tsx", "utf8");
     expect(source).toContain("Manual purpose label");
     expect(source).toContain("purpose_label: opt");
   });

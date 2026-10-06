@@ -6,7 +6,8 @@ const thread = readFileSync("src/components/message-thread.tsx", "utf8");
 const groupThread = readFileSync("src/components/group-message-thread.tsx", "utf8");
 const plusMenu = readFileSync("src/components/composer-plus-menu.tsx", "utf8");
 const sendMenu = readFileSync("src/components/chat-send-menu.tsx", "utf8");
-const messagesRoute = readFileSync("src/routes/_authenticated/admin/messages.tsx", "utf8");
+const messagesRoute = readFileSync("src/route-pages/_authenticated/admin/messages.tsx", "utf8");
+const messagesRouteFile = readFileSync("src/routes/_authenticated/admin/messages.tsx", "utf8");
 const communication = readFileSync("src/routes/_authenticated/admin/communication.tsx", "utf8");
 
 function deferred<T>() {
@@ -107,14 +108,15 @@ describe("messenger composer", () => {
 
 describe("messages first open", () => {
   it("redirects /admin/messages before render instead of from an effect", () => {
-    expect(messagesRoute).toContain("beforeLoad");
-    expect(messagesRoute).toContain("throw redirect(");
-    expect(messagesRoute).not.toContain("function MessagesRedirect");
+    expect(messagesRouteFile).toContain("beforeLoad");
+    expect(messagesRouteFile).toContain("throw redirect(");
+    expect(messagesRouteFile).not.toContain("function MessagesRedirect");
   });
 
   it("only bundles the Messages tab with the communication page", () => {
-    expect(communication).toContain('import { MessagesInbox } from "./messages";');
-    for (const mod of ["./broadcasts", "./membership.support", "./support-alerts", "./chat-gifs", "./chat-sounds", "./popups"]) {
+    const pages = "@/route-pages/_authenticated/admin";
+    expect(communication).toContain(`import { MessagesInbox } from "${pages}/messages";`);
+    for (const mod of ["broadcasts", "membership.support", "support-alerts", "chat-gifs", "chat-sounds", "popups"].map((m) => `${pages}/${m}`)) {
       expect(communication).not.toContain(`from "${mod}"`);
       expect(communication).toContain(`import("${mod}")`);
     }

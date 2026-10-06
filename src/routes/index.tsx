@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { DashboardSplash } from "@/components/dashboard-splash";
@@ -6,8 +6,18 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { getLastRoute } from "@/lib/route-persistence";
 import { getViewMode } from "@/lib/view-mode";
 import { supabase } from "@/integrations/supabase/client";
+import { hasPersistedAuthSession } from "@/lib/session-hint";
 
 export const Route = createFileRoute("/")({
+  // First-time / signed-out visitors: skip "splash -> hydrate -> wait for auth ->
+  // redirect" and go straight to sign-in. Runs in the browser only (the server
+  // can't see localStorage); anyone with a saved session keeps the full flow
+  // below, including last-route restore and dual-account handling.
+  beforeLoad: () => {
+    if (typeof window !== "undefined" && !hasPersistedAuthSession()) {
+      throw redirect({ to: "/auth", replace: true });
+    }
+  },
   head: () => ({
     meta: [
       { title: "JF Effect — Private Coaching & Training System" },

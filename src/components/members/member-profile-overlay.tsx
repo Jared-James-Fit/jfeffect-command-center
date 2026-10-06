@@ -6,7 +6,7 @@ import { useOverlayMemberId, useCloseMemberProfile } from "@/lib/open-member-pro
 
 // Lazy-load the workspace so it only ships when a member is opened.
 const MemberProfileWorkspace = lazyWithRetry(async () => {
-  const mod = await import("@/routes/_authenticated/admin/members.$memberId");
+  const mod = await import("@/route-pages/_authenticated/admin/members.$memberId");
   return { default: mod.MemberProfileWorkspace };
 });
 

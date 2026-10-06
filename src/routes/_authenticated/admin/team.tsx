@@ -5,13 +5,13 @@ import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 
 const CoachesPage = lazyWithRetry(() =>
-  import("./coaches.index").then((m) => ({ default: m.CoachesPage })),
+  import("@/route-pages/_authenticated/admin/coaches.index").then((m) => ({ default: m.CoachesPage })),
 );
 const StaffPage = lazyWithRetry(() =>
-  import("./staff").then((m) => ({ default: m.StaffPage })),
+  import("@/route-pages/_authenticated/admin/staff").then((m) => ({ default: m.StaffPage })),
 );
 const BusinessSystemsHub = lazyWithRetry(() =>
-  import("./business-systems").then((m) => ({ default: m.BusinessSystemsHub })),
+  import("@/route-pages/_authenticated/admin/business-systems").then((m) => ({ default: m.BusinessSystemsHub })),
 );
 
 const TabFallback = () => (
