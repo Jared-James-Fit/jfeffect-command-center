@@ -1,0 +1,136 @@
+import { useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import {
+  listStaff, inviteMediaManager, resendStaffInvite, revokeStaffInvite, deactivateMediaManager,
+} from "@/lib/media-manager.functions";
+
+export function StaffRedirect() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/admin/team", search: { tab: "staff-media" } as any, replace: true });
+  }, [navigate]);
+  return null;
+}
+
+export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const list = useServerFn(listStaff);
+  const invite = useServerFn(inviteMediaManager);
+  const resend = useServerFn(resendStaffInvite);
+  const revoke = useServerFn(revokeStaffInvite);
+  const deactivate = useServerFn(deactivateMediaManager);
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["staff"], queryFn: () => list() });
+
+  const [form, setForm] = useState({ email: "", first_name: "", last_name: "", phone: "" });
+  const pendingEmails = new Set(
+    (data?.invites ?? [])
+      .filter((i: any) => i.status === "pending")
+      .map((i: any) => (i.email || "").toLowerCase())
+  );
+  const inviteDisabled = pendingEmails.has(form.email.trim().toLowerCase());
+
+  function smsMessage(sms: { sent: boolean; reason?: string } | undefined, action: "Invite" | "New link") {
+    if (sms?.sent) return `${action} sent by SMS · link also copied`;
+    const reasonMap: Record<string, string> = {
+      no_phone: "no phone on file — link copied",
+      sms_disabled: "SMS disabled in settings — link copied",
+      no_from_phone: "no Twilio From number set — link copied",
+      twilio_not_configured: "Twilio not connected — link copied",
+      exception: "SMS failed — link copied",
+    };
+    const tail = reasonMap[sms?.reason ?? ""] ?? "SMS not sent — link copied";
+    return `${action} created · ${tail}`;
+  }
+
+  async function handleInvite() {
+    if (!form.email || !form.first_name || !form.last_name) return toast.error("Name and email required");
+    try {
+      const res = await invite({ data: { ...form, phone: form.phone || null } });
+      await navigator.clipboard.writeText(res.link);
+      toast.success(smsMessage(res.sms, "Invite"));
+      setForm({ email: "", first_name: "", last_name: "", phone: "" });
+      qc.invalidateQueries({ queryKey: ["staff"] });
+    } catch (e: any) { toast.error(e.message); }
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-6">
+      {!embedded && (
+        <header>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight">Staff & Media Manager Access</h1>
+          <p className="text-sm text-muted-foreground">Invite a Media Manager. They will get a setup link to create their password.</p>
+        </header>
+      )}
+
+      <Card className="p-4 space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Invite Media Manager</h2>
+        <p className="text-xs text-muted-foreground">
+          Add as many Media Managers as you need — they all share the same admin workspace and see edits in real time.
+          {inviteDisabled && " A pending invite already exists for that email — resend or revoke it below."}
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+          <Input placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+          <Input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <Input placeholder="Phone (for SMS setup link)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        </div>
+        <Button onClick={handleInvite} disabled={inviteDisabled}>Send Invite</Button>
+      </Card>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Active Media Managers</h2>
+        {(data?.members ?? []).length === 0 && <div className="text-sm text-muted-foreground">No media managers yet.</div>}
+        {data?.members?.map((m: any) => (
+          <Card key={m.user_id} className="p-3 flex items-center justify-between">
+            <div>
+              <div className="font-medium">{m.profile?.full_name || m.profile?.email || m.user_id}</div>
+              <div className="text-xs text-muted-foreground">{m.profile?.email}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={async () => {
+              if (!confirm("Revoke this Media Manager's access?")) return;
+              try { await deactivate({ data: { userId: m.user_id } }); qc.invalidateQueries({ queryKey: ["staff"] }); toast.success("Access revoked"); }
+              catch (e: any) { toast.error(e.message); }
+              }}>Revoke access</Button>
+            </div>
+          </Card>
+        ))}
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Pending Invites</h2>
+        {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
+        {(data?.invites ?? []).filter((i: any) => i.status === "pending").map((i: any) => (
+          <Card key={i.id} className="p-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="font-medium truncate">{i.first_name} {i.last_name}</div>
+              <div className="text-xs text-muted-foreground">{i.email}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{i.status}</Badge>
+              <Button size="sm" variant="outline" onClick={async () => {
+                try {
+                  const r = await resend({ data: { inviteId: i.id } });
+                  await navigator.clipboard.writeText(r.link);
+                  toast.success(smsMessage(r.sms, "New link"));
+                  qc.invalidateQueries({ queryKey: ["staff"] });
+                } catch (e: any) { toast.error(e.message); }
+              }}>Resend</Button>
+              <Button size="sm" variant="destructive" onClick={async () => {
+                try { await revoke({ data: { inviteId: i.id } }); qc.invalidateQueries({ queryKey: ["staff"] }); toast.success("Revoked"); }
+                catch (e: any) { toast.error(e.message); }
+              }}>Revoke</Button>
+            </div>
+          </Card>
+        ))}
+      </section>
+    </div>
+  );
+}

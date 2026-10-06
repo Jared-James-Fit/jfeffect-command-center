@@ -76,7 +76,7 @@ describe("committed training schedule canonical sync", () => {
 describe("every committed-day writer realigns the calendar", () => {
   const files = [
     "src/components/quick-assign-template-dialog.tsx",
-    "src/routes/_authenticated/admin/program-library.tsx",
+    "src/route-pages/_authenticated/admin/program-library.tsx",
     "src/components/program-planner/AvailabilityGuardDialog.tsx",
   ];
   for (const f of files) {

@@ -100,7 +100,7 @@ describe("workspace layout", () => {
   });
 
   it("applies the canonical container and grid on every client workspace tab", () => {
-    const src = fs.readFileSync("src/routes/_authenticated/admin/clients.$id.tsx", "utf8");
+    const src = fs.readFileSync("src/route-pages/_authenticated/admin/clients.$id.tsx", "utf8");
     expect(src).toContain("WORKSPACE_CONTAINER_CLASS");
     expect(src).not.toMatch(/className="grid gap-6 md:grid-cols-3"/);
     expect(src).toContain("<ClientSessionsPanel");

@@ -103,7 +103,7 @@ describe("admin wiring", () => {
   });
 
   it("puts the per-client panel first in the client's agreements section", () => {
-    const src = read("src/routes/_authenticated/admin/clients.$id.tsx");
+    const src = read("src/route-pages/_authenticated/admin/clients.$id.tsx");
     const panel = src.indexOf("<ClientAgreementPanel");
     expect(panel).toBeGreaterThan(-1);
     expect(panel).toBeLessThan(src.indexOf("<AgreementStatusPanel"));
@@ -131,7 +131,7 @@ describe("contract-with-payment is retired", () => {
     expect(offerForm).not.toContain('set("requires_agreement"');
     expect(offerForm).not.toContain('set("agreement_before_service"');
     expect(offerForm).not.toContain("default_agreement_template_id");
-    const links = read("src/routes/_authenticated/admin/payment-links.tsx");
+    const links = read("src/route-pages/_authenticated/admin/payment-links.tsx");
     expect(links).not.toContain("agreementRequired");
     expect(links).not.toContain("agreementTemplateId");
   });

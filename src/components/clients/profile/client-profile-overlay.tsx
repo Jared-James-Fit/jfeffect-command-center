@@ -6,7 +6,7 @@ import { useOverlayClientId, useCloseClientProfile } from "@/lib/open-client-pro
 
 // Lazy-load the heavy workspace so it only ships when a client is opened.
 const ClientProfileWorkspace = lazyWithRetry(async () => {
-  const mod = await import("@/routes/_authenticated/admin/clients.$id");
+  const mod = await import("@/route-pages/_authenticated/admin/clients.$id");
   return { default: mod.ClientProfileWorkspace };
 });
 

@@ -5,10 +5,10 @@ import { PageHeader } from "@/components/app-shell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { UpcomingPanel } from "@/components/admin-calendar/upcoming-panel";
-import { BookingLinksPage } from "./booking-links";
-import { GoogleCalendarPage } from "./google-calendar";
+import { BookingLinksPage } from "@/route-pages/_authenticated/admin/booking-links";
+import { GoogleCalendarPage } from "@/route-pages/_authenticated/admin/google-calendar";
 import { PtCalendarPanel } from "@/components/admin-calendar/pt-calendar-panel";
-import { AdminEventsPage } from "./events.index";
+import { AdminEventsPage } from "@/route-pages/_authenticated/admin/events.index";
 import { AdminCalendarBoardPanel } from "@/components/admin-calendar/board-panel";
 
 const TAB_VALUES = ["board", "upcoming", "events", "availability", "booking-links", "pt-calendar", "google-calendar"] as const;
