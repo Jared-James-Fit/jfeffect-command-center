@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { PovInput, resolvePovClientId } from "@/lib/client-pov.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 async function isAdminOrAssignedCoach(supabase: any, userId: string, clientId: string) {
@@ -144,10 +145,11 @@ export const getMyNutritionStatusFn = createServerFn({ method: "GET" })
 // ============================================================================
 export const getMyRecentAdherenceFn = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d: unknown) => PovInput.parse(d ?? {}))
+  .handler(async ({ data: pov, context }) => {
     const { supabase, userId } = context as any;
-    const { data: client } = await supabase
-      .from("clients").select("id").eq("user_id", userId).maybeSingle();
+    const povClientId = await resolvePovClientId(supabase, userId, pov);
+    const client = povClientId ? { id: povClientId } : null;
     if (!client) return { rows: [] as Array<{ id: string; submitted_at: string; compliance_pct: number | null }> };
     const { data } = await supabase
       .from("nutrition_update_submissions")

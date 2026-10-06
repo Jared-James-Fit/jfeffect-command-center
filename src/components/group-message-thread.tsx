@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { adminDeleteMessages } from "@/lib/messages";
+import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,6 +73,8 @@ export function GroupMessageThread({
   groupName: string;
 }) {
   const { user, role: authRole } = useAuth();
+  // Admins can silently delete any group message (no placeholder for anyone).
+  const isAdmin = authRole === "admin";
   const qc = useQueryClient();
 
   // Composer state
@@ -184,6 +188,14 @@ export function GroupMessageThread({
       .on("postgres_changes", { event: "*", schema: "public", table: "group_messages", filter: `group_id=eq.${groupId}` }, () => {
         qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
         qc.invalidateQueries({ queryKey: ["group-unread"] });
+      })
+      // DELETE events can't be filtered by group_id (only the id is sent).
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "group_messages" }, (payload: any) => {
+        const id = payload.old?.id;
+        const cached = qc.getQueryData<any[]>(["group-messages", groupId]);
+        if (id && Array.isArray(cached) && cached.some((m) => m?.id === id)) {
+          qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+        }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "group_message_reactions" }, () => {
         qc.invalidateQueries({ queryKey: ["group-reactions", groupId] });
@@ -408,9 +420,9 @@ export function GroupMessageThread({
   );
   const deletableIds = useMemo(
     () => new Set(messages
-      .filter((m) => (m.sender_id === user?.id || canManage) && !m.deleted_at)
+      .filter((m) => isAdmin || ((m.sender_id === user?.id || canManage) && !m.deleted_at))
       .map((m) => m.id)),
-    [messages, user?.id, canManage],
+    [messages, user?.id, canManage, isAdmin],
   );
   const selectedDeletable = useMemo(
     () => Array.from(selectedIds).filter((id) => deletableIds.has(id)),
@@ -418,7 +430,20 @@ export function GroupMessageThread({
   );
   const allMineSelected = myIds.size > 0 && Array.from(myIds).every((id) => selectedIds.has(id));
 
+  const performAdminDelete = async (ids: string[]) => {
+    try {
+      await adminDeleteMessages(ids, "group");
+      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+      qc.invalidateQueries({ queryKey: deletionsQueryKey({ groupId }) });
+      toast.success(`${ids.length} message${ids.length === 1 ? "" : "s"} deleted`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to delete");
+    }
+    exitSelection();
+  };
+
   const performBulkDelete = async (ids: string[]) => {
+    if (isAdmin) return performAdminDelete(ids);
     let failed = 0;
     for (const id of ids) {
       try { await deleteGroupMessageForEveryone(id); } catch { failed++; }
@@ -648,7 +673,7 @@ export function GroupMessageThread({
                   }}
                   onContextMenu={(e) => { if (!isDeleted) e.preventDefault(); }}
                   onPointerDown={(e) => {
-                    if (isEditing || isDeleted) return;
+                    if (isEditing || (isDeleted && !isAdmin)) return;
                     if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video")) return;
                     startLongPress(m.id, e.clientX, e.clientY);
                   }}
@@ -874,10 +899,10 @@ export function GroupMessageThread({
                                 className="text-destructive focus:text-destructive"
                                 onClick={() => {
                                   setActionsForId(null);
-                                  setConfirmDelete({ ids: [m.id], label: "Delete this message for everyone?" });
+                                  setConfirmDelete({ ids: [m.id], label: isAdmin ? "Delete this message?" : "Delete this message for everyone?" });
                                 }}
                               >
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
+                                <Trash2 className="mr-2 h-4 w-4" /> {isAdmin ? "Delete" : "Delete for everyone"}
                               </DropdownMenuItem>
                             </>
                           )}
@@ -899,6 +924,8 @@ export function GroupMessageThread({
           );
         })}
       </div>
+
+      {(isAdmin || authRole === "coach") && <DeletedMessagesStrip groupId={groupId} />}
 
       {/* Composer */}
       {canPost ? (
@@ -1151,7 +1178,7 @@ export function GroupMessageThread({
               if (blocked > 0) toast.message(`Skipping ${blocked} message${blocked === 1 ? "" : "s"} you can't delete`);
               setConfirmDelete({
                 ids: selectedDeletable,
-                label: `Delete ${selectedDeletable.length} message${selectedDeletable.length === 1 ? "" : "s"} for everyone?`,
+                label: `Delete ${selectedDeletable.length} message${selectedDeletable.length === 1 ? "" : "s"}${isAdmin ? "" : " for everyone"}?`,
               });
             }}
           >
@@ -1168,7 +1195,7 @@ export function GroupMessageThread({
             if (!m) return null;
             const mine = m.sender_id === user?.id;
             const canEdit = mine && !m.deleted_at && (m.body?.length ?? 0) > 0;
-            const canDelete = (mine || canManage) && !m.deleted_at;
+            const canDelete = deletableIds.has(m.id);
             const canReact = !m.deleted_at;
             return (
               <>
@@ -1245,10 +1272,10 @@ export function GroupMessageThread({
                       className="h-12 justify-start text-base text-destructive hover:text-destructive"
                       onClick={() => {
                         setSheetForId(null);
-                        setConfirmDelete({ ids: [m.id], label: "Delete this message for everyone?" });
+                        setConfirmDelete({ ids: [m.id], label: isAdmin ? "Delete this message?" : "Delete this message for everyone?" });
                       }}
                     >
-                      <Trash2 className="mr-3 h-5 w-5" /> Delete for everyone
+                      <Trash2 className="mr-3 h-5 w-5" /> {isAdmin ? "Delete" : "Delete for everyone"}
                     </Button>
                   )}
                   <Button type="button" variant="outline" className="mt-2 h-11" onClick={() => setSheetForId(null)}>
@@ -1275,7 +1302,9 @@ export function GroupMessageThread({
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmDelete?.label ?? "Delete?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              This cannot be undone. Everyone in the group will see a "This message was deleted" placeholder.
+              {isAdmin
+                ? "Removed for everyone with no trace — members won't see a placeholder or timestamp. Only coaches and admins can see it under “deleted”."
+                : "This cannot be undone. Everyone in the group will see a \"This message was deleted\" placeholder."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1285,6 +1314,10 @@ export function GroupMessageThread({
               onClick={async () => {
                 const ids = confirmDelete?.ids ?? [];
                 setConfirmDelete(null);
+                if (isAdmin) {
+                  await performAdminDelete(ids);
+                  return;
+                }
                 if (ids.length === 1) {
                   try {
                     await deleteGroupMessageForEveryone(ids[0]);
@@ -1298,7 +1331,7 @@ export function GroupMessageThread({
                 await performBulkDelete(ids);
               }}
             >
-              Delete for everyone
+              {isAdmin ? "Delete" : "Delete for everyone"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

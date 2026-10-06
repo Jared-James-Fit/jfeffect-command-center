@@ -6,6 +6,7 @@
  * Newest reply first. Tap to open the full thread.
  */
 
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -26,13 +27,14 @@ import {
 } from "@/lib/weekly-checkin-threads.functions";
 
 export function CoachCheckinReplies() {
-  const listFn = useServerFn(listMyCheckinThreads);
+  const listFn = usePovFn(useServerFn(listMyCheckinThreads));
+  const povKey = usePovArgs().viewAsClientId ?? null;
   const getThreadFn = useServerFn(getCheckinThread);
   const replyFn = useServerFn(replyToCheckinThread);
   const archiveFn = useServerFn(archiveCheckinThread);
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["my-checkin-threads"],
+    queryKey: ["my-checkin-threads", povKey],
     queryFn: () => listFn(),
     staleTime: 30_000,
   });

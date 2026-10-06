@@ -20,6 +20,7 @@ import { recapStoryBlob, shareOrSaveImage } from "@/lib/recap-story-card";
 import { createRecapMusic, readRecapMuted, writeRecapMuted, type RecapMusic, type RecapSfx } from "@/lib/recap-music";
 import { UserAvatar } from "@/components/user-avatar";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
 import { leagueToday } from "@/lib/league-boost";
 import {
@@ -477,6 +478,61 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
     return () => window.removeEventListener("keydown", onKey);
   }, [open, next, prev]);
 
+  // ---- Swipe down to close (like Instagram stories) ----
+  // The whole story follows the finger, shrinks a little and fades the page
+  // behind it. Release past ~120px (or flick down) to dismiss; otherwise it
+  // snaps back. The story is paused while dragging.
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const drag = useRef<{ id: number; x: number; y: number; lastY: number; lastT: number; v: number; active: boolean } | null>(null);
+  useEffect(() => { if (open) { setDragY(0); setDragging(false); setLeaving(false); drag.current = null; } }, [open]);
+
+  const onDragStart = (e: React.PointerEvent) => {
+    if (leaving || (e.target as HTMLElement).closest("button, a, [role='button']")) { drag.current = null; return; }
+    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, lastY: e.clientY, lastT: performance.now(), v: 0, active: false };
+  };
+  const onDragMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId || leaving) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (!d.active) {
+      // Only a mostly-vertical, downward pull starts a dismiss drag.
+      if (dy > 12 && dy > Math.abs(dx) * 1.2) {
+        d.active = true;
+        if (holdTimer.current) window.clearTimeout(holdTimer.current);
+        held.current = false;
+        setPaused(true);
+        setDragging(true);
+        try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      } else {
+        return;
+      }
+    }
+    const now = performance.now();
+    d.v = (e.clientY - d.lastY) / Math.max(1, now - d.lastT);
+    d.lastY = e.clientY;
+    d.lastT = now;
+    setDragY(Math.max(0, dy));
+  };
+  const endDrag = (e: React.PointerEvent, cancelled: boolean) => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d?.active) return; // a plain tap — handled by the slide area
+    setDragging(false);
+    const dy = Math.max(0, e.clientY - d.y);
+    if (!cancelled && (dy > 120 || (dy > 40 && d.v > 0.5))) {
+      setLeaving(true);
+      setDragY(typeof window !== "undefined" ? window.innerHeight : 800);
+      window.setTimeout(onClose, 190);
+    } else {
+      setDragY(0);
+      setPaused(false);
+    }
+  };
+  const dragProgress = Math.min(dragY, 320) / 320;
+
   const onPointerDown = () => {
     ensureMusic();
     held.current = false;
@@ -493,12 +549,25 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[95] bg-black" />
+        <DialogPrimitive.Overlay
+          className="fixed inset-0 z-[95] bg-black"
+          style={{ opacity: 1 - dragProgress * 0.85, transition: dragging ? "none" : "opacity 190ms ease" }}
+        />
         <DialogPrimitive.Content
           className="fixed inset-0 z-[96] flex select-none flex-col overflow-hidden text-white outline-none md:inset-y-4 md:left-1/2 md:w-[420px] md:-translate-x-1/2 md:rounded-[2rem]"
-          style={{ background: slide.bg, transition: "background 600ms ease" }}
+          style={{
+            background: slide.bg,
+            transform: dragY > 0 ? `translateY(${dragY}px) scale(${1 - dragProgress * 0.08})` : undefined,
+            borderRadius: dragY > 0 ? Math.min(28, dragY / 4) : undefined,
+            transition: dragging ? "background 600ms ease" : "background 600ms ease, transform 190ms ease, border-radius 190ms ease",
+            touchAction: "none",
+          }}
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => e.preventDefault()}
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={(e) => endDrag(e, false)}
+          onPointerCancel={(e) => endDrag(e, true)}
         >
           <DialogPrimitive.Title className="sr-only">{monthName(recap.month_start)} League Recap</DialogPrimitive.Title>
 
@@ -593,7 +662,7 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
                 </button>
               </div>
             ) : (
-              <div className="text-center text-[11px] font-semibold text-white/45">Tap to continue · hold to pause</div>
+              <div className="text-center text-[11px] font-semibold text-white/45">Tap to continue · hold to pause · swipe down to close</div>
             )}
           </div>
         </DialogPrimitive.Content>
@@ -607,7 +676,10 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
 /** Shows the previous month's recap once, during the first week of a new month. */
 export function LeagueRecapGate() {
   const { user } = useAuth();
-  const userId = user?.id ?? null;
+  const { isImpersonating } = useClientImpersonation();
+  // The auto-play story is for the real client only; in coach POV the home
+  // tile is there instead (and we must not mark it "seen" for anyone).
+  const userId = isImpersonating ? null : user?.id ?? null;
   const qc = useQueryClient();
   const today = leagueToday();
   const month = previousLeagueMonth(today);
@@ -660,14 +732,14 @@ export function LeagueRecapGate() {
 
 /** Entry point inside the league: replay last month's recap anytime. */
 export function LeagueRecapButton({ className }: { className?: string }) {
-  const { user } = useAuth();
+  const viewerId = usePortalUserId() ?? null;
   const month = previousLeagueMonth();
   const [open, setOpen] = useState(false);
   const { data: recap } = useQuery({
-    queryKey: ["league-recap", month, user?.id ?? null],
-    enabled: !!user?.id,
+    queryKey: ["league-recap", month, viewerId],
+    enabled: !!viewerId,
     staleTime: 10 * 60_000,
-    queryFn: () => fetchLeagueRecap(month),
+    queryFn: () => fetchLeagueRecap(month, viewerId),
   });
   if (!recap) return null;
   return (
@@ -701,8 +773,8 @@ export function LeagueRecapButton({ className }: { className?: string }) {
  * an archive of every past recap.
  */
 export function LeagueRecapHomeTile({ className }: { className?: string }) {
-  const { user } = useAuth();
-  const userId = user?.id ?? null;
+  // The person whose portal this is (the client in coach "View as" mode).
+  const userId = usePortalUserId() ?? null;
   const month = previousLeagueMonth();
   const [playing, setPlaying] = useState<LeagueRecap | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -711,7 +783,7 @@ export function LeagueRecapHomeTile({ className }: { className?: string }) {
     queryKey: ["league-recap", month, userId],
     enabled: !!userId,
     staleTime: 10 * 60_000,
-    queryFn: () => fetchLeagueRecap(month),
+    queryFn: () => fetchLeagueRecap(month, userId),
   });
 
   const months = useMemo(() => recapMonths(month, 12), [month]);
@@ -720,7 +792,7 @@ export function LeagueRecapHomeTile({ className }: { className?: string }) {
       queryKey: ["league-recap", m, userId],
       enabled: !!userId && archiveOpen,
       staleTime: 30 * 60_000,
-      queryFn: () => fetchLeagueRecap(m),
+      queryFn: () => fetchLeagueRecap(m, userId),
     })),
   });
   const past = archive.map((q) => q.data).filter((r): r is LeagueRecap => !!r && (r.me?.total_points ?? 0) > 0);

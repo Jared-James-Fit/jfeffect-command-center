@@ -1,3 +1,4 @@
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -228,9 +229,10 @@ function PortalHome() {
   }) ?? phases.find((p) => derivePhase(p).state === "upcoming") ?? null;
 
   // Compact upcoming appointment (single, only if within ~14 days).
-  const fetchPortalAppointments = useServerFn(listMyPortalAppointments);
+  const fetchPortalAppointments = usePovFn(useServerFn(listMyPortalAppointments));
+  const povKey = usePovArgs().viewAsClientId ?? null;
   const { data: appts = [] } = useQuery({
-    queryKey: ["portal-next-appointment"],
+    queryKey: ["portal-next-appointment", povKey],
     queryFn: async () => {
       const res: any = await fetchPortalAppointments();
       return (res?.upcoming ?? []) as any[];

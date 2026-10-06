@@ -8,11 +8,13 @@
 import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Loader2, UtensilsCrossed } from "lucide-react";
 import { getNutritionDashboard } from "@/lib/nutrition-dashboard.functions";
+import { ToolTile } from "./NutritionToolsCard";
 
 const Panel = lazy(() => import("./DailyNutritionPanelLazy"));
 
@@ -45,12 +47,13 @@ function LogSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boo
 }
 
 export function TodaysIntakeCard() {
-  const getDashboard = useServerFn(getNutritionDashboard);
+  const getDashboard = usePovFn(useServerFn(getNutritionDashboard));
+  const povUserId = usePovArgs().viewAsUserId;
   const date = todayISO();
   const [open, setOpen] = useState(false);
 
   const q = useQuery({
-    queryKey: ["nutrition-dashboard", date],
+    queryKey: ["nutrition-dashboard", date, povUserId ?? null],
     queryFn: () => getDashboard({ data: { date } }),
     retry: false,
     staleTime: 30_000,
@@ -91,14 +94,18 @@ export function TodaysIntakeCard() {
   );
 }
 
-/** "Log Food" entry inside Nutrition Tools (used when nothing is logged yet). */
+/** "Log Food" tile inside Nutrition Tools. */
 export function LogFoodToolButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="outline" className="h-11 w-full justify-start" onClick={() => setOpen(true)}>
-        <UtensilsCrossed className="mr-2 h-4 w-4" /> Log Food
-      </Button>
+      <ToolTile
+        icon={UtensilsCrossed}
+        title="Log Food"
+        hint="Track what you ate today"
+        onClick={() => setOpen(true)}
+        accent
+      />
       <LogSheet open={open} onOpenChange={setOpen} />
     </>
   );

@@ -766,20 +766,17 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
           .eq("id", row.occurrence_id)
           .maybeSingle()
       : { data: null };
-    const contextSnapshot = await buildContextSnapshot(sb, row.client_id, {
-      dueLocalDate: occurrence?.due_local_date ?? null,
-      clientTz: occurrence?.client_tz ?? null,
-    });
-    const analysis = await generateAnalysis(sb, taskType, data.answers, contextSnapshot);
+    // Save instantly with the rule-based recap; the AI recap (slow) runs in
+    // analyzeMessengerCheckin right after, so the client isn't kept waiting.
+    const analysis = fallbackAnalysis(taskType, data.answers as any);
     const now = new Date().toISOString();
 
     await sb
       .from("messenger_checkins")
       .update({
         answers: data.answers,
-        context_snapshot: contextSnapshot,
         ai_analysis: analysis,
-        ai_status: "ready",
+        ai_status: "pending",
         ai_error: null,
         status: "completed",
         submitted_at: now,
@@ -864,11 +861,60 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
     return {
       ...row,
       answers: data.answers,
-      context_snapshot: contextSnapshot,
       ai_analysis: analysis,
-      ai_status: "ready",
+      ai_status: "pending",
       status: "completed",
       submitted_at: now,
       submission_message_id: sentMessage?.id ?? null,
     };
+  });
+
+
+/**
+ * AI recap for a submitted check-in. Called right after submit (fire-and-
+ * forget) and again from the coach view if it never finished. Idempotent:
+ * a finished recap is returned as-is.
+ */
+export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { submissionId: string }) =>
+    z.object({ submissionId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const sb = await adminClient();
+    const { data: row } = await sb
+      .from("messenger_checkins")
+      .select("*")
+      .eq("id", data.submissionId)
+      .maybeSingle();
+    if (!row) throw new Error("Check-in not found.");
+    const actor = await resolveClientAccess(context.supabase, context.userId, row.client_id);
+    if (actor !== "client" && actor !== "admin" && actor !== "coach") throw new Error("Not allowed.");
+    if (row.status !== "completed" || row.ai_status === "ready") return { status: row.ai_status };
+
+    const taskType = row.task_type as MessengerCheckinTaskType;
+    const { data: occurrence } = row.occurrence_id
+      ? await sb.from("client_task_occurrences").select("due_local_date, client_tz").eq("id", row.occurrence_id).maybeSingle()
+      : { data: null };
+    const contextSnapshot = await buildContextSnapshot(sb, row.client_id, {
+      dueLocalDate: occurrence?.due_local_date ?? null,
+      clientTz: occurrence?.client_tz ?? null,
+    });
+    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, contextSnapshot);
+    await sb
+      .from("messenger_checkins")
+      .update({
+        context_snapshot: contextSnapshot,
+        ai_analysis: analysis,
+        ai_status: "ready",
+        ai_error: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+    if (analysis.urgency === "urgent" || analysis.urgency === "high") {
+      await sb
+        .from("conversation_state")
+        .upsert({ client_id: row.client_id, priority: "Important" }, { onConflict: "client_id" });
+    }
+    return { status: "ready" as const };
   });

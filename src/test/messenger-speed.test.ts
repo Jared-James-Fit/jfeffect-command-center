@@ -156,15 +156,9 @@ describe("messenger stays current after the app resumes", () => {
 });
 
 describe("clearing deleted-message placeholders", () => {
-  const lib = readFileSync("src/lib/messages.ts", "utf8");
-  it("only ever hard-deletes messages that were already deleted for everyone", () => {
-    const fn = lib.slice(lib.indexOf("export async function purgeDeletedMessage"));
-    expect(fn).toContain('.delete()');
-    expect(fn).toContain('.not("deleted_at", "is", null)');
-  });
-  it("offers Remove on placeholders to admins only", () => {
+  it("offers Remove on placeholders to admins only, via the audited admin delete", () => {
     expect(thread).toContain('role === "admin" && !m.id.startsWith("optimistic-")');
-    expect(thread).toContain("purgeDeletedMessage(m.id)");
+    expect(thread).toContain("void performAdminDelete([m.id])");
   });
 });
 

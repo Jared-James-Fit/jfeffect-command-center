@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -35,6 +35,7 @@ const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "a
 
 function AccountPage() {
   const portalUserId = usePortalUserId();
+  const { isImpersonating } = useClientImpersonation();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
@@ -258,7 +259,7 @@ function AccountPage() {
             <BasicInfoForm
               values={form}
               onChange={(p) => setForm({ ...form, ...p })}
-              emailReadOnly={form.email ?? user.email ?? ""}
+              emailReadOnly={form.email ?? (portalUserId === user.id ? user.email : "") ?? ""}
             />
             <p className="text-[11px] text-muted-foreground">
               Saves automatically. Last updated:{" "}
@@ -273,7 +274,7 @@ function AccountPage() {
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
             <ProfilePictureCapture
               mode="client"
-              userId={user.id}
+              userId={portalUserId ?? user.id}
               currentUrl={form.profile_picture_url}
               onUploaded={updatePicture}
             />
@@ -337,11 +338,15 @@ function AccountPage() {
           </div>
         )}
 
-        <div id="legal-safety" className="md:col-span-3 scroll-mt-32">
-          <SectionErrorBoundary label="Legal & Safety">
-            <ClientLegalSafety />
-          </SectionErrorBoundary>
-        </div>
+        {/* Legal status/consents come from the signed-in session, so in coach
+            "View as client" they'd be the coach's, not the client's. */}
+        {!isImpersonating && (
+          <div id="legal-safety" className="md:col-span-3 scroll-mt-32">
+            <SectionErrorBoundary label="Legal & Safety">
+              <ClientLegalSafety />
+            </SectionErrorBoundary>
+          </div>
+        )}
 
         <div id="install-app" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Install App">

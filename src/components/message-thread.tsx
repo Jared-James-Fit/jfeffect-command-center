@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   listMessages, sendMessage, markRead, setConversationStatus, setConversationPriority,
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
-  editMessage, deleteMessageForEveryone, purgeDeletedMessage, replyMediaFor,
+  editMessage, deleteMessageForEveryone, adminDeleteMessages, replyMediaFor,
   listReactions, toggleReaction, REACTION_EMOJIS,
   listOlderMessages,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
@@ -45,6 +45,7 @@ import { fallbackEmoji } from "@/lib/gif-fallback";
 import { markRecent as markSoundRecent } from "@/lib/chat-sounds";
 import { ChatSoundCard } from "@/components/chat-sound-card";
 import { ScheduledStrip } from "@/components/messages/scheduled-strip";
+import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { ScheduleButton } from "@/components/messages/schedule-button";
 import { renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
@@ -764,7 +765,9 @@ export function MessageThread({
   peerName?: string | null;
   peerAvatarPath?: string | null;
 }) {
-  const { user } = useAuth();
+  const { user, role: appRole } = useAuth();
+  // Admins (not coaches) can silently delete any message in the chat.
+  const isAdmin = role === "admin" && appRole === "admin";
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -1155,12 +1158,15 @@ export function MessageThread({
           (prev ?? []).map((m) => m.id === updated.id ? updated : m)
         );
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: `client_id=eq.${clientId}` }, (payload: any) => {
+      // DELETE events can't be filtered server-side (only the id is sent),
+      // so listen to all and drop the row if it's in this thread.
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (payload: any) => {
         const deletedId = payload.old?.id;
         if (!deletedId) return;
         qc.setQueryData(key, (prev: Message[] | undefined) =>
-          (prev ?? []).filter((m) => m.id !== deletedId)
+          prev && prev.some((m) => m.id === deletedId) ? prev.filter((m) => m.id !== deletedId) : prev
         );
+        setOlderMessages((prev) => (prev.some((m) => m.id === deletedId) ? prev.filter((m) => m.id !== deletedId) : prev));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload: any) => {
         const msgId = payload.new?.message_id ?? payload.old?.message_id;
@@ -1417,6 +1423,13 @@ export function MessageThread({
     }, 1400);
   };
 
+  // Sheets/dialogs opened from a message (check-ins, forms, payment cards)
+  // are portaled to <body> but still bubble React events through the
+  // message bubble. Bubble gestures must ignore those, or a resting finger in
+  // the sheet starts a long-press / double-tap that swallows the next tap.
+  const fromPortal = (e: React.SyntheticEvent) =>
+    !(e.currentTarget as Node).contains(e.target as Node);
+
   // ---------- Long-press + selection helpers ----------
   const startLongPress = (id: string, x: number, y: number) => {
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
@@ -1452,6 +1465,7 @@ export function MessageThread({
   // chat keeps scrolling naturally; back-gesture (right-edge swipe) is left
   // alone because we only react to leftward dx.
   const onSwipeTouchStart = (e: React.TouchEvent) => {
+    if (fromPortal(e)) return;
     if (e.touches.length !== 1) return;
     const t = e.touches[0];
     swipeRef.current = { x: t.clientX, y: t.clientY, decided: false, horizontal: false };
@@ -1475,13 +1489,19 @@ export function MessageThread({
     }
   };
   const onSwipeTouchEnd = () => {
+    if (!swipeRef.current) return;
     swipeRef.current = null;
     setSwipeX(0);
   };
 
+  const canDeleteMessage = useCallback(
+    (m: Message) =>
+      !m.id.startsWith("optimistic-") && (isAdmin || (m.sender_role === role && !m.deleted_at)),
+    [isAdmin, role],
+  );
   const myIds = useMemo(
-    () => new Set(visibleMessages.filter((m) => m.sender_role === role && !m.deleted_at).map((m) => m.id)),
-    [visibleMessages, role],
+    () => new Set(visibleMessages.filter(canDeleteMessage).map((m) => m.id)),
+    [visibleMessages, canDeleteMessage],
   );
   const selectedDeletable = useMemo(
     () => Array.from(selectedIds).filter((id) => myIds.has(id)),
@@ -1489,7 +1509,25 @@ export function MessageThread({
   );
   const allMineSelected = myIds.size > 0 && Array.from(myIds).every((id) => selectedIds.has(id));
 
+  /** Admin silent delete: gone for everyone, no placeholder. */
+  const performAdminDelete = async (ids: string[]) => {
+    const gone = new Set(ids);
+    try {
+      await adminDeleteMessages(ids);
+      qc.setQueryData(["messages", clientId, role], (prev: Message[] | undefined) => (prev ?? []).filter((m) => !gone.has(m.id)));
+      setOlderMessages((prev) => prev.filter((m) => !gone.has(m.id)));
+      qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+      qc.invalidateQueries({ queryKey: deletionsQueryKey({ clientId }) });
+      qc.invalidateQueries({ queryKey: ["conversation-states"] });
+      toast.success(`${ids.length} message${ids.length === 1 ? "" : "s"} deleted`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to delete");
+    }
+    exitSelection();
+  };
+
   const performBulkDelete = async (ids: string[]) => {
+    if (isAdmin) return performAdminDelete(ids);
     let failed = 0;
     for (const id of ids) {
       try { await deleteMessageForEveryone(id); }
@@ -1857,9 +1895,9 @@ export function MessageThread({
                   WebkitTouchCallout: "none",
                   WebkitTapHighlightColor: "transparent",
                 }}
-                onContextMenu={(e) => { if (!isDeleted) e.preventDefault(); }}
+                onContextMenu={(e) => { if (!isDeleted && !fromPortal(e)) e.preventDefault(); }}
                 onPointerDown={(e) => {
-                  if (isEditing || isDeleted) return;
+                  if (isEditing || (isDeleted && !isAdmin) || fromPortal(e)) return;
                   if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video")) return;
                   startLongPress(m.id, e.clientX, e.clientY);
                 }}
@@ -1868,7 +1906,7 @@ export function MessageThread({
                 onPointerCancel={cancelLongPress}
                 onPointerLeave={cancelLongPress}
                 onTouchEnd={(e) => {
-                  if (isDeleted || isEditing || selectionMode) return;
+                  if (isDeleted || isEditing || selectionMode || fromPortal(e)) return;
                   const lp = longPressRef.current;
                   if (lp) return; // long-press handler owns this gesture
                   const t = e.changedTouches[0];
@@ -1886,7 +1924,7 @@ export function MessageThread({
                   }
                 }}
                 onDoubleClick={(e) => {
-                  if (isDeleted || isEditing || selectionMode) return;
+                  if (isDeleted || isEditing || selectionMode || fromPortal(e)) return;
                   if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video,img")) return;
                   try {
                     const sel = window.getSelection();
@@ -1895,7 +1933,7 @@ export function MessageThread({
                   void onToggleReaction(m.id, defaultReaction);
                 }}
                 onClickCapture={(e) => {
-                  if (suppressClickRef.current) {
+                  if (suppressClickRef.current && !fromPortal(e)) {
                     suppressClickRef.current = false;
                     e.stopPropagation();
                     e.preventDefault();
@@ -1956,18 +1994,10 @@ export function MessageThread({
                     {role === "admin" && !m.id.startsWith("optimistic-") && (
                       <button
                         type="button"
-                        onClick={async (e) => {
+                        onClick={(e) => {
                           e.stopPropagation();
-                          const key = ["messages", clientId, role] as const;
-                          const prev = qc.getQueryData<Message[]>(key);
-                          // Vanish instantly; put it back if the database refuses.
-                          qc.setQueryData<Message[]>(key, (list) => (list ?? []).filter((x) => x.id !== m.id));
-                          setOlderMessages((list) => list.filter((x) => x.id !== m.id));
-                          try { await purgeDeletedMessage(m.id); }
-                          catch (err: any) {
-                            if (prev) qc.setQueryData(key, prev);
-                            toast.error(err?.message ?? "Couldn't remove it");
-                          }
+                          // Same admin silent delete as Select → Delete: removes the row and keeps the audit copy.
+                          void performAdminDelete([m.id]);
                         }}
                         className="ml-1 rounded-full border border-current/30 px-2 py-0.5 text-[10px] font-semibold not-italic opacity-80 active:scale-95"
                       >
@@ -2181,17 +2211,17 @@ export function MessageThread({
                           className="text-destructive focus:text-destructive"
                           onClick={() => {
                             setActionsForId(null);
-                            setConfirmDelete({ ids: [m.id], label: "Delete this message for everyone?" });
+                            setConfirmDelete({ ids: [m.id], label: isAdmin ? "Delete this message?" : "Delete this message for everyone?" });
                           }}
                         >
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
+                          <Trash2 className="mr-2 h-4 w-4" /> {isAdmin ? "Delete" : "Delete for everyone"}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                 )}
                 {/* Desktop hover quick-react for incoming messages */}
-                {!mine && !isDeleted && !isEditing && !selectionMode && (
+                {!mine && (!isDeleted || isAdmin) && !isEditing && !selectionMode && (
                   <div className={cn(
                     "absolute -top-2 left-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
                     actionsForId === m.id && "opacity-100",
@@ -2223,6 +2253,25 @@ export function MessageThread({
                         <DropdownMenuItem onClick={() => startReply(m)}>
                           <Reply className="mr-2 h-4 w-4" /> Reply
                         </DropdownMenuItem>
+                        {isAdmin && (
+                          <>
+                            <DropdownMenuItem
+                              onClick={() => { setActionsForId(null); setSelectionMode(true); setSelectedIds(new Set([m.id])); }}
+                            >
+                              <CheckSquare className="mr-2 h-4 w-4" /> Select
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => {
+                                setActionsForId(null);
+                                setConfirmDelete({ ids: [m.id], label: "Delete this message?" });
+                              }}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -2257,6 +2306,7 @@ export function MessageThread({
           cancel/retry. RLS hides these rows from clients, so it's only
           rendered for the admin role. */}
       {role === "admin" && clientId && <ScheduledStrip clientId={clientId} />}
+      {role === "admin" && clientId && <DeletedMessagesStrip clientId={clientId} />}
 
       <div
         className={cn(
@@ -2597,7 +2647,7 @@ export function MessageThread({
               if (blocked > 0) toast.message(`Skipping ${blocked} message${blocked === 1 ? "" : "s"} you can't delete`);
               setConfirmDelete({
                 ids: selectedDeletable,
-                label: `Delete ${selectedDeletable.length} message${selectedDeletable.length === 1 ? "" : "s"} for everyone?`,
+                label: `Delete ${selectedDeletable.length} message${selectedDeletable.length === 1 ? "" : "s"}${isAdmin ? "" : " for everyone"}?`,
               });
             }}
           >
@@ -2616,7 +2666,7 @@ export function MessageThread({
             const m = visibleMessages.find((x) => x.id === sheetForId);
             if (!m) return null;
             const canEdit = m.sender_role === role && !m.deleted_at && (m.body?.length ?? 0) > 0;
-            const canDelete = m.sender_role === role && !m.deleted_at;
+            const canDelete = canDeleteMessage(m);
             const canReact = !m.deleted_at;
             const canReply = !m.deleted_at && !m.is_internal_note && !m.id.startsWith("optimistic-");
             return (
@@ -2694,7 +2744,7 @@ export function MessageThread({
                     onClick={() => {
                       setSheetForId(null);
                       setSelectionMode(true);
-                      setSelectedIds(new Set(m.sender_role === role && !m.deleted_at ? [m.id] : []));
+                      setSelectedIds(new Set(canDeleteMessage(m) ? [m.id] : []));
                     }}
                   >
                     <CheckSquare className="mr-3 h-5 w-5" /> Select
@@ -2705,10 +2755,10 @@ export function MessageThread({
                       className="h-12 justify-start text-base text-destructive hover:text-destructive"
                       onClick={() => {
                         setSheetForId(null);
-                        setConfirmDelete({ ids: [m.id], label: "Delete this message for everyone?" });
+                        setConfirmDelete({ ids: [m.id], label: isAdmin ? "Delete this message?" : "Delete this message for everyone?" });
                       }}
                     >
-                      <Trash2 className="mr-3 h-5 w-5" /> Delete for everyone
+                      <Trash2 className="mr-3 h-5 w-5" /> {isAdmin ? "Delete" : "Delete for everyone"}
                     </Button>
                   )}
                   {!canEdit && !canDelete && !canReact && (
@@ -2736,7 +2786,9 @@ export function MessageThread({
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmDelete?.label ?? "Delete?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              This cannot be undone. Both sides will see a "This message was deleted" placeholder.
+              {isAdmin
+                ? "Removed for everyone with no trace — the client won't see a placeholder or timestamp. Only coaches and admins can see it under “deleted”."
+                : "This cannot be undone. Both sides will see a \"This message was deleted\" placeholder."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2746,6 +2798,10 @@ export function MessageThread({
               onClick={async () => {
                 const ids = confirmDelete?.ids ?? [];
                 setConfirmDelete(null);
+                if (isAdmin) {
+                  await performAdminDelete(ids);
+                  return;
+                }
                 if (ids.length === 1) {
                   try {
                     await deleteMessageForEveryone(ids[0]);
@@ -2759,7 +2815,7 @@ export function MessageThread({
                 await performBulkDelete(ids);
               }}
             >
-              Delete for everyone
+              {isAdmin ? "Delete" : "Delete for everyone"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
