@@ -71,7 +71,7 @@ describe("setup emails warn the page can take a moment", () => {
     ["client setup", InviteEmail, { siteName: "JF Effect", siteUrl: "https://jfeffect.com", confirmationUrl: url }],
     ["password", RecoveryEmail, { siteName: "JF Effect", confirmationUrl: url }],
     ["member setup", setupReminder.component, { first_name: "Bob", setup_url: "https://jfeffect.com/member-setup?token=abc" }],
-  ])("%s email", async (_name, Template: any, props) => {
+  ])("%s email", async (_name, Template: any, props: any) => {
     const html = await render(React.createElement(Template, props));
     expect(html).toContain(HEADS_UP);
   });
