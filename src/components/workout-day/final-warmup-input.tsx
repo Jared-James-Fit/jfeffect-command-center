@@ -1,16 +1,53 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Flame, Pencil, X } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { describeWarmup, readWarmup, warmupKey, writeWarmup, type StoredWarmup, type WarmupUnit } from "@/lib/final-warmup";
+import { describeWarmup, normalizeWarmupRow, type WarmupSetRow, type WarmupUnit } from "@/lib/final-warmup";
 import { WARMUP_MAX_REPS } from "@/lib/load-suggestion";
 
-/** Local, per-session state for a card's final warm-up (device storage, 16 h). */
-export function useFinalWarmup(dayId: string, rowId: string) {
-  const key = warmupKey(dayId, rowId);
-  const [value, setValue] = useState<StoredWarmup | null>(() => (typeof window === "undefined" ? null : readWarmup(key)));
-  useEffect(() => { setValue(readWarmup(key)); }, [key]);
-  const set = (v: StoredWarmup | null) => { setValue(v); writeWarmup(key, v); };
-  return [value, set] as const;
+const sb = supabase as any;
+const MAX_WARMUPS = 8;
+
+/** Logged warm-up sets for one exercise card (pl_warmup_sets — never counted as work). */
+export function useWarmupSets(rowId: string, clientId: string | null | undefined) {
+  const qc = useQueryClient();
+  const key = ["pl-warmup-sets", rowId, clientId ?? null];
+  const { data } = useQuery({
+    queryKey: key,
+    enabled: !!clientId && !!rowId,
+    staleTime: 60_000,
+    queryFn: async (): Promise<WarmupSetRow[]> => {
+      const { data } = await sb.from("pl_warmup_sets").select("id,load,unit,reps,rpe,created_at")
+        .eq("row_id", rowId).eq("client_id", clientId).order("created_at", { ascending: true }).throwOnError();
+      return ((data ?? []) as any[]).map(normalizeWarmupRow).filter((r): r is WarmupSetRow => !!r);
+    },
+  });
+  const sets = data ?? [];
+  const refresh = () => qc.invalidateQueries({ queryKey: key });
+  const fail = (e: any) => toast.error(e?.message ?? "Could not save warm-up");
+  const save = async (input: { id?: string; load: number; unit: WarmupUnit; reps: number; rpe: number | null }) => {
+    if (!clientId) return;
+    try {
+      if (input.id) {
+        await sb.from("pl_warmup_sets").update({ load: input.load, unit: input.unit, reps: input.reps, rpe: input.rpe })
+          .eq("id", input.id).eq("client_id", clientId).throwOnError();
+      } else {
+        if (sets.length >= MAX_WARMUPS) { toast.error(`Up to ${MAX_WARMUPS} warm-up sets`); return; }
+        await sb.from("pl_warmup_sets").insert({ row_id: rowId, client_id: clientId, load: input.load, unit: input.unit, reps: input.reps, rpe: input.rpe }).throwOnError();
+      }
+      await refresh();
+    } catch (e) { fail(e); }
+  };
+  const remove = async (id: string) => {
+    if (!clientId) return;
+    try {
+      await sb.from("pl_warmup_sets").delete().eq("id", id).eq("client_id", clientId).throwOnError();
+      await refresh();
+    } catch (e) { fail(e); }
+  };
+  return { sets, save, remove, atLimit: sets.length >= MAX_WARMUPS };
 }
 
 const FEEL: Array<{ rpe: number; label: string }> = [
@@ -20,139 +57,165 @@ const FEEL: Array<{ rpe: number; label: string }> = [
 ];
 
 /**
- * "Final warm-up (optional)" for squat / bench / deadlift cards. Entering it
- * sharpens the first working-set suggestion; skipping it changes nothing.
+ * Warm-up sets for one exercise card: the logged list, the add/edit form and (for
+ * squat / bench / deadlift, before any warm-up exists) a one-tap prompt. The
+ * heaviest logged warm-up sharpens the first working-set suggestion; skipping it
+ * changes nothing. `form` is controlled so the "Add set" menu can open it.
  */
-export function FinalWarmupInput({
-  value,
+export function WarmupSection({
+  sets,
   unit,
+  form,
+  onFormChange,
+  onSave,
+  onRemove,
+  canEdit,
+  showPrompt,
   hasHistory,
-  onChange,
 }: {
-  value: StoredWarmup | null;
+  sets: WarmupSetRow[];
   unit: WarmupUnit;
+  /** null = closed, "new" = adding, otherwise the id being edited. */
+  form: string | null;
+  onFormChange: (f: string | null) => void;
+  onSave: (v: { id?: string; load: number; unit: WarmupUnit; reps: number; rpe: number | null }) => void | Promise<void>;
+  onRemove: (id: string) => void | Promise<void>;
+  /** False once working sets are logged / when read-only: the list stays, edits go. */
+  canEdit: boolean;
+  /** Offer the one-tap "final warm-up" prompt (SBD cards with no warm-up yet). */
+  showPrompt: boolean;
   /** True when there is already enough history for a suggestion (so this only sharpens it). */
   hasHistory: boolean;
-  onChange: (v: StoredWarmup | null) => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const editing = form && form !== "new" ? sets.find((s) => s.id === form) ?? null : null;
   const [load, setLoad] = useState("");
   const [reps, setReps] = useState("");
   const [rpe, setRpe] = useState<number | null>(null);
+  const [seeded, setSeeded] = useState<string | null>(null);
 
-  const open = () => {
-    setLoad(value ? String(Math.round(value.load * 10) / 10) : "");
-    setReps(value ? String(value.reps) : "");
-    setRpe(value?.rpe ?? null);
-    setEditing(true);
-  };
+  // Seed the fields once each time the form opens (new or a specific warm-up).
+  if (form !== seeded) {
+    setSeeded(form);
+    if (form) {
+      const base = editing ? { load: warmupDisplay(editing, unit), reps: editing.reps, rpe: editing.rpe } : null;
+      setLoad(base ? String(base.load) : "");
+      setReps(base ? String(base.reps) : "");
+      setRpe(base?.rpe ?? null);
+    }
+  }
+
   const loadNum = Number(load.replace(",", "."));
   const repsNum = Number(reps);
   const valid = loadNum > 0 && Number.isFinite(loadNum) && Number.isInteger(repsNum) && repsNum >= 1 && repsNum <= WARMUP_MAX_REPS;
-  const save = () => {
+  const save = async () => {
     if (!valid) return;
-    onChange({ load: loadNum, unit, reps: repsNum, rpe, savedAt: Date.now() });
-    setEditing(false);
+    onFormChange(null);
+    await onSave({ id: editing?.id, load: loadNum, unit, reps: repsNum, rpe });
   };
 
-  if (editing) {
-    return (
-      <div className="mt-1.5 space-y-2 rounded-lg border border-border bg-card px-2.5 py-2" data-testid="final-warmup-form">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-bold">
-            <Flame className="h-3.5 w-3.5 text-orange-500" aria-hidden="true" />
-            Final warm-up <span className="font-medium text-muted-foreground">(optional)</span>
+  return (
+    <div data-testid="warmup-section">
+      {sets.length > 0 && (
+        <div className="mt-1.5 space-y-1" data-testid="warmup-list">
+          {sets.map((s, i) => (
+            <div key={s.id} className="flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+              <Flame className="h-3 w-3 text-orange-500" aria-hidden="true" />
+              <span>Warm-up {sets.length > 1 ? i + 1 : ""}</span>
+              <span className="font-bold tabular-nums text-foreground">{describeWarmup(s, unit)}</span>
+              {canEdit && <span className="ml-auto flex items-center gap-0.5">
+                <button type="button" onClick={() => onFormChange(s.id)} aria-label="Edit warm-up" className="rounded p-1 hover:bg-foreground/10">
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button type="button" onClick={() => void onRemove(s.id)} aria-label="Remove warm-up" className="rounded p-1 hover:bg-foreground/10">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {form ? (
+        <div className="mt-1.5 space-y-2 rounded-lg border border-border bg-card px-2.5 py-2" data-testid="warmup-form">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-bold">
+              <Flame className="h-3.5 w-3.5 text-orange-500" aria-hidden="true" />
+              {editing ? "Edit warm-up" : "Warm-up set"} <span className="font-medium text-muted-foreground">(optional)</span>
+            </div>
+            <button type="button" onClick={() => onFormChange(null)} aria-label="Cancel" className="rounded-full p-1 text-muted-foreground hover:bg-muted">
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <button type="button" onClick={() => setEditing(false)} aria-label="Cancel" className="rounded-full p-1 text-muted-foreground hover:bg-muted">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-        <div className="flex items-end gap-2">
-          <label className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Weight ({unit})
-            <input
-              inputMode="decimal"
-              value={load}
-              onChange={(e) => setLoad(e.target.value)}
-              className="mt-0.5 h-10 w-full rounded-md border border-input bg-background px-2 text-base font-bold tabular-nums text-foreground"
-              aria-label={`Final warm-up weight in ${unit}`}
-            />
-          </label>
-          <span className="pb-2.5 text-sm font-bold text-muted-foreground">×</span>
-          <label className="w-16 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Reps
-            <input
-              inputMode="numeric"
-              value={reps}
-              onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
-              className="mt-0.5 h-10 w-full rounded-md border border-input bg-background px-2 text-base font-bold tabular-nums text-foreground"
-              aria-label="Final warm-up reps"
-            />
-          </label>
-        </div>
-        <div>
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">How did it feel? (optional)</div>
-          <div className="flex gap-1.5" role="group" aria-label="How the final warm-up felt">
-            {FEEL.map((f) => (
-              <button
-                key={f.rpe}
-                type="button"
-                onClick={() => setRpe(rpe === f.rpe ? null : f.rpe)}
-                aria-pressed={rpe === f.rpe}
-                className={cn(
-                  "h-9 flex-1 rounded-md border text-xs font-bold transition",
-                  rpe === f.rpe ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-muted",
-                )}
-              >
-                {f.label} <span className="font-medium opacity-70">RPE {f.rpe}</span>
-              </button>
-            ))}
+          <div className="flex items-end gap-2">
+            <label className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Weight ({unit})
+              <input
+                inputMode="decimal"
+                value={load}
+                onChange={(e) => setLoad(e.target.value)}
+                className="mt-0.5 h-10 w-full rounded-md border border-input bg-background px-2 text-base font-bold tabular-nums text-foreground"
+                aria-label={`Warm-up weight in ${unit}`}
+              />
+            </label>
+            <span className="pb-2.5 text-sm font-bold text-muted-foreground">×</span>
+            <label className="w-16 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Reps
+              <input
+                inputMode="numeric"
+                value={reps}
+                onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
+                className="mt-0.5 h-10 w-full rounded-md border border-input bg-background px-2 text-base font-bold tabular-nums text-foreground"
+                aria-label="Warm-up reps"
+              />
+            </label>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
+          <div>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">How did it feel? (optional)</div>
+            <div className="flex gap-1.5" role="group" aria-label="How the warm-up felt">
+              {FEEL.map((f) => (
+                <button
+                  key={f.rpe}
+                  type="button"
+                  onClick={() => setRpe(rpe === f.rpe ? null : f.rpe)}
+                  aria-pressed={rpe === f.rpe}
+                  className={cn(
+                    "h-9 flex-1 rounded-md border text-xs font-bold transition",
+                    rpe === f.rpe ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-muted",
+                  )}
+                >
+                  {f.label} <span className="font-medium opacity-70">RPE {f.rpe}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground">Used to sharpen your suggestion. Not counted in volume, records or points.</p>
           <button
             type="button"
-            onClick={save}
+            onClick={() => void save()}
             disabled={!valid}
-            className="h-9 flex-1 rounded-md bg-primary text-xs font-bold text-primary-foreground disabled:opacity-40"
+            className="h-9 w-full rounded-md bg-primary text-xs font-bold text-primary-foreground disabled:opacity-40"
           >
-            Update suggestion
+            {editing ? "Save warm-up" : "Add warm-up"}
           </button>
-          {value && (
-            <button
-              type="button"
-              onClick={() => { onChange(null); setEditing(false); }}
-              className="h-9 rounded-md border border-border px-3 text-xs font-semibold text-muted-foreground hover:bg-muted"
-            >
-              Remove
-            </button>
-          )}
         </div>
-      </div>
-    );
-  }
-
-  if (value) {
-    return (
-      <div className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground" data-testid="final-warmup-chip">
-        <Flame className="h-3 w-3 text-orange-500" aria-hidden="true" />
-        Final warm-up <span className="font-bold tabular-nums text-foreground">{describeWarmup(value, unit)}</span>
-        <button type="button" onClick={open} aria-label="Edit final warm-up" className="rounded p-0.5 hover:bg-foreground/10">
-          <Pencil className="h-3 w-3" />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={open}
-      data-testid="final-warmup-prompt"
-      className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-muted active:scale-[0.98]"
-    >
-      <Flame className="h-3 w-3 text-orange-500" aria-hidden="true" />
-      {hasHistory ? "Add final warm-up (optional)" : "Add final warm-up for a suggestion (optional)"}
-    </button>
+      ) : (
+        showPrompt && sets.length === 0 && (
+          <button
+            type="button"
+            onClick={() => onFormChange("new")}
+            data-testid="final-warmup-prompt"
+            className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-muted active:scale-[0.98]"
+          >
+            <Flame className="h-3 w-3 text-orange-500" aria-hidden="true" />
+            {hasHistory ? "Add final warm-up (optional)" : "Add final warm-up for a suggestion (optional)"}
+          </button>
+        )
+      )}
+    </div>
   );
+}
+
+function warmupDisplay(w: WarmupSetRow, unit: WarmupUnit): number {
+  const n = w.unit === unit ? w.load : unit === "kg" ? w.load * 0.45359237 : w.load / 0.45359237;
+  return Math.round(n * 10) / 10;
 }

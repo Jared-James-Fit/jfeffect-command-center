@@ -68,8 +68,8 @@ import {
 import { WorkoutUndoProvider, useWorkoutUndo } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
-import { FinalWarmupInput, useFinalWarmup } from "@/components/workout-day/final-warmup-input";
-import { warmupInUnit } from "@/lib/final-warmup";
+import { WarmupSection, useWarmupSets } from "@/components/workout-day/final-warmup-input";
+import { pickFinalWarmup } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
@@ -3389,10 +3389,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const workedToday = existingResults.some(
     (r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external",
   );
-  const warmupEligible =
-    family !== "accessory" && !hideWeight && !coachOwnsLoad && rowLoadType === "external" && !!loadPlan && !readonly && !workedToday;
-  const [finalWarmup, setFinalWarmup] = useFinalWarmup(dayId, row.id);
-  const warmupForModel = warmupEligible && finalWarmup ? warmupInUnit(finalWarmup, activeUnit) : null;
+  // Warm-up sets can be logged on any external-load exercise (before the first
+  // working set); the heaviest one feeds the suggestion engine for that exercise.
+  const warmupAllowed =
+    !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId && !workedToday;
+  const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
+  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId);
+  const [warmupForm, setWarmupForm] = useState<string | null>(null);
+  const warmupPromptable = warmupEligible && !!loadHistory && family !== "accessory";
+  const warmupForModel = warmupEligible ? pickFinalWarmup(warmupSets, activeUnit) : null;
   const loadModel = useMemo<LoadModel | null>(() => {
     if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== "external" || !loadPlan) return null;
     const today = existingResults
@@ -3690,14 +3695,19 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {loadModel && loadPlan && (
         <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} />
       )}
-      {warmupEligible && loadModel && (
-        <FinalWarmupInput
-          value={finalWarmup}
+      {warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || warmupPromptable)) ? (
+        <WarmupSection
+          sets={warmupSets}
           unit={activeUnit}
-          hasHistory={loadModel.status === "ready" && loadModel.source !== "warmup"}
-          onChange={setFinalWarmup}
+          form={warmupAllowed ? warmupForm : null}
+          canEdit={warmupAllowed}
+          onFormChange={setWarmupForm}
+          onSave={saveWarmup}
+          onRemove={removeWarmup}
+          showPrompt={warmupPromptable}
+          hasHistory={!!loadModel && loadModel.status === "ready" && loadModel.source !== "warmup"}
         />
-      )}
+      ) : null}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge
           load={Number(
@@ -4011,18 +4021,44 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         })}
         {!readonly && adapter?.kind !== "member" && (
           <div className="flex justify-center border-t border-builder-card-border bg-background/80 py-1.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
-              onClick={() => void addSet()}
-              disabled={setCount >= 20}
-              aria-label={`Add set to ${name}`}
-            >
-              <span className="mr-1 text-base font-medium leading-none">+</span>
-              Add set
-            </Button>
+            {warmupAllowed ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
+                    aria-label={`Add set to ${name}`}
+                  >
+                    <span className="mr-1 text-base font-medium leading-none">+</span>
+                    Add set
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" className="w-56 rounded-xl p-1.5">
+                  <DropdownMenuItem onSelect={() => void addSet()} disabled={setCount >= 20} className="rounded-lg">
+                    Working set
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setWarmupForm("new")} disabled={warmupAtLimit} className="rounded-lg">
+                    Warm-up set
+                    <span className="ml-auto text-[10px] text-muted-foreground">sharpens suggestion</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
+                onClick={() => void addSet()}
+                disabled={setCount >= 20}
+                aria-label={`Add set to ${name}`}
+              >
+                <span className="mr-1 text-base font-medium leading-none">+</span>
+                Add set
+              </Button>
+            )}
           </div>
         )}
       </div>
