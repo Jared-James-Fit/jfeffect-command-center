@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLoadModel,
+  estimateFor,
   loadStep,
   percentOf1RM,
   planningTarget,
@@ -8,6 +9,10 @@ import {
   setE1rm,
   suggestSetLoad,
   suggestedSessionRpe,
+  warmupE1rm,
+  WARMUP_COLD_START_MAX_RATIO,
+  WARMUP_COLD_START_SPREAD,
+  HISTORY_SPREAD,
 } from "@/lib/load-suggestion";
 import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 
@@ -135,5 +140,131 @@ describe("helpers", () => {
     expect(suggestedSessionRpe([7, 7])).toBe(7);
     expect(suggestedSessionRpe([8])).toBeNull();
     expect(suggestedSessionRpe([5, 4, null])).toBeNull();
+  });
+});
+
+describe("final warm-up (SBD) → working-set suggestion", () => {
+  const plan = { reps: 5, rpe: 8 };
+  const base = () => buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW });
+  const withWarm = (w: { load: number; reps: number; rpe?: number | null }, extra: Record<string, unknown> = {}) =>
+    buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, warmup: w, ...extra });
+
+  describe("warmupE1rm", () => {
+    it("floors the RPE at 6 so a claimed 'easy' warm-up can never inflate the estimate", () => {
+      const at6 = warmupE1rm({ load: 120, reps: 2, rpe: 6 })!;
+      expect(warmupE1rm({ load: 120, reps: 2, rpe: 3 })).toBeCloseTo(at6, 6);
+      expect(warmupE1rm({ load: 120, reps: 2, rpe: 5 })).toBeCloseTo(at6, 6);
+    });
+    it("a harder-feeling warm-up implies a LOWER e1RM; unspecified RPE assumes a typical warm-up (7)", () => {
+      expect(warmupE1rm({ load: 120, reps: 2, rpe: 8 })!).toBeLessThan(warmupE1rm({ load: 120, reps: 2, rpe: 7 })!);
+      expect(warmupE1rm({ load: 120, reps: 2 })).toBeCloseTo(warmupE1rm({ load: 120, reps: 2, rpe: 7 })!, 6);
+    });
+    it("rejects what it can't trust", () => {
+      expect(warmupE1rm({ load: 0, reps: 2 })).toBeNull();
+      expect(warmupE1rm({ load: 120, reps: 0 })).toBeNull();
+      expect(warmupE1rm({ load: 120, reps: 12 })).toBeNull(); // not a warm-up any more
+    });
+  });
+
+  describe("with history: only a nudge", () => {
+    const hist = suggestSetLoad(base(), plan)!;
+
+    it("a warm-up in line with history leaves the suggestion essentially unchanged", () => {
+      // e1RM from history ≈ 171; a 135×2 @7 lands right around it
+      const m = withWarm({ load: 135, reps: 2, rpe: 7 });
+      expect(m.source).toBe("history_warmup");
+      const s = suggestSetLoad(m, plan)!;
+      expect(Math.abs(s.target - hist.target) / hist.target).toBeLessThanOrEqual(0.03);
+    });
+
+    it("a very easy / light warm-up can raise the suggestion by at most ~1.5% (never a big jump)", () => {
+      const s = suggestSetLoad(withWarm({ load: 100, reps: 1, rpe: 6 }), plan)!;
+      // 100 kg single is far below history → pushes DOWN, never up; flip it: a huge warm-up that implies a huge e1RM
+      const up = suggestSetLoad(withWarm({ load: 200, reps: 1, rpe: 6 }), plan)!;
+      expect(up.target / hist.target).toBeLessThanOrEqual(1.015 + 0.03); // 1.5% + one plate step of rounding
+      expect(s.target).toBeLessThanOrEqual(hist.target);
+    });
+
+    it("a heavy-feeling / weak warm-up backs the suggestion off by at most ~3%", () => {
+      const s = suggestSetLoad(withWarm({ load: 90, reps: 3, rpe: 9 }), plan)!;
+      expect(s.target).toBeLessThanOrEqual(hist.target);
+      expect(s.target / hist.target).toBeGreaterThanOrEqual(0.97 - 0.02); // −3% + rounding
+    });
+
+    it("backing off is allowed more than pushing up (asymmetric, safety first) — on the unrounded estimate", () => {
+      const raw = (w: { load: number; reps: number; rpe: number }) => estimateFor(withWarm(w), 5, 8)!.load;
+      const h = estimateFor(base(), 5, 8)!.load;
+      const down = raw({ load: 60, reps: 1, rpe: 9 }); // implausibly weak -> clamped
+      const up = raw({ load: 300, reps: 1, rpe: 6 }); // implausibly strong -> clamped
+      expect(down / h).toBeCloseTo(0.97, 3); // −3%
+      expect(up / h).toBeCloseTo(1.015, 3); // +1.5%
+      expect(h - down).toBeGreaterThan(up - h);
+    });
+
+    it("keeps the readiness trim instead of cancelling it", () => {
+      const tired = { multiplier: 0.95, reasons: ["short sleep"] };
+      const noWarm = estimateFor(buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, readiness: tired }), 5, 8)!.load;
+      const warm = estimateFor(withWarm({ load: 135, reps: 2, rpe: 7 }, { readiness: tired }), 5, 8)!.load;
+      expect(warm).toBeLessThan(hist.target); // still eased for the bad sleep
+      expect(warm / noWarm).toBeGreaterThanOrEqual(0.97 - 1e-9); // the warm-up only nudges: −3% .. +1.5%
+      expect(warm / noWarm).toBeLessThanOrEqual(1.015 + 1e-9);
+    });
+
+    it("never narrows the range below the history floor", () => {
+      const s = suggestSetLoad(withWarm({ load: 135, reps: 2, rpe: 7 }), plan)!;
+      expect(s.low).toBeLessThan(s.target);
+      expect(s.high).toBeGreaterThan(s.target);
+    });
+  });
+
+  describe("no history (a new lift)", () => {
+    const cold = (w: { load: number; reps: number; rpe?: number | null }) => buildLoadModel({ history: [], today: [], unit: "kg", now: NOW, warmup: w });
+
+    it("without a warm-up it still just calibrates", () => {
+      expect(buildLoadModel({ history: [], today: [], unit: "kg", now: NOW }).status).toBe("calibrating");
+    });
+    it("a warm-up unlocks a first suggestion — conservative and with a wider range", () => {
+      const m = cold({ load: 100, reps: 3, rpe: 7 });
+      expect(m.status).toBe("ready");
+      expect(m.source).toBe("warmup");
+      const s = suggestSetLoad(m, plan)!;
+      // conservative: below the raw chart value for that warm-up
+      const raw = warmupE1rm({ load: 100, reps: 3, rpe: 7 })! * percentOf1RM(5, 2)!;
+      expect(s.target).toBeLessThan(raw);
+      expect(s.high - s.low).toBeGreaterThan(suggestSetLoad(base(), plan)!.high - suggestSetLoad(base(), plan)!.low - 0.001);
+    });
+    it("never suggests more than 1.25× the warm-up load", () => {
+      for (const w of [{ load: 40, reps: 8, rpe: 7 }, { load: 100, reps: 3, rpe: 6 }, { load: 180, reps: 1, rpe: 6 }]) {
+        const s = suggestSetLoad(cold(w), { reps: 3, rpe: 8 })!;
+        expect(s.target).toBeLessThanOrEqual(w.load * WARMUP_COLD_START_MAX_RATIO + 2.5);
+      }
+    });
+    it("uses the documented cold-start spread", () => {
+      expect(WARMUP_COLD_START_SPREAD).toBeGreaterThan(HISTORY_SPREAD);
+    });
+    it("ignores an unusable warm-up (stays calibrating)", () => {
+      expect(cold({ load: 100, reps: 15 }).status).toBe("calibrating");
+    });
+  });
+
+  describe("once a working set is logged today, that set takes over", () => {
+    it("the warm-up has no effect any more", () => {
+      const today = [{ load: 150, reps: 5, rpe: 8 }];
+      const a = suggestSetLoad(buildLoadModel({ history: twoWeeks, today, unit: "kg", now: NOW }), { reps: 5, rpe: 8 })!;
+      const b = suggestSetLoad(buildLoadModel({ history: twoWeeks, today, unit: "kg", now: NOW, warmup: { load: 100, reps: 1, rpe: 6 } }), { reps: 5, rpe: 8 })!;
+      expect(b).toEqual(a);
+    });
+    it("also for a new lift: the logged set calibrates, the warm-up is dropped", () => {
+      const m = buildLoadModel({ history: [], today: [{ load: 120, reps: 5, rpe: 8 }], unit: "kg", now: NOW, warmup: { load: 60, reps: 3, rpe: 7 } });
+      expect(m.source).toBe("today");
+      expect(m.warmup).toBeNull();
+    });
+  });
+
+  it("works in lb as well", () => {
+    const m = buildLoadModel({ history: [], today: [], unit: "lb", now: NOW, warmup: { load: 225, reps: 3, rpe: 7 } });
+    const s = suggestSetLoad(m, plan)!;
+    expect(s.unit).toBe("lb");
+    expect(s.target % 5).toBe(0);
   });
 });

@@ -68,6 +68,8 @@ import {
 import { WorkoutUndoProvider, useWorkoutUndo } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
+import { FinalWarmupInput, useFinalWarmup } from "@/components/workout-day/final-warmup-input";
+import { warmupInUnit } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
@@ -2839,7 +2841,11 @@ function LoadSuggestionCard({
     ? `${fmtNum(hint.target)} ${hint.unit}`
     : `${fmtNum(hint.low)}–${fmtNum(hint.high)} ${hint.unit}`;
   const why =
-    model.source === "history"
+    model.source === "warmup"
+      ? "from your final warm-up · first lift, so kept conservative"
+      : model.source === "history_warmup"
+        ? "your history, nudged by your final warm-up"
+        : model.source === "history"
       ? model.readiness.reasons.length
         ? `eased for ${model.readiness.reasons[0]}`
         : model.staleDays
@@ -3377,6 +3383,16 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => planningTarget({ repTarget, rpeTarget, rirTarget }),
     [repTarget, rpeTarget, rirTarget],
   );
+  // Optional final warm-up (squat / bench / deadlift family only). It sharpens
+  // the FIRST working-set suggestion, so it is offered only while no working
+  // set is logged yet today and only where the engine can suggest at all.
+  const workedToday = existingResults.some(
+    (r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external",
+  );
+  const warmupEligible =
+    family !== "accessory" && !hideWeight && !coachOwnsLoad && rowLoadType === "external" && !!loadPlan && !readonly && !workedToday;
+  const [finalWarmup, setFinalWarmup] = useFinalWarmup(dayId, row.id);
+  const warmupForModel = warmupEligible && finalWarmup ? warmupInUnit(finalWarmup, activeUnit) : null;
   const loadModel = useMemo<LoadModel | null>(() => {
     if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== "external" || !loadPlan) return null;
     const today = existingResults
@@ -3388,8 +3404,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         rpe: parseRpe(r.actual_rpe_num ?? r.actual_rpe),
       }))
       .filter((x) => x.load > 0 && x.reps > 0);
-    return buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness });
-  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness]);
+    return buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel });
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe]);
   const loadHint = useMemo<LoadSuggestion | null>(
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
@@ -3673,6 +3689,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       )}
       {loadModel && loadPlan && (
         <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} />
+      )}
+      {warmupEligible && loadModel && (
+        <FinalWarmupInput
+          value={finalWarmup}
+          unit={activeUnit}
+          hasHistory={loadModel.status === "ready" && loadModel.source !== "warmup"}
+          onChange={setFinalWarmup}
+        />
       )}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge

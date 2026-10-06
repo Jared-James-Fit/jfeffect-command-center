@@ -38,7 +38,7 @@ describe("quick check-out (review v2)", () => {
 describe("load suggestions in the logger", () => {
   const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
   it("builds a model per exercise and shows a card plus a per-set tap-to-use chip", () => {
-    expect(wdv).toContain("buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness })");
+    expect(wdv).toContain("buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel })");
     expect(wdv).toContain("<LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} />");
     expect(wdv).toContain("onClick={() => setLoad(fmtNum(loadHint.target))}");
   });

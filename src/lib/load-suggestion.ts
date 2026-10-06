@@ -23,6 +23,14 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      faded by time) and a layoff (>3 weeks) can only trim a cold suggestion.
 //   7. The range is target RPE ±0.5 widened to the error measured on real
 //      client logs, so most sets genuinely land inside it.
+//   8. SBD lifts can take an optional FINAL WARM-UP (load × reps, optional RPE)
+//      before the first working set. It is submaximal by design and RIR guesses
+//      on an easy single/double are optimistic, so it is deliberately weak: its
+//      RPE is floored at 6 (a claimed "easy" can never inflate the estimate), it
+//      only nudges a history-based suggestion (+1.5% / −3% at most, so a heavy
+//      warm-up backs you off more readily than an easy one pushes you up), and
+//      with no history at all it gives a conservative first suggestion (−4%,
+//      wider range). Once a working set is logged today, that set takes over.
 // Backtested on ~2,800 real sets (scratch script, not shipped): median error
 // 8% cold, 4.4% once today's first set is in.
 // Pure: no I/O, fully unit tested.
@@ -59,6 +67,35 @@ export function parseRpe(value: number | string | null | undefined): number | nu
   if (value == null || value === "") return null;
   const n = typeof value === "number" ? value : parseFloat(String(value).replace(/[^0-9.]/g, ""));
   return Number.isFinite(n) && n >= 1 && n <= 10 ? n : null;
+}
+
+/** Optional final warm-up before the first working set (SBD lifts). */
+export interface WarmupSet {
+  load: number; // in the model's unit
+  reps: number;
+  /** How hard it felt. Optional — a typical final warm-up is assumed when missing. */
+  rpe?: number | string | null;
+}
+/** Assumed effort when the athlete doesn't say: a normal final warm-up. */
+export const WARMUP_DEFAULT_RPE = 7;
+/** Floor on warm-up RPE. Lower claims mean MORE reps in reserve, hence a bigger e1RM: never let "easy" inflate it. */
+export const WARMUP_RPE_FLOOR = 6;
+export const WARMUP_MAX_REPS = 8;
+/** With history: the warm-up moves the suggestion by half its disagreement, clamped to −6% / +3% of it → −3% / +1.5%. */
+export const WARMUP_NUDGE_DOWN = -0.06;
+export const WARMUP_NUDGE_UP = 0.03;
+export const WARMUP_NUDGE_WEIGHT = 0.5;
+/** No history at all: trim the warm-up's own estimate, widen the range, never suggest > 1.25× the warm-up load. */
+export const WARMUP_COLD_START_FACTOR = 0.96;
+export const WARMUP_COLD_START_SPREAD = 0.08;
+export const WARMUP_COLD_START_MAX_RATIO = 1.25;
+
+/** Estimated 1RM implied by a final warm-up, or null when it can't be trusted. */
+export function warmupE1rm(w: WarmupSet): number | null {
+  if (!(w.load > 0) || !(w.reps >= 1) || w.reps > WARMUP_MAX_REPS) return null;
+  const rpe = Math.min(10, Math.max(WARMUP_RPE_FLOOR, parseRpe(w.rpe ?? null) ?? WARMUP_DEFAULT_RPE));
+  const pct = percentOf1RM(w.reps, 10 - rpe);
+  return pct ? w.load / pct : null;
 }
 
 export interface SetSample {
@@ -139,7 +176,7 @@ export interface LoadModel {
   status: "ready" | "calibrating";
   unit: "kg" | "lb";
   /** Where the estimate comes from. */
-  source: "history" | "today" | "blend" | null;
+  source: "history" | "today" | "blend" | "warmup" | "history_warmup" | null;
   historySessions: number;
   /** Past sets of this lift (recency-weighted, readiness/staleness applied). */
   history: ModelSample[];
@@ -149,6 +186,8 @@ export interface LoadModel {
   readiness: Readiness;
   /** Days since the last session of this lift, when it's been a while. */
   staleDays: number | null;
+  /** The athlete's final warm-up, when given and no working set is logged yet today. */
+  warmup: { e1rm: number; load: number; reps: number } | null;
 }
 
 function weightedMean(values: Array<{ v: number; w: number }>): number | null {
@@ -168,6 +207,8 @@ export function buildLoadModel(input: {
   today: SetSample[];
   unit: "kg" | "lb";
   readiness?: Readiness;
+  /** Optional final warm-up (SBD). Ignored once a working set is logged today. */
+  warmup?: WarmupSet | null;
   now?: Date;
 }): LoadModel {
   const { unit } = input;
@@ -223,7 +264,9 @@ export function buildLoadModel(input: {
     }
   });
 
-  const base = { unit, historySessions: sessions.length, staleDays };
+  const wE1rm = input.warmup ? warmupE1rm(input.warmup) : null;
+  const warmup = wE1rm && input.warmup && today.length === 0 ? { e1rm: wE1rm, load: input.warmup.load, reps: input.warmup.reps } : null;
+  const base = { unit, historySessions: sessions.length, staleDays, warmup };
   if (today.length > 0) {
     return {
       ...base, status: "ready",
@@ -234,7 +277,12 @@ export function buildLoadModel(input: {
     };
   }
   if (historyReady) {
-    return { ...base, status: "ready", source: "history", history, today: [], readiness };
+    return { ...base, status: "ready", source: warmup ? "history_warmup" : "history", history, today: [], readiness };
+  }
+  // No usable history: a warm-up is the only same-day signal there is, which is
+  // exactly when a brand-new lift needs a first suggestion.
+  if (warmup) {
+    return { ...base, status: "ready", source: "warmup", history: [], today: [], readiness: NEUTRAL_READINESS };
   }
   return { ...base, status: "calibrating", source: null, history: [], today: [], readiness: NEUTRAL_READINESS };
 }
@@ -285,6 +333,20 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
   };
   const t = model.today.length ? est(model.today, TODAY_ALPHA) : null;
   const h = model.history.length ? est(model.history, HISTORY_ALPHA) : null;
+  // Final warm-up: only before any working set is logged today (model.warmup is
+  // null otherwise). It nudges a history estimate, or — with no history — gives
+  // a conservative first suggestion. See header note 8.
+  if (model.warmup && !t) {
+    const w = model.warmup.e1rm * targetPct;
+    if (h) {
+      const shift = clamp(w / h.load - 1, WARMUP_NUDGE_DOWN, WARMUP_NUDGE_UP);
+      return { load: h.load * (1 + WARMUP_NUDGE_WEIGHT * shift), spread: clamp(h.spread / 2, HISTORY_SPREAD, 0.07) };
+    }
+    return {
+      load: Math.min(w * WARMUP_COLD_START_FACTOR, model.warmup.load * WARMUP_COLD_START_MAX_RATIO),
+      spread: WARMUP_COLD_START_SPREAD,
+    };
+  }
   // Spread floors are calibrated on real logs so the range is honest (most
   // sets land inside it) rather than falsely precise.
   if (t && h) return { load: 0.75 * t.load + 0.25 * h.load, spread: clamp(h.spread / 2, TODAY_SPREAD, 0.05) };
