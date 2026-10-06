@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { saveCommittedSchedule } from "@/lib/schedule-bulk.functions";
+import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -36,6 +39,7 @@ type Props = {
 
 export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, clientName }: Props) {
   const qc = useQueryClient();
+  const saveSchedule = useServerFn(saveCommittedSchedule);
   const navigate = useNavigate();
   const today = todayLocalISO();
   const [templateId, setTemplateId] = useState<string>("");
@@ -138,14 +142,9 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
   /** Persist the coach's chosen weekdays so the canonical scheduler uses them. */
   const persistDays = async (days: Weekday[]) => {
     const longDays = days.map((d) => GUARD_WEEKDAY_LABEL[d]);
-    const { data: auth } = await supabase.auth.getUser();
-    await supabase.from("clients").update({
-      committed_training_days: longDays,
-      committed_training_frequency: longDays.length,
-      training_schedule_completed: true,
-      training_schedule_last_updated: new Date().toISOString(),
-      training_schedule_updated_by: auth.user?.id ?? null,
-    } as any).eq("id", clientId);
+    // One server call: saves the days AND re-dates the client's upcoming workouts.
+    await saveSchedule({ data: { clientId, frequency: longDays.length, days: longDays } });
+    invalidateScheduleQueries(qc, { clientId });
     qc.invalidateQueries({ queryKey: ["quick-assign-client-availability", clientId] });
     qc.invalidateQueries({ queryKey: ["client", clientId] });
   };

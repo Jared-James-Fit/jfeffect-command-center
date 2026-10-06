@@ -83,6 +83,23 @@ export const applyTemplateToClientFn = createServerFn({ method: "POST" })
       p_start_from_block_id: data.startFromBlockId ?? null,
     } as any);
     if (error) throw new Error(error.message);
+
+    // Template dates come from a fixed pattern, not the client's committed
+    // training days. Re-date the new (unstarted) workouts onto those days so a
+    // freshly assigned program matches the calendar the client agreed to.
+    // Manual/locked placements are left alone, and a failure here must never
+    // fail the assignment itself (the client can re-save their schedule to retry).
+    try {
+      const { realignClientToCommittedDays } = await import("@/lib/schedule-bulk.functions");
+      await realignClientToCommittedDays({
+        clientId: data.clientId,
+        userId: ctx.userId,
+        role: (await isAdmin(ctx)) ? "admin" : "coach",
+        includePinned: false,
+      });
+    } catch (e) {
+      console.error("[applyTemplateToClient] committed-day realign failed", e);
+    }
     return (result ?? {}) as Record<string, string | null>;
   });
 

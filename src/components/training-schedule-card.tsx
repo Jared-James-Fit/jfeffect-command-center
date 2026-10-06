@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
-import { rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
+import { rescheduleFromCommittedDays, saveCommittedSchedule } from "@/lib/schedule-bulk.functions";
+import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,7 @@ type Props = {
 export function TrainingScheduleCard({ client, editable = true, compact = false, defaultEditing = false }: Props) {
   const qc = useQueryClient();
   const reschedule = useServerFn(rescheduleFromCommittedDays);
+  const saveSchedule = useServerFn(saveCommittedSchedule);
   const [editing, setEditing] = useState(defaultEditing);
   const [saving, setSaving] = useState(false);
   // Committed (mandatory) fields — only fields the client fills out
@@ -64,76 +65,76 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
       return;
     }
     setSaving(true);
-    const { data: auth } = await supabase.auth.getUser();
     const sortedDays = [...committedDays].sort(
       (a, b) => WEEK_DAYS.indexOf(a as WeekDay) - WEEK_DAYS.indexOf(b as WeekDay),
     );
-    const patch: any = {
-      committed_training_frequency: Number(committedFreq),
-      committed_training_days: sortedDays,
-      training_schedule_completed: true,
-      training_schedule_last_updated: new Date().toISOString(),
-      training_schedule_updated_by: auth.user?.id ?? null,
+
+    // Everything the schedule change touches (the saved days, every future
+    // workout date, the calendar and the Workouts tab) is refreshed together.
+    const refresh = () => {
+      qc.invalidateQueries({ queryKey: ["client", client.id] });
+      qc.invalidateQueries({ queryKey: ["my-client"] });
+      qc.invalidateQueries({ queryKey: ["my-client-schedule"] });
+      qc.invalidateQueries({ queryKey: ["my-client-schedule-gate"] });
+      qc.invalidateQueries({ queryKey: ["client-training-schedule"] });
+      qc.invalidateQueries({ queryKey: ["cal-client-data"] });
+      invalidateScheduleQueries(qc, { clientId: client.id });
+      void invalidateGroceryList(qc, client.id);
     };
-    const { data: updated, error } = await supabase
-      .from("clients")
-      .update(patch)
-      .eq("id", client.id)
-      .select("id");
-    if (!error && (!updated || updated.length === 0)) {
+
+    // One server call saves the days AND re-dates every future, unstarted
+    // workout (all blocks, including upcoming Draft blocks) onto them. Started,
+    // completed and past workouts are always preserved; coach-locked workouts
+    // stay protected for clients.
+    let res: any;
+    try {
+      res = await saveSchedule({
+        data: { clientId: client.id, frequency: Number(committedFreq), days: sortedDays },
+      });
+    } catch (e: any) {
       setSaving(false);
-      toast.error("We couldn't save to your account. Please sign out and back in, then try again.");
+      toast.error(e?.message ?? "We couldn't save your schedule. Please try again.");
       return;
     }
-    if (!error) {
-      // Log activity for admin notification surface
-      await (supabase as any).from("client_activity_log").insert({
-        client_id: client.id,
-        actor_user_id: auth.user?.id ?? null,
-        actor_role: "client",
-        action: "training_schedule_updated",
-        details: {
-          committed_training_frequency: Number(committedFreq),
-          committed_training_days: sortedDays,
+    setSaving(false);
+    refresh();
+    setEditing(false);
+
+    if (res?.realignError) {
+      // The days are saved; only the calendar update failed. Offer a retry —
+      // the realign is idempotent so running it again is always safe.
+      toast.error("Schedule saved, but your workout calendar didn't update.", {
+        action: {
+          label: "Retry",
+          onClick: async () => {
+            try {
+              await reschedule({ data: { clientId: client.id, includePinned: true } });
+              refresh();
+              toast.success("Workout calendar updated");
+            } catch (err: any) {
+              toast.error(err?.message ?? "Still couldn't update the calendar");
+            }
+          },
         },
       });
+      return;
     }
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    // Realign future auto-scheduled workouts onto the new committed days.
-    // Started, completed and past workouts are always preserved.
-    let movedCount = 0;
-    let pinned = 0;
-    try {
-      // Changing the committed schedule is the explicit instruction to
-      // realign every FUTURE, unstarted workout onto those days. Manual
-      // instance placements are included; coach-locked workouts remain
-      // protected server-side for clients.
-      const res: any = await reschedule({
-        data: { clientId: client.id, includePinned: true },
-      });
-      movedCount = res?.applied ?? 0;
-      pinned = res?.pendingPinned ?? 0;
-    } catch (e: any) {
-      toast.error(`Saved, but could not realign workouts: ${e?.message ?? "unknown error"}`);
-    }
+
+    const movedCount: number = res?.applied ?? 0;
+    const pinned: number = res?.pendingPinned ?? 0;
+    const unplaced: number = res?.unplaced ?? 0;
     toast.success(
       movedCount > 0
-        ? `Schedule saved · ${movedCount} workout${movedCount === 1 ? "" : "s"} moved${pinned > 0 ? ` · ${pinned} locked kept` : ""}`
+        ? `Schedule saved · ${movedCount} upcoming workout${movedCount === 1 ? "" : "s"} moved to your new days${pinned > 0 ? ` · ${pinned} locked kept` : ""}`
         : pinned > 0
           ? `Schedule saved · ${pinned} locked workout${pinned === 1 ? "" : "s"} kept`
           : "Schedule saved",
     );
-
-    qc.invalidateQueries({ queryKey: ["client", client.id] });
-    qc.invalidateQueries({ queryKey: ["my-client"] });
-    qc.invalidateQueries({ queryKey: ["my-client-schedule-gate"] });
-    qc.invalidateQueries({ queryKey: ["workouts-experience-client", client.id] });
-    qc.invalidateQueries({ queryKey: ["client-schedule", client.id] });
-    qc.invalidateQueries({ queryKey: ["pl-days"] });
-    qc.invalidateQueries({ queryKey: ["workout-today"] });
-    void invalidateGroceryList(qc, client.id);
-    setEditing(false);
+    if (unplaced > 0) {
+      toast.warning(
+        `${unplaced} workout${unplaced === 1 ? "" : "s"} couldn't fit on your ${sortedDays.length} training day${sortedDays.length === 1 ? "" : "s"} and kept their old date. Your coach can adjust the program.`,
+      );
+    }
   };
 
   const toggle = (list: string[], set: (v: string[]) => void, day: WeekDay) => {
