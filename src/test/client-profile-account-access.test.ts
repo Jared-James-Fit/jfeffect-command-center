@@ -15,7 +15,7 @@ describe("client profile shell cleanup", () => {
     expect(SHELL).not.toContain("Mark setup complete");
     expect(SHELL).toContain("Email reset link");
     expect(SHELL).toContain("Text setup link");
-    expect(SHELL).toContain("Copy reset link");
+    expect(SHELL).toContain("Copy reset message");
   });
 
   it("renders the workspace nav exactly once, directly inside Tabs", () => {
@@ -35,7 +35,8 @@ describe("client profile shell cleanup", () => {
   it("surfaces Account & Access inside Summary without duplicating last sign-in", () => {
     const cardIdx = SHELL.indexOf("Account &amp; Access");
     expect(cardIdx).toBeGreaterThan(-1);
-    const card = SHELL.slice(cardIdx, cardIdx + 1600);
+    // The whole card, up to its closing tag (not a fixed number of characters).
+    const card = SHELL.slice(cardIdx, SHELL.indexOf("</Card>", cardIdx));
     expect(card).toContain("Account created");
     expect(card).toContain("Invite status");
     expect(card).toContain("Manage access");
