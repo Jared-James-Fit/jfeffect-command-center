@@ -68,6 +68,7 @@ import {
 import { WorkoutUndoProvider, useWorkoutUndo } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
+import { plDayKey, plDayResultsKey, plDayRowsKey } from "@/lib/workout-query-keys";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
@@ -527,7 +528,7 @@ function WorkoutDay({
   }, [clientFromQuery, adapter]);
 
   const { data: day } = useQuery({
-    queryKey: ["pl-day", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
+    queryKey: plDayKey(dayId, adapter?.kind, adapter?.ref.ownerId),
     initialData: cachedInitialData<any>(cacheScope, "day"),
     // Days don't mutate while a workout is open. Treat as fresh for the
     // whole session so remounts (tab toggles, back nav) are instant.
@@ -623,7 +624,7 @@ function WorkoutDay({
     error: rowsError,
     refetch: refetchRows,
   } = useQuery({
-    queryKey: ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
+    queryKey: plDayRowsKey(dayId, adapter?.kind, adapter?.ref.ownerId),
     initialData: cachedInitialData<any[]>(cacheScope, "rows"),
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
@@ -772,7 +773,7 @@ function WorkoutDay({
   }, [rowsLoaded, rows.length]);
 
   const { data: results = [] } = useQuery({
-    queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId],
+    queryKey: plDayResultsKey(dayId, client?.id, adapter?.kind, adapter?.ref.ownerId, scheduledWorkoutId),
     enabled: !!client?.id && (rows as any[]).length > 0,
     initialData: client?.id ? cachedInitialData<any[]>(cacheScope, `results:${client.id}`) : undefined,
     staleTime: 2 * 60_000,
