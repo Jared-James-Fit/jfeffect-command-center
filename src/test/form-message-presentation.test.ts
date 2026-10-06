@@ -66,3 +66,44 @@ describe("planFormMessages", () => {
     expect(plan.has(r2.id)).toBe(false);
   });
 });
+
+import { groupFormHistory } from "@/lib/form-message-presentation";
+
+describe("groupFormHistory", () => {
+  it("collapses 2+ older units of a type into one summary with filled / missed counts", () => {
+    const r1 = req("w1", "weekly_checkin", "2026-09-04T15:00:00Z"); // never answered -> missed
+    const r2 = req("w2", "weekly_checkin", "2026-09-11T15:00:00Z");
+    const s2 = sub("w2", "weekly_checkin", "2026-09-12T10:00:00Z"); // answered -> filled
+    const r3 = req("w3", "weekly_checkin", "2026-09-18T15:00:00Z"); // newest, pending (stays expanded)
+    const all = [r1, r2, s2, r3];
+    const plan = planFormMessages(all, "admin");
+    // thread hides a request once it's answered, so the visible order is r1, s2, r3
+    const { leaders, hidden } = groupFormHistory(plan, [r1.id, s2.id, r3.id]);
+    expect(leaders.size).toBe(1);
+    const g = leaders.get(r1.id)!;
+    expect(g).toMatchObject({ taskType: "weekly_checkin", filled: 1, missed: 1 });
+    expect(g.units.map((u) => u.submissionId)).toEqual(["w2", "w1"]); // newest first
+    expect(hidden.has(s2.id)).toBe(true);
+    expect(hidden.has(r3.id)).toBe(false); // current request is never grouped
+  });
+
+  it("a single older unit keeps its own row", () => {
+    const r1 = req("w1", "weekly_checkin", "2026-09-11T15:00:00Z");
+    const r2 = req("w2", "weekly_checkin", "2026-09-18T15:00:00Z");
+    const plan = planFormMessages([r1, r2], "client");
+    const { leaders, hidden } = groupFormHistory(plan, [r1.id, r2.id]);
+    expect(leaders.size).toBe(0);
+    expect(hidden.size).toBe(0);
+  });
+
+  it("form types are grouped independently", () => {
+    const w1 = req("w1", "weekly_checkin", "2026-09-04T15:00:00Z");
+    const w2 = req("w2", "weekly_checkin", "2026-09-11T15:00:00Z");
+    const w3 = req("w3", "weekly_checkin", "2026-09-18T15:00:00Z");
+    const n1 = req("n1", "nutrition_review", "2026-09-05T15:00:00Z");
+    const n2 = req("n2", "nutrition_review", "2026-09-19T15:00:00Z");
+    const plan = planFormMessages([w1, n1, w2, w3, n2], "client");
+    const { leaders } = groupFormHistory(plan, [w1.id, n1.id, w2.id, w3.id, n2.id]);
+    expect([...leaders.keys()]).toEqual([w1.id]); // 2 older weekly; only 1 older nutrition
+  });
+});
