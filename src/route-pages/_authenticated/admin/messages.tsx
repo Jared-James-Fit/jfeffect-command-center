@@ -34,7 +34,7 @@ import { deriveInboxWorkflow, previewPrefix, WORKFLOW_LABEL, type InboxWorkflowS
 import { formatReadReceipt } from "@/lib/read-receipt";
 import { applyMessageChange, INBOX_MESSAGE_COLUMNS } from "@/lib/inbox-cache";
 import { waitingState, type WaitingState } from "@/lib/inbox-waiting";
-import { deriveRequests, oldestPending, requestChip, type RequestChip } from "@/lib/inbox-requests";
+import { deriveRequests, latestToReview, oldestPending, requestChip, type RequestChip } from "@/lib/inbox-requests";
 import { Check } from "lucide-react";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 
@@ -228,8 +228,8 @@ export function MessagesInbox({
     staleTime: 15_000,
     queryFn: async () => {
       const [native, checkins] = await Promise.all([
-        (supabase.from("nf_submissions") as any).select("id, client_id, submitted_at, reviewed_at").not("submitted_at", "is", null).is("reviewed_at", null).limit(1000),
-        (supabase.from("messenger_checkins") as any).select("id, client_id, submitted_at, status").eq("status", "completed").not("submitted_at", "is", null).limit(1000),
+        (supabase.from("nf_submissions") as any).select("id, client_id, form_id, submitted_at, reviewed_at").not("submitted_at", "is", null).is("reviewed_at", null).limit(1000),
+        (supabase.from("messenger_checkins") as any).select("id, client_id, task_type, submitted_at, status").eq("status", "completed").not("submitted_at", "is", null).limit(1000),
       ]);
       if (native.error) throw native.error;
       if (checkins.error) throw checkins.error;
@@ -320,15 +320,35 @@ export function MessagesInbox({
     return m;
   }, [lastMessages]);
 
+  // When I (staff) last replied in each chat: a chat check-in has no reviewed
+  // flag, so a reply after it is what counts as reviewing it.
+  const lastStaffReplyByClient = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const msg of lastMessages) {
+      if (msg.sender_role === "client" || msg.is_internal_note) continue;
+      const cur = m.get(msg.client_id);
+      if (!cur || msg.created_at > cur) m.set(msg.client_id, msg.created_at);
+    }
+    return m;
+  }, [lastMessages]);
+
   const requestsByClient = useMemo(
     () =>
       deriveRequests({
         checkins: requestStatus?.checkins ?? [],
         submissions: requestStatus?.submissions ?? [],
         messages: lastMessages.filter((m) => (m.attachments ?? []).some((a) => a?.kind === "form_request")),
-        toReview: pendingSubmissions.map((p: any) => ({ client_id: p.client_id, kind: p.kind, submitted_at: p.submitted_at })),
+        toReview: latestToReview(
+          pendingSubmissions.map((p: any) => ({
+            client_id: p.client_id,
+            kind: p.kind,
+            submitted_at: p.submitted_at,
+            type: p.kind === "form" ? p.form_id : p.task_type,
+          })),
+          lastStaffReplyByClient,
+        ),
       }),
-    [requestStatus, lastMessages, pendingSubmissions],
+    [requestStatus, lastMessages, pendingSubmissions, lastStaffReplyByClient],
   );
 
   /** Waiting state + forms chip for one client's row. */
@@ -339,7 +359,7 @@ export function MessagesInbox({
       workflowState === "waiting_on_client"
         ? waitingState({ last, hasPendingRequest, oldestPendingSince: oldestPending(req) })
         : null;
-    return { waiting, chip: requestChip(req), hasRequests: !!req && (req.pending.length > 0 || req.toReview > 0) };
+    return { waiting, chip: requestChip(req), hasRequests: !!req && (req.pending.length > 0 || req.toReview > 0 || req.missed > 0) };
   };
 
   // Blue dot = new inbound client activity *I* (this staff member) haven't viewed.
