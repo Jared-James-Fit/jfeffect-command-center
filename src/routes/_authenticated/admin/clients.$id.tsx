@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, lazy, Suspense, Fragment, type ComponentType } from "react";
+import { useEffect, useMemo, useState, Suspense, Fragment, type ComponentType } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -65,7 +66,7 @@ import { LEGACY_WORKSPACE_TABS } from "@/components/clients/client-workspace-tab
 
 // Heavy panels — code-split so visiting a client only loads the active tab's code.
 const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string) =>
-  lazy(async () => {
+  lazyWithRetry(async () => {
     const m = await loader();
     return { default: (m as any)[name] as ComponentType<any> };
   });

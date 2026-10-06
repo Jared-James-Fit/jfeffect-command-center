@@ -5,7 +5,8 @@
  * the untouched DailyNutritionPanel.
  */
 
-import { lazy, Suspense, useState } from "react";
+import { Suspense, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
@@ -16,7 +17,7 @@ import { Loader2, UtensilsCrossed } from "lucide-react";
 import { getNutritionDashboard } from "@/lib/nutrition-dashboard.functions";
 import { ToolTile } from "./NutritionToolsCard";
 
-const Panel = lazy(() => import("./DailyNutritionPanelLazy"));
+const Panel = lazyWithRetry(() => import("./DailyNutritionPanelLazy"));
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);

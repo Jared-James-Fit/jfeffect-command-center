@@ -1,15 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, lazy, Suspense } from "react";
+import { useMemo, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 
-const CoachesPage = lazy(() =>
+const CoachesPage = lazyWithRetry(() =>
   import("./coaches.index").then((m) => ({ default: m.CoachesPage })),
 );
-const StaffPage = lazy(() =>
+const StaffPage = lazyWithRetry(() =>
   import("./staff").then((m) => ({ default: m.StaffPage })),
 );
-const BusinessSystemsHub = lazy(() =>
+const BusinessSystemsHub = lazyWithRetry(() =>
   import("./business-systems").then((m) => ({ default: m.BusinessSystemsHub })),
 );
 

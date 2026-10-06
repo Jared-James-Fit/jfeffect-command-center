@@ -22,7 +22,8 @@ import {
   Settings2, AlertCircle, AlertTriangle, Camera, Phone,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useState, lazy, Suspense, useEffect } from "react";
+import { useState, Suspense, useEffect } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -40,10 +41,10 @@ import {
   type WorkspaceAction,
   type WorkspaceAlert,
 } from "@/components/workspace";
-const MemberFeatureToggles = lazy(() =>
+const MemberFeatureToggles = lazyWithRetry(() =>
   import("@/components/admin/member-feature-toggles").then((m) => ({ default: m.MemberFeatureToggles })),
 );
-const JfAdminBillingCard = lazy(() =>
+const JfAdminBillingCard = lazyWithRetry(() =>
   import("@/components/billing/jf-admin-billing-card").then((m) => ({ default: m.JfAdminBillingCard })),
 );
 function PanelFallback() {
