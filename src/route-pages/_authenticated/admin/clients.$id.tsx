@@ -297,7 +297,10 @@ export function ClientProfileWorkspace({
     try {
       const redirectTo = `${window.location.origin}/setup`;
       await inviteFn({ data: { clientId: id, redirectTo } });
-      toast.success("Setup link sent", { id: t });
+      toast.success("Setup link sent", {
+        id: t,
+        description: "Not there in a few minutes? Check spam, or use Copy setup link.",
+      });
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });

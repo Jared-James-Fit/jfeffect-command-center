@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+import { isAlreadyRegisteredError } from "@/lib/invite-errors";
 
 type ClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
 
@@ -80,7 +81,10 @@ export const inviteClient = createServerFn({ method: "POST" })
 
     const now = new Date().toISOString();
     if (inviteErr) {
-      // If user already exists, fall back to a password recovery email.
+      // Any failure other than "already registered" must surface: the reset
+      // fallback below silently sends nothing when no account exists.
+      if (!isAlreadyRegisteredError(inviteErr)) throw new Error(inviteErr.message);
+      // Account exists: fall back to a password recovery email.
       // resetPasswordForEmail actually SENDS the email (admin.generateLink does not).
       const { error: resetErr } = await supabaseAdmin.auth.resetPasswordForEmail(
         client.email,

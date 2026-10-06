@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { isAlreadyRegisteredError } from "@/lib/invite-errors";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data, error } = await supabase
@@ -36,7 +37,9 @@ export const inviteCoach = createServerFn({ method: "POST" })
 
     let userIdAssigned: string | null = coach.user_id ?? null;
     if (inviteErr) {
-      // Fall back to password recovery if user already exists.
+      // Only an existing account can fall back to recovery; resetPasswordForEmail
+      // sends nothing for an unknown address, so surface any other failure.
+      if (!isAlreadyRegisteredError(inviteErr)) throw new Error(inviteErr.message);
       const { error: resetErr } = await supabaseAdmin.auth.resetPasswordForEmail(
         coach.email, { redirectTo: data.redirectTo },
       );

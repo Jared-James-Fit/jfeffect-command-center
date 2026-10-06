@@ -48,7 +48,9 @@ export function AddClientDialog({
       if (data?.id && email.trim()) {
         try {
           await inviteFn({ data: { clientId: data.id, redirectTo: `${window.location.origin}/setup` } });
-          toast.success(`Client created — setup email sent to ${email.trim()}`);
+          toast.success(`Client created — setup email sent to ${email.trim()}`, {
+            description: "Not there in a few minutes? Check spam, or copy their setup link from their profile.",
+          });
         } catch (e: any) {
           toast.warning(`Client created, but the setup email failed: ${e?.message ?? "unknown error"}. Use “Send setup link” on their profile.`);
         }
