@@ -12,13 +12,45 @@ import {
 const read = (path: string) => readFileSync(path, "utf8");
 
 describe("client side wiring", () => {
-  it("wraps the whole client app in the provider, so the popup and status reach every page", () => {
-    const src = read("src/routes/_authenticated/portal/route.tsx");
+  it("wraps every signed-in page in the provider, so the popup and status reach all of them", () => {
+    const src = read("src/routes/_authenticated/route.tsx");
     const open = src.indexOf("<CoachingAgreementProvider>");
-    const close = src.indexOf("</CoachingAgreementProvider>");
+    const outlet = src.indexOf("<Outlet />");
     expect(open).toBeGreaterThan(-1);
-    expect(open).toBeLessThan(src.indexOf("<AppShell"));
-    expect(close).toBeGreaterThan(src.indexOf("</AppShell>"));
+    expect(open).toBeLessThan(outlet);
+    expect(src.indexOf("</CoachingAgreementProvider>")).toBeGreaterThan(outlet);
+    // Exactly one provider: a second one inside the portal could race the first.
+    expect(read("src/routes/_authenticated/portal/route.tsx")).not.toContain(
+      "CoachingAgreementProvider",
+    );
+  });
+
+  it("shows the launch popup on any page: nothing in it depends on the route", () => {
+    const src = read("src/components/coaching-agreement/agreement-launch-popup.tsx");
+    expect(src).not.toContain("QUIET_PREFIXES");
+    expect(src).not.toContain("useRouterState");
+    expect(src).not.toMatch(/pathname/);
+  });
+
+  it("keeps the agreement text out of the code that loads on every signed-in page", () => {
+    const dir = "src/components/coaching-agreement/";
+    const alwaysLoaded = [
+      "src/lib/coaching-agreement/rules.ts",
+      "src/lib/coaching-agreement/version.ts",
+      `${dir}agreement-provider.tsx`,
+      `${dir}agreement-launch-popup.tsx`,
+      `${dir}agreement-context.ts`,
+      `${dir}agreement-copy.ts`,
+    ];
+    for (const file of alwaysLoaded) {
+      expect(read(file), file).not.toMatch(/from "(@\/lib\/coaching-agreement\/|\.\/)content"/);
+    }
+  });
+
+  it("does not look the agreement up for accounts that are never asked to sign", () => {
+    const src = read("src/components/coaching-agreement/agreement-provider.tsx");
+    expect(src).toMatch(/neverAsked/);
+    expect(src).toMatch(/enabled: !!user\?\.id && !neverAsked/);
   });
 
   it("shows the dashboard card above the setup checklist, behind its own error boundary", () => {

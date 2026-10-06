@@ -16,19 +16,16 @@
  * resolves to that section's number so numbering can never drift.
  */
 
+import { AGREEMENT_VERSION } from "./version";
+
 export const AGREEMENT_SLUG = "coaching-agreement";
 export const AGREEMENT_TITLE = "JF Effect Coaching Agreement";
 export const AGREEMENT_SUBTITLE =
   "Liability Waiver, Release of Claims, Assumption of Risk & Indemnity";
-export const AGREEMENT_VERSION = "2.0";
 export const AGREEMENT_EFFECTIVE_DATE = "2026-10-06";
 
-/**
- * Clients whose latest signed version is below this must sign again. Raise it only
- * for material changes; a wording-only fix can bump AGREEMENT_VERSION without
- * forcing every client to re-sign.
- */
-export const RESIGN_REQUIRED_BELOW_VERSION = "2.0";
+// Version numbers live in ./version so the always-loaded status rules never import this file.
+export { AGREEMENT_VERSION, RESIGN_REQUIRED_BELOW_VERSION, compareVersions } from "./version";
 
 export const COACH = {
   business: "JF Effect / Jared James Fit",
@@ -805,16 +802,4 @@ export function parseInline(text: string): { text: string; bold: boolean }[] {
   return parts
     .map((part, i) => ({ text: part, bold: i % 2 === 1 }))
     .filter((run) => run.text.length > 0);
-}
-
-/** Compares dotted numeric versions ("2.0" < "2.1" < "10.0"). */
-export function compareVersions(a: string, b: string): number {
-  const pa = a.split(".").map((n) => Number.parseInt(n, 10) || 0);
-  const pb = b.split(".").map((n) => Number.parseInt(n, 10) || 0);
-  const len = Math.max(pa.length, pb.length);
-  for (let i = 0; i < len; i++) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (diff !== 0) return diff > 0 ? 1 : -1;
-  }
-  return 0;
 }
