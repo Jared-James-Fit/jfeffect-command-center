@@ -16,12 +16,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { AdminTransactionRow } from "@/lib/admin-transactions";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { stripeFetch, getStripeKeyForMode, type StripeMode } from "@/lib/stripe.server";
+import { stripeFetch, getStripeKeyForMode, latestChargeForPaymentIntent, type StripeMode } from "@/lib/stripe.server";
 import {
   invoiceSubscriptionId,
   invoicePaymentIntentId,
   invoiceChargeId,
   invoiceTaxMinor,
+  invoiceIdByPaymentRef,
+  invoicePaymentRecordId,
 } from "@/lib/stripe-invoice-refs";
 
 async function assertAdmin(supabase: any, userId: string) {
@@ -149,10 +151,34 @@ async function existingLedgerByStripeRef(
   ];
   for (const [field, value] of checks) {
     if (!value) continue;
-    const { data } = await supabase.from("payment_ledger").select("id,purchase_id,client_id,amount_minor").eq(field, value).limit(1);
+    const { data } = await supabase.from("payment_ledger").select("id,purchase_id,client_id,amount_minor,stripe_payment_intent_id,stripe_charge_id").eq(field, value).limit(1);
     if ((data ?? []).length) return data![0];
   }
   return null;
+}
+
+/**
+ * Fill in the PaymentIntent / charge id on a ledger row that was saved without
+ * them (webhook invoice payloads omit both on newer Stripe API versions).
+ * Without these ids the Billing page cannot tie the row to the Stripe charge.
+ * Only fills blanks; never overwrites. Returns true when the row changed.
+ */
+async function backfillLedgerStripeRefs(
+  supabase: any,
+  existing: { id: string; stripe_payment_intent_id?: string | null; stripe_charge_id?: string | null },
+  refs: { paymentIntent: string | null; charge: string | null },
+  apiKey: string,
+): Promise<boolean> {
+  if (existing.stripe_payment_intent_id && existing.stripe_charge_id) return false;
+  const pi = existing.stripe_payment_intent_id ?? refs.paymentIntent;
+  let charge = existing.stripe_charge_id ?? refs.charge;
+  if (pi && !charge) charge = await latestChargeForPaymentIntent(pi, apiKey);
+  const patch: Record<string, string> = {};
+  if (!existing.stripe_payment_intent_id && pi) patch.stripe_payment_intent_id = pi;
+  if (!existing.stripe_charge_id && charge) patch.stripe_charge_id = charge;
+  if (!Object.keys(patch).length) return false;
+  const { error } = await supabase.from("payment_ledger").update(patch).eq("id", existing.id);
+  return !error;
 }
 
 export const syncStripePayments = createServerFn({ method: "POST" })
@@ -350,6 +376,8 @@ export const syncStripePayments = createServerFn({ method: "POST" })
     let invoicesScanned = 0;
     for (let page = 0; page < 20; page++) {
       const qs = new URLSearchParams({ limit: "100", "created[gte]": String(createdAfter) });
+      // `payments` is not on the Invoice by default in newer API versions.
+      qs.append("expand[]", "data.payments");
       if (invoiceStartingAfter) qs.set("starting_after", invoiceStartingAfter);
       const res: any = await stripeFetch(`/invoices?${qs.toString()}`, { apiKey });
       const rows: any[] = res?.data ?? [];
@@ -364,16 +392,21 @@ export const syncStripePayments = createServerFn({ method: "POST" })
           external: i.id, paymentIntent: piId, charge: chargeId, invoice: i.id,
         });
         if (existing) {
+          const refsFilled = await backfillLedgerStripeRefs(
+            supabase, existing, { paymentIntent: piId, charge: chargeId }, apiKey,
+          );
           entries.push({
             session_id: i.id,
             purchase_id: existing.purchase_id ?? null,
             client_id: existing.client_id ?? null,
-            action: "no_change",
+            action: refsFilled ? "updated" : "no_change",
             amount: i.amount_paid / 100,
             currency: (i.currency ?? "usd").toUpperCase(),
             customer_email: i.customer_email ?? null,
             occurred_at: occurredAt,
-            reason: "Paid invoice already exists in the ledger.",
+            reason: refsFilled
+              ? "Linked the existing ledger row to its Stripe payment/charge id."
+              : "Paid invoice already exists in the ledger.",
           });
           continue;
         }
@@ -396,7 +429,8 @@ export const syncStripePayments = createServerFn({ method: "POST" })
           client_id: purchase.client_id,
           purchase_id: purchase.id,
           txn_type: "payment",
-          method: "stripe",
+          // Invoices settled by a payment record were paid outside Stripe.
+          method: invoicePaymentRecordId(i) ? "other" : "stripe",
           amount_minor: i.amount_paid,
           tax_minor: invoiceTaxMinor(i),
           currency: (i.currency ?? "usd").toUpperCase(),
@@ -882,6 +916,30 @@ export const listStripeAccountTransactions = createServerFn({ method: "POST" })
     const chargeById = new Map<string, any>();
     for (const c of charges) if (c?.id) chargeById.set(c.id, c);
 
+    // Charges no longer carry `invoice` on newer API versions, so tie
+    // subscription charges back to the invoice the app stored via the
+    // invoices' own `payments` list. Best-effort: on failure rows still match
+    // by charge / PaymentIntent id.
+    let invoiceByPaymentRef = new Map<string, string>();
+    const paidInvoices: any[] = [];
+    try {
+      const invoices = paidInvoices;
+      let invAfter: string | null = null;
+      for (let page = 0; page < 100; page++) {
+        const qs = new URLSearchParams({ limit: "100", status: "paid", "created[gte]": String(createdAfter) });
+        qs.append("expand[]", "data.payments");
+        if (invAfter) qs.set("starting_after", invAfter);
+        const res: any = await stripeFetch(`/invoices?${qs.toString()}`, { apiKey });
+        const batch: any[] = res?.data ?? [];
+        invoices.push(...batch);
+        if (!res?.has_more || batch.length === 0) break;
+        invAfter = batch[batch.length - 1].id;
+      }
+      invoiceByPaymentRef = invoiceIdByPaymentRef(invoices);
+    } catch (e) {
+      console.error("[stripe-sync] invoice index failed", (e as any)?.message ?? e);
+    }
+
     const rows: AdminTransactionRow[] = [];
     const linkedIds = new Set<string>();
 
@@ -889,7 +947,11 @@ export const listStripeAccountTransactions = createServerFn({ method: "POST" })
       // Stripe lists failed attempts too. Keep them visible because the user
       // asked for the account transaction history, not only successful ledger rows.
       const pi = stripeObjectId(charge.payment_intent);
-      const invoice = stripeObjectId(charge.invoice);
+      const invoice =
+        stripeObjectId(charge.invoice) ??
+        (pi ? invoiceByPaymentRef.get(`pi:${pi}`) : undefined) ??
+        invoiceByPaymentRef.get(`charge:${charge.id}`) ??
+        null;
       const matched =
         appByKey.get(`charge:${charge.id}`) ||
         (pi ? appByKey.get(`pi:${pi}`) : undefined) ||
@@ -913,6 +975,64 @@ export const listStripeAccountTransactions = createServerFn({ method: "POST" })
       } else {
         rows.push(syntheticStripePayment(charge, data.mode as StripeMode));
       }
+    }
+
+    // Invoices settled with a Stripe payment record (marked paid outside Stripe,
+    // e.g. an e-transfer) have no charge, so the charge list above never shows
+    // them even though they are paid in the Stripe account.
+    for (const inv of paidInvoices) {
+      if (!(inv.amount_paid > 0) || !invoicePaymentRecordId(inv)) continue;
+      const paidAt = new Date((inv.status_transitions?.paid_at ?? inv.created) * 1000).toISOString();
+      const currency = String(inv.currency ?? "usd").toUpperCase();
+      const matched = appByKey.get(`invoice:${inv.id}`);
+      if (matched) {
+        linkedIds.add(matched.id);
+        rows.push({
+          ...matched,
+          status: "Paid",
+          amount: inv.amount_paid / 100,
+          currency,
+          stripe_invoice_id: inv.id,
+          hosted_invoice_url: inv.hosted_invoice_url ?? matched.hosted_invoice_url,
+          invoice_pdf_url: inv.invoice_pdf ?? matched.invoice_pdf_url,
+          stripe_mode: data.mode,
+          voided: false,
+        });
+        continue;
+      }
+      rows.push({
+        id: `stripe:invoice:${inv.id}`,
+        source: "stripe",
+        occurred_on: paidAt.slice(0, 10),
+        occurred_at: paidAt,
+        subject_id: stripeObjectId(inv.customer),
+        subject_kind: "stripe",
+        subject_name: inv.customer_name || inv.customer_email || "Stripe customer",
+        subject_email: inv.customer_email ?? null,
+        purchase_id: null,
+        offer_id: null,
+        product_name: inv.lines?.data?.[0]?.description || "Stripe invoice",
+        purchase_type: "Paid outside Stripe",
+        amount: inv.amount_paid / 100,
+        currency,
+        txn_type: "payment",
+        method: "other",
+        status: "Paid",
+        stripe_customer_id: stripeObjectId(inv.customer),
+        stripe_payment_intent_id: null,
+        stripe_charge_id: null,
+        stripe_invoice_id: inv.id,
+        stripe_checkout_session_id: null,
+        stripe_subscription_id: invoiceSubscriptionId(inv),
+        stripe_product_id: null,
+        stripe_price_id: null,
+        receipt_url: null,
+        hosted_invoice_url: inv.hosted_invoice_url ?? null,
+        invoice_pdf_url: inv.invoice_pdf ?? null,
+        stripe_mode: data.mode,
+        admin_notes: "Stripe invoice marked paid outside Stripe — not linked to a JF Effect purchase record.",
+        voided: false,
+      });
     }
 
     const refunds: any[] = [];
@@ -964,6 +1084,15 @@ export const listStripeAccountTransactions = createServerFn({ method: "POST" })
           ),
         );
       }
+    }
+
+    // Payments recorded outside Stripe (e-transfer, cash, ...) never create a
+    // Stripe charge, so they would otherwise be missing from Billing and from
+    // the Paid total. Add the active app rows that were not matched above.
+    for (const row of appRows) {
+      if (linkedIds.has(row.id)) continue;
+      if (String(row.method ?? "").toLowerCase() === "stripe") continue;
+      rows.push({ ...row, voided: false });
     }
 
     rows.sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at)));
