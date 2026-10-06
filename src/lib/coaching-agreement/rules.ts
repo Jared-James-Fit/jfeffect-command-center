@@ -90,6 +90,17 @@ export function needsSignature(state: AgreementState): boolean {
   return state.state === "needs_signature";
 }
 
+/** The agreement only applies to a current client who can use the portal. */
+export function isActiveClient(
+  client: { archived?: boolean | null; portal_access_disabled?: boolean | null; status?: string | null } | null | undefined,
+): boolean {
+  if (!client) return false;
+  if (client.archived) return false;
+  if (client.portal_access_disabled) return false;
+  const status = String(client.status ?? "");
+  return status !== "Archived" && status !== "Deactivated";
+}
+
 /** Whole years between a YYYY-MM-DD date of birth and `on`. Null for an unusable date. */
 export function ageOnDate(dateOfBirth: string | null | undefined, on: Date): number | null {
   if (!dateOfBirth || !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return null;

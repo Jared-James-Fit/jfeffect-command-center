@@ -113,6 +113,8 @@ function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: st
     patch.info_last_updated_at = new Date().toISOString();
     patch.info_last_updated_by = "client";
     patch.info_update_requested = false;
+    // First time it's complete: stamp it, so the coach's profile shows when basic info was finished.
+    if (!form?.basic_info_completed_at && isBasicInfoComplete(patch)) patch.basic_info_completed_at = patch.info_last_updated_at;
     const { data: updated, error } = await supabase.from("clients").update(patch).eq("id", targetId).select("id");
     setSaving(false);
     if (error) return toast.error(error.message ?? "Couldn't save your info. Please try again.");

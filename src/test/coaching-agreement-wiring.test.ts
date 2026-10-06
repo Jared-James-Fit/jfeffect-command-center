@@ -70,9 +70,11 @@ describe("client side wiring", () => {
   });
 
   it("makes the agreement the first account-setup step, in the checklist and in the setup flow", () => {
-    const checklist = read("src/components/portal/setup-checklist-banner.tsx");
-    // unshift, not push: the agreement leads the checklist
-    expect(checklist).toMatch(/base\.unshift\(\{\s*key: "agreement"/);
+    // The client's checklist and the coach's profile both read the one shared definition,
+    // where unshift (not push) makes the agreement lead.
+    expect(read("src/components/portal/setup-checklist-banner.tsx")).toContain("setupChecklistSteps(");
+    expect(read("src/components/clients/client-setup-checklist-card.tsx")).toContain("setupChecklistSteps(");
+    expect(read("src/lib/client-setup-checklist.ts")).toMatch(/steps\.unshift\(\{\s*key: "agreement"/);
     const setup = read("src/routes/setup.tsx");
     expect(setup).toContain('phase === "agreement"');
     expect(setup).toContain("AgreementSignFlow");

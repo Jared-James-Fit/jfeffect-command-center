@@ -26,6 +26,7 @@ import {
 import {
   isMinor,
   ageOnDate,
+  isActiveClient,
   namesMatch,
   resolveAgreementState,
   type AgreementState,
@@ -121,14 +122,6 @@ async function loadAgreementForClient(supabase: any, clientId: string) {
     resignNote: adminState?.resign_note ?? null,
   });
   return { signatures, adminState, state };
-}
-
-function isActiveClient(client: any): boolean {
-  if (!client) return false;
-  if (client.archived) return false;
-  if (client.portal_access_disabled) return false;
-  const status = String(client.status ?? "");
-  return status !== "Archived" && status !== "Deactivated";
 }
 
 function firstNameOf(client: any): string | null {

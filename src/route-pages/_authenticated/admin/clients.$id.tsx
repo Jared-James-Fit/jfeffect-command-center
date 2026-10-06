@@ -22,7 +22,7 @@ import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPas
 import { sendAuthLinkBySms } from "@/lib/sms-links.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { calcAge, formatHeight } from "@/lib/basic-info";
+import { calcAge, formatHeight, isBasicInfoComplete } from "@/lib/basic-info";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -64,6 +64,7 @@ import { CoachNutritionOverrideCard } from "@/components/admin/coach-nutrition-o
 import { ClientWorkspaceTabs, type WorkspaceTab } from "@/components/clients/client-workspace-tabs";
 import { LEGACY_WORKSPACE_TABS } from "@/components/clients/client-workspace-tab-model";
 import { TAB_VALUES, type TabValue } from "@/components/clients/client-tab-values";
+import { ClientSetupChecklistCard, useClientSetupChecklist } from "@/components/clients/client-setup-checklist-card";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
 const Route = __getRouteApi("/_authenticated/admin/clients/$id");
 
@@ -230,6 +231,9 @@ export function ClientProfileWorkspace({
     if (data && form === null) setForm(data);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
+
+  // The client's "Complete your setup" checklist: the last stage of onboarding on the Account tab.
+  const setupChecklist = useClientSetupChecklist(id, form);
 
   // Compare current form state to the last server snapshot to know when to
   // show the sticky Save bar. Must run before any early return to keep hook
@@ -998,7 +1002,7 @@ export function ClientProfileWorkspace({
               <div><span className="text-muted-foreground">Profile picture updated:</span> {fmtDate(form.profile_picture_updated_at)}</div>
               <div><span className="text-muted-foreground">Time zone confirmed:</span> {fmtDate(form.timezone_confirmed_at)}</div>
               <div><span className="text-muted-foreground">Update requested:</span> {form.info_update_requested ? `Yes (${fmtDate(form.info_update_requested_at)})` : "No"}</div>
-              <div><span className="text-muted-foreground">Basic info completed:</span> {fmtDate(form.basic_info_completed_at)}</div>
+              <div><span className="text-muted-foreground">Basic info completed:</span> {form.basic_info_completed_at ? fmtDate(form.basic_info_completed_at) : isBasicInfoComplete(form) ? "Yes (date not recorded)" : "Not yet"}</div>
             </div>
           </div>
 
@@ -1128,6 +1132,11 @@ export function ClientProfileWorkspace({
                   { label: "Client record created", done: true, at: form.created_at },
                   { label: "Setup link sent", done: !!lastSetup, at: lastSetup },
                   { label: "Signed in to the app", done: !!form.last_signed_in_at, at: form.last_signed_in_at },
+                  {
+                    label: setupChecklist.loading ? "Finished their setup checklist" : `Finished their setup checklist (${setupChecklist.done}/${setupChecklist.steps.length})`,
+                    done: !setupChecklist.loading && setupChecklist.done === setupChecklist.steps.length,
+                    at: null,
+                  },
                 ];
                 return (
                   <div className="space-y-4 border-t border-border pt-4">
@@ -2069,6 +2078,8 @@ function ClientOverviewSnapshot({
               </Card>
             );
           })()}
+
+          <ClientSetupChecklistCard clientId={clientId} client={form} onGoToTab={onGoToTab} />
 
           {/* Personal snapshot, read-only */}
           <Card className="border-border bg-card p-6 space-y-3">

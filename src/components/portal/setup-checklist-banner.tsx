@@ -7,14 +7,23 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, Target, FileSignature } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { isBasicInfoComplete } from "@/lib/basic-info";
-import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
+import type { ClientGoalsSetupRow } from "@/lib/client-goals/schema";
+import { setupChecklistSteps, type SetupChecklistKey } from "@/lib/client-setup-checklist";
 import { SetupStepSheet, type SetupStepKey } from "@/components/portal/setup-step-sheet";
 import { useCoachingAgreement } from "@/components/coaching-agreement/agreement-context";
 
 type Props = { clientId: string; userId: string };
-type ItemKey = "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup";
-type Item = { key: ItemKey; label: string; description: string; to?: string; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean };
+type Item = { key: SetupChecklistKey; label: string; description: string; to?: string; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean };
+
+// What each step says to the client. Whether a step is done comes from setupChecklistSteps,
+// which the admin client profile reads too.
+const STEP_COPY: Record<SetupChecklistKey, Omit<Item, "key" | "done" | "onClick">> = {
+  agreement: { label: "Sign your Coaching Agreement", description: "One quick signature covers everything you buy from your coach.", icon: FileSignature },
+  profile_picture: { label: "Add a profile photo", description: "A clear headshot helps your coach personalise feedback.", sheet: "profile_picture", icon: Camera },
+  basic_info: { label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard },
+  training_schedule: { label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock },
+  goals_setup: { label: "Finish Goals & Setup", description: "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target },
+};
 
 export function SetupChecklistBanner({ clientId, userId }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
@@ -37,26 +46,14 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
   });
 
   const items = useMemo<Item[]>(() => {
-    const c = client as any;
-    const base: Item[] = [
-      { key: "profile_picture", label: "Add a profile photo", description: "A clear headshot helps your coach personalise feedback.", sheet: "profile_picture", icon: Camera, done: !!c?.profile_picture_url && !c?.profile_picture_needs_update },
-      { key: "basic_info", label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard, done: !!c && isBasicInfoComplete(c) },
-      { key: "training_schedule", label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock, done: !!c?.training_schedule_completed },
-      { key: "goals_setup", label: "Finish Goals & Setup", description: "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null) },
-    ];
-    // The Coaching Agreement is the one mandatory step, so it leads the list. It only
-    // appears once its status has loaded and applies to this account.
-    if (agreement.state?.applicable && agreement.state.state) {
-      base.unshift({
-        key: "agreement",
-        label: "Sign your Coaching Agreement",
-        description: "One quick signature covers everything you buy from your coach.",
-        onClick: agreement.canSign ? agreement.openSignFlow : undefined,
-        icon: FileSignature,
-        done: agreement.state.state.state !== "needs_signature",
-      });
-    }
-    return base;
+    // The agreement step only appears once its status has loaded and applies to this account.
+    const agreementState = agreement.state?.applicable ? agreement.state.state : null;
+    return setupChecklistSteps({ client, goals, agreement: agreementState }).map((step) => ({
+      ...STEP_COPY[step.key],
+      key: step.key,
+      done: step.done,
+      onClick: step.key === "agreement" && agreement.canSign ? agreement.openSignFlow : undefined,
+    }));
   }, [client, goals, agreement.state, agreement.canSign, agreement.openSignFlow]);
 
   const done = items.filter((i) => i.done).length;
