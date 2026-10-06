@@ -235,6 +235,9 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
               : submitted ? `Submitted ${fmt(latest!.submitted_at)} · AI builds the targets and a paste-ready meal plan automatically.`
               : "Send the form → client fills it out → AI builds their targets and meal plan for you to review and apply."}
           </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Once sent, this repeats automatically on the Monday that starts the final week of each month (9am their time).
+          </p>
         </div>
         <div className="flex w-full shrink-0 gap-2 sm:w-auto">
           <DropdownMenu>

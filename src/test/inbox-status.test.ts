@@ -57,10 +57,10 @@ describe("deriveRequests / requestChip", () => {
 
   it("turns amber once a request has sat 48h+", () => {
     const r = deriveRequests({
-      checkins: [{ client_id: "b", task_type: "nutrition_review", status: "pending", created_at: ago(49) }],
+      checkins: [{ client_id: "b", task_type: "weekly_checkin", status: "pending", created_at: ago(49) }],
       submissions: [], messages: [], toReview: [],
     });
-    expect(requestChip(r.get("b"), now)).toEqual({ tone: "overdue", text: "Nutrition review not filled" });
+    expect(requestChip(r.get("b"), now)).toEqual({ tone: "overdue", text: "Weekly check-in not filled" });
   });
 
   it("form sent in chat is not filled until a submission lands after it", () => {

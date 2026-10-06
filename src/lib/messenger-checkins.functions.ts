@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { ensureNextOccurrence } from "@/lib/action-centre.functions";
 
-export type MessengerCheckinTaskType = "weekly_checkin" | "nutrition_review";
+export type MessengerCheckinTaskType = "weekly_checkin";
 
 export type MessengerCheckinAnalysis = {
   summary: string;
@@ -16,7 +16,7 @@ export type MessengerCheckinAnalysis = {
   urgency: "low" | "normal" | "high" | "urgent";
 };
 
-const taskSchema = z.enum(["weekly_checkin", "nutrition_review"]);
+const taskSchema = z.enum(["weekly_checkin"]);
 
 const ANSWER_LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
   weekly_checkin: {
@@ -29,25 +29,12 @@ const ANSWER_LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = 
     help: "Help or changes needed",
     next_week_goal: "Main goal for next week",
   },
-  nutrition_review: {
-    nutrition_rating: "Nutrition consistency rating (1–5)",
-    hunger: "Hunger / appetite",
-    digestion: "Digestion",
-    training_energy: "Energy around training rating (1–5)",
-    hardest: "Hardest nutrition issue",
-    food_changes: "Foods / meals to change",
-    goal: "Nutrition goal until next review",
-  },
 };
 
 const TASK_META: Record<MessengerCheckinTaskType, { title: string; body: string }> = {
   weekly_checkin: {
     title: "Weekly Check-In",
     body: "Quick 60-second weekly check-in 👇",
-  },
-  nutrition_review: {
-    title: "Nutrition Review",
-    body: "Quick monthly nutrition check-in 👇",
   },
 };
 
@@ -69,8 +56,7 @@ function localDateInTimeZone(tz: string): string {
 
 /**
  * Duplicate-send guard for automated requests (manual coach requests have no
- * occurrence and are never blocked). Nutrition: at most one per local calendar
- * month. Weekly: at most one per 4 days. Keep in sync with the SQL guard in
+ * occurrence and are never blocked). Weekly: at most one per 4 days. Keep in sync with the SQL guard in
  * enqueue_due_messenger_checkins().
  */
 export function automatedRequestAlreadySent(
@@ -78,27 +64,10 @@ export function automatedRequestAlreadySent(
   today: string,
   priorRequestLocalDates: string[],
 ): boolean {
-  if (taskType === "nutrition_review") {
-    const month = today.slice(0, 7);
-    return priorRequestLocalDates.some((d) => d.slice(0, 7) === month);
-  }
   return priorRequestLocalDates.some((d) => {
     const diff = dayDiff(d, today);
     return diff >= 0 && diff < 4;
   });
-}
-
-function localHourInTimeZone(tz: string): number {
-  try {
-    const h = new Intl.DateTimeFormat("en-GB", {
-      timeZone: tz || "UTC",
-      hour: "2-digit",
-      hourCycle: "h23",
-    }).format(new Date());
-    return Number(h);
-  } catch {
-    return new Date().getUTCHours();
-  }
 }
 
 function localDateOf(iso: string, tz: string): string {
@@ -294,8 +263,6 @@ export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
       .from("client_task_occurrences")
       .select("id,task_type,due_local_date,client_tz,status")
       .eq("client_id", clientId)
-      // Nutrition Review is retired (duplicated the weekly check-in); only
-      // weekly requests are auto-sent. Existing nutrition_review history still renders.
       .in("task_type", ["weekly_checkin"])
       .not("status", "in", "(completed,skipped)")
       .order("due_at_utc", { ascending: true })
@@ -308,11 +275,7 @@ export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
       const daysUntil = dayDiff(today, occ.due_local_date);
       // Never backfill old/overdue requests. Weekly check-ins are due Sunday
       // night but surface on Friday so clients have the full weekend to submit.
-      // Nutrition reviews surface on their due date (last Friday), from 9am local.
-      const dueNow =
-        taskType === "weekly_checkin"
-          ? daysUntil >= 0 && daysUntil <= 2
-          : daysUntil === 0 && localHourInTimeZone(occ.client_tz || "UTC") >= 9;
+      const dueNow = daysUntil >= 0 && daysUntil <= 2;
       if (!dueNow) continue;
 
       const { data: existing } = await sb
@@ -358,9 +321,6 @@ export const sendMessengerCheckinRequest = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (data.taskType === "nutrition_review") {
-      throw new Error("Nutrition Review has been retired. Use the Weekly Check-In or a Nutrition Update.");
-    }
     const actor = await resolveClientAccess(context.supabase, context.userId, data.clientId);
     if (actor === "client") throw new Error("Coach access required.");
     const sb = await adminClient();

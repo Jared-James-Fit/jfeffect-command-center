@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { planFormMessages } from "@/lib/form-message-presentation";
 
 let n = 0;
-const req = (id: string, type: "weekly_checkin" | "nutrition_review", at: string, read: string | null = null) => ({
+const req = (id: string, type: "weekly_checkin", at: string, read: string | null = null) => ({
   id: `req-${id}-${n++}`, created_at: at, read_by_client_at: read, deleted_at: null,
   attachments: [{ type: "file", url: "", kind: "checkin_request", checkin_submission_id: id, checkin_task_type: type }] as any,
 });
-const sub = (id: string, type: "weekly_checkin" | "nutrition_review", at: string) => ({
+const sub = (id: string, type: "weekly_checkin", at: string) => ({
   id: `sub-${id}-${n++}`, created_at: at, read_by_client_at: null, deleted_at: null,
   attachments: [{ type: "file", url: "", kind: "checkin_submission", checkin_submission_id: id, checkin_task_type: type }] as any,
 });
@@ -50,14 +50,6 @@ describe("planFormMessages", () => {
     }
   });
 
-  it("form types are independent: a new weekly check-in does not collapse a current nutrition review", () => {
-    const nr = req("n1", "nutrition_review", "2026-09-30T14:00:00Z");
-    const w = req("w9", "weekly_checkin", "2026-10-02T15:00:00Z");
-    const plan = planFormMessages([nr, w], "client");
-    expect(plan.get(nr.id)).toMatchObject({ mode: "expanded", state: "pending" });
-    expect(plan.get(w.id)).toMatchObject({ mode: "expanded", state: "pending" });
-  });
-
   it("ignores deleted messages and tolerates overlapping pages", () => {
     const r1 = req("w1", "weekly_checkin", "2026-09-18T15:00:00Z");
     const r2 = { ...req("w2", "weekly_checkin", "2026-09-25T15:00:00Z"), deleted_at: "2026-09-25T16:00:00Z" };
@@ -94,16 +86,5 @@ describe("groupFormHistory", () => {
     const { leaders, hidden } = groupFormHistory(plan, [r1.id, r2.id]);
     expect(leaders.size).toBe(0);
     expect(hidden.size).toBe(0);
-  });
-
-  it("form types are grouped independently", () => {
-    const w1 = req("w1", "weekly_checkin", "2026-09-04T15:00:00Z");
-    const w2 = req("w2", "weekly_checkin", "2026-09-11T15:00:00Z");
-    const w3 = req("w3", "weekly_checkin", "2026-09-18T15:00:00Z");
-    const n1 = req("n1", "nutrition_review", "2026-09-05T15:00:00Z");
-    const n2 = req("n2", "nutrition_review", "2026-09-19T15:00:00Z");
-    const plan = planFormMessages([w1, n1, w2, w3, n2], "client");
-    const { leaders } = groupFormHistory(plan, [w1.id, n1.id, w2.id, w3.id, n2.id]);
-    expect([...leaders.keys()]).toEqual([w1.id]); // 2 older weekly; only 1 older nutrition
   });
 });

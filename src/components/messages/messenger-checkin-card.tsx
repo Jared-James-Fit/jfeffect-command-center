@@ -114,56 +114,6 @@ const WEEKLY: Q[] = [
   },
 ];
 
-const NUTRITION: Q[] = [
-  {
-    key: "nutrition_rating",
-    prompt: "How well did you stick to your meal plan?",
-    helper: "1 = mostly off plan · 5 = on plan almost every day.",
-    type: "rating",
-    scale: ["Off plan", "Some days", "Half", "Most days", "Every day"],
-  },
-  {
-    key: "hunger",
-    prompt: "How hungry have you been?",
-    type: "single",
-    options: ["Not very hungry", "Just right", "Hungry a lot"],
-  },
-  {
-    key: "digestion",
-    prompt: "How has your stomach / digestion felt?",
-    type: "single",
-    options: ["Good — no issues", "A few issues (bloating, etc.)", "Bad most days"],
-  },
-  {
-    key: "training_energy",
-    prompt: "How’s your energy for workouts?",
-    helper: "1 = drained · 5 = full of energy.",
-    type: "rating",
-    scale: ["Drained", "Low", "Okay", "Good", "Full"],
-  },
-  {
-    key: "hardest",
-    prompt: "What’s been the hardest part of your nutrition?",
-    helper: "e.g. weekends, cravings, eating out, meal prep. Optional.",
-    type: "text",
-    optional: true,
-  },
-  {
-    key: "food_changes",
-    prompt: "Any foods or meals you want swapped?",
-    helper: "Tell me what you’re sick of or can’t get. Optional.",
-    type: "text",
-    optional: true,
-  },
-  {
-    key: "goal",
-    prompt: "What’s your #1 nutrition goal until your next review?",
-    helper: "e.g. “Hit my protein every day.” Optional.",
-    type: "text",
-    optional: true,
-  },
-];
-
 /** The exact Weekly Check-In questions, for the admin Requests preview. */
 export const WEEKLY_CHECKIN_QUESTIONS = WEEKLY;
 export type CheckinQuestion = Q;
@@ -179,15 +129,6 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
     help: "Help / changes",
     next_week_goal: "Next-week goal",
   },
-  nutrition_review: {
-    nutrition_rating: "Nutrition",
-    hunger: "Hunger",
-    digestion: "Digestion",
-    training_energy: "Training energy",
-    hardest: "Hardest part",
-    food_changes: "Foods / meals to change",
-    goal: "Nutrition goal",
-  },
 };
 
 // Form / check-in cards are always blue so "action required" reads differently
@@ -197,16 +138,16 @@ const FORM_CARD =
 const FORM_ICON = "bg-blue-600/10 text-blue-600 dark:bg-blue-400/15 dark:text-blue-300";
 const FORM_MUTED = "text-blue-900/70 dark:text-blue-100/70";
 
-function taskQuestions(taskType: MessengerCheckinTaskType) {
-  return taskType === "nutrition_review" ? NUTRITION : WEEKLY;
+function taskQuestions(_taskType: MessengerCheckinTaskType) {
+  return WEEKLY;
 }
 
-function titleFor(taskType: MessengerCheckinTaskType) {
-  return taskType === "nutrition_review" ? "Nutrition Review" : "Weekly Check-In";
+function titleFor(_taskType: MessengerCheckinTaskType) {
+  return "Weekly Check-In";
 }
 
-export function durationFor(taskType: MessengerCheckinTaskType) {
-  return taskType === "nutrition_review" ? "About 2–3 minutes" : "About 60–90 seconds";
+export function durationFor(_taskType: MessengerCheckinTaskType) {
+  return "About 60–90 seconds";
 }
 
 function displayAnswer(v: unknown) {
@@ -260,7 +201,7 @@ export function MessengerCheckinRequestCard({
             className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
             onClick={() => setOpen(true)}
           >
-            {taskType === "nutrition_review" ? "Start review" : "Start check-in"} <ChevronRight className="ml-1 h-4 w-4" />
+            Start check-in <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         )}
         {!isLoading && !done && !superseded && role === "admin" && (
@@ -276,7 +217,7 @@ export function MessengerCheckinRequestCard({
             onClick={() => setOpen(true)}
           >
             <CheckCircle2 className="mr-2 h-4 w-4" />
-            View {taskType === "nutrition_review" ? "Nutrition Review" : "Check-In"}
+            View Check-In
           </Button>
         )}
         {done && role === "client" && (
@@ -855,7 +796,7 @@ export function FormHistoryRow({ p, role }: { p: FormPresentation; role: Role })
               className="mt-1.5 h-8 rounded-full px-3 text-xs font-semibold"
               onClick={() => setSheetOpen(true)}
             >
-              View {p.taskType === "nutrition_review" ? "review" : "check-in"}
+              View check-in
             </Button>
           )}
         </div>
