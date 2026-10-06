@@ -1,5 +1,7 @@
 import { NewAchievementReveal } from "@/components/portal/new-achievement-reveal";
 import { useEffect, useRef, useState } from "react";
+import { playAppSound, playCountUp } from "@/lib/app-sounds";
+import { haptic } from "@/platform/haptics";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download } from "lucide-react";
@@ -45,10 +47,18 @@ type Props = {
   displayUnit?: "kg" | "lb";
   /** Prescribed cardio status for the same day, when there is one. */
   cardio?: CardioTakeawayInput;
+  /** Sound + haptic cues for the reveal. Off when re-opening a past recap. */
+  playSounds?: boolean;
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", cardio, onClose }: Props) {
+const INTRO_MS = 450;
+const COUNT_MS = 700;
+const DETAILS_MS = 1450;
+/** Minimum gap between celebration cues so they read as separate beats. */
+const CUE_GAP_MS = 550;
+
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", cardio, playSounds = true, onClose }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
@@ -60,7 +70,25 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const [sharing, setSharing] = useState(false);
   const shareCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const hasRecords = prList.length > 0 || recordCount > 0;
+  const hasRecordsRef = useRef(hasRecords);
+  hasRecordsRef.current = hasRecords;
+  const [milestones, setMilestones] = useState(0);
+  // Sound cues follow the reveal: score roll → result chime on landing →
+  // records / milestones as their cards arrive (both load after open).
+  const cues = useRef({ next: 0, celebrated: false, unlocked: false, timers: [] as number[] });
+  const cue = (fn: () => void, at = 0) => {
+    const c = cues.current;
+    const when = Math.max(Date.now() + at, c.next);
+    c.next = when + CUE_GAP_MS;
+    c.timers.push(window.setTimeout(fn, when - Date.now()));
+  };
+
   useEffect(() => {
+    const c = cues.current;
+    c.timers.forEach((t) => window.clearTimeout(t));
+    Object.assign(c, { next: 0, celebrated: false, unlocked: false, timers: [] });
+    setMilestones(0);
     if (!open) {
       setRevealStage(0);
       setDisplayScore(0);
@@ -70,20 +98,44 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     setDisplayScore(0);
     const intro = window.setTimeout(() => {
       setRevealStage(1);
-      void import("@/lib/app-sounds").then(({ playAppSound }) => playAppSound(soundRef.current));
-    }, 450);
-    const details = window.setTimeout(() => setRevealStage(2), 1450);
+      if (playSounds) playCountUp(Math.max(0, Math.min(100, summary.score)) / 8, COUNT_MS);
+    }, INTRO_MS);
+    const details = window.setTimeout(() => setRevealStage(2), DETAILS_MS);
+    if (playSounds) {
+      cue(() => {
+        c.celebrated = hasRecordsRef.current;
+        playAppSound(c.celebrated ? "celebrate" : "success", { throttle: false });
+        haptic("success");
+      }, INTRO_MS + COUNT_MS);
+    }
     return () => {
       window.clearTimeout(intro);
       window.clearTimeout(details);
+      c.timers.forEach((t) => window.clearTimeout(t));
+      c.timers = [];
     };
   }, [open]);
+
+  // Records usually land after the score did — give them their own beat.
+  useEffect(() => {
+    const c = cues.current;
+    if (!open || !playSounds || revealStage < 2 || !hasRecords || c.celebrated) return;
+    c.celebrated = true;
+    cue(() => playAppSound("celebrate", { throttle: false }));
+  }, [open, playSounds, revealStage, hasRecords]);
+
+  useEffect(() => {
+    const c = cues.current;
+    if (!open || !playSounds || revealStage < 2 || milestones === 0 || c.unlocked) return;
+    c.unlocked = true;
+    cue(() => { playAppSound("unlock", { throttle: false }); haptic("medium"); });
+  }, [open, playSounds, revealStage, milestones]);
 
   useEffect(() => {
     if (!open || revealStage < 1) return;
     const target = Math.max(0, Math.min(100, summary.score));
     const started = performance.now();
-    const duration = 700;
+    const duration = COUNT_MS;
     let frame = 0;
     const tick = (now: number) => {
       const progress = Math.min(1, (now - started) / duration);
@@ -94,9 +146,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [open, revealStage, summary.score]);
-  const soundRef = useRef<"celebrate" | "success">("success");
-  soundRef.current = prList.length > 0 || recordCount > 0 ? "celebrate" : "success";
-  const hasAchievement = prList.length > 0 || recordCount > 0 || summary.score >= 90 || summary.completionPct === 100;
+  const hasAchievement = hasRecords || summary.score >= 90 || summary.completionPct === 100;
   const headline =
     recordHeadline ? recordHeadline
     : prList.length > 0 ? (prList.length === 1 ? "NEW ATPR!" : `${prList.length} NEW ATPRs!`)
@@ -249,7 +299,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 [scrollbar-width:none] sm:px-5 [&::-webkit-scrollbar]:hidden">
           <div className={`space-y-2.5 transition-all duration-500 ${revealStage >= 2 ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
-            <NewAchievementReveal open={open} />
+            <NewAchievementReveal open={open} onShow={setMilestones} />
             {records && <NewRecordsSection records={records} unit={displayUnit} />}
             {points && <WorkoutPointsCard points={points} />}
             {prList.length > 0 && (

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 type Row = { badge_key: string; client_id: string; athlete_badge_catalog: { name: string; icon_key: string; rarity: Rarity; description: string } | null };
 
 /** Shows achievements the signed-in athlete unlocked in the last few minutes. RLS limits rows to their own. */
-export function NewAchievementReveal({ open }: { open: boolean }) {
+export function NewAchievementReveal({ open, onShow }: { open: boolean; onShow?: (count: number) => void }) {
   const { data = [] } = useQuery({
     queryKey: ["new-achievements", open],
     enabled: open,
@@ -31,6 +31,7 @@ export function NewAchievementReveal({ open }: { open: boolean }) {
   const shownKey = rows.map((r) => r.badge_key).join(",");
   useEffect(() => {
     if (!rows.length) return;
+    onShow?.(rows.length);
     markAchievementsSeen(rows[0].client_id, rows.map((r) => r.badge_key))
       .then(() => qc.invalidateQueries({ queryKey: ["athlete-achievements-unseen"] }))
       .catch(() => {});

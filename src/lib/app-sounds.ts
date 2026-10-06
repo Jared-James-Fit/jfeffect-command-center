@@ -11,7 +11,7 @@
  *    first user gesture
  */
 
-export type AppSound = "message" | "sent" | "notify" | "success" | "celebrate";
+export type AppSound = "message" | "sent" | "notify" | "success" | "celebrate" | "unlock";
 
 const KEY = "jf-app-sounds";
 const listeners = new Set<(on: boolean) => void>();
@@ -66,13 +66,11 @@ let unlockInstalled = false;
 function installUnlock() {
   if (unlockInstalled || typeof window === "undefined") return;
   unlockInstalled = true;
+  // Stays installed: iOS suspends/interrupts the context when the app is
+  // backgrounded, and only a later gesture can bring it back.
   const unlock = () => {
     const c = getCtx();
     if (c && c.state !== "running") void c.resume().catch(() => {});
-    if (c?.state === "running") {
-      window.removeEventListener("pointerdown", unlock, true);
-      window.removeEventListener("keydown", unlock, true);
-    }
   };
   window.addEventListener("pointerdown", unlock, true);
   window.addEventListener("keydown", unlock, true);
@@ -107,17 +105,33 @@ const PATTERNS: Record<AppSound, (c: AudioContext, out: AudioNode, t: number) =>
     [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(c, o, t + i * 0.07, f, i === 3 ? 0.7 : 0.25, 0.12, "triangle"));
     for (let i = 0; i < 5; i++) tone(c, o, t + 0.3 + i * 0.045, 2093 * Math.pow(2, (i * 3) / 12), 0.25, 0.035);
   },
+  // Upward sweep into a ringing chord — milestone / badge unlocked.
+  unlock: (c, o, t) => {
+    tone(c, o, t, 392, 0.22, 0.06, "triangle", 1568);
+    [1046.5, 1318.5, 1568, 1975.5].forEach((f, i) => tone(c, o, t + 0.16 + i * 0.03, f, 0.9, i === 0 ? 0.1 : 0.07));
+    tone(c, o, t + 0.16, 523.25, 0.6, 0.07, "triangle");
+  },
 };
 
-export function playAppSound(name: AppSound, opts: { force?: boolean } = {}) {
+type PlayOpts = {
+  /** Skip every check (toggle preview). */
+  force?: boolean;
+  /** false = skip the anti-spam limits, for choreographed sequences the UI times itself. */
+  throttle?: boolean;
+};
+
+/** Gates a sound, then hands the pattern an output bus and a start time. */
+function play(key: AppSound | null, opts: PlayOpts, draw: (c: AudioContext, out: AudioNode, t: number) => void) {
   if (typeof window === "undefined") return;
   if (!opts.force) {
     if (!appSoundsEnabled()) return;
     if (document.visibilityState === "hidden") return;
-    const now = Date.now();
-    if (now - lastAny < 600 || now - (lastBy[name] ?? 0) < 2500) return;
-    lastAny = now;
-    lastBy[name] = now;
+    if (key && opts.throttle !== false) {
+      const now = Date.now();
+      if (now - lastAny < 600 || now - (lastBy[key] ?? 0) < 2500) return;
+      lastAny = now;
+      lastBy[key] = now;
+    }
   }
   const c = getCtx();
   if (!c) return;
@@ -130,6 +144,28 @@ export function playAppSound(name: AppSound, opts: { force?: boolean } = {}) {
     const out = c.createGain();
     out.gain.value = 0.9;
     out.connect(c.destination);
-    PATTERNS[name](c, out, c.currentTime + 0.01);
+    draw(c, out, c.currentTime + 0.01);
   } catch { /* never let a sound break the UI */ }
+}
+
+export function playAppSound(name: AppSound, opts: PlayOpts = {}) {
+  play(name, opts, PATTERNS[name]);
+}
+
+/**
+ * Soft rising ticks for a number counting up with an ease-out-cubic curve:
+ * tick k lands when the counter passes k/steps of the way, so they bunch at
+ * the start and spread out as the number settles. The final step is left to
+ * the caller's landing sound.
+ */
+export function playCountUp(steps: number, durationMs: number) {
+  const n = Math.max(0, Math.min(14, Math.round(steps)));
+  if (n < 2) return;
+  const d = durationMs / 1000;
+  play(null, { throttle: false }, (c, o, t) => {
+    for (let k = 1; k < n; k++) {
+      const at = d * (1 - Math.cbrt(1 - k / n));
+      tone(c, o, t + at, 660 * Math.pow(2, k / n), 0.045, 0.035, "triangle");
+    }
+  });
 }
