@@ -14,11 +14,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { BADGE_TONE, ACTION_ICON, actionStyle, lastSeenChip, rowStatusChips, type ChipAction } from "./clients-status";
+import { BADGE_TONE, lastSeenChip, rowStatusChips, type ChipAction } from "./clients-status";
 import { StatusTip } from "./status-tip";
 import { adminRemindAgreement } from "@/lib/coaching-agreement.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
-import type { DirectoryNextAction } from "@/lib/clients-directory.functions";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
@@ -29,17 +28,8 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-/** Plain-English hover text for the big primary button, by what it does. */
-const ACTION_HINT: Record<string, string> = {
-  open: "Open this client's full profile: training, nutrition, messages, billing and more.",
-  setup: "Open this client's profile to finish setting up their account.",
-  payment: "Open their billing to fix a missed payment or set up a payment link.",
-  review: "Go to check-in reviews to review what this client submitted.",
-  assign: "Assign a training program to this client.",
-  next_phase: "Build this client's next training block so they don't run out of program.",
-  nutrition: "Update this client's nutrition plan.",
-  cardio: "Update this client's cardio plan.",
-};
+/** Hover text for the one primary button. Payment and check-in shortcuts live in the status badges. */
+const OPEN_CLIENT_HINT = "Open this client's full profile: training, nutrition, messages, billing and more.";
 
 /** Buttons inside a status explanation. The first is the main one. */
 const actionClass = (primary: boolean) =>
@@ -134,18 +124,8 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
   // The status row already carries "N Missed" when it fits, so the tag by the name only fills in
   // for the rare card whose status row is full.
   const missedShownAsBadge = badges.some((b) => b.id === "missed");
-  const urgent = r.priority <= 3;
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
-  // For non-urgent next-actions (missing program, next phase, nutrition,
-  // cardio, setup), the "Program"/"Nutrition"/"Cardio" status pills already
-  // handle the specific assign flow. The big primary button should always
-  // just open the client so admins have one consistent CTA per row.
-  const effectiveAction: DirectoryNextAction =
-    r.next_action.kind === "payment" || r.next_action.kind === "review"
-      ? r.next_action
-      : { kind: "open", label: "Open Client" };
-  const actionTarget = primaryActionTarget(effectiveAction, r.id);
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const navigate = useNavigate();
@@ -291,7 +271,7 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
           <AssignmentStatusStrip r={r} prog={prog} range={range} />
         </div>
         {/* Next best action */}
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1.5 max-xl:w-full">
           {canPov && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -310,11 +290,14 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button asChild size="sm" className={cn("h-9 min-w-[8rem]", actionStyle(effectiveAction, urgent))}>
-                {actionTarget}
+              <Button asChild size="sm" className="h-9 min-w-[8rem] flex-1 bg-secondary text-secondary-foreground hover:bg-secondary/80 xl:flex-none">
+                <ClientNameLink clientId={r.id}>
+                  <ArrowRight className="mr-1.5 h-4 w-4" aria-hidden />
+                  Open Client
+                </ClientNameLink>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">{ACTION_HINT[effectiveAction.kind] ?? effectiveAction.label}</TooltipContent>
+            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">{OPEN_CLIENT_HINT}</TooltipContent>
           </Tooltip>
 
           <QuickActionsMenu r={r} />
@@ -651,49 +634,6 @@ function AssignmentStatusStrip({
       />
     </div>
   );
-}
-
-/** Map next_action kind to the most useful in-app destination. */
-function primaryActionTarget(action: DirectoryNextAction, clientId: string) {
-  const IconBase = ACTION_ICON(action.kind);
-  const label = (
-    <>
-      <IconBase className="mr-1.5 h-4 w-4" aria-hidden />
-      {action.label}
-    </>
-  );
-  switch (action.kind) {
-    case "assign":
-    case "next_phase":
-      return (
-        <Link to="/admin/program-assign/$clientId" params={{ clientId }}>{label}</Link>
-      );
-    case "nutrition":
-      return (
-        <ClientNameLink clientId={clientId} tab="nutrition">{label}</ClientNameLink>
-      );
-    case "cardio":
-      return (
-        <ClientNameLink clientId={clientId} tab="nutrition">{label}</ClientNameLink>
-      );
-    case "review":
-      return (
-        <Link to="/admin/check-in-reviews">{label}</Link>
-      );
-    case "payment":
-      return (
-        <ClientNameLink clientId={clientId} tab="billing">{label}</ClientNameLink>
-      );
-    case "setup":
-      return (
-        <ClientNameLink clientId={clientId}>{label}</ClientNameLink>
-      );
-    case "open":
-    default:
-      return (
-        <ClientNameLink clientId={clientId}>{label}</ClientNameLink>
-      );
-  }
 }
 
 export function ClientRowSkeleton() {
