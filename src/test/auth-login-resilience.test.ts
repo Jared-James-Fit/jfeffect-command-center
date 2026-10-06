@@ -3,17 +3,18 @@ import fs from "node:fs";
 
 describe("auth login resilience", () => {
   const authRoute = fs.readFileSync("src/routes/auth.tsx", "utf8");
+  const signInForm = fs.readFileSync("src/components/auth/sign-in-form.tsx", "utf8");
   const authProvider = fs.readFileSync("src/lib/auth.tsx", "utf8");
   const guard = fs.readFileSync("src/routes/_authenticated/route.tsx", "utf8");
 
   it("normalizes email and requires a real session after password login", () => {
-    expect(authRoute).toContain("email.trim().toLowerCase()");
-    expect(authRoute).toContain("if (!data.session?.user)");
+    expect(signInForm).toContain("email.trim().toLowerCase()");
+    expect(signInForm).toContain("if (!data.session?.user)");
   });
 
   it("does not leave an authenticated user on an endless splash when role resolution fails", () => {
     expect(authRoute).toContain("user && !role");
-    expect(authRoute).toContain("Retry account access");
+    expect(authRoute).toContain("Try again");
     expect(authRoute).toContain("Sign out");
   });
 
