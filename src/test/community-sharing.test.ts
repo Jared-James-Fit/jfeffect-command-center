@@ -1,0 +1,225 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import {
+  CAPTION_MAX,
+  MAX_VIDEO_BYTES,
+  MAX_VIDEO_SECONDS,
+  REACTIONS,
+  checkMediaFile,
+  checkVideoDuration,
+  featuredLift,
+  formatTopSet,
+  formatWorkoutDuration,
+  isPrMoment,
+  nextFeedCursor,
+  pickCardStats,
+  postTimeLabel,
+  type CommunityFeedPage,
+  type WorkoutShareStats,
+} from "@/lib/community";
+import { wrapLines } from "@/lib/workout-share-card";
+
+const read = (p: string) => readFileSync(p, "utf8");
+const migration = read("supabase/migrations/20261006090000_community_sharing.sql");
+
+const base: WorkoutShareStats = {
+  workout_title: "Primary SBD",
+  completed_at: "2026-10-06T14:00:00Z",
+  duration_min: 74,
+  working_sets: 18,
+  tonnage_kg: 12000,
+  top_lift: { exercise_name: "Squat", reps: 3, load_kg: 220 },
+  pr_count: 0,
+  prs: [],
+};
+
+describe("share card data", () => {
+  it("formats duration like a person would say it", () => {
+    expect(formatWorkoutDuration(74)).toBe("1h 14m");
+    expect(formatWorkoutDuration(60)).toBe("1h");
+    expect(formatWorkoutDuration(48)).toBe("48m");
+    expect(formatWorkoutDuration(0)).toBeNull();
+    expect(formatWorkoutDuration(null)).toBeNull();
+  });
+
+  it("shows at most three numbers: time, working sets, PRs", () => {
+    const withPrs = pickCardStats({ ...base, pr_count: 2 }, "kg");
+    expect(withPrs.map((s) => s.label)).toEqual(["Time", "Working sets", "PRs"]);
+    expect(withPrs.length).toBeLessThanOrEqual(3);
+  });
+
+  it("falls back to volume only when there is no duration, and never overflows", () => {
+    const noTime = pickCardStats({ ...base, duration_min: null }, "kg");
+    expect(noTime.map((s) => s.label)).toEqual(["Working sets", "Volume"]);
+    const everything = pickCardStats({ ...base, pr_count: 3 }, "lb");
+    expect(everything.length).toBe(3);
+  });
+
+  it("omits stats that are empty instead of printing zeros", () => {
+    const bare = pickCardStats({ ...base, duration_min: null, working_sets: 0, tonnage_kg: 0 }, "kg");
+    expect(bare).toEqual([]);
+  });
+
+  it("features the PR when there is one, otherwise the primary lift", () => {
+    expect(featuredLift(base)).toEqual({ name: "Squat", detail: { reps: 3, load_kg: 220 }, pr: null });
+    const pr = featuredLift({
+      ...base,
+      pr_count: 1,
+      prs: [{ exercise_name: "Competition Bench Press", reps: 5, load_kg: 120, scope: "atpr" }],
+    });
+    expect(pr).toEqual({ name: "Competition Bench Press", detail: { reps: 5, load_kg: 120 }, pr: "atpr" });
+    expect(isPrMoment(base)).toBe(false);
+    expect(isPrMoment({ ...base, prs: [{ exercise_name: "x", reps: 1, load_kg: 1, scope: "block_pr" }] })).toBe(true);
+    expect(featuredLift({ ...base, top_lift: null })).toBeNull();
+  });
+
+  it("formats a top set with the athlete's unit", () => {
+    expect(formatTopSet({ reps: 3, load_kg: 220 }, "kg")).toBe("220 kg × 3");
+    expect(formatTopSet({ reps: 5, load_kg: 100 }, "lb")).toBe("220.5 lb × 5");
+  });
+});
+
+describe("reactions", () => {
+  it("is a small fixed set with no scoring attached", () => {
+    expect(REACTIONS.map((r) => r.emoji)).toEqual(["🔥", "💪", "👏", "❤️"]);
+    expect(Object.keys(REACTIONS[0]).sort()).toEqual(["emoji", "key", "label"]);
+  });
+});
+
+describe("media rules", () => {
+  it("accepts photos and short videos, rejects everything else", () => {
+    expect(checkMediaFile({ type: "image/jpeg", size: 9_000_000 })).toEqual({ ok: true, kind: "image" });
+    expect(checkMediaFile({ type: "video/mp4", size: 10_000_000 })).toEqual({ ok: true, kind: "video" });
+    expect(checkMediaFile({ type: "video/mp4", size: MAX_VIDEO_BYTES + 1 }).ok).toBe(false);
+    expect(checkMediaFile({ type: "application/pdf", size: 10 }).ok).toBe(false);
+  });
+
+  it("caps video length", () => {
+    expect(checkVideoDuration(MAX_VIDEO_SECONDS).ok).toBe(true);
+    expect(checkVideoDuration(MAX_VIDEO_SECONDS + 1).ok).toBe(false);
+  });
+});
+
+describe("feed helpers", () => {
+  const now = new Date("2026-10-06T12:00:00");
+  it("labels time compactly", () => {
+    expect(postTimeLabel("2026-10-06T11:59:40", now)).toBe("now");
+    expect(postTimeLabel("2026-10-06T11:48:00", now)).toBe("12m");
+    expect(postTimeLabel("2026-10-06T09:00:00", now)).toBe("3h");
+    expect(postTimeLabel("2026-10-05T08:00:00", now)).toBe("Yesterday");
+  });
+
+  it("pages by keyset cursor and stops when the server says there is no more", () => {
+    const post = (id: string, at: string) => ({ id, created_at: at }) as any;
+    const page: CommunityFeedPage = { posts: [post("a", "2026-10-06T10:00:00Z"), post("b", "2026-10-06T09:00:00Z")], has_more: true };
+    expect(nextFeedCursor(page)).toEqual({ at: "2026-10-06T09:00:00Z", id: "b" });
+    expect(nextFeedCursor({ ...page, has_more: false })).toBeNull();
+    expect(nextFeedCursor({ posts: [], has_more: true })).toBeNull();
+  });
+});
+
+describe("card text wrapping", () => {
+  // 10px per character, so 100px fits 10 chars.
+  const ctx: any = { measureText: (t: string) => ({ width: t.length * 10 }), font: "" };
+  it("wraps on words", () => {
+    expect(wrapLines(ctx, "finally starting to move again", 150, 3)).toEqual(["finally", "starting to", "move again"]);
+  });
+  it("ellipsizes instead of overflowing the line budget", () => {
+    const lines = wrapLines(ctx, "one two three four five six seven eight nine ten", 100, 2);
+    expect(lines).toHaveLength(2);
+    expect(lines[1].endsWith("…")).toBe(true);
+  });
+  it("never drops a single very long word", () => {
+    expect(wrapLines(ctx, "supercalifragilistic", 50, 2)[0]).toContain("supercal");
+  });
+  it("caption limit matches the database check", () => {
+    expect(migration).toContain(`char_length(caption) <= ${CAPTION_MAX}`);
+  });
+});
+
+describe("community_sharing migration contract", () => {
+  it("references the canonical completion and stores only social data", () => {
+    expect(migration).toMatch(/completion_id uuid NOT NULL REFERENCES public\.pl_day_completions\(id\)/);
+    expect(migration).toContain("community_posts_one_per_completion UNIQUE (completion_id)");
+    const table = migration.slice(migration.indexOf("CREATE TABLE IF NOT EXISTS public.community_posts"), migration.indexOf("CREATE TABLE IF NOT EXISTS public.community_reactions"));
+    for (const workoutColumn of ["duration", "tonnage", "sets", "reps", "load_kg", "pr_count"]) {
+      expect(table).not.toContain(workoutColumn);
+    }
+  });
+
+  it("derives workout numbers from the same record functions the recap uses", () => {
+    expect(migration).toContain("public.client_rep_records(pc.client_id)");
+    expect(migration).toContain("public.client_load_records(pc.client_id)");
+    expect(migration).toContain("public.client_qualifying_sets(pc.client_id)");
+  });
+
+  it("publishes nothing automatically: writes only through the owner-checked RPC", () => {
+    expect(migration).not.toMatch(/CREATE POLICY\s+\S+\s+ON public\.community_posts FOR (INSERT|UPDATE|ALL)/);
+    expect(migration).toMatch(/c\.user_id = uid/); // author must own the completion
+    expect(migration).toContain("pc.completed_at IS NOT NULL");
+    expect(migration).not.toMatch(/CREATE TRIGGER/i); // no trigger can post on completion
+  });
+
+  it("keeps private posts private, from staff too, including their media", () => {
+    const sel = migration.slice(migration.indexOf("community_posts_select"), migration.indexOf("community_posts_delete"));
+    expect(sel).toContain("author_user_id = auth.uid() OR (visibility = 'community'");
+    expect(sel).not.toContain("is_community_staff");
+    const mediaRead = migration.slice(migration.indexOf('"community media read"'));
+    expect(mediaRead).toContain("p.visibility = 'community'");
+  });
+
+  it("limits reactions to one per person from the fixed set", () => {
+    expect(migration).toContain("PRIMARY KEY (post_id, user_id)");
+    expect(migration).toContain("CHECK (emoji IN ('fire', 'muscle', 'clap', 'heart'))");
+  });
+
+  it("stays out of the XP / league systems", () => {
+    expect(migration).not.toMatch(/athlete_xp_events|league_/);
+  });
+
+  it("revokes anonymous access on every RPC", () => {
+    const grants = migration.match(/REVOKE ALL ON FUNCTION public\.community_\w+\([^)]*\) FROM PUBLIC, anon/g) ?? [];
+    expect(grants.length).toBeGreaterThanOrEqual(7);
+  });
+});
+
+describe("sharing stays optional", () => {
+  const summary = read("src/components/workout-submission-summary.tsx");
+  const composer = read("src/components/community/share-composer.tsx");
+  const dayView = read("src/components/workout-day/WorkoutDayView.tsx");
+
+  it("only opens when the athlete taps Share workout", () => {
+    expect(summary).toContain("useState(false);\n  const [shareMounted");
+    expect(summary).toContain("Share workout");
+    expect(summary).toContain("setShareOpen(true)");
+    expect(summary).not.toMatch(/useEffect\([^)]*setShareOpen\(true\)/);
+  });
+
+  it("is not offered to memberships or to a coach in View-as-client", () => {
+    expect(dayView).toContain("isClientWorkout && !isImpersonating && completion?.completed_at");
+  });
+
+  it("keeps community posting and external sharing independent", () => {
+    // external share never touches the post RPC, and posting never calls navigator.share
+    const shareOut = composer.slice(composer.indexOf("const shareOut"), composer.indexOf("const copyCaption"));
+    expect(shareOut).not.toContain("saveCommunityPost");
+    const post = composer.slice(composer.indexOf("const post = async"), composer.indexOf("/* ---- external share"));
+    expect(post).not.toContain("shareCardImage");
+    expect(post).not.toContain("navigator.share");
+  });
+
+  it("does not request camera or library until a button is tapped", () => {
+    expect(composer).not.toContain("getUserMedia");
+    expect(composer).toContain("cameraRef.current?.click()");
+  });
+
+  it("does not upload on selection, only on Post", () => {
+    const onPick = composer.slice(composer.indexOf("const onPick"), composer.indexOf("const removeMedia"));
+    expect(onPick).not.toContain("uploadPicked");
+  });
+
+  it("never prompts after a workout (no auto-open, no nagging copy)", () => {
+    expect(summary).not.toMatch(/setShareOpen\(true\)\s*;?\s*\n?\s*(}|\))\s*,\s*\d+\)/);
+    expect(composer).not.toMatch(/POST-WORKOUT PHOTO NOW|Are you sure you don't want to share/i);
+  });
+});

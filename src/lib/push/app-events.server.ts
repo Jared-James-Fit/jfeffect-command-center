@@ -21,7 +21,8 @@ export type AppEvent =
   | "nutrition_requested"
   | "checkin_reviewed"
   | "lift_reviewed"
-  | "nutrition_targets_updated";
+  | "nutrition_targets_updated"
+  | "community_coach_recognition";
 
 type EventSpec = {
   to: "staff" | "client";
@@ -93,6 +94,14 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: () => "New Nutrition Plan",
     body: "Your nutrition targets were updated. Tap to see your plan.",
     url: () => "/portal/nutrition-targets", rateMinutes: 360,
+  },
+  // The coach reacted to / commented on a workout the athlete chose to share.
+  // The only push the community ever sends: no likes, no peer activity.
+  community_coach_recognition: {
+    to: "client", category: "lift_reviews",
+    title: () => "Coach Feedback",
+    body: "Your coach saw your training.",
+    url: () => "/portal/community", rateMinutes: 180,
   },
 };
 
