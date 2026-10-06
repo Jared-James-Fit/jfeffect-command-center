@@ -291,7 +291,9 @@ export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
       .from("client_task_occurrences")
       .select("id,task_type,due_local_date,client_tz,status")
       .eq("client_id", clientId)
-      .in("task_type", ["weekly_checkin", "nutrition_review"])
+      // Nutrition Review is retired (duplicated the weekly check-in); only
+      // weekly requests are auto-sent. Existing nutrition_review history still renders.
+      .in("task_type", ["weekly_checkin"])
       .not("status", "in", "(completed,skipped)")
       .order("due_at_utc", { ascending: true })
       .limit(8);
@@ -353,6 +355,9 @@ export const sendMessengerCheckinRequest = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    if (data.taskType === "nutrition_review") {
+      throw new Error("Nutrition Review has been retired. Use the Weekly Check-In or a Nutrition Update.");
+    }
     const actor = await resolveClientAccess(context.supabase, context.userId, data.clientId);
     if (actor === "client") throw new Error("Coach access required.");
     const sb = await adminClient();
