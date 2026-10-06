@@ -46,6 +46,7 @@ vi.mock("@/lib/stripe.server", () => ({
   getStripeKeyDiagnostics: () => ({}),
   formEncode: () => "",
 }));
+vi.mock("@/lib/member-payment-ledger.server", () => ({ recordStripePayment: vi.fn(async () => {}) }));
 vi.mock("@/lib/billing-notify.server", () => ({
   sendBillingAdminEmail: vi.fn(async () => {}),
   buildBillingEmailBody: vi.fn(() => ""),

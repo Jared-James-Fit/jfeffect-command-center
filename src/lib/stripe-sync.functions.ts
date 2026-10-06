@@ -23,6 +23,7 @@ import {
   invoiceChargeId,
   invoiceTaxMinor,
   invoiceIdByPaymentRef,
+  invoicePaymentRecordId,
 } from "@/lib/stripe-invoice-refs";
 
 async function assertAdmin(supabase: any, userId: string) {
@@ -428,7 +429,8 @@ export const syncStripePayments = createServerFn({ method: "POST" })
           client_id: purchase.client_id,
           purchase_id: purchase.id,
           txn_type: "payment",
-          method: "stripe",
+          // Invoices settled by a payment record were paid outside Stripe.
+          method: invoicePaymentRecordId(i) ? "other" : "stripe",
           amount_minor: i.amount_paid,
           tax_minor: invoiceTaxMinor(i),
           currency: (i.currency ?? "usd").toUpperCase(),
@@ -919,8 +921,9 @@ export const listStripeAccountTransactions = createServerFn({ method: "POST" })
     // invoices' own `payments` list. Best-effort: on failure rows still match
     // by charge / PaymentIntent id.
     let invoiceByPaymentRef = new Map<string, string>();
+    const paidInvoices: any[] = [];
     try {
-      const invoices: any[] = [];
+      const invoices = paidInvoices;
       let invAfter: string | null = null;
       for (let page = 0; page < 100; page++) {
         const qs = new URLSearchParams({ limit: "100", status: "paid", "created[gte]": String(createdAfter) });
@@ -974,6 +977,64 @@ export const listStripeAccountTransactions = createServerFn({ method: "POST" })
       }
     }
 
+    // Invoices settled with a Stripe payment record (marked paid outside Stripe,
+    // e.g. an e-transfer) have no charge, so the charge list above never shows
+    // them even though they are paid in the Stripe account.
+    for (const inv of paidInvoices) {
+      if (!(inv.amount_paid > 0) || !invoicePaymentRecordId(inv)) continue;
+      const paidAt = new Date((inv.status_transitions?.paid_at ?? inv.created) * 1000).toISOString();
+      const currency = String(inv.currency ?? "usd").toUpperCase();
+      const matched = appByKey.get(`invoice:${inv.id}`);
+      if (matched) {
+        linkedIds.add(matched.id);
+        rows.push({
+          ...matched,
+          status: "Paid",
+          amount: inv.amount_paid / 100,
+          currency,
+          stripe_invoice_id: inv.id,
+          hosted_invoice_url: inv.hosted_invoice_url ?? matched.hosted_invoice_url,
+          invoice_pdf_url: inv.invoice_pdf ?? matched.invoice_pdf_url,
+          stripe_mode: data.mode,
+          voided: false,
+        });
+        continue;
+      }
+      rows.push({
+        id: `stripe:invoice:${inv.id}`,
+        source: "stripe",
+        occurred_on: paidAt.slice(0, 10),
+        occurred_at: paidAt,
+        subject_id: stripeObjectId(inv.customer),
+        subject_kind: "stripe",
+        subject_name: inv.customer_name || inv.customer_email || "Stripe customer",
+        subject_email: inv.customer_email ?? null,
+        purchase_id: null,
+        offer_id: null,
+        product_name: inv.lines?.data?.[0]?.description || "Stripe invoice",
+        purchase_type: "Paid outside Stripe",
+        amount: inv.amount_paid / 100,
+        currency,
+        txn_type: "payment",
+        method: "other",
+        status: "Paid",
+        stripe_customer_id: stripeObjectId(inv.customer),
+        stripe_payment_intent_id: null,
+        stripe_charge_id: null,
+        stripe_invoice_id: inv.id,
+        stripe_checkout_session_id: null,
+        stripe_subscription_id: invoiceSubscriptionId(inv),
+        stripe_product_id: null,
+        stripe_price_id: null,
+        receipt_url: null,
+        hosted_invoice_url: inv.hosted_invoice_url ?? null,
+        invoice_pdf_url: inv.invoice_pdf ?? null,
+        stripe_mode: data.mode,
+        admin_notes: "Stripe invoice marked paid outside Stripe — not linked to a JF Effect purchase record.",
+        voided: false,
+      });
+    }
+
     const refunds: any[] = [];
     let refundStartingAfter: string | null = null;
     for (let page = 0; page < 100; page++) {
@@ -1023,6 +1084,15 @@ export const listStripeAccountTransactions = createServerFn({ method: "POST" })
           ),
         );
       }
+    }
+
+    // Payments recorded outside Stripe (e-transfer, cash, ...) never create a
+    // Stripe charge, so they would otherwise be missing from Billing and from
+    // the Paid total. Add the active app rows that were not matched above.
+    for (const row of appRows) {
+      if (linkedIds.has(row.id)) continue;
+      if (String(row.method ?? "").toLowerCase() === "stripe") continue;
+      rows.push({ ...row, voided: false });
     }
 
     rows.sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at)));

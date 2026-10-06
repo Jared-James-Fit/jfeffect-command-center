@@ -5,6 +5,7 @@ import {
   invoiceChargeId,
   invoiceTaxMinor,
   invoiceIdByPaymentRef,
+  invoicePaymentRecordId,
 } from "@/lib/stripe-invoice-refs";
 
 describe("stripe invoice refs", () => {
@@ -63,5 +64,23 @@ describe("stripe invoice refs", () => {
     expect(idx.get("pi:pi_2")).toBe("in_2");
     expect(idx.get("charge:ch_2")).toBe("in_2");
     expect(idx.size).toBe(3);
+  });
+
+  it("ignores cancelled attempts and reads payment records (invoice paid outside Stripe)", () => {
+    // Shape of Colten's e-transfer invoice: a record payment plus an abandoned card attempt.
+    const inv = {
+      id: "in_colten",
+      payments: {
+        data: [
+          { status: "paid", payment: { type: "payment_record", payment_record: "pr_1" } },
+          { status: "canceled", payment: { type: "payment_intent", payment_intent: "pi_abandoned" } },
+        ],
+      },
+    };
+    expect(invoicePaymentIntentId(inv)).toBeNull();
+    expect(invoiceChargeId(inv)).toBeNull();
+    expect(invoicePaymentRecordId(inv)).toBe("pr_1");
+    expect(invoiceIdByPaymentRef([inv]).size).toBe(0);
+    expect(invoicePaymentRecordId({ payments: { data: [{ status: "paid", payment: { type: "payment_intent", payment_intent: "pi_1" } }] } })).toBeNull();
   });
 });

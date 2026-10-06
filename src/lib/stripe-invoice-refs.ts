@@ -15,6 +15,32 @@ type AnyRec = Record<string, any> | null | undefined;
 const str = (v: unknown): string | null =>
   typeof v === "string" && v.trim() ? v : null;
 
+/**
+ * Settled entries of an invoice's `payments` list. An invoice can carry
+ * cancelled/open attempts (e.g. a card PaymentIntent that was abandoned before
+ * the invoice was marked paid another way), and those must never be treated as
+ * the payment. Entries without a `status` (legacy shape) are kept.
+ */
+function paidInvoicePayments(invoice: AnyRec): any[] {
+  const raw: any = invoice?.["payments"];
+  const list: any[] = Array.isArray(raw) ? raw : raw?.data ?? [];
+  return list.filter((p) => p && (p.status === undefined || p.status === "paid"));
+}
+
+/**
+ * Id of the Stripe payment record behind an invoice that was marked paid
+ * outside Stripe (e-transfer, cash, ...). Null for card/PaymentIntent payments.
+ */
+export function invoicePaymentRecordId(invoice: AnyRec): string | null {
+  for (const p of paidInvoicePayments(invoice)) {
+    if (p?.payment?.type !== "payment_record") continue;
+    const rec = p.payment.payment_record;
+    const id = str(typeof rec === "object" ? rec?.id : rec);
+    if (id) return id;
+  }
+  return null;
+}
+
 /** Subscription id for an invoice, old or new API shape. */
 export function invoiceSubscriptionId(invoice: AnyRec): string | null {
   if (!invoice) return null;
@@ -30,8 +56,7 @@ export function invoicePaymentIntentId(invoice: AnyRec): string | null {
   if (!invoice) return null;
   const legacy = str(invoice["payment_intent"]);
   if (legacy) return legacy;
-  const payments: any[] = invoice["payments"]?.data ?? invoice["payments"] ?? [];
-  for (const p of Array.isArray(payments) ? payments : []) {
+  for (const p of paidInvoicePayments(invoice)) {
     const pi = p?.payment?.payment_intent;
     const id = str(typeof pi === "object" ? pi?.id : pi);
     if (id) return id;
@@ -44,8 +69,7 @@ export function invoiceChargeId(invoice: AnyRec): string | null {
   if (!invoice) return null;
   const legacy = str(invoice["charge"]);
   if (legacy) return legacy;
-  const payments: any[] = invoice["payments"]?.data ?? invoice["payments"] ?? [];
-  for (const p of Array.isArray(payments) ? payments : []) {
+  for (const p of paidInvoicePayments(invoice)) {
     const ch = p?.payment?.charge;
     const id = str(typeof ch === "object" ? ch?.id : ch);
     if (id) return id;

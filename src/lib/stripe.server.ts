@@ -111,6 +111,8 @@ export async function resolveInvoicePaymentRefs(
     let paymentIntent: string | null = null;
     let charge: string | null = null;
     for (const p of (inv?.payments?.data ?? []) as any[]) {
+      // Skip cancelled/open attempts; only the settled payment counts.
+      if (p?.status !== undefined && p.status !== "paid") continue;
       const pi = p?.payment?.payment_intent;
       const ch = p?.payment?.charge;
       paymentIntent ??= typeof pi === "string" ? pi : pi?.id ?? null;
