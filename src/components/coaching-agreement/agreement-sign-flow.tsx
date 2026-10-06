@@ -1,9 +1,12 @@
 import {
+  cloneElement,
+  isValidElement,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type ReactElement,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -13,6 +16,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  ChevronRight,
   Loader2,
   PenLine,
   RefreshCw,
@@ -28,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import {
@@ -42,6 +47,11 @@ import {
 } from "@/lib/coaching-agreement/content";
 import { sha256HexAsync } from "@/lib/coaching-agreement/hash";
 import { isMinor } from "@/lib/coaching-agreement/rules";
+import {
+  describeDetailsErrors,
+  missingForSigning,
+  type MissingItem,
+} from "@/lib/coaching-agreement/readiness";
 import { detailsSchema, guardianSchema } from "@/lib/coaching-agreement/schemas";
 import { AGREEMENT_QUERY_ROOT } from "./agreement-context";
 import { AgreementReader } from "./agreement-reader";
@@ -222,6 +232,12 @@ export function AgreementSignFlow({
   const [signed, setSigned] = useState<{ signatureId: string } | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [initFor, setInitFor] = useState<string | null>(null);
+  // Once someone has tried to continue, show exactly what is still missing and keep it live.
+  const [detailsAttempted, setDetailsAttempted] = useState(false);
+  const [signAttempted, setSignAttempted] = useState(false);
+  const [reviewNudge, setReviewNudge] = useState<number | null>(null);
+  const detailsAttemptedRef = useRef(false);
+  detailsAttemptedRef.current = detailsAttempted;
 
   // What this device is actually showing, as a fingerprint.
   useEffect(() => {
@@ -333,7 +349,15 @@ export function AgreementSignFlow({
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
+    setDetailsAttempted(false);
+    setSignAttempted(false);
+    setReviewNudge(null);
+    setErrors({});
   }, [step]);
+
+  useEffect(() => {
+    if (reviewedEnd) setReviewNudge(null);
+  }, [reviewedEnd]);
 
   const dob = form?.dateOfBirth ?? "";
   const minor = useMemo(() => isMinor(dob, new Date()), [dob]);
@@ -343,6 +367,9 @@ export function AgreementSignFlow({
 
   const patch = useCallback((next: Partial<FormState>) => {
     setForm((prev) => (prev ? { ...prev, ...next } : prev));
+    // After the first attempt, live re-validation owns the errors so a half-typed value
+    // doesn't look fixed.
+    if (detailsAttemptedRef.current) return;
     setErrors((prev) => {
       const copy = { ...prev };
       for (const field of Object.keys(next) as (keyof FormState)[]) {
@@ -352,8 +379,8 @@ export function AgreementSignFlow({
     });
   }, []);
 
-  const validateDetails = (): boolean => {
-    if (!form) return false;
+  const computeDetailErrors = useCallback((): Record<string, string> => {
+    if (!form) return {};
     const found: Record<string, string> = {};
     const parsed = detailsSchema.safeParse(detailsInput(form, payorOn));
     if (!parsed.success) Object.assign(found, issuesToErrors(parsed.error.issues));
@@ -371,40 +398,60 @@ export function AgreementSignFlow({
         }
       }
     }
+    return found;
+  }, [form, payorOn, minor]);
+
+  // After the first failed attempt the list of what's missing stays live as they fill things in.
+  useEffect(() => {
+    if (detailsAttempted) setErrors(computeDetailErrors());
+  }, [detailsAttempted, computeDetailErrors]);
+
+  /** Scrolls to something that still needs attention and, for inputs and boxes, focuses it. */
+  const jumpTo = useCallback((anchor: string) => {
+    const el = document.getElementById(anchor);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (el.matches("input, textarea, button")) el.focus({ preventScroll: true });
+  }, []);
+
+  const validateDetails = (): boolean => {
+    if (!form) return false;
+    const found = computeDetailErrors();
+    setDetailsAttempted(true);
     setErrors(found);
-    if (Object.keys(found).length > 0) {
-      requestAnimationFrame(() => {
-        const first = scrollRef.current?.querySelector(
-          '[data-invalid="true"]',
-        ) as HTMLElement | null;
-        first?.scrollIntoView({ block: "center", behavior: "smooth" });
-      });
+    const items = describeDetailsErrors(found);
+    if (items.length > 0) {
+      requestAnimationFrame(() => jumpTo(items[0].anchor));
       return false;
     }
     return true;
   };
 
-  const allAcked = content.acknowledgements.every((a) => acked.includes(a.id));
-  const nameOk = typedName.trim().length >= 3 && /\p{L}/u.test(typedName);
-  const sigOk = minor ? nameOk : method === "typed" ? nameOk : !!signature;
-  const payorOk = !payorOn || payorConfirmed;
-  const guardianNameOk = (form?.guardianName ?? "").trim().length >= 2;
-  const guardianSigOk = guardianMethod === "typed" ? guardianNameOk : !!guardianSignature;
-  const guardianOk = !minor || (guardianNameOk && guardianAck && guardianSigOk);
+  const missing = missingForSigning({
+    acknowledgements: content.acknowledgements,
+    acked,
+    payorOn,
+    payorConfirmed,
+    typedName,
+    minor,
+    method,
+    hasSignature: !!signature,
+    guardianName: form?.guardianName ?? "",
+    guardianAck,
+    guardianMethod,
+    hasGuardianSignature: !!guardianSignature,
+    online,
+  });
+  const missingKeys = new Set(missing.map((m) => m.key));
 
-  const missingHint = !allAcked
-    ? `Tick all ${content.acknowledgements.length} confirmations (${content.acknowledgements.length - acked.length} left)`
-    : !payorOk
-      ? "Confirm the payor statement"
-      : !nameOk
-        ? "Type your full legal name"
-        : !sigOk
-          ? "Add your signature"
-          : !guardianOk
-            ? "A parent or guardian needs to confirm and sign"
-            : !online
-              ? "You're offline"
-              : null;
+  /** How far down the agreement they've scrolled, for the "keep going" message. */
+  const readProgress = () => {
+    const el = scrollRef.current;
+    if (!el) return 0;
+    const max = el.scrollHeight - el.clientHeight;
+    if (max <= 0) return 99;
+    return Math.min(99, Math.max(0, Math.round((el.scrollTop / max) * 100)));
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -480,6 +527,9 @@ export function AgreementSignFlow({
     setGuardianSignature(null);
     setPayorConfirmed(false);
     setForm(null);
+    setDetailsAttempted(false);
+    setSignAttempted(false);
+    setReviewNudge(null);
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -582,13 +632,25 @@ export function AgreementSignFlow({
       );
       footer = (
         <Footer
-          hint={reviewedEnd ? null : "Scroll to the end of the agreement to continue"}
+          hint={
+            reviewedEnd
+              ? null
+              : reviewNudge !== null
+                ? reviewNudge < 5
+                  ? "Scroll through the whole agreement to continue."
+                  : `You're ${reviewNudge}% of the way through. Keep scrolling to the end to continue.`
+                : "Scroll to the end of the agreement to continue"
+          }
+          hintTone={reviewNudge !== null && !reviewedEnd ? "error" : "muted"}
           primary={
             <Button
               type="button"
-              className="h-12 w-full text-base font-semibold"
-              disabled={!reviewedEnd}
-              onClick={() => setStep(1)}
+              className={cn("h-12 w-full text-base font-semibold", !reviewedEnd && "opacity-60")}
+              aria-disabled={!reviewedEnd}
+              onClick={() => {
+                if (reviewedEnd) setStep(1);
+                else setReviewNudge(readProgress());
+              }}
             >
               Continue
             </Button>
@@ -613,6 +675,9 @@ export function AgreementSignFlow({
       );
       footer = (
         <Footer
+          problemsTitle="Fill these in to continue"
+          problems={describeDetailsErrors(errors)}
+          onJump={jumpTo}
           primary={
             <Button
               type="button"
@@ -653,19 +718,40 @@ export function AgreementSignFlow({
           setGuardianSignature={setGuardianSignature}
           offline={!online}
           profileName={ctx.profile.fullName}
+          attempted={signAttempted}
+          missingKeys={missingKeys}
         />
       );
-      const canSubmit =
-        allAcked && nameOk && sigOk && payorOk && guardianOk && online && !mutation.isPending;
+      const showMissing = signAttempted && missing.length > 0;
       footer = (
         <Footer
-          hint={missingHint}
+          hint={
+            !showMissing && missing.length > 0
+              ? `${missing.length} ${missing.length === 1 ? "thing" : "things"} left before you can sign`
+              : null
+          }
+          problemsTitle="Before you can sign"
+          problems={showMissing ? missing : []}
+          onJump={jumpTo}
           primary={
             <Button
               type="button"
-              className="h-12 w-full text-base font-semibold"
-              disabled={!canSubmit}
-              onClick={() => mutation.mutate()}
+              className={cn(
+                "h-12 w-full text-base font-semibold",
+                missing.length > 0 && !mutation.isPending && "opacity-70",
+              )}
+              disabled={mutation.isPending}
+              aria-disabled={missing.length > 0 || undefined}
+              onClick={() => {
+                if (mutation.isPending) return;
+                if (missing.length > 0) {
+                  // Tapping while something is missing shows exactly what, and takes them to it.
+                  setSignAttempted(true);
+                  jumpTo(missing[0].anchor);
+                  return;
+                }
+                mutation.mutate();
+              }}
             >
               {mutation.isPending ? (
                 <>
@@ -771,15 +857,82 @@ export function AgreementSignFlow({
 // Pieces
 // ---------------------------------------------------------------------------
 
-function Footer({ hint, primary }: { hint?: string | null; primary: ReactNode }) {
+function Footer({
+  hint,
+  hintTone = "muted",
+  problems,
+  problemsTitle,
+  onJump,
+  primary,
+}: {
+  hint?: string | null;
+  hintTone?: "muted" | "error";
+  problems?: MissingItem[];
+  problemsTitle?: string;
+  onJump?: (anchor: string) => void;
+  primary: ReactNode;
+}) {
   return (
     <footer
       className="shrink-0 border-t border-border bg-background px-4 pt-3 sm:rounded-b-2xl"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
-      {hint && <p className="mb-2 text-center text-xs text-muted-foreground">{hint}</p>}
+      {problems && problems.length > 0 && onJump && (
+        <MissingPanel title={problemsTitle ?? "Still needed"} items={problems} onJump={onJump} />
+      )}
+      {hint && (
+        <p
+          className={cn(
+            "mb-2 text-center text-xs",
+            hintTone === "error" ? "font-semibold text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {hint}
+        </p>
+      )}
       {primary}
     </footer>
+  );
+}
+
+/**
+ * Everything still missing, as a short list the client can tap to jump straight to the spot.
+ * It stays on screen (it lives in the sticky footer) and shrinks as things get filled in.
+ */
+function MissingPanel({
+  title,
+  items,
+  onJump,
+}: {
+  title: string;
+  items: MissingItem[];
+  onJump: (anchor: string) => void;
+}) {
+  return (
+    <div
+      role="alert"
+      data-testid="missing-panel"
+      className="mb-3 max-h-[36vh] overflow-y-auto rounded-xl border border-destructive/40 bg-destructive/10 p-3 animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
+    >
+      <p className="flex items-center gap-2 text-sm font-bold text-destructive">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        {title}
+      </p>
+      <ul className="mt-1.5">
+        {items.map((item) => (
+          <li key={item.key}>
+            <button
+              type="button"
+              onClick={() => onJump(item.anchor)}
+              className="flex min-h-[40px] w-full items-center justify-between gap-2 rounded-lg px-2 text-left text-sm font-medium text-foreground active:bg-destructive/10"
+            >
+              <span>{item.label}</span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -886,19 +1039,41 @@ function Field({
   hint,
   children,
   htmlFor,
+  required,
 }: {
   label: string;
   error?: string;
   hint?: string;
   children: ReactNode;
   htmlFor: string;
+  required?: boolean;
 }) {
+  // Give the input the invalid look and the right accessibility flags without repeating
+  // them on every field.
+  const control = isValidElement<Record<string, unknown>>(children)
+    ? cloneElement(children, {
+        "aria-invalid": error ? true : undefined,
+        "aria-required": required ? true : undefined,
+        className: cn(
+          children.props.className as string | undefined,
+          error && "border-destructive focus-visible:ring-destructive",
+        ),
+      })
+    : children;
   return (
     <div className="space-y-1.5" data-invalid={error ? "true" : undefined}>
       <Label htmlFor={htmlFor} className="text-[13px] font-semibold">
         {label}
+        {required && (
+          <>
+            <span aria-hidden className="ml-0.5 text-destructive">
+              *
+            </span>
+            <span className="sr-only"> (required)</span>
+          </>
+        )}
       </Label>
-      {children}
+      {control}
       {error ? (
         <p className="text-xs font-medium text-destructive" role="alert">
           {error}
@@ -939,6 +1114,9 @@ function DetailsStep({
         <p className="mt-1 text-[15px] text-muted-foreground">
           These become part of your signed agreement. Anything already on your profile is filled in.
         </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          <span className="font-bold text-destructive">*</span> Required to continue
+        </p>
       </div>
 
       <section className="space-y-4 rounded-2xl border border-border bg-card p-4">
@@ -946,7 +1124,7 @@ function DetailsStep({
         <Field label="Email" htmlFor="ag-email" hint="From your account.">
           <Input id="ag-email" className={inputClass} value={email} disabled readOnly />
         </Field>
-        <Field label="Phone" htmlFor="ag-phone" error={errors["phone"]}>
+        <Field label="Phone" htmlFor="ag-phone" required error={errors["phone"]}>
           <Input
             id="ag-phone"
             className={inputClass}
@@ -961,6 +1139,7 @@ function DetailsStep({
         <Field
           label="Date of birth"
           htmlFor="ag-dob"
+          required={!dobLocked}
           error={errors["dateOfBirth"]}
           hint={
             dobLocked ? "Already on your profile. If it's wrong, message your coach." : undefined
@@ -984,7 +1163,12 @@ function DetailsStep({
         <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
           Address
         </h2>
-        <Field label="Street and unit" htmlFor="ag-street" error={errors["address.street"]}>
+        <Field
+          label="Street and unit"
+          htmlFor="ag-street"
+          required
+          error={errors["address.street"]}
+        >
           <Input
             id="ag-street"
             className={inputClass}
@@ -994,7 +1178,7 @@ function DetailsStep({
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="City" htmlFor="ag-city" error={errors["address.city"]}>
+          <Field label="City" htmlFor="ag-city" required error={errors["address.city"]}>
             <Input
               id="ag-city"
               className={inputClass}
@@ -1003,7 +1187,12 @@ function DetailsStep({
               onChange={(e) => patch({ city: e.target.value })}
             />
           </Field>
-          <Field label="Province / state" htmlFor="ag-province" error={errors["address.province"]}>
+          <Field
+            label="Province / state"
+            htmlFor="ag-province"
+            required
+            error={errors["address.province"]}
+          >
             <Input
               id="ag-province"
               className={inputClass}
@@ -1014,7 +1203,12 @@ function DetailsStep({
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Postal / zip code" htmlFor="ag-postal" error={errors["address.postalCode"]}>
+          <Field
+            label="Postal / zip code"
+            htmlFor="ag-postal"
+            required
+            error={errors["address.postalCode"]}
+          >
             <Input
               id="ag-postal"
               className={inputClass}
@@ -1024,7 +1218,7 @@ function DetailsStep({
               onChange={(e) => patch({ postalCode: e.target.value })}
             />
           </Field>
-          <Field label="Country" htmlFor="ag-country" error={errors["address.country"]}>
+          <Field label="Country" htmlFor="ag-country" required error={errors["address.country"]}>
             <Input
               id="ag-country"
               className={inputClass}
@@ -1043,7 +1237,12 @@ function DetailsStep({
         <p className="-mt-2 text-xs text-muted-foreground">
           Only used if there's an emergency. The first is required; a second is optional.
         </p>
-        <Field label="Contact 1 name" htmlFor="ag-ec1n" error={errors["emergencyContact1.name"]}>
+        <Field
+          label="Contact 1 name"
+          htmlFor="ag-ec1n"
+          required
+          error={errors["emergencyContact1.name"]}
+        >
           <Input
             id="ag-ec1n"
             className={inputClass}
@@ -1052,7 +1251,12 @@ function DetailsStep({
             onChange={(e) => patch({ ec1Name: e.target.value })}
           />
         </Field>
-        <Field label="Contact 1 phone" htmlFor="ag-ec1p" error={errors["emergencyContact1.phone"]}>
+        <Field
+          label="Contact 1 phone"
+          htmlFor="ag-ec1p"
+          required
+          error={errors["emergencyContact1.phone"]}
+        >
           <Input
             id="ag-ec1p"
             className={inputClass}
@@ -1108,6 +1312,7 @@ function DetailsStep({
           <Field
             label="Parent or guardian full name"
             htmlFor="ag-gn"
+            required
             error={errors["guardian.fullName"]}
           >
             <Input
@@ -1121,6 +1326,7 @@ function DetailsStep({
           <Field
             label="Relationship to you"
             htmlFor="ag-gr"
+            required
             error={errors["guardian.relationship"]}
           >
             <Input
@@ -1132,7 +1338,7 @@ function DetailsStep({
               onChange={(e) => patch({ guardianRelationship: e.target.value })}
             />
           </Field>
-          <Field label="Their phone" htmlFor="ag-gp" error={errors["guardian.phone"]}>
+          <Field label="Their phone" htmlFor="ag-gp" required error={errors["guardian.phone"]}>
             <Input
               id="ag-gp"
               className={inputClass}
@@ -1163,7 +1369,7 @@ function DetailsStep({
               The person paying becomes responsible for the charges (see Services &amp; Purchases
               Covered). Give them a chance to read this agreement first.
             </p>
-            <Field label="Payor full name" htmlFor="ag-pn" error={errors["payor.name"]}>
+            <Field label="Payor full name" htmlFor="ag-pn" required error={errors["payor.name"]}>
               <Input
                 id="ag-pn"
                 className={inputClass}
@@ -1172,7 +1378,12 @@ function DetailsStep({
                 onChange={(e) => patch({ payorName: e.target.value })}
               />
             </Field>
-            <Field label="Relationship to you" htmlFor="ag-pr" error={errors["payor.relationship"]}>
+            <Field
+              label="Relationship to you"
+              htmlFor="ag-pr"
+              required
+              error={errors["payor.relationship"]}
+            >
               <Input
                 id="ag-pr"
                 className={inputClass}
@@ -1181,7 +1392,7 @@ function DetailsStep({
                 onChange={(e) => patch({ payorRelationship: e.target.value })}
               />
             </Field>
-            <Field label="Payor phone" htmlFor="ag-pp" error={errors["payor.phone"]}>
+            <Field label="Payor phone" htmlFor="ag-pp" required error={errors["payor.phone"]}>
               <Input
                 id="ag-pp"
                 className={inputClass}
@@ -1192,7 +1403,7 @@ function DetailsStep({
                 onChange={(e) => patch({ payorPhone: e.target.value })}
               />
             </Field>
-            <Field label="Payor email" htmlFor="ag-pe" error={errors["payor.email"]}>
+            <Field label="Payor email" htmlFor="ag-pe" required error={errors["payor.email"]}>
               <Input
                 id="ag-pe"
                 className={inputClass}
@@ -1216,26 +1427,41 @@ function CheckRow({
   onChange,
   children,
   id,
+  invalid,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   children: ReactNode;
   id: string;
+  /** Shown after a failed attempt to sign: this one still needs a tick. */
+  invalid?: boolean;
 }) {
   return (
     <label
       htmlFor={id}
-      className={`flex min-h-[56px] cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors active:bg-muted/50 ${
-        checked ? "border-primary/50 bg-primary/5" : "border-border"
-      }`}
+      data-invalid={invalid ? "true" : undefined}
+      className={cn(
+        "flex min-h-[56px] cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors active:bg-muted/50",
+        checked
+          ? "border-primary/50 bg-primary/5"
+          : invalid
+            ? "border-destructive bg-destructive/5"
+            : "border-border",
+      )}
     >
       <Checkbox
         id={id}
         checked={checked}
         onCheckedChange={(v) => onChange(v === true)}
-        className="mt-0.5 h-6 w-6 shrink-0 rounded-md"
+        aria-invalid={invalid ? true : undefined}
+        className={cn("mt-0.5 h-6 w-6 shrink-0 rounded-md", invalid && "border-destructive")}
       />
-      <span className="text-[14px] leading-snug text-foreground">{children}</span>
+      <span className="text-[14px] leading-snug text-foreground">
+        {children}
+        {invalid && (
+          <span className="mt-1 block text-xs font-semibold text-destructive">Tick to confirm</span>
+        )}
+      </span>
     </label>
   );
 }
@@ -1308,8 +1534,12 @@ function SignStep(props: {
   setGuardianSignature: (s: string | null) => void;
   offline: boolean;
   profileName: string;
+  /** True once they've tried to sign; missing things are then marked in red. */
+  attempted: boolean;
+  missingKeys: ReadonlySet<string>;
 }) {
   const { content, acked, setAcked } = props;
+  const flag = (key: string) => props.attempted && props.missingKeys.has(key);
   const toggleAck = (id: string, on: boolean) =>
     setAcked(on ? Array.from(new Set([...acked, id])) : acked.filter((x) => x !== id));
 
@@ -1323,7 +1553,10 @@ function SignStep(props: {
       </div>
 
       {props.offline && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+        <div
+          id="ag-offline"
+          className="flex items-center gap-2.5 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm"
+        >
           <WifiOff className="h-4 w-4 shrink-0 text-amber-600" />
           You're offline. Reconnect to sign.
         </div>
@@ -1361,15 +1594,21 @@ function SignStep(props: {
       </section>
 
       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-          Confirm the key points
-        </h2>
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+            Confirm the key points
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            <span className="font-bold text-destructive">*</span> All of these are required to sign.
+          </p>
+        </div>
         {content.acknowledgements.map((a) => (
           <CheckRow
             key={a.id}
             id={`ag-ack-${a.id}`}
             checked={acked.includes(a.id)}
             onChange={(v) => toggleAck(a.id, v)}
+            invalid={props.attempted && !acked.includes(a.id)}
           >
             {a.text}
           </CheckRow>
@@ -1379,6 +1618,7 @@ function SignStep(props: {
             id="ag-ack-payor"
             checked={props.payorConfirmed}
             onChange={props.setPayorConfirmed}
+            invalid={flag("payor")}
           >
             {content.payorStatement}
           </CheckRow>
@@ -1392,25 +1632,51 @@ function SignStep(props: {
         <div className="space-y-1.5">
           <Label htmlFor="ag-legal-name" className="text-[13px] font-semibold">
             Full legal name
+            <span aria-hidden className="ml-0.5 text-destructive">
+              *
+            </span>
+            <span className="sr-only"> (required)</span>
           </Label>
           <Input
             id="ag-legal-name"
-            className={inputClass}
+            className={cn(
+              inputClass,
+              flag("name") && "border-destructive focus-visible:ring-destructive",
+            )}
             autoComplete="name"
             autoCapitalize="words"
+            aria-required
+            aria-invalid={flag("name") ? true : undefined}
             value={props.typedName}
             onChange={(e) => props.setTypedName(e.target.value)}
           />
-          <p className="text-xs text-muted-foreground">
-            Account name: {props.profileName || "not set"}
-          </p>
+          {flag("name") ? (
+            <p className="text-xs font-medium text-destructive" role="alert">
+              Type your full legal name (at least 3 characters, with letters).
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Account name: {props.profileName || "not set"}
+            </p>
+          )}
         </div>
 
         {!props.minor && (
           <>
             <MethodToggle method={props.method} onChange={props.setMethod} />
             {props.method === "drawn" ? (
-              <SignaturePad onChange={props.setSignature} initialDataUrl={props.signature} />
+              <div id="ag-signature" className="space-y-1.5">
+                <SignaturePad
+                  onChange={props.setSignature}
+                  initialDataUrl={props.signature}
+                  invalid={flag("signature")}
+                />
+                {flag("signature") && (
+                  <p className="text-xs font-medium text-destructive" role="alert">
+                    Your signature is required. Draw it in the box above.
+                  </p>
+                )}
+              </div>
             ) : (
               <TypedPreview name={props.typedName} />
             )}
@@ -1433,19 +1699,30 @@ function SignStep(props: {
             id="ag-ack-guardian"
             checked={props.guardianAck}
             onChange={props.setGuardianAck}
+            invalid={flag("guardian-ack")}
           >
             {content.guardianStatement}
           </CheckRow>
           <MethodToggle method={props.guardianMethod} onChange={props.setGuardianMethod} />
-          {props.guardianMethod === "drawn" ? (
-            <SignaturePad
-              onChange={props.setGuardianSignature}
-              initialDataUrl={props.guardianSignature}
-              ariaLabel="Parent or guardian signature"
-            />
-          ) : (
-            <TypedPreview name={props.guardianName} />
-          )}
+          <div id="ag-guardian-signature" className="space-y-1.5">
+            {props.guardianMethod === "drawn" ? (
+              <>
+                <SignaturePad
+                  onChange={props.setGuardianSignature}
+                  initialDataUrl={props.guardianSignature}
+                  ariaLabel="Parent or guardian signature"
+                  invalid={flag("guardian-signature")}
+                />
+                {flag("guardian-signature") && (
+                  <p className="text-xs font-medium text-destructive" role="alert">
+                    The parent or guardian's signature is required. Draw it in the box above.
+                  </p>
+                )}
+              </>
+            ) : (
+              <TypedPreview name={props.guardianName} />
+            )}
+          </div>
         </section>
       )}
     </div>

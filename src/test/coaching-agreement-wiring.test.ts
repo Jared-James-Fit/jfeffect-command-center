@@ -189,6 +189,39 @@ describe("signing flow regressions found in the browser", () => {
   });
 });
 
+describe("the signing screens say what is missing", () => {
+  const flow = read("src/components/coaching-agreement/agreement-sign-flow.tsx");
+  const readiness = read("src/lib/coaching-agreement/readiness.ts");
+
+  it("never greys the buttons out: tapping explains what is missing instead", () => {
+    expect(flow).toContain("missingForSigning(");
+    expect(flow).toContain("describeDetailsErrors(");
+    // Only the in-flight request disables Sign; missing items are explained, not hidden.
+    expect(flow).not.toMatch(/(?<!aria-)disabled=\{!(reviewedEnd|canSubmit)\}/);
+    expect(flow).toMatch(/disabled=\{mutation\.isPending\}/);
+    expect(flow).toContain("<MissingPanel");
+    expect(flow).toMatch(/problemsTitle="Fill these in to continue"/);
+    expect(flow).toMatch(/problemsTitle="Before you can sign"/);
+  });
+
+  it("jumps to elements that really exist: every anchor the helper names is on the screen", () => {
+    const anchors = [...readiness.matchAll(/anchor: "([^"]+)"/g)].map((m) => m[1]);
+    expect(anchors.length).toBeGreaterThan(15);
+    for (const anchor of new Set(anchors)) {
+      expect(flow, `no element with id="${anchor}"`).toContain(`id="${anchor}"`);
+    }
+    // The key points get one id each, built from the acknowledgement id.
+    expect(readiness).toContain("`ag-ack-${unticked[0].id}`");
+    expect(flow).toContain("id={`ag-ack-${a.id}`}");
+  });
+
+  it("marks required fields and flags the missing ones for screen readers", () => {
+    expect(flow).toContain('"aria-required": required ? true : undefined');
+    expect(flow).toContain('"aria-invalid": error ? true : undefined');
+    expect(flow).toContain("Required to continue");
+  });
+});
+
 describe("signed copy printing", () => {
   it("has print styles for the viewer's sheet", () => {
     const css = read("src/styles.css");
