@@ -10,7 +10,10 @@ import {
   nextFeedCursor,
   type CommunityComment,
   type CommunityFeedPage,
+  type CommunityActivity,
   type CommunityPost,
+  type CommunityPostDetail,
+  type CommunityProfile,
   type CommunityVisibility,
   type ReactionKey,
   type WorkoutShareStats,
@@ -25,6 +28,9 @@ export const communityKeys = {
   comments: (postId: string) => ["community-comments", postId] as const,
   preview: (completionId: string | null | undefined) => ["community-preview", completionId ?? null] as const,
   myPost: (completionId: string | null | undefined) => ["community-my-post", completionId ?? null] as const,
+  post: (postId: string | null) => ["community-post", postId] as const,
+  profile: (userId: string | null) => ["community-profile", userId] as const,
+  activity: ["community-activity"] as const,
 };
 
 /* ---- feed ----------------------------------------------------------- */
@@ -75,6 +81,7 @@ function patchPost(qc: ReturnType<typeof useQueryClient>, postId: string, patch:
   qc.setQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: ["community-feed"] }, (old) =>
     old ? { ...old, pages: old.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => (p.id === postId ? patch(p) : p)) })) } : old,
   );
+  qc.setQueryData<CommunityPostDetail | null>(communityKeys.post(postId), (old) => (old ? (patch(old) as CommunityPostDetail) : old));
 }
 
 /* ---- reactions ------------------------------------------------------ */
@@ -101,7 +108,10 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
       return { snapshot };
     },
     onError: (_e, _v, ctx) => ctx?.snapshot.forEach(([key, data]) => qc.setQueryData(key, data)),
-    onSettled: () => qc.invalidateQueries({ queryKey: ["community-feed"] }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["community-feed"] });
+      qc.invalidateQueries({ queryKey: communityKeys.post(post.id) });
+    },
   });
 }
 
@@ -234,4 +244,69 @@ export function useDeletePost() {
 export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-feed"] });
   qc.invalidateQueries({ queryKey: ["community-my-post"] });
+}
+
+/* ---- post detail / profile ------------------------------------------ */
+
+/** One post + its full exercise breakdown (the Strava-style activity page). */
+export function usePostDetail(postId: string | null) {
+  return useQuery({
+    queryKey: communityKeys.post(postId),
+    enabled: !!postId,
+    staleTime: 30_000,
+    queryFn: async (): Promise<CommunityPostDetail | null> => {
+      const { data, error } = await db.rpc("community_post", { _post_id: postId });
+      if (error) throw error;
+      return (data ?? null) as CommunityPostDetail | null;
+    },
+  });
+}
+
+export function useCommunityProfile(userId: string | null) {
+  return useQuery({
+    queryKey: communityKeys.profile(userId),
+    enabled: !!userId,
+    staleTime: 60_000,
+    queryFn: async (): Promise<CommunityProfile | null> => {
+      const { data, error } = await db.rpc("community_profile", { _user_id: userId });
+      if (error) throw error;
+      return (data ?? null) as CommunityProfile | null;
+    },
+  });
+}
+
+export function useSetBio(userId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (bio: string) => {
+      const { error } = await db.rpc("community_set_bio", { _bio: bio });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: communityKeys.profile(userId) }),
+  });
+}
+
+/* ---- "new posts" badge (server-side seen state) --------------------- */
+
+export function useCommunityActivity(enabled = true) {
+  return useQuery({
+    queryKey: communityKeys.activity,
+    enabled,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    queryFn: async (): Promise<CommunityActivity> => {
+      const { data, error } = await db.rpc("community_activity");
+      if (error) throw error;
+      return (data ?? { enabled: false, unseen: 0, seen_at: null }) as CommunityActivity;
+    },
+  });
+}
+
+/** Opening the community clears the badge on every device. */
+export async function markCommunitySeen(qc: ReturnType<typeof useQueryClient>) {
+  try {
+    await db.rpc("community_mark_seen");
+  } finally {
+    qc.setQueryData<CommunityActivity>(communityKeys.activity, (old) => (old ? { ...old, unseen: 0, seen_at: new Date().toISOString() } : old));
+  }
 }

@@ -17,13 +17,22 @@ export function CommentsSheet({ post, viewerIsStaff, onClose }: { post: Communit
   return (
     <Sheet open={!!post} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="bottom" className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
-        {post && <CommentsBody key={post.id} post={post} viewerIsStaff={viewerIsStaff} />}
+        {post && (
+          <>
+            <SheetHeader className="shrink-0 border-b border-border/70 px-4 py-3 text-left">
+              <SheetTitle className="text-base font-black">Comments</SheetTitle>
+              <SheetDescription className="text-xs">Quick encouragement. Coaching questions belong in Messages.</SheetDescription>
+            </SheetHeader>
+            <CommentThread key={post.id} post={post} viewerIsStaff={viewerIsStaff} />
+          </>
+        )}
       </SheetContent>
     </Sheet>
   );
 }
 
-function CommentsBody({ post, viewerIsStaff }: { post: CommunityPost; viewerIsStaff: boolean }) {
+/** Comment list + composer. `inline` renders without its own scroll area (post detail). */
+export function CommentThread({ post, viewerIsStaff, inline = false }: { post: CommunityPost; viewerIsStaff: boolean; inline?: boolean }) {
   const [text, setText] = useState("");
   const { data: comments = [], isLoading } = useComments(post.id, true);
   const add = useAddComment(post.id, viewerIsStaff, post.is_mine);
@@ -40,12 +49,7 @@ function CommentsBody({ post, viewerIsStaff }: { post: CommunityPost; viewerIsSt
 
   return (
     <>
-      <SheetHeader className="shrink-0 border-b border-border/70 px-4 py-3 text-left">
-        <SheetTitle className="text-base font-black">Comments</SheetTitle>
-        <SheetDescription className="text-xs">Quick encouragement. Coaching questions belong in Messages.</SheetDescription>
-      </SheetHeader>
-
-      <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-4 py-3">
+      <div className={inline ? "space-y-3.5 px-4 py-3" : "min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-4 py-3"}>
         {isLoading ? (
           <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
         ) : comments.length === 0 ? (
@@ -77,7 +81,7 @@ function CommentsBody({ post, viewerIsStaff }: { post: CommunityPost; viewerIsSt
         )}
       </div>
 
-      <div className="shrink-0 border-t border-border/70 bg-background px-3 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
+      <div className={inline ? "px-3 pb-3 pt-1" : "shrink-0 border-t border-border/70 bg-background px-3 pt-2"} style={inline ? undefined : { paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
         <div className="flex items-end gap-2">
           <Textarea
             value={text}

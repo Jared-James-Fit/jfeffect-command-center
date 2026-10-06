@@ -37,6 +37,22 @@ export type WorkoutShareStats = {
   top_lift: { exercise_name: string; reps: number; load_kg: number } | null;
   pr_count: number;
   prs: { exercise_name: string; reps: number; load_kg: number; scope: RecordScope }[];
+  /** Completed sessions in the same local month / week, up to and including this one. */
+  month_sessions?: number;
+  week_sessions?: number;
+  /** Present on the composer preview and the post detail (not in the feed). */
+  exercises?: CommunityExercise[];
+};
+
+/** One line of the workout breakdown (rows of the same lift merged). */
+export type CommunityExercise = {
+  name: string;
+  sets: number;
+  best_load_kg: number | null;
+  best_reps: number | null;
+  max_reps: number | null;
+  max_seconds: number | null;
+  pr: RecordScope | null;
 };
 
 export type CommunityAuthor = {
@@ -67,6 +83,20 @@ export type CommunityPost = {
   comment_count: number;
   coach_commented: boolean;
 };
+
+export type CommunityPostDetail = CommunityPost & { exercises: CommunityExercise[] };
+
+export type CommunityProfile = {
+  author: CommunityAuthor;
+  bio: string | null;
+  is_me: boolean;
+  posts: number;
+  training_since: string | null;
+};
+
+export type CommunityActivity = { enabled: boolean; unseen: number; seen_at: string | null };
+
+export const BIO_MAX = 150;
 
 export type CommunityFeedPage = { posts: CommunityPost[]; has_more: boolean };
 
@@ -190,4 +220,63 @@ export function nextFeedCursor(page: CommunityFeedPage): { at: string; id: strin
   if (!page.has_more || page.posts.length === 0) return null;
   const last = page.posts[page.posts.length - 1];
   return { at: last.created_at, id: last.id };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Exercise lines + share-card data                                   */
+/* ------------------------------------------------------------------ */
+
+/** "220 kg × 3", "12 reps", "1:00" — whatever best describes the lift. */
+export function formatExerciseBest(e: CommunityExercise, unit: "kg" | "lb"): string {
+  if (e.best_load_kg != null && e.best_reps != null && e.best_load_kg > 0) return formatTopSet({ load_kg: e.best_load_kg, reps: e.best_reps }, unit);
+  if (e.max_reps != null && e.max_reps > 0) return `${e.max_reps} reps`;
+  if (e.max_seconds != null && e.max_seconds > 0) {
+    const m = Math.floor(e.max_seconds / 60);
+    const sec = e.max_seconds % 60;
+    return m > 0 ? `${m}:${String(sec).padStart(2, "0")}` : `${sec}s`;
+  }
+  return `${e.sets} ${e.sets === 1 ? "set" : "sets"}`;
+}
+
+/** "Session 12 this month" — only once it means something (2+). */
+export function sessionLine(s: Pick<WorkoutShareStats, "month_sessions">): string | null {
+  const n = s.month_sessions ?? 0;
+  if (n < 2) return null;
+  return `Session ${n} this month`;
+}
+
+export type ShareCardInput = {
+  stats: WorkoutShareStats;
+  unit: "kg" | "lb";
+  athleteName: string | null;
+  workoutTitle?: string | null;
+  dateLabel: string | null;
+};
+
+/** Everything a share card prints, derived once from the canonical stats. */
+export function buildShareCardFields(i: ShareCardInput) {
+  const s = i.stats;
+  const lift = featuredLift(s);
+  const exercises = (s.exercises ?? [])
+    .filter((e) => e.sets > 0)
+    .map((e) => ({ name: e.name, detail: formatExerciseBest(e, i.unit), pr: !!e.pr }));
+  return {
+    athleteName: i.athleteName,
+    workoutTitle: s.workout_title || i.workoutTitle || "Workout",
+    dateLabel: i.dateLabel,
+    lift: lift ? { name: lift.name, detail: formatTopSet(lift.detail, i.unit), prLabel: lift.pr ? SCOPE_WORD[lift.pr].toUpperCase() : null } : null,
+    stats: pickCardStats(s, i.unit),
+    isPr: isPrMoment(s),
+    exercises,
+    volume: s.tonnage_kg > 0 ? formatTonnage(s.tonnage_kg, i.unit) : null,
+    sessionLine: sessionLine(s),
+  };
+}
+
+/** "Training since Jun 2026" */
+export function trainingSinceLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return null;
+  return `Training since ${d.toLocaleDateString(undefined, { month: "short", year: "numeric" })}`;
 }

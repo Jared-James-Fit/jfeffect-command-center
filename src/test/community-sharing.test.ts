@@ -14,10 +14,15 @@ import {
   nextFeedCursor,
   pickCardStats,
   postTimeLabel,
+  buildShareCardFields,
+  formatExerciseBest,
+  sessionLine,
+  trainingSinceLabel,
+  type CommunityExercise,
   type CommunityFeedPage,
   type WorkoutShareStats,
 } from "@/lib/community";
-import { wrapLines } from "@/lib/workout-share-card";
+import { availableTemplates, exportType, wrapLines } from "@/lib/workout-share-card";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const migration = read("supabase/migrations/20261006090000_community_sharing.sql");
@@ -201,16 +206,19 @@ describe("sharing stays optional", () => {
 
   it("keeps community posting and external sharing independent", () => {
     // external share never touches the post RPC, and posting never calls navigator.share
-    const shareOut = composer.slice(composer.indexOf("const shareOut"), composer.indexOf("const copyCaption"));
-    expect(shareOut).not.toContain("saveCommunityPost");
-    const post = composer.slice(composer.indexOf("const post = async"), composer.indexOf("/* ---- external share"));
+    const external = composer.slice(composer.indexOf("/* ---- external share"), composer.indexOf("/* ---- community post"));
+    expect(external).not.toContain("saveCommunityPost");
+    expect(external).not.toContain("uploadPicked");
+    const post = composer.slice(composer.indexOf("const post = async"), composer.indexOf("// Fit the card"));
     expect(post).not.toContain("shareCardImage");
+    expect(post).not.toContain("copyImageToClipboard");
     expect(post).not.toContain("navigator.share");
   });
 
   it("does not request camera or library until a button is tapped", () => {
     expect(composer).not.toContain("getUserMedia");
-    expect(composer).toContain("cameraRef.current?.click()");
+    expect(composer).toContain("fileRef.current?.click()");
+    expect(composer).toContain('accept="image/*,video/*"');
   });
 
   it("does not upload on selection, only on Post", () => {
@@ -221,5 +229,95 @@ describe("sharing stays optional", () => {
   it("never prompts after a workout (no auto-open, no nagging copy)", () => {
     expect(summary).not.toMatch(/setShareOpen\(true\)\s*;?\s*\n?\s*(}|\))\s*,\s*\d+\)/);
     expect(composer).not.toMatch(/POST-WORKOUT PHOTO NOW|Are you sure you don't want to share/i);
+  });
+});
+
+const migration2 = read("supabase/migrations/20261006150000_community_platform.sql");
+
+describe("share templates", () => {
+  it("leads with the PR card when there is a record, otherwise the photo or the stats", () => {
+    expect(availableTemplates({ isPr: true, exercises: [{ name: "x", detail: "y", pr: true }], volume: "1 kg", media: null })[0]).toBe("pr");
+    expect(availableTemplates({ isPr: false, exercises: [{ name: "x", detail: "y", pr: false }], volume: null, media: {} as any })[0]).toBe("photo");
+    expect(availableTemplates({ isPr: false, exercises: [{ name: "x", detail: "y", pr: false }], volume: null, media: null })[0]).toBe("stats");
+  });
+  it("always offers the sticker, and volume only when weight was moved", () => {
+    const t = availableTemplates({ isPr: false, exercises: [], volume: null, media: null });
+    expect(t).toContain("sticker");
+    expect(t).not.toContain("volume");
+    expect(availableTemplates({ isPr: false, exercises: [], volume: "12,450 kg", media: null })).toContain("volume");
+  });
+  it("keeps the sticker transparent", () => {
+    expect(exportType("sticker")).toBe("image/png");
+    expect(exportType("stats")).toBe("image/jpeg");
+  });
+});
+
+describe("card fields from canonical stats", () => {
+  const ex = (o: Partial<CommunityExercise>): CommunityExercise => ({ name: "Squat", sets: 3, best_load_kg: null, best_reps: null, max_reps: null, max_seconds: null, pr: null, ...o });
+  it("describes each lift by its best set, reps or hold", () => {
+    expect(formatExerciseBest(ex({ best_load_kg: 220, best_reps: 3 }), "kg")).toBe("220 kg × 3");
+    expect(formatExerciseBest(ex({ max_reps: 12 }), "kg")).toBe("12 reps");
+    expect(formatExerciseBest(ex({ max_seconds: 75 }), "kg")).toBe("1:15");
+    expect(formatExerciseBest(ex({ max_seconds: 45 }), "kg")).toBe("45s");
+    expect(formatExerciseBest(ex({ sets: 1 }), "kg")).toBe("1 set");
+  });
+  it("only claims a session count once it means something", () => {
+    expect(sessionLine({ month_sessions: 1 })).toBeNull();
+    expect(sessionLine({ month_sessions: 12 })).toBe("Session 12 this month");
+    expect(sessionLine({})).toBeNull();
+  });
+  it("builds every card field from one source", () => {
+    const f = buildShareCardFields({
+      stats: { ...base, month_sessions: 5, pr_count: 1, prs: [{ exercise_name: "Bench", reps: 5, load_kg: 120, scope: "atpr" }], exercises: [ex({ best_load_kg: 220, best_reps: 3, pr: "block_pr" }), ex({ name: "Skipped", sets: 0 })] },
+      unit: "kg",
+      athleteName: "Jared",
+      dateLabel: "Tue, Oct 6",
+    });
+    expect(f.isPr).toBe(true);
+    expect(f.lift).toEqual({ name: "Bench", detail: "120 kg × 5", prLabel: "ALL-TIME PR" });
+    expect(f.exercises).toEqual([{ name: "Squat", detail: "220 kg × 3", pr: true }]);
+    expect(f.volume).toBe("12,000 kg");
+    expect(f.sessionLine).toBe("Session 5 this month");
+  });
+  it("labels profile tenure", () => {
+    expect(trainingSinceLabel(null)).toBeNull();
+    expect(trainingSinceLabel("2026-06-03T00:00:00Z")).toMatch(/^Training since /);
+  });
+});
+
+describe("community platform migration contract", () => {
+  it("keeps 'seen' state server-side and never touches XP or the league", () => {
+    expect(migration2).toContain("CREATE TABLE IF NOT EXISTS public.community_seen");
+    expect(migration2).not.toMatch(/athlete_xp_events|league_month/);
+  });
+  it("derives the workout breakdown from the canonical record functions", () => {
+    expect(migration2).toContain("public.client_rep_records(pc.client_id)");
+    expect(migration2).toContain("public.client_load_records(pc.client_id)");
+    expect(migration2).toContain("public.client_qualifying_sets(pc.client_id)");
+  });
+  it("shows a detail only when the post is visible to the viewer", () => {
+    const detail = migration2.slice(migration2.indexOf("FUNCTION public.community_post(_post_id uuid)"));
+    expect(detail).toContain("p.visibility = 'community' OR p.author_user_id = uid");
+  });
+  it("keeps internal helpers off the public API", () => {
+    expect(migration2).toContain("REVOKE ALL ON FUNCTION public.community_workout_exercises(uuid) FROM PUBLIC, anon, authenticated;");
+    expect(migration2).toContain("REVOKE ALL ON FUNCTION public.community_post_json(uuid, uuid) FROM PUBLIC, anon, authenticated;");
+    expect(migration2).toContain("REVOKE ALL ON public.community_profiles FROM anon, authenticated;");
+  });
+  it("caps bios to match the UI", () => {
+    expect(migration2).toContain("char_length(bio) <= 150");
+  });
+});
+
+describe("community is easy to find without taking over", () => {
+  const shell = read("src/components/app-shell.tsx");
+  const home = read("src/routes/_authenticated/portal/index.tsx");
+  const entry = read("src/components/community/community-entry.tsx");
+  it("sits in the header next to notifications and on Home", () => {
+    expect(shell).toContain("<CommunityNavButton />");
+    expect(home).toContain("<CommunityHomeStrip />");
+  });
+  it("never shows an empty social widget on Home", () => {
+    expect(entry).toContain("if (!activity?.enabled || people.length === 0) return null;");
   });
 });

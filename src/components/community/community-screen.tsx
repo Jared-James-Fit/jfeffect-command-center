@@ -1,35 +1,53 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
-import { PostCard, AuthorLine } from "@/components/community/post-card";
+import { PostCard } from "@/components/community/post-card";
 import { CommentsSheet } from "@/components/community/comments-sheet";
-import { useCommunityFeed, useDeletePost, usePostMediaUrls, useReact } from "@/lib/community.queries";
+import { PostDetailDialog } from "@/components/community/post-detail";
+import { ProfileView } from "@/components/community/profile-view";
+import { markCommunitySeen, useCommunityFeed, useDeletePost, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
 
-type Scope = { kind: "everyone" } | { kind: "mine" } | { kind: "author"; author: CommunityAuthor };
+type Scope = { kind: "feed" } | { kind: "you" } | { kind: "author"; author: CommunityAuthor };
+
+/** `#post=<id>` opens a post straight away (used by the Home strip and pushes). */
+function postFromHash(): string | null {
+  if (typeof window === "undefined") return null;
+  const m = window.location.hash.match(/post=([0-9a-f-]{36})/i);
+  return m ? m[1] : null;
+}
 
 /**
- * The Community feed: workouts people chose to share, newest first. Shared by
- * the client portal and the coach view. Quiet by design — no counts of
- * followers, no ranking, nothing that rewards posting for its own sake.
+ * The JF Effect community: workouts people chose to share, newest first, a
+ * profile per person, and a full workout page per post. Shared by the client
+ * portal and the coach view. No follower counts, no rankings.
  */
 export function CommunityScreen() {
   const { user, role } = useAuth();
+  const qc = useQueryClient();
   const viewerIsStaff = role === "admin" || role === "coach";
-  const [scope, setScope] = useState<Scope>({ kind: "everyone" });
+  const [scope, setScope] = useState<Scope>({ kind: "feed" });
   const [commentsFor, setCommentsFor] = useState<CommunityPost | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
 
-  const authorUserId = scope.kind === "mine" ? user?.id ?? null : scope.kind === "author" ? scope.author.user_id : null;
-  const feed = useCommunityFeed(authorUserId);
+  const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
-  const { data: urls } = usePostMediaUrls(posts);
+  const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? posts : []);
   const del = useDeletePost();
+
+  // Opening the community clears the "new posts" badge (server-side, every device).
+  const markedRef = useRef(false);
+  useEffect(() => {
+    if (markedRef.current || !feed.isSuccess) return;
+    markedRef.current = true;
+    void markCommunitySeen(qc);
+  }, [feed.isSuccess, qc]);
 
   // Viewer's own unit for loads (athletes: their setting; coaches: app default).
   const { data: unit = "lb" } = useQuery({
@@ -42,74 +60,79 @@ export function CommunityScreen() {
     },
   });
 
-  // Infinite scroll: load the next page when the sentinel nears the viewport.
+  // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || !hasNextPage) return;
+    if (!el || !hasNextPage || scope.kind !== "feed") return;
     const io = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) void fetchNextPage();
       },
-      { rootMargin: "600px 0px" },
+      { rootMargin: "800px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, posts.length]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, posts.length, scope.kind]);
+
+  const openAuthor = (a: CommunityAuthor) => {
+    setDetailId(null);
+    if (a.user_id === user?.id) setScope({ kind: "you" });
+    else setScope({ kind: "author", author: a });
+    window.scrollTo({ top: 0 });
+  };
+  const closeDetail = () => {
+    setDetailId(null);
+    if (window.location.hash.includes("post=")) history.replaceState(null, "", window.location.pathname + window.location.search);
+  };
 
   const notAllowed = (feed.error as any)?.code === "42501";
 
   return (
-    <div className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-10 pt-3 sm:px-4">
+    <div className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 sm:px-4">
       {scope.kind === "author" ? (
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-full" onClick={() => setScope({ kind: "everyone" })} aria-label="Back to community">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <AuthorLine author={scope.author} sub="Shared workouts" />
-        </div>
+        <Button type="button" variant="ghost" className="-ml-2 h-10 rounded-full px-3" onClick={() => setScope({ kind: "feed" })}>
+          <ArrowLeft className="mr-1.5 h-4 w-4" /> Feed
+        </Button>
       ) : (
         <div className="inline-flex rounded-full bg-muted p-1" role="tablist" aria-label="Community view">
-          {(["everyone", "mine"] as const).map((k) => (
+          {(["feed", "you"] as const).map((k) => (
             <button
               key={k}
               type="button"
               role="tab"
               aria-selected={scope.kind === k}
               onClick={() => setScope({ kind: k })}
-              className={cn(
-                "h-9 rounded-full px-4 text-[13px] font-bold transition-colors",
-                scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
-              )}
+              className={cn("h-9 rounded-full px-5 text-[13px] font-bold transition-colors", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
             >
-              {k === "everyone" ? "Community" : "My posts"}
+              {k === "feed" ? "Feed" : "You"}
             </button>
           ))}
         </div>
       )}
 
-      {feed.isLoading ? (
+      {scope.kind === "you" && user?.id ? (
+        <ProfileView userId={user.id} unit={unit} onOpenPost={(p) => setDetailId(p.id)} />
+      ) : scope.kind === "author" ? (
+        <ProfileView userId={scope.author.user_id} unit={unit} onOpenPost={(p) => setDetailId(p.id)} />
+      ) : feed.isLoading ? (
         <div className="space-y-3">
           {[0, 1].map((i) => (
-            <Skeleton key={i} className="h-72 w-full rounded-2xl" />
+            <Skeleton key={i} className="h-96 w-full rounded-3xl" />
           ))}
         </div>
       ) : notAllowed ? (
         <EmptyNote title="Community isn't available on this account" body="It's open to active coaching clients." />
       ) : feed.isError ? (
-        <div className="rounded-2xl border border-border/80 bg-card p-6 text-center text-sm">
+        <div className="rounded-3xl border border-border/80 bg-card p-6 text-center text-sm">
           <p className="text-muted-foreground">Couldn't load the community.</p>
           <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void feed.refetch()}>
             Try again
           </Button>
         </div>
       ) : posts.length === 0 ? (
-        scope.kind === "mine" ? (
-          <EmptyNote title="Nothing shared yet" body="After a workout, tap Share workout to post it here or keep it just for you." />
-        ) : (
-          <EmptyNote title="Nothing here yet" body="When someone shares a workout, it shows up here. Finish a session and tap Share workout to be first." />
-        )
+        <EmptyNote title="Be the first one in" body="Finish a workout, tap Share workout, then Post to JF Community. Your crew will see it here." />
       ) : (
         <>
           {posts.map((p) => (
@@ -119,8 +142,9 @@ export function CommunityScreen() {
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
               unit={unit}
               viewerIsStaff={viewerIsStaff}
+              onOpen={(post) => setDetailId(post.id)}
               onOpenComments={setCommentsFor}
-              onOpenAuthor={(a) => setScope({ kind: "author", author: a })}
+              onOpenAuthor={openAuthor}
               onDelete={(post) =>
                 del.mutate(post, {
                   onSuccess: () => toast.success("Post removed"),
@@ -130,16 +154,13 @@ export function CommunityScreen() {
             />
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
-          {isFetchingNextPage && <Skeleton className="h-40 w-full rounded-2xl" />}
-          {hasNextPage && !isFetchingNextPage && (
-            <Button type="button" variant="ghost" className="w-full" onClick={() => void fetchNextPage()}>
-              Show more
-            </Button>
-          )}
+          {isFetchingNextPage && <Skeleton className="h-64 w-full rounded-3xl" />}
+          {!hasNextPage && posts.length > 3 && <p className="py-4 text-center text-[12px] text-muted-foreground">You're all caught up 💪</p>}
         </>
       )}
 
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} />
+      <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} />
     </div>
   );
 }
@@ -150,6 +171,7 @@ function PostRow(props: {
   thumbUrl: string | null;
   unit: "kg" | "lb";
   viewerIsStaff: boolean;
+  onOpen: (p: CommunityPost) => void;
   onOpenComments: (p: CommunityPost) => void;
   onOpenAuthor: (a: CommunityAuthor) => void;
   onDelete: (p: CommunityPost) => void;
@@ -165,10 +187,10 @@ function PostRow(props: {
 
 function EmptyNote({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-12 text-center">
+    <div className="rounded-3xl border border-dashed border-border bg-card/50 px-6 py-12 text-center">
       <Dumbbell className="mx-auto h-8 w-8 text-muted-foreground/60" />
       <div className="mt-3 text-sm font-bold">{title}</div>
-      <p className="mx-auto mt-1 max-w-[30ch] text-[13px] leading-snug text-muted-foreground">{body}</p>
+      <p className="mx-auto mt-1 max-w-[32ch] text-[13px] leading-snug text-muted-foreground">{body}</p>
     </div>
   );
 }
