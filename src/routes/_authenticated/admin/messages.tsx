@@ -32,6 +32,7 @@ import { Megaphone, Users as UsersIcon } from "lucide-react";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { deriveInboxWorkflow, previewPrefix, WORKFLOW_LABEL, type InboxWorkflowState } from "@/lib/inbox-workflow";
 import { formatReadReceipt } from "@/lib/read-receipt";
+import { applyMessageChange, INBOX_MESSAGE_COLUMNS } from "@/lib/inbox-cache";
 import { Check } from "lucide-react";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 
@@ -165,7 +166,7 @@ export function MessagesInbox({
       // rows (not only one row per client) so unread counts and manual
       // mark-unread stay correct even when the latest message was sent by us.
       const { data, error } = await (supabase.from("messages") as any)
-        .select("id, client_id, body, sender_role, created_at, read_by_admin_at, read_by_client_at, is_automated, is_internal_note, message_type, attachments")
+        .select(INBOX_MESSAGE_COLUMNS)
         .in("client_id", clientIds)
         .eq("is_internal_note", false)
         .in("delivery_status", ["sent", "sending"])
@@ -221,6 +222,13 @@ export function MessagesInbox({
   const resyncInbox = () => { for (const k of INBOX_KEYS) qc.invalidateQueries({ queryKey: [k] }); };
   useResyncOnResume(resyncInbox);
 
+  // "2 minutes" / "about 1 hour" labels only change when something re-renders.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Realtime
   useEffect(() => {
     let pending: ReturnType<typeof setTimeout> | null = null;
@@ -237,8 +245,13 @@ export function MessagesInbox({
     };
     const ch = supabase
       .channel("admin-inbox")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
-        scheduleInvalidate(["last-messages", "conversation-states", "staff-inbox-state", "admin-nav-badges"]);
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload: any) => {
+        // The event already carries the whole row: patch the list now (preview,
+        // time, order and unread dot update immediately) instead of re-downloading
+        // ~1,000 messages. Only the small counters are refetched afterwards.
+        qc.setQueryData<Message[] | undefined>(["last-messages"], (prev) =>
+          applyMessageChange(prev, { eventType: payload.eventType, new: payload.new, old: payload.old }));
+        scheduleInvalidate(["conversation-states", "staff-inbox-state", "admin-nav-badges"]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => {
         scheduleInvalidate(["conversation-states", "staff-inbox-state", "admin-nav-badges"]);

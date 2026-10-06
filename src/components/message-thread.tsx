@@ -63,6 +63,7 @@ import { haptic } from "@/platform/haptics";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
 import { useChatSignedUrls } from "@/hooks/use-chat-signed-urls";
+import { belongsInInbox, resolveOptimistic, upsertRow } from "@/lib/inbox-cache";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { ChatVideoTile } from "@/components/chat-video-tile";
@@ -1636,6 +1637,11 @@ export function MessageThread({
       ...(drafts.length ? { local_upload_ids: drafts.map((d) => d.id) } : {}),
     } as Message;
     qc.setQueryData<Message[]>(key, (prev) => [...(prev ?? []), optimistic]);
+    // Coach side: the inbox row (preview, time, order) reflects this send at once.
+    const patchInbox = (fn: (prev: Message[] | undefined) => Message[] | undefined) => {
+      if (role === "admin") qc.setQueryData<Message[] | undefined>(["last-messages"], fn);
+    };
+    if (belongsInInbox(optimistic)) patchInbox((prev) => (prev ? upsertRow(prev, optimistic) : prev));
     setBody("");
     setAttachments([]);
     setReplyingTo(null);
@@ -1653,6 +1659,7 @@ export function MessageThread({
       } catch (e: any) {
         drafts.forEach((d) => d.abort());
         qc.setQueryData<Message[]>(key, (prev) => (prev ?? []).filter((m) => m.id !== tempId));
+        patchInbox((prev) => resolveOptimistic(prev, tempId, null));
         drafts.forEach(releaseDraft);
         // Nothing was sent: put the caption back so the coach can re-attach and retry.
         if (text) setBody((b) => b || text);
@@ -1683,6 +1690,7 @@ export function MessageThread({
         replyPreview,
       });
       playAppSound("sent");
+      patchInbox((prev) => resolveOptimistic(prev, tempId, sent));
       // Swap the optimistic row for the persisted row (dedupe if realtime
       // already delivered it via INSERT).
       qc.setQueryData<Message[]>(key, (prev) => {
@@ -1696,6 +1704,7 @@ export function MessageThread({
       releaseDrafts();
       return sent;
     } catch (e: any) {
+      patchInbox((prev) => resolveOptimistic(prev, tempId, null));
       // Mark the optimistic bubble as failed so the user can see it didn't send.
       qc.setQueryData<Message[]>(key, (prev) =>
         (prev ?? []).map((m) => m.id === tempId
