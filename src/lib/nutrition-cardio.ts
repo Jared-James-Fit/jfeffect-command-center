@@ -1,4 +1,3 @@
-import { todayLocalISO } from "@/lib/today";
 export const NUTRITION_PHASES = [
   "Fat Loss",
   "Muscle Gain",
@@ -191,79 +190,6 @@ export function deriveTarget(t: TargetRow): DerivedTargetState {
 // ============================================================
 // Default cardio presets + nutrition day-type sync helpers
 // ============================================================
-
-export type CardioPreset = {
-  day_type: "Training Day" | "Rest Day" | "High Day";
-  /** Friendly label shown in the defaults UI only — storage uses `day_type`. */
-  display_label: string;
-  cardio_type: string;
-  duration_minutes: number;
-  intensity: string;
-  frequency_per_week: number;
-  calorie_target_min: number | null;
-  calorie_target_max: number | null;
-  client_notes: string;
-};
-
-export const DEFAULT_CARDIO_PRESETS: CardioPreset[] = [
-  {
-    day_type: "Training Day",
-    display_label: "Training Day",
-    cardio_type: "Incline Walking",
-    duration_minutes: 25,
-    intensity: "Zone 2",
-    frequency_per_week: 4,
-    calorie_target_min: 150,
-    calorie_target_max: 200,
-    client_notes: "Steady incline walk after lifting. Keep heart rate in Zone 2.",
-  },
-  {
-    day_type: "Rest Day",
-    display_label: "Non-Training Day",
-    cardio_type: "Outdoor Walking",
-    duration_minutes: 25,
-    intensity: "Low Intensity",
-    frequency_per_week: 3,
-    calorie_target_min: null,
-    calorie_target_max: null,
-    client_notes: "Easy outdoor walk. Aim for daily steps, low fatigue.",
-  },
-  {
-    day_type: "High Day",
-    display_label: "High Day",
-    cardio_type: "Outdoor Walking",
-    duration_minutes: 20,
-    intensity: "Low Intensity",
-    frequency_per_week: 2,
-    calorie_target_min: null,
-    calorie_target_max: null,
-    client_notes: "Optional light walk. Keep fatigue low.",
-  },
-];
-
-export function presetToRow(preset: CardioPreset, clientId: string): Record<string, any> {
-  const today = todayLocalISO();
-  return {
-    client_id: clientId,
-    day_type: preset.day_type,
-    custom_day_type: null,
-    cardio_type: preset.cardio_type,
-    custom_type: null,
-    intensity: preset.intensity,
-    frequency_per_week: preset.frequency_per_week,
-    duration_minutes: preset.duration_minutes,
-    calorie_target_min: preset.calorie_target_min,
-    calorie_target_max: preset.calorie_target_max,
-    show_calories_to_client: preset.calorie_target_min != null,
-    client_notes: preset.client_notes,
-    start_date: today,
-    status: "Active",
-    enabled: true,
-    visible_to_client: true,
-    program_name: null,
-    last_updated_at: new Date().toISOString(),
-  };
-}
 
 /** A cardio row is the "default" for its day type when it has no program_name. */
 export function findDefaultFor(rows: any[], dayType: string): any | undefined {
