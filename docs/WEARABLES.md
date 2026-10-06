@@ -53,24 +53,35 @@ Status of what I could and could not verify (Garmin's own pages were not reachab
 4. Endpoint and field names were written without access to Oura's docs. Verify with a real account.
 
 ## Apple Health / Health Connect (native app)
-Plugin: `@capgo/capacitor-health` (v8 line = Capacitor 8). It is the only maintained Capacitor 8
-plugin that reads sleep, HRV and resting HR on both platforms.
+Plugin: `@capgo/capacitor-health` 8.x (installed). The web side is live once deployed: in the
+phone app, Account > Devices shows Connect for that phone's health store; on the website it says
+"Connect in the iPhone app"; on app builds without the native plugin it says "Update the app".
+The native half is added by CI and is OFF until you switch it on.
 
-1. `bun add @capgo/capacitor-health` (commit the updated lockfile), then `bun run cap:sync`.
-2. iOS: enable the HealthKit capability; add `NSHealthShareUsageDescription` to Info.plist
-   (explain it is for coaching: sleep, HRV, resting HR, steps). Update `PrivacyInfo.xcprivacy`.
-3. Android: Health Connect read permissions for sleep, HRV, resting HR, steps, active calories
-   only, plus the privacy-policy rationale activity the plugin README describes.
-4. Call site (for example behind a "Connect Apple Health" button, from a user tap):
-   ```ts
-   import { Health } from "@capgo/capacitor-health";
-   import { syncHealthStore } from "@/platform/health";
-   const r = await syncHealthStore(Health as any, { requestAccess: true });
-   ```
-   Then call `syncHealthStore(Health as any)` on app foreground to top up.
-5. In `providers.ts` set `live: true` for `apple_health` / `health_connect` and render the
-   connect button for them in `wearables-card.tsx` (it currently only wires OAuth).
-6. Update the privacy policy for health data before shipping.
+### iPhone (Apple Health, which is also how Garmin data gets in on iPhone)
+1. **Accept the pending Apple agreement** (App Store Connect > Business / Agreements). Every iOS
+   upload since at least run 1502 fails with `REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`; nothing
+   reaches TestFlight until this is done, HealthKit or not.
+2. developer.apple.com > Identifiers > `com.jfeffect.app` > enable **HealthKit** > Save.
+3. Profiles > "JF Effect App Store Distribution" > Edit > Save (regenerates with HealthKit) >
+   Download. Base64 it (`base64 -i profile.mobileprovision | pbcopy`) and replace the GitHub secret
+   `PROVISIONING_PROFILE_BASE64`.
+4. GitHub > Settings > Secrets and variables > Actions > **Variables** > `ENABLE_HEALTHKIT` = `true`.
+5. Actions > "iOS Build and Upload" > Run workflow. If step 3 was missed, the build stops at
+   "Check provisioning profile allows HealthKit" with instructions instead of a cryptic signing error.
+6. Install the TestFlight build > Account > Devices > Apple Health > Connect > allow access.
+7. Garmin users: in Garmin Connect, turn on sharing to Apple Health (Settings > Connected Apps).
+   Garmin reportedly does not share HRV to Apple Health; recovery then uses sleep and resting HR
+   (falls back to the day's minimum heart rate when no resting HR is written).
+8. App Store review: update the App Privacy answers (Health & Fitness data, linked to the user,
+   app functionality) and the privacy policy before submitting a public release.
+
+### Android (Health Connect)
+1. Play Console > App content > **Health apps** declaration for: steps, active calories, sleep,
+   heart rate, resting heart rate, HRV (read only). CI strips every other health permission.
+2. GitHub Actions variable `ENABLE_HEALTH_CONNECT` = `true`. The build then raises minSdk to 26
+   (Android 8.0+), which Health Connect requires.
+3. The Android workflow only produces a signed AAB artifact; upload it to Play as usual.
 
 ## Data rules worth remembering
 - HRV is not comparable across sources: Apple = SDNN, Oura/Whoop/Health Connect = RMSSD.

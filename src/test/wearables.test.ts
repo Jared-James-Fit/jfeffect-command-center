@@ -534,3 +534,26 @@ describe("Apple Health / Health Connect go-live", () => {
     expect(read("package-lock.json")).toContain('"node_modules/@capgo/capacitor-health"');
   });
 });
+
+describe("native builds stay unchanged until health is switched on", () => {
+  it("gates every HealthKit change behind ENABLE_HEALTHKIT and fails early on a profile without HealthKit", () => {
+    const wf = read(".github/workflows/ios-build.yml");
+    expect(wf).toContain(
+      "name: Enable HealthKit (Apple Health sync)\n        if: ${{ vars.ENABLE_HEALTHKIT == 'true' }}",
+    );
+    expect(wf).toContain(
+      "name: Check provisioning profile allows HealthKit\n        if: ${{ vars.ENABLE_HEALTHKIT == 'true' }}",
+    );
+    expect(wf.indexOf("Enable HealthKit")).toBeLessThan(wf.indexOf("- name: Run pod install"));
+  });
+
+  it("removes the plugin from Android unless ENABLE_HEALTH_CONNECT is on, and strips unused permissions when on", () => {
+    const wf = read(".github/workflows/android-build.yml");
+    expect(wf).toContain("if: ${{ vars.ENABLE_HEALTH_CONNECT != 'true' }}");
+    expect(wf).toContain('npm pkg delete "dependencies.@capgo/capacitor-health"');
+    expect(wf.indexOf("Leave Health Connect out")).toBeLessThan(
+      wf.indexOf("- name: Add Android platform"),
+    );
+    expect(wf).toContain('tools:node="remove"');
+  });
+});
