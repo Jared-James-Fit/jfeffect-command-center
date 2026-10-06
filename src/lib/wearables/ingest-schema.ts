@@ -13,11 +13,12 @@ const nullNum = (min: number, max: number) => z.number().min(min).max(max).nulla
 
 const tomorrowISO = () => new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 10);
 
-export const DailyMetricInput = z.object({
-  metric_date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .refine((d) => d >= "2015-01-01" && d <= tomorrowISO(), "date out of range"),
+const DATE_SCHEMA = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((d) => d >= "2015-01-01" && d <= tomorrowISO(), "date out of range");
+
+const FIELD_SCHEMAS = {
   sleep_minutes: nullInt(0, 1440),
   sleep_efficiency: nullInt(0, 100),
   sleep_score: nullInt(0, 100),
@@ -28,6 +29,11 @@ export const DailyMetricInput = z.object({
   steps: nullInt(0, 200000),
   active_kcal: nullInt(0, 20000),
   activity_score: nullInt(0, 100),
+};
+
+export const DailyMetricInput = z.object({
+  metric_date: DATE_SCHEMA,
+  ...FIELD_SCHEMAS,
 });
 
 export const IngestInput = z.object({
@@ -41,3 +47,27 @@ export const IngestInput = z.object({
       "duplicate dates",
     ),
 });
+
+/**
+ * Client-side: keep every valid value and null the rest, so one odd reading (a sensor
+ * glitch, a unit surprise) costs a field, not the whole batch the server would reject.
+ * Rows with a bad date or nothing valid are dropped.
+ */
+export function sanitizeMetrics(
+  rows: Record<string, unknown>[],
+): z.infer<typeof DailyMetricInput>[] {
+  const out: z.infer<typeof DailyMetricInput>[] = [];
+  for (const row of rows) {
+    const date = DATE_SCHEMA.safeParse(row.metric_date);
+    if (!date.success) continue;
+    const clean: Record<string, unknown> = { metric_date: date.data };
+    let any = false;
+    for (const [field, schema] of Object.entries(FIELD_SCHEMAS)) {
+      const r = schema.safeParse(row[field] ?? null);
+      clean[field] = r.success ? r.data : null;
+      if (clean[field] != null) any = true;
+    }
+    if (any) out.push(clean as z.infer<typeof DailyMetricInput>);
+  }
+  return out.slice(-MAX_INGEST_DAYS);
+}

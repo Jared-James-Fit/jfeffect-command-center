@@ -268,3 +268,115 @@ describe("recovery source selection (no cross-device HRV mixing)", () => {
     expect(summarizeRecoveryFromRows(rows)!.summary.state).toBe("low");
   });
 });
+
+describe("health-store normalization (phone -> DailyMetric)", () => {
+  const utcDate = (iso: string) => iso.slice(0, 10);
+  const seg = (start: string, end: string, state = "asleep", sourceName = "Watch") => ({
+    value: 0,
+    startDate: start,
+    endDate: end,
+    sleepState: state,
+    sourceName,
+  });
+
+  it("attributes a night to its wake-up date, counts only asleep stages, and averages overnight HRV", async () => {
+    const { normalizeHealthStore } = await import("@/lib/wearables/health-store-normalize");
+    const out = normalizeHealthStore(
+      {
+        sleep: [
+          seg("2026-10-04T22:00:00Z", "2026-10-05T06:00:00Z", "inBed"),
+          seg("2026-10-04T22:30:00Z", "2026-10-05T02:30:00Z", "light"),
+          seg("2026-10-05T02:30:00Z", "2026-10-05T03:00:00Z", "awake"),
+          seg("2026-10-05T03:00:00Z", "2026-10-05T06:00:00Z", "deep"),
+        ],
+        hrv: [
+          { value: 50, startDate: "2026-10-05T01:00:00Z", endDate: "2026-10-05T01:00:00Z" },
+          { value: 70, startDate: "2026-10-05T04:00:00Z", endDate: "2026-10-05T04:00:00Z" },
+          { value: 20, startDate: "2026-10-05T15:00:00Z", endDate: "2026-10-05T15:00:00Z" }, // daytime: ignored
+        ],
+        restingHr: [
+          { value: 52, startDate: "2026-10-05T08:00:00Z", endDate: "2026-10-05T08:00:00Z" },
+          { value: 54, startDate: "2026-10-05T20:00:00Z", endDate: "2026-10-05T20:00:00Z" },
+        ],
+        steps: [{ startDate: "2026-10-05T00:00:00Z", value: 9000.4 }],
+        activeKcal: [{ startDate: "2026-10-05T00:00:00Z", value: 0 }],
+      },
+      utcDate,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      metric_date: "2026-10-05",
+      sleep_minutes: 420, // 4h light + 3h deep, awake and inBed excluded
+      hrv_ms: 60,
+      resting_hr: 54, // latest of the day
+      steps: 9000,
+      active_kcal: null, // 0 is "no data", never a value
+    });
+  });
+
+  it("does not double count two sources writing the same night, and ignores naps", async () => {
+    const { normalizeHealthStore } = await import("@/lib/wearables/health-store-normalize");
+    const out = normalizeHealthStore(
+      {
+        sleep: [
+          seg("2026-10-04T23:00:00Z", "2026-10-05T06:00:00Z", "asleep", "Watch"),
+          seg("2026-10-04T23:00:00Z", "2026-10-05T06:00:00Z", "asleep", "iPhone"),
+          seg("2026-10-05T14:00:00Z", "2026-10-05T14:40:00Z", "asleep", "Watch"), // nap
+        ],
+      },
+      utcDate,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].sleep_minutes).toBe(420);
+  });
+
+  it("expands Android-style sessions with stages and merges brief wake gaps", async () => {
+    const { normalizeHealthStore } = await import("@/lib/wearables/health-store-normalize");
+    const out = normalizeHealthStore(
+      {
+        sleep: [
+          {
+            value: 0,
+            startDate: "2026-10-04T23:00:00Z",
+            endDate: "2026-10-05T07:00:00Z",
+            sourceName: "Health Connect",
+            stages: [
+              {
+                startDate: "2026-10-04T23:00:00Z",
+                endDate: "2026-10-05T03:00:00Z",
+                stage: "light",
+              },
+              {
+                startDate: "2026-10-05T03:00:00Z",
+                endDate: "2026-10-05T03:20:00Z",
+                stage: "awake",
+              },
+              { startDate: "2026-10-05T03:20:00Z", endDate: "2026-10-05T07:00:00Z", stage: "rem" },
+            ],
+          },
+        ],
+      },
+      utcDate,
+    );
+    expect(out[0].sleep_minutes).toBe(460); // 240 + 220
+  });
+
+  it("returns nothing for days with no usable data", async () => {
+    const { normalizeHealthStore } = await import("@/lib/wearables/health-store-normalize");
+    expect(
+      normalizeHealthStore({ steps: [{ startDate: "2026-10-05T00:00:00Z", value: 0 }] }, utcDate),
+    ).toEqual([]);
+  });
+
+  it("sanitizeMetrics keeps valid values, nulls glitches, drops empty/invalid rows", async () => {
+    const { sanitizeMetrics } = await import("@/lib/wearables/ingest-schema");
+    const out = sanitizeMetrics([
+      { ...emptyMetric("2026-10-05"), steps: 8000, resting_hr: 900 }, // glitch nulled, steps kept
+      { ...emptyMetric("2026-10-04"), steps: -5 }, // nothing valid -> dropped
+      { ...emptyMetric("not-a-date"), steps: 100 }, // bad date -> dropped
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].steps).toBe(8000);
+    expect(out[0].resting_hr).toBeNull();
+  });
+});
