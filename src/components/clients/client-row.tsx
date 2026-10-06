@@ -7,20 +7,19 @@ import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useOpenClientProfile } from "@/lib/open-client-profile";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
-  ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
+  MoreHorizontal, CalendarDays, Dumbbell,
   Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, Clock, AlertTriangle, Upload,
   Bell, Loader2,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { BADGE_TONE, ACTION_ICON, actionStyle, rowStatusChips, type ChipAction } from "./clients-status";
+import { BADGE_TONE, rowStatusChips, type ChipAction } from "./clients-status";
 import { StatusTip } from "./status-tip";
 import { adminRemindAgreement } from "@/lib/coaching-agreement.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
-import type { DirectoryNextAction } from "@/lib/clients-directory.functions";
 import { format, parseISO, differenceInDays, formatDistanceToNow } from "date-fns";
-import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
+import { ClientMoreMenu } from "./quick-actions";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { useNavigate } from "@tanstack/react-router";
@@ -28,18 +27,6 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
-/** Plain-English hover text for the big primary button, by what it does. */
-const ACTION_HINT: Record<string, string> = {
-  open: "Open this client's full profile: training, nutrition, messages, billing and more.",
-  setup: "Open this client's profile to finish setting up their account.",
-  payment: "Open their billing to fix a missed payment or set up a payment link.",
-  review: "Go to check-in reviews to review what this client submitted.",
-  assign: "Assign a training program to this client.",
-  next_phase: "Build this client's next training block so they don't run out of program.",
-  nutrition: "Update this client's nutrition plan.",
-  cardio: "Update this client's cardio plan.",
-};
 
 /** Buttons inside a status explanation. The first is the main one. */
 const actionClass = (primary: boolean) =>
@@ -123,18 +110,8 @@ const TAG = "cursor-pointer rounded-full border border-border bg-muted/40 px-1.5
 
 export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void }) {
   const badges = rowStatusChips(r);
-  const urgent = r.priority <= 3;
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
-  // For non-urgent next-actions (missing program, next phase, nutrition,
-  // cardio, setup), the "Program"/"Nutrition"/"Cardio" status pills already
-  // handle the specific assign flow. The big primary button should always
-  // just open the client so admins have one consistent CTA per row.
-  const effectiveAction: DirectoryNextAction =
-    r.next_action.kind === "payment" || r.next_action.kind === "review"
-      ? r.next_action
-      : { kind: "open", label: "Open Client" };
-  const actionTarget = primaryActionTarget(effectiveAction, r.id);
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const navigate = useNavigate();
@@ -312,7 +289,7 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
               : "Never signed in"}
           </span>
         </StatusTip>
-        {/* Next best action */}
+        {/* Row actions */}
         <div className="flex items-center justify-end gap-1.5">
           {canPov && (
             <Tooltip>
@@ -330,40 +307,31 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
               <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">See the app exactly as this client sees it (their home screen, workouts, nutrition and messages).</TooltipContent>
             </Tooltip>
           )}
+          {/* One button per row, always the same: the profile is where every client task lives.
+              Problems (payment, contract, program, nutrition, cardio) are the chips on the row,
+              each with its own fix one tap away. */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button asChild size="sm" className={cn("h-9 min-w-[8rem]", actionStyle(effectiveAction, urgent))}>
-                {actionTarget}
+              <Button asChild size="sm" className="h-9 min-w-[8rem] bg-secondary text-secondary-foreground hover:bg-secondary/80">
+                <ClientNameLink clientId={r.id}>
+                  <ArrowRight className="mr-1.5 h-4 w-4" aria-hidden />
+                  Open Client
+                </ClientNameLink>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">{ACTION_HINT[effectiveAction.kind] ?? effectiveAction.label}</TooltipContent>
+            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">Open this client's full profile: training, nutrition, messages, billing and more.</TooltipContent>
           </Tooltip>
-
-          <QuickActionsMenu r={r} />
 
           <ClientMoreMenu
             r={r}
             onArchive={onArchive}
-            tip="More options: schedule a workout, assign programs, download reports, mark payment status, archive."
+            tip="Message, send a payment link, payment status or archive, without leaving the list."
             trigger={
               <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="More client actions">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             }
           />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ClientNameLink
-                clientId={r.id}
-                ariaLabel={`Open ${r.full_name ?? "client"}`}
-                className="hidden h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground xl:flex"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </ClientNameLink>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">Open this client's profile.</TooltipContent>
-          </Tooltip>
         </div>
       </li>
     </TooltipProvider>
@@ -673,49 +641,6 @@ function AssignmentStatusStrip({
       />
     </div>
   );
-}
-
-/** Map next_action kind to the most useful in-app destination. */
-function primaryActionTarget(action: DirectoryNextAction, clientId: string) {
-  const IconBase = ACTION_ICON(action.kind);
-  const label = (
-    <>
-      <IconBase className="mr-1.5 h-4 w-4" aria-hidden />
-      {action.label}
-    </>
-  );
-  switch (action.kind) {
-    case "assign":
-    case "next_phase":
-      return (
-        <Link to="/admin/program-assign/$clientId" params={{ clientId }}>{label}</Link>
-      );
-    case "nutrition":
-      return (
-        <ClientNameLink clientId={clientId} tab="nutrition">{label}</ClientNameLink>
-      );
-    case "cardio":
-      return (
-        <ClientNameLink clientId={clientId} tab="nutrition">{label}</ClientNameLink>
-      );
-    case "review":
-      return (
-        <Link to="/admin/check-in-reviews">{label}</Link>
-      );
-    case "payment":
-      return (
-        <ClientNameLink clientId={clientId} tab="billing">{label}</ClientNameLink>
-      );
-    case "setup":
-      return (
-        <ClientNameLink clientId={clientId}>{label}</ClientNameLink>
-      );
-    case "open":
-    default:
-      return (
-        <ClientNameLink clientId={clientId}>{label}</ClientNameLink>
-      );
-  }
 }
 
 export function ClientRowSkeleton() {

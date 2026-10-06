@@ -1,5 +1,4 @@
 import {
-  AlertCircle,
   ClipboardCheck,
   CalendarClock,
   CreditCard,
@@ -13,7 +12,6 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  ArrowRight,
   FileSignature,
   FileCheck2,
   FileClock,
@@ -22,7 +20,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
-import type { DirectoryNextAction, DirectoryRow } from "@/lib/clients-directory.functions";
+import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import type { DirectoryFilterKey } from "@/lib/clients-directory-filters";
 
 /** Every filter on the Clients list, plus "all". The keys are the database's (see clients-directory-filters.ts). */
@@ -225,30 +223,3 @@ export const BADGE_TONE: Record<BadgeDef["tone"], string> = {
   muted:  "bg-muted text-muted-foreground border-border",
 };
 
-/** Next-best-action button styling — only the highest-priority one is filled. */
-export function actionStyle(a: DirectoryNextAction, urgent: boolean): string {
-  if (urgent && (a.kind === "payment" || a.kind === "review")) {
-    return "bg-destructive text-destructive-foreground hover:bg-destructive/90";
-  }
-  if (a.kind === "next_phase" || a.kind === "nutrition" || a.kind === "cardio") {
-    return "bg-amber-500 text-amber-950 hover:bg-amber-500/90";
-  }
-  if (a.kind === "open") {
-    return "bg-secondary text-secondary-foreground hover:bg-secondary/80";
-  }
-  return "bg-primary text-primary-foreground hover:bg-primary/90";
-}
-
-export function ACTION_ICON(kind: DirectoryNextAction["kind"]): LucideIcon {
-  switch (kind) {
-    case "payment": return CreditCard;
-    case "setup": return UserRoundCog;
-    case "review": return ClipboardCheck;
-    case "assign": return Dumbbell;
-    case "next_phase": return CalendarClock;
-    case "nutrition": return Apple;
-    case "cardio": return HeartPulse;
-    case "open": return ArrowRight;
-    default: return AlertCircle;
-  }
-}

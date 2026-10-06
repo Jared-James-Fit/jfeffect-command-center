@@ -99,3 +99,30 @@ describe("the filters reach the database", () => {
     expect(read("src/components/clients/client-filter-rail.tsx")).toContain("match all");
   });
 });
+
+describe("one clear action per row", () => {
+  const menu = read("src/components/clients/quick-actions.tsx");
+
+  it("always opens the client: the row's problems are its chips, each with its own fix", () => {
+    const actions = row.slice(row.indexOf("{/* Row actions */}"), row.indexOf("</li>"));
+    expect(actions).toContain("Open Client");
+    expect(actions).not.toMatch(/actionStyle|next_action|Set Up Payment/);
+    // No duplicate open-arrow and no second quick-actions menu beside the three-dot one.
+    expect(actions).not.toContain("ChevronRight");
+    expect(row).not.toContain("QuickActionsMenu");
+  });
+
+  it("keeps the three-dot menu to what is done straight from the list", () => {
+    expect(menu).not.toContain("export function QuickActionsMenu");
+    for (const item of ["Send Message", "Quick Sell / Send Payment Link", "Mark: no payment needed", "Archive Client"]) {
+      expect(menu).toContain(item);
+    }
+    // Program, schedule, nutrition, cardio, reports and account live in the client profile.
+    expect(menu).not.toMatch(/tab="(training|nutrition|billing|purchases|info|account|agreements|sessions)"/);
+    expect(menu).not.toMatch(/\/admin\/(client-programs|blocks)\//);
+  });
+
+  it("moves the coach's meal plan PDF into the client's Nutrition tab", () => {
+    expect(read("src/components/nutrition-targets-panel.tsx")).toContain("useCoachMealPlanDownload(clientId)");
+  });
+});

@@ -18,6 +18,7 @@ import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { useAuth } from "@/lib/auth";
 import { downloadNutritionTargetsPdf } from "@/lib/nutrition-targets-pdf";
 import { GroceryListSheet } from "@/components/nutrition/GroceryListSheet";
+import { useCoachMealPlanDownload } from "@/lib/nutrition-targets/use-coach-meal-plan-download";
 
 export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
@@ -25,6 +26,7 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
   const [editing, setEditing] = useState<any>(null);
   const [waterOpen, setWaterOpen] = useState(false);
   const [groceryOpen, setGroceryOpen] = useState(false);
+  const mealPlan = useCoachMealPlanDownload(clientId);
   const { user, role } = useAuth();
   const sendRequestFn = useServerFn(sendNutritionRequestFn);
   const [requesting, setRequesting] = useState(false);
@@ -129,6 +131,15 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
             disabled={!clientUserId}
           >
             <ShoppingCart className="mr-2 h-4 w-4" /> Preview Grocery List
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="font-bold uppercase"
+            onClick={mealPlan.download}
+            disabled={mealPlan.pending}
+          >
+            <Download className="mr-2 h-4 w-4" /> Meal Plan PDF
           </Button>
           <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Add Targets
