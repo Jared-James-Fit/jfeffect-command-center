@@ -3,7 +3,7 @@
  * minor detection and the launch-popup dismissal window. No I/O, so every rule is
  * unit-tested without a database.
  */
-import { RESIGN_REQUIRED_BELOW_VERSION, compareVersions } from "./content";
+import { RESIGN_REQUIRED_BELOW_VERSION, compareVersions } from "./version";
 
 export type SignatureSummary = {
   id: string;

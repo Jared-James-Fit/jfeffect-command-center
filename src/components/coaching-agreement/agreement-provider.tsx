@@ -18,18 +18,24 @@ const AgreementSignFlow = lazy(() =>
 );
 
 export function CoachingAgreementProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   const getState = usePovFn(useServerFn(getMyAgreementState));
   const [open, setOpen] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
 
+  // This provider sits above every signed-in page, so skip the lookup for accounts that are
+  // never asked to sign: admins and coaches (unless viewing as a client) and members.
+  const neverAsked =
+    !isImpersonating && (role === "admin" || role === "coach" || role === "member");
+
   const { data, isLoading } = useQuery({
     queryKey: [AGREEMENT_QUERY_ROOT, "state", user?.id ?? "anon", povClient?.id ?? "self"],
-    enabled: !!user?.id,
+    enabled: !!user?.id && !neverAsked,
     queryFn: () => getState({ data: {} }),
     staleTime: 60_000,
-    refetchOnWindowFocus: true,
+    // Only people who can be asked to sign need a fresh answer each time the app regains focus.
+    refetchOnWindowFocus: (query) => query.state.data?.applicable !== false,
     retry: 1,
   });
 

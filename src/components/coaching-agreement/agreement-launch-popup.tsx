@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { useRouterState } from "@tanstack/react-router";
 import { FileSignature, ShieldCheck, Clock } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -11,24 +10,16 @@ import { agreementPrompt } from "./agreement-copy";
 /**
  * Mandatory-but-dismissible "Sign your Coaching Agreement" popup.
  *
- * It appears on every app launch until the client signs. "Not now" hides it for the
- * rest of this app session; closing and reopening the app (or returning after the
- * app sat in the background for 10+ minutes) brings it back. It waits for any other
- * open popup to close first, and stays out of the way on workout, messaging and
- * form screens.
+ * It appears once each time the app is opened, on whatever page the client lands on,
+ * until they sign. "Not now" hides it for the rest of this app session, however far they
+ * navigate; closing and reopening the app (or coming back after it sat in the background
+ * for 10+ minutes) brings it back. It waits for any other open popup to close first so two
+ * sheets never stack, but it is never tied to a particular page.
  *
  * The dismissal lives in sessionStorage on purpose: it must reset when the app is
  * relaunched. The signature itself is always recorded server-side.
  */
 const SESSION_KEY = (uid: string) => `coaching-agreement:launch-dismissed:${uid}`;
-const QUIET_PREFIXES = [
-  "/portal/workouts",
-  "/portal/messages",
-  "/portal/check-ins",
-  "/portal/lift-videos",
-  "/portal/goals-setup",
-  "/portal/agreements",
-];
 
 // Module-level guard against duplicate instances across remounts.
 let activeFor: string | null = null;
@@ -69,14 +60,12 @@ function clearDismissed(uid: string) {
 export function AgreementLaunchPopup({ flowOpen }: { flowOpen: boolean }) {
   const { user } = useAuth();
   const { state, needsSignature, openSignFlow } = useCoachingAgreement();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
   const [resumeTick, setResumeTick] = useState(0);
   const hiddenSince = useRef<number | null>(null);
 
   const uid = user?.id ?? "";
-  const quiet = QUIET_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  const eligible = !!uid && needsSignature && !flowOpen && !quiet;
+  const eligible = !!uid && needsSignature && !flowOpen;
 
   // Coming back after the app sat in the background counts as reopening it.
   useEffect(() => {
@@ -129,7 +118,7 @@ export function AgreementLaunchPopup({ flowOpen }: { flowOpen: boolean }) {
     };
   }, [eligible, open, uid, resumeTick]);
 
-  // Close as soon as it no longer applies (signed on another screen, flow opened, quiet route).
+  // Close as soon as it no longer applies (signed on another screen, or the flow opened).
   useEffect(() => {
     if (open && !eligible) {
       setOpen(false);

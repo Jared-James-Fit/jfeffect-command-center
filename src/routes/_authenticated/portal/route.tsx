@@ -10,7 +10,6 @@ import { HomeScreenSetupGate } from "@/components/home-screen-setup-gate";
 import { FormPopupGate } from "@/components/form-popup-gate";
 import { LegalAcceptanceGate } from "@/components/legal/legal-acceptance-gate";
 import { LeagueRecapGate } from "@/components/portal/league-recap";
-import { CoachingAgreementProvider } from "@/components/coaching-agreement/agreement-provider";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
 function PortalLayout() {
@@ -19,33 +18,29 @@ function PortalLayout() {
   return (
     <>
       <ClientPovBanner />
-      {/* Coaching Agreement: status, the mandatory launch popup and the signing flow.
-          Everything that shows or acts on agreement status reads from this one provider. */}
-      <CoachingAgreementProvider>
-        <AppShell items={clientNav} bottomItems={clientBottomNav} title="Client Portal">
-          {/* Onboarding requirements (profile photo, basic info, training schedule,
-              Goals & Setup) are surfaced as a non-blocking checklist on the Home
-              page — they must never lock the portal. See
-              <SetupChecklistBanner /> in /portal/index.tsx. */}
-          <Outlet />
-          {/* Popup gates run off the signed-in session, so in coach "View as
-              client" they'd show the coach's own popups/legal status — skip. */}
-          {!isImpersonating && (
-            <>
-              <BroadcastPopupGate />
-              <EventPopupGate />
-              <FormPopupGate />
-              <HomeScreenSetupGate />
-              <LegalAcceptanceGate />
-            </>
-          )}
-          {/* Previous month's League Recap — first week of each month, once. */}
-          <LeagueRecapGate />
-          {/* Birthday card mounts LAST so its dialog stacks above other portal
-              gates (setup prompts, event/form popups). */}
-          <ClientBirthdayCard />
-        </AppShell>
-      </CoachingAgreementProvider>
+      <AppShell items={clientNav} bottomItems={clientBottomNav} title="Client Portal">
+        {/* Onboarding requirements (profile photo, basic info, training schedule,
+            Goals & Setup) are surfaced as a non-blocking checklist on the Home
+            page — they must never lock the portal. See
+            <SetupChecklistBanner /> in /portal/index.tsx. */}
+        <Outlet />
+        {/* Popup gates run off the signed-in session, so in coach "View as
+            client" they'd show the coach's own popups/legal status — skip. */}
+        {!isImpersonating && (
+          <>
+            <BroadcastPopupGate />
+            <EventPopupGate />
+            <FormPopupGate />
+            <HomeScreenSetupGate />
+            <LegalAcceptanceGate />
+          </>
+        )}
+        {/* Previous month's League Recap — first week of each month, once. */}
+        <LeagueRecapGate />
+        {/* Birthday card mounts LAST so its dialog stacks above other portal
+            gates (setup prompts, event/form popups). */}
+        <ClientBirthdayCard />
+      </AppShell>
     </>
   );
 }
