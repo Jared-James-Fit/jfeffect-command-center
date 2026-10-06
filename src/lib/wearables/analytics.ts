@@ -5,11 +5,22 @@
  * never one bad night. A lifter with a 45 ms HRV and one with a 90 ms HRV are both
  * fine; a 20% drop from either one's baseline is the signal.
  */
-import { METRIC_FIELDS, type DailyMetric, type MetricField } from "./providers";
+import {
+  METRIC_FIELDS,
+  RECOVERY_SOURCE_PRIORITY,
+  hrvMethodFor,
+  type DailyMetric,
+  type HrvMethod,
+  type MetricField,
+} from "./providers";
 
 export type StoredMetric = DailyMetric & { provider: string };
 
 /**
+ * Collapse multiple providers into one record per day. Fine for additive/display
+ * fields (steps, calories). NOT for recovery baselines: use summarizeRecoveryFromRows,
+ * which keeps HRV, resting HR and sleep from a single source.
+ *
  * Collapse multiple providers into one record per day. For each field the first
  * provider in `priority` that has a value wins (e.g. ring beats phone for HRV).
  */
@@ -157,4 +168,62 @@ export function trailingAverage(
     .filter((d) => d.metric_date >= from && d[field] != null)
     .map((d) => d[field] as number);
   return xs.length ? Math.round(mean(xs) * 10) / 10 : null;
+}
+
+const DAY_MS = 24 * 3600 * 1000;
+const FRESHNESS_TOLERANCE_DAYS = 2;
+
+export type RecoverySource = { provider: string; hrvMethod: HrvMethod | null };
+
+/**
+ * Choose ONE provider to judge recovery from. Baselines only mean something when the
+ * numbers come from the same sensor and algorithm, so we never blend sources.
+ *  - Candidates are providers with any HRV / resting HR / sleep reading.
+ *  - A provider within 2 days of the freshest data counts as current, so one late
+ *    sync does not flip the source back and forth.
+ *  - Among current providers, RECOVERY_SOURCE_PRIORITY decides (ring/strap over phone).
+ */
+export function pickRecoverySource(rows: StoredMetric[]): RecoverySource | null {
+  const latestByProvider = new Map<string, string>();
+  for (const r of rows) {
+    if (r.hrv_ms == null && r.resting_hr == null && r.sleep_minutes == null) continue;
+    const cur = latestByProvider.get(r.provider);
+    if (!cur || r.metric_date > cur) latestByProvider.set(r.provider, r.metric_date);
+  }
+  if (!latestByProvider.size) return null;
+  const newest = [...latestByProvider.values()].sort().pop() as string;
+  const cutoff = new Date(
+    new Date(`${newest}T00:00:00Z`).getTime() - FRESHNESS_TOLERANCE_DAYS * DAY_MS,
+  )
+    .toISOString()
+    .slice(0, 10);
+  const rank = (p: string) => {
+    const i = RECOVERY_SOURCE_PRIORITY.indexOf(p);
+    return i === -1 ? RECOVERY_SOURCE_PRIORITY.length : i;
+  };
+  const current = [...latestByProvider.entries()]
+    .filter(([, d]) => d >= cutoff)
+    .map(([p]) => p)
+    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  const provider = current[0];
+  return { provider, hrvMethod: hrvMethodFor(provider) };
+}
+
+export type SourcedRecovery = RecoverySummary & RecoverySource;
+
+/**
+ * Recovery summary computed from a single provider's own history. Switching devices
+ * (Oura -> Apple Watch) therefore restarts the baseline instead of faking a drop.
+ */
+export function summarizeRecoveryFromRows(
+  rows: StoredMetric[],
+): { summary: SourcedRecovery; series: DailyMetric[] } | null {
+  const source = pickRecoverySource(rows);
+  if (!source) return null;
+  const series = rows
+    .filter((r) => r.provider === source.provider)
+    .map(({ provider: _p, ...m }) => m as DailyMetric)
+    .sort((a, b) => a.metric_date.localeCompare(b.metric_date));
+  const summary = summarizeRecovery(series);
+  return summary ? { summary: { ...summary, ...source }, series } : null;
 }

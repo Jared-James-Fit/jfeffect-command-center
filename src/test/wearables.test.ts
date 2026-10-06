@@ -213,3 +213,58 @@ describe("health-store ingest validation", () => {
     expect(fn).not.toMatch(/data\.user_?[iI]d/);
   });
 });
+
+describe("recovery source selection (no cross-device HRV mixing)", () => {
+  const stored = (provider: string, i: number, f: Partial<DailyMetric>) => ({
+    ...emptyMetric(day(i)),
+    ...f,
+    provider,
+  });
+
+  it("labels HRV by method: Apple is SDNN, Oura/Health Connect are RMSSD", async () => {
+    const { hrvMethodFor } = await import("@/lib/wearables/providers");
+    expect(hrvMethodFor("apple_health")).toBe("sdnn");
+    expect(hrvMethodFor("oura")).toBe("rmssd");
+    expect(hrvMethodFor("health_connect")).toBe("rmssd");
+    expect(hrvMethodFor("strava")).toBeNull();
+  });
+
+  it("does not flag a false HRV drop when an athlete switches from Oura (RMSSD) to Apple Watch (SDNN)", async () => {
+    const { summarizeRecoveryFromRows } = await import("@/lib/wearables/analytics");
+    // 14 days of Oura at ~80 ms RMSSD, then Oura stops and Apple reports ~40 ms SDNN.
+    const rows = [
+      ...Array.from({ length: 14 }, (_, i) => stored("oura", i, { hrv_ms: 80 })),
+      ...Array.from({ length: 4 }, (_, i) => stored("apple_health", 14 + i, { hrv_ms: 40 })),
+    ];
+    const r = summarizeRecoveryFromRows(rows)!;
+    // Apple is the only current source now; its own baseline is too short -> not "low".
+    expect(r.summary.provider).toBe("apple_health");
+    expect(r.summary.state).toBe("unknown");
+    expect(r.summary.hrvMethod).toBe("sdnn");
+    expect(r.series.every((d) => d.hrv_ms === 40)).toBe(true);
+  });
+
+  it("prefers the ring over the phone when both are current, and survives one late sync", async () => {
+    const { pickRecoverySource } = await import("@/lib/wearables/analytics");
+    const both = [
+      ...Array.from({ length: 10 }, (_, i) => stored("apple_health", i, { hrv_ms: 40 })),
+      ...Array.from({ length: 9 }, (_, i) => stored("oura", i, { hrv_ms: 80 })), // Oura 1 day behind
+    ];
+    expect(pickRecoverySource(both)?.provider).toBe("oura");
+    const ouraStale = [
+      ...Array.from({ length: 10 }, (_, i) => stored("apple_health", i, { hrv_ms: 40 })),
+      ...Array.from({ length: 4 }, (_, i) => stored("oura", i, { hrv_ms: 80 })), // 6 days behind
+    ];
+    expect(pickRecoverySource(ouraStale)?.provider).toBe("apple_health");
+    expect(pickRecoverySource([])).toBeNull();
+    expect(pickRecoverySource([stored("oura", 0, { steps: 5000 })])).toBeNull();
+  });
+
+  it("still flags a genuine drop within a single source", async () => {
+    const { summarizeRecoveryFromRows } = await import("@/lib/wearables/analytics");
+    const rows = Array.from({ length: 15 }, (_, i) =>
+      stored("oura", i, i < 14 ? { hrv_ms: 80, resting_hr: 50 } : { hrv_ms: 56, resting_hr: 59 }),
+    );
+    expect(summarizeRecoveryFromRows(rows)!.summary.state).toBe("low");
+  });
+});

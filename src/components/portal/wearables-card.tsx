@@ -20,7 +20,7 @@ import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { WEARABLE_PROVIDERS } from "@/lib/wearables/providers";
 import {
   resolveDaily,
-  summarizeRecovery,
+  summarizeRecoveryFromRows,
   trailingAverage,
   type RecoveryState,
 } from "@/lib/wearables/analytics";
@@ -109,19 +109,29 @@ export function WearablesCard() {
     () => resolveDaily((data?.metrics ?? []) as any[], priority),
     [data?.metrics, priority],
   );
-  const recovery = useMemo(() => summarizeRecovery(series), [series]);
+  // Recovery signals (HRV, resting HR, sleep) come from ONE source so baselines are
+  // like-for-like; the merged `series` is only for additive fields like steps.
+  const recoveryResult = useMemo(
+    () => summarizeRecoveryFromRows((data?.metrics ?? []) as any[]),
+    [data?.metrics],
+  );
+  const recovery = recoveryResult?.summary ?? null;
+  const recSeries = recoveryResult?.series ?? [];
   const latest = useMemo(
-    () => [...series].reverse().find((d) => d.sleep_minutes != null || d.hrv_ms != null),
-    [series],
+    () => [...recSeries].reverse().find((d) => d.sleep_minutes != null || d.hrv_ms != null),
+    [recSeries],
   );
   const hrvSpark = useMemo(
     () =>
-      series
+      recSeries
         .filter((d) => d.hrv_ms != null)
         .slice(-30)
         .map((d) => ({ d: d.metric_date, v: d.hrv_ms })),
-    [series],
+    [recSeries],
   );
+  const sourceLabel = recovery
+    ? (WEARABLE_PROVIDERS.find((p) => p.id === recovery.provider)?.label ?? recovery.provider)
+    : null;
 
   if (isPending || !data) return null;
 
@@ -137,6 +147,7 @@ export function WearablesCard() {
       <div className="flex items-center gap-2">
         <Watch className="h-4 w-4 text-primary" />
         <h3 className="font-semibold">Devices &amp; recovery</h3>
+        {sourceLabel && <span className="text-xs text-muted-foreground">via {sourceLabel}</span>}
         {recovery && (
           <span
             className={cn(
@@ -159,14 +170,14 @@ export function WearablesCard() {
                 latest.sleep_minutes != null ? `${(latest.sleep_minutes / 60).toFixed(1)}h` : "–"
               }
               sub={
-                trailingAverage(series, "sleep_minutes") != null
-                  ? `7d avg ${(trailingAverage(series, "sleep_minutes")! / 60).toFixed(1)}h`
+                trailingAverage(recSeries, "sleep_minutes") != null
+                  ? `7d avg ${(trailingAverage(recSeries, "sleep_minutes")! / 60).toFixed(1)}h`
                   : undefined
               }
             />
             <Stat
               icon={Activity}
-              label="HRV"
+              label={recovery?.hrvMethod ? `HRV (${recovery.hrvMethod.toUpperCase()})` : "HRV"}
               value={latest.hrv_ms != null ? `${Math.round(latest.hrv_ms)} ms` : "–"}
               sub={
                 recovery?.hrvPctVsBaseline != null

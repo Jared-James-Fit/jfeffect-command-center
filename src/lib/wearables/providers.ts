@@ -123,3 +123,35 @@ export function emptyMetric(metric_date: string): DailyMetric {
     activity_score: null,
   };
 }
+
+/**
+ * HRV is NOT one number. Oura, Whoop and Android Health Connect report RMSSD; Apple
+ * Health reports SDNN. The two differ systematically (SDNN is usually larger and
+ * behaves differently), so values and baselines must never be mixed across them.
+ */
+export type HrvMethod = "rmssd" | "sdnn";
+
+const HRV_METHOD: Partial<Record<WearableProviderId, HrvMethod>> = {
+  oura: "rmssd",
+  whoop: "rmssd",
+  health_connect: "rmssd",
+  apple_health: "sdnn",
+};
+
+export function hrvMethodFor(provider: string): HrvMethod | null {
+  return HRV_METHOD[provider as WearableProviderId] ?? null;
+}
+
+/**
+ * Preference when several devices report recovery signals for the same days:
+ * dedicated recovery wearables beat phone-health-store aggregates.
+ */
+export const RECOVERY_SOURCE_PRIORITY: readonly string[] = [
+  "oura",
+  "whoop",
+  "garmin",
+  "fitbit",
+  "polar",
+  "apple_health",
+  "health_connect",
+];
