@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, X, ArrowUpDown, SlidersHorizontal } from "lucide-react";
+import { Search, X, ArrowUpDown, SlidersHorizontal, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DirectoryCounts } from "@/lib/clients-directory.functions";
 import { serializeFilterKeys, toggleFilterKey, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
@@ -11,13 +11,13 @@ import { ClientFilterRail, ActiveFilterSummary } from "./client-filter-rail";
 import { ClientFilterSheet } from "./client-filter-sheet";
 
 // Sort options intentionally limited to what the directory RPC supports.
-// Labels re-worded to match the coach-first workflow.
+// Labels re-worded to match the coach-first workflow, and kept short enough to show in full on a phone.
 const SORTS: { v: string; label: string }[] = [
-  { v: "name",      label: "First Name (A–Z)" },
+  { v: "name",      label: "Name (A–Z)" },
   { v: "recent",    label: "Recently Added" },
   { v: "activity",  label: "Recently Active" },
   { v: "attention", label: "Needs Attention" },
-  { v: "ending",    label: "Program Ending Soon" },
+  { v: "ending",    label: "Program Ending" },
 ];
 
 type Props = {
@@ -151,6 +151,18 @@ export function ClientToolbar({
       loading={loading}
       onToggle={toggleFlag}
       onClear={() => setFlags([])}
+      extra={
+        // The bulk "remind everyone unsigned" already lives on the Agreements page.
+        isAdmin && flags.includes("no_contract") ? (
+          <Link
+            to="/admin/coaching-agreements"
+            className="mt-2.5 inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline"
+          >
+            Remind everyone who hasn't signed, on the Agreements page
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        ) : null
+      }
     />
     <ClientFilterSheet
       open={sheetOpen}

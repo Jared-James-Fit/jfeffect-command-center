@@ -8,18 +8,18 @@ import { useOpenClientProfile } from "@/lib/open-client-profile";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
-  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, Clock, AlertTriangle, Upload,
+  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, AlertTriangle, Upload,
   Bell, Loader2,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { BADGE_TONE, ACTION_ICON, actionStyle, rowStatusChips, type ChipAction } from "./clients-status";
+import { BADGE_TONE, ACTION_ICON, actionStyle, lastSeenChip, rowStatusChips, type ChipAction } from "./clients-status";
 import { StatusTip } from "./status-tip";
 import { adminRemindAgreement } from "@/lib/coaching-agreement.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import type { DirectoryNextAction } from "@/lib/clients-directory.functions";
-import { format, parseISO, differenceInDays, formatDistanceToNow } from "date-fns";
+import { format, parseISO, differenceInDays } from "date-fns";
 import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
@@ -121,8 +121,19 @@ function blockProgress(start: string | null, end: string | null) {
 
 const TAG = "cursor-pointer rounded-full border border-border bg-muted/40 px-1.5 py-1";
 
+/** Last seen turns amber after a week without opening the app and red after two. */
+const SEEN_TONE = {
+  danger: "border-destructive/40 bg-destructive/10 text-destructive",
+  warn: "border-amber-500/40 bg-amber-500/10 text-amber-600",
+  muted: "border-border bg-muted/40",
+} as const;
+
 export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void }) {
   const badges = rowStatusChips(r);
+  const seen = lastSeenChip(r);
+  // The status row already carries "N Missed" when it fits, so the tag by the name only fills in
+  // for the rare card whose status row is full.
+  const missedShownAsBadge = badges.some((b) => b.id === "missed");
   const urgent = r.priority <= 3;
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
@@ -182,11 +193,11 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
         className={cn(
           "group relative grid gap-3 rounded-xl border border-border bg-card p-4 transition",
           "hover:border-primary/30 hover:bg-accent/20",
-          // desktop 5-area grid: identity | status | program | action | open.
+          // desktop 4-area grid: identity | status | program | actions.
           // Only activate the compressed grid at true desktop widths — iPad
           // and other tablet widths keep the stacked/wrapping layout so
           // badges, program pills, and action buttons never overlap.
-          "xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto_auto] xl:items-center",
+          "xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto] xl:items-center",
         )}
       >
         {/* Identity */}
@@ -224,33 +235,15 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
                   Coach · {r.coach_name}
                 </StatusTip>
               )}
-              {/* Last active — show with color coding based on recency */}
-              {r.last_active_at ? (
-                <StatusTip
-                  title="Last active"
-                  body={`Last used the app ${format(parseISO(r.last_active_at), "MMM d, yyyy h:mm a")}. Turns amber after 7 days and red after 14 days without activity.`}
-                  className={[
-                    "cursor-pointer rounded-full border px-1.5 py-1",
-                    (r.days_inactive ?? 0) >= 14
-                      ? "border-destructive/40 bg-destructive/10 text-destructive"
-                      : (r.days_inactive ?? 0) >= 7
-                      ? "border-amber-500/40 bg-amber-500/10 text-amber-600"
-                      : "border-border bg-muted/40",
-                  ].join(" ")}
-                >
-                  Active {formatDistanceToNow(parseISO(r.last_active_at), { addSuffix: true })}
-                </StatusTip>
-              ) : r.last_login_at ? (
-                <StatusTip
-                  title="Last signed in"
-                  body={`Last signed in ${format(parseISO(r.last_login_at), "MMM d, yyyy h:mm a")}.`}
-                  className={TAG}
-                >
-                  Signed in {formatDistanceToNow(parseISO(r.last_login_at), { addSuffix: true })}
-                </StatusTip>
-              ) : null}
-              {/* Missed workouts badge */}
-              {r.f_missed_workouts && r.missed_workouts_count > 0 && (
+              {/* When they last used the app, colour-coded by how long ago */}
+              <StatusTip
+                title={seen.title}
+                body={seen.body}
+                className={cn("cursor-pointer rounded-full border px-1.5 py-1", SEEN_TONE[seen.tone])}
+              >
+                {seen.label}
+              </StatusTip>
+              {r.f_missed_workouts && r.missed_workouts_count > 0 && !missedShownAsBadge && (
                 <StatusTip
                   title="Missed workouts"
                   body={`${r.missed_workouts_count} scheduled workouts in the last 14 days weren't completed. Two or more is flagged.`}
@@ -297,21 +290,6 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
         <div className="min-w-0 space-y-1.5">
           <AssignmentStatusStrip r={r} prog={prog} range={range} />
         </div>
-        {/* Last signed in — always shown, falls back to 'Never signed in' */}
-        <StatusTip
-          title="Last seen"
-          body="The last time this client opened the app."
-          className="flex cursor-pointer items-center gap-1 py-1 text-[11px] text-muted-foreground"
-        >
-          <Clock className="h-3 w-3 shrink-0" aria-hidden />
-          <span>
-            {r.last_active_at
-              ? `Last seen ${formatDistanceToNow(parseISO(r.last_active_at), { addSuffix: true })}`
-              : r.last_login_at
-              ? `Signed in ${formatDistanceToNow(parseISO(r.last_login_at), { addSuffix: true })}`
-              : "Never signed in"}
-          </span>
-        </StatusTip>
         {/* Next best action */}
         <div className="flex items-center justify-end gap-1.5">
           {canPov && (
@@ -720,7 +698,7 @@ function primaryActionTarget(action: DirectoryNextAction, clientId: string) {
 
 export function ClientRowSkeleton() {
   return (
-    <li className="grid animate-pulse gap-3 rounded-xl border border-border bg-card p-4 xl:grid-cols-[1.4fr_1fr_1.3fr_auto_auto]">
+    <li className="grid animate-pulse gap-3 rounded-xl border border-border bg-card p-4 xl:grid-cols-[1.4fr_1fr_1.3fr_auto]">
       <div className="flex items-center gap-3">
         <div className="h-11 w-11 rounded-full bg-muted" />
         <div className="space-y-2">
@@ -734,7 +712,6 @@ export function ClientRowSkeleton() {
         <div className="h-1.5 w-full rounded bg-muted/60" />
       </div>
       <div className="h-9 w-32 rounded-md bg-muted" />
-      <div className="h-9 w-9 rounded-md bg-muted" />
     </li>
   );
 }

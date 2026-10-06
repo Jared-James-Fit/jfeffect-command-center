@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contractBadge, rowBadges, rowStatusChips, STATUS_META } from "@/components/clients/clients-status";
+import { contractBadge, lastSeenChip, rowBadges, rowStatusChips, STATUS_META } from "@/components/clients/clients-status";
 
 const row = (over: Record<string, unknown> = {}): any => ({
   account_status: "Account Created",
@@ -165,5 +165,69 @@ describe("every status explains itself", () => {
       expect(chip.next, label).toBeTruthy();
       expect(chip.actions?.length, label).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("one last-seen indicator", () => {
+  const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+
+  it("says when they were last seen, and stays quiet for a recent visit", () => {
+    const chip = lastSeenChip(row({ last_active_at: ago(2), days_inactive: 2 }));
+    expect(chip.label).toBe("Last seen 2 days ago");
+    expect(chip.title).toBe("Last seen");
+    expect(chip.tone).toBe("muted");
+    expect(chip.body).toMatch(/Last used the app .*Turns amber after 7 days and red after 14/);
+  });
+
+  it("turns amber after a week and red after two", () => {
+    expect(lastSeenChip(row({ last_active_at: ago(6), days_inactive: 6 })).tone).toBe("muted");
+    expect(lastSeenChip(row({ last_active_at: ago(7), days_inactive: 7 })).tone).toBe("warn");
+    expect(lastSeenChip(row({ last_active_at: ago(13), days_inactive: 13 })).tone).toBe("warn");
+    expect(lastSeenChip(row({ last_active_at: ago(14), days_inactive: 14 })).tone).toBe("danger");
+  });
+
+  it("falls back to the last sign-in, then to never signed in", () => {
+    const signedIn = lastSeenChip(row({ last_active_at: null, last_login_at: ago(3) }));
+    expect(signedIn.label).toBe("Signed in 3 days ago");
+    expect(signedIn.title).toBe("Last signed in");
+    const never = lastSeenChip(row({ last_active_at: null, last_login_at: null }));
+    expect(never.label).toBe("Never signed in");
+    expect(never.body).toMatch(/haven't opened the app/);
+  });
+
+  it("does not crash on an unreadable date", () => {
+    expect(lastSeenChip(row({ last_active_at: "not a date" })).label).toBe("Last seen a while ago");
+  });
+});
+
+describe("status ids, so the card never matches on label text", () => {
+  it("names each status", () => {
+    const id = (over: Record<string, unknown>) => rowBadges(row(over))[0].id;
+    expect(id({ f_payment_issue: true, payment_state: "past_due" })).toBe("payment_issue");
+    expect(id({ f_needs_setup: true, account_status: "Invite Sent" })).toBe("needs_setup");
+    expect(id({ payment_state: "not_set_up" })).toBe("no_payment");
+    expect(id({ payment_state: "pending" })).toBe("awaiting_payment");
+    expect(id({ f_needs_review: true })).toBe("review_due");
+    expect(id({ f_missed_workouts: true, missed_workouts_count: 2 })).toBe("missed");
+    expect(id({ f_inactive: true })).toBe("inactive");
+    expect(id({ f_program_ending: true })).toBe("program_ending");
+    expect(id({ f_new_client: true })).toBe("new");
+    expect(id({})).toBe("active");
+    expect(contractBadge(row({ coaching_agreement_status: "signed" }))!.id).toBe("contract");
+  });
+
+  it("shows missed workouts in the status row, so the tag by the name can step aside", () => {
+    const normal = rowStatusChips(row({ f_missed_workouts: true, missed_workouts_count: 3 }));
+    expect(normal.some((b) => b.id === "missed")).toBe(true);
+  });
+
+  it("only leaves the tag by the name in when the status row is already full", () => {
+    const crowded = rowStatusChips(
+      row({
+        f_payment_issue: true, payment_state: "not_set_up", f_needs_setup: true, account_status: "Invite Sent",
+        f_needs_review: true, f_missed_workouts: true, missed_workouts_count: 3,
+      }),
+    );
+    expect(crowded.some((b) => b.id === "missed")).toBe(false);
   });
 });
