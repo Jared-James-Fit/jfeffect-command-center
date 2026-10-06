@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
@@ -18,7 +19,7 @@ import { listLiftVideos } from "@/lib/lift-videos";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
-const PriceCardPickerDialog = lazy(() =>
+const PriceCardPickerDialog = lazyWithRetry(() =>
   import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
 );
 import { UserAvatar } from "@/components/user-avatar";

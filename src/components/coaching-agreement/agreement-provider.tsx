@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useMemo, useState, type ReactNode } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -13,7 +14,7 @@ import {
 import { AgreementLaunchPopup } from "./agreement-launch-popup";
 
 // The full signing flow carries the whole agreement text, so it loads only when first opened.
-const AgreementSignFlow = lazy(() =>
+const AgreementSignFlow = lazyWithRetry(() =>
   import("./agreement-sign-flow").then((m) => ({ default: m.AgreementSignFlow })),
 );
 

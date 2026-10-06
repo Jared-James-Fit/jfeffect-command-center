@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { FileSignature } from "lucide-react";
 import { getAgreementSigningContext } from "@/lib/coaching-agreement.functions";
 
 // The signing flow carries the full agreement text, so it only loads when this step is reached.
-const AgreementSignFlow = lazy(() =>
+const AgreementSignFlow = lazyWithRetry(() =>
   import("@/components/coaching-agreement/agreement-sign-flow").then((m) => ({
     default: m.AgreementSignFlow,
   })),
