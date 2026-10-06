@@ -11,7 +11,6 @@ import {
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
-import { TeamImpersonationProvider } from "@/lib/team-impersonation";
 import { ProgressDrawer } from "@/components/progress-drawer";
 import { GlobalHighlight } from "@/components/global-highlight";
 import { MediaViewerProvider, MediaViewerRoot } from "@/components/media-viewer";
@@ -397,7 +396,6 @@ function RootComponent() {
   const inner = (
     <AuthProvider>
       <ClientImpersonationProvider>
-        <TeamImpersonationProvider>
           <MediaViewerProvider>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
@@ -410,7 +408,6 @@ function RootComponent() {
             {/* Single global media viewer — portalled above every overlay. */}
             <MediaViewerRoot />
           </MediaViewerProvider>
-        </TeamImpersonationProvider>
       </ClientImpersonationProvider>
     </AuthProvider>
   );

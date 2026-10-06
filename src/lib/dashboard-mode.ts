@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export type DashboardMode = "coaching" | "membership" | "media";
+export type DashboardMode = "coaching" | "membership";
 const KEY = "jf-dashboard-mode";
 const EVENT = "jf-dashboard-mode-change";
 
@@ -8,7 +8,7 @@ export function getDashboardMode(): DashboardMode {
   try {
     const v = localStorage.getItem(KEY);
     if (v === "membership") return "membership";
-    if (v === "media") return "media";
+    // A stale "media" value (the Media workspace was removed) falls back to coaching.
   } catch {}
   return "coaching";
 }

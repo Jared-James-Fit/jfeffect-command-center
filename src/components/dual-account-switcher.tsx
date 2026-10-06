@@ -52,7 +52,7 @@ export function DualAccountSwitcher() {
             active={currentMode === "staff"}
             onClick={() => select("staff")}
             icon={<Briefcase className="h-3.5 w-3.5" />}
-            label={staffDestination === "/media" ? "Media" : "Admin / Staff"}
+            label="Admin / Staff"
           />
         </div>
       </div>

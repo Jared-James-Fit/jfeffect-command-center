@@ -47,7 +47,7 @@ function IndexRedirect() {
       // selected view (set by <DualAccountSwitcher />). They can flip
       // back from inside either dashboard at any time.
       const savedView = getViewMode(user.id);
-      if (savedView && (role === "admin" || role === "coach" || role === "media_manager")) {
+      if (savedView && (role === "admin" || role === "coach")) {
         // Confirm a client record exists before honoring "client" — avoids
         // sending a staff-only user into /portal if localStorage was seeded
         // on another account on this device.
@@ -56,7 +56,7 @@ function IndexRedirect() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             if (data?.id) navigate({ to: "/portal/workouts" as any, replace: true });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            else navigate({ to: (role === "media_manager" ? "/media" : "/admin") as any, replace: true });
+            else navigate({ to: "/admin" as any, replace: true });
           });
           return;
         }
@@ -73,13 +73,11 @@ function IndexRedirect() {
           const isPortal = saved.startsWith("/portal");
           const isMember = saved === "/m" || saved.startsWith("/m/");
           const isAdmin  = saved === "/admin" || saved.startsWith("/admin/");
-          const isMedia  = saved === "/media" || saved.startsWith("/media/");
 
           const roleMatch =
             (isPortal && (role === "client" || role === "admin" || role === "coach")) ||
             (isMember && (role === "member"  || role === "admin" || role === "coach")) ||
-            (isAdmin  && (role === "admin"   || role === "coach")) ||
-            (isMedia  && role === "media_manager");
+            (isAdmin  && (role === "admin"   || role === "coach"));
 
           if (roleMatch) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,7 +90,6 @@ function IndexRedirect() {
       const dest =
         role === "client" ? "/portal"
         : role === "member" ? "/m"
-        : role === "media_manager" ? "/media"
         : "/admin";
       navigate({ to: dest, replace: true });
     } else {
