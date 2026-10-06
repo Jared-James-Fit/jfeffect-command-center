@@ -63,6 +63,7 @@ import { haptic } from "@/platform/haptics";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
 import { useChatSignedUrls } from "@/hooks/use-chat-signed-urls";
+import { useViewingAsClient } from "@/lib/client-impersonation";
 import { belongsInInbox, resolveOptimistic, upsertRow } from "@/lib/inbox-cache";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
@@ -758,6 +759,10 @@ export function MessageThread({
   peerAvatarPath?: string | null;
 }) {
   const { user, role: appRole } = useAuth();
+  // A coach viewing as this client: look, but leave no trace (no read receipts,
+  // no "online", no typing, no auto-created check-ins).
+  const viewingAsClient = useViewingAsClient();
+  const povClient = role === "client" && viewingAsClient;
   // Admins (not coaches) can silently delete any message in the chat.
   const isAdmin = role === "admin" && appRole === "admin";
   const qc = useQueryClient();
@@ -842,7 +847,7 @@ export function MessageThread({
   // Recurring check-ins arrive as real chat requests instead of Home-page
   // form cards. Client opens are an idempotent safety trigger for due reminders.
   useEffect(() => {
-    if (role !== "client" || !clientId) return;
+    if (role !== "client" || !clientId || povClient) return;
     void ensureCheckinsFn({ data: { clientId } })
       .then((res) => {
         if (res?.created) {
@@ -850,7 +855,7 @@ export function MessageThread({
         }
       })
       .catch(() => {});
-  }, [role, clientId, ensureCheckinsFn, qc]);
+  }, [role, clientId, ensureCheckinsFn, qc, povClient]);
 
   const { data: messages = [], isPending: messagesPending } = useQuery(threadMessagesQuery(clientId, role));
 
@@ -1200,6 +1205,7 @@ export function MessageThread({
   }, [clientId, user?.id, role]);
 
   const broadcastTyping = (stopped = false) => {
+    if (povClient) return;
     const ch = typingChannelRef.current;
     if (!ch || !user?.id) return;
     const now = Date.now();
@@ -1220,7 +1226,7 @@ export function MessageThread({
   // Read receipts must reflect a person actually looking at this thread, so
   // a thread mounted in a hidden/backgrounded tab waits until it is visible.
   useEffect(() => {
-    if (!clientId || !latestMessageId) return;
+    if (!clientId || !latestMessageId || povClient) return;
     let cancelled = false;
     const run = () => {
       void markRead(clientId, role).then(() => {
@@ -1243,7 +1249,7 @@ export function MessageThread({
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
-  }, [clientId, role, qc, latestMessageId]);
+  }, [clientId, role, qc, latestMessageId, povClient]);
 
   // Bottom-pinning, done without visible jumps:
   //  - the first scroll to the latest message runs in a layout effect, i.e.

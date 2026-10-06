@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isViewingAsClient } from "@/lib/pov-guard";
 
 export type SenderRole = "admin" | "client";
 
@@ -273,6 +274,8 @@ export async function sendMessage(input: {
 }
 
 export async function markRead(clientId: string, role: SenderRole) {
+  // A coach viewing as this client must not mark the client's messages as read.
+  if (role === "client" && (await isViewingAsClient(clientId))) return;
   const now = new Date().toISOString();
   // Staff unread is per coach/admin: this only clears MY blue dot. It never
   // changes the conversation's workflow status (Needs Response stays).

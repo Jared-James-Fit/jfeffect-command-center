@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isViewingAsClient } from "@/lib/pov-guard";
 
 export type GroupPermissionMode = "everyone" | "admins_only" | "read_only";
 export type GroupMemberRole = "admin" | "member";
@@ -189,6 +190,8 @@ export async function deleteGroupMessageForEveryone(messageId: string) {
 }
 
 export async function markGroupRead(groupId: string, userId: string, at: string = new Date().toISOString()) {
+  // Viewing as a client: peeking must not leave a "seen" mark on anyone's membership.
+  if (await isViewingAsClient()) return;
   await db.from("chat_group_members")
     .update({ last_read_at: at })
     .eq("group_id", groupId)

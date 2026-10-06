@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePortalUserId } from "@/lib/client-impersonation";
+import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
 import { MessageThread } from "@/components/message-thread";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
@@ -55,7 +55,9 @@ function ClientMessages() {
     },
   });
 
-  const { peerLive: coachLive } = useChatPresence(client?.id ?? null, "client");
+  // Viewing as the client must not show them as online in the coach's inbox.
+  const viewingAsClient = useViewingAsClient();
+  const { peerLive: coachLive } = useChatPresence(viewingAsClient ? null : client?.id ?? null, "client");
 
   const { data: coach } = useQuery({
     queryKey: ["my-assigned-coach", client?.assigned_coach_id],
