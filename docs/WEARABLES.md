@@ -5,8 +5,8 @@ Do these in order. Nothing shows a Connect button until steps 1 to 4 are done.
 
 1. **Deploy** the branch (merge to `main`). Merges cleanly with `main` as of 6 Oct 2026.
 2. **Apply the migrations**, in this order, in the Supabase SQL editor or your normal migration flow:
-   - `supabase/migrations/20261006140000_wearables_foundation.sql`
-   - `supabase/migrations/20261006150000_client_daily_training_load.sql`
+   - `supabase/migrations/20261006160000_wearables_foundation.sql`
+   - `supabase/migrations/20261006170000_client_daily_training_load.sql`
    If step 2 is skipped, Account > Devices shows "Device connections aren't available right now".
 3. **Register the app with Oura** (Oura developer portal, "Cloud API" applications):
    - Redirect URI: `https://jfeffect.com/api/public/wearables/oura/callback`
