@@ -167,3 +167,34 @@ describe("clearing deleted-message placeholders", () => {
     expect(thread).toContain("purgeDeletedMessage(m.id)");
   });
 });
+
+describe("media replies and video playback", () => {
+  const viewer = readFileSync("src/components/media-viewer.tsx", "utf8");
+  const tile = readFileSync("src/components/chat-video-tile.tsx", "utf8");
+  const shared = readFileSync("src/components/chat-shared.tsx", "utf8");
+
+  it("opens videos full screen and autoplays instead of an inline player", () => {
+    expect(tile).toContain('viewer.open(src, { kind: "video"');
+    expect(viewer).toContain("autoPlay");
+    expect(viewer).toContain("function VideoViewer");
+    for (const src of [thread, shared]) {
+      expect(src).toContain("<ChatVideoTile");
+      expect(src).not.toMatch(/<video[^>]*controls/);
+    }
+  });
+
+  it("shows a thumbnail for replies to photos and videos, including old replies", async () => {
+    const { replyMediaFor } = await import("@/lib/messages");
+    const video = { attachments: [{ type: "video", url: "", storage_path: "c1/a.mov" }] } as any;
+    // Original loaded: use it (replies sent before previews carried a path).
+    expect(replyMediaFor({ sender_role: "client", body: "", attachment_type: "video" }, video))
+      .toEqual({ type: "video", path: "c1/a.mov", url: undefined });
+    // Original not loaded: fall back to the path stored on the preview.
+    expect(replyMediaFor({ sender_role: "client", body: "", attachment_type: "image", attachment_path: "c1/b.jpg" }, null))
+      .toEqual({ type: "image", path: "c1/b.jpg", url: undefined });
+    // Nothing to show for text, files or unknown media.
+    expect(replyMediaFor({ sender_role: "client", body: "hi" }, null)).toBeNull();
+    expect(replyMediaFor({ sender_role: "client", body: "", attachment_type: "pdf" }, { attachments: [{ type: "pdf", url: "x" }] } as any)).toBeNull();
+    expect(thread).toContain("<ReplyThumb");
+  });
+});

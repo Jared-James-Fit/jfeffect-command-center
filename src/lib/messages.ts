@@ -40,8 +40,34 @@ export type MessageReplyPreview = {
   body: string;
   attachment_type?: MessageAttachment["type"] | null;
   attachment_name?: string | null;
+  /** Storage path of the first photo/video (signed at render time), so replies can show a thumbnail. */
+  attachment_path?: string | null;
+  /** Public URL fallback for media with no storage path (e.g. GIFs). */
+  attachment_url?: string | null;
   is_internal_note?: boolean;
 };
+
+export type ReplyMedia = { type: "image" | "video"; path?: string; url?: string };
+
+/**
+ * The photo/video to show as a reply thumbnail. Prefers the original message
+ * when it's loaded (covers replies sent before previews carried a path), else
+ * what the preview stored.
+ */
+export function replyMediaFor(
+  preview: MessageReplyPreview | null | undefined,
+  source?: Pick<Message, "attachments"> | null,
+): ReplyMedia | null {
+  const first = source?.attachments?.[0];
+  if (first && (first.type === "image" || first.type === "video") && (first.storage_path || first.url)) {
+    return { type: first.type, path: first.storage_path || undefined, url: first.storage_path ? undefined : first.url };
+  }
+  if (preview && (preview.attachment_type === "image" || preview.attachment_type === "video")
+    && (preview.attachment_path || preview.attachment_url)) {
+    return { type: preview.attachment_type, path: preview.attachment_path || undefined, url: preview.attachment_url || undefined };
+  }
+  return null;
+}
 
 export type Message = {
   id: string;

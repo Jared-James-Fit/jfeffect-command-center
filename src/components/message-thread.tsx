@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   listMessages, sendMessage, markRead, setConversationStatus, setConversationPriority,
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
-  editMessage, deleteMessageForEveryone, purgeDeletedMessage,
+  editMessage, deleteMessageForEveryone, purgeDeletedMessage, replyMediaFor,
   listReactions, toggleReaction, REACTION_EMOJIS,
   listOlderMessages,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
@@ -63,6 +63,8 @@ import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
+import { ChatVideoTile } from "@/components/chat-video-tile";
+import { ReplyThumb } from "@/components/messages/reply-thumb";
 import {
   FormHistoryRow,
   MessengerCheckinRequestCard,
@@ -91,11 +93,15 @@ function fmtTime(iso: string) {
 
 function makeReplyPreview(message: Message): MessageReplyPreview {
   const first = message.attachments?.[0];
+  const isMedia = first?.type === "image" || first?.type === "video";
   return {
     sender_role: message.sender_role,
     body: (message.body || "").trim().slice(0, 260),
     attachment_type: first?.type ?? null,
     attachment_name: first?.name ?? null,
+    // Lets the quote show a thumbnail without loading the original message.
+    attachment_path: isMedia ? first?.storage_path ?? null : null,
+    attachment_url: isMedia && !first?.storage_path ? first?.url || null : null,
     is_internal_note: !!message.is_internal_note,
   };
 }
@@ -103,6 +109,9 @@ function makeReplyPreview(message: Message): MessageReplyPreview {
 function replyPreviewText(preview?: MessageReplyPreview | null) {
   if (!preview) return "Original message";
   if (preview.body) return preview.body;
+  // "IMG_5678.mov" means nothing in a quote; say what it is, like iMessage.
+  if (preview.attachment_type === "video") return "Video";
+  if (preview.attachment_type === "image") return "Photo";
   if (preview.attachment_name) return preview.attachment_name;
   if (preview.attachment_type) return `${preview.attachment_type.charAt(0).toUpperCase()}${preview.attachment_type.slice(1)} attachment`;
   return "Attachment";
@@ -185,9 +194,8 @@ function VideoAttachment({ att }: { att: MessageAttachment }) {
   const signed = useSignedUrlFor(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   if (!src) return null;
-  // Local (still uploading) previews are blob: URLs: load metadata so the first frame shows.
-  const local = src.startsWith("blob:");
-  return <video src={local ? `${src}#t=0.1` : src} controls playsInline preload={local ? "metadata" : "none"} className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
+  // Tap opens it full screen and plays (also for local, still-uploading previews).
+  return <ChatVideoTile src={src} cacheKey={att.storage_path} name={att.name} />;
 }
 
 function fakePeaks(n = 40, seed = 1) {
@@ -898,6 +906,37 @@ export function MessageThread({
 
   const canLoadOlder = messages.length >= 25;
 
+  const messageById = useMemo(() => new Map(allMessages.map((x) => [x.id, x])), [allMessages]);
+
+  // Replies to photos/videos sent before previews carried a storage path, whose
+  // original is older than the loaded window: fetch just those attachments once
+  // so the quote still gets a thumbnail.
+  const unresolvedReplyIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of allMessages) {
+      const rp = m.reply_preview;
+      if (!m.reply_to_message_id || !rp) continue;
+      if (rp.attachment_type !== "image" && rp.attachment_type !== "video") continue;
+      if (rp.attachment_path || rp.attachment_url || messageById.has(m.reply_to_message_id)) continue;
+      ids.add(m.reply_to_message_id);
+    }
+    return Array.from(ids).sort();
+  }, [allMessages, messageById]);
+  const { data: replySources } = useQuery({
+    queryKey: ["reply-sources", clientId, unresolvedReplyIds.join("|")],
+    enabled: unresolvedReplyIds.length > 0,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, attachments")
+        .in("id", unresolvedReplyIds);
+      if (error) throw error;
+      return new Map(((data ?? []) as unknown as Array<Pick<Message, "id" | "attachments">>).map((r) => [r.id, r]));
+    },
+  });
+  const replySourceFor = (id?: string | null) => (id ? messageById.get(id) ?? replySources?.get(id) ?? null : null);
+
   // Collect every attachment storage_path across visible messages so we can
   // resolve them in one batched createSignedUrls() call instead of N.
   const attachmentPaths = useMemo(() => {
@@ -909,8 +948,17 @@ export function MessageThread({
         if (a?.storage_path) out.push(a.storage_path);
       }
     }
+    // Replies to media whose original isn't loaded still show a thumbnail.
+    for (const m of allMessages) {
+      const rp = m.reply_preview?.attachment_path;
+      if (rp) out.push(rp);
+    }
+    for (const r of replySources?.values() ?? []) {
+      const first = r.attachments?.[0];
+      if (first?.storage_path) out.push(first.storage_path);
+    }
     return out;
-  }, [allMessages]);
+  }, [allMessages, replySources]);
   const signedUrlMap = useSignedUrls(attachmentPaths);
 
   const loadOlder = async () => {
@@ -1882,12 +1930,20 @@ export function MessageThread({
                             ? peerName ?? "Client"
                             : "Coach Jared"}
                     </div>
-                    <div className={cn(
-                      "line-clamp-2 text-xs leading-snug",
-                      mine ? "text-primary-foreground/80" : "text-muted-foreground",
-                    )}>
-                      {replyPreviewText(m.reply_preview)}
-                    </div>
+                    {(() => {
+                      const media = replyMediaFor(m.reply_preview, replySourceFor(m.reply_to_message_id));
+                      return (
+                        <div className="flex items-center gap-2.5">
+                          <div className={cn(
+                            "line-clamp-2 min-w-0 flex-1 text-xs leading-snug",
+                            mine ? "text-primary-foreground/80" : "text-muted-foreground",
+                          )}>
+                            {replyPreviewText(m.reply_preview)}
+                          </div>
+                          {media && <ReplyThumb media={media} signedUrl={media.path ? signedUrlMap[media.path] : undefined} />}
+                        </div>
+                      );
+                    })()}
                   </button>
                 )}
                 {m.is_internal_note && (
@@ -2227,6 +2283,10 @@ export function MessageThread({
                 {replyPreviewText(makeReplyPreview(replyingTo))}
               </div>
             </div>
+            {(() => {
+              const media = replyMediaFor(makeReplyPreview(replyingTo), replyingTo);
+              return media ? <ReplyThumb media={media} signedUrl={media.path ? signedUrlMap[media.path] : undefined} /> : null;
+            })()}
             <Button
               type="button"
               variant="ghost"

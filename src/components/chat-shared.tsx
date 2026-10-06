@@ -16,6 +16,7 @@ import {
 import { ClipboardList, FileSignature, UtensilsCrossed, ChevronRight } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
+import { ChatVideoTile } from "@/components/chat-video-tile";
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 
@@ -478,7 +479,7 @@ function VideoAttachment({ att }: { att: SharedAttachment }) {
   const signed = useSignedUrl(att.storage_path);
   const src = att.storage_path ? signed : att.url;
   if (!src) return null;
-  return <video src={src} controls playsInline className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
+  return <ChatVideoTile src={src} cacheKey={att.storage_path} name={att.name} />;
 }
 
 function AudioAttachment({
