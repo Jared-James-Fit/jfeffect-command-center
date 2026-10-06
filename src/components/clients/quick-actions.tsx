@@ -1,4 +1,4 @@
-import { ClientNameLink } from "@/components/clients/client-name-link";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { MessageSquare, CreditCard, ShoppingCart, Archive } from "lucide-react";
 import { QuickSellSheet } from "./quick-sell-sheet";
@@ -57,9 +57,10 @@ export function ClientMoreMenu({
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel className="text-xs">{r.full_name}</DropdownMenuLabel>
         <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="messages" className="flex items-center gap-2">
+          {/* Straight to their conversation, like the profile's Message button. */}
+          <Link to="/admin/communication" search={{ tab: "messages", client: r.id } as any} className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" /> Send Message
-          </ClientNameLink>
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSellOpen(true); }}>
           <ShoppingCart className="mr-2 h-4 w-4 text-primary" /> Quick Sell / Send Payment Link

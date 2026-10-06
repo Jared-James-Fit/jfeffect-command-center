@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   CLIENT_WORKSPACE_MORE_TABS,
@@ -30,7 +31,7 @@ describe("client workspace tabs", () => {
     expect(new Set(tabValues)).toEqual(new Set(ALL_CLIENT_WORKSPACE_TABS));
   });
 
-  it("keeps the coaching workflows in the primary tab bar, profile/setup under More", () => {
+  it("keeps the coaching workflows and Account in the primary tab bar, profile pages under More", () => {
     expect(CLIENT_WORKSPACE_PRIMARY_TABS.map((tab) => tab.value)).toEqual([
       "summary",
       "training",
@@ -39,8 +40,17 @@ describe("client workspace tabs", () => {
       "documents",
       "sessions",
       "purchases",
+      "account",
     ]);
-    expect(CLIENT_WORKSPACE_MORE_TABS.map((tab) => tab.value)).toEqual(["info", "goals-setup", "coaching", "notes", "account"]);
+    expect(CLIENT_WORKSPACE_MORE_TABS.map((tab) => tab.value)).toEqual(["info", "goals-setup", "coaching", "notes"]);
+    expect(CLIENT_WORKSPACE_PRIMARY_TABS.find((tab) => tab.value === "account")?.label).toBe("Account");
+  });
+
+  it("flags Account with a dot until the client is set up", () => {
+    const bar = readFileSync("src/components/clients/client-workspace-tabs.tsx", "utf8");
+    expect(bar).toContain("const flag = attention?.[item.value];");
+    const profile = readFileSync("src/route-pages/_authenticated/admin/clients.$id.tsx", "utf8");
+    expect(profile).toContain("access.needsAttention || form.needs_admin_help ? access.statusLabel : undefined");
   });
 
   it("redirects merged tabs to where their content lives now", () => {

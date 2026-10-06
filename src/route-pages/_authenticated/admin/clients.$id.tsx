@@ -106,12 +106,13 @@ function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
 }
 
-function SectionNav({ activeTab, onChange, heading }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string }) {
+function SectionNav({ activeTab, onChange, heading, accountAttention }: { activeTab: TabValue; onChange: (v: TabValue) => void; compact?: boolean; heading?: string; accountAttention?: string }) {
   return (
     <ClientWorkspaceTabs
       activeTab={activeTab as WorkspaceTab}
       onChange={(next) => onChange(next as TabValue)}
       heading={heading}
+      attention={accountAttention ? { account: accountAttention } : undefined}
     />
   );
 }
@@ -667,6 +668,11 @@ export function ClientProfileWorkspace({
           onChange={(v) => setTab(v)}
           compact={embedded}
           heading={embedded ? "Workspace" : undefined}
+          accountAttention={(() => {
+            // A dot on Account until the client is set up (or when they need help).
+            const access = describeAccountAccess(form);
+            return access.needsAttention || form.needs_admin_help ? access.statusLabel : undefined;
+          })()}
         />
 
         <TabsContent value="summary" className={WORKSPACE_GRID_CLASS}>
@@ -1115,7 +1121,7 @@ export function ClientProfileWorkspace({
         <TabsContent value="account" className={WORKSPACE_GRID_CLASS}>
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Login & Access</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Account</h3>
             <Badge variant="outline">{describeAccountAccess(form).statusLabel}</Badge>
           </div>
           <div className="grid gap-5 md:grid-cols-3">

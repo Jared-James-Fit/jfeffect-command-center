@@ -20,6 +20,8 @@ interface ClientWorkspaceTabsProps {
   activeTab: WorkspaceTab;
   onChange: (tab: WorkspaceTab) => void;
   heading?: string;
+  /** Tabs that need the coach's attention, with why (e.g. Account: "Not set up yet"). */
+  attention?: Partial<Record<WorkspaceTab, string>>;
 }
 
 /**
@@ -27,7 +29,7 @@ interface ClientWorkspaceTabsProps {
  * Primary coaching workflows stay one tap away; lower-frequency setup and
  * account tools remain discoverable under More without rebuilding any panel.
  */
-export function ClientWorkspaceTabs({ activeTab, onChange, heading }: ClientWorkspaceTabsProps) {
+export function ClientWorkspaceTabs({ activeTab, onChange, heading, attention }: ClientWorkspaceTabsProps) {
   const activeMore = CLIENT_WORKSPACE_MORE_TABS.find((item) => item.value === activeTab);
 
   return (
@@ -47,6 +49,7 @@ export function ClientWorkspaceTabs({ activeTab, onChange, heading }: ClientWork
           {CLIENT_WORKSPACE_PRIMARY_TABS.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.value;
+            const flag = attention?.[item.value];
             return (
               <button
                 key={item.value}
@@ -59,9 +62,13 @@ export function ClientWorkspaceTabs({ activeTab, onChange, heading }: ClientWork
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground",
                 ].join(" ")}
                 aria-current={isActive ? "page" : undefined}
+                title={flag}
               >
                 <Icon className="h-4 w-4" />
                 {item.label}
+                {flag ? (
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-warning" role="img" aria-label={flag} />
+                ) : null}
               </button>
             );
           })}
