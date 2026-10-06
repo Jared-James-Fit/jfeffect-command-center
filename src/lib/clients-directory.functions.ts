@@ -52,6 +52,10 @@ export type DirectoryRow = {
   f_program_ending: boolean;
   f_missing_program: boolean;
   f_payment_issue: boolean;
+  /** Derived from the client's purchases: ok | pending | not_set_up | past_due | exempt. */
+  payment_state: "ok" | "pending" | "not_set_up" | "past_due" | "exempt";
+  f_no_payment: boolean;
+  f_payment_pending: boolean;
   f_new_client: boolean;
   f_missing_nutrition: boolean;
   f_missing_cardio: boolean;
@@ -71,6 +75,7 @@ export type DirectoryCounts = {
   needs_review: number;
   program_ending: number;
   payment_issues: number;
+  no_payment: number;
   new_clients: number;
   missed_workouts: number;
   inactive: number;
@@ -91,7 +96,10 @@ const InputSchema = z.object({
       "needs_review",
       "program_ending",
       "payment_issues",
+      "no_payment",
       "new_clients",
+      "missed_workouts",
+      "inactive",
     ])
     .optional()
     .default("all"),
@@ -138,7 +146,10 @@ export const listClientsDirectoryFn = createServerFn({ method: "POST" })
         needs_review: 0,
         program_ending: 0,
         payment_issues: 0,
+        no_payment: 0,
         new_clients: 0,
+        missed_workouts: 0,
+        inactive: 0,
       }) as DirectoryCounts,
     };
   });

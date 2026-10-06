@@ -4,7 +4,7 @@ import { STATUS_META, TONE_CLASSES, type StatusKey } from "./clients-status";
 import { cn } from "@/lib/utils";
 import type { DirectoryCounts } from "@/lib/clients-directory.functions";
 
-const KEYS: StatusKey[] = ["all", "needs_setup", "needs_review", "program_ending", "payment_issues", "new_clients", "missed_workouts", "inactive"];
+const KEYS: StatusKey[] = ["all", "needs_setup", "needs_review", "program_ending", "payment_issues", "no_payment", "new_clients", "missed_workouts", "inactive"];
 
 export function SummaryCards({
   counts,
@@ -21,7 +21,7 @@ export function SummaryCards({
       <div
         role="tablist"
         aria-label="Filter clients by status"
-        className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-9"
       >
         {KEYS.map((k) => {
           const meta = STATUS_META[k];
