@@ -16,6 +16,8 @@ type Props = {
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  /** Shown after a failed attempt to sign with the box still empty. */
+  invalid?: boolean;
 };
 
 /** Total ink length (CSS px) before a drawing counts as a signature, so a stray tap can't sign. */
@@ -45,6 +47,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
     disabled,
     ariaLabel = "Draw your signature",
     className,
+    invalid,
   },
   ref,
 ) {
@@ -172,7 +175,11 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
         ref={wrapRef}
         className={cn(
           "relative overflow-hidden rounded-xl border-2 border-dashed bg-white",
-          disabled ? "opacity-60" : "border-border",
+          disabled
+            ? "opacity-60"
+            : invalid
+              ? "border-destructive bg-destructive/5"
+              : "border-border",
         )}
         style={{ height }}
       >
