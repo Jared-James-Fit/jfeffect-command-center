@@ -5,7 +5,9 @@ import { createFileRoute } from "@tanstack/react-router";
  *
  * Resolves the token server-side and 302-redirects to the exact canonical
  * Stripe URL (Checkout Session / hosted invoice / reusable Payment Link).
- * Opening this URL never creates a payment, subscription or ledger record.
+ * Opening this URL never creates a payment, subscription or ledger record. When
+ * the Stripe Checkout Session behind it has expired (Stripe caps them at 24h) it
+ * mints a fresh unpaid one, so the link keeps working until the sale is paid.
  */
 export const Route = createFileRoute("/pay/$token")({
   server: {
