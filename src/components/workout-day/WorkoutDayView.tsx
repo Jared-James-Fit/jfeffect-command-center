@@ -38,6 +38,7 @@ import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { formatClientDayNotes, formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { format, parseISO, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
+import { SessionTimeRow } from "@/components/workout-day/SessionTimeRow";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 import { getRowBlockSummariesFn } from "@/lib/exercise-blocks.functions";
 import {
@@ -1566,6 +1567,14 @@ function WorkoutDay({
     setCompletionHydrated(true);
   }, [draftHydrated, completionHydrated, completion]);
 
+  // The Session time sheet edits a finished workout's length server-side.
+  // Mirror it here, or the next notes autosave writes the old length back.
+  const serverDurationMin = completion?.completed_at ? completion?.actual_duration_min ?? null : null;
+  useEffect(() => {
+    if (!completionHydrated || serverDurationMin == null) return;
+    setActualMin(String(serverDurationMin));
+  }, [completionHydrated, serverDurationMin]);
+
   // Autosave workout-level notes + actual minutes into pl_day_completions (draft state — does NOT set completed_at).
   const metaSave = useAutosave({
     key: draftKey,
@@ -2491,7 +2500,8 @@ function WorkoutDay({
             >
               <CheckCircle2 className="mr-1 h-3 w-3" />
               {reviewSubmitted ? "Completed" : "Completed · Review pending"}
-              {completion.actual_duration_min != null && completion.actual_duration_min > 0
+              {/* Client workouts show length on the Session time row below. */}
+              {!isClientWorkout && completion.actual_duration_min != null && completion.actual_duration_min > 0
                 ? ` · ${formatDurationMin(completion.actual_duration_min)}`
                 : ""}
             </Badge>
@@ -2506,6 +2516,9 @@ function WorkoutDay({
               </Button>
             )}
           </div>
+        )}
+        {completion?.completed_at && completion?.id && isClientWorkout && client?.id && (
+          <SessionTimeRow completion={completion as any} clientId={client.id} workoutTitle={day?.title ?? null} />
         )}
         {/* Compact Warm-Up launcher. Rescheduling lives on the outside
             workout card / Schedule Manager, not inside the logger. */}

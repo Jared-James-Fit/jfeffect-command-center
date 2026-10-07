@@ -20,6 +20,7 @@ import { NUTRITION_PHASES, phaseFromText } from "@/lib/nutrition-cardio";
 import { calcAge, formatHeight, type HeightUnit } from "@/lib/basic-info";
 import { sexLabel } from "@/lib/athlete-sex";
 import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
+import { resolveTiming } from "@/lib/analytics/training-time";
 
 const phaseSchema = z.enum(NUTRITION_PHASES.filter((p) => p !== "Custom") as [string, ...string[]]);
 const workoutMealsSchema = z.enum(["auto", "pre_post", "post_only", "pre_only", "none"]);
@@ -94,13 +95,24 @@ async function loadTrainingPattern(sb: any, clientId: string): Promise<TrainingP
     sb.from("clients").select("timezone").eq("id", clientId).maybeSingle(),
     sb
       .from("pl_day_completions")
-      .select("started_at, in_progress_at, completed_at")
+      .select("started_at, training_started_at, completed_at, actual_duration_min, logged_sets_count")
       .eq("client_id", clientId)
       .gte("completed_at", since)
       .order("completed_at", { ascending: false })
       .limit(200),
   ]);
-  const starts = (rows ?? []).map((r: any) => r.started_at ?? r.in_progress_at ?? r.completed_at);
+  // Same rules as Analytics → Training Time: a confirmed start wins, and a
+  // workout typed in after the gym says nothing about when they train.
+  const starts = (rows ?? []).map((r: any) => {
+    const t = resolveTiming({
+      startedAt: r.started_at,
+      trainingStartedAt: r.training_started_at ?? null,
+      completedAt: r.completed_at,
+      durationMin: r.actual_duration_min,
+      loggedSets: r.logged_sets_count,
+    });
+    return t && t.source !== "suspect" ? t.start : null;
+  });
   return summarizeTrainingTimes(starts, client?.timezone || "UTC");
 }
 

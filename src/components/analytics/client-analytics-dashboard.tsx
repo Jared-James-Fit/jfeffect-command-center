@@ -6,7 +6,7 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TrendingUp, Trophy, Dumbbell, Calendar, Flame, PieChart } from "lucide-react";
+import { TrendingUp, Trophy, Dumbbell, Calendar, Flame, PieChart, Clock } from "lucide-react";
 import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell,
 } from "recharts";
@@ -40,6 +40,7 @@ import { BodyweightTrendCard } from "@/components/analytics/bodyweight-trend-car
 import { CardioAnalyticsSection } from "@/components/analytics/cardio-analytics-section";
 import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
 import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
+import { TrainingTimeCard } from "@/components/analytics/training-time-card";
 import { getClientAnalyticsSettings } from "@/lib/analytics/settings";
 import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 import { InfoTip } from "@/components/analytics/info-tip";
@@ -135,6 +136,17 @@ export function ClientAnalyticsDashboard({
   };
 
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Soonest upcoming meet across this athlete's prep blocks.
+  const nextMeetDate = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    return (
+      clientBlocks
+        .map((b) => b.pl_preps?.event_date ?? null)
+        .filter((d): d is string => !!d && d >= today)
+        .sort()[0] ?? null
+    );
+  }, [clientBlocks]);
 
   const activeBlockId =
     filter.preset === "current_block" ||
@@ -654,6 +666,37 @@ export function ClientAnalyticsDashboard({
               displayUnit={displayUnit}
               blockId={activeBlockId}
             />
+            </SectionErrorBoundary>
+
+            <SectionErrorBoundary label="Training time">
+              <TrainingTimeCard
+                clientId={clientId}
+                rangeStart={filter.start}
+                rangeEnd={filter.end}
+                rangeLabel={filter.label}
+                nextMeetDate={nextMeetDate}
+                canOpenLog={canOpenLog}
+                header={
+                  <SectionHeading
+                    icon={<Clock className="h-5 w-5" />}
+                    title="Training Time"
+                    meta={filter.label}
+                    tip={
+                      <InfoTip label="About training time" title="Training Time" align="start">
+                        When you train and for how long, from the workout
+                        timer or the time you set on a finished workout.
+                        Workouts logged after the fact (lots of sets in a few
+                        minutes) are left out until you set their real time.
+                        Strength compares each session's top sets, adjusted
+                        for RPE, with your best on that lift over the prior 8
+                        weeks, so heavy and volume days score on one scale. A
+                        best time is only named with 3+ sessions in at least
+                        two windows and a real gap between them.
+                      </InfoTip>
+                    }
+                  />
+                }
+              />
             </SectionErrorBoundary>
 
             <div
