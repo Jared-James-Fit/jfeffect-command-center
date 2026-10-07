@@ -345,8 +345,9 @@ describe("community lives inside the training loop", () => {
   it("only shows a header nudge when there is something new", () => {
     expect(entry).toContain("data.unseen <= 0) return null;");
   });
-  it("puts one-tap coach props on the coach dashboard", () => {
+  it("puts one-tap coach props on the coach dashboard, visible even before anyone posts", () => {
     expect(admin).toContain("<CommunityCoachCard />");
+    expect(entry).toContain("No posts yet. Clients share from Workouts → Community");
     expect(entry).toContain('react.mutate(given ? null : "fire"');
   });
   it("lets an athlete share any recent session (their own only)", () => {

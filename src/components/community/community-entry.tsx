@@ -143,7 +143,27 @@ export function CommunityCoachCard() {
     return (feed.data?.pages[0]?.posts ?? []).filter((p) => !p.is_mine && new Date(p.created_at).getTime() > weekAgo).slice(0, 4);
   }, [feed.data]);
 
-  if (!activity?.enabled || posts.length === 0) return null;
+  if (!activity?.enabled) return null;
+
+  // Always visible for coaches: it's their tool, and with nothing shared yet
+  // a hidden card meant the coach couldn't see the community existed at all.
+  if (posts.length === 0) {
+    const anyEver = (feed.data?.pages[0]?.posts?.length ?? 0) > 0;
+    return (
+      <Link to="/admin/community" className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition hover:border-primary/40">
+        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full text-white", NEW_GRADIENT)}>
+          <Flame className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-bold">Community</div>
+          <div className="truncate text-[12px] text-muted-foreground">
+            {anyEver ? "Nothing shared this week yet. Open the feed" : "No posts yet. Clients share from Workouts → Community"}
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </Link>
+    );
+  }
   const waiting = posts.filter((p) => !p.my_reaction).length;
 
   return (
