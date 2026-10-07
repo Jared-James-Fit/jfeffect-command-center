@@ -4,8 +4,12 @@
  *   Effort  — session RPE 6–10, pre-filled from today's logged set RPEs
  *   Sleep   — hours last night (optional)
  *   Energy  — how recovered you felt going in, 1–5 (optional)
- *   Pain    — No by default; Yes asks where + how bad (feeds coach flags)
+ *   Pain    — No/Yes, blank until tapped; Yes asks where + how bad (feeds coach flags)
  *   Note    — behind "Add a note"
+ *
+ * Only effort is pre-filled (from real logged RPEs). Everything else starts
+ * blank so a fast "Done" never invents data; the button says how many were
+ * skipped, which nudges a tap without blocking the one-tap finish.
  *
  * These are the markers the recovery score and the load suggestions use.
  * See src/lib/workout-review.ts for the mapping and why v1 was replaced.
@@ -33,6 +37,7 @@ import {
   PAIN_SEVERITY,
   REVIEW_VERSION,
   deriveOverallRating,
+  checkoutCta,
   initialEffort,
 } from "@/lib/workout-review";
 
@@ -153,7 +158,8 @@ export function WorkoutReviewEditor({
   const [effort, setEffort] = useState<number | null>(() => initialEffort(initial, suggestedSessionRpe));
   const [sleepBucket, setSleepBucket] = useState<SleepBucket | null>(initial?.sleepBucket ?? null);
   const [recoveryToday, setRecoveryToday] = useState<number | null>(initial?.recoveryToday ?? null);
-  const [pain, setPain] = useState<boolean>(!!initial?.pain);
+  // null = not answered. Edits show the stored value; new reviews start blank.
+  const [pain, setPain] = useState<boolean | null>(initial?.submittedAt ? !!initial.pain : null);
   const [painArea, setPainArea] = useState<string | null>(initial?.pain ? initial?.painArea ?? null : null);
   const [painLevel, setPainLevel] = useState<number>(initial?.painLevel ?? 5);
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
@@ -164,7 +170,7 @@ export function WorkoutReviewEditor({
     setEffort(initialEffort(initial, suggestedSessionRpe));
     setSleepBucket(initial?.sleepBucket ?? null);
     setRecoveryToday(initial?.recoveryToday ?? null);
-    setPain(!!initial?.pain);
+    setPain(initial?.submittedAt ? !!initial.pain : null);
     setPainArea(initial?.pain ? initial?.painArea ?? null : null);
     setPainLevel(initial?.painLevel ?? 5);
     setNote(initial?.clientNote ?? "");
@@ -172,19 +178,20 @@ export function WorkoutReviewEditor({
   }, [open, initial?.submittedAt, suggestedSessionRpe]);
 
   const prefilled = effort != null && effort === suggestedSessionRpe && !isEdit;
-  const canSubmit = effort != null && (!pain || !!painArea);
+  const cta = checkoutCta({ isEdit, effort, pain, painArea, sleepBucket, recoveryToday });
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (effort == null) throw new Error("Pick how hard it was");
       if (pain && !painArea) throw new Error("Pick where it hurts");
-      const overallRating = deriveOverallRating({ pain, sessionRpe: effort, recoveryToday });
+      const overallRating = deriveOverallRating({ pain: !!pain, sessionRpe: effort, recoveryToday });
       const res = await submit({
         data: {
           ...ctx,
           overallRating,
           sessionRpe: effort,
-          pain,
+          // Skipped = "no pain reported"; the column is NOT NULL.
+          pain: !!pain,
           // Constraint pl_workout_feedback_pain_consistency requires:
           // pain=true → pain_level IS NOT NULL AND pain_area IS NOT NULL
           painLevel: pain ? painLevel : null,
@@ -270,7 +277,7 @@ export function WorkoutReviewEditor({
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5 pt-4">
-          <Row title="How hard was it?" hint={prefilled ? "From your logged RPE" : "Session RPE"}>
+          <Row title="How hard was it?" hint={prefilled ? "From your logged RPE" : effort == null ? "Required" : "Session RPE"}>
             <div className="grid grid-cols-5 gap-1.5">
               {EFFORT_OPTIONS.map((o) => (
                 <Chip key={o.v} active={effort === o.v} onClick={() => setEffort(o.v)} label={`Effort ${o.v} ${o.label}`}>
@@ -315,8 +322,8 @@ export function WorkoutReviewEditor({
 
           <Row title="Any pain?">
             <div className="grid grid-cols-2 gap-1.5">
-              <Chip active={!pain} onClick={() => setPain(false)} label="No pain">No</Chip>
-              <Chip active={pain} onClick={() => { setPain(true); setNoteOpen(true); }} label="Yes, pain">Yes</Chip>
+              <Chip active={pain === false} onClick={() => setPain(false)} label="No pain">No</Chip>
+              <Chip active={pain === true} onClick={() => { setPain(true); setNoteOpen(true); }} label="Yes, pain">Yes</Chip>
             </div>
             {pain && (
               <div className="space-y-2 pt-1">
@@ -384,9 +391,9 @@ export function WorkoutReviewEditor({
           <Button variant="ghost" className="flex-1" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
             Close
           </Button>
-          <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!canSubmit || mutation.isPending}>
+          <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!cta.enabled || mutation.isPending}>
             {mutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            {isEdit ? "Save changes" : "Done"}
+            {cta.label}
           </Button>
         </SheetFooter>
       </SheetContent>

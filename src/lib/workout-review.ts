@@ -6,6 +6,12 @@
  *   • Energy  — how recovered they felt going in (recovery_today, 1–5)
  *   • Pain    — no/yes; yes asks where + how bad
  *
+ * Only effort is pre-filled, and only from the athlete's own logged RPEs.
+ * Sleep, energy and pain start blank: a pre-selected "7–8h / Good / No pain"
+ * would be one tap from becoming fake data. Skipped sleep/energy stay null
+ * (neutral in readiness); skipped pain is stored as false ("none reported")
+ * because pl_workout_feedback.pain is NOT NULL.
+ *
  * v1 asked "Feeling Good / Minor Issue / Need Attention" and wrote fake session
  * RPEs (5/7/8) from that choice; 75% of ratings were 5/5, so it carried almost
  * no signal. v2 rows are marked review_version = 2 so analytics only trust
@@ -55,6 +61,22 @@ export function initialEffort(
     return Math.min(10, Math.max(6, initial.sessionRpe));
   }
   return suggested ?? null;
+}
+
+/** Primary button label: honest about skipped questions, still one tap. */
+export function checkoutCta(input: {
+  isEdit: boolean;
+  effort: number | null;
+  pain: boolean | null;
+  painArea: string | null;
+  sleepBucket: string | null;
+  recoveryToday: number | null;
+}): { label: string; enabled: boolean } {
+  if (input.effort == null) return { label: "Pick how hard it was", enabled: false };
+  if (input.pain === true && !input.painArea) return { label: "Pick where it hurts", enabled: false };
+  if (input.isEdit) return { label: "Save changes", enabled: true };
+  const skipped = [input.sleepBucket, input.recoveryToday, input.pain].filter((v) => v == null).length;
+  return { label: skipped ? `Skip ${skipped} & finish` : "Done", enabled: true };
 }
 
 /** Whether the stored session_rpe is a real self-report (v2) or a legacy mapping. */
