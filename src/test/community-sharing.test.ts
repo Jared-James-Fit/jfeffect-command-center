@@ -631,3 +631,28 @@ describe("weight units: a setting for clients, a tap on the community card", () 
     expect(wins).not.toContain("preferred_weight_unit");
   });
 });
+
+describe("Wednesday Wins sounds like Jared texts", () => {
+  const sql = read("supabase/migrations/20261008160000_community_wins_voice.sql");
+  const body = sql.split("$$").filter((_, i) => i % 2 === 1).join("").replace(/--.*$/gm, "");
+  it("uses gym shorthand for lifts and sets", () => {
+    expect(sql).toContain("regexp_replace(s, '\\mcompetition\\M', 'comp', 'g')");
+    expect(sql).toContain("regexp_replace(s, '\\mromanian deadlifts?\\M', 'RDL', 'g')");
+    expect(sql).toContain("regexp_replace(s, '\\mdumbbells?\\M', 'DB', 'g')");
+    expect(sql).toContain("|| CASE WHEN _reps = 1 THEN ' single' ELSE ' x ' || _reps END END");
+    expect(sql).toContain("v_set := CASE WHEN v_hide THEN NULL ELSE public.community_fmt_set(pr.load_kg, pr.reps, v_unit) END;");
+  });
+  it("is casual: few commas, no em dashes, not capitalized every week", () => {
+    expect(body).not.toContain("—");
+    expect(sql).toContain("'big week. ' || v_prs || ' PRs between all of you last week heres who stood out'");
+    expect(sql).toContain("IF v_wk % 2 = 1 THEN");
+    // the only comma left in the words is between names in the shoutout list
+    const words = [...body.matchAll(/'([^']*)'/g)].map((m) => m[1]).filter((t) => /[a-z]{3}/.test(t));
+    expect(words.filter((t) => t.includes(",") && t !== ", ").length).toBe(0);
+  });
+  it("never repeats the big PR week reaction on lines next to each other", () => {
+    expect(sql).toContain("' PRs in 1 week thats insane'");
+    expect(sql).toContain("' PRs in 1 week crazy'");
+    expect(sql).toContain("' PRs on the week lowkey insane'");
+  });
+});
