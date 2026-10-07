@@ -193,7 +193,7 @@ function Detail({
       )}
 
       <div className="px-2 pt-2">
-        <ReactionBar post={post} onReact={onReact} />
+        <ReactionBar post={post} onReact={onReact} onOpenAuthor={onOpenAuthor} />
       </div>
 
       <section className="border-t border-border/60">

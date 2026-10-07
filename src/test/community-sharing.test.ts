@@ -21,6 +21,9 @@ import {
   isTrainingNow,
   lockInTimeLabel,
   SERIES_LABEL,
+  REACTION,
+  reactionTotal,
+  reactorsLine,
   compactNumber,
   winsChallenge,
   winsChart,
@@ -705,5 +708,37 @@ describe("Wednesday Wins card v2 + voice", () => {
     expect(body).not.toMatch(/\bur\b|\bu\b/);
     const yall = [...body.matchAll(/'[^']*yall[^']*'/g)].map((m) => m[0]);
     expect(yall).toEqual(["'yall are cooking. '"]);
+  });
+});
+
+describe("one reaction (🔥) and who gave it", () => {
+  const sql = read("supabase/migrations/20261008200000_community_one_reaction.sql");
+  const card = read("src/components/community/post-card.tsx");
+  const p = (n: number, names: [string, boolean?][]) => ({
+    reaction_count: n,
+    reactions: { fire: n },
+    reactors: names.map(([name, me]) => ({ user_id: name, name, avatar_url: null, is_coach: false, is_me: !!me })),
+  });
+  it("is one tap, and old reactions all count as 🔥", () => {
+    expect(REACTION.emoji).toBe("🔥");
+    expect(sql).toContain("UPDATE public.community_reactions SET emoji = 'fire' WHERE emoji IS DISTINCT FROM 'fire';");
+    expect(sql).toContain("VALUES (_post_id, uid, 'fire')");
+    expect(card).toContain("onReact(post, mine ? null : REACTION.key)");
+    expect(card).not.toContain("REACTIONS.map(");
+    expect(reactionTotal({ reactions: { fire: 2, heart: 1 } })).toBe(3);
+  });
+  it("says who in plain words, you first", () => {
+    expect(reactorsLine(p(0, []))).toBeNull();
+    expect(reactorsLine(p(1, [["Nicole"]]))).toBe("Nicole");
+    expect(reactorsLine(p(2, [["Nicole"], ["Jared", true]]))).toBe("You and Nicole");
+    expect(reactorsLine(p(3, [["Jared"], ["Vicky"], ["Nicole"]]))).toBe("Jared, Vicky and Nicole");
+    expect(reactorsLine(p(5, [["Jared"], ["Vicky"], ["Nicole"]]))).toBe("Jared, Vicky and 3 others");
+    expect(reactorsLine(p(3, [["Jared"], ["Vicky"]]))).toBe("Jared, Vicky and 1 other");
+  });
+  it("only people who can see the post can see who reacted", () => {
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.community_post_reactors(_post_id uuid)");
+    expect(sql).toMatch(/community_post_reactors[\s\S]*community_post_visible\(p\.visibility, p\.author_user_id, p\.client_id\)/);
+    expect(sql).toContain("'reactors', coalesce(");
+    expect(card).toContain("<ReactorsSheet postId={listFor}");
   });
 });

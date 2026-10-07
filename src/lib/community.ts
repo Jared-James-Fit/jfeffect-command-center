@@ -11,7 +11,12 @@ export const CAPTION_MAX = 280;
 export const COMMENT_MAX = 300;
 export const FEED_PAGE_SIZE = 10;
 
-/** Fixed, deliberately small set. One reaction per person per post. */
+/**
+ * The reaction is 🔥, one tap, one per person per post. A crew this size
+ * reads better as one number with faces than four split counts. The other
+ * three stay here only so anything saved under the old set still renders.
+ */
+export const REACTION = { key: "fire", emoji: "🔥", label: "Fire" } as const;
 export const REACTIONS = [
   { key: "fire", emoji: "🔥", label: "Fire" },
   { key: "muscle", emoji: "💪", label: "Strong" },
@@ -117,10 +122,39 @@ export type CommunityPost = {
   stats: WorkoutShareStats | null;
   reactions: Partial<Record<ReactionKey, number>>;
   my_reaction: ReactionKey | null;
+  /** Everyone who reacted (any key). Missing on older cached posts. */
+  reaction_count?: number;
+  /** The first few people who gave it 🔥: coaches first, then newest. */
+  reactors?: Reactor[];
   coach_reactions: { name: string; emoji: ReactionKey }[];
   comment_count: number;
   coach_commented: boolean;
 };
+
+export type Reactor = CommunityAuthor & { is_me?: boolean };
+
+export function reactionTotal(post: Pick<CommunityPost, "reaction_count" | "reactions">): number {
+  if (typeof post.reaction_count === "number") return post.reaction_count;
+  return Object.values(post.reactions ?? {}).reduce((a, b) => a + (b ?? 0), 0);
+}
+
+/**
+ * "Nicole" · "You and Nicole" · "Jared, Vicky and Nicole" ·
+ * "Jared, Vicky and 3 others". You always come first.
+ */
+export function reactorsLine(post: Pick<CommunityPost, "reaction_count" | "reactions" | "reactors">): string | null {
+  const total = reactionTotal(post);
+  if (total <= 0) return null;
+  const people = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me));
+  const names = people.map((r) => (r.is_me ? "You" : r.name));
+  if (names.length === 0) return `${total} ${total === 1 ? "person" : "people"}`;
+  if (total === 1) return names[0];
+  if (total === 2 && names.length >= 2) return `${names[0]} and ${names[1]}`;
+  if (total === 3 && names.length >= 3) return `${names[0]}, ${names[1]} and ${names[2]}`;
+  const shown = names.slice(0, 2);
+  const rest = total - shown.length;
+  return `${shown.join(", ")} and ${rest} ${rest === 1 ? "other" : "others"}`;
+}
 
 /** Someone in the crew (Crew tab). Counts only include posts you can see. */
 export type CommunityMember = {
