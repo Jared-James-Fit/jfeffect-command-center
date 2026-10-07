@@ -134,19 +134,88 @@ export function answerFor(qas: QA[], ...keywords: string[]): string {
   return hit?.value.trim() ?? "";
 }
 
-export function targetsUserPrompt(clientName: string, qas: QA[], phase?: string | null): string {
+/** What the profile already knows about the client (never asked twice). */
+export type ClientBasics = {
+  name: string;
+  /** "Male" / "Female"; omitted when unknown or "prefer not to say". */
+  sex?: string | null;
+  age?: number | null;
+  /** Display height, e.g. "5 ft 10 in". */
+  height?: string | null;
+};
+
+function basicsOf(client: string | ClientBasics): ClientBasics {
+  return typeof client === "string" ? { name: client } : client;
+}
+
+/**
+ * Name / sex / age / height lines from the profile. Sex and height are left
+ * out when the form already answered them, so nothing appears twice.
+ */
+export function clientBasicsLines(client: string | ClientBasics, qas: QA[] = []): string[] {
+  const c = basicsOf(client);
+  const answered = (re: RegExp) => qas.some((q) => re.test(q.label.trim()) && q.value.trim());
+  return [
+    `Client name: ${c.name}`,
+    c.sex && !answered(/^sex\b/i) ? `Sex: ${c.sex}` : "",
+    c.age != null ? `Age: ${c.age}` : "",
+    c.height && !answered(/^height\b/i) ? `Height: ${c.height}` : "",
+  ].filter(Boolean);
+}
+
+export function targetsUserPrompt(
+  client: string | ClientBasics,
+  qas: QA[],
+  phase?: string | null,
+): string {
   return [
     `CLIENT DATA`,
-    `Client name: ${clientName}`,
+    ...clientBasicsLines(client, qas),
     phase ? `COACH-SELECTED PHASE: ${phase}` : "",
     "",
     formatAnswers(qas),
-  ].filter((l, i) => l !== "" || i === 3).join("\n");
+  ]
+    .filter((l, i, all) => l !== "" || i === all.length - 2)
+    .join("\n");
 }
 
 /** Full copy-paste prompt for running pass 1 by hand in ChatGPT/Claude. */
-export function manualTargetsPrompt(clientName: string, qas: QA[], phase?: string | null): string {
-  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(clientName, qas, phase)}`;
+export function manualTargetsPrompt(
+  client: string | ClientBasics,
+  qas: QA[],
+  phase?: string | null,
+): string {
+  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase)}`;
+}
+
+/**
+ * The whole submission as one paste-ready block: who the client is, the
+ * coach's phase, then every answer. For building a plan by hand.
+ */
+export function nutritionSubmissionSummary(opts: {
+  client: string | ClientBasics;
+  qas: QA[];
+  phase?: string | null;
+  submittedAt?: string | null;
+}): string {
+  const c = basicsOf(opts.client);
+  const when = opts.submittedAt
+    ? new Date(opts.submittedAt).toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
+  return [
+    `NUTRITION FORM — ${c.name}`,
+    when ? `Submitted: ${when}` : "",
+    ...clientBasicsLines(c, opts.qas).slice(1),
+    opts.phase ? `Coach phase: ${opts.phase}` : "",
+    "",
+    formatAnswers(opts.qas),
+  ]
+    .filter((l, i, all) => l !== "" || i === all.length - 2)
+    .join("\n");
 }
 
 /** Full copy-paste prompt for running pass 2 by hand. */

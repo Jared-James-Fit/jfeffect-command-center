@@ -108,6 +108,9 @@ function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: st
     setSaving(true);
     const patch: any = {};
     for (const f of BASIC_FIELDS) patch[f] = form?.[f] ?? null;
+    // Only write sex when it has an answer, so a stale form can't erase one
+    // given elsewhere (e.g. the Home prompt).
+    if (form?.sex) patch.sex = form.sex;
     if (patch.preferred_height_unit == null) patch.preferred_height_unit = "imperial";
     patch.full_name = [form?.first_name, form?.last_name].filter(Boolean).join(" ").trim() || form?.full_name || null;
     patch.info_last_updated_at = new Date().toISOString();

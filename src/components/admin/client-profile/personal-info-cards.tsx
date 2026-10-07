@@ -1,4 +1,6 @@
 import { Input } from "@/components/ui/input";
+import { SexChoice } from "@/components/athlete-sex";
+import { sexLabel, type AthleteSex } from "@/lib/athlete-sex";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -115,6 +117,7 @@ export function ContactCard({ form, onSave }: { form: any; onSave: Save }) {
 export function PersonalDetailsCard({ form, onSave }: { form: any; onSave: Save }) {
   const initial = {
     date_of_birth: form.date_of_birth ?? "",
+    sex: (form.sex ?? null) as AthleteSex | null,
     height_cm: form.height_cm ?? null,
     preferred_height_unit: (form.preferred_height_unit ?? "imperial") as "imperial" | "metric",
     timezone: form.timezone ?? "America/Winnipeg",
@@ -122,11 +125,13 @@ export function PersonalDetailsCard({ form, onSave }: { form: any; onSave: Save 
   return (
     <EditableCard
       title="Personal Details"
-      description="Date of birth, height & time zone."
+      description="Date of birth, sex, height & time zone."
       initial={initial}
       onSave={async (d) => {
         await onSave({
           date_of_birth: d.date_of_birth || null,
+          // Unchanged sex isn't written, so a client's newer answer survives.
+          ...(d.sex !== initial.sex ? { sex: d.sex } : {}),
           height_cm: d.height_cm ?? null,
           preferred_height_unit: d.preferred_height_unit,
           timezone: d.timezone,
@@ -135,6 +140,7 @@ export function PersonalDetailsCard({ form, onSave }: { form: any; onSave: Save 
       view={(v) => (
         <div className="divide-y divide-border/60">
           <FieldRow label="Date of birth" value={fmtDob(v.date_of_birth)} />
+          <FieldRow label="Sex" value={sexLabel(v.sex)} />
           <FieldRow label="Height" value={v.height_cm != null ? formatHeight(v.height_cm, v.preferred_height_unit) : null} />
           <FieldRow label="Time zone" value={v.timezone} />
         </div>
@@ -148,7 +154,7 @@ function PersonalDetailsEdit({
   draft,
   setDraft,
 }: {
-  draft: { date_of_birth: string; height_cm: number | null; preferred_height_unit: "imperial" | "metric"; timezone: string };
+  draft: { date_of_birth: string; sex: AthleteSex | null; height_cm: number | null; preferred_height_unit: "imperial" | "metric"; timezone: string };
   setDraft: (d: any) => void;
 }) {
   const unit = draft.preferred_height_unit;
@@ -192,6 +198,14 @@ function PersonalDetailsEdit({
         ) : (
           <Input className="min-h-[44px]" type="number" inputMode="numeric" min={50} max={250} value={cm} onChange={(e) => { setCm(e.target.value); const n = Number(e.target.value); setDraft({ ...draft, height_cm: n > 0 ? n : null }); }} placeholder="cm" />
         )}
+      </div>
+      <div className="md:col-span-2">
+        <Label>Sex</Label>
+        <SexChoice
+          className="mt-1.5"
+          value={draft.sex}
+          onChange={(v) => setDraft({ ...draft, sex: v })}
+        />
       </div>
       <div className="md:col-span-2">
         <Label>Time zone</Label>

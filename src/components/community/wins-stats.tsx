@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pct, winsHabitsLine, winsStatTiles, winsWeekLabel, type WinsStats } from "@/lib/community";
 
@@ -5,9 +7,12 @@ import { pct, winsHabitsLine, winsStatTiles, winsWeekLabel, type WinsStats } fro
  * Wednesday Wins: the crew's week as one branded card under the post. Big
  * "X of Y trained" ring up top, then six plain-English numbers, then the
  * small habits line. Same dark/red look as the workout and Locked In cards.
+ * Weight starts in the viewer's own unit; tapping it flips lb/kg just here.
  */
 export function WinsStatsCard({ stats, unit, className }: { stats: WinsStats; unit: "kg" | "lb"; className?: string }) {
-  const tiles = winsStatTiles(stats, unit);
+  const [shown, setShown] = useState(unit);
+  useEffect(() => setShown(unit), [unit]);
+  const tiles = winsStatTiles(stats, shown);
   const habits = winsHabitsLine(stats);
   const showed = pct(stats.trained, stats.roster);
   return (
@@ -38,13 +43,36 @@ export function WinsStatsCard({ stats, unit, className }: { stats: WinsStats; un
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-x-2 gap-y-3.5 border-t border-white/10 pt-3.5">
-        {tiles.map((t) => (
-          <div key={t.label} className="min-w-0">
-            <div className="font-display truncate text-[26px] uppercase leading-none">{t.value}</div>
-            <div className="mt-1 text-[10px] font-black uppercase leading-tight tracking-[0.1em] text-white/60">{t.label}</div>
-            {t.sub && <div className="mt-0.5 text-[10px] leading-tight text-white/50">{t.sub}</div>}
-          </div>
-        ))}
+        {tiles.map((t) => {
+          const body = (
+            <>
+              <div className="font-display truncate text-[26px] uppercase leading-none">{t.value}</div>
+              <div className="mt-1 flex items-center gap-1 text-[10px] font-black uppercase leading-tight tracking-[0.1em] text-white/60">
+                {t.label}
+                {t.unitToggle && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 text-white/40" aria-hidden />}
+              </div>
+              {t.sub && <div className="mt-0.5 text-[10px] leading-tight text-white/50">{t.sub}</div>}
+            </>
+          );
+          return t.unitToggle ? (
+            <button
+              key="weight"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShown(shown === "lb" ? "kg" : "lb");
+              }}
+              className="min-w-0 text-left"
+              aria-label={`Show in ${shown === "lb" ? "kg" : "lb"}`}
+            >
+              {body}
+            </button>
+          ) : (
+            <div key={t.label} className="min-w-0">
+              {body}
+            </div>
+          );
+        })}
       </div>
 
       {habits && <div className="mt-3.5 border-t border-white/10 pt-2.5 text-[11px] font-semibold text-white/55">{habits}</div>}

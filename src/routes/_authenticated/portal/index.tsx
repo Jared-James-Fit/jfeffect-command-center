@@ -27,6 +27,7 @@ import { AgreementDashboardCard } from "@/components/coaching-agreement/agreemen
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { LeagueRecapHomeTile } from "@/components/portal/league-recap";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
+import { SexPromptCard } from "@/components/athlete-sex";
 import { CommunityHomeStrip, CommunityNavButton } from "@/components/community/community-entry";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
@@ -55,7 +56,7 @@ function greeting() {
 }
 
 function PortalHome() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const portalUserId = usePortalUserId();
   const offlineNoCache = useIsOfflineWithoutCache();
   const qc = useQueryClient();
@@ -319,6 +320,14 @@ function PortalHome() {
         {client?.id && portalUserId && (
           <SectionErrorBoundary label="Setup checklist">
             <SetupChecklistBanner clientId={client.id} userId={portalUserId ?? ""} />
+          </SectionErrorBoundary>
+        )}
+
+        {/* 2c — One-tap profile question for athletes who haven't answered
+            (the athlete only, never in coach "View as client"). */}
+        {client?.id && (
+          <SectionErrorBoundary label="Sex prompt">
+            <SexPromptCard enabled={role === "client"} />
           </SectionErrorBoundary>
         )}
 

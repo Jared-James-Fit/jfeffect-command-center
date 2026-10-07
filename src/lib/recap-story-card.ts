@@ -155,7 +155,7 @@ export async function drawRecapStory(canvas: HTMLCanvasElement, r: LeagueRecap, 
       ctx.fillStyle = "#111"; ctx.font = font(900, 20); ctx.textBaseline = "middle";
       ctx.fillText(String(p.rank ?? i + 1), 206, rowY + 25);
       ctx.textAlign = "left"; ctx.fillStyle = "#fff"; ctx.font = font(800, 28);
-      ctx.fillText(ellipsize(ctx, p.display_name + (p.is_me ? " (me)" : ""), 480), 240, rowY + 25);
+      ctx.fillText(ellipsize(ctx, p.display_name + (p.is_coach ? " · Coach" : "") + (p.is_me ? " (me)" : ""), 480), 240, rowY + 25);
       ctx.textAlign = "right"; ctx.fillStyle = "#fbbf24"; ctx.font = font(900, 28);
       ctx.fillText(`${p.total_points} pts`, STORY_W - 196, rowY + 25);
       ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
