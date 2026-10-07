@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 /**
- * Scheduled hook (pg_cron, every 30 minutes) that sends the single
+ * Scheduled hook (pg_cron, every 30 minutes) that (1) pushes the payment setup
+ * reminders the database just inserted and (2) sends the single
  * "check your app messages" text for unpaid payment links.
  *
  * Auth: the cron job sends `x-reminder-secret`, a random secret kept in the
@@ -21,10 +22,21 @@ export const Route = createFileRoute("/api/public/hooks/payment-reminder-sms")({
         }
 
         try {
+          // Push for the reminders the database just inserted. Best-effort: it
+          // must never stop the text from going out.
+          let push = { pushed: 0, skipped: 0 };
+          try {
+            const { pushNewPaymentReminders } = await import("@/lib/payment-reminder-push.server");
+            const { sendWebPushToUser } = await import("@/lib/push/push.server");
+            push = await pushNewPaymentReminders(supabaseAdmin, { sendWebPushToUser });
+          } catch (e: any) {
+            console.error("[payment-reminder-sms] push step failed", e?.message ?? e);
+          }
+
           const { runPaymentSmsSweep } = await import("@/lib/payment-sms.server");
           const { sendViaTwilio, normalizePhone } = await import("@/lib/sms.functions");
           const result = await runPaymentSmsSweep(supabaseAdmin, { sendSms: sendViaTwilio, normalizePhone });
-          return Response.json({ ok: true, ...result });
+          return Response.json({ ok: true, ...result, push });
         } catch (e: any) {
           console.error("[payment-reminder-sms] sweep failed", e?.message ?? e);
           return Response.json({ ok: false, error: "sweep_failed" }, { status: 500 });
