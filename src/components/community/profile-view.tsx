@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
-import { CoachBadge, WorkoutHero } from "@/components/community/post-card";
+import { CoachBadge, LockInHero, WorkoutHero } from "@/components/community/post-card";
 import { BIO_MAX, trainingSinceLabel, type CommunityPost } from "@/lib/community";
 import { useCommunityFeed, useCommunityProfile, usePostMediaUrls, useSetBio } from "@/lib/community.queries";
 
@@ -101,11 +101,13 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
         {posts.map((p) => {
           const thumb = urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null;
           return (
-            <button key={p.id} type="button" onClick={() => onOpenPost(p)} className="relative aspect-square overflow-hidden bg-muted" aria-label={`Open ${p.stats?.workout_title ?? "workout"}`}>
+            <button key={p.id} type="button" onClick={() => onOpenPost(p)} className="relative aspect-square overflow-hidden bg-muted" aria-label={`Open ${p.stats?.workout_title ?? p.session_title ?? "workout"}`}>
               {p.media_type && thumb ? (
                 <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
               ) : p.stats ? (
                 <WorkoutHero stats={p.stats} unit={unit} size="tile" />
+              ) : p.locked_in_at ? (
+                <LockInHero post={p} size="tile" />
               ) : (
                 <div className="h-full w-full bg-muted" />
               )}

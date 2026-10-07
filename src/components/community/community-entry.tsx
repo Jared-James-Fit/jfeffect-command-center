@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { featuredLift, formatTopSet, postTimeLabel, SCOPE_WORD, type CommunityPost } from "@/lib/community";
+import { featuredLift, formatTopSet, isTrainingNow, postTimeLabel, SCOPE_WORD, type CommunityPost } from "@/lib/community";
 import { useCommunityActivity, useCommunityFeed, useReact, useViewerUnit } from "@/lib/community.queries";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
@@ -64,37 +64,52 @@ export function CommunityHomeStrip() {
     const posts = feed.data?.pages[0]?.posts ?? [];
     const weekAgo = Date.now() - 7 * 86_400_000;
     const seen = new Set<string>();
-    const out: { id: string; userId: string; name: string; avatar: string | null; fresh: boolean; mine: boolean }[] = [];
+    const out: { id: string; userId: string; name: string; avatar: string | null; fresh: boolean; mine: boolean; live: boolean }[] = [];
     for (const p of posts) {
       const at = new Date(p.created_at).getTime();
       if (at < weekAgo || seen.has(p.author.user_id)) continue;
       seen.add(p.author.user_id);
-      out.push({ id: p.id, userId: p.author.user_id, name: p.author.name, avatar: p.author.avatar_url, fresh: !p.is_mine && at > seenAt, mine: p.author.user_id === user?.id });
+      out.push({ id: p.id, userId: p.author.user_id, name: p.author.name, avatar: p.author.avatar_url, fresh: !p.is_mine && at > seenAt, mine: p.author.user_id === user?.id, live: isTrainingNow(p) });
     }
-    return out;
+    // Training right now goes first: that's the "hop in" moment.
+    return out.sort((a, b) => Number(b.live) - Number(a.live));
   }, [feed.data, seenAt, user?.id]);
+  // "3 locked in today": people who showed up today (local day).
+  const lockedToday = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const ids = new Set<string>();
+    for (const p of feed.data?.pages[0]?.posts ?? []) if (p.locked_in_at && new Date(p.locked_in_at) >= start) ids.add(p.author.user_id);
+    return ids.size;
+  }, [feed.data]);
 
   if (!activity?.enabled || feed.isLoading) return null;
 
   return (
     <section className="rounded-2xl border border-border/80 bg-card px-3.5 pb-3 pt-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[13px] font-black">
-          <Flame className="h-4 w-4 text-orange-500" /> Community
-          {activity.unseen > 0 && <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>}
+        <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[13px] font-black">
+          <Flame className="h-4 w-4 shrink-0 text-orange-500" /> Community
+          {/* Who showed up today beats "N new": it's the nudge to go train. */}
+          {lockedToday > 0 ? (
+            <span className="truncate rounded-full bg-red-500/15 px-1.5 py-px text-[10px] font-bold text-red-600 dark:text-red-400">🔒 {lockedToday} locked in today</span>
+          ) : activity.unseen > 0 ? (
+            <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>
+          ) : null}
         </div>
-        <Link to="/portal/community" className="-my-1 flex items-center py-1 pl-3 text-[12px] font-bold text-muted-foreground">
+        <Link to="/portal/community" className="-my-1 flex shrink-0 items-center whitespace-nowrap py-1 pl-3 text-[12px] font-bold text-muted-foreground">
           {people.length ? "See all" : "Open"} <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
       <div className="-mx-1 mt-2.5 flex items-start gap-3 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {canShare && <ShareWorkoutButton unit={unit} label="Share" variant="bubble" />}
         {people.map((p) => (
-          <button key={p.userId} type="button" onClick={() => setOpenPost(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`${p.name}'s latest workout`}>
-            <span className={cn("rounded-full p-[2.5px]", p.fresh ? "bg-[linear-gradient(135deg,#f58529,#dd2a7b,#8134af)]" : "bg-border")}>
+          <button key={p.userId} type="button" onClick={() => setOpenPost(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={p.live ? `${p.name} is training now` : `${p.name}'s latest workout`}>
+            <span className={cn("relative rounded-full p-[2.5px]", p.live ? "bg-red-500" : p.fresh ? "bg-[linear-gradient(135deg,#f58529,#dd2a7b,#8134af)]" : "bg-border")}>
               <span className="block rounded-full bg-card p-[2px]">
                 <UserAvatar src={p.avatar} name={p.name} size={52} expandable={false} />
               </span>
+              {p.live && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-[5px] border-2 border-card bg-red-500 px-1 text-[8px] font-black uppercase leading-[12px] tracking-wide text-white">Live</span>}
             </span>
             <span className="w-full truncate text-center text-[11px] font-semibold">{p.mine ? "You" : p.name}</span>
           </button>
@@ -185,7 +200,7 @@ function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }
           {post.author.name} <span className="font-normal text-muted-foreground">· {postTimeLabel(post.created_at)}</span>
         </div>
         <div className="truncate text-[12px] text-muted-foreground">
-          {post.stats?.workout_title ?? "Workout"}
+          {!post.stats && post.locked_in_at ? `🔒 Locked in · ${post.session_title ?? "Workout"}` : post.stats?.workout_title ?? post.session_title ?? "Workout"}
           {lift ? ` · ${lift.name} ${formatTopSet(lift.detail, unit)}` : ""}
           {lift?.pr ? ` · ${SCOPE_WORD[lift.pr]}` : ""}
         </div>

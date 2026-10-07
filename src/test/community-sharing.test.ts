@@ -18,6 +18,9 @@ import {
   formatExerciseBest,
   sessionLine,
   trainingSinceLabel,
+  isTrainingNow,
+  lockInTimeLabel,
+  LOCK_IN_CAPTIONS,
   type CommunityExercise,
   type CommunityFeedPage,
   type WorkoutShareStats,
@@ -369,5 +372,49 @@ describe("community is its own page, reached from Home", () => {
   it("never lets a coach in View-as-client share for the athlete", () => {
     expect(page).toContain("<CommunityScreen canShare={!isImpersonating} />");
     expect(entry).toContain("{canShare && <ShareWorkoutButton");
+  });
+});
+
+describe("lock in (I showed up)", () => {
+  const sql = read("supabase/migrations/20261007090000_community_lock_in.sql");
+  const bar = read("src/components/community/lock-in.tsx");
+  const editor = read("src/components/community/lock-in-editor.tsx");
+  const day = read("src/components/workout-day/WorkoutDayView.tsx");
+  const card = read("src/lib/workout-share-card.ts");
+
+  it("is the session's one post: a started session can post, the finished numbers fill it in", () => {
+    expect(sql).toContain("AND (pc.completed_at IS NOT NULL OR pc.started_at IS NOT NULL OR pc.in_progress_at IS NOT NULL);");
+    expect(sql).toContain("CASE WHEN v_done THEN NULL ELSE now() END)");
+    // the upsert never rewrites locked_in_at
+    expect(sql.slice(sql.indexOf("ON CONFLICT"), sql.indexOf("RETURNING p.id"))).not.toContain("locked_in_at");
+    expect(sql).toContain("'live', pc.completed_at IS NULL,");
+  });
+  it("still refuses anyone but the athlete (coach View-as-client included)", () => {
+    expect(sql).toContain("WHERE pc.id = _completion_id AND c.user_id = uid");
+    expect(day).toContain("isClientWorkout && !isImpersonating && !completion?.completed_at");
+  });
+  it("starts the session through the normal start path, never on its own", () => {
+    expect(day).toContain('await startWorkoutSrv({ data: { kind: "client" as const, dayId, scheduledWorkoutId } });');
+    expect(editor).toContain("const id = completionId ?? (await ensureStarted());");
+  });
+  it("opens the camera inside the tap and keeps the logger light", () => {
+    expect(bar).toContain('capture="environment"');
+    expect(bar).toContain("camRef.current?.click();");
+    expect(bar).toContain('lazyWithRetry(() => import("@/components/community/lock-in-editor")');
+    expect(bar).not.toContain("workout-share-card");
+  });
+  it("draws a LOCKED IN card and carries the time onto the finished photo card", () => {
+    expect(card).toContain('else if (d.template === "lockin") drawLockIn(ctx, d, logo, L);');
+    expect(card).toContain("else if (d.lockedIn) pill(ctx, `LOCKED IN ${d.lockedIn.time}`");
+    expect(availableTemplates({ isPr: false, exercises: [], volume: null, media: null })).not.toContain("lockin");
+  });
+  it("labels and timing", () => {
+    expect(lockInTimeLabel(null)).toBeNull();
+    expect(lockInTimeLabel("2026-10-07T18:42:00Z")).toMatch(/\d{1,2}:42/);
+    const now = Date.parse("2026-10-07T19:00:00Z");
+    expect(isTrainingNow({ live: true, locked_in_at: "2026-10-07T18:00:00Z" }, now)).toBe(true);
+    expect(isTrainingNow({ live: true, locked_in_at: "2026-10-07T14:00:00Z" }, now)).toBe(false);
+    expect(isTrainingNow({ live: false, locked_in_at: "2026-10-07T18:30:00Z" }, now)).toBe(false);
+    expect(LOCK_IN_CAPTIONS.every((c) => c.length <= CAPTION_MAX && !c.includes("#"))).toBe(true);
   });
 });

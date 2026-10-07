@@ -73,6 +73,12 @@ export type CommunityPost = {
   media_width: number | null;
   media_height: number | null;
   completion_id: string;
+  /** Set when the post was made while the session was still open ("Locked in"). */
+  locked_in_at?: string | null;
+  /** The session hasn't been finished yet (a lock-in waiting on its numbers). */
+  live?: boolean;
+  /** The day's title, available before any stats exist. */
+  session_title?: string | null;
   is_mine: boolean;
   author: CommunityAuthor;
   /** null when the workout was reopened — the post then shows photo + caption only. */
@@ -272,6 +278,24 @@ export function buildShareCardFields(i: ShareCardInput) {
     sessionLine: sessionLine(s),
   };
 }
+
+/** "6:42 PM" — when someone locked in. */
+export function lockInTimeLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return null;
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** A lock-in is "training now" while the session is open and recent. */
+export function isTrainingNow(p: Pick<CommunityPost, "live" | "locked_in_at">, now = Date.now()): boolean {
+  if (!p.live || !p.locked_in_at) return false;
+  const at = new Date(p.locked_in_at).getTime();
+  return now - at < 3 * 3600_000 && now >= at - 60_000;
+}
+
+/** One-tap captions for a lock-in. Short, no hashtags, no hype words. */
+export const LOCK_IN_CAPTIONS = ["Locked in.", "Showed up.", "No days off.", "Who's training today?", "Your move."] as const;
 
 /** "Training since Jun 2026" */
 export function trainingSinceLabel(iso: string | null | undefined): string | null {
