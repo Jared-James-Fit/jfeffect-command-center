@@ -438,3 +438,26 @@ describe("community photos are the athlete's own", () => {
     expect(profile).toContain("setAvatar.mutate(null");
   });
 });
+
+describe("who sees a post: JF crew, my coach, only me + hide weights", () => {
+  const sql = read("supabase/migrations/20261007150000_community_audience.sql");
+  it("uses one visibility rule everywhere (RLS, storage, feed, detail, reactions, comments, badge, profile)", () => {
+    expect(sql).toContain("CHECK (visibility IN ('community', 'coach', 'private'))");
+    expect(sql).toContain("USING (public.community_post_visible(visibility, author_user_id, client_id));");
+    expect(sql.match(/public\.community_post_visible\(p\.visibility, p\.author_user_id, p\.client_id\)/g)!.length).toBeGreaterThanOrEqual(8);
+    expect(sql).not.toContain("(p.visibility = 'community' OR p.author_user_id = uid)");
+  });
+  it("'coach' means the author, admins and the client's assigned coach, never other athletes", () => {
+    expect(sql).toContain("OR (_visibility = 'coach' AND (public.has_role(auth.uid(), 'admin') OR public.is_assigned_coach_for_client(_client))))");
+  });
+  it("hides weights server-side for everyone but the author", () => {
+    expect(sql).toContain("CASE WHEN n.hide_loads AND n.author_user_id IS DISTINCT FROM _viewer");
+    expect(sql).toContain("'tonnage_kg', 0,");
+    expect(sql).toContain("jsonb_build_object('best_load_kg', null,");
+    expect(sql).toContain("hide_loads = coalesce(_hide_loads, p.hide_loads),");
+  });
+  it("formats a hidden load as reps, never '0 kg'", () => {
+    expect(formatTopSet({ reps: 5, load_kg: null }, "kg")).toBe("5 reps");
+    expect(formatTopSet({ reps: 1, load_kg: null }, "lb")).toBe("1 rep");
+  });
+});

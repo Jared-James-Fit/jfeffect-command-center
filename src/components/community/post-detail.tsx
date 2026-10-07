@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AuthorLine, LockInHero, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero } from "@/components/community/post-card";
+import { AuthorLine, LockInHero, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote } from "@/components/community/post-card";
 import { CommentThread } from "@/components/community/comments-sheet";
 import {
   SCOPE_WORD,
@@ -115,7 +115,7 @@ function Detail({
         <AuthorLine
           author={post.author}
           size={44}
-          sub={[postTimeLabel(post.created_at), s ? new Date(s.completed_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : null].filter(Boolean).join(" · ")}
+          sub={[postTimeLabel(post.created_at), s ? new Date(s.completed_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : null, audienceNote(post)].filter(Boolean).join(" · ")}
           onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined}
         />
       </div>

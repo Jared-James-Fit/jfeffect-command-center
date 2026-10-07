@@ -72,7 +72,7 @@ export function LockInBar({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-black">{existing?.locked_in_at ? `Locked in${time ? ` · ${time}` : ""}` : "Posted"}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">{existing?.visibility === "private" ? "Only you can see it" : "Your numbers land on it when you finish"}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{existing?.visibility === "private" ? "Only you can see it" : existing?.visibility === "coach" ? "Only your coach sees it" : "Your numbers land on it when you finish"}</span>
           </span>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         </button>

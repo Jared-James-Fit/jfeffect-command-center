@@ -6,6 +6,7 @@ import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
 import { formatWorkoutDuration, postTimeLabel } from "@/lib/community";
 import { useRecentCompletions, type RecentCompletion } from "@/lib/community.queries";
+import { audienceDoneLabel } from "@/components/community/audience-picker";
 
 const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
 
@@ -92,7 +93,7 @@ export function ShareWorkoutButton({ unit, className, label = "Share a workout",
                     </div>
                     {s.post_id ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
-                        <Check className="h-3 w-3" /> {s.visibility === "private" ? "Saved" : "Posted"}
+                        <Check className="h-3 w-3" /> {audienceDoneLabel(s.visibility ?? "community")}
                       </span>
                     ) : null}
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />

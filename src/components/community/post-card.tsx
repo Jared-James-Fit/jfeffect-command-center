@@ -62,6 +62,15 @@ export function LockInHero({ post, size = "feed" }: { post: CommunityPost; size?
   );
 }
 
+/** "Only me" · "Just my coach" (author) · "Just you" (the coach) · "Weights hidden" (author). */
+export function audienceNote(post: Pick<CommunityPost, "visibility" | "is_mine" | "hide_loads">): string | null {
+  const parts: string[] = [];
+  if (post.visibility === "private") parts.push("Only me");
+  else if (post.visibility === "coach") parts.push(post.is_mine ? "Just my coach" : "Just you");
+  if (post.is_mine && post.hide_loads) parts.push("Weights hidden");
+  return parts.length ? parts.join(" · ") : null;
+}
+
 export function CoachBadge({ className }: { className?: string }) {
   return (
     <span className={cn("rounded-full bg-primary/10 px-1.5 py-px text-[9px] font-black uppercase tracking-[0.12em] text-primary", className)}>
@@ -182,7 +191,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const stats = s ? pickCardStats(s, unit) : [];
   const canDelete = post.is_mine || viewerIsStaff;
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
-  const sub = [postTimeLabel(post.created_at), lockedAt ? `Locked in ${lockedAt}` : null, post.visibility === "private" ? "Only me" : null].filter(Boolean).join(" · ");
+  const sub = [postTimeLabel(post.created_at), lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
 
   // Tap opens the workout; double-tap gives 🔥 (Instagram muscle memory).
   const onHeroTap = () => {
@@ -207,7 +216,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       <header className="flex items-center justify-between gap-2 px-3.5 py-3">
         <AuthorLine author={post.author} sub={sub} onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined} />
         <div className="flex shrink-0 items-center gap-1">
-          {post.visibility === "private" && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label="Only visible to you" />}
+          {post.visibility !== "community" && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : "Only visible to you"} />}
           {canDelete && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

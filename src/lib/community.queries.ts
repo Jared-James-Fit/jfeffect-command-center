@@ -183,6 +183,7 @@ export type MyPostRow = {
   media_thumb_path: string | null;
   media_type: "image" | "video" | null;
   locked_in_at: string | null;
+  hide_loads: boolean;
 };
 
 /** The post (if any) already made for this workout — so reopening Share edits it instead of duplicating. */
@@ -194,7 +195,7 @@ export function useMyPostForCompletion(completionId: string | null | undefined, 
     queryFn: async (): Promise<MyPostRow | null> => {
       const { data, error } = await db
         .from("community_posts")
-        .select("id, caption, visibility, media_path, media_thumb_path, media_type, locked_in_at")
+        .select("id, caption, visibility, media_path, media_thumb_path, media_type, locked_in_at, hide_loads")
         .eq("completion_id", completionId)
         .maybeSingle();
       if (error) throw error;
@@ -208,6 +209,8 @@ export type SavePostInput = {
   caption: string;
   visibility: CommunityVisibility;
   media: { action: "keep" } | { action: "remove" } | ({ action: "set" } & UploadedMedia);
+  /** Hide loads from everyone but you. Omitted = keep the current setting. */
+  hideLoads?: boolean;
 };
 
 export async function saveCommunityPost(input: SavePostInput): Promise<string> {
@@ -222,6 +225,7 @@ export async function saveCommunityPost(input: SavePostInput): Promise<string> {
     _media_type: m.action === "set" ? m.media_type : null,
     _media_width: m.action === "set" ? m.media_width : null,
     _media_height: m.action === "set" ? m.media_height : null,
+    _hide_loads: input.hideLoads ?? null,
   });
   if (error) throw error;
   return (data as { id: string }).id;
