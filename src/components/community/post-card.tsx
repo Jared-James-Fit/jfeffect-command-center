@@ -83,7 +83,7 @@ export function CoachBadge({ className }: { className?: string }) {
  * `clamp` keeps long notes tidy in the feed; the detail shows everything.
  */
 export function NoteBody({ post, clamp = false }: { post: CommunityPost; clamp?: boolean }) {
-  const series = post.series ? SERIES_LABEL[post.series] : null;
+  const series = post.series ? SERIES_LABEL[post.series] ?? null : null;
   return (
     <div className="px-4 pb-1 pt-1">
       {series && (

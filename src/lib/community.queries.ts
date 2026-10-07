@@ -307,6 +307,8 @@ export type SeriesOverview = {
   library: Record<CommunitySeries, number>;
   history: { id: string; series: CommunitySeries; created_at: string; mentor: string | null; caption: string | null }[];
   this_week: Record<CommunitySeries, boolean>;
+  /** Wednesday Wins is written from last week's training: what it would say right now. */
+  wins_preview: { body: string; featured: number; trainers: number; week_of: string; next_week: boolean } | null;
 };
 
 export function useSeriesOverview(enabled: boolean) {

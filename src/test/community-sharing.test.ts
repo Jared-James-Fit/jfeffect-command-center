@@ -20,6 +20,7 @@ import {
   trainingSinceLabel,
   isTrainingNow,
   lockInTimeLabel,
+  SERIES_LABEL,
   LOCK_IN_CAPTIONS,
   type CommunityExercise,
   type CommunityFeedPage,
@@ -512,5 +513,38 @@ describe("Monday Motivation + Finish Strong Friday: real coach posts", () => {
     expect(sql).toContain("'title', CASE WHEN staff.yes OR cp.title IS NOT NULL THEN coalesce(cp.title, 'Coach · JF Effect') END");
     expect(sql).toContain("AND NOT EXISTS (SELECT 1 FROM public.community_profiles l WHERE l.user_id = m.user_id AND l.same_person_as IS NOT NULL)");
     expect(sql).toContain("'is_mine', n.author_user_id = public.community_main_account(_viewer),");
+  });
+});
+
+describe("Wednesday Wins: last week's real wins, everyone who trained", () => {
+  const sql = read("supabase/migrations/20261008120000_community_wednesday_wins.sql");
+  const coach = read("src/components/community/coach-weekly-posts.tsx");
+  it("posts once a week at noon Winnipeg, through the same series runs", () => {
+    expect(sql).toContain("WHEN 3 THEN 'wednesday_wins'");
+    expect(sql).toContain("v_start := CASE v_series WHEN 'wednesday_wins' THEN time '12:00' ELSE time '07:00' END;");
+    expect(sql).toContain("'*/15 16-23 * * 3', 'select public.community_publish_series(''wednesday_wins'');'");
+    expect(sql).toContain("INSERT INTO public.community_series_runs (series_key, series) VALUES (v_key, v_series) ON CONFLICT (series_key) DO NOTHING;");
+  });
+  it("is built only from logged training, last week, excluding the coach", () => {
+    expect(sql).toContain("public.community_compose_wins((date_trunc('week', v_local)::date - 7), v_author)");
+    expect(sql).toContain("CONTINUE WHEN v_sessions = 0;");
+    expect(sql).toContain("FROM public.client_load_records(c.id) UNION ALL SELECT * FROM public.client_rep_records(c.id)");
+    expect(sql).toContain("IF v_comp IS NULL THEN RETURN jsonb_build_object('status', 'no_wins'); END IF;");
+  });
+  it("rotates shout-outs so everyone gets one within the month, and names the rest", () => {
+    expect(sql).toContain("interval '28 days'");
+    expect(sql).toContain("least(6, greatest(4, ceil(v_n / 2.0)::int))");
+    expect(sql).toContain("'Also put in the work: '");
+    expect(sql).toContain("INSERT INTO public.community_series_features (series_key, client_id, win_type, featured_at)");
+  });
+  it("respects each client's unit and Hide weights", () => {
+    expect(sql).toContain("v_load := CASE WHEN v_hide THEN NULL ELSE public.community_fmt_load(pr.load_kg, v_unit) END;");
+    expect(sql).toContain("REVOKE ALL ON public.community_series_features FROM anon, authenticated;");
+  });
+  it("shows the coach a live preview and the Wednesday label everywhere", () => {
+    expect(SERIES_LABEL.wednesday_wins.name).toBe("Wednesday Wins");
+    expect(coach).toContain('"wednesday_wins"');
+    expect(coach).toContain("preview.body");
+    expect(coach).toContain("SERIES_LABEL[h.series]?.short");
   });
 });

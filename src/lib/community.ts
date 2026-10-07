@@ -72,12 +72,13 @@ export type CommunityAuthor = {
   title?: string | null;
 };
 
-export type CommunitySeries = "monday_motivation" | "finish_strong_friday";
+export type CommunitySeries = "monday_motivation" | "wednesday_wins" | "finish_strong_friday";
 
-/** The two weekly coach posts: name + the one-line idea behind each. */
-export const SERIES_LABEL: Record<CommunitySeries, { name: string; tagline: string }> = {
-  monday_motivation: { name: "Monday Motivation", tagline: "Set the standard" },
-  finish_strong_friday: { name: "Finish Strong Friday", tagline: "Finish what you started" },
+/** The weekly coach posts: name + the one-line idea behind each. */
+export const SERIES_LABEL: Record<CommunitySeries, { name: string; tagline: string; short: string }> = {
+  monday_motivation: { name: "Monday Motivation", tagline: "Set the standard", short: "Mon" },
+  wednesday_wins: { name: "Wednesday Wins", tagline: "Last week's work", short: "Wed" },
+  finish_strong_friday: { name: "Finish Strong Friday", tagline: "Finish what you started", short: "Fri" },
 };
 
 export type CommunityPost = {
