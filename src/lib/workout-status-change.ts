@@ -1,4 +1,5 @@
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -91,5 +92,105 @@ export function useWorkoutStatusChange({
     return res;
   };
 
-  return { change, undo };
+  /**
+   * Put the workout back to a saved version. The server saves the current
+   * state first, so the toast's Undo returns to exactly what was there.
+   */
+  const restore = async (versionId: string, whenLabel: string) => {
+    const { data, error } = await sb.rpc("workout_restore_version", { _version_id: versionId });
+    if (error) throw error;
+    const res = data as {
+      before_version_id: string | null;
+      status: WorkoutStatusKey;
+      restored_sets: number;
+    };
+    await invalidateWorkoutSurfaces(qc, clientId, invalidateKeys);
+    toast.success(`Restored to ${whenLabel}`, {
+      duration: 10_000,
+      action: res.before_version_id
+        ? { label: "Undo", onClick: () => void undo(res.before_version_id!) }
+        : undefined,
+    });
+    return res;
+  };
+
+  return { change, undo, restore };
+}
+
+export type WorkoutVersion = {
+  id: string;
+  created_at: string;
+  reason: "edit" | "status" | "reset" | "restore";
+  to_status: WorkoutStatusKey | null;
+  summary: {
+    status?: WorkoutStatusKey;
+    sets?: number;
+    done_sets?: number;
+    warmups?: number;
+    review?: boolean;
+  };
+};
+
+/**
+ * Saved versions of one workout instance, newest first (summaries only — the
+ * stored copies never leave the server). Fetched only while `enabled`.
+ */
+export function useWorkoutVersions(
+  {
+    dayId,
+    clientId,
+    scheduledWorkoutId = null,
+  }: { dayId: string; clientId: string; scheduledWorkoutId?: string | null },
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["workout-versions", clientId, dayId, scheduledWorkoutId],
+    enabled,
+    staleTime: 0,
+    queryFn: async (): Promise<WorkoutVersion[]> => {
+      const { data, error } = await sb.rpc("workout_list_versions", {
+        _client_id: clientId,
+        _day_id: dayId,
+        _scheduled_workout_id: scheduledWorkoutId,
+      });
+      if (error) throw error;
+      return (data ?? []) as WorkoutVersion[];
+    },
+  });
+}
+
+export function versionWhen(iso: string): string {
+  const d = parseISO(iso);
+  const time = format(d, "h:mm a");
+  if (isToday(d)) return time;
+  if (isYesterday(d)) return `Yesterday ${time}`;
+  return `${format(d, "EEE MMM d")} · ${time}`;
+}
+
+export function versionReason(v: Pick<WorkoutVersion, "reason" | "to_status">): string {
+  switch (v.reason) {
+    case "reset":
+      return "Before reset";
+    case "restore":
+      return "Before restoring a version";
+    case "status":
+      return v.to_status
+        ? `Before marking ${workoutStatusLabel(v.to_status)}`
+        : "Before status change";
+    default:
+      return "Auto-saved while logging";
+  }
+}
+
+export function versionSummary(v: Pick<WorkoutVersion, "summary">): string {
+  const s = v.summary ?? {};
+  const sets = s.sets ?? 0;
+  const parts = [
+    workoutStatusLabel(s.status ?? "not_started"),
+    sets === 0
+      ? "no sets"
+      : `${sets} set${sets === 1 ? "" : "s"}${s.done_sets != null && s.done_sets !== sets ? ` (${s.done_sets} done)` : ""}`,
+  ];
+  if (s.review) parts.push("review");
+  return parts.join(" · ");
 }

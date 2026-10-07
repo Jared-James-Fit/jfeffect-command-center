@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Circle, Loader2, Play, CheckCircle2 } from "lucide-react";
+import { Check, Circle, History, Loader2, Play, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkoutStatusChange, type WorkoutStatusKey } from "@/lib/workout-status-change";
 import {
@@ -10,6 +10,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { WorkoutHistorySheet } from "@/components/workout-history-sheet";
 import { cn } from "@/lib/utils";
 
 export type { WorkoutStatusKey } from "@/lib/workout-status-change";
@@ -35,6 +36,7 @@ export function WorkoutStatusSheet({
   invalidateKeys = [],
   loggedSets = null,
   mode = "status",
+  showHistoryLink = true,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -51,6 +53,8 @@ export function WorkoutStatusSheet({
   /** Logged sets on this workout, when the caller knows (shown in the reset confirm). */
   loggedSets?: number | null;
   mode?: "status" | "reset";
+  /** Link to Version history (off where the card's ⋯ menu already offers it). */
+  showHistoryLink?: boolean;
 }) {
   const { change } = useWorkoutStatusChange({ dayId, clientId, scheduledWorkoutId, invalidateKeys });
   const current: WorkoutStatusKey = completion?.completed_at
@@ -62,6 +66,7 @@ export function WorkoutStatusSheet({
   const [selected, setSelected] = useState<WorkoutStatusKey>(current);
   const [saving, setSaving] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<WorkoutStatusKey | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const hasActivity = current !== "not_started";
   const resetOnly = mode === "reset";
@@ -165,7 +170,20 @@ export function WorkoutStatusSheet({
               })}
             </div>
 
-            <SheetFooter className="mt-4 flex-row gap-2 sm:flex-row sm:justify-end">
+            {showHistoryLink && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  setHistoryOpen(true);
+                }}
+                className="mt-3 inline-flex h-10 items-center gap-1.5 self-start rounded-lg px-2 text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                <History className="h-4 w-4" /> Version history
+              </button>
+            )}
+
+            <SheetFooter className="mt-3 flex-row gap-2 sm:flex-row sm:justify-end">
               <Button
                 variant="outline"
                 className="h-11 flex-1 sm:flex-none"
@@ -185,6 +203,17 @@ export function WorkoutStatusSheet({
             </SheetFooter>
           </SheetContent>
         </Sheet>
+      )}
+
+      {showHistoryLink && !resetOnly && (
+        <WorkoutHistorySheet
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          dayId={dayId}
+          clientId={clientId}
+          scheduledWorkoutId={scheduledWorkoutId}
+          invalidateKeys={invalidateKeys}
+        />
       )}
 
       <AlertDialog
