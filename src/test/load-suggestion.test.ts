@@ -303,3 +303,22 @@ describe("audibleStep (the 'moving fast / grinding' tip)", () => {
     expect(audibleStep(12, "kg")).toBe(1);
   });
 });
+
+describe("bodyweight-adjusted history", () => {
+  it("scales strength with bodyweight^0.67 and ignores implausible jumps", async () => {
+    const { bodyweightScale } = await import("@/lib/load-suggestion");
+    expect(bodyweightScale(102, 100)).toBeCloseTo(Math.pow(1.02, 0.67), 6);
+    expect(bodyweightScale(98, 100)).toBeLessThan(1);
+    expect(bodyweightScale(150, 100)).toBe(1); // unit slip, not a real change
+    expect(bodyweightScale(null, 100)).toBe(1);
+    expect(bodyweightScale(100, undefined)).toBe(1);
+  });
+  it("a heavier athlete gets a proportionally heavier suggestion from the same history", () => {
+    const at = (bw: number | null) => twoWeeks.map((l) => ({ ...l, bodyweightKg: bw }));
+    const same = suggestSetLoad(buildLoadModel({ history: at(90), today: [], unit: "kg", now: NOW, bodyweightKg: 90 }), { reps: 5, rpe: 8 })!;
+    const up = buildLoadModel({ history: at(90), today: [], unit: "kg", now: NOW, bodyweightKg: 94 });
+    expect(up.bodyweightScale).toBeGreaterThan(1.02);
+    expect(estimateFor(up, 5, 8)!.load).toBeGreaterThan(estimateFor(buildLoadModel({ history: at(90), today: [], unit: "kg", now: NOW, bodyweightKg: 90 }), 5, 8)!.load);
+    expect(same.target).toBeGreaterThan(0);
+  });
+});

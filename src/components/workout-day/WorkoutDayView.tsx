@@ -70,6 +70,9 @@ import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { WarmupSection, useWarmupSets } from "@/components/workout-day/final-warmup-input";
 import { LoadSuggestionCard } from "@/components/workout-day/load-suggestion-card";
+import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
+import { fetchAllPages } from "@/lib/supabase-paginate";
+import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
 import { pickFinalWarmup } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
@@ -903,33 +906,21 @@ function WorkoutDay({
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
           is_bodyweight, load_type,
           pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, exercises(name))`;
-      const requests: Promise<any>[] = [];
-      if (exerciseIds.length) {
-        requests.push(
-          (supabase as any)
-            .from("pl_row_results")
-            .select(columns)
-            .eq("client_id", historyOwnerId)
-            .in("pl_exercise_rows.exercise_id", exerciseIds)
-            .order("updated_at", { ascending: false })
-            .limit(2000),
-        );
-      }
-      if (fallbackNames.length) {
-        requests.push(
-          (supabase as any)
-            .from("pl_row_results")
-            .select(columns)
-            .eq("client_id", historyOwnerId)
-            .in("pl_exercise_rows.exercise_name_override", fallbackNames)
-            .order("updated_at", { ascending: false })
-            .limit(2000),
-        );
-      }
-      const batches = await Promise.all(requests);
-      for (const batch of batches) if (batch.error) throw batch.error;
+      // Confirmed sets only (drafts from "apply to remaining" are not history),
+      // newest first, paged past the 1,000-row response cap so long-term
+      // clients keep their full rep-max baselines.
+      const history = (filter: (q: any) => any) => fetchAllPages((from, to) =>
+        filter((supabase as any).from("pl_row_results").select(columns).eq("client_id", historyOwnerId))
+          .not("completed_at", "is", null)
+          .order("completed_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(from, to), { maxRows: 10_000 });
+      const batches = await Promise.all([
+        exerciseIds.length ? history((q) => q.in("pl_exercise_rows.exercise_id", exerciseIds)) : Promise.resolve([]),
+        fallbackNames.length ? history((q) => q.in("pl_exercise_rows.exercise_name_override", fallbackNames)) : Promise.resolve([]),
+      ]);
       const uniqueLogs = Array.from(
-        new Map(batches.flatMap((batch) => batch.data ?? []).map((log: any) => [log.id, log])).values(),
+        new Map(batches.flat().map((log: any) => [log.id, log])).values(),
       );
       return uniqueLogs.map((log: any) => {
         const historyRow = log.pl_exercise_rows;
@@ -971,15 +962,36 @@ function WorkoutDay({
     [results],
   );
 
+  // Bodyweight (smoothed) — strength scales with it, so past sets are adjusted
+  // for any change since they were lifted. See load-suggestion.ts.
+  const { data: bodyweightSeries = [] } = useQuery<BodyweightKgPoint[]>({
+    queryKey: ["load-bodyweight", historyOwnerId],
+    enabled: secondaryHydrationReady && adapter?.kind !== "member" && !!historyOwnerId,
+    staleTime: 10 * 60_000,
+    retry: 1,
+    queryFn: () => getClientBodyweightKgSeries(historyOwnerId!, 120),
+  });
+  const bodyweightNowKg = useMemo(
+    () => smoothedBodyweightKgAt(bodyweightSeries, Date.now()),
+    [bodyweightSeries],
+  );
+
   // Per-row history for RPE-based load suggestions — same batch, same matching
   // rules as Last Time, current session excluded.
   const loadHistoryByRow = useMemo(() => {
     const map = new Map<string, PreviousLiftLog[]>();
+    const bwAt = new Map<string, number | null>();
+    const withBodyweight = (log: PreviousLiftLog): PreviousLiftLog => {
+      if (!bodyweightSeries.length || !log.occurredAt) return log;
+      const day = log.occurredAt.slice(0, 10);
+      if (!bwAt.has(day)) bwAt.set(day, smoothedBodyweightKgAt(bodyweightSeries, Date.parse(log.occurredAt)));
+      return { ...log, bodyweightKg: bwAt.get(day) ?? null };
+    };
     for (const identity of previousLiftIdentities) {
-      map.set(identity.rowId, matchHistoryLogs(identity, previousLiftLogs, currentHistorySessionKey));
+      map.set(identity.rowId, matchHistoryLogs(identity, previousLiftLogs, currentHistorySessionKey).map(withBodyweight));
     }
     return map;
-  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey]);
+  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey, bodyweightSeries]);
 
   // Predicted readiness from the most recent OTHER workout review. Only v2
   // reviews carry a real session RPE (legacy ones mapped status → fake RPE).
@@ -2282,6 +2294,7 @@ function WorkoutDay({
                       previousLift={previousLiftByRow.get(r.id) ?? null}
                       repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
+                      bodyweightKg={bodyweightNowKg}
                       readiness={readiness}
                       assistedBests={assistedBestsByRow.get(r.id) ?? null}
                       blockId={blockId}
@@ -2583,6 +2596,7 @@ function WorkoutDay({
                     previousLift={previousLiftByRow.get(r.id) ?? null}
                     repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
+                      bodyweightKg={bodyweightNowKg}
                       readiness={readiness}
                     assistedBests={assistedBestsByRow.get(r.id) ?? null}
                     blockId={blockId}
@@ -3011,7 +3025,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, loadHistory = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3361,8 +3375,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         rpe: parseRpe(r.actual_rpe_num ?? r.actual_rpe),
       }))
       .filter((x) => x.load > 0 && x.reps > 0);
-    return buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel });
-  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe]);
+    return buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel, bodyweightKg });
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg]);
   const loadHint = useMemo<LoadSuggestion | null>(
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
@@ -4764,6 +4778,12 @@ function SetRow({
         completed_at: completedAt,
       }, adapter, workoutId);
       let savedId: string | null = existing?.id ?? null;
+      // Optimistic: today's sets drive the load suggestions, so patch the cache
+      // now and let them recalculate instantly. The hydrate guard keeps this
+      // from touching the inputs; a failed write refetches the truth below.
+      recentlySavedRef.current = true;
+      qc.setQueriesData({ queryKey: ["pl-day-results", workoutId] }, (old: any) =>
+        applyOptimisticSetResult(old, payload, existing?.id ?? null));
       // PostgREST keeps a pooled connection in "current transaction is
       // aborted" (SQLSTATE 25P02) state if a prior statement on the same
       // connection failed. Detect that and retry exactly once after a brief
@@ -4793,6 +4813,7 @@ function SetRow({
             status: existing.completed_at ? "completed" : null,
           }
         : { weight: null, reps: null, rpe: null, unit: null, status: null };
+      try {
       if (existing) {
         if (adapter) {
           await writeWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id));
@@ -4829,6 +4850,11 @@ function SetRow({
           });
           savedId = (inserted as any)?.id ?? null;
         }
+      }
+      } catch (writeError) {
+        // Roll the optimistic patch back to whatever the server really has.
+        void qc.invalidateQueries({ queryKey: ["pl-day-results", workoutId] });
+        throw writeError;
       }
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();

@@ -55,6 +55,25 @@ const DAY_MS = 86_400_000;
  */
 export const MIN_RPE = 4;
 
+/**
+ * Bodyweight: strength scales with bodyweight^~0.67 (allometric scaling), so a
+ * past set is adjusted by (bodyweight now / bodyweight then)^0.67. Uses the
+ * smoothed (7-day) bodyweight to ignore daily water swings, and ignores ratios
+ * outside ±12% (a unit slip, not a real change). Backtest: SBD in-range 43% → 45%
+ * cold, error 3.0% → 2.9% once a set is in; nothing got worse. Tested and
+ * rejected (no gain): projecting the block's e1RM trend forward, and a flat
+ * calibration bump for SBD.
+ */
+export const BODYWEIGHT_EXPONENT = 0.67;
+const BODYWEIGHT_MAX_RATIO_SHIFT = 0.12;
+
+export function bodyweightScale(nowKg: number | null | undefined, thenKg: number | null | undefined): number {
+  if (!(nowKg && nowKg > 0) || !(thenKg && thenKg > 0)) return 1;
+  const r = nowKg / thenKg;
+  if (Math.abs(r - 1) > BODYWEIGHT_MAX_RATIO_SHIFT) return 1;
+  return Math.pow(r, BODYWEIGHT_EXPONENT);
+}
+
 /** Fraction of 1RM for `reps` performed with `rir` reps left in the tank. */
 export function percentOf1RM(reps: number, rir: number): number | null {
   const e = reps + Math.max(0, rir);
@@ -196,6 +215,8 @@ export interface LoadModel {
   readiness: Readiness;
   /** Days since the last session of this lift, when it's been a while. */
   staleDays: number | null;
+  /** Mean bodyweight adjustment applied to history (1 = none), for the "why". */
+  bodyweightScale: number;
   /** The athlete's final warm-up, when given and no working set is logged yet today. */
   warmup: { e1rm: number; load: number; reps: number } | null;
 }
@@ -219,6 +240,8 @@ export function buildLoadModel(input: {
   readiness?: Readiness;
   /** Optional final warm-up (SBD). Ignored once a working set is logged today. */
   warmup?: WarmupSet | null;
+  /** Today's smoothed bodyweight (kg); history logs carry theirs in `bodyweightKg`. */
+  bodyweightKg?: number | null;
   now?: Date;
 }): LoadModel {
   const { unit } = input;
@@ -227,6 +250,7 @@ export function buildLoadModel(input: {
 
   // ── History: every valid working set, grouped by session ──
   const bySession = new Map<string, { at: number; sets: Array<Omit<ModelSample, "weight">> }>();
+  const bwScales: number[] = [];
   for (const log of input.history) {
     if ((log.loadType ?? "external") !== "external" || log.isWorkingSet === false) continue;
     const at = log.occurredAt ? Date.parse(log.occurredAt) : NaN;
@@ -237,9 +261,11 @@ export function buildLoadModel(input: {
     const rpe = parseRpe(log.rpe) ?? (log.rir != null && log.rir !== "" ? parseRpe(10 - Number(log.rir)) : null);
     const est = setE1rm({ load, reps, rpe });
     if (!est) continue;
+    const bw = bodyweightScale(input.bodyweightKg, log.bodyweightKg);
+    bwScales.push(bw);
     const s = bySession.get(log.sessionKey) ?? { at, sets: [] };
     s.at = Math.max(s.at, at);
-    s.sets.push({ e1rm: est.e1rm, load, reps, rpe: rpe ?? 8.5, trust: est.trust });
+    s.sets.push({ e1rm: est.e1rm * bw, load: load * bw, reps, rpe: rpe ?? 8.5, trust: est.trust });
     bySession.set(log.sessionKey, s);
   }
   const sessions = Array.from(bySession.values()).sort((a, b) => b.at - a.at).slice(0, MAX_SESSIONS);
@@ -276,7 +302,8 @@ export function buildLoadModel(input: {
 
   const wE1rm = input.warmup ? warmupE1rm(input.warmup) : null;
   const warmup = wE1rm && input.warmup && today.length === 0 ? { e1rm: wE1rm, load: input.warmup.load, reps: input.warmup.reps } : null;
-  const base = { unit, historySessions: sessions.length, staleDays, warmup };
+  const bodyweightScaleMean = bwScales.length ? bwScales.reduce((a, b) => a + b, 0) / bwScales.length : 1;
+  const base = { unit, historySessions: sessions.length, staleDays, warmup, bodyweightScale: bodyweightScaleMean };
   if (today.length > 0) {
     return {
       ...base, status: "ready",

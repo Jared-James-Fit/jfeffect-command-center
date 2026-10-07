@@ -70,7 +70,12 @@ export function LoadSuggestionCard({
         </PopoverTrigger>
         <PopoverContent side="top" className="w-72 text-xs leading-relaxed">
           <p className="font-semibold">Just a suggestion</p>
-          <p className="mt-1 text-muted-foreground">Based on {why}. Let your first set decide:</p>
+          <p className="mt-1 text-muted-foreground">
+            Based on {why}.
+            {Math.abs((model.bodyweightScale ?? 1) - 1) >= 0.01 &&
+              ` Adjusted ${model.bodyweightScale > 1 ? "up" : "down"} ${Math.abs(Math.round((model.bodyweightScale - 1) * 1000) / 10)}% for your bodyweight change.`}
+            {" "}Let your first set decide:
+          </p>
           <ul className="mt-1 space-y-0.5 text-muted-foreground">
             <li><span className="font-semibold text-foreground">Bar flying?</span> Add {fmtNum(audible)} {hint.unit} next set.</li>
             <li><span className="font-semibold text-foreground">Slow or form breaking?</span> Drop {fmtNum(audible)} {hint.unit}.</li>
