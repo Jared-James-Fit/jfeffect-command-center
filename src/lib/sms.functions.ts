@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
-function normalizePhone(raw: string | null | undefined): string | null {
+export function normalizePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const cleaned = String(raw).replace(/[^\d+]/g, "");
   if (!cleaned) return null;
@@ -33,7 +33,7 @@ async function assertCanMessage(supabase: any, userId: string, clientId: string)
   return { isAdmin: false };
 }
 
-async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
+export async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const twilioKey = process.env.TWILIO_API_KEY;
   if (!lovableKey) throw new Error("LOVABLE_API_KEY missing");
@@ -183,6 +183,9 @@ export async function runReminderSweep(supabaseAdmin: any) {
     .eq("sender_role", "admin")
     .eq("is_internal_note", false)
     .is("read_by_client_at", null)
+    // Payment requests and their reminders have their own single, better timed
+    // text (payment-reminder-sms), so the generic unread sweep skips them.
+    .or("message_type.is.null,message_type.neq.Payment")
     .gte("created_at", lookback)
     .order("created_at", { ascending: true })
     .limit(500);
