@@ -322,8 +322,10 @@ describe("community is easy to find without taking over", () => {
     expect(shell).toContain("<CommunityNavButton />");
     expect(home).toContain("<CommunityHomeStrip />");
   });
-  it("never shows an empty social widget on Home", () => {
-    expect(entry).toContain("if (!activity?.enabled || people.length === 0) return null;");
+  it("is always on Home (clients live there), with Share first and an invite instead of an empty widget", () => {
+    expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" />');
+    expect(entry).toContain("Be the first to share this week");
+    expect(entry).not.toContain("people.length === 0) return null");
   });
 });
 
