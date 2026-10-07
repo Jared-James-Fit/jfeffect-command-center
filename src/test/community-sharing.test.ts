@@ -353,7 +353,7 @@ describe("community is its own page, reached from Home", () => {
   });
   it("opens a person's workout right on Home instead of navigating away", () => {
     expect(entry).toContain("onClick={() => setOpenPost(p.id)}");
-    expect(entry).toContain("<PostDetailDialog postId={openPost}");
+    expect(entry).toContain("postId={openPost}");
   });
   it("only shows a header nudge when there is something new", () => {
     expect(entry).toContain("data.unseen <= 0) return null;");
@@ -459,5 +459,22 @@ describe("who sees a post: JF crew, my coach, only me + hide weights", () => {
   it("formats a hidden load as reps, never '0 kg'", () => {
     expect(formatTopSet({ reps: 5, load_kg: null }, "kg")).toBe("5 reps");
     expect(formatTopSet({ reps: 1, load_kg: null }, "lb")).toBe("1 rep");
+  });
+});
+
+describe("the crew: find anyone's profile", () => {
+  const sql = read("supabase/migrations/20261007170000_community_members.sql");
+  const screen = read("src/components/community/community-screen.tsx");
+  const entry = read("src/components/community/community-entry.tsx");
+  it("lists the same population as the community, minus you, counting only posts you can see", () => {
+    expect(sql).toContain("coalesce(c.portal_access_disabled, false) = false");
+    expect(sql).toContain("AND public.community_post_visible(p.visibility, p.author_user_id, p.client_id)");
+    expect(sql).toContain("WHERE m.user_id <> uid");
+    expect(sql).not.toMatch(/community_follow|is_following/i);
+  });
+  it("is a Crew tab, and Home opens a person's profile instead of dead-ending", () => {
+    expect(screen).toContain('(["feed", "crew", "you"] as const)');
+    expect(screen).toContain("<CrewList onOpen={openAuthor} />");
+    expect(entry).toContain("hash: a.user_id === user?.id ? undefined : `person=${a.user_id}`");
   });
 });

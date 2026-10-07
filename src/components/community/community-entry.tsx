@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ChevronRight, Flame } from "lucide-react";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
@@ -59,6 +59,7 @@ export function CommunityHomeStrip() {
   const seenAt = activity?.seen_at ? new Date(activity.seen_at).getTime() : 0;
   const canShare = !isImpersonating;
   const [openPost, setOpenPost] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const people = useMemo(() => {
     const posts = feed.data?.pages[0]?.posts ?? [];
@@ -121,7 +122,16 @@ export function CommunityHomeStrip() {
           </div>
         )}
       </div>
-      <PostDetailDialog postId={openPost} unit={unit} viewerIsStaff={false} onClose={() => setOpenPost(null)} />
+      <PostDetailDialog
+        postId={openPost}
+        unit={unit}
+        viewerIsStaff={false}
+        onClose={() => setOpenPost(null)}
+        onOpenAuthor={(a) => {
+          setOpenPost(null);
+          navigate({ to: "/portal/community", hash: a.user_id === user?.id ? undefined : `person=${a.user_id}` });
+        }}
+      />
     </section>
   );
 }

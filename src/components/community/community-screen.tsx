@@ -10,16 +10,25 @@ import { CommentsSheet } from "@/components/community/comments-sheet";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
+import { CrewList } from "@/components/community/crew-list";
 import { markCommunitySeen, useCommunityFeed, useDeletePost, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
 
-type Scope = { kind: "feed" } | { kind: "you" } | { kind: "author"; author: CommunityAuthor };
+type Tab = "feed" | "crew" | "you";
+type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
 
 /** `#post=<id>` opens a post straight away (used by the Home strip and pushes). */
 function postFromHash(): string | null {
   if (typeof window === "undefined") return null;
   const m = window.location.hash.match(/post=([0-9a-f-]{36})/i);
+  return m ? m[1] : null;
+}
+
+/** `#person=<user id>` opens someone's profile (used from Home). */
+function personFromHash(): string | null {
+  if (typeof window === "undefined") return null;
+  const m = window.location.hash.match(/person=([0-9a-f-]{36})/i);
   return m ? m[1] : null;
 }
 
@@ -32,7 +41,11 @@ export function CommunityScreen({ canShare = false }: { canShare?: boolean }) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const viewerIsStaff = role === "admin" || role === "coach";
-  const [scope, setScope] = useState<Scope>({ kind: "feed" });
+  const [scope, setScope] = useState<Scope>(() => {
+    const person = personFromHash();
+    return person ? { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "crew" } : { kind: "feed" };
+  });
+  const tab: Tab = scope.kind === "author" ? scope.from : scope.kind;
   const [commentsFor, setCommentsFor] = useState<CommunityPost | null>(null);
   const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
 
@@ -70,7 +83,7 @@ export function CommunityScreen({ canShare = false }: { canShare?: boolean }) {
   const openAuthor = (a: CommunityAuthor) => {
     setDetailId(null);
     if (a.user_id === user?.id) setScope({ kind: "you" });
-    else setScope({ kind: "author", author: a });
+    else setScope({ kind: "author", author: a, from: tab });
     window.scrollTo({ top: 0 });
   };
   const closeDetail = () => {
@@ -83,22 +96,30 @@ export function CommunityScreen({ canShare = false }: { canShare?: boolean }) {
   return (
     <div className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 sm:px-4">
       {scope.kind === "author" ? (
-        <Button type="button" variant="ghost" className="-ml-2 h-10 rounded-full px-3" onClick={() => setScope({ kind: "feed" })}>
-          <ArrowLeft className="mr-1.5 h-4 w-4" /> Feed
+        <Button
+          type="button"
+          variant="ghost"
+          className="-ml-2 h-10 rounded-full px-3"
+          onClick={() => {
+            setScope({ kind: scope.from });
+            if (window.location.hash.includes("person=")) history.replaceState(null, "", window.location.pathname + window.location.search);
+          }}
+        >
+          <ArrowLeft className="mr-1.5 h-4 w-4" /> {scope.from === "crew" ? "Crew" : scope.from === "you" ? "You" : "Feed"}
         </Button>
       ) : (
         <div className="flex items-center justify-between gap-2">
         <div className="inline-flex rounded-full bg-muted p-1" role="tablist" aria-label="Community view">
-          {(["feed", "you"] as const).map((k) => (
+          {(["feed", "crew", "you"] as const).map((k) => (
             <button
               key={k}
               type="button"
               role="tab"
               aria-selected={scope.kind === k}
               onClick={() => setScope({ kind: k })}
-              className={cn("h-9 rounded-full px-5 text-[13px] font-bold transition-colors", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+              className={cn("h-9 rounded-full px-4 text-[13px] font-bold transition-colors", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
             >
-              {k === "feed" ? "Feed" : "You"}
+              {k === "feed" ? "Feed" : k === "crew" ? "Crew" : "You"}
             </button>
           ))}
         </div>
@@ -106,7 +127,9 @@ export function CommunityScreen({ canShare = false }: { canShare?: boolean }) {
         </div>
       )}
 
-      {scope.kind === "you" && user?.id ? (
+      {scope.kind === "crew" ? (
+        <CrewList onOpen={openAuthor} />
+      ) : scope.kind === "you" && user?.id ? (
         <ProfileView userId={user.id} unit={unit} onOpenPost={(p) => setDetailId(p.id)} />
       ) : scope.kind === "author" ? (
         <ProfileView userId={scope.author.user_id} unit={unit} onOpenPost={(p) => setDetailId(p.id)} />

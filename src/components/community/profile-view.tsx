@@ -155,7 +155,7 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
       </div>
       {posts.length === 0 && !feed.isLoading && (
         <div className="mt-2 rounded-2xl border border-dashed border-border px-6 py-10 text-center text-[13px] text-muted-foreground">
-          {profile.is_me ? "Your shared workouts show up here. Finish a session and tap Share workout." : "Nothing shared yet."}
+          {profile.is_me ? "Lock in at your next session, or share a finished workout. It shows up here." : "Nothing shared yet."}
         </div>
       )}
       {feed.hasNextPage && (
