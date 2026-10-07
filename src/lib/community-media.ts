@@ -160,6 +160,41 @@ export async function uploadPicked(m: PickedMedia, userId: string, onProgress?: 
   return { media_path: up.path, media_thumb_path: thumbPath, media_type: m.kind, media_width: m.width, media_height: m.height };
 }
 
+/* ---- community profile photo -------------------------------------- */
+
+/**
+ * Centre-crop a chosen photo to a 512px square JPEG. Lives in the existing
+ * private `avatars` bucket under `<uid>/community-*` (owner-write, signed-in
+ * read), separate from the account / identity photo.
+ */
+export async function prepareCommunityAvatar(file: File): Promise<Blob> {
+  if (!file.type.startsWith("image/")) throw new Error("Pick a photo");
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await loadImageEl(url);
+    if (!img) throw new Error("Couldn't read that photo. Try a JPEG or PNG.");
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const out = Math.min(512, side);
+    const c = document.createElement("canvas");
+    c.width = out;
+    c.height = out;
+    c.getContext("2d")!.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, out, out);
+    const blob = await canvasToJpeg(c, 0.86);
+    if (!blob) throw new Error("Couldn't prepare that photo");
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export async function uploadCommunityAvatar(file: File, userId: string): Promise<string> {
+  const blob = await prepareCommunityAvatar(file);
+  const path = `${userId}/community-${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+  if (error) throw error;
+  return path;
+}
+
 /** Best-effort cleanup of files no post points at any more. */
 export async function removeCommunityFiles(paths: (string | null | undefined)[]) {
   const list = paths.filter((p): p is string => !!p);

@@ -1,13 +1,14 @@
-import { useMemo, useState } from "react";
-import { Lock, Pencil, Play } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Camera, Lock, Pencil, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge, LockInHero, WorkoutHero } from "@/components/community/post-card";
 import { BIO_MAX, trainingSinceLabel, type CommunityPost } from "@/lib/community";
-import { useCommunityFeed, useCommunityProfile, usePostMediaUrls, useSetBio } from "@/lib/community.queries";
+import { useCommunityFeed, useCommunityProfile, usePostMediaUrls, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
 
 /**
  * A person's corner of the community: photo, name, a short bio and a grid of
@@ -22,6 +23,8 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
   const [editing, setEditing] = useState(false);
   const [bio, setBio] = useState("");
   const saveBio = useSetBio(userId);
+  const setAvatar = useSetCommunityAvatar(userId);
+  const photoRef = useRef<HTMLInputElement | null>(null);
 
   if (isLoading || !profile) {
     return (
@@ -48,10 +51,43 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
   return (
     <div>
       <div className="flex items-center gap-4">
-        <div className="rounded-full bg-[linear-gradient(135deg,#f58529,#dd2a7b,#8134af)] p-[3px]">
-          <div className="rounded-full bg-background p-[2px]">
-            <UserAvatar src={profile.author.avatar_url} name={profile.author.name} size={78} expandable={false} />
-          </div>
+        {/* Your own photo: tap to add / change. Community-only, never your account photo. */}
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <button
+            type="button"
+            disabled={!profile.is_me || setAvatar.isPending}
+            onClick={() => photoRef.current?.click()}
+            className="relative rounded-full bg-[linear-gradient(135deg,#f58529,#dd2a7b,#8134af)] p-[3px] disabled:cursor-default"
+            aria-label={profile.is_me ? (profile.author.avatar_url ? "Change your community photo" : "Add a community photo") : undefined}
+          >
+            <span className={cn("block rounded-full bg-background p-[2px]", setAvatar.isPending && "animate-pulse")}>
+              <UserAvatar src={profile.author.avatar_url} name={profile.author.name} size={78} expandable={false} />
+            </span>
+            {profile.is_me && (
+              <span className="absolute -bottom-0.5 -right-0.5 grid h-7 w-7 place-items-center rounded-full border-2 border-background bg-foreground text-background">
+                <Camera className="h-3.5 w-3.5" />
+              </span>
+            )}
+          </button>
+          {profile.is_me && !profile.author.avatar_url && <span className="text-[11px] font-bold text-primary">Add photo</span>}
+          {profile.is_me && profile.author.avatar_url && (
+            <button type="button" disabled={setAvatar.isPending} className="text-[11px] font-semibold text-muted-foreground" onClick={() => setAvatar.mutate(null, { onError: (e: any) => toast.error(e?.message ?? "Couldn't remove it") })}>
+              Remove
+            </button>
+          )}
+          {profile.is_me && (
+            <input
+              ref={photoRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) setAvatar.mutate(f, { onSuccess: () => toast.success("Photo updated"), onError: (err: any) => toast.error(err?.message ?? "Couldn't upload that photo") });
+              }}
+            />
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
