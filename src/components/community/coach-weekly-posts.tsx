@@ -6,7 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { SERIES_LABEL, postTimeLabel, type CommunitySeries } from "@/lib/community";
-import { useSeriesAction, useSeriesOverview, type SeriesItem } from "@/lib/community.queries";
+import { useSeriesAction, useSeriesOverview, useViewerUnit, type SeriesItem } from "@/lib/community.queries";
+import { useAuth } from "@/lib/auth";
+import { WinsStatsCard } from "@/components/community/wins-stats";
 import { NoteEditor } from "@/components/community/note-editor";
 
 const ORDER: CommunitySeries[] = ["monday_motivation", "wednesday_wins", "finish_strong_friday"];
@@ -25,6 +27,8 @@ const WHEN: Record<CommunitySeries, string> = {
  */
 export function CoachWeeklyPosts() {
   const { data, isLoading, isError } = useSeriesOverview(true);
+  const { user } = useAuth();
+  const { data: unit = "lb" } = useViewerUnit(user?.id);
   const act = useSeriesAction();
   const [editing, setEditing] = useState<{ item: SeriesItem } | null>(null);
   const [writing, setWriting] = useState(false);
@@ -108,6 +112,7 @@ export function CoachWeeklyPosts() {
                         : "Nobody has logged a session yet"}
                     </div>
                     {preview && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{preview.body}</div>}
+                    {preview?.stats && <WinsStatsCard stats={preview.stats} unit={unit} className="mt-2.5" />}
                   </div>
                 )}
               </div>

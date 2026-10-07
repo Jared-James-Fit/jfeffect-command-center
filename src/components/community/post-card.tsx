@@ -22,6 +22,7 @@ import {
   type WorkoutShareStats,
 } from "@/lib/community";
 import { useFullMediaUrl } from "@/lib/community.queries";
+import { WinsStatsCard } from "@/components/community/wins-stats";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -280,7 +281,10 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {/* Hero: the photo, or the workout itself when there isn't one */}
       <div role="button" tabIndex={0} onClick={onHeroTap} onKeyDown={(e) => e.key === "Enter" && onOpen(post)} className="relative cursor-pointer select-none" aria-label="Open workout">
         {isNote ? (
-          <NoteBody post={post} clamp />
+          <>
+            <NoteBody post={post} clamp />
+            {post.series_data && <WinsStatsCard stats={post.series_data} unit={unit} className="mx-4 mb-1 mt-2" />}
+          </>
         ) : post.media_type ? (
           <PostMedia post={post} thumbUrl={thumbUrl} />
         ) : s ? (

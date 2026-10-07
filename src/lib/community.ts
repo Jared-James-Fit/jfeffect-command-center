@@ -100,6 +100,8 @@ export type CommunityPost = {
   quote?: string | null;
   quote_author?: string | null;
   quote_source?: string | null;
+  /** Wednesday Wins: the crew's numbers for the week, shown as a card. */
+  series_data?: WinsStats | null;
   edited_at?: string | null;
   /** Set when the post was made while the session was still open ("Locked in"). */
   locked_in_at?: string | null;
@@ -343,4 +345,85 @@ export function trainingSinceLabel(iso: string | null | undefined): string | nul
   const d = new Date(iso);
   if (Number.isNaN(+d)) return null;
   return `Training since ${d.toLocaleDateString(undefined, { month: "short", year: "numeric" })}`;
+}
+
+/* ---- Wednesday Wins: the crew's week in numbers ----------------------- */
+
+/** Saved on the post when it goes out. Counts only; nobody singled out. */
+export type WinsStats = {
+  week_of: string;
+  roster: number;
+  opened: number;
+  trained: number;
+  sessions: number;
+  sessions_prev: number;
+  prs: number;
+  pr_people: number;
+  volume_kg: number;
+  reps: number;
+  streaks: number;
+  bodyweight: number;
+  checkins: number;
+  busiest_day: string | null;
+};
+
+/** "Sep 28 – Oct 4" for the Monday the week starts on. */
+export function winsWeekLabel(weekOf: string): string {
+  const [y, m, d] = weekOf.split("-").map(Number);
+  const start = new Date(y, m - 1, d);
+  const end = new Date(y, m - 1, d + 6);
+  const f = (x: Date) => x.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${f(start)} – ${f(end)}`;
+}
+
+export function pct(part: number, whole: number): number {
+  return whole > 0 ? Math.round((part / whole) * 100) : 0;
+}
+
+/** 6,015 · 45.2K · 450K · 1.2M */
+export function compactNumber(n: number): string {
+  if (n < 10_000) return Math.round(n).toLocaleString("en-US");
+  if (n < 100_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+  if (n < 1_000_000) return `${Math.round(n / 1000)}K`;
+  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+}
+
+const PICKUP_LB = 5000;
+
+/**
+ * The tiles under the post, in plain words anyone gets: how many opened the
+ * app, workouts, PRs, total weight (with a pickup-truck comparison), streaks
+ * and the busiest day. Weight is shown in the viewer's own unit.
+ */
+export function winsStatTiles(s: WinsStats, unit: "kg" | "lb") {
+  const lb = s.volume_kg * 2.20462;
+  const trucks = Math.round(lb / PICKUP_LB);
+  const change = s.sessions_prev > 0 ? Math.round(((s.sessions - s.sessions_prev) / s.sessions_prev) * 100) : null;
+  const tiles: { value: string; label: string; sub?: string }[] = [
+    { value: `${pct(s.opened, s.roster)}%`, label: "opened the app", sub: `${s.opened} of ${s.roster}` },
+    {
+      value: String(s.sessions),
+      label: "workouts done",
+      sub: change == null || change === 0 ? undefined : `${change > 0 ? "+" : ""}${change}% vs last week`,
+    },
+    { value: String(s.prs), label: s.prs === 1 ? "new PR" : "new PRs", sub: s.pr_people > 0 ? `by ${s.pr_people} ${s.pr_people === 1 ? "person" : "people"}` : undefined },
+  ];
+  if (s.volume_kg > 0)
+    tiles.push({
+      value: compactNumber(unit === "kg" ? s.volume_kg : lb),
+      label: `${unit} lifted`,
+      sub: trucks >= 2 ? `≈ ${trucks} pickup trucks` : undefined,
+    });
+  if (s.streaks > 0) tiles.push({ value: String(s.streaks), label: "on a 4+ week streak" });
+  if (s.busiest_day) tiles.push({ value: s.busiest_day.slice(0, 3), label: "busiest day" });
+  return tiles;
+}
+
+/** The small habits line: "9 logged bodyweight · 4 sent a check-in · 6,015 reps". */
+export function winsHabitsLine(s: WinsStats): string {
+  const parts: string[] = [];
+  if (s.bodyweight > 0) parts.push(`${s.bodyweight} logged bodyweight`);
+  if (s.checkins > 0) parts.push(`${s.checkins} sent a check-in`);
+  if (s.reps > 0) parts.push(`${s.reps.toLocaleString("en-US")} reps`);
+  return parts.join(" · ");
 }

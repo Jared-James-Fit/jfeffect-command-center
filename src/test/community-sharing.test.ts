@@ -21,6 +21,11 @@ import {
   isTrainingNow,
   lockInTimeLabel,
   SERIES_LABEL,
+  compactNumber,
+  winsHabitsLine,
+  winsStatTiles,
+  winsWeekLabel,
+  type WinsStats,
   LOCK_IN_CAPTIONS,
   type CommunityExercise,
   type CommunityFeedPage,
@@ -534,11 +539,11 @@ describe("Wednesday Wins: last week's real wins, everyone who trained", () => {
   it("rotates shout-outs so everyone gets one within the month, and names the rest", () => {
     expect(sql).toContain("interval '28 days'");
     expect(sql).toContain("least(6, greatest(4, ceil(v_n / 2.0)::int))");
-    expect(sql).toContain("'Also put in the work: '");
+    expect(sql).toContain("'Shoutout to ' || v_rest || ' too. '");
     expect(sql).toContain("INSERT INTO public.community_series_features (series_key, client_id, win_type, featured_at)");
   });
   it("respects each client's unit and Hide weights", () => {
-    expect(sql).toContain("v_load := CASE WHEN v_hide THEN NULL ELSE public.community_fmt_load(pr.load_kg, v_unit) END;");
+    expect(sql).toContain("v_set := CASE WHEN v_hide OR public.community_fmt_load(pr.load_kg, c.unit) IS NULL THEN NULL");
     expect(sql).toContain("REVOKE ALL ON public.community_series_features FROM anon, authenticated;");
   });
   it("shows the coach a live preview and the Wednesday label everywhere", () => {
@@ -546,5 +551,50 @@ describe("Wednesday Wins: last week's real wins, everyone who trained", () => {
     expect(coach).toContain('"wednesday_wins"');
     expect(coach).toContain("preview.body");
     expect(coach).toContain("SERIES_LABEL[h.series]?.short");
+  });
+});
+
+describe("Wednesday Wins reads like the coach wrote it, with the crew's numbers", () => {
+  const sql = read("supabase/migrations/20261008120000_community_wednesday_wins.sql");
+  const card = read("src/components/community/post-card.tsx");
+  const detail = read("src/components/community/post-detail.tsx");
+  it("writes each win as a sentence and never repeats the same phrasing back to back", () => {
+    expect(sql).toContain("v_name || ' hit an all-time PR on ' || v_lift");
+    expect(sql).toContain("w->'texts'->>((pos - 1 + v_wk)::int % 3)");
+    expect(sql).toContain("regexp_replace(_name, '^(.+?) - (.+)$', '\\2 \\1')");
+    // no robotic "Name: ..." lines, no em dashes in the words
+    expect(sql).not.toContain("v_name || ': '");
+    expect(sql.split("$$").filter((_, i) => i % 2 === 1).join("")).not.toContain("—");
+  });
+  it("saves the crew's numbers on the post and the app reads them back", () => {
+    expect(sql).toContain("ALTER TABLE public.community_posts ADD COLUMN IF NOT EXISTS series_data jsonb;");
+    expect(sql).toContain("v_comp->'stats', coalesce(_at, now()))");
+    expect(sql).toContain("'series_data', n.series_data,");
+    expect(sql).toContain("WHERE a.action = 'signed_in'");
+    expect(card).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
+    expect(detail).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
+  });
+  const s: WinsStats = {
+    week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,
+    volume_kg: 204215, reps: 6015, streaks: 10, bodyweight: 9, checkins: 4, busiest_day: "Friday",
+  };
+  it("turns them into numbers anyone gets", () => {
+    expect(winsWeekLabel("2026-09-28")).toBe("Sep 28 – Oct 4");
+    const lb = winsStatTiles(s, "lb");
+    expect(lb.map((t) => t.value)).toEqual(["94%", "36", "41", "450K", "10", "Fri"]);
+    expect(lb[0].sub).toBe("15 of 16");
+    expect(lb[1].sub).toBe("+13% vs last week");
+    expect(lb[2].sub).toBe("by 9 people");
+    expect(lb[3]).toMatchObject({ label: "lb lifted", sub: "≈ 90 pickup trucks" });
+    expect(winsStatTiles(s, "kg")[3]).toMatchObject({ value: "204K", label: "kg lifted" });
+    expect(winsHabitsLine(s)).toBe("9 logged bodyweight · 4 sent a check-in · 6,015 reps");
+    expect(compactNumber(6015)).toBe("6,015");
+    expect(compactNumber(45200)).toBe("45.2K");
+    expect(compactNumber(1_250_000)).toBe("1.3M");
+  });
+  it("leaves out tiles that would be empty or misleading", () => {
+    const quiet = winsStatTiles({ ...s, volume_kg: 0, streaks: 0, busiest_day: null, sessions_prev: 0, prs: 1, pr_people: 1 }, "lb");
+    expect(quiet.map((t) => t.label)).toEqual(["opened the app", "workouts done", "new PR"]);
+    expect(quiet[1].sub).toBeUndefined();
   });
 });

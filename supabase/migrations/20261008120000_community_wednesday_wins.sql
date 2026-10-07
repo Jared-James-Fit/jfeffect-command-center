@@ -32,6 +32,9 @@ ALTER TABLE public.community_series_features ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.community_series_features FROM anon, authenticated;
 GRANT ALL ON public.community_series_features TO service_role;
 
+-- The crew's numbers for the week, shown as a card under the post.
+ALTER TABLE public.community_posts ADD COLUMN IF NOT EXISTS series_data jsonb;
+
 CREATE OR REPLACE FUNCTION public.community_fmt_load(_kg numeric, _unit text)
 RETURNS text LANGUAGE sql IMMUTABLE SET search_path = public AS $$
   SELECT CASE WHEN _kg IS NULL OR _kg <= 0 THEN NULL
@@ -39,8 +42,16 @@ RETURNS text LANGUAGE sql IMMUTABLE SET search_path = public AS $$
               ELSE round(_kg * 2.20462)::int::text || ' lb' END
 $$;
 
+-- "Hip Thrust - Barbell" reads as "Barbell Hip Thrust" in a sentence.
+CREATE OR REPLACE FUNCTION public.community_fmt_lift(_name text)
+RETURNS text LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT CASE WHEN _name ~* '^(.+?) - (barbell|dumbbells?|cable|machine|smith machine|kettlebell|band|bodyweight|ez bar|trap bar|landmine)$'
+              THEN regexp_replace(_name, '^(.+?) - (.+)$', '\2 \1') ELSE _name END
+$$;
+
 -- Every client who trained in the week starting _week_start (a Monday), with
--- their single best win. Internal (no grants); used by compose + preview.
+-- their single best win, written the way a coach would say it. Internal (no
+-- grants); used by compose + preview.
 CREATE OR REPLACE FUNCTION public.community_week_wins(_week_start date, _exclude_user uuid DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -51,7 +62,6 @@ DECLARE
   pr record;
   v_out jsonb := '[]'::jsonb;
   v_name text;
-  v_unit text;
   v_hide boolean;
   v_sessions int;
   v_pr_lifts int;
@@ -63,10 +73,14 @@ DECLARE
   v_streak int;
   v_vol numeric;
   v_vol_prev numeric;
+  v_reps int;
   v_type text;
   v_score int;
   v_text text;
-  v_load text;
+  v_texts text[];
+  v_lift text;
+  v_set text;
+  v_more text;
 BEGIN
   FOR c IN
     SELECT cl.id, cl.user_id, coalesce(nullif(cl.preferred_weight_unit, ''), 'lb') AS unit
@@ -82,7 +96,6 @@ BEGIN
     CONTINUE WHEN v_sessions = 0;
 
     v_name := public.community_author(c.user_id)->>'name';
-    v_unit := c.unit;
     v_hide := EXISTS (SELECT 1 FROM public.community_posts p WHERE p.author_user_id = c.user_id AND p.hide_loads);
 
     -- PRs set this week (the same record rules the recap and share cards use)
@@ -115,8 +128,9 @@ BEGIN
     END LOOP;
 
     SELECT coalesce(sum(q.reps * q.load_kg) FILTER (WHERE q.workout_at >= v_from), 0),
-           coalesce(sum(q.reps * q.load_kg) FILTER (WHERE q.workout_at < v_from), 0)
-      INTO v_vol, v_vol_prev
+           coalesce(sum(q.reps * q.load_kg) FILTER (WHERE q.workout_at < v_from), 0),
+           coalesce(sum(q.reps) FILTER (WHERE q.workout_at >= v_from), 0)::int
+      INTO v_vol, v_vol_prev, v_reps
       FROM public.client_qualifying_sets(c.id) q
      WHERE q.completed AND q.workout_at >= v_from - interval '7 days' AND q.workout_at < v_to;
 
@@ -126,41 +140,124 @@ BEGIN
       -- More PRs and a big-3 PR rank higher within the same kind of win.
       v_score := CASE pr.scope WHEN 'atpr' THEN 100 WHEN 'program_pr' THEN 85 ELSE 70 END
                  + least(coalesce(v_pr_lifts, 1), 10) + CASE WHEN pr.exercise_name ~* '(squat|bench|deadlift)' THEN 5 ELSE 0 END;
-      v_load := CASE WHEN v_hide THEN NULL ELSE public.community_fmt_load(pr.load_kg, v_unit) END;
-      v_text := v_name || ': ' || CASE pr.scope WHEN 'atpr' THEN 'all-time PR' WHEN 'program_pr' THEN 'program PR' ELSE 'block PR' END
-                || ' on ' || pr.exercise_name || CASE WHEN v_load IS NOT NULL THEN ', ' || v_load || ' × ' || pr.reps ELSE '' END
-                || CASE WHEN v_pr_lifts > 1 THEN '. Plus ' || (v_pr_lifts - 1) || CASE WHEN v_pr_lifts = 2 THEN ' more PR.' ELSE ' more PRs.' END ELSE '.' END;
+      v_lift := public.community_fmt_lift(pr.exercise_name);
+      v_set := CASE WHEN v_hide OR public.community_fmt_load(pr.load_kg, c.unit) IS NULL THEN NULL
+                    WHEN pr.reps = 1 THEN 'a ' || public.community_fmt_load(pr.load_kg, c.unit) || ' single'
+                    ELSE public.community_fmt_load(pr.load_kg, c.unit) || ' for ' || pr.reps END;
+      v_more := CASE WHEN v_pr_lifts >= 5 THEN ' ' || v_pr_lifts || ' PRs in one week.'
+                     WHEN v_pr_lifts > 1 THEN ' That''s ' || v_pr_lifts || ' PRs on the week.' ELSE '' END;
+      -- three ways to say each win; compose rotates them so lines next to
+      -- each other never read the same
+      v_texts := CASE pr.scope
+        WHEN 'atpr' THEN ARRAY[
+          v_name || ' hit an all-time PR on ' || v_lift || coalesce(', ' || v_set, '') || '.',
+          'New all-time PR for ' || v_name || ' on ' || v_lift || '.' || coalesce(' ' || initcap(left(v_set, 1)) || substr(v_set, 2) || '.', ''),
+          v_name || ' set a new all-time best on ' || v_lift || coalesce(', ' || v_set, '') || '.']
+        WHEN 'program_pr' THEN ARRAY[
+          v_name || ' hit a program PR on ' || v_lift || coalesce(', ' || v_set, '') || '.',
+          v_name || ' beat their best on ' || v_lift || ' this program' || coalesce(', ' || v_set, '') || '.',
+          'Program PR for ' || v_name || ' on ' || v_lift || coalesce(', ' || v_set, '') || '.']
+        ELSE ARRAY[
+          v_name || ' beat their best of this block on ' || v_lift || coalesce(', ' || v_set, '') || '.',
+          'Block PR for ' || v_name || ' on ' || v_lift || coalesce(', ' || v_set, '') || '.',
+          v_name || ' hit a block PR on ' || v_lift || coalesce(', ' || v_set, '') || '.']
+      END;
+      v_texts := ARRAY[v_texts[1] || v_more, v_texts[2] || v_more, v_texts[3] || v_more];
     ELSIF v_prev IS NULL THEN
       v_type := 'first_week'; v_score := 60;
-      v_text := v_name || ': first week in the books. ' || v_sessions || CASE WHEN v_sessions = 1 THEN ' session.' ELSE ' sessions.' END;
+      v_texts := ARRAY[
+        'Welcome to the crew ' || v_name || '. First week done, ' || CASE WHEN v_sessions = 1 THEN 'first session in.' ELSE v_sessions || ' sessions in.' END,
+        v_name || ' got their first week in the books. ' || CASE WHEN v_sessions = 1 THEN 'One session down.' ELSE v_sessions || ' sessions down.' END,
+        'First week done for ' || v_name || '. ' || CASE WHEN v_sessions = 1 THEN 'That first session is the hardest one.' ELSE v_sessions || ' sessions in already.' END];
     ELSIF v_gap >= 14 THEN
       v_type := 'comeback'; v_score := 60;
-      v_text := v_name || ': back under the bar after ' || v_gap || ' days off. Hardest session there is.';
+      v_texts := ARRAY[
+        v_name || ' is back after ' || v_gap || ' days off. The first one back is the hardest, and it''s done.',
+        'Good to have ' || v_name || ' back after ' || v_gap || ' days away.',
+        v_name || ' got back in after ' || v_gap || ' days off. That''s the hard part done.'];
     ELSIF v_sched >= 3 AND v_done >= v_sched THEN
       v_type := 'perfect_week'; v_score := 55;
-      v_text := v_name || ': ' || v_done || ' for ' || v_sched || '. Every session done.';
+      v_texts := ARRAY[
+        v_name || ' went ' || v_done || ' for ' || v_sched || '. Didn''t miss a single session.',
+        v_name || ' hit every session on the plan, ' || v_done || ' for ' || v_sched || '.',
+        v_done || ' for ' || v_sched || ' from ' || v_name || '. Every session done.'];
     ELSIF v_streak >= 4 THEN
       v_type := 'streak'; v_score := 40 + least(v_streak, 20);
-      v_text := v_name || ': ' || v_streak || ' straight weeks without missing one.';
+      v_texts := ARRAY[
+        v_name || ' has trained ' || v_streak || ' weeks straight without missing one.',
+        v_streak || ' weeks in a row for ' || v_name || '. That''s how it''s done.',
+        v_name || ' hasn''t missed a week in ' || v_streak || ' weeks.'];
     ELSIF v_vol_prev > 0 AND v_vol >= v_vol_prev * 1.15 THEN
       v_type := 'volume'; v_score := 35;
-      v_text := v_name || ': moved ' || round((v_vol / v_vol_prev - 1) * 100)::int || '% more than the week before.';
+      v_texts := ARRAY[
+        v_name || ' moved ' || round((v_vol / v_vol_prev - 1) * 100)::int || '% more weight than the week before.',
+        v_name || ' lifted ' || round((v_vol / v_vol_prev - 1) * 100)::int || '% more than the week before.',
+        v_name || ' put up ' || round((v_vol / v_vol_prev - 1) * 100)::int || '% more total weight than the week before.'];
     ELSE
       v_type := 'sessions'; v_score := 10 + v_sessions * 3;
-      v_text := v_name || ': ' || v_sessions || CASE WHEN v_sessions = 1 THEN ' session in. Showed up.' ELSE ' sessions in.' END;
+      v_texts := CASE WHEN v_sessions = 1 THEN array_fill(v_name || ' got a session in. That counts.', ARRAY[3])
+                      ELSE ARRAY[v_name || ' got ' || v_sessions || ' sessions in.', v_sessions || ' sessions from ' || v_name || '.', v_name || ' put in ' || v_sessions || ' sessions.'] END;
     END IF;
+    v_text := v_texts[1];
 
     v_out := v_out || jsonb_build_array(jsonb_build_object(
-      'client_id', c.id, 'name', v_name, 'type', v_type, 'score', v_score, 'text', v_text,
-      'sessions', v_sessions, 'pr_lifts', coalesce(v_pr_lifts, 0)));
+      'client_id', c.id, 'name', v_name, 'type', v_type, 'score', v_score, 'text', v_text, 'texts', to_jsonb(v_texts),
+      'sessions', v_sessions, 'pr_lifts', coalesce(v_pr_lifts, 0), 'streak', v_streak,
+      'volume_kg', round(v_vol), 'reps', v_reps));
   END LOOP;
   RETURN v_out;
 END;
 $$;
 REVOKE ALL ON FUNCTION public.community_week_wins(date, uuid) FROM PUBLIC, anon, authenticated;
 
--- The post itself: who's named (fair rotation) + the words. NULL when
--- nobody trained. Internal; publish and the coach preview call it.
+-- The crew's week in numbers, for the stats card under the post. Only
+-- counts and percentages, nobody singled out.
+CREATE OR REPLACE FUNCTION public.community_week_stats(_week_start date, _exclude_user uuid, _wins jsonb)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  tz constant text := 'America/Winnipeg';
+  v_from timestamptz := (_week_start::timestamp AT TIME ZONE tz);
+  v_to timestamptz := ((_week_start + 7)::timestamp AT TIME ZONE tz);
+  v_roster uuid[];
+BEGIN
+  SELECT array_agg(cl.id) INTO v_roster FROM public.clients cl
+   WHERE cl.user_id IS NOT NULL
+     AND coalesce(cl.archived, false) = false AND cl.archived_at IS NULL
+     AND coalesce(cl.status, '') <> 'Archived'
+     AND coalesce(cl.portal_access_disabled, false) = false
+     AND cl.user_id IS DISTINCT FROM _exclude_user;
+  RETURN jsonb_build_object(
+    'week_of', _week_start,
+    'roster', coalesce(array_length(v_roster, 1), 0),
+    -- opened the app: signed in, or logged anything at all
+    'opened', (SELECT count(DISTINCT x.id) FROM (
+                 SELECT a.client_id AS id FROM public.client_activity_log a
+                  WHERE a.action = 'signed_in' AND a.created_at >= v_from AND a.created_at < v_to AND a.client_id = ANY (v_roster)
+                 UNION ALL
+                 SELECT e.client_id FROM public.athlete_xp_events e
+                  WHERE e.occurred_at >= v_from AND e.occurred_at < v_to AND e.client_id = ANY (v_roster)) x),
+    'trained', jsonb_array_length(coalesce(_wins, '[]'::jsonb)),
+    'sessions', (SELECT coalesce(sum((w->>'sessions')::int), 0) FROM jsonb_array_elements(coalesce(_wins, '[]'::jsonb)) w),
+    'sessions_prev', (SELECT count(*) FROM public.pl_day_completions pc
+                       WHERE pc.client_id = ANY (v_roster) AND pc.completed_at >= v_from - interval '7 days' AND pc.completed_at < v_from),
+    'prs', (SELECT coalesce(sum((w->>'pr_lifts')::int), 0) FROM jsonb_array_elements(coalesce(_wins, '[]'::jsonb)) w),
+    'pr_people', (SELECT count(*) FROM jsonb_array_elements(coalesce(_wins, '[]'::jsonb)) w WHERE (w->>'pr_lifts')::int > 0),
+    'volume_kg', (SELECT coalesce(sum((w->>'volume_kg')::numeric), 0) FROM jsonb_array_elements(coalesce(_wins, '[]'::jsonb)) w),
+    'reps', (SELECT coalesce(sum((w->>'reps')::int), 0) FROM jsonb_array_elements(coalesce(_wins, '[]'::jsonb)) w),
+    'streaks', (SELECT count(*) FROM jsonb_array_elements(coalesce(_wins, '[]'::jsonb)) w WHERE (w->>'streak')::int >= 4),
+    'bodyweight', (SELECT count(DISTINCT e.client_id) FROM public.athlete_xp_events e
+                    WHERE e.event_type = 'bodyweight' AND e.occurred_at >= v_from AND e.occurred_at < v_to AND e.client_id = ANY (v_roster)),
+    'checkins', (SELECT count(DISTINCT e.client_id) FROM public.athlete_xp_events e
+                  WHERE e.event_type = 'weekly_checkin' AND e.occurred_at >= v_from AND e.occurred_at < v_to AND e.client_id = ANY (v_roster)),
+    'busiest_day', (SELECT to_char(pc.completed_at AT TIME ZONE tz, 'FMDay') FROM public.pl_day_completions pc
+                     WHERE pc.client_id = ANY (v_roster) AND pc.completed_at >= v_from AND pc.completed_at < v_to
+                     GROUP BY 1, extract(isodow FROM pc.completed_at AT TIME ZONE tz) ORDER BY count(*) DESC, extract(isodow FROM pc.completed_at AT TIME ZONE tz) LIMIT 1));
+END;
+$$;
+REVOKE ALL ON FUNCTION public.community_week_stats(date, uuid, jsonb) FROM PUBLIC, anon, authenticated;
+
+-- The post itself: who's named (fair rotation), the words, and the stats.
+-- NULL when nobody trained. Internal; publish and the coach preview call it.
 CREATE OR REPLACE FUNCTION public.community_compose_wins(_week_start date, _exclude_user uuid DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -170,7 +267,8 @@ DECLARE
   v_pick jsonb;
   v_lines text;
   v_rest text;
-  v_sessions int;
+  v_rest_n int;
+  v_stats jsonb;
   v_prs int;
   v_wk int := extract(week FROM _week_start)::int;
   v_intro text;
@@ -190,26 +288,40 @@ BEGIN
       FROM jsonb_array_elements(v_all) w) z
    WHERE ord <= v_k;
 
-  SELECT string_agg(w->>'text', E'\n' ORDER BY (w->>'score')::int DESC) INTO v_lines FROM jsonb_array_elements(v_pick) w;
+  SELECT string_agg(coalesce(w->'texts'->>((pos - 1 + v_wk)::int % 3), w->>'text'), E'\n\n' ORDER BY pos) INTO v_lines
+    FROM (SELECT w, row_number() OVER (ORDER BY (w->>'score')::int DESC) AS pos FROM jsonb_array_elements(v_pick) w) z;
   -- Everyone else who trained is still named.
-  SELECT CASE WHEN count(*) = 1 THEN min(nm) ELSE string_agg(nm, ', ' ORDER BY ord) FILTER (WHERE ord < count_all) || ' and ' || max(nm) FILTER (WHERE ord = count_all) END
-    INTO v_rest
+  SELECT count(*)::int,
+         CASE WHEN count(*) = 1 THEN min(nm) ELSE string_agg(nm, ', ' ORDER BY ord) FILTER (WHERE ord < count_all) || ' and ' || max(nm) FILTER (WHERE ord = count_all) END
+    INTO v_rest_n, v_rest
     FROM (SELECT w->>'name' AS nm, row_number() OVER (ORDER BY (w->>'score')::int DESC, w->>'name') AS ord, count(*) OVER () AS count_all
             FROM jsonb_array_elements(v_all) w
            WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_pick) p WHERE p->>'client_id' = w->>'client_id')) r;
-  SELECT sum((w->>'sessions')::int)::int, sum((w->>'pr_lifts')::int)::int INTO v_sessions, v_prs FROM jsonb_array_elements(v_all) w;
 
-  v_intro := (ARRAY['Last week''s wins.', 'Wins from last week. Earned, not given.', 'Here''s what the crew did last week.', 'Last week, in wins.'])[1 + v_wk % 4];
-  v_outro := (ARRAY['Your name could be on next week''s list.', 'Next week''s list is being written right now.', 'Keep stacking weeks.', 'Get your sessions in. I read every log.'])[1 + v_wk % 4];
+  v_stats := public.community_week_stats(_week_start, _exclude_user, v_all);
+  v_prs := (v_stats->>'prs')::int;
+
+  v_intro := CASE
+    WHEN v_prs >= 10 THEN (ARRAY['Big week. ' || v_prs || ' PRs between all of you last week. Here''s who stood out.',
+                                 'Last week was a good one. ' || v_prs || ' PRs across the crew, and some of you went off.'])[1 + v_wk % 2]
+    WHEN v_n * 10 >= (v_stats->>'roster')::int * 6 THEN (ARRAY['Most of you showed up last week. Here''s what that looked like.',
+                                                              'Good week from this group. Here are some of the highlights.'])[1 + v_wk % 2]
+    ELSE (ARRAY['Here''s what last week looked like.', 'A few highlights from last week.'])[1 + v_wk % 2] END;
+  v_outro := (ARRAY['Proud of you guys. Let''s keep it rolling this week.',
+                    'That''s the standard now. Let''s go again.',
+                    'Not on the list this week? Get your sessions in and you will be.',
+                    'Keep stacking weeks like this. Let''s go.'])[1 + v_wk % 4];
 
   RETURN jsonb_build_object(
     'week_of', _week_start,
     'trainers', v_n,
     'featured', (SELECT jsonb_agg(jsonb_build_object('client_id', w->>'client_id', 'type', w->>'type')) FROM jsonb_array_elements(v_pick) w),
+    'stats', v_stats,
     'caption', v_intro || E'\n\n' || v_lines || E'\n\n'
-               || CASE WHEN v_rest IS NOT NULL THEN 'Also put in the work: ' || v_rest || '.' || E'\n\n' ELSE '' END
-               || v_sessions || CASE WHEN v_sessions = 1 THEN ' session' ELSE ' sessions' END || CASE WHEN v_prs > 0 THEN ' and ' || v_prs || ' PR' || CASE WHEN v_prs = 1 THEN '' ELSE 's' END ELSE '' END
-               || ' across the crew.' || E'\n\n' || v_outro);
+               || CASE WHEN v_rest IS NOT NULL
+                       THEN 'Shoutout to ' || v_rest || ' too. ' || CASE WHEN v_rest_n = 1 THEN 'Showing up is the whole game.' ELSE 'Every one of you showed up.' END || E'\n\n'
+                       ELSE '' END
+               || v_outro);
 END;
 $$;
 REVOKE ALL ON FUNCTION public.community_compose_wins(date, uuid) FROM PUBLIC, anon, authenticated;
@@ -262,9 +374,9 @@ BEGIN
     IF v_comp IS NULL THEN RETURN jsonb_build_object('status', 'no_wins'); END IF;
     INSERT INTO public.community_series_runs (series_key, series) VALUES (v_key, v_series) ON CONFLICT (series_key) DO NOTHING;
     IF NOT FOUND THEN RETURN jsonb_build_object('status', 'exists', 'key', v_key); END IF;
-    INSERT INTO public.community_posts (author_user_id, client_id, kind, visibility, caption, series, series_key, created_at)
+    INSERT INTO public.community_posts (author_user_id, client_id, kind, visibility, caption, series, series_key, series_data, created_at)
     VALUES (v_author, (SELECT c.id FROM public.clients c WHERE c.user_id = v_author LIMIT 1), 'note', 'community',
-            v_comp->>'caption', v_series, v_key, coalesce(_at, now()))
+            v_comp->>'caption', v_series, v_key, v_comp->'stats', coalesce(_at, now()))
     RETURNING id INTO v_id;
     UPDATE public.community_series_runs SET post_id = v_id WHERE series_key = v_key;
     INSERT INTO public.community_series_features (series_key, client_id, win_type, featured_at)
@@ -324,7 +436,8 @@ BEGIN
                                               public.community_main_account(v_settings.author_user_id));
   RETURN jsonb_build_object(
     'wins_preview', CASE WHEN v_preview IS NOT NULL THEN jsonb_build_object('body', v_preview->>'caption', 'featured', jsonb_array_length(v_preview->'featured'),
-                                                                             'trainers', v_preview->'trainers', 'week_of', v_preview->>'week_of', 'next_week', v_wins_posted) END,
+                                                                             'trainers', v_preview->'trainers', 'week_of', v_preview->>'week_of', 'next_week', v_wins_posted,
+                                                                             'stats', v_preview->'stats') END,
     'paused', coalesce(v_settings.paused, false),
     'author', CASE WHEN v_settings.author_user_id IS NOT NULL THEN public.community_author(v_settings.author_user_id) END,
     'next', coalesce((SELECT jsonb_object_agg(s.series, to_jsonb(n))
@@ -352,6 +465,58 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.community_series_overview() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.community_series_overview() TO authenticated;
+-- ── Read path: the stats ride along with the post ─────────────────────────
+CREATE OR REPLACE FUNCTION public.community_post_json(_post_id uuid, _viewer uuid)
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT jsonb_build_object(
+    'id', n.id,
+    'created_at', n.created_at,
+    'visibility', n.visibility,
+    'caption', n.caption,
+    'media_path', n.media_path,
+    'media_thumb_path', n.media_thumb_path,
+    'media_type', n.media_type,
+    'media_width', n.media_width,
+    'media_height', n.media_height,
+    'completion_id', n.completion_id,
+    'kind', n.kind,
+    'series', n.series,
+    'quote', n.quote,
+    'quote_author', n.quote_author,
+    'quote_source', n.quote_source,
+    'series_data', n.series_data,
+    'edited_at', n.edited_at,
+    'locked_in_at', n.locked_in_at,
+    'hide_loads', n.hide_loads,
+    'live', n.kind = 'workout' AND pc.completed_at IS NULL,
+    'session_title', CASE WHEN n.kind = 'workout' THEN coalesce(nullif(btrim(d.title), ''), nullif(btrim(d.focus), ''), 'Workout') END,
+    'is_mine', n.author_user_id = public.community_main_account(_viewer),
+    'author', public.community_author(n.author_user_id),
+    -- "Hide my weights": loads are removed for everyone but the author.
+    'stats', CASE WHEN n.hide_loads AND n.author_user_id IS DISTINCT FROM _viewer
+                  THEN public.community_hide_loads(public.community_workout_stats(n.completion_id))
+                  ELSE public.community_workout_stats(n.completion_id) END,
+    'reactions', coalesce((SELECT jsonb_object_agg(x.emoji, x.c)
+                             FROM (SELECT r.emoji, count(*) c FROM public.community_reactions r
+                                    WHERE r.post_id = n.id GROUP BY r.emoji) x), '{}'::jsonb),
+    'my_reaction', (SELECT r.emoji FROM public.community_reactions r WHERE r.post_id = n.id AND r.user_id = _viewer),
+    'coach_reactions', coalesce((SELECT jsonb_agg(jsonb_build_object(
+                                    'name', public.community_author(r.user_id)->>'name', 'emoji', r.emoji)
+                                    ORDER BY r.created_at)
+                                   FROM public.community_reactions r
+                                  WHERE r.post_id = n.id
+                                    AND public.community_is_coach(r.user_id)), '[]'::jsonb),
+    'comment_count', (SELECT count(*) FROM public.community_comments c WHERE c.post_id = n.id),
+    'coach_commented', EXISTS (SELECT 1 FROM public.community_comments c
+                                WHERE c.post_id = n.id
+                                  AND public.community_is_coach(c.author_user_id)))
+  FROM public.community_posts n
+  LEFT JOIN public.pl_day_completions pc ON pc.id = n.completion_id
+  LEFT JOIN public.pl_days d ON d.id = pc.day_id
+  WHERE n.id = _post_id
+$$;
+REVOKE ALL ON FUNCTION public.community_post_json(uuid, uuid) FROM PUBLIC, anon, authenticated;
+
 -- ── Schedule: Wednesdays, covering 12:00–17:00 Winnipeg in CST and CDT ────
 DO $$
 BEGIN
