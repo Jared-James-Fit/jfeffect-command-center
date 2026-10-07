@@ -68,6 +68,16 @@ export type CommunityAuthor = {
   name: string;
   avatar_url: string | null;
   is_coach: boolean;
+  /** Coaches: "Coach · JF Effect". */
+  title?: string | null;
+};
+
+export type CommunitySeries = "monday_motivation" | "finish_strong_friday";
+
+/** The two weekly coach posts: name + the one-line idea behind each. */
+export const SERIES_LABEL: Record<CommunitySeries, { name: string; tagline: string }> = {
+  monday_motivation: { name: "Monday Motivation", tagline: "Set the standard" },
+  finish_strong_friday: { name: "Finish Strong Friday", tagline: "Finish what you started" },
 };
 
 export type CommunityPost = {
@@ -80,7 +90,16 @@ export type CommunityPost = {
   media_type: "image" | "video" | null;
   media_width: number | null;
   media_height: number | null;
-  completion_id: string;
+  /** null for coach notes (no workout behind them). */
+  completion_id: string | null;
+  /** "workout" (a session) or "note" (a coach's text post). Missing = workout. */
+  kind?: "workout" | "note";
+  series?: CommunitySeries | null;
+  /** A featured quote on a note: always from the verified library. */
+  quote?: string | null;
+  quote_author?: string | null;
+  quote_source?: string | null;
+  edited_at?: string | null;
   /** Set when the post was made while the session was still open ("Locked in"). */
   locked_in_at?: string | null;
   /** The session hasn't been finished yet (a lock-in waiting on its numbers). */

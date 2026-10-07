@@ -478,3 +478,39 @@ describe("the crew: find anyone's profile", () => {
     expect(entry).toContain("hash: a.user_id === user?.id ? undefined : `person=${a.user_id}`");
   });
 });
+
+describe("Monday Motivation + Finish Strong Friday: real coach posts", () => {
+  const sql = read("supabase/migrations/20261008090000_community_coach_posts.sql");
+  const card = read("src/components/community/post-card.tsx");
+  it("are ordinary community posts (same table, feed, profile, reactions, comments)", () => {
+    expect(sql).toContain("CHECK ((kind = 'workout') = (completion_id IS NOT NULL))");
+    expect(sql).toContain("'note', 'community', v_item.body");
+    expect(sql).toContain("LEFT JOIN public.pl_day_completions pc ON pc.id = n.completion_id");
+    expect(card).toContain("<NoteBody post={post} clamp />");
+  });
+  it("publish once per theme per week, Winnipeg time, never twice even after a delete", () => {
+    expect(sql).toContain("AT TIME ZONE 'America/Winnipeg'");
+    expect(sql).toContain("v_local::time < time '07:00' OR v_local::time >= time '12:00'");
+    expect(sql).toContain("to_char(v_local, 'IYYY-\"W\"IW')");
+    expect(sql).toContain("series_key text PRIMARY KEY");
+    expect(sql).toContain("ON CONFLICT (series_key) DO NOTHING;\n  IF NOT FOUND THEN RETURN jsonb_build_object('status', 'exists'");
+    expect(sql).toContain("'*/15 11-18 * * 1,5', 'select public.community_publish_series();'");
+  });
+  it("can be paused, and only coaches can publish, edit the library or write notes", () => {
+    expect(sql).toContain("IF coalesce(v_settings.paused, false) THEN RETURN jsonb_build_object('status', 'paused')");
+    expect(sql).toContain("IF auth.uid() IS NOT NULL AND NOT public.is_community_staff() THEN");
+    expect(sql).toContain("IF uid IS NULL OR NOT public.community_is_coach(uid) THEN");
+  });
+  it("rotate mentors and never put words in anyone's mouth", () => {
+    expect(sql).toContain("ORDER BY (i.mentor = ANY (coalesce(v_recent, '{}'))) ASC, i.last_used_at ASC NULLS FIRST");
+    expect(sql).toContain("CONSTRAINT community_series_items_quote_has_source CHECK (quote IS NULL OR quote_source IS NOT NULL)");
+    // quotes are not editable after the fact, only the coach's own words
+    expect(sql).toMatch(/community_update_note\(_post_id uuid, _body text\)/);
+    for (const known of ["Rest at the end, not in the middle", "Pain is weakness leaving the body", "opportunity for me to rise"]) expect(sql).not.toContain(known);
+  });
+  it("show the coach once, as coach, folding a second login into the same person", () => {
+    expect(sql).toContain("'title', CASE WHEN staff.yes OR cp.title IS NOT NULL THEN coalesce(cp.title, 'Coach · JF Effect') END");
+    expect(sql).toContain("AND NOT EXISTS (SELECT 1 FROM public.community_profiles l WHERE l.user_id = m.user_id AND l.same_person_as IS NOT NULL)");
+    expect(sql).toContain("'is_mine', n.author_user_id = public.community_main_account(_viewer),");
+  });
+});

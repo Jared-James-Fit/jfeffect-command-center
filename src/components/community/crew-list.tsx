@@ -53,9 +53,9 @@ export function CrewList({ onOpen }: { onOpen: (a: CommunityAuthor) => void }) {
               <span className="block truncate text-[12px] text-muted-foreground">
                 {m.bio ||
                   (m.posts > 0
-                    ? `${m.posts} ${m.posts === 1 ? "workout" : "workouts"} shared · ${postTimeLabel(m.last_post_at!)}`
+                    ? `${m.author.is_coach ? m.author.title || "Coach · JF Effect" : `${m.posts} ${m.posts === 1 ? "post" : "posts"}`} · ${postTimeLabel(m.last_post_at!)}`
                     : m.author.is_coach
-                      ? "Coach"
+                      ? m.author.title || "Coach · JF Effect"
                       : "No posts yet")}
               </span>
             </span>

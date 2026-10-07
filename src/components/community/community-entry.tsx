@@ -149,7 +149,7 @@ export function CommunityCoachCard() {
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => {
     const weekAgo = Date.now() - 7 * 86_400_000;
-    return (feed.data?.pages[0]?.posts ?? []).filter((p) => !p.is_mine && new Date(p.created_at).getTime() > weekAgo).slice(0, 4);
+    return (feed.data?.pages[0]?.posts ?? []).filter((p) => !p.is_mine && p.kind !== "note" && new Date(p.created_at).getTime() > weekAgo).slice(0, 4);
   }, [feed.data]);
 
   if (!activity?.enabled) return null;

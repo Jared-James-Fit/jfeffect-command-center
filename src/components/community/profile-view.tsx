@@ -46,7 +46,7 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
   }
 
   const since = trainingSinceLabel(profile.training_since);
-  const meta = [`${profile.posts} ${profile.posts === 1 ? "workout" : "workouts"} shared`, since].filter(Boolean).join(" · ");
+  const meta = [`${profile.posts} ${profile.posts === 1 ? "post" : "posts"}`, since].filter(Boolean).join(" · ");
 
   return (
     <div>
@@ -94,6 +94,7 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
             <h2 className="font-display truncate text-[28px] uppercase leading-none">{profile.author.name}</h2>
             {profile.author.is_coach && <CoachBadge />}
           </div>
+          {profile.author.is_coach && <div className="mt-1 text-[12px] font-bold text-foreground/80">{profile.author.title || "Coach · JF Effect"}</div>}
           <div className="mt-1 text-[12px] font-semibold text-muted-foreground">{meta}</div>
         </div>
       </div>
@@ -138,7 +139,12 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
           const thumb = urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null;
           return (
             <button key={p.id} type="button" onClick={() => onOpenPost(p)} className="relative aspect-square overflow-hidden bg-muted" aria-label={`Open ${p.stats?.workout_title ?? p.session_title ?? "workout"}`}>
-              {p.media_type && thumb ? (
+              {p.kind === "note" ? (
+                <div className="flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)] p-2.5 text-left">
+                  <span className="text-[8px] font-black uppercase tracking-[0.14em] text-primary">{p.series === "monday_motivation" ? "Monday" : p.series === "finish_strong_friday" ? "Friday" : "Note"}</span>
+                  <span className="line-clamp-5 text-[11px] font-semibold leading-snug">{p.quote ? `“${p.quote}”` : p.caption}</span>
+                </div>
+              ) : p.media_type && thumb ? (
                 <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
               ) : p.stats ? (
                 <WorkoutHero stats={p.stats} unit={unit} size="tile" />
