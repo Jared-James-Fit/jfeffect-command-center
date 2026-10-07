@@ -818,7 +818,7 @@ export async function getClientResults(
   }
   const { data, error } = await sb
     .from("pl_row_results")
-    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, mean_concentric_velocity_mps, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, category))")
+    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, mean_concentric_velocity_mps, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, muscle_groups, secondary_muscle_groups, counts_toward_volume, category))")
     .eq("client_id", clientId)
     .not("actual_reps", "is", null)
     .not("completed_at", "is", null)
@@ -892,6 +892,9 @@ export async function getClientResults(
           r.pl_exercise_rows?.exercises?.primary_muscle_group ??
           r.pl_exercise_rows?.exercises?.muscle_group ??
           "Other",
+        primary_muscles: (r.pl_exercise_rows?.exercises?.muscle_groups ?? []) as string[],
+        secondary_muscles: (r.pl_exercise_rows?.exercises?.secondary_muscle_groups ?? []) as string[],
+        counts_toward_volume: r.pl_exercise_rows?.exercises?.counts_toward_volume !== false,
         category: r.pl_exercise_rows?.exercises?.category ?? null,
       };
     });
@@ -939,10 +942,27 @@ export function weeklyMuscleVolume(results: any[], days = 7) {
   const tally = new Map<string, number>();
   for (const r of results) {
     if (!r.date || new Date(r.date).getTime() < cutoff) continue;
-    // Normalize library free-text muscle values (e.g. "Lower Back",
-    // "Adductors") into the canonical analytics groups before tallying.
-    const k = normalizeMuscle(r.muscle_group) ?? "Other";
-    tally.set(k, (tally.get(k) ?? 0) + 1);
+    // Stretches / conditioning don't build a muscle's weekly volume.
+    if (r.counts_toward_volume === false) continue;
+    // Tagged muscles: every PRIMARY muscle = 1 set, SECONDARY = ½ set (same
+    // weights as Performance Insights). One set never counts twice for the
+    // same displayed group (front + side delts are both "Shoulders").
+    const credit = new Map<string, number>();
+    const add = (key: string, w: number) => {
+      const g = normalizeMuscle(key);
+      if (!g) return;
+      credit.set(g, Math.max(credit.get(g) ?? 0, w));
+    };
+    const primary: string[] = Array.isArray(r.primary_muscles) ? r.primary_muscles : [];
+    if (primary.length) {
+      for (const m of primary) add(m, 1);
+      for (const m of (Array.isArray(r.secondary_muscles) ? r.secondary_muscles : [])) add(m, 0.5);
+    } else {
+      // Untagged legacy rows: the single label, as before.
+      add(r.muscle_group, 1);
+    }
+    if (!credit.size) credit.set("Other", 1);
+    for (const [g, w] of credit) tally.set(g, (tally.get(g) ?? 0) + w);
   }
   return [...tally.entries()].map(([muscle, sets]) => ({ muscle, sets })).sort((a, b) => b.sets - a.sets);
 }
