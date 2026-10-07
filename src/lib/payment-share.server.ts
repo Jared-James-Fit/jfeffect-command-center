@@ -6,6 +6,7 @@
  * creates charges, invoices, customers, subscriptions or ledger rows.
  */
 import { choosePaymentShareStrategy, sanitizeShareUrl } from "@/lib/payment-share-link";
+import { isPastExplicitExpiry } from "@/lib/payment-link-regenerate.server";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -241,13 +242,15 @@ export async function mintShareLinkForPurchase(
 
 export type ResolvedTokenDestination =
   | { ok: true; url: string }
-  | { ok: false; status: 404 | 410; message: string };
+  | { ok: false; status: 404 | 410 | 503; message: string };
 
 /**
  * Public resolution of a short token. Uses the service-role client because the
  * visitor is anonymous, but exposes NOTHING except the redirect destination.
- * Strictly read-only: retrieving a share link never creates a payment,
- * subscription, invoice or ledger row.
+ * Retrieving a share link never creates a payment, subscription, invoice or
+ * ledger row. The one write it can trigger is minting a fresh, unpaid Checkout
+ * Session (in payment-link-regenerate.server.ts) when the previous one expired,
+ * so a link stays usable until the sale is paid or its explicit expiry passes.
  */
 export async function resolveShareToken(token: string): Promise<ResolvedTokenDestination> {
   if (!isValidShareToken(token)) {
@@ -265,7 +268,7 @@ export async function resolveShareToken(token: string): Promise<ResolvedTokenDes
 
   const { data: purchase } = await supabaseAdmin
     .from("purchase_records")
-    .select("id, payment_status, stripe_payment_link, stripe_checkout_session_id, stripe_subscription_id, offer_id")
+    .select("id, payment_status, stripe_payment_link, stripe_checkout_session_id, stripe_subscription_id, offer_id, assigned_by, payment_link_expires_at")
     .eq("id", link.purchase_record_id)
     .maybeSingle();
   if (!purchase) return { ok: false, status: 404, message: "This payment link is not valid." };
@@ -275,12 +278,26 @@ export async function resolveShareToken(token: string): Promise<ResolvedTokenDes
     return { ok: false, status: 410, message: "This purchase is already settled — no payment is needed." };
   }
 
+  // Links never expire on their own. They only stop at an explicit expiry date.
+  if (isPastExplicitExpiry(purchase.payment_link_expires_at)) {
+    const when = new Date(purchase.payment_link_expires_at).toLocaleDateString("en-CA", {
+      year: "numeric", month: "long", day: "numeric", timeZone: "America/Winnipeg",
+    });
+    return {
+      ok: false,
+      status: 410,
+      message: `This payment link expired on ${when}. Message your coach and they'll send you a new one.`,
+    };
+  }
+
   // Prefer a still-open Checkout Session, then an open hosted invoice, then a
   // reusable Payment Link. Stripe calls here are GET-only.
+  let lastSession: any = null;
   if (purchase.stripe_checkout_session_id) {
     const session = await stripeGet(
       `/checkout/sessions/${encodeURIComponent(purchase.stripe_checkout_session_id)}`,
     );
+    lastSession = session;
     const usable =
       session &&
       (session.status ?? "open") === "open" &&
@@ -308,9 +325,31 @@ export async function resolveShareToken(token: string): Promise<ResolvedTokenDes
     return { ok: true, url: stored };
   }
 
-  return {
-    ok: false,
-    status: 410,
-    message: "This payment link has expired. Ask your coach to send you a fresh one.",
-  };
+  // The client already completed that checkout; the payment is being confirmed.
+  // Minting another session now would risk a double charge.
+  if (lastSession && lastSession.status === "complete") {
+    return {
+      ok: false,
+      status: 410,
+      message: "Your payment went through and is being confirmed. If this still shows unpaid in a few minutes, message your coach.",
+    };
+  }
+
+  // Nothing usable is left (the Checkout Session lasted its 24 hours). Mint a
+  // fresh one so the link keeps working until the sale is paid.
+  const { regenerateCheckoutForLink } = await import("@/lib/payment-link-regenerate.server");
+  const regenerated = await regenerateCheckoutForLink(
+    supabaseAdmin,
+    { id: link.id },
+    { id: purchase.id, assigned_by: purchase.assigned_by, stripe_checkout_session_id: purchase.stripe_checkout_session_id },
+    lastSession,
+    { stripeGet },
+  );
+  if (regenerated.ok) {
+    await supabaseAdmin
+      .from("payment_share_links")
+      .update({ last_resolved_at: new Date().toISOString() })
+      .eq("id", link.id);
+  }
+  return regenerated;
 }

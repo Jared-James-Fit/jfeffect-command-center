@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
+import { SocialLinks } from "@/components/sales/apple";
 
 export function SalesPageShell({
   children,
@@ -80,6 +81,7 @@ export function SalesPageShell({
           <Link to="/about" className="hover:text-foreground">About</Link>
           <Link to="/auth" className="hover:text-foreground">Sign in</Link>
         </nav>
+        <SocialLinks variant="icons" className="mb-4" />
         © {new Date().getFullYear()} JF Effect. All rights reserved.
       </footer>
     </div>

@@ -64,6 +64,7 @@ import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
 import { useChatSignedUrls } from "@/hooks/use-chat-signed-urls";
 import { useViewingAsClient } from "@/lib/client-impersonation";
+import { usePovSendGuard } from "@/components/pov/pov-send-guard";
 import { belongsInInbox, resolveOptimistic, upsertRow } from "@/lib/inbox-cache";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
@@ -764,6 +765,8 @@ export function MessageThread({
   // no "online", no typing, no auto-created check-ins).
   const viewingAsClient = useViewingAsClient();
   const povClient = role === "client" && viewingAsClient;
+  // Coach "View as client": confirm before anything goes out under the client's name.
+  const povGuard = usePovSendGuard();
   // Admins (not coaches) can silently delete any message in the chat.
   const isAdmin = role === "admin" && appRole === "admin";
   const qc = useQueryClient();
@@ -1563,6 +1566,7 @@ export function MessageThread({
 
   const sendPreview = async () => {
     if (!preview) return;
+    if (!(await povGuard.confirm("Voice message"))) return;
     setUploading(true);
     try {
       const ext = preview.blob.type.includes("mp4") ? "m4a" : "webm";
@@ -1574,7 +1578,7 @@ export function MessageThread({
       att.type = "audio";
       att.duration = preview.duration;
       att.peaks = preview.peaks;
-      const sent = await doSend({ body: "", extraAttachments: [att], returnMessage: true });
+      const sent = await doSend({ body: "", extraAttachments: [att], returnMessage: true, povConfirmed: true });
       URL.revokeObjectURL(preview.url);
       setPreview(null);
       setPreviewPlaying(false);
@@ -1593,11 +1597,16 @@ export function MessageThread({
     }
   };
 
-  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[]; returnMessage?: boolean; withDrafts?: boolean }) => {
+  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[]; returnMessage?: boolean; withDrafts?: boolean; povConfirmed?: boolean }) => {
     if (!user) return null;
     const text = (opts?.body ?? body).trim();
     const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
     if (!text && atts.length === 0 && !(opts?.withDrafts && uploads.drafts.length)) return null;
+    // View-as-client: ask first. Declining leaves the composer exactly as it was.
+    if (!opts?.povConfirmed) {
+      const mediaCount = atts.length + (opts?.withDrafts ? uploads.drafts.length : 0);
+      if (!(await povGuard.confirm(text || (mediaCount ? `${mediaCount} attachment${mediaCount === 1 ? "" : "s"}` : "")))) return null;
+    }
     // Media still uploading goes out with this message: the bubble shows
     // local previews + progress now, the insert happens once uploads land.
     const drafts = opts?.withDrafts ? uploads.take() : [];
@@ -1742,6 +1751,7 @@ export function MessageThread({
 
   return (
     <SignedUrlContext.Provider value={signedUrls}>
+    {povGuard.dialog}
     <div className={cn(
       "flex flex-col",
       fullBleed
@@ -2482,6 +2492,7 @@ export function MessageThread({
               } : undefined}
               onPickGif={async (g) => {
                 if (!user) return;
+                if (!(await povGuard.confirm(`GIF: ${g.title}`))) return;
                 setSending(true);
                 try {
                   await sendMessage({
@@ -2515,6 +2526,7 @@ export function MessageThread({
               }}
               onPickSound={!canSendSounds ? undefined : async (s) => {
                 if (!user) return;
+                if (!(await povGuard.confirm(`Sound: ${s.title}`))) return;
                 setSending(true);
                 try {
                   await sendMessage({

@@ -87,10 +87,13 @@ export function WorkoutsExperience({
   clientId,
   mode = "self",
   clientName,
+  topSlot,
 }: {
   clientId: string;
   mode?: Mode;
   clientName?: string | null;
+  /** Rendered first under the header (the client's "My training | Community" switch). */
+  topSlot?: React.ReactNode;
 }) {
   const { data: client } = useQuery({
     queryKey: ["workouts-experience-client", clientId],
@@ -542,6 +545,7 @@ export function WorkoutsExperience({
       />
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
+        {topSlot}
 
         {client && (
           <TrainingScheduleCard

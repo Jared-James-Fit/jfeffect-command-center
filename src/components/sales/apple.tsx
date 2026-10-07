@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Instagram, Youtube } from "lucide-react";
+import { SOCIAL } from "@/lib/social-links";
 import { cn } from "@/lib/utils";
 
 /**
@@ -145,6 +146,37 @@ export function Stat({ value, label, detail }: { value: string; label: string; d
       <div className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-primary md:text-[34px]">{value}</div>
       <div className="mt-2 text-[13px] font-semibold">{label}</div>
       {detail && <div className="mt-1 text-[12px] leading-snug text-muted-foreground">{detail}</div>}
+    </div>
+  );
+}
+
+/**
+ * Instagram + YouTube. "pills" shows the handle (for body sections),
+ * "icons" is the compact version for the footer.
+ */
+export function SocialLinks({ variant = "pills", className }: { variant?: "pills" | "icons"; className?: string }) {
+  const items = [
+    { ...SOCIAL.instagram, Icon: Instagram },
+    { ...SOCIAL.youtube, Icon: Youtube },
+  ];
+  return (
+    <div className={cn("flex flex-wrap items-center gap-2.5", variant === "icons" && "justify-center", className)}>
+      {items.map(({ label, handle, url, Icon }) => (
+        <a
+          key={label}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${label} ${handle}`}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full bg-muted font-medium text-foreground transition active:scale-[0.97] hover:bg-muted/70",
+            variant === "pills" ? "h-11 px-4 text-[15px]" : "h-10 w-10 justify-center",
+          )}
+        >
+          <Icon className="h-[18px] w-[18px]" aria-hidden />
+          {variant === "pills" && <span>{handle}</span>}
+        </a>
+      ))}
     </div>
   );
 }

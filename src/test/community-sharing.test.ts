@@ -326,3 +326,36 @@ describe("community is easy to find without taking over", () => {
     expect(entry).toContain("if (!activity?.enabled || people.length === 0) return null;");
   });
 });
+
+describe("community lives inside the training loop", () => {
+  const workouts = read("src/routes/_authenticated/portal/workouts.index.tsx");
+  const legacy = read("src/routes/_authenticated/portal/community.tsx");
+  const entry = read("src/components/community/community-entry.tsx");
+  const admin = read("src/routes/_authenticated/admin/index.tsx");
+  const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
+  const screen = read("src/components/community/community-screen.tsx");
+
+  it("is a tab inside Workouts, with training as the default", () => {
+    expect(workouts).toContain("<WorkoutsViewSwitch view={view} onChange={switchView} />");
+    expect(workouts).toContain('return window.location.hash.replace(/^#/, "").split("&")[0] === CLIENT_COMMUNITY_HASH ? "community" : "training";');
+  });
+  it("keeps the old URL working by redirecting into Workouts", () => {
+    expect(legacy).toContain('throw redirect({ to: "/portal/workouts"');
+  });
+  it("only shows a header nudge when there is something new", () => {
+    expect(entry).toContain("data.unseen <= 0) return null;");
+  });
+  it("puts one-tap coach props on the coach dashboard", () => {
+    expect(admin).toContain("<CommunityCoachCard />");
+    expect(entry).toContain('react.mutate(given ? null : "fire"');
+  });
+  it("lets an athlete share any recent session (their own only)", () => {
+    expect(recent).toContain("c.user_id = auth.uid()");
+    expect(recent).toContain("interval '30 days'");
+    expect(recent).toContain("REVOKE ALL ON FUNCTION public.community_recent_completions(int) FROM PUBLIC, anon;");
+    expect(screen).toContain('label="Share your last workout"');
+  });
+  it("never lets a coach in View-as-client share for the athlete", () => {
+    expect(workouts).toContain("<CommunityScreen canShare={!isImpersonating} />");
+  });
+});

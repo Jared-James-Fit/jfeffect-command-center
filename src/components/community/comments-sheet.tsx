@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Send, Trash2 } from "lucide-react";
+import { Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
@@ -16,12 +16,19 @@ import { useAddComment, useComments, useDeleteComment } from "@/lib/community.qu
 export function CommentsSheet({ post, viewerIsStaff, onClose }: { post: CommunityPost | null; viewerIsStaff: boolean; onClose: () => void }) {
   return (
     <Sheet open={!!post} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
+      <SheetContent side="bottom" hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
         {post && (
           <>
             <SheetHeader className="shrink-0 border-b border-border/70 px-4 py-3 text-left">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
               <SheetTitle className="text-base font-black">Comments</SheetTitle>
               <SheetDescription className="text-xs">Quick encouragement. Coaching questions belong in Messages.</SheetDescription>
+            </div>
+                <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
+                  <X className="h-4 w-4" />
+                </SheetClose>
+              </div>
             </SheetHeader>
             <CommentThread key={post.id} post={post} viewerIsStaff={viewerIsStaff} />
           </>

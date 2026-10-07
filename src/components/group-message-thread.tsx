@@ -41,6 +41,7 @@ import {
 } from "@/components/chat-shared";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
 import { useViewingAsClient } from "@/lib/client-impersonation";
+import { usePovSendGuard } from "@/components/pov/pov-send-guard";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { GroupSeenByRow, GroupSeenBySheet } from "@/components/messages/group-seen-by";
@@ -173,6 +174,8 @@ export function GroupMessageThread({
     authRole === "admin" ? "admin" : authRole === "coach" ? "coach" : "client";
   // Coach viewing as a client: don't appear as an active group member, and don't mark anything seen.
   const viewingAsClient = useViewingAsClient();
+  // Coach "View as client": confirm before anything goes out under the member's name.
+  const povGuard = usePovSendGuard();
   const { others: livePeers } = useGroupPresence(viewingAsClient ? null : groupId, myPresenceRole);
   const liveUserIds = useMemo(() => new Set(livePeers.map((p) => p.user_id)), [livePeers]);
 
@@ -488,6 +491,7 @@ export function GroupMessageThread({
 
   const sendPreview = async () => {
     if (!preview || !user) return;
+    if (!(await povGuard.confirm("Voice message"))) return;
     setUploading(true);
     try {
       const ext = preview.blob.type.includes("mp4") ? "m4a" : "webm";
@@ -518,6 +522,9 @@ export function GroupMessageThread({
     if (!user) return;
     const text = body.trim();
     if (!text && attachments.length === 0 && uploads.drafts.length === 0) return;
+    // View-as-client: ask first. Declining leaves the composer exactly as it was.
+    const mediaCount = attachments.length + uploads.drafts.length;
+    if (!(await povGuard.confirm(text || `${mediaCount} attachment${mediaCount === 1 ? "" : "s"}`))) return;
     const ready = attachments;
     const drafts = uploads.take();
     const draftIds = drafts.map((d) => d.id);
@@ -562,6 +569,7 @@ export function GroupMessageThread({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
+      {povGuard.dialog}
       {/* Messages */}
       <div
         ref={scrollerRef}
@@ -1031,6 +1039,7 @@ export function GroupMessageThread({
                 } : undefined}
                 onPickGif={async (g) => {
                   if (!user) return;
+                  if (!(await povGuard.confirm(`GIF: ${g.title}`))) return;
                   setSending(true);
                   try {
                     await sendGroupMessage({
@@ -1058,6 +1067,7 @@ export function GroupMessageThread({
                 }}
                 onPickSound={!canSendSounds ? undefined : async (s) => {
                   if (!user) return;
+                  if (!(await povGuard.confirm(`Sound: ${s.title}`))) return;
                   setSending(true);
                   try {
                     await sendGroupMessage({

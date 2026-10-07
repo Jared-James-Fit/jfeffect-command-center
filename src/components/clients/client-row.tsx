@@ -1,21 +1,24 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { UserAvatar } from "@/components/user-avatar";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useOpenClientProfile } from "@/lib/open-client-profile";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
-  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, Clock, AlertTriangle, Upload,
+  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, AlertTriangle, Upload,
+  Bell, Loader2,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { BADGE_TONE, ACTION_ICON, actionStyle, rowBadges } from "./clients-status";
-import { Tip } from "./tip";
+import { BADGE_TONE, lastSeenChip, rowStatusChips, type ChipAction } from "./clients-status";
+import { StatusTip } from "./status-tip";
+import { adminRemindAgreement } from "@/lib/coaching-agreement.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
-import type { DirectoryNextAction } from "@/lib/clients-directory.functions";
-import { format, parseISO, differenceInDays, formatDistanceToNow } from "date-fns";
+import { format, parseISO, differenceInDays } from "date-fns";
 import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
@@ -24,18 +27,87 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 
-/** Plain-English hover text for the big primary button, by what it does. */
-const ACTION_HINT: Record<string, string> = {
-  open: "Open this client's full profile: training, nutrition, messages, billing and more.",
-  setup: "Open this client's profile to finish setting up their account.",
-  payment: "Open their billing to fix a missed payment or set up a payment link.",
-  review: "Go to check-in reviews to review what this client submitted.",
-  assign: "Assign a training program to this client.",
-  next_phase: "Build this client's next training block so they don't run out of program.",
-  nutrition: "Update this client's nutrition plan.",
-  cardio: "Update this client's cardio plan.",
-};
+/** Hover text for the one primary button. Payment and check-in shortcuts live in the status badges. */
+const OPEN_CLIENT_HINT = "Open this client's full profile: training, nutrition, messages, billing and more.";
+
+/** Buttons inside a status explanation. The first is the main one. */
+const actionClass = (primary: boolean) =>
+  cn(buttonVariants({ variant: primary ? "default" : "secondary", size: "sm" }), "h-10 w-full text-sm");
+
+/** One-tap reminder to sign the Coaching Agreement (admins only; the server holds a 24 hour cooldown). */
+function RemindButton({ r, primary, close }: { r: DirectoryRow; primary: boolean; close: () => void }) {
+  const remindFn = useServerFn(adminRemindAgreement);
+  const queryClient = useQueryClient();
+  const remind = useMutation({
+    mutationFn: () => remindFn({ data: { clientIds: [r.id] } }),
+    onSuccess: (res) => {
+      if (res.reminded > 0) toast.success(`Reminder sent to ${r.full_name ?? "the client"}`);
+      else if (res.skippedRecent > 0) toast.message("Already reminded in the last 24 hours");
+      else toast.message("They aren't waiting to sign, so nothing was sent");
+      queryClient.invalidateQueries({ queryKey: ["clients-directory"] });
+      close();
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Couldn't send the reminder"),
+  });
+  return (
+    <button type="button" className={actionClass(primary)} disabled={remind.isPending} onClick={() => remind.mutate()}>
+      {remind.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Bell aria-hidden />}
+      Send reminder
+    </button>
+  );
+}
+
+/** One-tap "this is handled": closes everything Review Due counts for the client. */
+function MarkReviewedButton({ r, primary, close }: { r: DirectoryRow; primary: boolean; close: () => void }) {
+  const queryClient = useQueryClient();
+  const mark = useMutation({
+    mutationFn: () => markClientReviewsReviewed(r.id),
+    onSuccess: (n) => {
+      toast.success(n > 0 ? `Marked reviewed for ${r.full_name ?? "the client"}` : "Nothing was waiting");
+      refreshReviewQueries(queryClient);
+      close();
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Couldn't mark this reviewed"),
+  });
+  return (
+    <button type="button" className={actionClass(primary)} disabled={mark.isPending} onClick={() => mark.mutate()}>
+      {mark.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <CheckCircle2 aria-hidden />}
+      Mark reviewed
+    </button>
+  );
+}
+
+/** The buttons a status explanation offers, by kind. */
+function ChipActions({
+  r, actions, isAdmin, close,
+}: { r: DirectoryRow; actions: ChipAction[]; isAdmin: boolean; close: () => void }) {
+  const shown = actions.filter((a) => a !== "remind" || isAdmin);
+  return (
+    <>
+      {shown.map((a, i) => {
+        const cls = actionClass(i === 0);
+        switch (a) {
+          case "remind":
+            return <RemindButton key={a} r={r} primary={i === 0} close={close} />;
+          case "billing":
+            return <ClientNameLink key={a} clientId={r.id} tab="billing" className={cls} onClick={close}>Open billing</ClientNameLink>;
+          case "profile":
+            return <ClientNameLink key={a} clientId={r.id} className={cls} onClick={close}>Open profile</ClientNameLink>;
+          case "agreement":
+            return <ClientNameLink key={a} clientId={r.id} tab="agreements" className={cls} onClick={close}>Open agreement</ClientNameLink>;
+          case "reviews":
+            return <Link key={a} to="/admin/messages" search={{ client: r.id }} className={cls} onClick={close}>Open check-in</Link>;
+          case "mark_reviewed":
+            return <MarkReviewedButton key={a} r={r} primary={i === 0} close={close} />;
+          case "program":
+            return <Link key={a} to="/admin/program-assign/$clientId" params={{ clientId: r.id }} className={cls} onClick={close}>Build next block</Link>;
+        }
+      })}
+    </>
+  );
+}
 
 function fmtRange(start: string | null, end: string | null) {
   if (!start && !end) return null;
@@ -60,21 +132,25 @@ function blockProgress(start: string | null, end: string | null) {
   } catch { return null; }
 }
 
+const TAG = "cursor-pointer rounded-full border border-border bg-muted/40 px-1.5 py-1";
+
+/** Last seen turns amber after a week without opening the app and red after two. */
+const SEEN_TONE = {
+  danger: "border-destructive/40 bg-destructive/10 text-destructive",
+  warn: "border-amber-500/40 bg-amber-500/10 text-amber-600",
+  muted: "border-border bg-muted/40",
+} as const;
+
 export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void }) {
-  const badges = rowBadges(r);
-  const urgent = r.priority <= 3;
+  const badges = rowStatusChips(r);
+  const seen = lastSeenChip(r);
+  // The status row already carries "N Missed" when it fits, so the tag by the name only fills in
+  // for the rare card whose status row is full.
+  const missedShownAsBadge = badges.some((b) => b.id === "missed");
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
-  // For non-urgent next-actions (missing program, next phase, nutrition,
-  // cardio, setup), the "Program"/"Nutrition"/"Cardio" status pills already
-  // handle the specific assign flow. The big primary button should always
-  // just open the client so admins have one consistent CTA per row.
-  const effectiveAction: DirectoryNextAction =
-    r.next_action.kind === "payment" || r.next_action.kind === "review"
-      ? r.next_action
-      : { kind: "open", label: "Open Client" };
-  const actionTarget = primaryActionTarget(effectiveAction, r.id);
   const { role } = useAuth();
+  const isAdmin = role === "admin";
   const navigate = useNavigate();
   const impersonation = useClientImpersonation();
   const canPov = role === "admin" || role === "coach";
@@ -120,11 +196,11 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
         className={cn(
           "group relative grid gap-3 rounded-xl border border-border bg-card p-4 transition",
           "hover:border-primary/30 hover:bg-accent/20",
-          // desktop 5-area grid: identity | status | program | action | open.
+          // desktop 4-area grid: identity | status | program | actions.
           // Only activate the compressed grid at true desktop widths — iPad
           // and other tablet widths keep the stacked/wrapping layout so
           // badges, program pills, and action buttons never overlap.
-          "xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto_auto] xl:items-center",
+          "xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto] xl:items-center",
         )}
       >
         {/* Identity */}
@@ -145,49 +221,40 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
             <div className="truncate text-xs text-muted-foreground">{r.email || "—"}</div>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
               {r.coaching_type && (
-                <Tip text="The type of coaching package this client is on.">
-                  <span className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5">
-                    {r.coaching_type}
-                  </span>
-                </Tip>
+                <StatusTip
+                  title="Coaching type"
+                  body="The type of coaching package this client is on."
+                  className={TAG}
+                >
+                  {r.coaching_type}
+                </StatusTip>
               )}
               {r.coach_name && (
-                <Tip text="The coach responsible for this client.">
-                  <span className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5">
-                    Coach · {r.coach_name}
-                  </span>
-                </Tip>
+                <StatusTip
+                  title="Assigned coach"
+                  body="The coach responsible for this client."
+                  className={TAG}
+                >
+                  Coach · {r.coach_name}
+                </StatusTip>
               )}
-              {/* Last active — show with color coding based on recency */}
-              {r.last_active_at ? (
-                <Tip text={`Last used the app ${format(parseISO(r.last_active_at), "MMM d, yyyy h:mm a")}. Turns amber after 7 days and red after 14 days without activity.`}>
-                  <span
-                    className={[
-                      "rounded-full border px-1.5 py-0.5",
-                      (r.days_inactive ?? 0) >= 14
-                        ? "border-destructive/40 bg-destructive/10 text-destructive"
-                        : (r.days_inactive ?? 0) >= 7
-                        ? "border-amber-500/40 bg-amber-500/10 text-amber-600"
-                        : "border-border bg-muted/40",
-                    ].join(" ")}
-                  >
-                    Active {formatDistanceToNow(parseISO(r.last_active_at), { addSuffix: true })}
-                  </span>
-                </Tip>
-              ) : r.last_login_at ? (
-                <Tip text={`Last signed in ${format(parseISO(r.last_login_at), "MMM d, yyyy h:mm a")}.`}>
-                  <span className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5">
-                    Signed in {formatDistanceToNow(parseISO(r.last_login_at), { addSuffix: true })}
-                  </span>
-                </Tip>
-              ) : null}
-              {/* Missed workouts badge */}
-              {r.f_missed_workouts && r.missed_workouts_count > 0 && (
-                <Tip text={`${r.missed_workouts_count} scheduled workouts in the last 14 days weren't completed.`}>
-                  <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-600 font-medium">
-                    {r.missed_workouts_count} missed
-                  </span>
-                </Tip>
+              {/* When they last used the app, colour-coded by how long ago */}
+              <StatusTip
+                title={seen.title}
+                body={seen.body}
+                className={cn("cursor-pointer rounded-full border px-1.5 py-1", SEEN_TONE[seen.tone])}
+              >
+                {seen.label}
+              </StatusTip>
+              {r.f_missed_workouts && r.missed_workouts_count > 0 && !missedShownAsBadge && (
+                <StatusTip
+                  title="Missed workouts"
+                  body={`${r.missed_workouts_count} scheduled workouts in the last 14 days weren't completed. Two or more is flagged.`}
+                  tone="warn"
+                  className="cursor-pointer rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-1 text-amber-600 font-medium"
+                >
+                  {r.missed_workouts_count} missed
+                </StatusTip>
               )}
             </div>
           </div>
@@ -195,20 +262,29 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
 
         {/* Status badges */}
         <div className="flex flex-wrap items-center gap-1.5">
-          {badges.map((b, i) => {
+          {badges.map((b) => {
             const Icon = b.icon;
             return (
-              <Tip key={i} text={b.hint}>
-                <span
-                  className={cn(
-                    "inline-flex cursor-help items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                    BADGE_TONE[b.tone],
-                  )}
-                >
-                  {Icon ? <Icon className="h-3 w-3" aria-hidden /> : null}
-                  {b.label}
-                </span>
-              </Tip>
+              <StatusTip
+                key={b.label}
+                title={b.label}
+                body={b.hint}
+                next={b.next}
+                icon={b.icon}
+                tone={b.tone}
+                footer={
+                  b.actions?.length
+                    ? (close) => <ChipActions r={r} actions={b.actions!} isAdmin={isAdmin} close={close} />
+                    : undefined
+                }
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium",
+                  BADGE_TONE[b.tone],
+                )}
+              >
+                {Icon ? <Icon className="h-3 w-3" aria-hidden /> : null}
+                {b.label}
+              </StatusTip>
             );
           })}
         </div>
@@ -217,21 +293,8 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
         <div className="min-w-0 space-y-1.5">
           <AssignmentStatusStrip r={r} prog={prog} range={range} />
         </div>
-        {/* Last signed in — always shown, falls back to 'Never signed in' */}
-        <Tip text="The last time this client opened the app.">
-          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Clock className="h-3 w-3 shrink-0" aria-hidden />
-            <span>
-              {r.last_active_at
-                ? `Last seen ${formatDistanceToNow(parseISO(r.last_active_at), { addSuffix: true })}`
-                : r.last_login_at
-                ? `Signed in ${formatDistanceToNow(parseISO(r.last_login_at), { addSuffix: true })}`
-                : "Never signed in"}
-            </span>
-          </div>
-        </Tip>
         {/* Next best action */}
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1.5 max-xl:w-full">
           {canPov && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -250,11 +313,14 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button asChild size="sm" className={cn("h-9 min-w-[8rem]", actionStyle(effectiveAction, urgent))}>
-                {actionTarget}
+              <Button asChild size="sm" className="h-9 min-w-[8rem] flex-1 bg-secondary text-secondary-foreground hover:bg-secondary/80 xl:flex-none">
+                <ClientNameLink clientId={r.id}>
+                  <ArrowRight className="mr-1.5 h-4 w-4" aria-hidden />
+                  Open Client
+                </ClientNameLink>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">{ACTION_HINT[effectiveAction.kind] ?? effectiveAction.label}</TooltipContent>
+            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">{OPEN_CLIENT_HINT}</TooltipContent>
           </Tooltip>
 
           <QuickActionsMenu r={r} />
@@ -270,15 +336,18 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
             }
           />
 
-          <Tip text="Open this client's profile.">
-            <ClientNameLink
-              clientId={r.id}
-              ariaLabel={`Open ${r.full_name ?? "client"}`}
-              className="hidden h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground xl:flex"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </ClientNameLink>
-          </Tip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ClientNameLink
+                clientId={r.id}
+                ariaLabel={`Open ${r.full_name ?? "client"}`}
+                className="hidden h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground xl:flex"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </ClientNameLink>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">Open this client's profile.</TooltipContent>
+          </Tooltip>
         </div>
       </li>
     </TooltipProvider>
@@ -287,55 +356,71 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
 
 /* ---------- Assignment Status Strip ---------- */
 
+type PillTip = { title: string; body: string; next?: string; action: string };
+
 function StatusPill({
   ok,
   icon: Icon,
   label,
   detail,
   assignLabel,
-  onClick,
-  okHint,
-  missingHint,
+  onAction,
+  okTip,
+  missingTip,
 }: {
   ok: boolean;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   detail?: string | null;
   assignLabel: string;
-  onClick: () => void;
-  /** Plain-English hover text when assigned. */
-  okHint: string;
-  /** Plain-English hover text when missing. */
-  missingHint: string;
+  /** What the button inside the explanation does (open the plan, or assign one). */
+  onAction: () => void;
+  /** The explanation when it's in place. */
+  okTip: PillTip;
+  /** The explanation when it's missing. */
+  missingTip: PillTip;
 }) {
-  if (ok) {
-    return (
-      <Tip text={okHint}>
+  const tip = ok ? okTip : missingTip;
+  return (
+    <StatusTip
+      title={tip.title}
+      body={tip.body}
+      next={tip.next}
+      icon={Icon}
+      tone={ok ? "ok" : "danger"}
+      footer={(close) => (
         <button
           type="button"
-          onClick={onClick}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-400 transition hover:bg-emerald-500/20"
+          className={actionClass(true)}
+          onClick={() => {
+            close();
+            onAction();
+          }}
         >
+          {tip.action}
+        </button>
+      )}
+      className={
+        ok
+          ? "inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-400 transition hover:bg-emerald-500/20"
+          : "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive transition hover:bg-destructive/20"
+      }
+    >
+      {ok ? (
+        <>
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
           <Icon className="h-3 w-3 shrink-0 opacity-80" />
           <span className="truncate">{detail ?? label}</span>
-        </button>
-      </Tip>
-    );
-  }
-  return (
-    <Tip text={missingHint}>
-      <button
-        type="button"
-        onClick={onClick}
-        className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive transition hover:bg-destructive/20"
-      >
-        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-        <Icon className="h-3 w-3 shrink-0" />
-        <span className="truncate">{assignLabel}</span>
-        <Plus className="h-3 w-3 shrink-0" />
-      </button>
-    </Tip>
+        </>
+      ) : (
+        <>
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          <Icon className="h-3 w-3 shrink-0" />
+          <span className="truncate">{assignLabel}</span>
+          <Plus className="h-3 w-3 shrink-0" />
+        </>
+      )}
+    </StatusTip>
   );
 }
 
@@ -355,6 +440,8 @@ function AssignmentStatusStrip({
   // end_date as still-active.
   const hasNutrition = !r.f_missing_nutrition;
   const hasCardio = !r.f_missing_cardio;
+  // A block can still be showing (it ended within the last week) with nothing queued after it.
+  const programEnded = hasProgram && r.f_missing_program;
   const [sheet, setSheet] = useState<QuickPanelKind | null>(null);
   const [assignProgramOpen, setAssignProgramOpen] = useState(false);
 
@@ -371,9 +458,27 @@ function AssignmentStatusStrip({
               : r.block_name
           }
           assignLabel="Assign Program"
-          okHint={`Their current training block${prog ? `, week ${prog.week} of ${prog.totalWeeks}` : ""}. Click to view their schedule.`}
-          missingHint="No training program is running for this client right now. Click to assign one."
-          onClick={() => (hasProgram ? setSheet("program-view") : setAssignProgramOpen(true))}
+          okTip={
+            programEnded
+              ? {
+                  title: "Program has ended",
+                  body: "Their last training block has finished and nothing is queued after it.",
+                  next: "Assign the next block so they have workouts to do.",
+                  action: "Assign program",
+                }
+              : {
+                  title: "Training program running",
+                  body: `Their current training block${prog ? `, week ${prog.week} of ${prog.totalWeeks}` : ""}.`,
+                  action: "View schedule",
+                }
+          }
+          missingTip={{
+            title: "No training program",
+            body: "No training program is running or queued for this client.",
+            next: "Assign one so they have workouts to do.",
+            action: "Assign program",
+          }}
+          onAction={() => (hasProgram && !programEnded ? setSheet("program-view") : setAssignProgramOpen(true))}
         />
         <StatusPill
           ok={hasNutrition}
@@ -381,9 +486,18 @@ function AssignmentStatusStrip({
           label="Nutrition"
           detail={hasNutrition ? "Nutrition" : null}
           assignLabel="Assign Nutrition"
-          okHint="Nutrition targets (calories, protein, meals) are assigned and active. Click to view or edit."
-          missingHint="No active nutrition plan for this client. Click to assign one."
-          onClick={() => setSheet("nutrition")}
+          okTip={{
+            title: "Nutrition plan active",
+            body: "Nutrition targets (calories, protein, meals) are assigned and showing in their app.",
+            action: "View or edit",
+          }}
+          missingTip={{
+            title: "No nutrition plan",
+            body: "No active nutrition targets, so they see no calorie or protein goals in the app.",
+            next: "Assign targets so they know what to aim for.",
+            action: "Assign nutrition",
+          }}
+          onAction={() => setSheet("nutrition")}
         />
         <StatusPill
           ok={hasCardio}
@@ -391,9 +505,18 @@ function AssignmentStatusStrip({
           label="Cardio"
           detail={hasCardio ? "Cardio" : null}
           assignLabel="Assign Cardio"
-          okHint="A cardio plan is assigned and active. Click to view or edit."
-          missingHint="No active cardio plan for this client. Click to assign one."
-          onClick={() => setSheet("cardio")}
+          okTip={{
+            title: "Cardio plan active",
+            body: "A cardio plan is assigned and showing in their app.",
+            action: "View or edit",
+          }}
+          missingTip={{
+            title: "No cardio plan",
+            body: "No active cardio targets, so they see no cardio goals in the app.",
+            next: "Assign one if cardio is part of their coaching.",
+            action: "Assign cardio",
+          }}
+          onAction={() => setSheet("cardio")}
         />
         {hasProgram && (
           <Tooltip>
@@ -416,29 +539,46 @@ function AssignmentStatusStrip({
           {(range || prog) && (
             <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
               {range && (
-                <Tip text="The start and end dates of their current training block.">
-                  <span className="truncate">{range}</span>
-                </Tip>
+                <StatusTip
+                  title="Block dates"
+                  body="The start and end dates of their current training block."
+                  className="min-w-0 cursor-pointer truncate py-1"
+                >
+                  {range}
+                </StatusTip>
               )}
               {prog && (
-                <Tip text="Days left in the current block, and how far through it they are by calendar time (not workouts completed).">
-                  <span className="shrink-0">
-                    {prog.left}d left · {prog.pct}%
-                  </span>
-                </Tip>
+                <StatusTip
+                  title="Time left in the block"
+                  body="Days left in the current block, and how far through it they are by calendar time (not workouts completed)."
+                  align="end"
+                  className="shrink-0 cursor-pointer py-1"
+                >
+                  {prog.left}d left · {prog.pct}%
+                </StatusTip>
               )}
             </div>
           )}
           {prog && (
-            <Tip text="How far through the current training block they are, by calendar time.">
-              <div><Progress value={prog.pct} className="h-1.5" /></div>
-            </Tip>
+            <StatusTip
+              title="Block progress"
+              body="How far through the current training block they are, by calendar time."
+              label="Block progress"
+              className="block w-full cursor-pointer py-1.5"
+            >
+              <Progress value={prog.pct} className="h-1.5" />
+            </StatusTip>
           )}
         </>
       )}
       {r.next_block_id && (
-        <Tip text="The next training block already queued for this client, and when it starts. Nothing to do here.">
-        <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-400">
+        <StatusTip
+          title="Next block queued"
+          body="The next training block is already set up for this client, and this is when it starts. Nothing to do here."
+          icon={ArrowRight}
+          tone="info"
+          className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-400"
+        >
           <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
           <span className="truncate">
             Up next: <span className="font-semibold">{r.next_block_name ?? "Next block"}</span>
@@ -451,8 +591,7 @@ function AssignmentStatusStrip({
               } catch { return null; }
             })()}
           </span>
-        </div>
-        </Tip>
+        </StatusTip>
       )}
       {hasProgram && !r.next_block_id && (() => {
         // No next block queued — surface program-end so the coach knows when to upload more.
@@ -473,22 +612,35 @@ function AssignmentStatusStrip({
           ? `Program ends in ${daysLeft}d (${format(parseISO(endIso), "MMM d")}) · no next block`
           : `Program ends ${format(parseISO(endIso), "MMM d")} · no next block queued`;
         return (
-          <Tip text={ended
-            ? "Their program has ended and nothing is queued. Click to assign or upload the next block."
-            : "Nothing is queued after their current block. Click to assign or upload the next block before it ends."}>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setAssignProgramOpen(true); }}
-              className={cn(
-                "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-medium transition hover:brightness-110",
-                tone,
-              )}
-            >
-              {ended || ending ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <Upload className="h-3 w-3 shrink-0" />}
-              <span className="truncate">{label}</span>
-              <Plus className="h-3 w-3 shrink-0" />
-            </button>
-          </Tip>
+          <StatusTip
+            title={ended ? "Program has ended" : "No next block queued"}
+            body={ended
+              ? "Their program has ended and nothing is queued after it."
+              : "Nothing is queued after their current block, so they'll run out of workouts when it ends."}
+            next={ended ? "Assign or upload the next block." : "Assign or upload the next block before it ends."}
+            icon={ended || ending ? AlertTriangle : Upload}
+            tone={ended ? "danger" : ending ? "warn" : "muted"}
+            footer={(close) => (
+              <button
+                type="button"
+                className={actionClass(true)}
+                onClick={() => {
+                  close();
+                  setAssignProgramOpen(true);
+                }}
+              >
+                Assign next block
+              </button>
+            )}
+            className={cn(
+              "inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-medium transition hover:brightness-110",
+              tone,
+            )}
+          >
+            {ended || ending ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <Upload className="h-3 w-3 shrink-0" />}
+            <span className="truncate">{label}</span>
+            <Plus className="h-3 w-3 shrink-0" />
+          </StatusTip>
         );
       })()}
       <ClientQuickSheet
@@ -507,52 +659,9 @@ function AssignmentStatusStrip({
   );
 }
 
-/** Map next_action kind to the most useful in-app destination. */
-function primaryActionTarget(action: DirectoryNextAction, clientId: string) {
-  const IconBase = ACTION_ICON(action.kind);
-  const label = (
-    <>
-      <IconBase className="mr-1.5 h-4 w-4" aria-hidden />
-      {action.label}
-    </>
-  );
-  switch (action.kind) {
-    case "assign":
-    case "next_phase":
-      return (
-        <Link to="/admin/program-assign/$clientId" params={{ clientId }}>{label}</Link>
-      );
-    case "nutrition":
-      return (
-        <ClientNameLink clientId={clientId} tab="nutrition">{label}</ClientNameLink>
-      );
-    case "cardio":
-      return (
-        <ClientNameLink clientId={clientId} tab="nutrition">{label}</ClientNameLink>
-      );
-    case "review":
-      return (
-        <Link to="/admin/check-in-reviews">{label}</Link>
-      );
-    case "payment":
-      return (
-        <ClientNameLink clientId={clientId} tab="billing">{label}</ClientNameLink>
-      );
-    case "setup":
-      return (
-        <ClientNameLink clientId={clientId}>{label}</ClientNameLink>
-      );
-    case "open":
-    default:
-      return (
-        <ClientNameLink clientId={clientId}>{label}</ClientNameLink>
-      );
-  }
-}
-
 export function ClientRowSkeleton() {
   return (
-    <li className="grid animate-pulse gap-3 rounded-xl border border-border bg-card p-4 xl:grid-cols-[1.4fr_1fr_1.3fr_auto_auto]">
+    <li className="grid animate-pulse gap-3 rounded-xl border border-border bg-card p-4 xl:grid-cols-[1.4fr_1fr_1.3fr_auto]">
       <div className="flex items-center gap-3">
         <div className="h-11 w-11 rounded-full bg-muted" />
         <div className="space-y-2">
@@ -566,7 +675,6 @@ export function ClientRowSkeleton() {
         <div className="h-1.5 w-full rounded bg-muted/60" />
       </div>
       <div className="h-9 w-32 rounded-md bg-muted" />
-      <div className="h-9 w-9 rounded-md bg-muted" />
     </li>
   );
 }
