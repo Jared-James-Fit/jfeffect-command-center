@@ -70,7 +70,6 @@ export type ClientRequests = {
 
 const CHECKIN_TITLE: Record<string, string> = {
   weekly_checkin: "Weekly check-in",
-  nutrition_review: "Nutrition review",
 };
 
 export function deriveRequests(input: {

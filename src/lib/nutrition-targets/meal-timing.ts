@@ -12,12 +12,36 @@ export const MEAL_TIMING_LABEL: Record<Exclude<MealTiming, null>, string> = {
   pre_post: "Pre / Post-Workout",
 };
 
-/** Short client-facing "why" for each tag. */
+/** Short client-facing "when" for each tag. */
 export const MEAL_TIMING_HINT: Record<Exclude<MealTiming, null>, string> = {
-  pre: "Eat 60–120 min before you train",
-  post: "Eat within 2 hrs after you train",
-  pre_post: "Around your training session",
+  pre: "Eat this 1–2 hours before you train",
+  post: "Eat this within 2 hours after you train",
+  pre_post: "Eat this around your workout",
 };
+
+/**
+ * Plain-language explainer behind the (i) next to a workout meal and in
+ * Nutrition Help. One source so the wording is identical everywhere.
+ */
+export const WORKOUT_MEAL_EXPLAINER = {
+  title: "Pre-Workout & Post-Workout meals",
+  pre: {
+    term: "Pre-Workout",
+    text: "the meal you eat 1–2 hours before you train. Mostly carbs with some protein and not much fat, so you have energy to lift hard without feeling heavy or bloated.",
+  },
+  post: {
+    term: "Post-Workout",
+    text: "the meal you eat within 2 hours after you train. Protein and carbs help your muscles recover and grow, and refill the energy you just used.",
+  },
+  move: "Training at a different time today? Just move these two meals with your workout.",
+  optional: "Eating them at these times is the best way to do it, but it's not a must. What matters most is eating ALL your meals and hitting your daily numbers.",
+} as const;
+
+/** The explainer as one paragraph (FAQ answers, plain text surfaces). */
+export function workoutMealExplainerText(): string {
+  const x = WORKOUT_MEAL_EXPLAINER;
+  return `${x.pre.term} = ${x.pre.text} ${x.post.term} = ${x.post.text} ${x.move} ${x.optional}`;
+}
 
 const PRE = /\bpre[\s-]*(?:workout|training|lift|gym|session)\b|\bpre\s*\/\s*post[\s-]*(?:workout|training)\b/i;
 const POST = /\bpost[\s-]*(?:workout|training|lift|gym|session)\b|\bpre\s*\/\s*post[\s-]*(?:workout|training)\b/i;
