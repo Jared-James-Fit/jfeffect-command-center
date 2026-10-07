@@ -1,20 +1,21 @@
 import { useEffect, useState } from "react";
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { pct, winsHabitsLine, winsStatTiles, winsWeekLabel, type WinsStats } from "@/lib/community";
+import { winsChallenge, winsChart, winsHero, winsTiles, winsWeekLabel, type WinsStats } from "@/lib/community";
 
 /**
- * Wednesday Wins: the crew's week as one branded card under the post. Big
- * "X of Y trained" ring up top, then six plain-English numbers, then the
- * small habits line. Same dark/red look as the workout and Locked In cards.
+ * Wednesday Wins: the crew's week as one branded card under the post, written
+ * so someone who has never lifted gets it at a glance. One big team number
+ * (everything lifted together, with an everyday comparison), four plain
+ * stats, workouts per week for the last 8 weeks, and a goal for this week.
  * Weight starts in the viewer's own unit; tapping it flips lb/kg just here.
  */
 export function WinsStatsCard({ stats, unit, className }: { stats: WinsStats; unit: "kg" | "lb"; className?: string }) {
   const [shown, setShown] = useState(unit);
   useEffect(() => setShown(unit), [unit]);
-  const tiles = winsStatTiles(stats, shown);
-  const habits = winsHabitsLine(stats);
-  const showed = pct(stats.trained, stats.roster);
+  const hero = winsHero(stats, shown);
+  const tiles = winsTiles(stats);
+  const bars = winsChart(stats);
   return (
     <div
       className={cn(
@@ -32,64 +33,71 @@ export function WinsStatsCard({ stats, unit, className }: { stats: WinsStats; un
         <span className="shrink-0 whitespace-nowrap text-[10px] font-black uppercase tracking-[0.14em] text-red-400">{winsWeekLabel(stats.week_of)}</span>
       </div>
 
-      <div className="mt-3.5 flex items-center gap-4">
-        <Ring value={showed} />
-        <div className="min-w-0">
-          <div className="font-display text-[38px] uppercase leading-none">
-            {stats.trained} <span className="text-white/45">of</span> {stats.roster}
-          </div>
-          <div className="mt-1 text-[13px] font-semibold text-white/75">trained last week</div>
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-3 gap-x-2 gap-y-3.5 border-t border-white/10 pt-3.5">
-        {tiles.map((t) => {
-          const body = (
-            <>
-              <div className="font-display truncate text-[26px] uppercase leading-none">{t.value}</div>
-              <div className="mt-1 flex items-center gap-1 text-[10px] font-black uppercase leading-tight tracking-[0.1em] text-white/60">
-                {t.label}
-                {t.unitToggle && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 text-white/40" aria-hidden />}
-              </div>
-              {t.sub && <div className="mt-0.5 text-[10px] leading-tight text-white/50">{t.sub}</div>}
-            </>
-          );
-          return t.unitToggle ? (
-            <button
-              key="weight"
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShown(shown === "lb" ? "kg" : "lb");
-              }}
-              className="min-w-0 text-left"
-              aria-label={`Show in ${shown === "lb" ? "kg" : "lb"}`}
-            >
-              {body}
-            </button>
-          ) : (
-            <div key={t.label} className="min-w-0">
-              {body}
+      {stats.volume_kg > 0 && (
+        <div className="mt-3.5">
+          <div className="text-[11px] font-black uppercase tracking-[0.14em] text-white/60">Together the crew lifted</div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShown(shown === "lb" ? "kg" : "lb");
+            }}
+            className="mt-1 flex items-baseline gap-2 text-left"
+            aria-label={`Show in ${shown === "lb" ? "kg" : "lb"}`}
+          >
+            <span className="font-display text-[44px] uppercase leading-none">{hero.amount}</span>
+            <span className="font-display text-[22px] uppercase leading-none text-white/70">{hero.unit}</span>
+            <ArrowLeftRight className="h-3 w-3 shrink-0 self-center text-white/40" aria-hidden />
+          </button>
+          {hero.compare && <div className="mt-1.5 text-[14px] font-semibold leading-snug text-white/85">{hero.compare}</div>}
+          {(hero.badge || hero.change) && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {hero.badge && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2.5 py-0.5 text-[11px] font-black text-[#2b1700]">
+                  <Trophy className="h-3 w-3" aria-hidden /> {hero.badge}
+                </span>
+              )}
+              {hero.change && <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-bold text-white/85">{hero.change}</span>}
             </div>
-          );
-        })}
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4 border-t border-white/10 pt-3.5">
+        {tiles.map((t) => (
+          <div key={t.label} className="min-w-0">
+            <div className="font-display truncate text-[30px] uppercase leading-none">{t.value}</div>
+            <div className="mt-1 text-[12px] font-bold leading-tight text-white/80">{t.label}</div>
+            {t.sub && <div className="mt-0.5 text-[11px] leading-tight text-white/50">{t.sub}</div>}
+          </div>
+        ))}
       </div>
 
-      {habits && <div className="mt-3.5 border-t border-white/10 pt-2.5 text-[11px] font-semibold text-white/55">{habits}</div>}
-    </div>
-  );
-}
+      {bars.length > 1 && (
+        <div className="mt-4 border-t border-white/10 pt-3.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[11px] font-black uppercase tracking-[0.14em] text-white/60">Workouts each week</span>
+            <span className="text-[10px] text-white/45">last {bars.length} weeks</span>
+          </div>
+          <div className="mt-2 flex h-[64px] items-end gap-[2px]" role="img" aria-label={bars.map((b) => `${b.label}: ${b.sessions}`).join(", ")}>
+            {bars.map((b) => (
+              <div key={b.wk} className="flex h-full flex-1 flex-col items-center justify-end" title={`Week of ${b.label}: ${b.sessions} workouts`}>
+                {b.current && <span className="mb-0.5 text-[10px] font-black leading-none">{b.sessions}</span>}
+                <div
+                  className={cn("w-full max-w-[22px] rounded-t-[4px]", b.current ? "bg-[#ef3340]" : "bg-white/20")}
+                  style={{ height: `${Math.max(4, Math.round(b.share * 48))}px` }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-1 flex justify-between text-[9px] text-white/40">
+            <span>{bars[0].label}</span>
+            <span>{bars[bars.length - 1].label}</span>
+          </div>
+        </div>
+      )}
 
-function Ring({ value }: { value: number }) {
-  const r = 26;
-  const c = 2 * Math.PI * r;
-  return (
-    <div className="relative h-[68px] w-[68px] shrink-0">
-      <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90" aria-hidden>
-        <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="7" />
-        <circle cx="32" cy="32" r={r} fill="none" stroke="#ef3340" strokeWidth="7" strokeLinecap="round" strokeDasharray={`${(c * Math.min(value, 100)) / 100} ${c}`} />
-      </svg>
-      <span className="font-display absolute inset-0 grid place-items-center text-[17px] leading-none">{value}%</span>
+      <div className="mt-3.5 rounded-xl bg-white/[0.06] px-3 py-2 text-[12px] font-bold text-white/85">{winsChallenge(stats)}</div>
     </div>
   );
 }
