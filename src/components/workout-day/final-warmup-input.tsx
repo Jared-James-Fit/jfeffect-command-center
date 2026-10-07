@@ -72,6 +72,8 @@ export function WarmupSection({
   canEdit,
   showPrompt,
   hasHistory,
+  seed = null,
+  showList = true,
 }: {
   sets: WarmupSetRow[];
   unit: WarmupUnit;
@@ -86,6 +88,10 @@ export function WarmupSection({
   showPrompt: boolean;
   /** True when there is already enough history for a suggestion (so this only sharpens it). */
   hasHistory: boolean;
+  /** Pre-fill for a NEW warm-up (the suggested last warm-up), so the athlete only picks how it felt. */
+  seed?: { load: number; reps: number } | null;
+  /** The suggestion card already shows the final warm-up — list only when there are more. */
+  showList?: boolean;
 }) {
   const editing = form && form !== "new" ? sets.find((s) => s.id === form) ?? null : null;
   const [load, setLoad] = useState("");
@@ -97,7 +103,9 @@ export function WarmupSection({
   if (form !== seeded) {
     setSeeded(form);
     if (form) {
-      const base = editing ? { load: warmupDisplay(editing, unit), reps: editing.reps, rpe: editing.rpe } : null;
+      const base = editing
+        ? { load: warmupDisplay(editing, unit), reps: editing.reps, rpe: editing.rpe }
+        : seed ? { load: seed.load, reps: seed.reps, rpe: null } : null;
       setLoad(base ? String(base.load) : "");
       setReps(base ? String(base.reps) : "");
       setRpe(base?.rpe ?? null);
@@ -115,7 +123,7 @@ export function WarmupSection({
 
   return (
     <div data-testid="warmup-section">
-      {sets.length > 0 && (
+      {showList && sets.length > 0 && (
         <div className="mt-1.5 space-y-1" data-testid="warmup-list">
           {sets.map((s, i) => (
             <div key={s.id} className="flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
@@ -188,7 +196,7 @@ export function WarmupSection({
               ))}
             </div>
           </div>
-          <p className="text-[10px] text-muted-foreground">Used to sharpen your suggestion. Not counted in volume, records or points.</p>
+          <p className="text-[10px] leading-snug text-muted-foreground">How your last warm-up moves shows how today feels, so your top-set number adjusts before you lift it. Not counted in volume, records or points.</p>
           <button
             type="button"
             onClick={() => void save()}

@@ -453,6 +453,21 @@ export function audibleStep(target: number, unit: "kg" | "lb"): number {
 }
 
 /**
+ * What the athlete's LAST warm-up should be before the first working set, so it
+ * is heavy enough to read how today feels yet light enough to cost nothing:
+ * a single at ~90% for a top set of 1–3 reps, a double at ~87% for 4–6 and
+ * ~85% for 7+ (standard powerlifting warm-up ramps), rounded DOWN to plates.
+ */
+export function suggestFinalWarmup(target: number, planReps: number, unit: "kg" | "lb"): { load: number; reps: number } | null {
+  if (!(target > 0) || !(planReps >= 1)) return null;
+  const pct = planReps <= 3 ? 0.9 : planReps <= 6 ? 0.87 : 0.85;
+  const step = loadStep(unit, target);
+  const load = Math.floor((target * pct) / step) * step;
+  if (!(load > 0)) return null;
+  return { load, reps: planReps <= 3 ? 1 : 2 };
+}
+
+/**
  * Which reps/RPE to plan for from the prescription. Rep ranges plan for the
  * midpoint; no prescribed effort means a normal working set (RPE 8).
  */
