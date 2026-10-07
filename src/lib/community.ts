@@ -100,6 +100,15 @@ export type CommunityPost = {
   coach_commented: boolean;
 };
 
+/** Someone in the crew (Crew tab). Counts only include posts you can see. */
+export type CommunityMember = {
+  author: CommunityAuthor;
+  bio: string | null;
+  posts: number;
+  last_post_at: string | null;
+  live: boolean;
+};
+
 export type CommunityPostDetail = CommunityPost & { exercises: CommunityExercise[] };
 
 export type CommunityProfile = {

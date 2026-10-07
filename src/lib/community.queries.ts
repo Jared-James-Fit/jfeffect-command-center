@@ -11,6 +11,7 @@ import {
   type CommunityComment,
   type CommunityFeedPage,
   type CommunityActivity,
+  type CommunityMember,
   type CommunityPost,
   type CommunityPostDetail,
   type CommunityProfile,
@@ -251,6 +252,7 @@ export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-my-post"] });
   qc.invalidateQueries({ queryKey: ["community-recent-completions"] });
   qc.invalidateQueries({ queryKey: ["community-profile"] });
+  qc.invalidateQueries({ queryKey: ["community-members"] });
 }
 
 /* ---- post detail / profile ------------------------------------------ */
@@ -290,6 +292,20 @@ export function useSetBio(userId: string | null) {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: communityKeys.profile(userId) }),
+  });
+}
+
+/** Everyone in the community but you (Crew tab). */
+export function useCommunityMembers(enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-members"],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<CommunityMember[]> => {
+      const { data, error } = await db.rpc("community_members");
+      if (error) throw error;
+      return (data ?? []) as CommunityMember[];
+    },
   });
 }
 
