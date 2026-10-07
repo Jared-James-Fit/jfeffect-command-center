@@ -31,6 +31,9 @@ export function reactionEmoji(key: string | null | undefined): string | null {
 
 export type CommunityVisibility = "community" | "coach" | "private";
 
+/** Shown when a coach taps a post button while viewing as a client. */
+export const PREVIEW_ONLY_MESSAGE = "Preview only. This is what they see, but you can't post as them.";
+
 /** Who a post is for. "JF crew" = every active JF Effect client + coaches, never the public. */
 export const AUDIENCES: { key: CommunityVisibility; label: string; hint: string }[] = [
   { key: "community", label: "JF crew", hint: "Only JF Effect clients and coaches see it" },

@@ -38,7 +38,7 @@ function personFromHash(): string | null {
  * profile per person, and a full workout page per post. Shared by the client
  * portal and the coach view. No follower counts, no rankings.
  */
-export function CommunityScreen({ canShare = false }: { canShare?: boolean }) {
+export function CommunityScreen({ canShare = false, previewOnly = false }: { canShare?: boolean; previewOnly?: boolean }) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const viewerIsStaff = role === "admin" || role === "coach";
@@ -126,7 +126,7 @@ export function CommunityScreen({ canShare = false }: { canShare?: boolean }) {
             </button>
           ))}
         </div>
-        {canShare && <ShareWorkoutButton unit={unit} label="Share" />}
+        {canShare && <ShareWorkoutButton unit={unit} label="Share" previewOnly={previewOnly} />}
         </div>
       )}
 
@@ -155,7 +155,7 @@ export function CommunityScreen({ canShare = false }: { canShare?: boolean }) {
         <EmptyNote
           title="Be the first one in"
           body={canShare ? "Share a session from this month. Your crew sees the work, your coach sees it too." : "When clients share a workout, it shows up here."}
-          action={canShare ? <ShareWorkoutButton unit={unit} label="Share your last workout" variant="block" /> : null}
+          action={canShare ? <ShareWorkoutButton unit={unit} label="Share your last workout" variant="block" previewOnly={previewOnly} /> : null}
         />
       ) : (
         <>
