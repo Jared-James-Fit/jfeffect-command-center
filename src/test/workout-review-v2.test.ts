@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { checkoutCta, deriveOverallRating, initialEffort, trustedSessionRpe, REVIEW_VERSION } from "@/lib/workout-review";
+import {
+  checkoutCta,
+  deriveOverallRating,
+  initialEffort,
+  trustedSessionRpe,
+  REVIEW_VERSION,
+} from "@/lib/workout-review";
 
 describe("quick check-out (review v2)", () => {
   it("derives overall_rating from real answers instead of asking", () => {
@@ -20,15 +26,30 @@ describe("quick check-out (review v2)", () => {
   });
 
   it("never pre-selects sleep, energy or pain, and says what a quick finish skips", () => {
-    const base = { isEdit: false, effort: 8, pain: null, painArea: null, sleepBucket: null, recoveryToday: null };
+    const base = {
+      isEdit: false,
+      effort: 8,
+      pain: null,
+      painArea: null,
+      sleepBucket: null,
+      recoveryToday: null,
+    };
     expect(checkoutCta(base)).toEqual({ label: "Skip 3 & finish", enabled: true });
-    expect(checkoutCta({ ...base, pain: false, sleepBucket: "7_8" })).toEqual({ label: "Skip 1 & finish", enabled: true });
-    expect(checkoutCta({ ...base, pain: false, sleepBucket: "7_8", recoveryToday: 4 })).toEqual({ label: "Done", enabled: true });
+    expect(checkoutCta({ ...base, pain: false, sleepBucket: "7_8" })).toEqual({
+      label: "Skip 1 & finish",
+      enabled: true,
+    });
+    expect(checkoutCta({ ...base, pain: false, sleepBucket: "7_8", recoveryToday: 4 })).toEqual({
+      label: "Done",
+      enabled: true,
+    });
     expect(checkoutCta({ ...base, effort: null }).enabled).toBe(false);
     expect(checkoutCta({ ...base, pain: true }).enabled).toBe(false);
     expect(checkoutCta({ ...base, isEdit: true }).label).toBe("Save changes");
     const editor = readFileSync("src/components/workout/shared/workout-review-editor.tsx", "utf8");
-    expect(editor).toContain("useState<boolean | null>(initial?.submittedAt ? !!initial.pain : null)");
+    expect(editor).toContain(
+      "useState<boolean | null>(initial?.submittedAt ? !!initial.pain : null)",
+    );
     expect(editor).toContain("useState<SleepBucket | null>(initial?.sleepBucket ?? null)");
     expect(editor).toContain("useState<number | null>(initial?.recoveryToday ?? null)");
   });

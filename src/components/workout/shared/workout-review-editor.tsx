@@ -184,7 +184,11 @@ export function WorkoutReviewEditor({
     mutationFn: async () => {
       if (effort == null) throw new Error("Pick how hard it was");
       if (pain && !painArea) throw new Error("Pick where it hurts");
-      const overallRating = deriveOverallRating({ pain: !!pain, sessionRpe: effort, recoveryToday });
+      const overallRating = deriveOverallRating({
+        pain: !!pain,
+        sessionRpe: effort,
+        recoveryToday,
+      });
       const res = await submit({
         data: {
           ...ctx,
@@ -280,7 +284,10 @@ export function WorkoutReviewEditor({
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5 pt-4">
-          <Row title="How hard was it?" hint={prefilled ? "From your logged RPE" : effort == null ? "Required" : "Session RPE"}>
+          <Row
+            title="How hard was it?"
+            hint={prefilled ? "From your logged RPE" : effort == null ? "Required" : "Session RPE"}
+          >
             <div className="grid grid-cols-5 gap-1.5">
               {EFFORT_OPTIONS.map((o) => (
                 <Chip key={o.v} active={effort === o.v} onClick={() => setEffort(o.v)} label={`Effort ${o.v} ${o.label}`}>

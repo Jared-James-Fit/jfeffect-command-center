@@ -73,9 +73,12 @@ export function checkoutCta(input: {
   recoveryToday: number | null;
 }): { label: string; enabled: boolean } {
   if (input.effort == null) return { label: "Pick how hard it was", enabled: false };
-  if (input.pain === true && !input.painArea) return { label: "Pick where it hurts", enabled: false };
+  if (input.pain === true && !input.painArea)
+    return { label: "Pick where it hurts", enabled: false };
   if (input.isEdit) return { label: "Save changes", enabled: true };
-  const skipped = [input.sleepBucket, input.recoveryToday, input.pain].filter((v) => v == null).length;
+  const skipped = [input.sleepBucket, input.recoveryToday, input.pain].filter(
+    (v) => v == null,
+  ).length;
   return { label: skipped ? `Skip ${skipped} & finish` : "Done", enabled: true };
 }
 
