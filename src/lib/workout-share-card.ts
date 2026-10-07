@@ -11,6 +11,9 @@
  *   sticker  – transparent PNG to paste on top of your own photo in an
  *              Instagram Story (the Strava move).
  *   volume   – one giant number: total weight moved.
+ *   lockin   – "LOCKED IN": the gym photo (or the brand glow) with the
+ *              time and the session, posted when someone shows up, before
+ *              any numbers exist. Not in the finished-workout carousel.
  *
  * Hierarchy (on purpose): photo / performance → accomplishment → brand. The
  * brand is a small footer mark, never a banner.
@@ -26,7 +29,7 @@ import { ellipsize, fitFont as fitSystemFont, font, loadImage, roundRect } from 
 import type { CardStat } from "@/lib/community";
 
 export type ShareFormat = "feed" | "story";
-export type ShareTemplate = "pr" | "photo" | "stats" | "sticker" | "volume";
+export type ShareTemplate = "pr" | "photo" | "stats" | "sticker" | "volume" | "lockin";
 
 export const SHARE_SIZES: Record<ShareFormat, { w: number; h: number; safeTop: number; safeBottom: number }> = {
   feed: { w: 1080, h: 1350, safeTop: 80, safeBottom: 80 },
@@ -39,6 +42,7 @@ export const TEMPLATE_LABEL: Record<ShareTemplate, string> = {
   stats: "Stats",
   sticker: "Sticker",
   volume: "Volume",
+  lockin: "Lock in",
 };
 
 export type ShareCardMedia = CanvasImageSource & { width?: number; height?: number };
@@ -63,6 +67,8 @@ export type ShareCardData = {
   /** "Session 12 this month" */
   sessionLine: string | null;
   media: ShareCardMedia | null;
+  /** When they locked in ("6:42 PM"); `live` = the photo was just taken in-app. */
+  lockedIn?: { time: string; live: boolean } | null;
 };
 
 /** Templates worth offering for this workout, best first. */
@@ -290,6 +296,7 @@ export async function drawWorkoutShareCard(canvas: HTMLCanvasElement, d: ShareCa
   if (d.template === "pr") drawPr(ctx, d, logo, L);
   else if (d.template === "photo") drawPhoto(ctx, d, logo, L);
   else if (d.template === "stats") drawStats(ctx, d, logo, L);
+  else if (d.template === "lockin") drawLockIn(ctx, d, logo, L);
   else drawVolume(ctx, d, logo, L);
 }
 
@@ -378,6 +385,7 @@ function drawPhoto(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
 
   brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
   if (d.isPr) pill(ctx, d.lift?.prLabel ? `NEW ${d.lift.prLabel}` : "NEW PR", PAD, L.top + 70, gold(ctx, PAD, 360), "#2b1700");
+  else if (d.lockedIn) pill(ctx, `LOCKED IN ${d.lockedIn.time}`.toUpperCase(), PAD, L.top + 70, RED, INK);
 
   // Bottom-up block: stats, lift, title.
   let y = L.bottom - 40;
@@ -412,6 +420,59 @@ function drawPhoto(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
     ctx.textAlign = "right";
     ctx.fillText(d.sessionLine, W - PAD, L.bottom + 40);
     ctx.textAlign = "left";
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  LOCK IN ("I showed up")                                            */
+/* ------------------------------------------------------------------ */
+function drawLockIn(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
+  const { W, H, PAD, innerW } = L;
+  if (d.media) drawCover(ctx, d.media, W, H);
+  else darkGlow(ctx, W, H, "red");
+  const scrimTop = H * 0.38;
+  const g = ctx.createLinearGradient(0, scrimTop, 0, H);
+  g.addColorStop(0, "rgba(8,8,11,0)");
+  g.addColorStop(0.55, "rgba(8,8,11,0.62)");
+  g.addColorStop(1, "rgba(8,8,11,0.94)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, scrimTop, W, H - scrimTop);
+  const tg = ctx.createLinearGradient(0, 0, 0, L.top + 160);
+  tg.addColorStop(0, "rgba(8,8,11,0.5)");
+  tg.addColorStop(1, "rgba(8,8,11,0)");
+  ctx.fillStyle = tg;
+  ctx.fillRect(0, 0, W, L.top + 160);
+
+  brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
+
+  // Bottom-up: session, the stamp, the time.
+  let y = L.bottom - 10;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = font(800, 40);
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.fillText(ellipsize(ctx, d.workoutTitle, innerW), PAD, y);
+  y -= 40 + 64;
+
+  ctx.fillStyle = INK;
+  const size = fitDisplay(ctx, "LOCKED IN", innerW, L.story ? 250 : 210, 120);
+  ctx.fillText("LOCKED IN", PAD - 4, y);
+  // Red rule under the stamp: the brand accent, one stroke.
+  ctx.fillStyle = RED;
+  ctx.fillRect(PAD, y + 18, Math.min(innerW, size * 1.15), 10);
+  y -= size * 0.92 + 34;
+
+  if (d.lockedIn) {
+    const text = (d.lockedIn.live ? `●  LIVE  ${d.lockedIn.time}` : d.lockedIn.time).toUpperCase();
+    pill(ctx, text, PAD, y - 54, RED, INK);
+    y -= 54 + 30;
+  }
+  if (d.athleteName) {
+    ctx.font = font(800, 28);
+    setSpacing(ctx, 6);
+    ctx.fillStyle = MUTED;
+    ctx.fillText(d.athleteName.toUpperCase(), PAD, y);
+    setSpacing(ctx, 0);
   }
 }
 

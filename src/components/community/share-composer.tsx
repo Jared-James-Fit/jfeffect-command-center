@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { CAPTION_MAX, buildShareCardFields, type CommunityVisibility } from "@/lib/community";
+import { CAPTION_MAX, buildShareCardFields, lockInTimeLabel, type CommunityVisibility } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, type SavePostInput } from "@/lib/community.queries";
+import { InstagramGlyph } from "@/components/community/glyphs";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import {
   TEMPLATE_LABEL,
@@ -154,9 +155,12 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   );
   const current: ShareTemplate | undefined = templates[Math.min(index, templates.length - 1)];
 
+  // Locked in earlier? The finished photo card carries that time ("LOCKED IN 6:02 PM").
+  const lockedInTime = lockInTimeLabel(existing?.locked_in_at);
   const dataFor = useCallback(
-    (template: ShareTemplate): ShareCardData | null => (base ? { ...base, template, format: shareFormat, media: drawable } : null),
-    [base, shareFormat, drawable],
+    (template: ShareTemplate): ShareCardData | null =>
+      base ? { ...base, template, format: shareFormat, media: drawable, lockedIn: lockedInTime ? { time: lockedInTime, live: false } : null } : null,
+    [base, shareFormat, drawable, lockedInTime],
   );
 
   // Draw every slide (≤5, ~30 ms each). Latest-wins so a stale draw never lands.
@@ -564,16 +568,5 @@ function Overlay({ children, onClose, light }: { children: React.ReactNode; onCl
         {children}
       </div>
     </div>
-  );
-}
-
-/** Generic camera-in-rounded-square mark (not a brand logo). */
-function InstagramGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
-      <rect x="3" y="3" width="18" height="18" rx="5" />
-      <circle cx="12" cy="12" r="4" />
-      <circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />
-    </svg>
   );
 }

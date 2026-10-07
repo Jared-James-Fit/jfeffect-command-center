@@ -9,6 +9,8 @@ import {
   SCOPE_WORD,
   featuredLift,
   formatTopSet,
+  isTrainingNow,
+  lockInTimeLabel,
   pickCardStats,
   postTimeLabel,
   reactionEmoji,
@@ -19,6 +21,46 @@ import {
   type WorkoutShareStats,
 } from "@/lib/community";
 import { useFullMediaUrl } from "@/lib/community.queries";
+
+/** "● Training now" — a lock-in whose session is still open (and recent). */
+export function TrainingNowPill({ className }: { className?: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-white", className)}>
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Training now
+    </span>
+  );
+}
+
+/**
+ * A lock-in before its numbers exist: LOCKED IN, the session, the time.
+ * Once the session is finished the post shows the workout instead.
+ */
+export function LockInHero({ post, size = "feed" }: { post: CommunityPost; size?: "feed" | "detail" | "tile" }) {
+  const now = isTrainingNow(post);
+  const time = lockInTimeLabel(post.locked_in_at);
+  const bg = "bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.55),rgba(127,29,29,0.16)_45%,#0a0a0d_75%)]";
+  if (size === "tile") {
+    return (
+      <div className={cn("flex h-full w-full flex-col justify-between p-2.5 text-white", bg)}>
+        {now ? <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /> : <span />}
+        <div>
+          <div className="font-display text-[17px] uppercase leading-none">Locked in</div>
+          <div className="mt-0.5 line-clamp-2 text-[10px] font-bold text-white/70">{post.session_title}</div>
+        </div>
+      </div>
+    );
+  }
+  const big = size === "detail";
+  return (
+    <div className={cn("relative overflow-hidden px-5 text-white", big ? "py-8" : "py-6", bg)}>
+      {now ? <TrainingNowPill /> : time ? <span className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">{time}</span> : null}
+      <div className={cn("font-display mt-2 uppercase leading-[0.95]", big ? "text-[60px]" : "text-[48px]")}>Locked in</div>
+      <div className="mt-1.5 h-1.5 w-24 rounded-full bg-red-500" />
+      {post.session_title && <div className="mt-3 truncate text-[15px] font-bold text-white/80">{post.session_title}</div>}
+      {post.live && <div className="mt-1 text-[12px] text-white/55">Numbers land here when they finish.</div>}
+    </div>
+  );
+}
 
 export function CoachBadge({ className }: { className?: string }) {
   return (
@@ -139,7 +181,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const lift = s ? featuredLift(s) : null;
   const stats = s ? pickCardStats(s, unit) : [];
   const canDelete = post.is_mine || viewerIsStaff;
-  const sub = [postTimeLabel(post.created_at), post.visibility === "private" ? "Only me" : null].filter(Boolean).join(" · ");
+  const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
+  const sub = [postTimeLabel(post.created_at), lockedAt ? `Locked in ${lockedAt}` : null, post.visibility === "private" ? "Only me" : null].filter(Boolean).join(" · ");
 
   // Tap opens the workout; double-tap gives 🔥 (Instagram muscle memory).
   const onHeroTap = () => {
@@ -189,6 +232,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           <PostMedia post={post} thumbUrl={thumbUrl} />
         ) : s ? (
           <WorkoutHero stats={s} unit={unit} />
+        ) : post.locked_in_at ? (
+          <LockInHero post={post} />
         ) : (
           <div className="px-4 py-6 text-sm text-muted-foreground">Workout was reopened, numbers will be back once it's finished.</div>
         )}
@@ -198,6 +243,17 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           </span>
         )}
       </div>
+
+      {/* A photo lock-in: the stamp sits under it until the numbers arrive */}
+      {post.media_type && !s && post.locked_in_at && (
+        <button type="button" onClick={() => onOpen(post)} className="block w-full px-3.5 pt-3 text-left">
+          <div className="flex items-center gap-2">
+            <h3 className="font-display shrink-0 text-[24px] uppercase leading-none">Locked in</h3>
+            {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-[12px] font-bold text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
+          </div>
+          {post.session_title && <div className="mt-1 truncate text-[12px] font-semibold text-muted-foreground">{post.session_title}</div>}
+        </button>
+      )}
 
       {/* With a photo, the numbers sit under it, Strava style */}
       {post.media_type && s && (

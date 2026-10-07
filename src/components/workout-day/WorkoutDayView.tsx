@@ -127,6 +127,7 @@ import {
 } from "@/lib/workout-load-type";
 import { SetTimerInput } from "@/components/workout-day/set-timer-input";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
+import { LockInBar } from "@/components/community/lock-in";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { collectSessionPRs } from "@/lib/workout-takeaways";
 import { useWorkoutPoints, useWorkoutRecords } from "@/lib/training-records";
@@ -1261,6 +1262,15 @@ function WorkoutDay({
     }
   };
 
+  // Lock in (community): locking in is starting the session — same server
+  // path as the first logged set — and returns the completion it posts to.
+  const ensureStartedForLockIn = async (): Promise<string | null> => {
+    if (completion?.id && (completion.started_at || completion.in_progress_at)) return completion.id;
+    const res = await startWorkoutSrv({ data: { kind: "client" as const, dayId, scheduledWorkoutId } });
+    qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+    return (res as any)?.id ?? null;
+  };
+
   // Heartbeat: persist activity timestamps to localStorage while the
   // workout is in-flight so the final active_duration_seconds reflects
   // real engaged time and survives a mid-workout refresh.
@@ -2269,6 +2279,14 @@ function WorkoutDay({
                   ])}
                 />
               ) : null}
+              {isClientWorkout && !isImpersonating && !completion?.completed_at && rowsLoaded && (rows as any[]).length > 0 && (
+                <LockInBar
+                  completionId={completion?.id ?? null}
+                  ensureStarted={ensureStartedForLockIn}
+                  workoutTitle={cleanDayTitle(day.title, day.day_index)}
+                  athleteName={(client as any)?.full_name ?? null}
+                />
+              )}
               {canEditWorkoutStructure && rowsLoaded && (rows as any[]).length === 0 && (
                 <WorkoutAddExercise onAdd={(exercise) => addExerciseNow(exercise, 0)} disabled={rowsFetching} />
               )}

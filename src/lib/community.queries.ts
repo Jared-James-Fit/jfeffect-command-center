@@ -182,6 +182,7 @@ export type MyPostRow = {
   media_path: string | null;
   media_thumb_path: string | null;
   media_type: "image" | "video" | null;
+  locked_in_at: string | null;
 };
 
 /** The post (if any) already made for this workout — so reopening Share edits it instead of duplicating. */
@@ -193,7 +194,7 @@ export function useMyPostForCompletion(completionId: string | null | undefined, 
     queryFn: async (): Promise<MyPostRow | null> => {
       const { data, error } = await db
         .from("community_posts")
-        .select("id, caption, visibility, media_path, media_thumb_path, media_type")
+        .select("id, caption, visibility, media_path, media_thumb_path, media_type, locked_in_at")
         .eq("completion_id", completionId)
         .maybeSingle();
       if (error) throw error;
