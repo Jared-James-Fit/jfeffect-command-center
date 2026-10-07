@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, Target } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, Target, SlidersHorizontal, Repeat } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -3028,7 +3028,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
       className={cn("inline-flex max-w-full items-center gap-1 rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-900 dark:text-sky-100", className)}
       title="Your top set the last time you trained this exercise"
     >
-      <span className="text-[9px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">Last time</span>
+      <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">Last time</span>
       <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}</span>
       {when && <span className="text-[10px] text-sky-700/70 dark:text-sky-300/70">· {when}</span>}
     </div>
@@ -3236,15 +3236,52 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const hideWeight = !showWeight;
   // Single shared column template so the header and every set row line up
   // no matter which inputs are active.
+  // Phone-first: 44px-tall cells, a thumb-sized done circle, and room for the
+  // remove control only when a set can actually be removed.
+  const canRemoveSet = !readonly && adapter?.kind !== "member" && setCount > 1;
   const gridTemplate = [
-    focusMode ? "36px" : "28px",
+    focusMode ? "30px" : "22px",
     showReps ? "1fr" : null,
     showTimer ? "1fr" : null,
     showVelocity ? "1fr" : null,
     "1fr",
-    !hideWeight ? "1.3fr" : null,
-    focusMode ? "52px" : "44px",
+    !hideWeight ? "1.35fr" : null,
+    canRemoveSet ? "68px" : "44px",
   ].filter(Boolean).join(" ");
+  // The logging frontier: helper chips (suggested load, repeat previous set)
+  // appear only on the next set to log — never on every row.
+  const frontier = Array.from({ length: setCount }, (_, k) => k + 1)
+    .find((n) => !existingResults.find((x) => x.set_index === n && x.completed_at)) ?? null;
+  // "Repeat set N" — offered on the next set when the last logged set's numbers
+  // differ from what's waiting below it (blank or another value).
+  const repeatPrevious = (() => {
+    if (readonly || frontier == null || frontier < 2) return null;
+    const from = existingResults.find((x) => x.set_index === frontier - 1);
+    if (!from?.completed_at || from.actual_load == null) return null;
+    const loadType = resolveLoadType(from.load_type, from.is_bodyweight);
+    const values = {
+      load: String(from.actual_load),
+      reps: from.actual_reps != null ? String(from.actual_reps) : "",
+      rpe: from.actual_rpe_num != null ? String(from.actual_rpe_num) : from.actual_rpe != null ? String(from.actual_rpe) : "",
+      unit: ((from.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit),
+      loadType,
+    };
+    let differs = false;
+    let overwrites = false;
+    for (let n = frontier; n <= setCount; n++) {
+      const r = existingResults.find((x) => x.set_index === n);
+      if (r?.completed_at) continue;
+      const blank = r?.actual_load == null;
+      const same = !blank && Number(r.actual_load) === Number(from.actual_load)
+        && (r.actual_load_unit ?? activeUnit) === values.unit
+        && (r.actual_reps == null || String(r.actual_reps) === values.reps);
+      if (!same) differs = true;
+      if (!blank && !same) overwrites = true;
+    }
+    if (!differs) return null;
+    const label = `${formatLoadDisplay(Number(Number(from.actual_load).toFixed(2)), loadType, values.unit)}${values.reps ? ` × ${values.reps}` : ""}`;
+    return { fromSet: frontier - 1, values, label, overwrites };
+  })();
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,
@@ -3687,7 +3724,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {position != null && <ExerciseOrderBadge position={position} family={family} className="mt-px" />}
-          <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
+          <div className="min-w-0 flex-1 text-base font-bold leading-snug break-words">{name}</div>
         </div>
         {!readonly && onUnitChange && (
           <div className="shrink-0">
@@ -3697,7 +3734,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       </div>
       {/* Row 2 — badges */}
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", purposeLabelBadgeClass(purposeLabel))}>
+        <Badge variant="outline" className={cn("h-5 px-1.5 text-[11px] font-bold uppercase tracking-wider", purposeLabelBadgeClass(purposeLabel))}>
           {purposeLabel || category}
         </Badge>
         {hasNote && (
@@ -3707,7 +3744,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         )}
       </div>
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE */}
-      <div className="mt-1 text-sm font-semibold text-foreground leading-snug break-words">
+      <div className="mt-1.5 text-base font-bold text-foreground leading-snug break-words">
         {formatPrescription({
           sets: row.sets,
           repsText: row.reps_text,
@@ -3721,7 +3758,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           measurementType: showTimer && !showReps ? "time" : "reps",
           durationSeconds: effectivePrescribedDurationSec,
         })}
-        {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
+        {row.tempo && <span className="ml-2 text-sm font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
       {/* Reference row: Last Time and History stay directly connected — History
           simply expands on the previous-performance information. */}
@@ -3744,7 +3781,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           )}
         </div>
       )}
-      {loadModel && loadPlan && (
+      {loadModel && loadPlan && !(warmupForm && (loadModel.status === "calibrating" || !loadHint)) && (
         <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} />
       )}
       {(warmupSets.length > 0 && (!warmupGauge || warmupSets.length > 1)) || (warmupAllowed && !!warmupForm) ? (
@@ -3830,41 +3867,41 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 swapContext={swapContext}
               />
             </DropdownMenuItem>
+            {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Exercise {movePosition} of {moveCount}
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  <DropdownMenuItem disabled={!canMoveUp} onSelect={onMoveUp} aria-label="Move exercise up" className="h-10 justify-center rounded-lg">
+                    <ArrowUp className="mr-1.5 h-4 w-4" /> Up
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={!canMoveDown} onSelect={onMoveDown} aria-label="Move exercise down" className="h-10 justify-center rounded-lg">
+                    <ArrowDown className="mr-1.5 h-4 w-4" /> Down
+                  </DropdownMenuItem>
+                </div>
+                {(moveCount ?? 0) > 2 && (
+                  <>
+                    <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Move to position</div>
+                    <div className="grid grid-cols-4 gap-1 p-1">
+                      {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
+                        <DropdownMenuItem
+                          key={position}
+                          disabled={position === movePosition}
+                          onSelect={() => onMoveTo?.(position)}
+                          className="h-10 justify-center rounded-lg p-0 font-semibold"
+                        >
+                          {position}
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </DropdownMenuContent>
         )}
-        reorderMenu={(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) ? (
-          <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5">
-              <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Exercise {movePosition} of {moveCount}
-              </div>
-              <div className="grid grid-cols-2 gap-1">
-                <DropdownMenuItem disabled={!canMoveUp} onSelect={onMoveUp} className="rounded-lg justify-center">
-                  <ArrowUp className="mr-1.5 h-4 w-4" /> Up
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canMoveDown} onSelect={onMoveDown} className="rounded-lg justify-center">
-                  <ArrowDown className="mr-1.5 h-4 w-4" /> Down
-                </DropdownMenuItem>
-              </div>
-              {(moveCount ?? 0) > 2 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <div className="px-2 py-1 text-xs text-muted-foreground">Move directly to</div>
-                  <div className="grid grid-cols-4 gap-1 p-1">
-                    {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
-                      <DropdownMenuItem
-                        key={position}
-                        disabled={position === movePosition}
-                        onSelect={() => onMoveTo?.(position)}
-                        className="h-9 justify-center rounded-lg p-0 font-semibold"
-                      >
-                        {position}
-                      </DropdownMenuItem>
-                    ))}
-                  </div>
-                </>
-              )}
-            </DropdownMenuContent>
-        ) : null}
         rest={(exerciseId || name) ? (
           <RestTimerButton
             seconds={effectiveRest ?? null}
@@ -3881,7 +3918,19 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         const hasFirstWeight = firstLoad != null && isFinite(Number(firstLoad));
         const uncompletedAfterFirst = Array.from({ length: setCount }, (_, i) => i + 1)
           .filter((i) => i > 1 && !existingResults.find((x: any) => x.set_index === i && x.completed_at)).length;
-        if (uncompletedAfterFirst === 0) return null;
+        if (uncompletedAfterFirst === 0 || firstSet?.completed_at) return null;
+        // Once set 1 is logged, "Repeat set N" on the next set takes over.
+        // Only offer it when it would change something: Set 1 has a weight and
+        // an open set below still differs (blank or another load). Otherwise
+        // it's a dead row — the weight cascade already fills blanks below.
+        const needsFill = hasFirstWeight && Array.from({ length: setCount }, (_, i) => i + 1).some((i) => {
+          if (i === 1) return false;
+          const r = existingResults.find((x) => x.set_index === i);
+          if (r?.completed_at) return false;
+          return r?.actual_load == null || Number(r.actual_load) !== Number(firstLoad)
+            || (r.actual_load_unit ?? activeUnit) !== (firstSet?.actual_load_unit ?? activeUnit);
+        });
+        if (!needsFill) return null;
         const firstUnit = (firstSet?.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit;
         const displayLoad = Number(Number(firstLoad ?? 0).toFixed(2));
         const firstLoadType = resolveLoadType(firstSet?.load_type, firstSet?.is_bodyweight);
@@ -3930,9 +3979,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 : "Enter a weight in Set 1 first"}
             >
               <Zap className="h-3.5 w-3.5" />
-              {hasFirstWeight
-                ? `Fill All Sets with ${fillLabel}`
-                : "Fill All Sets (enter Set 1 weight first)"}
+              {`Fill All Sets with ${fillLabel}`}
             </Button>
           </div>
         );
@@ -3944,67 +3991,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </p>
       )}
 
-      {/* Input type — optional athlete logging columns. Velocity uses mean concentric
-          velocity (m/s). Per-row choices are instant; the velocity default is account-wide. */}
-      {!readonly && (
-        <div className="mt-2 flex items-center gap-1.5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex h-6 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              >
-                Inputs
-                <ChevronDown className="h-3 w-3" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-40">
-              {([
-                ["reps", "Reps", showReps],
-                ["weight", "Weight", showWeight],
-                ["timer", "Timer", showTimer],
-                ["velocity", "Avg velocity (m/s)", showVelocity],
-              ] as const).map(([field, label, on]) => (
-                <DropdownMenuItem
-                  key={field}
-                  onSelect={(e) => { e.preventDefault(); toggleInput(field); }}
-                  className="text-xs font-semibold"
-                >
-                  <span className={cn("mr-2 inline-flex h-3.5 w-3.5 items-center justify-center", !on && "opacity-0")}>
-                    <Check className="h-3.5 w-3.5" />
-                  </span>
-                  {label}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  const next = !velocityDefault;
-                  void persistVelocityDefault(next)
-                    .then(() => {
-                      if (next && !showVelocity) {
-                        const updated = { ...inputOverrides, velocity: true };
-                        setInputOverridesState(updated);
-                        setRowInputs(row.id, updated);
-                      }
-                      toast.success(next ? "Velocity will open by default on your workouts" : "Velocity default turned off");
-                    })
-                    .catch(() => toast.error("Could not save velocity default"));
-                }}
-                className="text-xs font-semibold"
-              >
-                Velocity default: {velocityDefault ? "On" : "Off"}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
-
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div
           className={cn(
-            "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
+            "grid items-center justify-items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground",
             focusMode && "text-xs",
           )}
           style={{ gridTemplateColumns: gridTemplate }}
@@ -4015,15 +4005,68 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <EffortScaleHeader rir={showRir} />
           {showVelocity && <span title="Average concentric velocity — enter the final rep for multi-rep sets">Avg Vel</span>}
           {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
-          <span className="text-right">Status</span>
+          {/* Status column header doubles as the column picker — the circles
+              below explain themselves, and the picker sits with the columns it changes. */}
+          {readonly ? <span className="justify-self-end">Done</span> : (
+            <div className="flex justify-self-end">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Log columns for ${name}`}
+                    title="Choose what to log (reps, weight, timer, velocity)"
+                    className="-my-1 ml-auto inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    <span className="sr-only">Log columns</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  {([
+                    ["reps", "Reps", showReps],
+                    ["weight", "Weight", showWeight],
+                    ["timer", "Timer", showTimer],
+                    ["velocity", "Avg velocity (m/s)", showVelocity],
+                  ] as const).map(([field, label, on]) => (
+                    <DropdownMenuItem
+                      key={field}
+                      onSelect={(e) => { e.preventDefault(); toggleInput(field); }}
+                      className="text-xs font-semibold"
+                    >
+                      <span className={cn("mr-2 inline-flex h-3.5 w-3.5 items-center justify-center", !on && "opacity-0")}>
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                      {label}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      const next = !velocityDefault;
+                      void persistVelocityDefault(next)
+                        .then(() => {
+                          if (next && !showVelocity) {
+                            const updated = { ...inputOverrides, velocity: true };
+                            setInputOverridesState(updated);
+                            setRowInputs(row.id, updated);
+                          }
+                          toast.success(next ? "Velocity will open by default on your workouts" : "Velocity default turned off");
+                        })
+                        .catch(() => toast.error("Could not save velocity default"));
+                    }}
+                    className="text-xs font-semibold"
+                  >
+                    Velocity default: {velocityDefault ? "On" : "Off"}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
           const prevExisting = i > 0 ? existingResults.find((x) => x.set_index === i) : undefined;
-          const hasUncompletedAfter = Array.from({ length: setCount - (i + 1) }).some((_, k) => {
-            const ex = existingResults.find((x) => x.set_index === i + 2 + k);
-            return !ex?.completed_at;
-          });
           return (
             <SetRow
               key={i}
@@ -4056,7 +4099,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               repTarget={repTarget}
               rpeTarget={rpeTarget}
               rirTarget={rirTarget}
-              hasUncompletedAfter={hasUncompletedAfter}
+              isNextSet={frontier === i + 1}
+              repeat={frontier === i + 1 ? repeatPrevious : null}
               onApplyToRemaining={applyToRemaining}
               cascade={cascade}
               autoFilled={cascadeOriginRef.current.get(i + 1) === "auto"}
@@ -4071,7 +4115,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               focusMode={focusMode}
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
-              onRemoveSet={!readonly && adapter?.kind !== "member" && setCount > 1 ? removeSet : undefined}
+              onRemoveSet={canRemoveSet ? removeSet : undefined}
             />
           );
         })}
@@ -4091,7 +4135,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                     Add set
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="center" className="w-56 rounded-xl p-1.5">
+                {/* Don't hand focus back to "Add set" on close — the warm-up form's
+                    weight field takes it so the keyboard is ready to type. */}
+                <DropdownMenuContent align="center" className="w-56 rounded-xl p-1.5" onCloseAutoFocus={(e) => e.preventDefault()}>
                   <DropdownMenuItem onSelect={() => void addSet()} disabled={setCount >= 20} className="rounded-lg">
                     Working set
                   </DropdownMenuItem>
@@ -4382,7 +4428,8 @@ function SetRow({
   repMaxBests = null,
   assistedBests = null,
   defaultLoadType = "external",
-  hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
+  isNextSet = true,
+  repeat = null, onApplyToRemaining, forceHydrateToken = 0,
   forcedFill = null,
   cascade = null,
   autoFilled = false,
@@ -4431,7 +4478,10 @@ function SetRow({
   assistedBests?: Map<number, PreviousLiftLog> | null;
   /** Exercise-library default load type (assisted machines open in Assisted). */
   defaultLoadType?: LoadType;
-  hasUncompletedAfter?: boolean;
+  /** First set without a completion — where helper chips appear. */
+  isNextSet?: boolean;
+  /** Offered on the next set: repeat the last logged set into every open set below. */
+  repeat?: { fromSet: number; label: string; overwrites: boolean; values: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType } } | null;
   onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => Promise<void> | void;
   /** Bumped by parent after a "Fill All Sets" write to force re-hydration
    *  from the freshly-saved `existing` even if the recent-save guard would
@@ -5199,14 +5249,6 @@ function SetRow({
     else if (rirTarget?.max != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.max))));
     else if (rirTarget?.min != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.min))));
   };
-  const copyPrevious = () => {
-    if (!prevExisting) return;
-    const pkg = displayLoadInUnit(prevExisting, unit);
-    if (pkg != null) setLoad(fmtLoad(pkg));
-    if (prevExisting.actual_reps != null) setReps(String(prevExisting.actual_reps));
-    const prevRpe = prevExisting.actual_rpe_num ?? prevExisting.actual_rpe;
-    if (prevRpe != null) setRpe(String(prevRpe));
-  };
 
   const repChipValues = useMemo(() => (repTarget ? repChips(repTarget) : []), [repTarget]);
   const rpeChipValues = useMemo(() => (rpeTarget ? rpeChips(rpeTarget) : []), [rpeTarget]);
@@ -5418,10 +5460,10 @@ function SetRow({
       statusError && "bg-destructive/10 border-l-2 border-l-destructive ring-1 ring-destructive/40",
     )}>
     <div
-      className="grid items-start gap-1.5 px-2.5 py-1.5"
+      className="grid items-center gap-1.5 px-2 py-1.5"
       style={{ gridTemplateColumns: gridTemplate }}
     >
-      <span className={cn("font-mono text-muted-foreground pt-1.5", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
+      <span className={cn("text-center font-semibold tabular-nums text-muted-foreground", focusMode ? "text-base" : "text-sm")}>{setIndex}</span>
       {/* Fast tap reps selector — smart chips from the prescription, custom entry inside */}
       {showReps && (
       <TypedValueInput
@@ -5515,7 +5557,7 @@ function SetRow({
         }}
       />
       )}
-      <div className="flex items-center justify-end gap-1">
+      <div className="relative flex items-center justify-end gap-1">
         {/* Compact indicator — smooth pencil (pending) → spinner (saving) →
             check (saved) transition so the row reflects sync status in real
             time. Full error label renders below the row to avoid overlapping
@@ -5530,7 +5572,15 @@ function SetRow({
                 ? "idle"
                 : null as any;
           if (!displayState) return null;
-          return <SaveStatus state={displayState} savedAt={save.savedAt} compact />;
+          // A corner badge, so the status column never changes width mid-save.
+          return (
+            <SaveStatus
+              state={displayState}
+              savedAt={save.savedAt}
+              compact
+              className="pointer-events-none absolute -top-1 left-0 z-10 rounded-full bg-background p-0.5"
+            />
+          );
         })()}
         {!readonly ? (
           <button
@@ -5540,7 +5590,7 @@ function SetRow({
             title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : "Mark set complete"}
             aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : `Mark set ${setIndex} complete`}
             className={cn(
-              "inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors",
+              "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors sm:h-9 sm:w-9 [&_svg]:size-5",
               isConfirmed
                 ? "border-green-500/40 bg-green-500/10 text-green-500"
                 : "border-border bg-background text-muted-foreground hover:border-green-500/50 hover:text-green-500",
@@ -5567,7 +5617,7 @@ function SetRow({
             onClick={() => void onRemoveSet(setIndex)}
             title={`Remove set ${setIndex}`}
             aria-label={`Remove set ${setIndex}`}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
+            className="inline-flex h-10 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-9"
           >
             <span className="text-base font-medium leading-none">−</span>
           </button>
@@ -5605,60 +5655,44 @@ function SetRow({
       </div>
     )}
 
-    {/* RPE-based suggestion for this set — one tap fills it, never auto-confirms */}
-    {!readonly && !isConfirmed && !hideWeight && loadHint && loadType === "external" && (
-      <div className="px-3 pb-1.5">
-        <button
-          type="button"
-          onClick={() => setLoad(fmtNum(loadHint.target))}
-          aria-label={`Use suggested ${fmtNum(loadHint.target)} ${loadHint.unit}`}
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
-        >
-          <Target className="h-3 w-3" aria-hidden="true" />
-          {loadHint.low === loadHint.high
-            ? `${fmtNum(loadHint.target)} ${loadHint.unit}`
-            : `${fmtNum(loadHint.low)}–${fmtNum(loadHint.high)} ${loadHint.unit}`}
-          {Number(load) !== loadHint.target && loadHint.low !== loadHint.high && (
-            <span className="font-normal text-primary/80">· use {fmtNum(loadHint.target)}</span>
-          )}
-        </button>
-      </div>
-    )}
-    {/* Quick-fill chip row — Suggested values are visible but never auto-confirm */}
-    {/* Copy Previous — compact secondary action for set 2+ */}
-    {!readonly && !isConfirmed && setIndex > 1 && prevExisting?.completed_at && (() => {
-      const prevWeight = prevExisting.actual_load;
-      if (prevWeight == null) return null;
-      return (
-        <div className="px-3 pb-1.5">
+    {/* Next-set helpers — one row, only on the set the athlete is about to log:
+        the suggested load (one tap fills it, never auto-confirms) and "Repeat
+        set N", which copies the last logged set into every open set below. */}
+    {!readonly && !isConfirmed && isNextSet && ((!hideWeight && loadHint && loadType === "external") || repeat) && (
+      <div className="flex flex-wrap gap-1.5 px-2 pb-2">
+        {!hideWeight && loadHint && loadType === "external" && (
           <button
             type="button"
-            onClick={copyPrevious}
-            className="h-7 rounded-md border border-border/60 bg-transparent px-2.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            onClick={() => setLoad(fmtNum(loadHint.target))}
+            aria-label={`Use suggested ${fmtNum(loadHint.target)} ${loadHint.unit}`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 active:scale-[0.98]"
           >
-            Copy Previous ({fmtNum(Number(prevWeight))} {unit})
+            <Target className="h-3.5 w-3.5" aria-hidden="true" />
+            {loadHint.low === loadHint.high
+              ? `${fmtNum(loadHint.target)} ${loadHint.unit}`
+              : `${fmtNum(loadHint.low)}–${fmtNum(loadHint.high)} ${loadHint.unit}`}
+            {Number(load) !== loadHint.target && loadHint.low !== loadHint.high && (
+              <span className="font-normal text-primary/80">· use {fmtNum(loadHint.target)}</span>
+            )}
           </button>
-        </div>
-      );
-    })()}
-
-    {/* Apply to remaining sets (visible after this set is confirmed) */}
-    {!readonly && isConfirmed && hasUncompletedAfter && onApplyToRemaining && (
-      <div className="px-3 pb-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-          onClick={async () => {
-            const ok = typeof window !== "undefined" ? window.confirm("Apply this result to the remaining sets as drafts?") : true;
-            if (!ok) return;
-            await onApplyToRemaining(setIndex, { load, reps, rpe, unit, loadType });
-          }}>
-            Apply to remaining sets
-        </Button>
+        )}
+        {repeat && onApplyToRemaining && (
+          <button
+            type="button"
+            onClick={async () => {
+              if (repeat.overwrites && typeof window !== "undefined"
+                && !window.confirm(`Replace the numbers in the remaining sets with set ${repeat.fromSet} (${repeat.label})?`)) return;
+              await onApplyToRemaining(repeat.fromSet, repeat.values);
+            }}
+            aria-label={`Same as set ${repeat.fromSet}: fill the remaining sets with ${repeat.label}`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-foreground transition-colors hover:bg-secondary active:scale-[0.98]"
+          >
+            <Repeat className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            Same as set {repeat.fromSet}
+          </button>
+        )}
       </div>
     )}
-
     {/* WorkoutTimerSheet replaced by DurationTimerInCard (in-card timer, no overlay) */}
     </div>
   );
