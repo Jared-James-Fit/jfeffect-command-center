@@ -246,6 +246,9 @@ export function WorkoutReviewEditor({
       <SheetContent
         side="bottom"
         hideCloseButton
+        // Radix focuses the first button (Back) on open, which paints a focus
+        // ring on touch devices before the athlete has done anything.
+        onOpenAutoFocus={(e) => e.preventDefault()}
         className="z-[70] flex max-h-[92svh] flex-col gap-0 rounded-t-3xl p-0"
       >
         <div
