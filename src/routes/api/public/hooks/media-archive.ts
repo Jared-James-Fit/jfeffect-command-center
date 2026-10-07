@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { runAutoArchiveInternal } from "@/lib/media-archive.functions";
 
-// Cron entry point — Supabase pg_cron should POST here daily with the project
-// anon key as `apikey` header. The /api/public/* prefix bypasses Lovable's
-// published-site auth wall; we additionally require the anon key match to
-// stop drive-by triggers.
+// Cron entry point — pg_cron POSTs here daily with the Vault-held cron secret
+// as `x-hook-secret` (or the worker secret as `x-worker-secret`). The
+// /api/public/* prefix bypasses Lovable's published-site auth wall, so the
+// shared hook auth is what stops drive-by triggers.
 export const Route = createFileRoute("/api/public/hooks/media-archive")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        if (!authorizeWorker(request)) return new Response("Unauthorized", { status: 401 });
+        if (!(await authorizeWorker(request))) return new Response("Unauthorized", { status: 401 });
         try {
           const result = await runAutoArchiveInternal();
           return Response.json({ ok: true, ...result });
@@ -22,13 +22,8 @@ export const Route = createFileRoute("/api/public/hooks/media-archive")({
   },
 });
 
-function authorizeWorker(request: Request): boolean {
-  const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
-  if (!expected) return false;
-  const provided =
-    request.headers.get("x-worker-secret") ?? "";
-  if (!provided || provided.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
-  return diff === 0;
+/** Shared hook auth: worker secret (env) or the Vault-held cron secret. */
+async function authorizeWorker(request: Request): Promise<boolean> {
+  const { authorizeHookRequest } = await import("@/lib/hook-auth.server");
+  return authorizeHookRequest(request);
 }
