@@ -69,10 +69,15 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  UPDATE public.app_members
-  SET biological_sex = CASE WHEN NEW.sex IN ('male', 'female') THEN NEW.sex END
-  WHERE user_id = NEW.user_id
-    AND biological_sex IS DISTINCT FROM (CASE WHEN NEW.sex IN ('male', 'female') THEN NEW.sex END);
+  BEGIN
+    UPDATE public.app_members
+    SET biological_sex = CASE WHEN NEW.sex IN ('male', 'female') THEN NEW.sex END
+    WHERE user_id = NEW.user_id
+      AND biological_sex IS DISTINCT FROM (CASE WHEN NEW.sex IN ('male', 'female') THEN NEW.sex END);
+  EXCEPTION WHEN OTHERS THEN
+    -- The athlete's own answer must save even if the mirror can't.
+    RAISE WARNING 'clients_sync_sex_to_member: %', SQLERRM;
+  END;
   RETURN NULL;
 END;
 $$;
@@ -92,10 +97,14 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  UPDATE public.clients
-  SET sex = NEW.biological_sex
-  WHERE user_id = NEW.user_id
-    AND sex IS DISTINCT FROM NEW.biological_sex;
+  BEGIN
+    UPDATE public.clients
+    SET sex = NEW.biological_sex
+    WHERE user_id = NEW.user_id
+      AND sex IS DISTINCT FROM NEW.biological_sex;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'members_sync_sex_to_client: %', SQLERRM;
+  END;
   RETURN NULL;
 END;
 $$;
@@ -110,3 +119,33 @@ CREATE TRIGGER members_sync_sex_to_client_trg
 REVOKE ALL ON FUNCTION public.clients_stamp_sex() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.clients_sync_sex_to_member() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.members_sync_sex_to_client() FROM PUBLIC, anon, authenticated;
+
+-- Nutrition Update Request: open with the athlete's sex, pre-filled from the
+-- profile (the client can change it; a change is saved back to the profile).
+-- Height pre-fills too. `validation.prefill` is what the form renderer reads.
+DO $$
+DECLARE
+  f uuid := 'b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d';
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.nf_forms WHERE id = f)
+     AND NOT EXISTS (SELECT 1 FROM public.nf_questions WHERE id = 'c1d2e3f4-0a1b-4c2d-8e3f-5a6b7c8d9e03') THEN
+    UPDATE public.nf_questions SET order_index = order_index + 1 WHERE form_id = f;
+    INSERT INTO public.nf_questions (id, form_id, label, help_text, question_type, options, required, order_index, validation)
+    VALUES (
+      'c1d2e3f4-0a1b-4c2d-8e3f-5a6b7c8d9e03', f,
+      'Sex',
+      'Filled in from your profile. Change it if it''s wrong.',
+      'dropdown',
+      '["Male","Female","Prefer not to say"]'::jsonb,
+      true, 1,
+      '{"prefill":"sex"}'::jsonb
+    );
+  END IF;
+
+  UPDATE public.nf_questions
+  SET validation = coalesce(validation, '{}'::jsonb) || '{"prefill":"height"}'::jsonb
+  WHERE form_id = f
+    AND archived_at IS NULL
+    AND label ILIKE 'height%'
+    AND NOT (coalesce(validation, '{}'::jsonb) ? 'prefill');
+END $$;

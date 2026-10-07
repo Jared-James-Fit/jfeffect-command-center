@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
 });
 
-const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", "date_of_birth", "height_cm", "preferred_height_unit", "emergency_contact_name", "emergency_contact_phone", ...SOCIAL_FIELDS] as const;
+const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", "date_of_birth", "sex", "height_cm", "preferred_height_unit", "emergency_contact_name", "emergency_contact_phone", ...SOCIAL_FIELDS] as const;
 
 function AccountPage() {
   const portalUserId = usePortalUserId();
@@ -127,6 +127,8 @@ function AccountPage() {
       timezone_confirmed_at:
         current.timezone !== client?.timezone ? new Date().toISOString() : client?.timezone_confirmed_at,
     };
+    // Only write sex when it has an answer, so autosave never erases one.
+    if (current.sex) patch.sex = current.sex;
     return patch;
   };
 
