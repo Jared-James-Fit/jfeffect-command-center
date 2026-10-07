@@ -14,6 +14,8 @@ export type RecapAthlete = {
   avatar_url: string | null;
   rank: number | null;
   total_points: number;
+  /** The coach's own athlete account (older recaps from before this field simply don't have it). */
+  is_coach?: boolean;
 };
 
 export type LeagueRecap = {
