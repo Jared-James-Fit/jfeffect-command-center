@@ -7,13 +7,13 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, ChevronDown, ClipboardList, Copy, FileText, Loader2, RefreshCw, Send, Sparkles, Wand2 } from "lucide-react";
+import { Check, ChevronDown, ClipboardList, Copy, Dumbbell, FileText, Loader2, RefreshCw, Send, Sparkles, Wand2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
-import { MEAL_PLAN_PROMPT, TARGETS_PROMPT, manualMealPlanPrompt, manualTargetsPrompt, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { MEAL_PLAN_PROMPT, TARGETS_PROMPT, clientBasicsLines, manualMealPlanPrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
 import { WorkoutMealsSelect, workoutMealsLabel } from "@/components/nutrition/WorkoutMealsSelect";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -238,6 +238,12 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             Once sent, this repeats automatically on the Monday that starts the final week of each month (9am their time).
           </p>
+          {data?.trainingPattern && (
+            <p className="mt-1 flex items-start gap-1.5 text-[11px] text-muted-foreground" title="From their logged workouts in the last 8 weeks. Used to place Pre/Post-Workout meals when their form answer is 'It varies' or blank.">
+              <Dumbbell className="mt-px h-3 w-3 shrink-0 text-primary" />
+              <span>Trains: {data.trainingPattern.summary}</span>
+            </p>
+          )}
         </div>
         <div className="flex w-full shrink-0 gap-2 sm:w-auto">
           <DropdownMenu>
@@ -250,12 +256,12 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
               <DropdownMenuLabel className="text-xs">Run it manually in ChatGPT / Claude</DropdownMenuLabel>
               {submitted ? (
                 <>
-                  <DropdownMenuItem onClick={() => copyText(manualTargetsPrompt(data?.clientName ?? "Client", latest!.answers, plan?.phase ?? null), "Targets prompt")}>
+                  <DropdownMenuItem onClick={() => copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest!.answers, plan?.phase ?? null), "Targets prompt")}>
                     1 · Targets prompt <span className="ml-auto text-[10px] text-muted-foreground">with answers</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!plan?.targets_text}
-                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null), "Meal plan prompt")}
+                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null), "Meal plan prompt")}
                   >
                     2 · Meal plan prompt <span className="ml-auto text-[10px] text-muted-foreground">with targets</span>
                   </DropdownMenuItem>
@@ -331,12 +337,48 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
 
       {submitted && latest!.answers.length > 0 && (
         <div className="rounded-xl border border-border">
-          <button type="button" onClick={() => setShowAnswers(!showAnswers)} className="flex w-full items-center justify-between px-3 py-2 text-xs font-bold text-muted-foreground">
-            Client answers ({latest!.answers.filter((a) => a.value).length})
-            <ChevronDown className={cn("h-4 w-4 transition", showAnswers && "rotate-180")} />
-          </button>
+          <div className="flex items-center gap-1 pr-1.5">
+            <button
+              type="button"
+              onClick={() => setShowAnswers(!showAnswers)}
+              className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-xs font-bold text-muted-foreground"
+            >
+              <span className="truncate">
+                Client answers ({latest!.answers.filter((a) => a.value).length})
+              </span>
+              <ChevronDown
+                className={cn("h-4 w-4 shrink-0 transition", showAnswers && "rotate-180")}
+              />
+            </button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 shrink-0 gap-1.5 text-xs font-bold"
+              title="Copy name, sex, age, height and every answer as one block"
+              onClick={() =>
+                copyText(
+                  nutritionSubmissionSummary({
+                    client: data?.client ?? data?.clientName ?? "Client",
+                    qas: latest!.answers,
+                    phase: plan?.phase ?? data?.requestedPhase ?? null,
+                    submittedAt: latest!.submitted_at,
+                  }),
+                  "Client form",
+                )
+              }
+            >
+              <Copy className="h-3.5 w-3.5" /> Copy all
+            </Button>
+          </div>
           {showAnswers && (
             <dl className="space-y-2 border-t border-border px-3 py-3 text-sm">
+              {data?.client && (
+                <div className="rounded-lg bg-muted/40 px-2.5 py-2 text-xs">
+                  {clientBasicsLines(data.client, latest!.answers).map((l) => (
+                    <div key={l}>{l}</div>
+                  ))}
+                </div>
+              )}
               {latest!.answers.map((a) => (
                 <div key={a.label}>
                   <dt className="text-[11px] font-semibold text-muted-foreground">{a.label}</dt>

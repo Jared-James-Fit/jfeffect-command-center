@@ -62,7 +62,9 @@ export function MacroCalculatorDialog({
 
   const [units, setUnits] = useState<Units>("imperial");
   const [age, setAge] = useState<string>("");
-  const [sex, setSex] = useState<BiologicalSex>("male");
+  // No default: a wrong guess skews calories by ~166 kcal/day. Prefilled from
+  // the profile when it's on file, otherwise the athlete picks.
+  const [sex, setSex] = useState<BiologicalSex | null>(null);
   const [weight, setWeight] = useState<string>("");
   const [heightCm, setHeightCm] = useState<string>("");
   const [heightFt, setHeightFt] = useState<string>("");
@@ -103,7 +105,7 @@ export function MacroCalculatorDialog({
   const computed = useMemo(() => {
     const a = Number(age);
     const w = Number(weight);
-    if (!a || !w) return null;
+    if (!a || !w || !sex) return null;
     const kg = units === "metric" ? w : kgFromLb(w);
     const cm = units === "metric"
       ? Number(heightCm)
@@ -216,8 +218,13 @@ export function MacroCalculatorDialog({
                 </div>
                 <div>
                   <Label>Sex (for calc)</Label>
-                  <Select value={sex} onValueChange={(v) => setSex(v as BiologicalSex)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={sex ?? undefined}
+                    onValueChange={(v) => setSex(v as BiologicalSex)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="male">Male</SelectItem>
                       <SelectItem value="female">Female</SelectItem>
@@ -293,7 +300,7 @@ export function MacroCalculatorDialog({
               </div>
               {!computed && (age || weight) && (
                 <div className="text-[11px] text-muted-foreground">
-                  Enter age, weight and height to calculate.
+                  Enter age, sex, weight and height to calculate.
                 </div>
               )}
             </>

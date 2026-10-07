@@ -19,6 +19,7 @@ import { ArrowDownRight, ArrowUpRight, Clapperboard, Dumbbell, Flame, Medal, Min
 import { recapStoryBlob, shareOrSaveImage } from "@/lib/recap-story-card";
 import { createRecapMusic, readRecapMuted, writeRecapMuted, type RecapMusic, type RecapSfx } from "@/lib/recap-music";
 import { UserAvatar } from "@/components/user-avatar";
+import { CoachTag } from "@/components/portal/coach-tag";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
@@ -258,7 +259,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
                   <div className="flex items-center gap-3">
                     <UserAvatar src={rv.avatar_url} name={rv.display_name} size={40} expandable={false} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-base font-black text-white">{rv.display_name}</div>
+                      <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-base font-black text-white">{rv.display_name}</span>{rv.is_coach && <CoachTag onDark />}</div>
                       <div className="text-xs text-white/60">
                         {rv.rank ? `#${rv.rank} · ` : ""}{rv.total_points} pts · {rv.workouts_completed} workouts
                         {rv.atpr_lifts ? ` · ${rv.atpr_lifts} ATPR` : ""}
@@ -310,6 +311,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
                   <Medal className={cn("h-6 w-6", p.rank === 1 ? "text-yellow-300" : p.rank === 2 ? "text-slate-300" : "text-amber-600")} />
                   <UserAvatar src={p.avatar_url} name={p.display_name} size={p.rank === 1 ? 56 : 46} expandable={false} className="mt-1" />
                   <div className={cn("mt-1 w-full truncate text-xs font-black", p.is_me ? "text-red-300" : "text-white")}>{p.display_name}{p.is_me ? " (You)" : ""}</div>
+                  {p.is_coach && <CoachTag onDark className="mt-0.5" />}
                   <div className="text-[11px] font-bold text-white/70">{p.total_points} pts</div>
                 </div>
                 <div

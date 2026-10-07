@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge, LockInHero, WorkoutHero } from "@/components/community/post-card";
-import { BIO_MAX, trainingSinceLabel, type CommunityPost } from "@/lib/community";
+import { BIO_MAX, SERIES_LABEL, trainingSinceLabel, type CommunityPost } from "@/lib/community";
 import { useCommunityFeed, useCommunityProfile, usePostMediaUrls, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
 
 /**
@@ -141,7 +141,7 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
             <button key={p.id} type="button" onClick={() => onOpenPost(p)} className="relative aspect-square overflow-hidden bg-muted" aria-label={`Open ${p.stats?.workout_title ?? p.session_title ?? "workout"}`}>
               {p.kind === "note" ? (
                 <div className="flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)] p-2.5 text-left">
-                  <span className="text-[8px] font-black uppercase tracking-[0.14em] text-primary">{p.series === "monday_motivation" ? "Monday" : p.series === "finish_strong_friday" ? "Friday" : "Note"}</span>
+                  <span className="text-[8px] font-black uppercase tracking-[0.14em] text-primary">{p.series ? SERIES_LABEL[p.series]?.name.split(" ")[0] ?? "Note" : "Note"}</span>
                   <span className="line-clamp-5 text-[11px] font-semibold leading-snug">{p.quote ? `“${p.quote}”` : p.caption}</span>
                 </div>
               ) : p.media_type && thumb ? (

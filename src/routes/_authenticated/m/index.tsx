@@ -9,6 +9,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Settings, ChevronRight } from "lucide-react";
 import { SetupChecklist } from "@/components/member/setup-checklist-card";
+import { SexPromptCard } from "@/components/athlete-sex";
+import { useAuth } from "@/lib/auth";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
@@ -25,6 +27,7 @@ function MemberHome() {
   const search = useSearch({ from: "/_authenticated/m/" });
   const qc = useQueryClient();
   const offlineNoCache = useIsOfflineWithoutCache();
+  const { role } = useAuth();
   useEffect(() => {
     if (search.upgrade === "success") {
       toast.success("Payment received — your new access will appear in a few seconds.");
@@ -68,7 +71,8 @@ function MemberHome() {
           progressHref={{ kind: "member" }}
         />
       )}
-      <SetupChecklist />
+        <SetupChecklist />
+        <SexPromptCard enabled={role === "member"} />
       <Card className="p-5">
         <Link to="/m/more" className="flex items-center gap-3 -m-1 rounded-lg p-1 transition hover:bg-muted/40">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">

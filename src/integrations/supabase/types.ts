@@ -3394,6 +3394,8 @@ export type Database = {
           schedule_updated_at: string | null
           sessions_purchased: number
           sessions_used: number
+          sex: string | null
+          sex_updated_at: string | null
           sms_opt_out: boolean
           source: string | null
           start_date: string | null
@@ -3577,6 +3579,8 @@ export type Database = {
           schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
+          sex?: string | null
+          sex_updated_at?: string | null
           sms_opt_out?: boolean
           source?: string | null
           start_date?: string | null
@@ -3760,6 +3764,8 @@ export type Database = {
           schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
+          sex?: string | null
+          sex_updated_at?: string | null
           sms_opt_out?: boolean
           source?: string | null
           start_date?: string | null

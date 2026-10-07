@@ -20,6 +20,17 @@ import {
   trainingSinceLabel,
   isTrainingNow,
   lockInTimeLabel,
+  SERIES_LABEL,
+  REACTION,
+  reactionTotal,
+  reactorsLine,
+  compactNumber,
+  winsChallenge,
+  winsChart,
+  winsHero,
+  winsTiles,
+  winsWeekLabel,
+  type WinsStats,
   LOCK_IN_CAPTIONS,
   type CommunityExercise,
   type CommunityFeedPage,
@@ -512,5 +523,222 @@ describe("Monday Motivation + Finish Strong Friday: real coach posts", () => {
     expect(sql).toContain("'title', CASE WHEN staff.yes OR cp.title IS NOT NULL THEN coalesce(cp.title, 'Coach · JF Effect') END");
     expect(sql).toContain("AND NOT EXISTS (SELECT 1 FROM public.community_profiles l WHERE l.user_id = m.user_id AND l.same_person_as IS NOT NULL)");
     expect(sql).toContain("'is_mine', n.author_user_id = public.community_main_account(_viewer),");
+  });
+});
+
+describe("Wednesday Wins: last week's real wins, everyone who trained", () => {
+  const sql = read("supabase/migrations/20261008120000_community_wednesday_wins.sql");
+  const coach = read("src/components/community/coach-weekly-posts.tsx");
+  it("posts once a week at noon Winnipeg, through the same series runs", () => {
+    expect(sql).toContain("WHEN 3 THEN 'wednesday_wins'");
+    expect(sql).toContain("v_start := CASE v_series WHEN 'wednesday_wins' THEN time '12:00' ELSE time '07:00' END;");
+    expect(sql).toContain("'*/15 16-23 * * 3', 'select public.community_publish_series(''wednesday_wins'');'");
+    expect(sql).toContain("INSERT INTO public.community_series_runs (series_key, series) VALUES (v_key, v_series) ON CONFLICT (series_key) DO NOTHING;");
+  });
+  it("is built only from logged training, last week, excluding the coach", () => {
+    expect(sql).toContain("public.community_compose_wins((date_trunc('week', v_local)::date - 7), v_author)");
+    expect(sql).toContain("CONTINUE WHEN v_sessions = 0;");
+    expect(sql).toContain("FROM public.client_load_records(c.id) UNION ALL SELECT * FROM public.client_rep_records(c.id)");
+    expect(sql).toContain("IF v_comp IS NULL THEN RETURN jsonb_build_object('status', 'no_wins'); END IF;");
+  });
+  it("rotates shout-outs so everyone gets one within the month, and names the rest", () => {
+    expect(sql).toContain("interval '28 days'");
+    expect(sql).toContain("least(6, greatest(4, ceil(v_n / 2.0)::int))");
+    expect(sql).toContain("'Shoutout to ' || v_rest || ' too. '");
+    expect(sql).toContain("INSERT INTO public.community_series_features (series_key, client_id, win_type, featured_at)");
+  });
+  it("respects each client's unit and Hide weights", () => {
+    expect(sql).toContain("v_set := CASE WHEN v_hide OR public.community_fmt_load(pr.load_kg, c.unit) IS NULL THEN NULL");
+    expect(sql).toContain("REVOKE ALL ON public.community_series_features FROM anon, authenticated;");
+  });
+  it("shows the coach a live preview and the Wednesday label everywhere", () => {
+    expect(SERIES_LABEL.wednesday_wins.name).toBe("Wednesday Wins");
+    expect(coach).toContain('"wednesday_wins"');
+    expect(coach).toContain("preview.body");
+    expect(coach).toContain("SERIES_LABEL[h.series]?.short");
+  });
+});
+
+describe("Wednesday Wins reads like the coach wrote it, with the crew's numbers", () => {
+  const sql = read("supabase/migrations/20261008120000_community_wednesday_wins.sql");
+  const card = read("src/components/community/post-card.tsx");
+  const detail = read("src/components/community/post-detail.tsx");
+  it("writes each win as a sentence and never repeats the same phrasing back to back", () => {
+    expect(sql).toContain("v_name || ' hit an all-time PR on ' || v_lift");
+    expect(sql).toContain("w->'texts'->>((pos - 1 + v_wk)::int % 3)");
+    expect(sql).toContain("regexp_replace(_name, '^(.+?) - (.+)$', '\\2 \\1')");
+    // no robotic "Name: ..." lines, no em dashes in the words
+    expect(sql).not.toContain("v_name || ': '");
+    expect(sql.split("$$").filter((_, i) => i % 2 === 1).join("")).not.toContain("—");
+  });
+  it("saves the crew's numbers on the post and the app reads them back", () => {
+    expect(sql).toContain("ALTER TABLE public.community_posts ADD COLUMN IF NOT EXISTS series_data jsonb;");
+    expect(sql).toContain("v_comp->'stats', coalesce(_at, now()))");
+    expect(sql).toContain("'series_data', n.series_data,");
+    expect(sql).toContain("WHERE a.action = 'signed_in'");
+    expect(card).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
+    expect(detail).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
+  });
+  const s: WinsStats = {
+    week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,
+    volume_kg: 204215, reps: 6015, streaks: 10, bodyweight: 9, checkins: 4, busiest_day: "Friday",
+  };
+  const full: WinsStats = {
+    ...s, volume_prev_kg: 206865, volume_rank: 4, sessions_rank: 5, weeks_tracked: 16,
+    history: [49, 36, 34, 34, 35, 31, 32, 36].map((n, i) => ({ wk: ["2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"][i], sessions: n })),
+  };
+  it("leads with one team number anyone gets, said as a team total", () => {
+    expect(winsWeekLabel("2026-09-28")).toBe("Sep 28 – Oct 4");
+    const lb = winsHero(full, "lb");
+    expect(lb).toMatchObject({ amount: "450,216", unit: "lbs" });
+    expect(lb.compare).toMatch(/^That's about the weight of \d+ (pickup trucks|elephants|cars|school buses)$/);
+    expect(winsHero(full, "kg")).toMatchObject({ amount: "204,215", unit: "kg" });
+    // 4th best week: no badge; lighter than the week before: no change pill
+    expect(lb.badge).toBeNull();
+    expect(lb.change).toBeNull();
+    expect(winsHero({ ...full, volume_rank: 1 }, "lb").badge).toBe("Biggest week the crew has ever had");
+    expect(winsHero({ ...full, volume_rank: 2 }, "lb").badge).toBe("2nd biggest week the crew has ever had");
+    expect(winsHero({ ...full, volume_rank: 1, weeks_tracked: 3 }, "lb").badge).toBeNull();
+    expect(winsHero({ ...full, volume_prev_kg: 180000 }, "lb").change).toBe("13% more than the week before");
+    expect(compactNumber(12_500_000)).toBe("12.5M");
+  });
+  it("keeps the comparison sensible at any size and rotates it week to week", () => {
+    const picks = new Set(["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"].map((w) => winsHero({ ...full, week_of: w }, "lb").compare?.split(" ").pop()));
+    expect(picks.size).toBeGreaterThan(1);
+    for (const kg of [2_000, 50_000, 204_215, 900_000]) {
+      const n = Number(winsHero({ ...full, volume_kg: kg }, "lb").compare?.match(/\d+/)?.[0] ?? "0");
+      expect(n === 0 || (n >= 3 && n <= 300)).toBe(true);
+    }
+  });
+  it("uses plain words in the tiles, no coach jargon", () => {
+    const t = winsTiles(full);
+    expect(t.map((x) => [x.value, x.label])).toEqual([
+      ["12 of 16", "people trained"],
+      ["36", "workouts finished"],
+      ["41", "new personal records"],
+      ["10", "people haven't missed a week"],
+    ]);
+    expect(t[0].sub).toBe("75% of the crew");
+    expect(t[1].sub).toBe("4 more than the week before");
+    expect(t[2].sub).toBe("set by 9 different people");
+    expect(t[3].sub).toBe("in a month or more");
+    const words = JSON.stringify(t);
+    for (const jargon of ["opened the app", "busiest day", "PRs", "streak", "volume"]) expect(words).not.toContain(jargon);
+    // a down week never shows a negative
+    expect(winsTiles({ ...full, sessions_prev: 40 })[1].sub).toBeUndefined();
+  });
+  it("shows 8 weeks of workouts with this week highlighted, and a goal to chase", () => {
+    const bars = winsChart(full);
+    expect(bars).toHaveLength(8);
+    expect(bars.filter((b) => b.current).map((b) => b.sessions)).toEqual([36]);
+    expect(bars[0].share).toBe(1);
+    expect(winsChart({ ...full, history: undefined })).toEqual([]);
+    expect(winsChallenge(full)).toBe("This week's goal: beat 36 workouts");
+    expect(winsChallenge({ ...full, sessions_rank: 1 })).toBe("Most workouts the crew has ever done in a week. Run it back");
+  });
+});
+
+describe("Wednesday Wins shows a PR in the unit the athlete logs that lift in", () => {
+  const sql = read("supabase/migrations/20261008150000_community_wins_lift_unit.sql");
+  it("uses the per-exercise kg/lb toggle first, then the account default", () => {
+    expect(sql).toContain("SELECT x.exercise_id, x.exercise_name, x.reps, x.load_kg,");
+    expect(sql).toContain("FROM public.client_exercise_unit_prefs u");
+    expect(sql).toContain("WHERE u.client_id = c.id AND u.exercise_id = pr.exercise_id AND u.unit IN ('kg', 'lb') LIMIT 1), c.unit);");
+    expect(sql).toContain("public.community_fmt_load(pr.load_kg, v_unit)");
+    expect(sql).not.toContain("community_fmt_load(pr.load_kg, c.unit)");
+  });
+});
+
+describe("weight units: a setting for clients, a tap on the community card", () => {
+  const account = read("src/routes/_authenticated/portal/account.tsx");
+  const unitCard = read("src/components/portal/weight-unit-card.tsx");
+  const wins = read("src/components/community/wins-stats.tsx");
+  it("clients can set their default unit in Account Settings", () => {
+    expect(account).toContain('<WeightUnitCard key={form.id} clientId={form.id} value={client?.preferred_weight_unit} />');
+    expect(account).toContain('{ id: "units", label: "Units" }');
+    expect(unitCard).toContain('.update({ preferred_weight_unit: next })');
+  });
+  const s: WinsStats = {
+    week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,
+    volume_kg: 204215, reps: 6015, streaks: 10, bodyweight: 9, checkins: 4, busiest_day: "Friday",
+  };
+  it("the weight tile on Wednesday Wins flips lb/kg on tap, only for that viewer, without opening the post", () => {
+    expect(winsHero(s, "lb").unit).toBe("lbs");
+    expect(winsHero(s, "kg").unit).toBe("kg");
+    expect(wins).toContain('setShown(shown === "lb" ? "kg" : "lb")');
+    expect(wins).toContain("e.stopPropagation();");
+    // a tap never writes the viewer's saved preference
+    expect(wins).not.toContain("preferred_weight_unit");
+  });
+});
+
+describe("Wednesday Wins sounds like Jared texts", () => {
+  const sql = read("supabase/migrations/20261008160000_community_wins_voice.sql");
+  const body = sql.split("$$").filter((_, i) => i % 2 === 1).join("").replace(/--.*$/gm, "");
+  it("uses gym shorthand for lifts and sets", () => {
+    expect(sql).toContain("regexp_replace(s, '\\mcompetition\\M', 'comp', 'g')");
+    expect(sql).toContain("regexp_replace(s, '\\mromanian deadlifts?\\M', 'RDL', 'g')");
+    expect(sql).toContain("regexp_replace(s, '\\mdumbbells?\\M', 'DB', 'g')");
+    expect(sql).toContain("|| CASE WHEN _reps = 1 THEN ' single' ELSE ' x ' || _reps END END");
+    expect(sql).toContain("v_set := CASE WHEN v_hide THEN NULL ELSE public.community_fmt_set(pr.load_kg, pr.reps, v_unit) END;");
+  });
+  it("is casual: few commas, no em dashes, not capitalized every week", () => {
+    expect(body).not.toContain("—");
+    expect(sql).toContain("'big week. ' || v_prs || ' PRs between all of you last week heres who stood out'");
+    expect(sql).toContain("IF v_wk % 2 = 1 THEN");
+    // the only comma left in the words is between names in the shoutout list
+    const words = [...body.matchAll(/'([^']*)'/g)].map((m) => m[1]).filter((t) => /[a-z]{3}/.test(t));
+    expect(words.filter((t) => t.includes(",") && t !== ", ").length).toBe(0);
+  });
+  it("never repeats the big PR week reaction on lines next to each other", () => {
+    expect(sql).toContain("' PRs in 1 week thats insane'");
+    expect(sql).toContain("' PRs in 1 week crazy'");
+    expect(sql).toContain("' PRs on the week lowkey insane'");
+  });
+});
+
+describe("Wednesday Wins card v2 + voice", () => {
+  const sql = read("supabase/migrations/20261008180000_community_wins_card_v2.sql");
+  const body = sql.split("$$").filter((_, i) => i % 2 === 1).join("").replace(/--.*$/gm, "");
+  it("keeps the history the card needs", () => {
+    for (const k of ["'volume_prev_kg'", "'volume_rank'", "'sessions_rank'", "'weeks_tracked'", "'history'"]) expect(sql).toContain(k);
+    expect(sql).toContain("FROM generate_series(0, 7) i");
+  });
+  it("never says ur or u, and only says yall when it's hype", () => {
+    expect(body).not.toMatch(/\bur\b|\bu\b/);
+    const yall = [...body.matchAll(/'[^']*yall[^']*'/g)].map((m) => m[0]);
+    expect(yall).toEqual(["'yall are cooking. '"]);
+  });
+});
+
+describe("one reaction (🔥) and who gave it", () => {
+  const sql = read("supabase/migrations/20261008200000_community_one_reaction.sql");
+  const card = read("src/components/community/post-card.tsx");
+  const p = (n: number, names: [string, boolean?][]) => ({
+    reaction_count: n,
+    reactions: { fire: n },
+    reactors: names.map(([name, me]) => ({ user_id: name, name, avatar_url: null, is_coach: false, is_me: !!me })),
+  });
+  it("is one tap, and old reactions all count as 🔥", () => {
+    expect(REACTION.emoji).toBe("🔥");
+    expect(sql).toContain("UPDATE public.community_reactions SET emoji = 'fire' WHERE emoji IS DISTINCT FROM 'fire';");
+    expect(sql).toContain("VALUES (_post_id, uid, 'fire')");
+    expect(card).toContain("onReact(post, mine ? null : REACTION.key)");
+    expect(card).not.toContain("REACTIONS.map(");
+    expect(reactionTotal({ reactions: { fire: 2, heart: 1 } })).toBe(3);
+  });
+  it("says who in plain words, you first", () => {
+    expect(reactorsLine(p(0, []))).toBeNull();
+    expect(reactorsLine(p(1, [["Nicole"]]))).toBe("Nicole");
+    expect(reactorsLine(p(2, [["Nicole"], ["Jared", true]]))).toBe("You and Nicole");
+    expect(reactorsLine(p(3, [["Jared"], ["Vicky"], ["Nicole"]]))).toBe("Jared, Vicky and Nicole");
+    expect(reactorsLine(p(5, [["Jared"], ["Vicky"], ["Nicole"]]))).toBe("Jared, Vicky and 3 others");
+    expect(reactorsLine(p(3, [["Jared"], ["Vicky"]]))).toBe("Jared, Vicky and 1 other");
+  });
+  it("only people who can see the post can see who reacted", () => {
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.community_post_reactors(_post_id uuid)");
+    expect(sql).toMatch(/community_post_reactors[\s\S]*community_post_visible\(p\.visibility, p\.author_user_id, p\.client_id\)/);
+    expect(sql).toContain("'reactors', coalesce(");
+    expect(card).toContain("<ReactorsSheet postId={listFor}");
   });
 });
