@@ -253,7 +253,7 @@ export function WorkoutReviewEditor({
               type="button"
               onClick={() => onOpenChange(false)}
               aria-label="Back"
-              className="inline-flex h-9 items-center gap-0.5 rounded-full px-2 -ml-1 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
+              className="inline-flex h-9 items-center gap-0.5 rounded-full px-2 -ml-1 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ChevronLeft className="h-5 w-5" />
               <span>Back</span>
