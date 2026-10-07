@@ -764,3 +764,17 @@ describe("share editor never opens blank", () => {
     expect(composer).not.toContain("stageRef");
   });
 });
+
+describe("Wednesday Wins stays short and still reaches everyone each month", () => {
+  const sql = read("supabase/migrations/20261008220000_community_wins_short.sql");
+  it("features 3 a week (up to 5 only to fit everyone left into the month)", () => {
+    expect(sql).toContain("v_k := least(v_n, greatest(3, least(5, ceil(v_waiting::numeric / greatest(v_weds_left, 1))::int)));");
+    expect(sql).toContain("f.featured_at >= v_month_start AND f.featured_at < v_post_end");
+    expect(sql).toContain("((w->>'streak')::int >= 4) ASC,");
+  });
+  it("drops the everyone-else name list: intro, shout-outs, one team line", () => {
+    expect(sql).toContain("v_caption := v_intro || E'\\n\\n' || v_lines || E'\\n\\n' || v_outro;");
+    expect(sql).not.toContain("shoutout to ' || v_rest");
+    expect(sql).toContain("' of you got after it last week. proud of this crew 🔥'");
+  });
+});

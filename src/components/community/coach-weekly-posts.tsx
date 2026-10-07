@@ -143,7 +143,7 @@ export function CoachWeeklyPosts() {
         </div>
       </div>
       <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
-        Monday and Friday come from a prepared library; quotes are only used where the wording and source are on record. Wednesday Wins is built from last week's logs: everyone who trained is named, and the full shout-outs rotate so each client gets one within the month.
+        Monday and Friday come from a prepared library; quotes are only used where the wording and source are on record. Wednesday Wins is built from last week's logs: 3 shout-outs a week, rotating so everyone who trains gets one each month.
       </p>
 
       <NoteEditor
