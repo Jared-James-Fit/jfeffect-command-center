@@ -52,7 +52,7 @@ const DialogContent = React.forwardRef<
       {showBackButton && (
         <DialogPrimitive.Close
           aria-label="Back"
-          className="absolute left-3 top-3 z-20 inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground shadow-sm ring-offset-background backdrop-blur cursor-pointer transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
+          className="absolute left-3 top-3 z-20 inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground shadow-sm ring-offset-background backdrop-blur cursor-pointer transition hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
         >
           <ChevronLeft className="h-4 w-4" />
           <span>Back</span>
