@@ -21,6 +21,8 @@ export type PreviousLiftLog = {
   isWorkingSet: boolean | null;
   /** external | bodyweight | assisted. Absent on legacy in-memory fixtures. */
   loadType?: "external" | "bodyweight" | "assisted";
+  /** Athlete's smoothed bodyweight (kg) when this set was logged, when known. */
+  bodyweightKg?: number | null;
 };
 
 export type PreviousLift = PreviousLiftLog & { match: "exercise_id" | "name" };

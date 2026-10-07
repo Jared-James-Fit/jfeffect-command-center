@@ -134,3 +134,46 @@ export async function getCombinedBodyweightSeries(
     (pm as { data: LegacyBodyweightMetricRow[] }).data ?? [],
   );
 }
+
+export type BodyweightKgPoint = { date: string; kg: number };
+
+/**
+ * A client's bodyweight (kg) for the last `sinceDays`, both sources merged —
+ * read by load suggestions to adjust past sets for bodyweight change.
+ */
+export async function getClientBodyweightKgSeries(clientId: string, sinceDays = 120): Promise<BodyweightKgPoint[]> {
+  const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString().slice(0, 10);
+  const { data: clientRow } = await supabase.from("clients").select("user_id").eq("id", clientId).maybeSingle();
+  const [pb, pm] = await Promise.all([
+    clientRow?.user_id
+      ? supabase.from("progress_bodyweight").select("id, logged_date, weight_value, weight_unit, note")
+          .eq("user_id", clientRow.user_id).gte("logged_date", since).order("logged_date").limit(400)
+      : Promise.resolve({ data: [] as CanonicalBodyweightRow[] } as never),
+    supabase.from("progress_metrics").select("id, entry_date, bodyweight, bodyweight_unit, notes")
+      .eq("client_id", clientId).not("bodyweight", "is", null).gte("entry_date", since).order("entry_date").limit(400),
+  ]);
+  return mergeBodyweightSeries(
+    ((pb as any).data ?? []) as CanonicalBodyweightRow[],
+    ((pm as any).data ?? []) as LegacyBodyweightMetricRow[],
+  )
+    .filter((p) => Number.isFinite(p.value) && p.value > 0)
+    .map((p) => ({ date: p.date, kg: toKg(p.value, p.unit) }));
+}
+
+/**
+ * Smoothed bodyweight at a moment: the mean of entries in the 7 days up to it
+ * (irons out daily water swings), else the latest entry within 30 days, else null.
+ */
+export function smoothedBodyweightKgAt(series: BodyweightKgPoint[], atMs: number): number | null {
+  if (!Number.isFinite(atMs)) return null;
+  const DAY = 86_400_000;
+  const end = atMs + DAY; // a same-day entry counts
+  const inMonth = series.filter((p) => {
+    const t = Date.parse(`${p.date}T00:00:00Z`);
+    return t < end && t > atMs - 30 * DAY;
+  });
+  if (!inMonth.length) return null;
+  const inWeek = inMonth.filter((p) => Date.parse(`${p.date}T00:00:00Z`) > atMs - 7 * DAY);
+  const use = inWeek.length ? inWeek : [inMonth[inMonth.length - 1]];
+  return use.reduce((a, p) => a + p.kg, 0) / use.length;
+}

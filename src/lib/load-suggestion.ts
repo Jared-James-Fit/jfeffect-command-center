@@ -23,6 +23,14 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      faded by time) and a layoff (>3 weeks) can only trim a cold suggestion.
 //   7. The range is target RPE ±0.5 widened to the error measured on real
 //      client logs, so most sets genuinely land inside it.
+//   8. SBD lifts can take an optional FINAL WARM-UP (load × reps, optional RPE)
+//      before the first working set. It is submaximal by design and RIR guesses
+//      on an easy single/double are optimistic, so it is deliberately weak: its
+//      RPE is floored at 6 (a claimed "easy" can never inflate the estimate), it
+//      only nudges a history-based suggestion (+1.5% / −3% at most, so a heavy
+//      warm-up backs you off more readily than an easy one pushes you up), and
+//      with no history at all it gives a conservative first suggestion (−4%,
+//      wider range). Once a working set is logged today, that set takes over.
 // Backtested on ~2,800 real sets (scratch script, not shipped): median error
 // 8% cold, 4.4% once today's first set is in.
 // Pure: no I/O, fully unit tested.
@@ -38,6 +46,33 @@ const MAX_SESSIONS = 8;
 export const MIN_HISTORY_SESSIONS = 2;
 export const MIN_HISTORY_SPAN_DAYS = 6;
 const DAY_MS = 86_400_000;
+
+/**
+ * Lowest RPE used as evidence and as a target. Light prescriptions (RPE 4–5:
+ * primers, technique work, pivot weeks) are planned at their real effort
+ * instead of being bumped to RPE 6. Backtest on real logs: light-target error
+ * 10.9% → 8.5% cold and 13.7% → 9.8% once a set is in; normal targets unchanged.
+ */
+export const MIN_RPE = 4;
+
+/**
+ * Bodyweight: strength scales with bodyweight^~0.67 (allometric scaling), so a
+ * past set is adjusted by (bodyweight now / bodyweight then)^0.67. Uses the
+ * smoothed (7-day) bodyweight to ignore daily water swings, and ignores ratios
+ * outside ±12% (a unit slip, not a real change). Backtest: SBD in-range 43% → 45%
+ * cold, error 3.0% → 2.9% once a set is in; nothing got worse. Tested and
+ * rejected (no gain): projecting the block's e1RM trend forward, and a flat
+ * calibration bump for SBD.
+ */
+export const BODYWEIGHT_EXPONENT = 0.67;
+const BODYWEIGHT_MAX_RATIO_SHIFT = 0.12;
+
+export function bodyweightScale(nowKg: number | null | undefined, thenKg: number | null | undefined): number {
+  if (!(nowKg && nowKg > 0) || !(thenKg && thenKg > 0)) return 1;
+  const r = nowKg / thenKg;
+  if (Math.abs(r - 1) > BODYWEIGHT_MAX_RATIO_SHIFT) return 1;
+  return Math.pow(r, BODYWEIGHT_EXPONENT);
+}
 
 /** Fraction of 1RM for `reps` performed with `rir` reps left in the tank. */
 export function percentOf1RM(reps: number, rir: number): number | null {
@@ -61,6 +96,35 @@ export function parseRpe(value: number | string | null | undefined): number | nu
   return Number.isFinite(n) && n >= 1 && n <= 10 ? n : null;
 }
 
+/** Optional final warm-up before the first working set (SBD lifts). */
+export interface WarmupSet {
+  load: number; // in the model's unit
+  reps: number;
+  /** How hard it felt. Optional — a typical final warm-up is assumed when missing. */
+  rpe?: number | string | null;
+}
+/** Assumed effort when the athlete doesn't say: a normal final warm-up. */
+export const WARMUP_DEFAULT_RPE = 7;
+/** Floor on warm-up RPE. Lower claims mean MORE reps in reserve, hence a bigger e1RM: never let "easy" inflate it. */
+export const WARMUP_RPE_FLOOR = 6;
+export const WARMUP_MAX_REPS = 8;
+/** With history: the warm-up moves the suggestion by half its disagreement, clamped to −6% / +3% of it → −3% / +1.5%. */
+export const WARMUP_NUDGE_DOWN = -0.06;
+export const WARMUP_NUDGE_UP = 0.03;
+export const WARMUP_NUDGE_WEIGHT = 0.5;
+/** No history at all: trim the warm-up's own estimate, widen the range, never suggest > 1.25× the warm-up load. */
+export const WARMUP_COLD_START_FACTOR = 0.96;
+export const WARMUP_COLD_START_SPREAD = 0.08;
+export const WARMUP_COLD_START_MAX_RATIO = 1.25;
+
+/** Estimated 1RM implied by a final warm-up, or null when it can't be trusted. */
+export function warmupE1rm(w: WarmupSet): number | null {
+  if (!(w.load > 0) || !(w.reps >= 1) || w.reps > WARMUP_MAX_REPS) return null;
+  const rpe = Math.min(10, Math.max(WARMUP_RPE_FLOOR, parseRpe(w.rpe ?? null) ?? WARMUP_DEFAULT_RPE));
+  const pct = percentOf1RM(w.reps, 10 - rpe);
+  return pct ? w.load / pct : null;
+}
+
 export interface SetSample {
   load: number; // in the model's unit
   reps: number;
@@ -70,8 +134,10 @@ export interface SetSample {
 /** RPE-adjusted e1RM for one set and how much to trust it (0..1). */
 export function setE1rm(s: SetSample): { e1rm: number; trust: number } | null {
   if (!(s.load > 0) || !(s.reps >= 1) || s.reps > 15) return null;
-  // Below RPE 6 is warm-up territory: the RIR guess is unreliable.
-  if (s.rpe != null && s.rpe < 6) return null;
+  // Below RPE 4 is warm-up territory. RPE 4–6 counts, but its RIR guess is
+  // weak, so it's trusted less (see below) and its own reps/RPE neighbours
+  // dominate through the kernel.
+  if (s.rpe != null && s.rpe < MIN_RPE) return null;
   const rpe = s.rpe ?? 8.5; // unlogged working sets: assume a typical hard set
   const pct = percentOf1RM(s.reps, 10 - rpe);
   if (!pct) return null;
@@ -139,7 +205,7 @@ export interface LoadModel {
   status: "ready" | "calibrating";
   unit: "kg" | "lb";
   /** Where the estimate comes from. */
-  source: "history" | "today" | "blend" | null;
+  source: "history" | "today" | "blend" | "warmup" | "history_warmup" | null;
   historySessions: number;
   /** Past sets of this lift (recency-weighted, readiness/staleness applied). */
   history: ModelSample[];
@@ -149,6 +215,10 @@ export interface LoadModel {
   readiness: Readiness;
   /** Days since the last session of this lift, when it's been a while. */
   staleDays: number | null;
+  /** Mean bodyweight adjustment applied to history (1 = none), for the "why". */
+  bodyweightScale: number;
+  /** The athlete's final warm-up, when given and no working set is logged yet today. */
+  warmup: { e1rm: number; load: number; reps: number } | null;
 }
 
 function weightedMean(values: Array<{ v: number; w: number }>): number | null {
@@ -168,6 +238,10 @@ export function buildLoadModel(input: {
   today: SetSample[];
   unit: "kg" | "lb";
   readiness?: Readiness;
+  /** Optional final warm-up (SBD). Ignored once a working set is logged today. */
+  warmup?: WarmupSet | null;
+  /** Today's smoothed bodyweight (kg); history logs carry theirs in `bodyweightKg`. */
+  bodyweightKg?: number | null;
   now?: Date;
 }): LoadModel {
   const { unit } = input;
@@ -176,6 +250,7 @@ export function buildLoadModel(input: {
 
   // ── History: every valid working set, grouped by session ──
   const bySession = new Map<string, { at: number; sets: Array<Omit<ModelSample, "weight">> }>();
+  const bwScales: number[] = [];
   for (const log of input.history) {
     if ((log.loadType ?? "external") !== "external" || log.isWorkingSet === false) continue;
     const at = log.occurredAt ? Date.parse(log.occurredAt) : NaN;
@@ -186,9 +261,11 @@ export function buildLoadModel(input: {
     const rpe = parseRpe(log.rpe) ?? (log.rir != null && log.rir !== "" ? parseRpe(10 - Number(log.rir)) : null);
     const est = setE1rm({ load, reps, rpe });
     if (!est) continue;
+    const bw = bodyweightScale(input.bodyweightKg, log.bodyweightKg);
+    bwScales.push(bw);
     const s = bySession.get(log.sessionKey) ?? { at, sets: [] };
     s.at = Math.max(s.at, at);
-    s.sets.push({ e1rm: est.e1rm, load, reps, rpe: rpe ?? 8.5, trust: est.trust });
+    s.sets.push({ e1rm: est.e1rm * bw, load: load * bw, reps, rpe: rpe ?? 8.5, trust: est.trust });
     bySession.set(log.sessionKey, s);
   }
   const sessions = Array.from(bySession.values()).sort((a, b) => b.at - a.at).slice(0, MAX_SESSIONS);
@@ -223,7 +300,10 @@ export function buildLoadModel(input: {
     }
   });
 
-  const base = { unit, historySessions: sessions.length, staleDays };
+  const wE1rm = input.warmup ? warmupE1rm(input.warmup) : null;
+  const warmup = wE1rm && input.warmup && today.length === 0 ? { e1rm: wE1rm, load: input.warmup.load, reps: input.warmup.reps } : null;
+  const bodyweightScaleMean = bwScales.length ? bwScales.reduce((a, b) => a + b, 0) / bwScales.length : 1;
+  const base = { unit, historySessions: sessions.length, staleDays, warmup, bodyweightScale: bodyweightScaleMean };
   if (today.length > 0) {
     return {
       ...base, status: "ready",
@@ -234,7 +314,12 @@ export function buildLoadModel(input: {
     };
   }
   if (historyReady) {
-    return { ...base, status: "ready", source: "history", history, today: [], readiness };
+    return { ...base, status: "ready", source: warmup ? "history_warmup" : "history", history, today: [], readiness };
+  }
+  // No usable history: a warm-up is the only same-day signal there is, which is
+  // exactly when a brand-new lift needs a first suggestion.
+  if (warmup) {
+    return { ...base, status: "ready", source: "warmup", history: [], today: [], readiness: NEUTRAL_READINESS };
   }
   return { ...base, status: "calibrating", source: null, history: [], today: [], readiness: NEUTRAL_READINESS };
 }
@@ -283,8 +368,25 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
     const variance = weightedMean(w.map((x) => ({ v: (x.v / mean - 1) ** 2, w: x.w }))) ?? 0;
     return { load: mean, spread: Math.sqrt(variance) };
   };
-  const t = model.today.length ? est(model.today, TODAY_ALPHA) : null;
+  // A light set (below RPE 6) says little about heavy capacity — athletes rate
+  // easy sets loosely — so it only calibrates light targets, never heavier ones.
+  const todayUsable = rpe >= 6 ? model.today.filter((s) => s.rpe >= 6) : model.today;
+  const t = todayUsable.length ? est(todayUsable, TODAY_ALPHA) : null;
   const h = model.history.length ? est(model.history, HISTORY_ALPHA) : null;
+  // Final warm-up: only before any working set is logged today (model.warmup is
+  // null otherwise). It nudges a history estimate, or — with no history — gives
+  // a conservative first suggestion. See header note 8.
+  if (model.warmup && !t) {
+    const w = model.warmup.e1rm * targetPct;
+    if (h) {
+      const shift = clamp(w / h.load - 1, WARMUP_NUDGE_DOWN, WARMUP_NUDGE_UP);
+      return { load: h.load * (1 + WARMUP_NUDGE_WEIGHT * shift), spread: clamp(h.spread / 2, HISTORY_SPREAD, 0.07) };
+    }
+    return {
+      load: Math.min(w * WARMUP_COLD_START_FACTOR, model.warmup.load * WARMUP_COLD_START_MAX_RATIO),
+      spread: WARMUP_COLD_START_SPREAD,
+    };
+  }
   // Spread floors are calibrated on real logs so the range is honest (most
   // sets land inside it) rather than falsely precise.
   if (t && h) return { load: 0.75 * t.load + 0.25 * h.load, spread: clamp(h.spread / 2, TODAY_SPREAD, 0.05) };
@@ -319,11 +421,11 @@ export function suggestSetLoad(
   target: { reps: number; rpe: number },
 ): LoadSuggestion | null {
   const reps = Math.round(target.reps);
-  const rpe = Math.min(10, Math.max(6, target.rpe));
+  const rpe = Math.min(10, Math.max(MIN_RPE, target.rpe));
   const est = estimateFor(model, reps, rpe);
   if (!est) return null;
   const mid = percentOf1RM(reps, 10 - rpe);
-  const lowPct = percentOf1RM(reps, 10 - Math.max(6, rpe - 0.5));
+  const lowPct = percentOf1RM(reps, 10 - Math.max(MIN_RPE, rpe - 0.5));
   const highPct = percentOf1RM(reps, 10 - Math.min(10, rpe + 0.5));
   if (!mid || !lowPct || !highPct) return null;
   const raw = est.load;
@@ -338,6 +440,16 @@ export function suggestSetLoad(
   high = Math.max(high, targetLoad);
   if (!(targetLoad > 0) || !(low > 0)) return null;
   return { low, high, target: targetLoad, unit: model.unit };
+}
+
+/**
+ * The in-session "audible": how much to change the next set when the bar moves
+ * clearly faster or slower than planned. ~2.5% (about half an RPE on the chart),
+ * rounded to a loadable plate step and never less than one step.
+ */
+export function audibleStep(target: number, unit: "kg" | "lb"): number {
+  const step = loadStep(unit, target);
+  return Math.max(step, roundToStep(target * 0.025, step));
 }
 
 /**
@@ -357,7 +469,7 @@ export function planningTarget(input: {
   const rpe = mid(input.rpeTarget);
   const rir = mid(input.rirTarget);
   const effort = rpe != null ? rpe : rir != null ? 10 - rir : 8;
-  return { reps, rpe: Math.min(10, Math.max(6, Math.round(effort * 2) / 2)) };
+  return { reps, rpe: Math.min(10, Math.max(MIN_RPE, Math.round(effort * 2) / 2)) };
 }
 
 /** Session RPE to pre-fill in the review: mean of today's working-set RPEs. */
