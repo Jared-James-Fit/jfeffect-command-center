@@ -1,16 +1,25 @@
 /**
- * Quick post-workout review (v2) — the signals that actually predict recovery,
+ * Quick post-workout review — the signals that actually predict recovery,
  * in as few taps as possible:
- *   • Effort  — session RPE (Foster sRPE), pre-filled from logged set RPEs
- *   • Sleep   — hours the night before
- *   • Energy  — how recovered they felt going in (recovery_today, 1–5)
+ *   • Effort  — session RPE (Foster sRPE), the one required tap
  *   • Pain    — no/yes; yes asks where + how bad
+ *   • Sleep   — hours the night before: <5h / 5–6h / 6–7h / 7h+
+ *   • Energy  — how recovered they felt going in (recovery_today, 1–5)
+ *
+ * Nothing is pre-selected. Effort used to be pre-filled from logged set RPEs,
+ * but recovery-score trusts a v2 session RPE *over* the set average because
+ * it is the athlete's own read of the whole session; a pre-fill they just
+ * accept is the set average wearing that label. Skipped sleep/energy stay
+ * null (neutral in readiness); skipped pain is stored as false ("none
+ * reported") because pl_workout_feedback.pain is NOT NULL.
  *
  * v1 asked "Feeling Good / Minor Issue / Need Attention" and wrote fake session
  * RPEs (5/7/8) from that choice; 75% of ratings were 5/5, so it carried almost
  * no signal. v2 rows are marked review_version = 2 so analytics only trust
  * their session_rpe.
  */
+
+import type { SleepBucket } from "@/lib/analytics/recovery-score";
 
 export const REVIEW_VERSION = 2;
 
@@ -45,16 +54,55 @@ export function deriveOverallRating(input: {
   return 4;
 }
 
-/** Session RPE to show when (re)opening the review. */
+/** Sleep choices. Above 7h the old 7–8 / 8–9 / 9+ split never changed a decision. */
+export const SLEEP_OPTIONS: { v: SleepBucket; label: string }[] = [
+  { v: "lt5", label: "<5h" },
+  { v: "5_6", label: "5–6h" },
+  { v: "6_7", label: "6–7h" },
+  { v: "gte7", label: "7h+" },
+];
+
+/** The chip a stored bucket lights up (older 7h+ buckets show as "7h+"). */
+export function sleepChip(b: SleepBucket | null | undefined): SleepBucket | null {
+  if (!b) return null;
+  return b === "7_8" || b === "8_9" || b === "gte9" ? "gte7" : b;
+}
+
+/** Session RPE to show when reopening a saved review. Never pre-filled. */
 export function initialEffort(
-  initial: { sessionRpe?: number | null; reviewVersion?: number | null; submittedAt?: string | null } | null | undefined,
-  suggested: number | null | undefined,
+  initial:
+    | { sessionRpe?: number | null; reviewVersion?: number | null; submittedAt?: string | null }
+    | null
+    | undefined,
 ): number | null {
   // Only a v2 review stored a real session RPE; legacy values were derived.
-  if (initial?.submittedAt && (initial.reviewVersion ?? 0) >= REVIEW_VERSION && initial.sessionRpe != null) {
+  if (
+    initial?.submittedAt &&
+    (initial.reviewVersion ?? 0) >= REVIEW_VERSION &&
+    initial.sessionRpe != null
+  ) {
     return Math.min(10, Math.max(6, initial.sessionRpe));
   }
-  return suggested ?? null;
+  return null;
+}
+
+/** Primary button label: says what's missing, and how many optional answers a quick finish skips. */
+export function checkoutCta(input: {
+  isEdit: boolean;
+  effort: number | null;
+  pain: boolean | null;
+  painArea: string | null;
+  sleepBucket: string | null;
+  recoveryToday: number | null;
+}): { label: string; enabled: boolean } {
+  if (input.effort == null) return { label: "Pick how hard it was", enabled: false };
+  if (input.pain === true && !input.painArea)
+    return { label: "Pick where it hurts", enabled: false };
+  if (input.isEdit) return { label: "Save changes", enabled: true };
+  const skipped = [input.sleepBucket, input.recoveryToday, input.pain].filter(
+    (v) => v == null,
+  ).length;
+  return { label: skipped ? `Skip ${skipped} & finish` : "Done", enabled: true };
 }
 
 /** Whether the stored session_rpe is a real self-report (v2) or a legacy mapping. */

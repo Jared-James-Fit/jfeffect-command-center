@@ -79,7 +79,11 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
-  const stageRef = useRef<HTMLDivElement | null>(null);
+  // State, not a ref: the dialog's content mounts a render after `open`, so
+  // the stage has to be measured whenever it actually appears. With a ref the
+  // effect ran before it existed and, when the workout was already cached,
+  // never ran again: the card stayed 0x0 and the editor looked empty.
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const canvases = useRef<Partial<Record<ShareTemplate, HTMLCanvasElement | null>>>({});
 
@@ -168,9 +172,10 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   );
 
   // Draw every slide (≤5, ~30 ms each). Latest-wins so a stale draw never lands.
+  // Re-runs when the stage mounts, since the canvases only exist from then.
   const drawToken = useRef(0);
   useEffect(() => {
-    if (!open || !base) return;
+    if (!open || !base || !stageEl) return;
     const token = ++drawToken.current;
     (async () => {
       for (const t of templates) {
@@ -180,7 +185,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         if (c && d) await drawWorkoutShareCard(c, d);
       }
     })();
-  }, [open, base, templates, dataFor]);
+  }, [open, base, templates, dataFor, stageEl]);
 
   // Keep the selected slide in view when templates change (e.g. a photo was added).
   const goTo = (i: number, smooth = true) => {
@@ -315,12 +320,11 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
 
   // Fit the card into whatever space is left between the bars (any phone size).
   useEffect(() => {
-    const el = stageRef.current;
-    if (!open || !el || typeof ResizeObserver === "undefined") return;
+    if (!open || !stageEl || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width, h: e.contentRect.height }));
-    ro.observe(el);
+    ro.observe(stageEl);
     return () => ro.disconnect();
-  }, [open, base]);
+  }, [open, stageEl]);
   const cardSize = (r: number) => {
     const maxW = Math.max(0, box.w - 40);
     const maxH = Math.max(0, box.h - 20);
@@ -370,7 +374,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         </div>
 
         {/* Cards — swipe sideways */}
-        <div ref={stageRef} className="relative min-h-0 flex-1">
+        <div ref={setStageEl} className="relative min-h-0 flex-1">
           {statsError ? (
             <div className="grid h-full place-items-center px-8 text-center text-sm text-white/70">Couldn't load this workout. Close and try again.</div>
           ) : statsLoading || !base ? (

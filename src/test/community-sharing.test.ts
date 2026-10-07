@@ -337,7 +337,7 @@ describe("community is easy to find without taking over", () => {
     expect(home).toContain("<CommunityHomeStrip />");
   });
   it("is always on Home (clients live there), with Share first and an invite instead of an empty widget", () => {
-    expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" />');
+    expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />');
     expect(entry).toContain("Be the first to share this week");
     expect(entry).not.toContain("people.length === 0) return null");
   });
@@ -354,7 +354,7 @@ describe("community is its own page, reached from Home", () => {
 
   it("has a Back to Home and keeps Home lit, so nobody is stranded in Workouts", () => {
     expect(page).toContain('backTo="/portal" backLabel="Home"');
-    expect(page).toContain("<CommunityScreen canShare={!isImpersonating} />");
+    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} />");
     expect(shellSrc).toContain('(item.to === "/portal" && pathname === "/portal/community")');
   });
   it("leaves Workouts as pure training and forwards old #community links", () => {
@@ -381,8 +381,8 @@ describe("community is its own page, reached from Home", () => {
     expect(screen).toContain('label="Share your last workout"');
   });
   it("never lets a coach in View-as-client share for the athlete", () => {
-    expect(page).toContain("<CommunityScreen canShare={!isImpersonating} />");
-    expect(entry).toContain("{canShare && <ShareWorkoutButton");
+    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} />");
+    expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />');
   });
 });
 
@@ -402,7 +402,8 @@ describe("lock in (I showed up)", () => {
   });
   it("still refuses anyone but the athlete (coach View-as-client included)", () => {
     expect(sql).toContain("WHERE pc.id = _completion_id AND c.user_id = uid");
-    expect(day).toContain("isClientWorkout && !isImpersonating && !completion?.completed_at");
+    expect(day).toContain("isClientWorkout && !completion?.completed_at && rowsLoaded");
+    expect(day).toContain("previewOnly={isImpersonating}");
   });
   it("starts the session through the normal start path, never on its own", () => {
     expect(day).toContain('await startWorkoutSrv({ data: { kind: "client" as const, dayId, scheduledWorkoutId } });');
@@ -740,5 +741,26 @@ describe("one reaction (🔥) and who gave it", () => {
     expect(sql).toMatch(/community_post_reactors[\s\S]*community_post_visible\(p\.visibility, p\.author_user_id, p\.client_id\)/);
     expect(sql).toContain("'reactors', coalesce(");
     expect(card).toContain("<ReactorsSheet postId={listFor}");
+  });
+});
+
+describe("coach POV shows the post buttons but never posts as the client", () => {
+  const picker = read("src/components/community/share-workout-picker.tsx");
+  const lockIn = read("src/components/community/lock-in.tsx");
+  it("looks like the client's screen and explains on tap", () => {
+    expect(picker).toContain("const open = rawOpen && !previewOnly;");
+    expect(picker).toContain("toast.message(PREVIEW_ONLY_MESSAGE)");
+    expect(lockIn).toContain("if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);");
+  });
+});
+
+describe("share editor never opens blank", () => {
+  const composer = read("src/components/community/share-composer.tsx");
+  it("measures and draws once the stage actually mounts, even when the workout is already cached", () => {
+    expect(composer).toContain("const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);");
+    expect(composer).toContain('<div ref={setStageEl} className="relative min-h-0 flex-1">');
+    expect(composer).toContain("}, [open, stageEl]);");
+    expect(composer).toContain("}, [open, base, templates, dataFor, stageEl]);");
+    expect(composer).not.toContain("stageRef");
   });
 });

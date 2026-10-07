@@ -57,7 +57,6 @@ export function CommunityHomeStrip() {
   const { data: activity } = useCommunityActivity(true);
   const feed = useCommunityFeed(null);
   const seenAt = activity?.seen_at ? new Date(activity.seen_at).getTime() : 0;
-  const canShare = !isImpersonating;
   const [openPost, setOpenPost] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -103,7 +102,7 @@ export function CommunityHomeStrip() {
         </Link>
       </div>
       <div className="-mx-1 mt-2.5 flex items-start gap-3 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {canShare && <ShareWorkoutButton unit={unit} label="Share" variant="bubble" />}
+        <ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />
         {people.map((p) => (
           <button key={p.userId} type="button" onClick={() => setOpenPost(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={p.live ? `${p.name} is training now` : `${p.name}'s latest workout`}>
             <span className={cn("relative rounded-full p-[2.5px]", p.live ? "bg-red-500" : p.fresh ? "bg-[linear-gradient(135deg,#f58529,#dd2a7b,#8134af)]" : "bg-border")}>

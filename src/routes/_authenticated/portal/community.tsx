@@ -19,7 +19,7 @@ function PortalCommunity() {
   return (
     <>
       <PageHeader title="Community" subtitle="What the crew is lifting" backTo="/portal" backLabel="Home" />
-      <CommunityScreen canShare={!isImpersonating} />
+      <CommunityScreen canShare previewOnly={isImpersonating} />
     </>
   );
 }

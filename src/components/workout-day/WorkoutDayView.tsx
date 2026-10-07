@@ -105,7 +105,6 @@ import { trustedSessionRpe } from "@/lib/workout-review";
 import {
   buildLoadModel,
   parseRpe,
-  suggestedSessionRpe as computeSuggestedSessionRpe,
   planningTarget,
   predictReadiness,
   suggestFinalWarmup,
@@ -946,13 +945,6 @@ function WorkoutDay({
   const previousLiftByRow = useMemo(
     () => selectPreviousLifts(previousLiftIdentities, previousLiftLogs, currentHistorySessionKey),
     [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey],
-  );
-  // Pre-fill for the review's effort question: today's logged working-set RPEs.
-  const reviewSessionRpe = useMemo(
-    () => computeSuggestedSessionRpe(
-      (results as any[]).filter((r) => r.completed_at).map((r) => r.actual_rpe_num ?? r.actual_rpe),
-    ),
-    [results],
   );
 
   // Bodyweight (smoothed) — strength scales with it, so past sets are adjusted
@@ -2288,8 +2280,9 @@ function WorkoutDay({
                   ])}
                 />
               ) : null}
-              {isClientWorkout && !isImpersonating && !completion?.completed_at && rowsLoaded && (rows as any[]).length > 0 && (
+              {isClientWorkout && !completion?.completed_at && rowsLoaded && (rows as any[]).length > 0 && (
                 <LockInBar
+                  previewOnly={isImpersonating}
                   completionId={completion?.id ?? null}
                   ensureStarted={ensureStartedForLockIn}
                   workoutTitle={cleanDayTitle(day.title, day.day_index)}
@@ -2392,7 +2385,6 @@ function WorkoutDay({
             {completion?.completed_at && client?.id && (
               <div className="mx-auto max-w-3xl px-4 pb-4">
                 <CompletedWorkoutActions
-                  suggestedSessionRpe={reviewSessionRpe}
                   ctx={{ kind: "client", dayId, scheduledWorkoutId }}
                   hasCoach
                   actAsClientId={isImpersonating ? client.id : null}
@@ -2692,7 +2684,6 @@ function WorkoutDay({
 
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
-                  suggestedSessionRpe={reviewSessionRpe}
             ctx={{ kind: "client", dayId, scheduledWorkoutId }}
             hasCoach
             actAsClientId={isImpersonating ? client.id : null}
@@ -2738,7 +2729,6 @@ function WorkoutDay({
 
       {!completion?.completed_at && client?.id && autoFinishReady && (
         <WorkoutReviewEditor
-          suggestedSessionRpe={reviewSessionRpe}
           open={quickFinishReviewOpen}
           onOpenChange={setQuickFinishReviewOpen}
           ctx={
