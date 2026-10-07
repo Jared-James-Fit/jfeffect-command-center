@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ChevronRight, Flame } from "lucide-react";
 import { toast } from "sonner";
@@ -9,17 +9,14 @@ import { featuredLift, formatTopSet, postTimeLabel, SCOPE_WORD, type CommunityPo
 import { useCommunityActivity, useCommunityFeed, useReact, useViewerUnit } from "@/lib/community.queries";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
-
-/** Where the community lives for clients: a tab inside Workouts. */
-export const CLIENT_COMMUNITY_HASH = "community";
-export const clientCommunityHash = (postId?: string) => (postId ? `${CLIENT_COMMUNITY_HASH}&post=${postId}` : CLIENT_COMMUNITY_HASH);
+import { PostDetailDialog } from "@/components/community/post-detail";
 
 const NEW_GRADIENT = "bg-[linear-gradient(135deg,#f58529,#dd2a7b)]";
 
 /**
  * Header nudge, only when there is something new ("🔥 3 new"). With nothing
- * new it renders nothing: the community lives in Workouts (clients) and on
- * the dashboard (coaches), never as a mystery icon.
+ * new it renders nothing: the community is on Home (clients) and on the
+ * dashboard (coaches), never as a mystery icon.
  */
 export function CommunityNavButton({ className }: { className?: string }) {
   const { role } = useAuth();
@@ -30,7 +27,7 @@ export function CommunityNavButton({ className }: { className?: string }) {
   const eligible = inPortal || (inAdmin && staff);
   const { data } = useCommunityActivity(eligible);
   // Pages that already surface the community themselves.
-  const hidden = path === "/portal/workouts" || path === "/portal/workouts/" || path === "/admin" || path === "/admin/" || path.endsWith("/community");
+  const hidden = path === "/admin" || path === "/admin/" || path.endsWith("/community");
   if (!eligible || hidden || !data?.enabled || data.unseen <= 0) return null;
   const n = data.unseen;
   return inAdmin ? (
@@ -38,40 +35,9 @@ export function CommunityNavButton({ className }: { className?: string }) {
       <Flame className="h-3.5 w-3.5" /> {n > 9 ? "9+" : n} new
     </Link>
   ) : (
-    <Link to="/portal/workouts" hash={CLIENT_COMMUNITY_HASH} aria-label={`Community, ${n} new`} className={cn("inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-black text-white shadow-sm", NEW_GRADIENT, className)}>
+    <Link to="/portal/community" aria-label={`Community, ${n} new`} className={cn("inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-black text-white shadow-sm", NEW_GRADIENT, className)}>
       <Flame className="h-3.5 w-3.5" /> {n > 9 ? "9+" : n} new
     </Link>
-  );
-}
-
-/** "My training | Community" at the top of the Workouts tab. */
-export function WorkoutsViewSwitch({ view, onChange }: { view: "training" | "community"; onChange: (v: "training" | "community") => void }) {
-  const { data } = useCommunityActivity(true);
-  if (!data?.enabled) return null;
-  const n = data.unseen;
-  return (
-    <div className="grid grid-cols-2 rounded-2xl bg-muted p-1" role="tablist" aria-label="Workouts view">
-      {(["training", "community"] as const).map((k) => (
-        <button
-          key={k}
-          type="button"
-          role="tab"
-          aria-selected={view === k}
-          onClick={() => onChange(k)}
-          className={cn(
-            "relative flex h-10 items-center justify-center gap-1.5 rounded-xl text-[14px] font-bold transition-colors",
-            view === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
-          )}
-        >
-          {k === "training" ? "My training" : (
-            <>
-              <Flame className={cn("h-4 w-4", view === k ? "text-orange-500" : "")} /> Community
-              {n > 0 && view !== k && <span className={cn("rounded-full px-1.5 text-[10px] font-black text-white", NEW_GRADIENT)}>{n > 9 ? "9+" : n}</span>}
-            </>
-          )}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -79,8 +45,10 @@ export function WorkoutsViewSwitch({ view, onChange }: { view: "training" | "com
  * Home: the community's front door, right under today's training. Always
  * there for clients (that's where they are: Home and the workout itself), so
  * it can't be missed — "+ Share" first, Instagram-stories style, then who
- * shared this week (ring = new to you). With nothing shared yet it's a single
- * inviting line, never an empty widget.
+ * shared this week (ring = new to you). Tapping a person opens their workout
+ * right here over Home; "See all" opens the community page, whose Back
+ * returns to Home. With nothing shared yet it's a single inviting line,
+ * never an empty widget.
  */
 export function CommunityHomeStrip() {
   const { user } = useAuth();
@@ -90,6 +58,7 @@ export function CommunityHomeStrip() {
   const feed = useCommunityFeed(null);
   const seenAt = activity?.seen_at ? new Date(activity.seen_at).getTime() : 0;
   const canShare = !isImpersonating;
+  const [openPost, setOpenPost] = useState<string | null>(null);
 
   const people = useMemo(() => {
     const posts = feed.data?.pages[0]?.posts ?? [];
@@ -114,21 +83,21 @@ export function CommunityHomeStrip() {
           <Flame className="h-4 w-4 text-orange-500" /> Community
           {activity.unseen > 0 && <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>}
         </div>
-        <Link to="/portal/workouts" hash={CLIENT_COMMUNITY_HASH} className="flex items-center text-[12px] font-bold text-muted-foreground">
+        <Link to="/portal/community" className="-my-1 flex items-center py-1 pl-3 text-[12px] font-bold text-muted-foreground">
           {people.length ? "See all" : "Open"} <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
       <div className="-mx-1 mt-2.5 flex items-start gap-3 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {canShare && <ShareWorkoutButton unit={unit} label="Share" variant="bubble" />}
         {people.map((p) => (
-          <Link key={p.userId} to="/portal/workouts" hash={clientCommunityHash(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1" aria-label={`${p.name}'s latest workout`}>
+          <button key={p.userId} type="button" onClick={() => setOpenPost(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`${p.name}'s latest workout`}>
             <span className={cn("rounded-full p-[2.5px]", p.fresh ? "bg-[linear-gradient(135deg,#f58529,#dd2a7b,#8134af)]" : "bg-border")}>
               <span className="block rounded-full bg-card p-[2px]">
                 <UserAvatar src={p.avatar} name={p.name} size={52} expandable={false} />
               </span>
             </span>
             <span className="w-full truncate text-center text-[11px] font-semibold">{p.mine ? "You" : p.name}</span>
-          </Link>
+          </button>
         ))}
         {people.length === 0 && (
           <div className="flex min-h-[61px] flex-1 flex-col justify-center pr-1">
@@ -137,6 +106,7 @@ export function CommunityHomeStrip() {
           </div>
         )}
       </div>
+      <PostDetailDialog postId={openPost} unit={unit} viewerIsStaff={false} onClose={() => setOpenPost(null)} />
     </section>
   );
 }
@@ -171,7 +141,7 @@ export function CommunityCoachCard() {
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-bold">Community</div>
           <div className="truncate text-[12px] text-muted-foreground">
-            {anyEver ? "Nothing shared this week yet. Open the feed" : "No posts yet. Clients share from Workouts → Community"}
+            {anyEver ? "Nothing shared this week yet. Open the feed" : "No posts yet. Clients share from Home and after each workout"}
           </div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
