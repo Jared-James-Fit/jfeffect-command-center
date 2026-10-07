@@ -107,6 +107,7 @@ import {
   suggestedSessionRpe as computeSuggestedSessionRpe,
   planningTarget,
   predictReadiness,
+  suggestFinalWarmup,
   suggestSetLoad,
   NEUTRAL_READINESS,
   type LoadModel,
@@ -3353,7 +3354,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
   const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId);
   const [warmupForm, setWarmupForm] = useState<string | null>(null);
-  const warmupPromptable = warmupEligible && !!loadHistory && family !== "accessory";
+  const warmupPromptable = warmupEligible && family !== "accessory";
   const warmupForModel = warmupEligible ? pickFinalWarmup(warmupSets, activeUnit) : null;
   const loadModel = useMemo<LoadModel | null>(() => {
     if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== "external" || !loadPlan) return null;
@@ -3372,6 +3373,28 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
   );
+  // "Last warm-up" gauge on the suggestion card (squat / bench / deadlift, before
+  // the first working set): tells the athlete what to warm up to, then reads how
+  // it felt to tune the top-set number. Opens the warm-up form pre-filled.
+  const warmupGaugeSuggested = useMemo(
+    () => (loadHint && loadPlan ? suggestFinalWarmup(loadHint.target, loadPlan.reps, activeUnit) : null),
+    [loadHint?.target, loadPlan?.reps, activeUnit],
+  );
+  const heaviestWarmupId = useMemo(() => {
+    let best: { id: string; kg: number } | null = null;
+    for (const w of warmupSets) {
+      const kg = w.unit === "kg" ? w.load : w.load * 0.45359237;
+      if (!best || kg >= best.kg) best = { id: w.id, kg };
+    }
+    return best?.id ?? null;
+  }, [warmupSets]);
+  const warmupGauge = warmupPromptable && loadModel
+    ? {
+        suggested: warmupGaugeSuggested,
+        logged: warmupForModel,
+        onOpen: () => setWarmupForm(heaviestWarmupId ?? "new"),
+      }
+    : null;
 
   // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
   // into all later un-completed sets of this same exercise. Never overwrites
@@ -3704,9 +3727,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </div>
       )}
       {loadModel && loadPlan && (
-        <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} />
+        <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} />
       )}
-      {warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || warmupPromptable)) ? (
+      {(warmupSets.length > 0 && (!warmupGauge || warmupSets.length > 1)) || (warmupAllowed && !!warmupForm) ? (
         <WarmupSection
           sets={warmupSets}
           unit={activeUnit}
@@ -3715,8 +3738,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           onFormChange={setWarmupForm}
           onSave={saveWarmup}
           onRemove={removeWarmup}
-          showPrompt={warmupPromptable}
+          showPrompt={false}
           hasHistory={!!loadModel && loadModel.status === "ready" && loadModel.source !== "warmup"}
+          seed={warmupGauge?.suggested ?? null}
+          showList={!warmupGauge || warmupSets.length > 1}
         />
       ) : null}
       {row.manual_override && (row.load_kg || row.load_lb) && (
