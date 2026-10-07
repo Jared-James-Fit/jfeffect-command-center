@@ -204,7 +204,7 @@ function ClientPurchase() {
               <>
                 <Badge className="bg-gradient-primary">Signed</Badge>
                 <p className="text-xs text-muted-foreground mt-2">
-                  This purchase is covered by your signed JF Effect / Jared James Fit Coaching
+                  This purchase is covered by your signed JF Effect Coaching
                   Agreement + Liability Waiver.
                 </p>
                 {!signedInApp && c?.agreement_link ? (

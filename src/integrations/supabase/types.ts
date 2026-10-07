@@ -5458,6 +5458,7 @@ export type Database = {
           quality_warning: string | null
           safe_to_publish: boolean
           secondary_vimeo_embed_url: string | null
+          secondary_muscle_groups: string[]
           secondary_vimeo_id: string | null
           source_quality: string | null
           source_type: string | null
@@ -5513,6 +5514,7 @@ export type Database = {
           quality_warning?: string | null
           safe_to_publish?: boolean
           secondary_vimeo_embed_url?: string | null
+          secondary_muscle_groups?: string[]
           secondary_vimeo_id?: string | null
           source_quality?: string | null
           source_type?: string | null
@@ -5568,6 +5570,7 @@ export type Database = {
           quality_warning?: string | null
           safe_to_publish?: boolean
           secondary_vimeo_embed_url?: string | null
+          secondary_muscle_groups?: string[]
           secondary_vimeo_id?: string | null
           source_quality?: string | null
           source_type?: string | null

@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 const logger = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
 const picker = readFileSync("src/components/workout-day/workout-add-exercise.tsx", "utf8");
 const actions = readFileSync("src/lib/quick-swap.functions.ts", "utf8");
+// The card's action row (How To · Note · More · Rest) lives in its own component.
+const actionRow = readFileSync("src/components/workout-day/exercise-action-row.tsx", "utf8");
 
 describe("live workout structure editing", () => {
   it("lets a coaching client add an exercise from the logger", () => {
@@ -32,8 +34,9 @@ describe("live workout structure editing", () => {
   it("keeps exercise insertion subtle and collapses secondary card actions", () => {
     expect(picker).toContain('aria-label="Add exercise here"');
     expect(picker).not.toContain('>\n            Add\n');
-    expect(logger).toContain("More options for");
-    expect(logger).toContain("<MoreHorizontal");
+    expect(actionRow).toContain("More options for");
+    expect(actionRow).toContain("<MoreHorizontal");
+    expect(actionRow).not.toContain("GripVertical");
     expect(logger).toContain("<DropdownMenuSeparator");
     expect(logger).toContain("Move to position");
     expect(logger).not.toContain('title="Change exercise order"');

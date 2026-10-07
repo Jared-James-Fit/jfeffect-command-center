@@ -9,7 +9,6 @@ import { cadenceLabel, lastFridayOfMonth, nextLastFridayDate, nextSemiMonthlyDat
 
 export type TaskType =
   | "weekly_checkin"
-  | "nutrition_review"
   | "progress_photos"
   | "monthly_assessment"
   | "bodyweight"
@@ -479,6 +478,8 @@ export const listTaskDefinitions = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("coach_task_definitions")
       .select("*")
+      // Nutrition Review is retired: Nutrition Update Requests replace it.
+      .neq("task_type", "nutrition_review")
       .order("task_type", { ascending: true });
     if (error) throw new Error(error.message);
     return (data ?? []) as TaskDefinition[];

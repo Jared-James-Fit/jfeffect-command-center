@@ -127,6 +127,8 @@ function SmartTodayCardInner({ state, clientId }: { state: TodayState; clientId:
           dayId={it.day.id}
           clientId={clientId}
           completion={it.completion}
+          scheduledWorkoutId={it.scheduledWorkoutId ?? null}
+          loggedSets={it.logged_sets_count ?? null}
           invalidateKeys={[["my-workouts", clientId], ["my-workouts-page"]]}
         />
       )}

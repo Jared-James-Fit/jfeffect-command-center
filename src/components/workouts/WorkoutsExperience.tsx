@@ -38,6 +38,7 @@ import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
+import { WorkoutHistorySheet } from "@/components/workout-history-sheet";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
 import { usePreviewOpen } from "@/lib/preview-open-store";
 import { InlineWorkoutEditor } from "@/components/workout/shared/inline-workout-editor";
@@ -87,13 +88,10 @@ export function WorkoutsExperience({
   clientId,
   mode = "self",
   clientName,
-  topSlot,
 }: {
   clientId: string;
   mode?: Mode;
   clientName?: string | null;
-  /** Rendered first under the header (the client's "My training | Community" switch). */
-  topSlot?: React.ReactNode;
 }) {
   const { data: client } = useQuery({
     queryKey: ["workouts-experience-client", clientId],
@@ -545,7 +543,6 @@ export function WorkoutsExperience({
       />
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
-        {topSlot}
 
         {client && (
           <TrainingScheduleCard
@@ -1037,7 +1034,7 @@ function SelectedDayCard({
   const [moveOpen, setMoveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
-  const [resetting, setResetting] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [backupAction, setBackupAction] = useState<"remove" | "cancel" | null>(null);
   const qc = useQueryClient();
@@ -1138,85 +1135,15 @@ function SelectedDayCard({
   // across rest days (item === null) and active days.
   const { data: progress } = useWorkoutProgress(item?.day?.id, clientId);
 
-  const handleReset = async () => {
-    if (!dayId) return;
-    setResetting(true);
-    try {
-      // 1) Look up the exercise row ids for this workout day so we can scope
-      //    the row_results delete (pl_row_results has row_id but no day_id).
-      const { data: rows, error: rowsErr } = await supabase
-        .from("pl_exercise_rows")
-        .select("id")
-        .eq("day_id", dayId);
-      if (rowsErr) throw rowsErr;
-      const rowIds = (rows ?? []).map((r: any) => r.id);
-
-      // 2) Delete this client's logged sets (reps / weight / RPE / set notes
-      //    / per-set timer) for the selected day only. Other days, other
-      //    clients, and the programming rows themselves are untouched.
-      if (rowIds.length) {
-        const { error } = await supabase
-          .from("pl_row_results")
-          .delete()
-          .eq("client_id", clientId)
-          .in("row_id", rowIds);
-        if (error) throw error;
-      }
-
-      // 3) Delete the client-authored per-exercise notes for this day.
-      //    Coach/admin programming notes live on pl_exercise_rows / pl_days
-      //    and are not affected.
-      const { error: notesErr } = await supabase
-        .from("pl_exercise_notes")
-        .delete()
-        .eq("client_id", clientId)
-        .eq("day_id", dayId);
-      if (notesErr) throw notesErr;
-
-      // 4) Delete the post-workout review/feedback (session RPE, pain,
-      //    client notes, rating) for this day.
-      const { error: fbErr } = await supabase
-        .from("pl_workout_feedback")
-        .delete()
-        .eq("client_id", clientId)
-        .eq("day_id", dayId);
-      if (fbErr) throw fbErr;
-
-      // 5) Delete the completion row last — this clears completion status,
-      //    workout-level notes, and the workout timer/duration, and makes
-      //    the day available to log again.
-      const { error: complErr } = await supabase
-        .from("pl_day_completions")
-        .delete()
-        .eq("client_id", clientId)
-        .eq("day_id", dayId);
-      if (complErr) throw complErr;
-
-      // Refresh the workouts schedule, analytics, and per-day caches so the
-      // UI immediately reflects the reset state.
-      qc.invalidateQueries({ queryKey: ["my-workouts", clientId] });
-      qc.invalidateQueries({ queryKey: ["workouts-experience-client", clientId] });
-      qc.invalidateQueries({ predicate: (q) => {
-        const k = q.queryKey?.[0];
-        return typeof k === "string" && (
-          k.startsWith("pl-") ||
-          k.startsWith("workout-") ||
-          k.startsWith("training-analytics") ||
-          k === "weight-lifted" ||
-          k === "day-completion" ||
-          k === "workout-feedback"
-        );
-      } });
-
-      toast.success("Workout inputs reset");
-      setResetOpen(false);
-    } catch (e: any) {
-      console.error("[reset-workout]", e);
-      toast.error(e?.message || "Could not reset workout");
-    } finally {
-      setResetting(false);
-    }
-  };
+  // Reset = the server's instance-scoped, undoable "Not Started" (see
+  // WorkoutStatusSheet / workout_set_status) — never a client-side delete.
+  const hasActivity = !!(
+    item?.completion?.completed_at || item?.completion?.in_progress_at || item?.completion?.started_at
+    || (item?.logged_sets_count ?? 0) > 0
+  );
+  const canReset = canChangeWorkoutStatus && hasActivity;
+  const hasMenuActions = canChangeWorkoutStatus || isCompleted
+    || (canManageBackupLifecycle && (backupState?.lifecycle === "in_progress" || backupState?.lifecycle === "empty"));
 
   if (!item) {
     return (
@@ -1307,7 +1234,7 @@ function SelectedDayCard({
               ) : null;
             })()}
           </div>
-          {!readonly && (
+          {!readonly && hasMenuActions && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="Workout actions">
@@ -1315,9 +1242,6 @@ function SelectedDayCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
-                  <Move className="mr-2 h-4 w-4" /> Reschedule workout
-                </DropdownMenuItem>
                 {canManageBackupLifecycle && backupState?.lifecycle === "in_progress" && (
                   <DropdownMenuItem asChild>
                     <Link
@@ -1351,11 +1275,6 @@ function SelectedDayCard({
                     <RotateCcw className="mr-2 h-4 w-4" /> Cancel Backup
                   </DropdownMenuItem>
                 )}
-                {canChangeWorkoutStatus && (
-                  <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
-                    <CircleDot className="mr-2 h-4 w-4" /> Change status
-                  </DropdownMenuItem>
-                )}
                 {isCompleted && (
                   <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
                     {hasReview ? (
@@ -1376,15 +1295,17 @@ function SelectedDayCard({
                     </Link>
                   </DropdownMenuItem>
                 )}
-                {canEditWorkout && (
+                {canChangeWorkoutStatus && (
+                  <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
+                    <History className="mr-2 h-4 w-4" /> Version history
+                  </DropdownMenuItem>
+                )}
+                {canReset && (
                   <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      setResetOpen(true);
-                    }}
+                    onSelect={() => setResetOpen(true)}
                     className="text-destructive focus:text-destructive"
                   >
-                    <RotateCcw className="mr-2 h-4 w-4" /> Reset workout inputs
+                    <RotateCcw className="mr-2 h-4 w-4" /> Reset workout
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -1481,6 +1402,31 @@ function SelectedDayCard({
           completion={item.completion as any}
           scheduledWorkoutId={item.scheduledWorkoutId ?? null}
           invalidateKeys={[["workouts-experience-client", clientId]]}
+          loggedSets={item.logged_sets_count ?? progress?.completedSets ?? null}
+          showHistoryLink={false}
+        />
+      )}
+      {canChangeWorkoutStatus && (
+        <WorkoutHistorySheet
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          dayId={item.day.id}
+          clientId={clientId}
+          scheduledWorkoutId={item.scheduledWorkoutId ?? null}
+          invalidateKeys={[["workouts-experience-client", clientId]]}
+        />
+      )}
+      {canReset && (
+        <WorkoutStatusSheet
+          mode="reset"
+          open={resetOpen}
+          onOpenChange={setResetOpen}
+          dayId={item.day.id}
+          clientId={clientId}
+          completion={item.completion as any}
+          scheduledWorkoutId={item.scheduledWorkoutId ?? null}
+          invalidateKeys={[["workouts-experience-client", clientId]]}
+          loggedSets={item.logged_sets_count ?? progress?.completedSets ?? null}
         />
       )}
 
@@ -1550,33 +1496,6 @@ function SelectedDayCard({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={resetOpen} onOpenChange={(o) => !resetting && setResetOpen(o)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset workout inputs?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will clear the workout data you entered for this day. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={resetting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void handleReset();
-              }}
-              disabled={resetting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {resetting ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting…</>
-              ) : (
-                "Reset"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

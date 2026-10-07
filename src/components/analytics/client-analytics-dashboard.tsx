@@ -6,15 +6,14 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TrendingUp, Trophy, Dumbbell, Calendar, Flame } from "lucide-react";
+import { TrendingUp, Trophy, Dumbbell, Calendar, Flame, PieChart } from "lucide-react";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, BarChart, Bar, Cell, ReferenceDot, Area, ComposedChart,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell,
 } from "recharts";
 import {
   getClientResults, buildExerciseHistory, weeklyMuscleVolume, recentPRs,
 } from "@/lib/pl-programs";
-import { format, isSameDay } from "date-fns";
+import { format } from "date-fns";
 import {
   AnalyticsFilterBar,
   defaultAnalyticsFilter,
@@ -28,13 +27,11 @@ import {
   resolveCurrentBlock,
 } from "@/lib/analytics/blocks";
 import { PowerliftingExposureSection } from "@/components/analytics/powerlifting-exposure-section";
-import {
-  SearchableSelect,
-  type SearchableOption,
-} from "@/components/analytics/searchable-select";
 import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-card";
 import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
+import { LiftProgressCard } from "@/components/analytics/lift-progress-card";
+import { SbdSplitCard } from "@/components/analytics/sbd-split-card";
 import { PRCard } from "@/components/analytics/pr-card";
 import { PerformanceInsights } from "@/components/analytics/performance-insights";
 import { RecoverySummaryCard } from "@/components/analytics/recovery-summary-card";
@@ -48,10 +45,7 @@ import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
 import { InfoTip } from "@/components/analytics/info-tip";
 import {
   ANALYTICS_COLORS,
-  exerciseColor,
-  exerciseGroup,
   fmtNum,
-  liftFamily,
   muscleColor,
   shortMuscleLabel,
 } from "@/lib/analytics-format";
@@ -219,13 +213,7 @@ export function ClientAnalyticsDashboard({
     return () => { cancelled = true; window.clearTimeout(t); };
   }, []);
 
-  const [selectedEx, setSelectedEx] = useState<string>("");
   const [selectedDot, setSelectedDot] = useState<GraphDotPoint | null>(null);
-  // Chart metric toggle for the Estimated 1RM Progress card.
-  // "effort" = RPE or RIR (whichever was logged), normalized to a common
-  // 0–10 effort scale for chart display; original value is preserved for
-  // the tooltip label ("RPE 8" vs "2 RIR").
-  const [chartMetric, setChartMetric] = useState<"est" | "load" | "effort" | "velocity">("est");
 
   const filteredResults = useMemo(() => {
     const startMs = filter.start.getTime();
@@ -251,98 +239,13 @@ export function ClientAnalyticsDashboard({
     [filteredResults],
   );
 
-  const activeEx = selectedEx || history[0]?.name || "";
-  const activeSeries = history.find((h) => h.name === activeEx);
-
-  const conv = (v: number) => convertWeight(Number(v) || 0, sourceUnit, displayUnit);
-
-  const handleDotClick = useCallback((data: any) => {
-    if (!data || !data.activePayload?.[0]) return;
-    const d = data.activePayload[0].payload;
-    const idx = d.idx ?? 0;
-    const rawPoint = activeSeries?.points?.[idx];
-    if (!rawPoint) return;
-    setSelectedDot({
-      id: rawPoint.id,
-      row_id: rawPoint.row_id,
-      day_id: rawPoint.day_id ?? null,
-      date: rawPoint.date,
-      exercise_name: activeEx,
-      load: rawPoint.load,
-      reps: rawPoint.reps,
-      est_1rm: rawPoint.est_1rm,
-      rpe: rawPoint.rpe ?? null,
-      rir: rawPoint.rir ?? null,
-      velocity_mps: rawPoint.velocity_mps ?? null,
-      exercise_note: rawPoint.exercise_note ?? null,
-      duration_seconds: rawPoint.duration_seconds ?? null,
-      set_index: rawPoint.set_index ?? idx,
-      displayUnit,
-      displayLoad: d.load,
-    });
-  }, [activeSeries, activeEx, displayUnit]);
+  const conv = useCallback(
+    (v: number) => convertWeight(Number(v) || 0, sourceUnit, displayUnit),
+    [displayUnit],
+  );
 
   const gridStroke = "color-mix(in oklab, var(--border) 60%, transparent)";
   const axisColor = "var(--muted-foreground)";
-
-  const lineData = useMemo(() => {
-    const pts = activeSeries?.points ?? [];
-    return pts.map((p: any, i: number) => {
-      const d = new Date(p.date);
-      const sameAsPrev = i > 0 && isSameDay(d, new Date(pts[i - 1].date));
-      const sameAsNext =
-        i < pts.length - 1 && isSameDay(d, new Date(pts[i + 1].date));
-      const sameDay = sameAsPrev || sameAsNext;
-      const label = sameAsPrev
-        ? ""
-        : sameDay
-          ? format(d, "MMM d")
-          : format(d, "MMM d");
-      const rpeRaw = p.rpe != null && p.rpe !== "" ? Number(p.rpe) : null;
-      const rirRaw = p.rir != null && p.rir !== "" ? Number(p.rir) : null;
-      // Normalize to a common effort scale (higher = harder).
-      // RPE stays as-is; RIR converts via 10 - RIR (RIR 0 = RPE 10, RIR 2 = RPE 8).
-      const effortNorm =
-        rpeRaw != null && Number.isFinite(rpeRaw)
-          ? rpeRaw
-          : rirRaw != null && Number.isFinite(rirRaw)
-            ? Math.max(0, Math.min(10, 10 - rirRaw))
-            : null;
-      const effortSource: "RPE" | "RIR" | null =
-        rpeRaw != null && Number.isFinite(rpeRaw)
-          ? "RPE"
-          : rirRaw != null && Number.isFinite(rirRaw)
-            ? "RIR"
-            : null;
-      return {
-        idx: i,
-        date: label,
-        fullDate: format(d, "MMM d, yyyy"),
-        time: sameDay ? format(d, "h:mma") : null,
-        est: Number(conv(p.est_1rm).toFixed(1)),
-        load: Number(conv(p.load).toFixed(1)),
-        reps: p.reps,
-        rpe: rpeRaw != null && Number.isFinite(rpeRaw) ? rpeRaw : null,
-        rir: rirRaw != null && Number.isFinite(rirRaw) ? rirRaw : null,
-        effort: effortNorm,
-        effortSource,
-        velocity: p.velocity_mps != null ? Number(p.velocity_mps) : null,
-      };
-    });
-  }, [activeSeries, conv]);
-
-  // Which effort systems appear in the current chart window (for labeling).
-  const effortSystems = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of lineData) if (p.effortSource) set.add(p.effortSource);
-    return set;
-  }, [lineData]);
-  const effortLabel =
-    effortSystems.size === 2
-      ? "Effort (RPE / RIR)"
-      : effortSystems.has("RIR")
-        ? "Effort (RIR)"
-        : "Effort (RPE)";
 
   // Previous-block date range for the Recovery card comparison chip.
   const { prevBlockStart, prevBlockEnd } = useMemo(() => {
@@ -353,106 +256,6 @@ export function ClientAnalyticsDashboard({
     if (!prev?.start_date || !prev?.end_date) return { prevBlockStart: null, prevBlockEnd: null };
     return { prevBlockStart: new Date(prev.start_date), prevBlockEnd: new Date(prev.end_date) };
   }, [activeBlockId, clientBlocks]);
-
-  const activePr = activeSeries?.pr;
-  const activeColor = exerciseColor(activeEx, activeSeries?.points?.[0]?.muscle_group);
-
-  // Velocity-based readiness + strength profile. Mean concentric velocity is
-  // only compared within the same exercise. The readiness signal uses prior
-  // sets at the same rep count and nearly the same load; the optional 1RM
-  // projection requires enough singles across multiple loads to fit a personal
-  // load-velocity line instead of using a generic percentage chart.
-  const velocityInsight = useMemo(() => {
-    const points = lineData.filter((p: any) =>
-      p.velocity != null && Number.isFinite(Number(p.velocity)) && Number(p.velocity) > 0 &&
-      Number.isFinite(Number(p.load)) && Number(p.load) > 0
-    );
-    if (!points.length) return null;
-
-    const latest = points[points.length - 1] as any;
-    const prior = points.slice(0, -1) as any[];
-    const increment = displayUnit === "kg" ? 2.5 : 5;
-    const tolerance = Math.max(increment, Number(latest.load) * 0.025);
-    const comparable = prior
-      .filter((p: any) =>
-        p.reps === latest.reps &&
-        Math.abs(Number(p.load) - Number(latest.load)) <= tolerance
-      )
-      .slice(-6);
-
-    let baseline: number | null = null;
-    let deltaPct: number | null = null;
-    let signal: "faster" | "normal" | "slower" | null = null;
-    if (comparable.length >= 2) {
-      baseline = comparable.reduce((s: number, p: any) => s + Number(p.velocity), 0) / comparable.length;
-      deltaPct = baseline > 0 ? ((Number(latest.velocity) - baseline) / baseline) * 100 : null;
-      if (deltaPct != null) signal = deltaPct >= 5 ? "faster" : deltaPct <= -5 ? "slower" : "normal";
-    }
-
-    const family = liftFamily(activeEx);
-    const mvt = family === "squat" ? 0.30 : family === "bench" ? 0.15 : family === "deadlift" ? 0.15 : null;
-    const singles = points.filter((p: any) => p.reps === 1 && Number(p.velocity) >= 0.05 && Number(p.velocity) <= 1.20);
-    const buckets = new Set(singles.map((p: any) => Math.round(Number(p.load) / increment)));
-    let predicted1rm: number | null = null;
-    let r2: number | null = null;
-
-    if (mvt != null && singles.length >= 5 && buckets.size >= 3) {
-      const xs = singles.map((p: any) => Number(p.velocity));
-      const ys = singles.map((p: any) => Number(p.load));
-      const xBar = xs.reduce((a, b) => a + b, 0) / xs.length;
-      const yBar = ys.reduce((a, b) => a + b, 0) / ys.length;
-      const ssX = xs.reduce((s, x) => s + (x - xBar) ** 2, 0);
-      const slope = ssX > 0
-        ? xs.reduce((s, x, i) => s + (x - xBar) * (ys[i] - yBar), 0) / ssX
-        : 0;
-      const intercept = yBar - slope * xBar;
-      const fitted = xs.map((x) => intercept + slope * x);
-      const ssTot = ys.reduce((s, y) => s + (y - yBar) ** 2, 0);
-      const ssRes = ys.reduce((s, y, i) => s + (y - fitted[i]) ** 2, 0);
-      r2 = ssTot > 0 ? Math.max(0, Math.min(1, 1 - ssRes / ssTot)) : null;
-      const projected = intercept + slope * mvt;
-      const observedMax = Math.max(...ys);
-      // Only surface a projection when the athlete's own data forms a sensible
-      // inverse load-velocity relationship and the extrapolation stays modest.
-      if (slope < 0 && r2 != null && r2 >= 0.70 && projected >= observedMax * 0.90 && projected <= observedMax * 1.25) {
-        predicted1rm = projected;
-      }
-    }
-
-    return {
-      latest,
-      comparableCount: comparable.length,
-      baseline,
-      deltaPct,
-      signal,
-      family,
-      mvt,
-      singlesCount: singles.length,
-      distinctLoads: buckets.size,
-      predicted1rm,
-      r2,
-    };
-  }, [lineData, activeEx, displayUnit]);
-
-  const exerciseOptions: SearchableOption[] = useMemo(
-    () =>
-      history.map((h: any) => {
-        const lf = liftFamily(h.name);
-        return {
-          value: h.name,
-          label: h.name,
-          group: exerciseGroup(h.name, h.points?.[0]?.category),
-          hint: `${fmtNum(conv(h.pr?.est_1rm ?? 0))} ${displayUnit}`,
-          keywords: [
-            lf ?? "",
-            h.points?.[0]?.muscle_group ?? "",
-            h.points?.[0]?.category ?? "",
-          ].filter(Boolean),
-          color: exerciseColor(h.name, h.points?.[0]?.muscle_group),
-        };
-      }),
-    [history, conv, displayUnit],
-  );
 
   const volumeData = useMemo(() => {
     const merged = new Map<string, { muscle: string; sets: number; color: string; label: string }>();
@@ -637,6 +440,33 @@ export function ClientAnalyticsDashboard({
               />
             </section>
 
+            <SectionErrorBoundary label="SBD total">
+              <SbdSplitCard
+                clientId={clientId}
+                displayUnit={displayUnit}
+                conv={conv}
+                header={
+                  <SectionHeading
+                    icon={<PieChart className="h-5 w-5" />}
+                    title="SBD Total"
+                    meta="Current maxes · last 16 weeks"
+                    tip={
+                      <InfoTip label="About SBD total" title="SBD Total" align="start">
+                        Your estimated total from your best competition squat,
+                        bench and deadlift over the last 16 weeks: the higher of
+                        your best logged e1RM (sets of 1–10, Epley) and your
+                        coach's max. A meet result fills in a missing lift. The
+                        split compares each lift's share of your total with the
+                        typical range for raw lifters, centered on JF Effect
+                        athletes' meet results. Leverages and weight class shift
+                        these, so treat it as a guide, not a rule.
+                      </InfoTip>
+                    }
+                  />
+                }
+              />
+            </SectionErrorBoundary>
+
             <SectionErrorBoundary label="Weight lifted">
             <WeightLiftedCard
               clientId={clientId}
@@ -648,82 +478,44 @@ export function ClientAnalyticsDashboard({
             />
             </SectionErrorBoundary>
 
-            <div
-              id="recovery"
-              className={`grid gap-4 scroll-mt-24 rounded-xl transition-shadow duration-500 ${
-                recoveryHighlight ? "ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-lg" : ""
-              }`}
-            >
-              <SectionErrorBoundary label="Recovery">
-              <RecoverySummaryCard
-                clientId={clientId}
-                rangeStart={filter.start}
-                rangeEnd={filter.end}
-                rangeLabel={filter.label}
-                prevStart={prevBlockStart}
-                prevEnd={prevBlockEnd}
+            <section aria-label="Lift Progress">
+              <SectionHeading
+                icon={<TrendingUp className="h-5 w-5" />}
+                title="Lift Progress"
+                meta={filter.label}
+                tip={
+                  <InfoTip label="About lift progress" title="Lift Progress" align="start">
+                    One point per session: its best set. Switch between e1RM
+                    (estimated one-rep max, Epley), Top set (heaviest weight),
+                    Volume (weight × reps), RPE and Velocity when logged. Touch
+                    or drag the chart to see a session; Details opens the set.
+                    The green dot marks the PR. The trend is fitted across all
+                    sessions, so one light day doesn't swing it.
+                  </InfoTip>
+                }
               />
-              </SectionErrorBoundary>
-            </div>
-
-            <SectionErrorBoundary label="Sleep">
-            <SleepInsightsCard
-              clientId={clientId}
-              blockStart={filter.start}
-              blockEnd={filter.end}
-              blockLabel={filter.label}
-            />
-            </SectionErrorBoundary>
-
-            <SectionErrorBoundary label="Bodyweight trend">
-            <BodyweightTrendCard
-              clientId={clientId}
-              displayUnit={displayUnit}
-              rangeStart={filter.start}
-              rangeEnd={filter.end}
-              rangeLabel={filter.label}
-            />
-            </SectionErrorBoundary>
-
-            <SectionErrorBoundary label="Cardio">
-            <CardioAnalyticsSection
-              clientId={clientId}
-              rangeStart={filter.start}
-              rangeEnd={filter.end}
-              rangeLabel={filter.label}
-            />
-            </SectionErrorBoundary>
-
-            <section aria-label="Planned vs Actual">
-              <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
-                {filter.label} · 5 most recent completed workouts in this range
-              </div>
-              <PlannedVsActualCard
-                clientId={clientId}
-                formula={analyticsSettings?.e1rm_formula}
-                workingRpeMin={analyticsSettings?.working_set_rpe_min}
-                startDate={filter.start}
-                endDate={filter.end}
-                blockId={activeBlockId}
+              <LiftProgressCard
+                history={history}
+                displayUnit={displayUnit}
+                conv={conv}
+                onOpenSet={setSelectedDot}
               />
             </section>
 
-            <section>
-              <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
-                <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
-                  <Trophy className="h-5 w-5 shrink-0 text-primary" />
-                  <span className="truncate">Recent ATPRs</span>
+            <section aria-label="Recent ATPRs">
+              <SectionHeading
+                icon={<Trophy className="h-5 w-5" />}
+                title="Recent ATPRs"
+                meta={filter.label}
+                action={prs.length > 0 ? viewAllPRsNode : undefined}
+                tip={
                   <InfoTip label="About recent ATPRs" title="Recent ATPRs" align="start">
                     Every card is a new estimated 1RM personal best: the logged
                     set, the previous best it beat, and the gain. Estimates use
                     the Epley formula — weight × (1 + reps ÷ 30).
                   </InfoTip>
-                </h2>
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs font-semibold text-muted-foreground">{filter.label}</span>
-                  {prs.length > 0 && viewAllPRsNode}
-                </div>
-              </div>
+                }
+              />
               {prs.length === 0 ? (
                 <Card className="p-6 text-base text-muted-foreground">
                   No new PRs in the selected range.
@@ -742,317 +534,19 @@ export function ClientAnalyticsDashboard({
               )}
             </section>
 
-            <section>
-              <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
-                <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
-                  <TrendingUp className="h-5 w-5 shrink-0 text-primary" />
-                  <span className="truncate">Exercise Progress</span>
-                  <InfoTip label="About exercise progress" title="Exercise Progress" align="start">
-                    Each point is a logged set for the selected exercise. Switch
-                    between Est 1RM (estimated one-rep max, Epley formula),
-                    Weight, Effort (RPE/RIR), and Velocity when mean concentric
-                    velocity has been logged. Compare velocity at similar loads over time: faster at the same load is a useful readiness/strength signal, not a standalone 1RM prediction. Tap a point for full set details — the green dot
-                    marks the current PR.
-                  </InfoTip>
-                </h2>
-                <ToggleGroup
-                  type="single"
-                  value={chartMetric}
-                  onValueChange={(v) => v && setChartMetric(v as any)}
-                  className="rounded-lg border border-border bg-card p-0.5"
-                >
-                  <ToggleGroupItem value="est" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                    Est 1RM
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="load" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                    Weight
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="effort" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                    Effort
-                  </ToggleGroupItem>
-                  {lineData.some((d: any) => d.velocity != null) && (
-                    <ToggleGroupItem value="velocity" className="h-8 px-3 text-[11px] font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
-                      Velocity
-                    </ToggleGroupItem>
-                  )}
-                </ToggleGroup>
-              </div>
-              <Card className="border-border/80 bg-card p-4">
-                <div className="mb-4">
-                  <SearchableSelect
-                    options={exerciseOptions}
-                    value={activeEx}
-                    onChange={setSelectedEx}
-                    placeholder="Select exercise"
-                    searchPlaceholder="Search exercise, lift, or muscle…"
-                    emptyText="No exercises match your search."
-                    triggerClassName="h-10"
-                    ariaLabel="Select exercise for 1RM chart"
-                  />
-                </div>
-
-                {activeSeries ? (
-                  <>
-                    <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2 sm:flex sm:flex-wrap sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                          <span
-                            aria-hidden
-                            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ background: activeColor }}
-                          />
-                          <span className="truncate">{activeEx}</span>
-                        </div>
-                        <div className="mt-0.5 text-2xl font-black text-foreground">
-                          {fmtNum(conv(activePr?.est_1rm ?? 0))}{" "}
-                          <span className="text-xs font-semibold uppercase text-muted-foreground">
-                            {displayUnit} · PR
-                          </span>
-                        </div>
-                        {activePr?.date && (
-                          <div className="text-xs font-medium text-muted-foreground">
-                            Set on {format(new Date(activePr.date), "MMM d, yyyy")}
-                          </div>
-                        )}
-                      </div>
-                      <div className="shrink-0 text-right text-xs font-semibold text-muted-foreground">
-                        {activeSeries.points.length}{" "}
-                        {activeSeries.points.length === 1 ? "logged set" : "logged sets"}
-                      </div>
-                    </div>
-                    {velocityInsight && (
-                      <div className="mb-4 rounded-xl border border-border bg-muted/20 p-3">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                              Velocity readiness
-                            </div>
-                            <div className="mt-1 text-sm font-bold text-foreground">
-                              {velocityInsight.signal === "faster"
-                                ? "Moving faster than your baseline"
-                                : velocityInsight.signal === "slower"
-                                  ? "Moving slower than your baseline"
-                                  : velocityInsight.signal === "normal"
-                                    ? "Right on your normal baseline"
-                                    : "Building your baseline"}
-                            </div>
-                            <div className="mt-0.5 text-xs text-muted-foreground">
-                              Latest: {Number(velocityInsight.latest.velocity).toFixed(2)} m/s at {fmtNum(velocityInsight.latest.load)} {displayUnit} × {velocityInsight.latest.reps}
-                              {velocityInsight.deltaPct != null && velocityInsight.baseline != null
-                                ? ` · ${velocityInsight.deltaPct >= 0 ? "+" : ""}${velocityInsight.deltaPct.toFixed(1)}% vs ${velocityInsight.comparableCount} matched prior sets`
-                                : " · log this same load/reps a few times for a strength-readiness comparison"}
-                            </div>
-                          </div>
-                          {velocityInsight.predicted1rm != null && (
-                            <div className="shrink-0 text-right">
-                              <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                                Velocity 1RM estimate
-                              </div>
-                              <div className="text-lg font-black text-foreground">
-                                {fmtNum(velocityInsight.predicted1rm)} {displayUnit}
-                              </div>
-                              <div className="text-[10px] text-muted-foreground">
-                                personal load-velocity profile · R² {velocityInsight.r2?.toFixed(2)}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        {velocityInsight.predicted1rm == null && velocityInsight.family && (
-                          <div className="mt-2 text-[11px] text-muted-foreground">
-                            1RM profile needs at least 5 velocity-tracked singles across 3+ loads with a clean load-velocity relationship.
-                            Current profile: {velocityInsight.singlesCount} singles · {velocityInsight.distinctLoads} load levels.
-                          </div>
-                        )}
-                        <div className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                          Use the same velocity device and setup each time. Mean concentric velocity is most useful here as an athlete-vs-self signal at matched load/reps; it does not replace RPE or competition-specific judgment.
-                        </div>
-                      </div>
-                    )}
-                    {lineData.length === 1 ? (
-                      <div className="flex h-56 flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/40 px-6 text-center">
-                        <div
-                          className="mb-2 h-3 w-3 rounded-full"
-                          style={{ background: activeColor }}
-                        />
-                        <div className="text-2xl font-black text-foreground">
-                          {lineData[0].est} {displayUnit}
-                        </div>
-                        <div className="mt-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                          First logged estimate
-                        </div>
-                        <p className="mt-2 max-w-xs text-xs text-muted-foreground">
-                          Log a few more sessions to build a progress trend.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="h-72">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart
-                            data={lineData}
-                            margin={{ top: 12, right: 12, left: -10, bottom: 4 }}
-                            onClick={handleDotClick}
-                            style={{ cursor: "pointer" }}
-                          >
-                            <defs>
-                              <linearGradient
-                                id={`fill-${activeEx.replace(/\W+/g, "")}`}
-                                x1="0" y1="0" x2="0" y2="1"
-                              >
-                                <stop offset="0%" stopColor={activeColor} stopOpacity={0.35} />
-                                <stop offset="100%" stopColor={activeColor} stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
-                            <XAxis
-                              dataKey="date"
-                              stroke={axisColor}
-                              fontSize={11}
-                              tickMargin={6}
-                              interval="preserveStartEnd"
-                              minTickGap={20}
-                            />
-                            <YAxis
-                              stroke={axisColor}
-                              fontSize={11}
-                              tickMargin={4}
-                              domain={chartMetric === "effort" ? [0, 10] : chartMetric === "velocity" ? [0, "auto"] : ["auto", "auto"]}
-                              tickFormatter={(v) => fmtNum(v)}
-                              width={40}
-                            />
-                            <Tooltip
-                              cursor={{
-                                stroke: `color-mix(in oklab, ${activeColor} 50%, transparent)`,
-                                strokeWidth: 1,
-                              }}
-                              wrapperStyle={{ outline: "none" }}
-                              content={({ active, payload }) => {
-                                if (!active || !payload?.length) return null;
-                                const d: any = payload[0].payload;
-                                const metricLabel =
-                                  chartMetric === "est" ? "est 1RM"
-                                  : chartMetric === "load" ? "top set"
-                                  : chartMetric === "velocity" ? "mean concentric velocity"
-                                  : effortLabel.toLowerCase();
-                                const effortDisplay =
-                                  d.effortSource === "RIR"
-                                    ? `${d.rir} RIR`
-                                    : d.effortSource === "RPE"
-                                      ? `RPE ${d.rpe}`
-                                      : "—";
-                                const metricValue = chartMetric === "effort"
-                                  ? effortDisplay
-                                  : chartMetric === "velocity"
-                                    ? (d.velocity != null ? `${Number(d.velocity).toFixed(2)} m/s` : "—")
-                                    : `${fmtNum(d[chartMetric])} ${displayUnit}`;
-                                return (
-                                  <div className="max-w-[220px] rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
-                                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                      <span
-                                        aria-hidden
-                                        className="h-2 w-2 rounded-full"
-                                        style={{ background: activeColor }}
-                                      />
-                                      {d.fullDate}
-                                      {d.time && (
-                                        <span className="font-medium normal-case tracking-normal">
-                                          · {d.time}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="mt-1 font-extrabold text-foreground">
-                                      {metricValue}{" "}
-                                      <span className="text-xs font-medium text-muted-foreground">
-                                        {metricLabel}
-                                      </span>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {fmtNum(d.load)} {displayUnit} × {d.reps}
-                                      {chartMetric !== "effort" && (d.effortSource === "RPE"
-                                        ? ` · RPE ${d.rpe}`
-                                        : d.effortSource === "RIR"
-                                          ? ` · ${d.rir} RIR`
-                                          : "")}
-                                    </div>
-                                    {chartMetric === "est" && activePr &&
-                                      d.est === Number(conv(activePr.est_1rm).toFixed(1)) && (
-                                      <div
-                                        className="mt-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-                                        style={{
-                                          background: `color-mix(in oklab, ${ANALYTICS_COLORS.green} 18%, transparent)`,
-                                          color: ANALYTICS_COLORS.green,
-                                        }}
-                                      >
-                                        Current PR
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }}
-                            />
-                            <Area
-                              type="monotone"
-                              dataKey={chartMetric}
-                              stroke="none"
-                              fill={`url(#fill-${activeEx.replace(/\W+/g, "")})`}
-                              connectNulls
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey={chartMetric}
-                              stroke={activeColor}
-                              strokeWidth={2.5}
-                              dot={{ r: 3.5, fill: activeColor, strokeWidth: 0 }}
-                              activeDot={{ r: 8, strokeWidth: 2, stroke: "var(--background)", fill: activeColor, cursor: "pointer" }}
-                              connectNulls
-                            />
-                            {chartMetric === "est" && activePr && lineData.length > 1 && (
-                              <ReferenceDot
-                                x={lineData.findIndex(
-                                  (d) => d.est === Number(conv(activePr.est_1rm).toFixed(1)),
-                                ) === -1
-                                  ? undefined
-                                  : lineData[
-                                      lineData.findIndex(
-                                        (d) =>
-                                          d.est ===
-                                          Number(conv(activePr.est_1rm).toFixed(1)),
-                                      )
-                                    ]?.date}
-                                y={Number(conv(activePr.est_1rm).toFixed(1))}
-                                r={5}
-                                fill={ANALYTICS_COLORS.green}
-                                stroke="var(--background)"
-                                strokeWidth={2}
-                                ifOverflow="extendDomain"
-                                isFront
-                              />
-                            )}
-                          </ComposedChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="py-12 text-center text-sm text-muted-foreground">
-                    Select an exercise to see progress.
-                  </div>
-                )}
-              </Card>
-            </section>
-
-            <section>
-              <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
-                <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
-                  <Dumbbell className="h-5 w-5 shrink-0 text-primary" />
-                  <span className="truncate">Volume by Muscle Group</span>
+            <section aria-label="Volume by Muscle Group">
+              <SectionHeading
+                icon={<Dumbbell className="h-5 w-5" />}
+                title="Volume by Muscle"
+                meta={filter.label}
+                tip={
                   <InfoTip label="About volume by muscle group" title="Volume by Muscle Group" align="start">
                     Working sets per muscle group in this range, based on each
                     exercise's muscle tag. Exercises without a tag land in
                     Other — it is not a real muscle group.
                   </InfoTip>
-                </h2>
-                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{filter.label}</span>
-              </div>
+                }
+              />
               {volumeData.length === 0 ? (
                 <Card className="p-6 text-sm text-muted-foreground">
                   No working sets logged in this period.
@@ -1138,6 +632,20 @@ export function ClientAnalyticsDashboard({
               )}
             </section>
 
+            <section aria-label="Planned vs Actual">
+              <div className="mb-1 text-[11px] font-semibold text-muted-foreground">
+                {filter.label} · 5 most recent completed workouts in this range
+              </div>
+              <PlannedVsActualCard
+                clientId={clientId}
+                formula={analyticsSettings?.e1rm_formula}
+                workingRpeMin={analyticsSettings?.working_set_rpe_min}
+                startDate={filter.start}
+                endDate={filter.end}
+                blockId={activeBlockId}
+              />
+            </section>
+
             <SectionErrorBoundary label="Powerlifting exposure">
             <PowerliftingExposureSection
               clientId={clientId}
@@ -1145,6 +653,52 @@ export function ClientAnalyticsDashboard({
               results={results as any[]}
               displayUnit={displayUnit}
               blockId={activeBlockId}
+            />
+            </SectionErrorBoundary>
+
+            <div
+              id="recovery"
+              className={`grid gap-4 scroll-mt-24 rounded-xl transition-shadow duration-500 ${
+                recoveryHighlight ? "ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-lg" : ""
+              }`}
+            >
+              <SectionErrorBoundary label="Recovery">
+              <RecoverySummaryCard
+                clientId={clientId}
+                rangeStart={filter.start}
+                rangeEnd={filter.end}
+                rangeLabel={filter.label}
+                prevStart={prevBlockStart}
+                prevEnd={prevBlockEnd}
+              />
+              </SectionErrorBoundary>
+            </div>
+
+            <SectionErrorBoundary label="Sleep">
+            <SleepInsightsCard
+              clientId={clientId}
+              blockStart={filter.start}
+              blockEnd={filter.end}
+              blockLabel={filter.label}
+            />
+            </SectionErrorBoundary>
+
+            <SectionErrorBoundary label="Bodyweight trend">
+            <BodyweightTrendCard
+              clientId={clientId}
+              displayUnit={displayUnit}
+              rangeStart={filter.start}
+              rangeEnd={filter.end}
+              rangeLabel={filter.label}
+            />
+            </SectionErrorBoundary>
+
+            <SectionErrorBoundary label="Cardio">
+            <CardioAnalyticsSection
+              clientId={clientId}
+              rangeStart={filter.start}
+              rangeEnd={filter.end}
+              rangeLabel={filter.label}
             />
             </SectionErrorBoundary>
 
@@ -1176,9 +730,30 @@ export function ClientAnalyticsDashboard({
   );
 }
 
-// Recharts is imported but LineChart is unused in this file; keep parity with
-// the original imports so tree-shaking behaves the same.
-void LineChart;
+/** Section title on its own line, so a long range label can never squeeze it. */
+function SectionHeading({
+  icon, title, tip, meta, action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  tip?: React.ReactNode;
+  meta?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="flex min-w-0 items-center gap-2 text-base font-black uppercase tracking-wider text-foreground">
+          <span className="shrink-0 text-primary">{icon}</span>
+          <span className="truncate">{title}</span>
+          {tip}
+        </h2>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+      {meta && <div className="mt-0.5 truncate text-xs font-semibold text-muted-foreground">{meta}</div>}
+    </div>
+  );
+}
 
 function StatCard({
   icon, label, value, sublabel, color, tip,

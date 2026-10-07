@@ -37,7 +37,7 @@ export type MessageAttachment = {
   request_note?: string;
   checkin_submission_id?: string;
   checkin_occurrence_id?: string | null;
-  checkin_task_type?: "weekly_checkin" | "nutrition_review";
+  checkin_task_type?: "weekly_checkin";
 };
 
 export type MessageReplyPreview = {

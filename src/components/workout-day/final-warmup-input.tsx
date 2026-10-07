@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Flame, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
@@ -10,17 +10,23 @@ import { WARMUP_MAX_REPS } from "@/lib/load-suggestion";
 const sb = supabase as any;
 const MAX_WARMUPS = 8;
 
-/** Logged warm-up sets for one exercise card (pl_warmup_sets — never counted as work). */
-export function useWarmupSets(rowId: string, clientId: string | null | undefined) {
+/**
+ * Logged warm-up sets for one exercise card (pl_warmup_sets — never counted as
+ * work). Keyed to the workout instance like the logged sets, so a program day
+ * that repeats weekly doesn't show last week's warm-ups.
+ */
+export function useWarmupSets(rowId: string, clientId: string | null | undefined, scheduledWorkoutId: string | null = null) {
   const qc = useQueryClient();
-  const key = ["pl-warmup-sets", rowId, clientId ?? null];
+  const key = ["pl-warmup-sets", rowId, clientId ?? null, scheduledWorkoutId];
   const { data } = useQuery({
     queryKey: key,
     enabled: !!clientId && !!rowId,
     staleTime: 60_000,
     queryFn: async (): Promise<WarmupSetRow[]> => {
-      const { data } = await sb.from("pl_warmup_sets").select("id,load,unit,reps,rpe,created_at")
-        .eq("row_id", rowId).eq("client_id", clientId).order("created_at", { ascending: true }).throwOnError();
+      let q = sb.from("pl_warmup_sets").select("id,load,unit,reps,rpe,created_at")
+        .eq("row_id", rowId).eq("client_id", clientId);
+      q = scheduledWorkoutId ? q.eq("scheduled_workout_id", scheduledWorkoutId) : q.is("scheduled_workout_id", null);
+      const { data } = await q.order("created_at", { ascending: true }).throwOnError();
       return ((data ?? []) as any[]).map(normalizeWarmupRow).filter((r): r is WarmupSetRow => !!r);
     },
   });
@@ -35,7 +41,7 @@ export function useWarmupSets(rowId: string, clientId: string | null | undefined
           .eq("id", input.id).eq("client_id", clientId).throwOnError();
       } else {
         if (sets.length >= MAX_WARMUPS) { toast.error(`Up to ${MAX_WARMUPS} warm-up sets`); return; }
-        await sb.from("pl_warmup_sets").insert({ row_id: rowId, client_id: clientId, load: input.load, unit: input.unit, reps: input.reps, rpe: input.rpe }).throwOnError();
+        await sb.from("pl_warmup_sets").insert({ row_id: rowId, client_id: clientId, scheduled_workout_id: scheduledWorkoutId, load: input.load, unit: input.unit, reps: input.reps, rpe: input.rpe }).throwOnError();
       }
       await refresh();
     } catch (e) { fail(e); }
@@ -98,6 +104,18 @@ export function WarmupSection({
   const [reps, setReps] = useState("");
   const [rpe, setRpe] = useState<number | null>(null);
   const [seeded, setSeeded] = useState<string | null>(null);
+  const loadRef = useRef<HTMLInputElement | null>(null);
+
+  // A blank new warm-up starts with the weight field focused. Retried once the
+  // opening menu has finished closing (its focus trap would otherwise win).
+  const hasSeed = !!seed;
+  useEffect(() => {
+    if (form !== "new" || hasSeed) return;
+    const focus = () => { if (document.activeElement !== loadRef.current) loadRef.current?.focus(); };
+    const raf = requestAnimationFrame(focus);
+    const t = setTimeout(focus, 260);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); };
+  }, [form, hasSeed]);
 
   // Seed the fields once each time the form opens (new or a specific warm-up).
   if (form !== seeded) {
@@ -144,67 +162,80 @@ export function WarmupSection({
       )}
 
       {form ? (
-        <div className="mt-1.5 space-y-2 rounded-lg border border-border bg-card px-2.5 py-2" data-testid="warmup-form">
+        <div className="mt-2 space-y-2 rounded-xl border border-orange-500/30 bg-orange-500/[0.04] p-2.5" data-testid="warmup-form">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-bold">
-              <Flame className="h-3.5 w-3.5 text-orange-500" aria-hidden="true" />
-              {editing ? "Edit warm-up" : "Warm-up set"} <span className="font-medium text-muted-foreground">(optional)</span>
+            <div className="flex items-center gap-1.5 text-sm font-bold">
+              <Flame className="h-4 w-4 text-orange-500" aria-hidden="true" />
+              {editing ? "Edit warm-up" : "Last warm-up"}
+              <span className="text-xs font-medium text-muted-foreground">· optional</span>
             </div>
-            <button type="button" onClick={() => onFormChange(null)} aria-label="Cancel" className="rounded-full p-1 text-muted-foreground hover:bg-muted">
-              <X className="h-3.5 w-3.5" />
+            <button type="button" onClick={() => onFormChange(null)} aria-label="Cancel" className="-mr-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
+              <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex items-end gap-2">
-            <label className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Weight ({unit})
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => { e.preventDefault(); void save(); }}
+          >
+            <label className="relative min-w-0 flex-[1.4]">
+              <span className="sr-only">Warm-up weight in {unit}</span>
               <input
                 inputMode="decimal"
+                enterKeyHint="next"
                 value={load}
-                onChange={(e) => setLoad(e.target.value)}
-                className="mt-0.5 h-10 w-full rounded-md border border-input bg-background px-2 text-base font-bold tabular-nums text-foreground"
+                ref={loadRef}
+                placeholder="0"
+                onChange={(e) => setLoad(e.target.value.replace(/[^0-9.,]/g, ""))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.form?.elements.namedItem("warmup-reps") as HTMLInputElement | null)?.focus(); }
+                }}
+                className="h-11 w-full rounded-lg border border-input bg-background pl-3 pr-9 text-center text-lg font-bold tabular-nums text-foreground placeholder:text-muted-foreground/40"
                 aria-label={`Warm-up weight in ${unit}`}
               />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">{unit}</span>
             </label>
-            <span className="pb-2.5 text-sm font-bold text-muted-foreground">×</span>
-            <label className="w-16 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Reps
+            <span className="text-base font-bold text-muted-foreground" aria-hidden>×</span>
+            <label className="relative min-w-0 flex-1">
+              <span className="sr-only">Warm-up reps</span>
               <input
+                name="warmup-reps"
                 inputMode="numeric"
+                enterKeyHint="done"
                 value={reps}
+                placeholder="0"
                 onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
-                className="mt-0.5 h-10 w-full rounded-md border border-input bg-background px-2 text-base font-bold tabular-nums text-foreground"
+                className="h-11 w-full rounded-lg border border-input bg-background pl-3 pr-11 text-center text-lg font-bold tabular-nums text-foreground placeholder:text-muted-foreground/40"
                 aria-label="Warm-up reps"
               />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">reps</span>
             </label>
+          </form>
+          <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="How the warm-up felt">
+            {FEEL.map((f) => (
+              <button
+                key={f.rpe}
+                type="button"
+                onClick={() => setRpe(rpe === f.rpe ? null : f.rpe)}
+                aria-pressed={rpe === f.rpe}
+                className={cn(
+                  "flex h-11 flex-col items-center justify-center rounded-lg border leading-tight transition active:scale-[0.98]",
+                  rpe === f.rpe ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-muted",
+                )}
+              >
+                <span className="text-sm font-bold">{f.label}</span>
+                <span className="text-[11px] font-medium opacity-70">RPE {f.rpe}</span>
+              </button>
+            ))}
           </div>
-          <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">How did it feel? (optional)</div>
-            <div className="flex gap-1.5" role="group" aria-label="How the warm-up felt">
-              {FEEL.map((f) => (
-                <button
-                  key={f.rpe}
-                  type="button"
-                  onClick={() => setRpe(rpe === f.rpe ? null : f.rpe)}
-                  aria-pressed={rpe === f.rpe}
-                  className={cn(
-                    "h-9 flex-1 rounded-md border text-xs font-bold transition",
-                    rpe === f.rpe ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-muted",
-                  )}
-                >
-                  {f.label} <span className="font-medium opacity-70">RPE {f.rpe}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="text-[10px] leading-snug text-muted-foreground">How your last warm-up moves shows how today feels, so your top-set number adjusts before you lift it. Not counted in volume, records or points.</p>
           <button
             type="button"
             onClick={() => void save()}
             disabled={!valid}
-            className="h-9 w-full rounded-md bg-primary text-xs font-bold text-primary-foreground disabled:opacity-40"
+            className="h-11 w-full rounded-lg bg-primary text-sm font-bold text-primary-foreground transition active:scale-[0.99] disabled:opacity-40"
           >
             {editing ? "Save warm-up" : "Add warm-up"}
           </button>
+          <p className="text-center text-[11px] leading-snug text-muted-foreground">Sharpens today's suggestion. Not counted in volume, records or points.</p>
         </div>
       ) : (
         showPrompt && sets.length === 0 && (

@@ -1,14 +1,25 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { PageHeader } from "@/components/app-shell";
+import { CommunityScreen } from "@/components/community/community-screen";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 
 /**
- * The client community lives inside Workouts (`/portal/workouts#community`).
- * This path stays so older links, toasts and push notifications still land
- * in the right place (a `#post=<id>` is carried over).
+ * The client community: its own page, opened from Home (and the header "🔥 new"
+ * pill, push notifications, the post-share toast). Back always returns to Home,
+ * and Home stays the active tab, so it never strands anyone in Workouts.
+ * `#post=<id>` opens a post straight away.
  */
 export const Route = createFileRoute("/_authenticated/portal/community")({
-  beforeLoad: ({ location }) => {
-    const hash = typeof location.hash === "string" ? location.hash.replace(/^#/, "") : "";
-    const post = hash.match(/post=([0-9a-f-]{36})/i)?.[1];
-    throw redirect({ to: "/portal/workouts", hash: post ? `community&post=${post}` : "community", replace: true });
-  },
+  head: () => ({ meta: [{ title: "Community" }] }),
+  component: PortalCommunity,
 });
+
+function PortalCommunity() {
+  const { isImpersonating } = useClientImpersonation();
+  return (
+    <>
+      <PageHeader title="Community" subtitle="What the crew is lifting" backTo="/portal" backLabel="Home" />
+      <CommunityScreen canShare={!isImpersonating} />
+    </>
+  );
+}

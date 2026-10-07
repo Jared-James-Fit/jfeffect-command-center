@@ -11,15 +11,19 @@ import {
   type CommunityComment,
   type CommunityFeedPage,
   type CommunityActivity,
+  type CommunityAuthor,
+  type CommunitySeries,
+  type CommunityMember,
   type CommunityPost,
   type CommunityPostDetail,
   type CommunityProfile,
   type CommunityVisibility,
   type ReactionKey,
   type WorkoutShareStats,
+  type WinsStats,
 } from "@/lib/community";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
-import { removeCommunityFiles, signCommunityPaths, type UploadedMedia } from "@/lib/community-media";
+import { removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, type UploadedMedia } from "@/lib/community-media";
 
 const db = supabase as any;
 
@@ -182,6 +186,8 @@ export type MyPostRow = {
   media_path: string | null;
   media_thumb_path: string | null;
   media_type: "image" | "video" | null;
+  locked_in_at: string | null;
+  hide_loads: boolean;
 };
 
 /** The post (if any) already made for this workout — so reopening Share edits it instead of duplicating. */
@@ -193,7 +199,7 @@ export function useMyPostForCompletion(completionId: string | null | undefined, 
     queryFn: async (): Promise<MyPostRow | null> => {
       const { data, error } = await db
         .from("community_posts")
-        .select("id, caption, visibility, media_path, media_thumb_path, media_type")
+        .select("id, caption, visibility, media_path, media_thumb_path, media_type, locked_in_at, hide_loads")
         .eq("completion_id", completionId)
         .maybeSingle();
       if (error) throw error;
@@ -207,6 +213,8 @@ export type SavePostInput = {
   caption: string;
   visibility: CommunityVisibility;
   media: { action: "keep" } | { action: "remove" } | ({ action: "set" } & UploadedMedia);
+  /** Hide loads from everyone but you. Omitted = keep the current setting. */
+  hideLoads?: boolean;
 };
 
 export async function saveCommunityPost(input: SavePostInput): Promise<string> {
@@ -221,6 +229,7 @@ export async function saveCommunityPost(input: SavePostInput): Promise<string> {
     _media_type: m.action === "set" ? m.media_type : null,
     _media_width: m.action === "set" ? m.media_width : null,
     _media_height: m.action === "set" ? m.media_height : null,
+    _hide_loads: input.hideLoads ?? null,
   });
   if (error) throw error;
   return (data as { id: string }).id;
@@ -246,6 +255,7 @@ export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-my-post"] });
   qc.invalidateQueries({ queryKey: ["community-recent-completions"] });
   qc.invalidateQueries({ queryKey: ["community-profile"] });
+  qc.invalidateQueries({ queryKey: ["community-members"] });
 }
 
 /* ---- post detail / profile ------------------------------------------ */
@@ -285,6 +295,105 @@ export function useSetBio(userId: string | null) {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: communityKeys.profile(userId) }),
+  });
+}
+
+/* ---- coach notes + the weekly series ---------------------------------- */
+
+export type SeriesItem = { id: string; mentor: string; body: string; quote: string | null; quote_source: string | null };
+export type SeriesOverview = {
+  paused: boolean;
+  author: CommunityAuthor | null;
+  next: Partial<Record<CommunitySeries, SeriesItem>>;
+  library: Record<CommunitySeries, number>;
+  history: { id: string; series: CommunitySeries; created_at: string; mentor: string | null; caption: string | null }[];
+  this_week: Record<CommunitySeries, boolean>;
+  /** Wednesday Wins is written from last week's training: what it would say right now. */
+  wins_preview: { body: string; featured: number; trainers: number; week_of: string; next_week: boolean; stats?: WinsStats | null } | null;
+};
+
+export function useSeriesOverview(enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-series"],
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<SeriesOverview> => {
+      const { data, error } = await db.rpc("community_series_overview");
+      if (error) throw error;
+      return data as SeriesOverview;
+    },
+  });
+}
+
+/** Every coach-side write here refreshes the overview and the feed. */
+export function useSeriesAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { kind: "pause"; paused: boolean } | { kind: "publish"; series: CommunitySeries } | { kind: "item"; id: string; body: string; active?: boolean } | { kind: "note"; body: string }) => {
+      const call =
+        a.kind === "pause"
+          ? db.rpc("community_series_set_paused", { _paused: a.paused })
+          : a.kind === "publish"
+            ? db.rpc("community_publish_series", { _series: a.series, _force: true })
+            : a.kind === "item"
+              ? db.rpc("community_series_update_item", { _id: a.id, _body: a.body, _active: a.active ?? true })
+              : db.rpc("community_create_note", { _body: a.body });
+      const { data, error } = await call;
+      if (error) throw error;
+      return data as { status?: string } | null;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["community-series"] });
+      invalidateCommunity(qc);
+    },
+  });
+}
+
+/** Edit a published note's text (author or staff). */
+export function useUpdateNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { postId: string; body: string }) => {
+      const { error } = await db.rpc("community_update_note", { _post_id: a.postId, _body: a.body });
+      if (error) throw error;
+    },
+    onSuccess: (_d, a) => {
+      invalidateCommunity(qc);
+      qc.invalidateQueries({ queryKey: communityKeys.post(a.postId) });
+    },
+  });
+}
+
+/** Everyone in the community but you (Crew tab). */
+export function useCommunityMembers(enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-members"],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<CommunityMember[]> => {
+      const { data, error } = await db.rpc("community_members");
+      if (error) throw error;
+      return (data ?? []) as CommunityMember[];
+    },
+  });
+}
+
+/** Set (File) or clear (null) your own community photo. Old file is deleted. */
+export function useSetCommunityAvatar(userId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File | null) => {
+      if (!userId) throw new Error("Not signed in");
+      const path = file ? await uploadCommunityAvatar(file, userId) : null;
+      const { data, error } = await db.rpc("community_set_avatar", { _path: path });
+      if (error) {
+        if (path) await db.storage.from("avatars").remove([path]).catch(() => {});
+        throw error;
+      }
+      const previous = (data as { previous?: string | null } | null)?.previous;
+      if (previous && previous !== path) await db.storage.from("avatars").remove([previous]).catch(() => {});
+    },
+    onSuccess: () => invalidateCommunity(qc),
   });
 }
 

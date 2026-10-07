@@ -40,7 +40,8 @@ export function TypedValueInput({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const committingRef = useRef(false);
   const hasValue = value !== "";
-  const cellHeight = focusMode ? "h-9" : "h-8";
+  // 44px on phones (thumb target, 16px text = no iOS focus zoom), tighter on desktop.
+  const cellHeight = focusMode ? "h-12 sm:h-10 text-lg sm:text-base" : "h-11 sm:h-8 text-base sm:text-sm";
 
   const start = () => {
     if (disabled) return;
@@ -98,7 +99,6 @@ export function TypedValueInput({
             className={cn(
               "w-full rounded-md border border-primary bg-background px-2 text-center text-sm font-semibold tabular-nums text-foreground outline-none ring-2 ring-primary/30 placeholder:text-muted-foreground/50",
               cellHeight,
-              focusMode && "text-base",
               error && "border-destructive ring-destructive/30",
             )}
           />
@@ -112,7 +112,6 @@ export function TypedValueInput({
           className={cn(
             "flex w-full items-center justify-center whitespace-nowrap rounded-md border px-2 text-sm font-medium tabular-nums transition-colors",
             cellHeight,
-            focusMode && "text-base",
             hasValue
               ? "border-border/60 bg-muted/40 text-foreground"
               : "border-blue-500/40 bg-blue-500/10 text-muted-foreground",

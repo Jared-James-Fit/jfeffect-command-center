@@ -6,6 +6,7 @@ import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
 import { formatWorkoutDuration, postTimeLabel } from "@/lib/community";
 import { useRecentCompletions, type RecentCompletion } from "@/lib/community.queries";
+import { audienceDoneLabel } from "@/components/community/audience-picker";
 
 const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
 
@@ -16,26 +17,36 @@ export const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%
  * share editor for it. Means nobody has to wait for their next workout to
  * post, and an empty feed always has a one-tap way to fill it.
  */
-export function ShareWorkoutButton({ unit, className, label = "Share a workout", variant = "pill" }: { unit: "kg" | "lb"; className?: string; label?: string; variant?: "pill" | "block" }) {
+export function ShareWorkoutButton({ unit, className, label = "Share a workout", variant = "pill" }: { unit: "kg" | "lb"; className?: string; label?: string; variant?: "pill" | "block" | "bubble" }) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<RecentCompletion | null>(null);
   const { data: sessions, isLoading } = useRecentCompletions(open);
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={cn(
-          "inline-flex items-center justify-center gap-1.5 font-black text-white shadow-md shadow-fuchsia-500/20 transition active:scale-[0.97]",
-          SHARE_GRADIENT,
-          variant === "pill" ? "h-9 rounded-full px-4 text-[13px]" : "h-12 w-full rounded-2xl text-[15px]",
-          className,
-        )}
-      >
-        <Plus className="h-4 w-4" strokeWidth={3} />
-        {label}
-      </button>
+      {variant === "bubble" ? (
+        // Instagram "your story" bubble: first item in the Home strip.
+        <button type="button" onClick={() => setOpen(true)} className={cn("flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95", className)} aria-label={label}>
+          <span className={cn("grid h-[61px] w-[61px] place-items-center rounded-full text-white shadow-md shadow-fuchsia-500/20", SHARE_GRADIENT)}>
+            <Plus className="h-6 w-6" strokeWidth={3} />
+          </span>
+          <span className="w-full truncate text-center text-[11px] font-bold">{label}</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={cn(
+            "inline-flex items-center justify-center gap-1.5 font-black text-white shadow-md shadow-fuchsia-500/20 transition active:scale-[0.97]",
+            SHARE_GRADIENT,
+            variant === "pill" ? "h-9 rounded-full px-4 text-[13px]" : "h-12 w-full rounded-2xl text-[15px]",
+            className,
+          )}
+        >
+          <Plus className="h-4 w-4" strokeWidth={3} />
+          {label}
+        </button>
+      )}
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" hideCloseButton className="max-h-[80dvh] rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
@@ -82,7 +93,7 @@ export function ShareWorkoutButton({ unit, className, label = "Share a workout",
                     </div>
                     {s.post_id ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
-                        <Check className="h-3 w-3" /> {s.visibility === "private" ? "Saved" : "Posted"}
+                        <Check className="h-3 w-3" /> {audienceDoneLabel(s.visibility ?? "community")}
                       </span>
                     ) : null}
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />

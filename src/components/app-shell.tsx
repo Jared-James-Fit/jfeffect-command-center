@@ -1500,6 +1500,8 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }:
         : null;
     const active =
       pathname === item.to ||
+      // Community opens from Home, so Home stays lit while it's open.
+      (item.to === "/portal" && pathname === "/portal/community") ||
       (tabAlias != null &&
         pathname === tabAlias.path &&
         (search?.tab === tabAlias.tab ||

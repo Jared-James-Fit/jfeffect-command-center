@@ -24,7 +24,14 @@ export function reactionEmoji(key: string | null | undefined): string | null {
   return REACTIONS.find((r) => r.key === key)?.emoji ?? null;
 }
 
-export type CommunityVisibility = "community" | "private";
+export type CommunityVisibility = "community" | "coach" | "private";
+
+/** Who a post is for. "JF crew" = every active JF Effect client + coaches, never the public. */
+export const AUDIENCES: { key: CommunityVisibility; label: string; hint: string }[] = [
+  { key: "community", label: "JF crew", hint: "Only JF Effect clients and coaches see it" },
+  { key: "coach", label: "My coach", hint: "Just you and your coach" },
+  { key: "private", label: "Only me", hint: "Saved to your profile, nobody else sees it" },
+];
 
 export type RecordScope = "atpr" | "program_pr" | "block_pr";
 
@@ -34,9 +41,10 @@ export type WorkoutShareStats = {
   duration_min: number | null;
   working_sets: number;
   tonnage_kg: number;
-  top_lift: { exercise_name: string; reps: number; load_kg: number } | null;
+  /** load_kg is null when the athlete hid their weights. */
+  top_lift: { exercise_name: string; reps: number; load_kg: number | null } | null;
   pr_count: number;
-  prs: { exercise_name: string; reps: number; load_kg: number; scope: RecordScope }[];
+  prs: { exercise_name: string; reps: number; load_kg: number | null; scope: RecordScope }[];
   /** Completed sessions in the same local month / week, up to and including this one. */
   month_sessions?: number;
   week_sessions?: number;
@@ -60,6 +68,17 @@ export type CommunityAuthor = {
   name: string;
   avatar_url: string | null;
   is_coach: boolean;
+  /** Coaches: "Coach · JF Effect". */
+  title?: string | null;
+};
+
+export type CommunitySeries = "monday_motivation" | "wednesday_wins" | "finish_strong_friday";
+
+/** The weekly coach posts: name + the one-line idea behind each. */
+export const SERIES_LABEL: Record<CommunitySeries, { name: string; tagline: string; short: string }> = {
+  monday_motivation: { name: "Monday Motivation", tagline: "Set the standard", short: "Mon" },
+  wednesday_wins: { name: "Wednesday Wins", tagline: "Last week's work", short: "Wed" },
+  finish_strong_friday: { name: "Finish Strong Friday", tagline: "Finish what you started", short: "Fri" },
 };
 
 export type CommunityPost = {
@@ -72,7 +91,26 @@ export type CommunityPost = {
   media_type: "image" | "video" | null;
   media_width: number | null;
   media_height: number | null;
-  completion_id: string;
+  /** null for coach notes (no workout behind them). */
+  completion_id: string | null;
+  /** "workout" (a session) or "note" (a coach's text post). Missing = workout. */
+  kind?: "workout" | "note";
+  series?: CommunitySeries | null;
+  /** A featured quote on a note: always from the verified library. */
+  quote?: string | null;
+  quote_author?: string | null;
+  quote_source?: string | null;
+  /** Wednesday Wins: the crew's numbers for the week, shown as a card. */
+  series_data?: WinsStats | null;
+  edited_at?: string | null;
+  /** Set when the post was made while the session was still open ("Locked in"). */
+  locked_in_at?: string | null;
+  /** The session hasn't been finished yet (a lock-in waiting on its numbers). */
+  live?: boolean;
+  /** The day's title, available before any stats exist. */
+  session_title?: string | null;
+  /** The author hid their weights (loads are already removed for everyone else). */
+  hide_loads?: boolean;
   is_mine: boolean;
   author: CommunityAuthor;
   /** null when the workout was reopened — the post then shows photo + caption only. */
@@ -82,6 +120,15 @@ export type CommunityPost = {
   coach_reactions: { name: string; emoji: ReactionKey }[];
   comment_count: number;
   coach_commented: boolean;
+};
+
+/** Someone in the crew (Crew tab). Counts only include posts you can see. */
+export type CommunityMember = {
+  author: CommunityAuthor;
+  bio: string | null;
+  posts: number;
+  last_post_at: string | null;
+  live: boolean;
 };
 
 export type CommunityPostDetail = CommunityPost & { exercises: CommunityExercise[] };
@@ -125,7 +172,8 @@ export function formatWorkoutDuration(min: number | null | undefined): string | 
 }
 
 /** "220 kg × 3" — unit is the viewer's / athlete's own preference. */
-export function formatTopSet(lift: { reps: number; load_kg: number }, unit: "kg" | "lb"): string {
+export function formatTopSet(lift: { reps: number; load_kg: number | null }, unit: "kg" | "lb"): string {
+  if (lift.load_kg == null || lift.load_kg <= 0) return `${lift.reps} ${lift.reps === 1 ? "rep" : "reps"}`;
   return `${formatLoad(lift.load_kg, unit)} × ${lift.reps}`;
 }
 
@@ -156,7 +204,7 @@ export const SCOPE_WORD: Record<RecordScope, string> = {
  */
 export function featuredLift(s: WorkoutShareStats): {
   name: string;
-  detail: { reps: number; load_kg: number };
+  detail: { reps: number; load_kg: number | null };
   pr: RecordScope | null;
 } | null {
   const pr = s.prs[0];
@@ -273,10 +321,109 @@ export function buildShareCardFields(i: ShareCardInput) {
   };
 }
 
+/** "6:42 PM" — when someone locked in. */
+export function lockInTimeLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return null;
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** A lock-in is "training now" while the session is open and recent. */
+export function isTrainingNow(p: Pick<CommunityPost, "live" | "locked_in_at">, now = Date.now()): boolean {
+  if (!p.live || !p.locked_in_at) return false;
+  const at = new Date(p.locked_in_at).getTime();
+  return now - at < 3 * 3600_000 && now >= at - 60_000;
+}
+
+/** One-tap captions for a lock-in. Short, no hashtags, no hype words. */
+export const LOCK_IN_CAPTIONS = ["Locked in.", "Showed up.", "No days off.", "Who's training today?", "Your move."] as const;
+
 /** "Training since Jun 2026" */
 export function trainingSinceLabel(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(+d)) return null;
   return `Training since ${d.toLocaleDateString(undefined, { month: "short", year: "numeric" })}`;
+}
+
+/* ---- Wednesday Wins: the crew's week in numbers ----------------------- */
+
+/** Saved on the post when it goes out. Counts only; nobody singled out. */
+export type WinsStats = {
+  week_of: string;
+  roster: number;
+  opened: number;
+  trained: number;
+  sessions: number;
+  sessions_prev: number;
+  prs: number;
+  pr_people: number;
+  volume_kg: number;
+  reps: number;
+  streaks: number;
+  bodyweight: number;
+  checkins: number;
+  busiest_day: string | null;
+};
+
+/** "Sep 28 – Oct 4" for the Monday the week starts on. */
+export function winsWeekLabel(weekOf: string): string {
+  const [y, m, d] = weekOf.split("-").map(Number);
+  const start = new Date(y, m - 1, d);
+  const end = new Date(y, m - 1, d + 6);
+  const f = (x: Date) => x.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${f(start)} – ${f(end)}`;
+}
+
+export function pct(part: number, whole: number): number {
+  return whole > 0 ? Math.round((part / whole) * 100) : 0;
+}
+
+/** 6,015 · 45.2K · 450K · 1.2M */
+export function compactNumber(n: number): string {
+  if (n < 10_000) return Math.round(n).toLocaleString("en-US");
+  if (n < 100_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+  if (n < 1_000_000) return `${Math.round(n / 1000)}K`;
+  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+}
+
+const PICKUP_LB = 5000;
+
+/**
+ * The tiles under the post, in plain words anyone gets: how many opened the
+ * app, workouts, PRs, total weight (with a pickup-truck comparison), streaks
+ * and the busiest day. Weight is shown in the viewer's own unit.
+ */
+export function winsStatTiles(s: WinsStats, unit: "kg" | "lb") {
+  const lb = s.volume_kg * 2.20462;
+  const trucks = Math.round(lb / PICKUP_LB);
+  const change = s.sessions_prev > 0 ? Math.round(((s.sessions - s.sessions_prev) / s.sessions_prev) * 100) : null;
+  const tiles: { value: string; label: string; sub?: string }[] = [
+    { value: `${pct(s.opened, s.roster)}%`, label: "opened the app", sub: `${s.opened} of ${s.roster}` },
+    {
+      value: String(s.sessions),
+      label: "workouts done",
+      sub: change == null || change === 0 ? undefined : `${change > 0 ? "+" : ""}${change}% vs last week`,
+    },
+    { value: String(s.prs), label: s.prs === 1 ? "new PR" : "new PRs", sub: s.pr_people > 0 ? `by ${s.pr_people} ${s.pr_people === 1 ? "person" : "people"}` : undefined },
+  ];
+  if (s.volume_kg > 0)
+    tiles.push({
+      value: compactNumber(unit === "kg" ? s.volume_kg : lb),
+      label: `${unit} lifted`,
+      sub: trucks >= 2 ? `≈ ${trucks} pickup trucks` : undefined,
+    });
+  if (s.streaks > 0) tiles.push({ value: String(s.streaks), label: "on a 4+ week streak" });
+  if (s.busiest_day) tiles.push({ value: s.busiest_day.slice(0, 3), label: "busiest day" });
+  return tiles;
+}
+
+/** The small habits line: "9 logged bodyweight · 4 sent a check-in · 6,015 reps". */
+export function winsHabitsLine(s: WinsStats): string {
+  const parts: string[] = [];
+  if (s.bodyweight > 0) parts.push(`${s.bodyweight} logged bodyweight`);
+  if (s.checkins > 0) parts.push(`${s.checkins} sent a check-in`);
+  if (s.reps > 0) parts.push(`${s.reps.toLocaleString("en-US")} reps`);
+  return parts.join(" · ");
 }

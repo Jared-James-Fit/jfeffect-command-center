@@ -4,18 +4,8 @@ export const Route = createFileRoute("/api/public/hooks/appointment-reminders")(
   server: {
     handlers: {
       POST: async ({ request }) => {
-        // ---------- Worker secret guard ----------
-        const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
-        const provided =
-          request.headers.get("x-worker-secret") ?? "";
-        if (
-          !expected ||
-          !provided ||
-          provided.length !== expected.length ||
-          !timingSafeEqualStr(provided, expected)
-        ) {
-          return new Response("unauthorized", { status: 401 });
-        }
+        // ---------- Shared hook auth (worker secret or Vault cron secret) ----------
+        if (!(await authorizeWorker(request))) return new Response("unauthorized", { status: 401 });
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const now = new Date().toISOString();
@@ -33,7 +23,10 @@ export const Route = createFileRoute("/api/public/hooks/appointment-reminders")(
         let sent = 0, failed = 0, skipped = 0;
         for (const r of due ?? []) {
           const appt = (r as any).appointment;
-          if (!appt || appt.status === "Cancelled" || !appt.sms_reminders_enabled || !enabled || !fromPhone) {
+          // Never text a reminder for an appointment that has already started
+          // (e.g. reminders that came due while this job was down).
+          const alreadyStarted = appt?.starts_at && new Date(appt.starts_at).getTime() <= Date.now();
+          if (!appt || alreadyStarted || appt.status === "Cancelled" || !appt.sms_reminders_enabled || !enabled || !fromPhone) {
             await supabaseAdmin.from("appointment_reminders").update({ status: "skipped" }).eq("id", r.id);
             skipped++; continue;
           }
@@ -106,10 +99,8 @@ async function sendSms(to: string, from: string, body: string) {
   }
 }
 
-/** Constant-time string compare. Strings must already be the same length. */
-function timingSafeEqualStr(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+/** Shared hook auth: worker secret (env) or the Vault-held cron secret. */
+async function authorizeWorker(request: Request): Promise<boolean> {
+  const { authorizeHookRequest } = await import("@/lib/hook-auth.server");
+  return authorizeHookRequest(request);
 }

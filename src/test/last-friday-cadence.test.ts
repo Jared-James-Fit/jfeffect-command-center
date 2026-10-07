@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { cadenceLabel, lastFridayOfMonth, nextLastFridayDate } from "@/lib/task-cadence";
+import { cadenceLabel, lastFridayOfMonth, lastMondayOfMonth, nextFinalWeekStart, nextLastFridayDate } from "@/lib/task-cadence";
 import { computeNextDueUtc, type EffectiveSchedule } from "@/lib/action-centre.functions";
 import { automatedRequestAlreadySent } from "@/lib/messenger-checkins.functions";
 
 const sched = (over: Partial<EffectiveSchedule> = {}): EffectiveSchedule => ({
-  task_type: "nutrition_review",
-  title: "Nutrition Review",
+  task_type: "monthly_assessment",
+  title: "Monthly Assessment",
   enabled: true,
   frequency: "monthly_last_friday",
   interval_days: null,
@@ -61,7 +60,7 @@ describe("last Friday of the month", () => {
   });
 });
 
-describe("next Nutrition Review occurrence", () => {
+describe("next last-Friday occurrence", () => {
   it("schedules this month's last Friday in the client's time zone", () => {
     const next = computeNextDueUtc(sched(), "Australia/Sydney", new Date("2026-10-03T00:00:00Z"))!;
     expect(next.localDate).toBe("2026-10-30");
@@ -93,33 +92,38 @@ describe("next Nutrition Review occurrence", () => {
 });
 
 describe("duplicate-send guard", () => {
-  it("allows one automated Nutrition Review per month", () => {
-    expect(automatedRequestAlreadySent("nutrition_review", "2026-10-30", [])).toBe(false);
-    expect(automatedRequestAlreadySent("nutrition_review", "2026-10-30", ["2026-09-25"])).toBe(false);
-    expect(automatedRequestAlreadySent("nutrition_review", "2026-10-30", ["2026-10-30"])).toBe(true);
-    expect(automatedRequestAlreadySent("nutrition_review", "2027-01-29", ["2026-01-30"])).toBe(false);
-  });
-
   it("allows one automated Weekly Check-In per 4 days", () => {
     expect(automatedRequestAlreadySent("weekly_checkin", "2026-10-09", ["2026-10-02"])).toBe(false);
     expect(automatedRequestAlreadySent("weekly_checkin", "2026-10-10", ["2026-10-09"])).toBe(true);
   });
 });
 
-describe("reminder copy + card duration", () => {
-  const fn = readFileSync("src/lib/messenger-checkins.functions.ts", "utf8");
-  const sql = readFileSync("supabase/migrations/20261003150000_nutrition_review_last_friday.sql", "utf8");
-  const card = readFileSync("src/components/messages/messenger-checkin-card.tsx", "utf8");
+describe("start of the final week (last Monday of the month)", () => {
+  it.each([
+    [2026, 10, 26], // Oct 31 is a Saturday
+    [2026, 11, 30], // Nov 30 is a Monday
+    [2026, 8, 31], // Aug 31 is a Monday
+    [2026, 12, 28],
+    [2027, 1, 25],
+    [2028, 2, 28], // leap year, Feb 29 is a Tuesday
+  ])("%i-%i → %i", (y, m, d) => {
+    expect(lastMondayOfMonth(y, m)).toBe(d);
+  });
 
-  it("uses the short messages in app and database senders", () => {
-    for (const src of [fn, sql]) {
-      expect(src).toContain("Quick 60-second weekly check-in 👇");
-      expect(src).toContain("Quick monthly nutrition check-in 👇");
+  it("is always a Monday in the final 7 days, for 20 years", () => {
+    for (let y = 2026; y < 2046; y++) {
+      for (let m = 1; m <= 12; m++) {
+        const d = lastMondayOfMonth(y, m);
+        expect(new Date(Date.UTC(y, m - 1, d)).getUTCDay()).toBe(1);
+        expect(new Date(Date.UTC(y, m - 1, d + 7)).getUTCMonth()).not.toBe(m - 1);
+      }
     }
   });
 
-  it("shows the completion time per card type", () => {
-    expect(card).toContain('"About 2–3 minutes"');
-    expect(card).toContain('"About 60–90 seconds"');
+  it("rolls to the next month once this month's final week has started", () => {
+    expect(nextFinalWeekStart(2026, 10, 6)).toEqual({ y: 2026, m: 10, d: 26 });
+    expect(nextFinalWeekStart(2026, 10, 26)).toEqual({ y: 2026, m: 10, d: 26 });
+    expect(nextFinalWeekStart(2026, 10, 27)).toEqual({ y: 2026, m: 11, d: 30 });
+    expect(nextFinalWeekStart(2026, 12, 29)).toEqual({ y: 2027, m: 1, d: 25 });
   });
 });
