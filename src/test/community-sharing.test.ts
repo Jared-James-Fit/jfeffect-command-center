@@ -418,3 +418,23 @@ describe("lock in (I showed up)", () => {
     expect(LOCK_IN_CAPTIONS.every((c) => c.length <= CAPTION_MAX && !c.includes("#"))).toBe(true);
   });
 });
+
+describe("community photos are the athlete's own", () => {
+  const sql = read("supabase/migrations/20261007120000_community_avatars.sql");
+  const profile = read("src/components/community/profile-view.tsx");
+  const media = read("src/lib/community-media.ts");
+  it("starts empty: never the account / identity photo", () => {
+    const author = sql.slice(sql.indexOf("FUNCTION public.community_author"), sql.indexOf("REVOKE ALL ON FUNCTION public.community_author"));
+    expect(author).not.toContain("profile_picture_url");
+    expect(author).not.toContain("p.avatar_url");
+    expect(author.match(/'avatar_url', cp\.avatar_path/g)?.length).toBe(2);
+  });
+  it("only accepts a path in your own community folder", () => {
+    expect(sql).toContain("left(v_path, length(uid::text || '/community-')) <> uid::text || '/community-'");
+    expect(media).toContain("const path = `${userId}/community-${Date.now()}.jpg`;");
+  });
+  it("lets you add, change or remove it from your own profile only", () => {
+    expect(profile).toContain("disabled={!profile.is_me || setAvatar.isPending}");
+    expect(profile).toContain("setAvatar.mutate(null");
+  });
+});

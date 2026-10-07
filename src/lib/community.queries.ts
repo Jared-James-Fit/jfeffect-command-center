@@ -19,7 +19,7 @@ import {
   type WorkoutShareStats,
 } from "@/lib/community";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
-import { removeCommunityFiles, signCommunityPaths, type UploadedMedia } from "@/lib/community-media";
+import { removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, type UploadedMedia } from "@/lib/community-media";
 
 const db = supabase as any;
 
@@ -286,6 +286,25 @@ export function useSetBio(userId: string | null) {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: communityKeys.profile(userId) }),
+  });
+}
+
+/** Set (File) or clear (null) your own community photo. Old file is deleted. */
+export function useSetCommunityAvatar(userId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File | null) => {
+      if (!userId) throw new Error("Not signed in");
+      const path = file ? await uploadCommunityAvatar(file, userId) : null;
+      const { data, error } = await db.rpc("community_set_avatar", { _path: path });
+      if (error) {
+        if (path) await db.storage.from("avatars").remove([path]).catch(() => {});
+        throw error;
+      }
+      const previous = (data as { previous?: string | null } | null)?.previous;
+      if (previous && previous !== path) await db.storage.from("avatars").remove([previous]).catch(() => {});
+    },
+    onSuccess: () => invalidateCommunity(qc),
   });
 }
 
