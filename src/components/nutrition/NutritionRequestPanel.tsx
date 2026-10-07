@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, ChevronDown, ClipboardList, Copy, FileText, Loader2, RefreshCw, Send, Sparkles, Wand2 } from "lucide-react";
+import { Check, ChevronDown, ClipboardList, Copy, Dumbbell, FileText, Loader2, RefreshCw, Send, Sparkles, Wand2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -238,6 +238,12 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             Once sent, this repeats automatically on the Monday that starts the final week of each month (9am their time).
           </p>
+          {data?.trainingPattern && (
+            <p className="mt-1 flex items-start gap-1.5 text-[11px] text-muted-foreground" title="From their logged workouts in the last 8 weeks. Used to place Pre/Post-Workout meals when their form answer is 'It varies' or blank.">
+              <Dumbbell className="mt-px h-3 w-3 shrink-0 text-primary" />
+              <span>Trains: {data.trainingPattern.summary}</span>
+            </p>
+          )}
         </div>
         <div className="flex w-full shrink-0 gap-2 sm:w-auto">
           <DropdownMenu>
@@ -255,7 +261,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!plan?.targets_text}
-                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null), "Meal plan prompt")}
+                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null), "Meal plan prompt")}
                   >
                     2 · Meal plan prompt <span className="ml-auto text-[10px] text-muted-foreground">with targets</span>
                   </DropdownMenuItem>
