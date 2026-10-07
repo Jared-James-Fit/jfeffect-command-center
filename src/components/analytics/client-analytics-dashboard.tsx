@@ -6,7 +6,7 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TrendingUp, Trophy, Dumbbell, Calendar, Flame } from "lucide-react";
+import { TrendingUp, Trophy, Dumbbell, Calendar, Flame, PieChart } from "lucide-react";
 import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell,
 } from "recharts";
@@ -31,6 +31,7 @@ import { PlannedVsActualCard } from "@/components/analytics/planned-vs-actual-ca
 import { WeightLiftedCard } from "@/components/analytics/weight-lifted-card";
 import { GraphDotDetail, type GraphDotPoint } from "@/components/analytics/graph-dot-detail";
 import { LiftProgressCard } from "@/components/analytics/lift-progress-card";
+import { SbdSplitCard } from "@/components/analytics/sbd-split-card";
 import { PRCard } from "@/components/analytics/pr-card";
 import { PerformanceInsights } from "@/components/analytics/performance-insights";
 import { RecoverySummaryCard } from "@/components/analytics/recovery-summary-card";
@@ -438,6 +439,33 @@ export function ClientAnalyticsDashboard({
                 }
               />
             </section>
+
+            <SectionErrorBoundary label="SBD total">
+              <SbdSplitCard
+                clientId={clientId}
+                displayUnit={displayUnit}
+                conv={conv}
+                header={
+                  <SectionHeading
+                    icon={<PieChart className="h-5 w-5" />}
+                    title="SBD Total"
+                    meta="Current maxes · last 16 weeks"
+                    tip={
+                      <InfoTip label="About SBD total" title="SBD Total" align="start">
+                        Your estimated total from your best competition squat,
+                        bench and deadlift over the last 16 weeks: the higher of
+                        your best logged e1RM (sets of 1–10, Epley) and your
+                        coach's max. A meet result fills in a missing lift. The
+                        split compares each lift's share of your total with the
+                        typical range for raw lifters, centered on JF Effect
+                        athletes' meet results. Leverages and weight class shift
+                        these, so treat it as a guide, not a rule.
+                      </InfoTip>
+                    }
+                  />
+                }
+              />
+            </SectionErrorBoundary>
 
             <SectionErrorBoundary label="Weight lifted">
             <WeightLiftedCard
