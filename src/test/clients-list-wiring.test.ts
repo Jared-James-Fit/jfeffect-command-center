@@ -76,6 +76,15 @@ describe("statuses explain themselves on a tap", () => {
 });
 
 describe("the filters reach the database", () => {
+  it("leaves only one directory function, so no call is ambiguous", () => {
+    const drop = read("supabase/migrations/20261008210000_drop_stale_clients_directory_overload.sql");
+    expect(drop).toContain(
+      "drop function if exists public.admin_clients_directory(text, text, text, uuid, text, integer, integer);",
+    );
+    // The current function is called with every argument by name, including the two the old one lacked.
+    expect(server).toContain("p_lifecycle: data.lifecycle,");
+  });
+
   it("sends the filters as a list and no longer sends the single status", () => {
     expect(server).toContain("p_flags: data.flags");
     expect(server).not.toContain("p_status");
