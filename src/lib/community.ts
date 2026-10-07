@@ -24,7 +24,14 @@ export function reactionEmoji(key: string | null | undefined): string | null {
   return REACTIONS.find((r) => r.key === key)?.emoji ?? null;
 }
 
-export type CommunityVisibility = "community" | "private";
+export type CommunityVisibility = "community" | "coach" | "private";
+
+/** Who a post is for. "JF crew" = every active JF Effect client + coaches, never the public. */
+export const AUDIENCES: { key: CommunityVisibility; label: string; hint: string }[] = [
+  { key: "community", label: "JF crew", hint: "Only JF Effect clients and coaches see it" },
+  { key: "coach", label: "My coach", hint: "Just you and your coach" },
+  { key: "private", label: "Only me", hint: "Saved to your profile, nobody else sees it" },
+];
 
 export type RecordScope = "atpr" | "program_pr" | "block_pr";
 
@@ -34,9 +41,10 @@ export type WorkoutShareStats = {
   duration_min: number | null;
   working_sets: number;
   tonnage_kg: number;
-  top_lift: { exercise_name: string; reps: number; load_kg: number } | null;
+  /** load_kg is null when the athlete hid their weights. */
+  top_lift: { exercise_name: string; reps: number; load_kg: number | null } | null;
   pr_count: number;
-  prs: { exercise_name: string; reps: number; load_kg: number; scope: RecordScope }[];
+  prs: { exercise_name: string; reps: number; load_kg: number | null; scope: RecordScope }[];
   /** Completed sessions in the same local month / week, up to and including this one. */
   month_sessions?: number;
   week_sessions?: number;
@@ -60,6 +68,16 @@ export type CommunityAuthor = {
   name: string;
   avatar_url: string | null;
   is_coach: boolean;
+  /** Coaches: "Coach · JF Effect". */
+  title?: string | null;
+};
+
+export type CommunitySeries = "monday_motivation" | "finish_strong_friday";
+
+/** The two weekly coach posts: name + the one-line idea behind each. */
+export const SERIES_LABEL: Record<CommunitySeries, { name: string; tagline: string }> = {
+  monday_motivation: { name: "Monday Motivation", tagline: "Set the standard" },
+  finish_strong_friday: { name: "Finish Strong Friday", tagline: "Finish what you started" },
 };
 
 export type CommunityPost = {
@@ -72,7 +90,24 @@ export type CommunityPost = {
   media_type: "image" | "video" | null;
   media_width: number | null;
   media_height: number | null;
-  completion_id: string;
+  /** null for coach notes (no workout behind them). */
+  completion_id: string | null;
+  /** "workout" (a session) or "note" (a coach's text post). Missing = workout. */
+  kind?: "workout" | "note";
+  series?: CommunitySeries | null;
+  /** A featured quote on a note: always from the verified library. */
+  quote?: string | null;
+  quote_author?: string | null;
+  quote_source?: string | null;
+  edited_at?: string | null;
+  /** Set when the post was made while the session was still open ("Locked in"). */
+  locked_in_at?: string | null;
+  /** The session hasn't been finished yet (a lock-in waiting on its numbers). */
+  live?: boolean;
+  /** The day's title, available before any stats exist. */
+  session_title?: string | null;
+  /** The author hid their weights (loads are already removed for everyone else). */
+  hide_loads?: boolean;
   is_mine: boolean;
   author: CommunityAuthor;
   /** null when the workout was reopened — the post then shows photo + caption only. */
@@ -82,6 +117,15 @@ export type CommunityPost = {
   coach_reactions: { name: string; emoji: ReactionKey }[];
   comment_count: number;
   coach_commented: boolean;
+};
+
+/** Someone in the crew (Crew tab). Counts only include posts you can see. */
+export type CommunityMember = {
+  author: CommunityAuthor;
+  bio: string | null;
+  posts: number;
+  last_post_at: string | null;
+  live: boolean;
 };
 
 export type CommunityPostDetail = CommunityPost & { exercises: CommunityExercise[] };
@@ -125,7 +169,8 @@ export function formatWorkoutDuration(min: number | null | undefined): string | 
 }
 
 /** "220 kg × 3" — unit is the viewer's / athlete's own preference. */
-export function formatTopSet(lift: { reps: number; load_kg: number }, unit: "kg" | "lb"): string {
+export function formatTopSet(lift: { reps: number; load_kg: number | null }, unit: "kg" | "lb"): string {
+  if (lift.load_kg == null || lift.load_kg <= 0) return `${lift.reps} ${lift.reps === 1 ? "rep" : "reps"}`;
   return `${formatLoad(lift.load_kg, unit)} × ${lift.reps}`;
 }
 
@@ -156,7 +201,7 @@ export const SCOPE_WORD: Record<RecordScope, string> = {
  */
 export function featuredLift(s: WorkoutShareStats): {
   name: string;
-  detail: { reps: number; load_kg: number };
+  detail: { reps: number; load_kg: number | null };
   pr: RecordScope | null;
 } | null {
   const pr = s.prs[0];
@@ -272,6 +317,24 @@ export function buildShareCardFields(i: ShareCardInput) {
     sessionLine: sessionLine(s),
   };
 }
+
+/** "6:42 PM" — when someone locked in. */
+export function lockInTimeLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return null;
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** A lock-in is "training now" while the session is open and recent. */
+export function isTrainingNow(p: Pick<CommunityPost, "live" | "locked_in_at">, now = Date.now()): boolean {
+  if (!p.live || !p.locked_in_at) return false;
+  const at = new Date(p.locked_in_at).getTime();
+  return now - at < 3 * 3600_000 && now >= at - 60_000;
+}
+
+/** One-tap captions for a lock-in. Short, no hashtags, no hype words. */
+export const LOCK_IN_CAPTIONS = ["Locked in.", "Showed up.", "No days off.", "Who's training today?", "Your move."] as const;
 
 /** "Training since Jun 2026" */
 export function trainingSinceLabel(iso: string | null | undefined): string | null {

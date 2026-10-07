@@ -77,7 +77,8 @@ export function WeightValueInput({
   const shown =
     loadType === "assisted" && numeric != null
       ? formatLoadDisplay(value, "external", unit, { compact: true })
-      : formatLoadDisplay(value, loadType, unit, { compact: true });
+      // Blank reads "—" like the reps/RPE cells: it's typed, not picked from a list.
+      : formatLoadDisplay(value, loadType, unit, { compact: true, empty: "—" });
   const isEmpty = loadType !== "bodyweight" && value === "";
 
   // Remembered values per load type — external weight and assistance never
@@ -277,7 +278,8 @@ export function WeightValueInput({
     </div>
   );
 
-  const cellHeight = focusMode ? "h-9" : "h-8";
+  // 44px on phones (thumb target, 16px text = no iOS focus zoom), tighter on desktop.
+  const cellHeight = focusMode ? "h-12 sm:h-10 text-lg sm:text-base" : "h-11 sm:h-8 text-base sm:text-sm";
 
   return (
     <>
@@ -303,7 +305,6 @@ export function WeightValueInput({
               className={cn(
                 "w-full rounded-md border border-primary bg-background px-2 text-center text-sm font-semibold tabular-nums text-foreground outline-none ring-2 ring-primary/30",
                 cellHeight,
-                focusMode && "text-base",
                 error && "border-destructive ring-destructive/30",
               )}
             />
@@ -317,7 +318,6 @@ export function WeightValueInput({
             className={cn(
               "flex w-full items-center justify-center whitespace-nowrap rounded-md border pl-2 pr-5 text-sm font-medium transition-colors",
               cellHeight,
-              focusMode && "text-base",
               loadType === "bodyweight" && "text-[10px] font-semibold uppercase tracking-tight",
               loadType === "assisted" && "border-amber-500/50 bg-amber-500/10",
               isEmpty

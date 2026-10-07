@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from "react";
-import { Lock, MessageCircle, MoreHorizontal, Play, Trash2 } from "lucide-react";
+import { BadgeCheck, Lock, MessageCircle, MoreHorizontal, Pencil, Play, Trash2 } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -7,8 +7,11 @@ import { cn } from "@/lib/utils";
 import {
   REACTIONS,
   SCOPE_WORD,
+  SERIES_LABEL,
   featuredLift,
   formatTopSet,
+  isTrainingNow,
+  lockInTimeLabel,
   pickCardStats,
   postTimeLabel,
   reactionEmoji,
@@ -20,11 +23,88 @@ import {
 } from "@/lib/community";
 import { useFullMediaUrl } from "@/lib/community.queries";
 
-export function CoachBadge({ className }: { className?: string }) {
+/** "● Training now" — a lock-in whose session is still open (and recent). */
+export function TrainingNowPill({ className }: { className?: string }) {
   return (
-    <span className={cn("rounded-full bg-primary/10 px-1.5 py-px text-[9px] font-black uppercase tracking-[0.12em] text-primary", className)}>
-      Coach
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-white", className)}>
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Training now
     </span>
+  );
+}
+
+/**
+ * A lock-in before its numbers exist: LOCKED IN, the session, the time.
+ * Once the session is finished the post shows the workout instead.
+ */
+export function LockInHero({ post, size = "feed" }: { post: CommunityPost; size?: "feed" | "detail" | "tile" }) {
+  const now = isTrainingNow(post);
+  const time = lockInTimeLabel(post.locked_in_at);
+  const bg = "bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.55),rgba(127,29,29,0.16)_45%,#0a0a0d_75%)]";
+  if (size === "tile") {
+    return (
+      <div className={cn("flex h-full w-full flex-col justify-between p-2.5 text-white", bg)}>
+        {now ? <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /> : <span />}
+        <div>
+          <div className="font-display text-[17px] uppercase leading-none">Locked in</div>
+          <div className="mt-0.5 line-clamp-2 text-[10px] font-bold text-white/70">{post.session_title}</div>
+        </div>
+      </div>
+    );
+  }
+  const big = size === "detail";
+  return (
+    <div className={cn("relative overflow-hidden px-5 text-white", big ? "py-8" : "py-6", bg)}>
+      {now ? <TrainingNowPill /> : time ? <span className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">{time}</span> : null}
+      <div className={cn("font-display mt-2 uppercase leading-[0.95]", big ? "text-[60px]" : "text-[48px]")}>Locked in</div>
+      <div className="mt-1.5 h-1.5 w-24 rounded-full bg-red-500" />
+      {post.session_title && <div className="mt-3 truncate text-[15px] font-bold text-white/80">{post.session_title}</div>}
+      {post.live && <div className="mt-1 text-[12px] text-white/55">Numbers land here when they finish.</div>}
+    </div>
+  );
+}
+
+/** "Only me" · "Just my coach" (author) · "Just you" (the coach) · "Weights hidden" (author). */
+export function audienceNote(post: Pick<CommunityPost, "visibility" | "is_mine" | "hide_loads">): string | null {
+  const parts: string[] = [];
+  if (post.visibility === "private") parts.push("Only me");
+  else if (post.visibility === "coach") parts.push(post.is_mine ? "Just my coach" : "Just you");
+  if (post.is_mine && post.hide_loads) parts.push("Weights hidden");
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** The coach mark next to a name: small, verified-style, never a banner. */
+export function CoachBadge({ className }: { className?: string }) {
+  return <BadgeCheck className={cn("h-4 w-4 shrink-0 fill-primary text-primary-foreground", className)} aria-label="Coach" role="img" />;
+}
+
+/**
+ * A coach's note (Monday Motivation, Finish Strong Friday, or a one-off):
+ * a quiet series label, the featured quote with its speaker, then the words.
+ * `clamp` keeps long notes tidy in the feed; the detail shows everything.
+ */
+export function NoteBody({ post, clamp = false }: { post: CommunityPost; clamp?: boolean }) {
+  const series = post.series ? SERIES_LABEL[post.series] : null;
+  return (
+    <div className="px-4 pb-1 pt-1">
+      {series && (
+        <div className="mb-2.5 flex min-w-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em]">
+          <span className="shrink-0 whitespace-nowrap text-primary">{series.name}</span>
+          <span className="truncate text-muted-foreground/70">· {series.tagline}</span>
+        </div>
+      )}
+      {post.quote && (
+        <figure className="mb-3 border-l-[3px] border-primary pl-3.5">
+          <blockquote className="whitespace-pre-line text-[18px] font-semibold leading-[1.32] tracking-[-0.01em]">“{post.quote}”</blockquote>
+          {post.quote_author && (
+            <figcaption className="mt-1.5 text-[12px] font-semibold text-muted-foreground">
+              {post.quote_author}
+              {post.quote_source ? <span className="font-normal">, {post.quote_source}</span> : null}
+            </figcaption>
+          )}
+        </figure>
+      )}
+      {post.caption && <p className={cn("whitespace-pre-line text-[15px] leading-[1.45]", clamp && "line-clamp-[8]")}>{post.caption}</p>}
+    </div>
   );
 }
 
@@ -37,7 +117,11 @@ export function AuthorLine({ author, sub, onOpen, size = 40 }: { author: Communi
           <span className="truncate text-sm font-bold leading-tight">{author.name}</span>
           {author.is_coach && <CoachBadge />}
         </div>
-        {sub ? <div className="text-[11px] leading-tight text-muted-foreground">{sub}</div> : null}
+        {author.is_coach || sub ? (
+          <div className="truncate text-[11px] leading-tight text-muted-foreground">
+            {[author.is_coach ? author.title || "Coach · JF Effect" : null, sub].filter(Boolean).join(" · ")}
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -63,7 +147,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
   if (size === "tile") {
     return (
       <div className={cn("flex h-full w-full flex-col justify-between p-2.5 text-white", pr ? "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(245,158,11,0.45),#0b0b0e_60%)]" : "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.5),#0b0b0e_60%)]")}>
-        {pr ? <span className="w-max rounded-full bg-amber-400 px-1.5 text-[8px] font-black uppercase text-amber-950">PR</span> : <span />}
+        {pr ? <span className="w-max rounded-full bg-amber-400 px-1.5 text-[8px] font-black uppercase text-[#2b1700]">PR</span> : <span />}
         <div>
           <div className="font-display line-clamp-2 text-[15px] uppercase leading-[1.02]">{stats.workout_title}</div>
           {lift && <div className={cn("font-display mt-0.5 text-[13px] uppercase", pr ? "text-amber-300" : "text-white/80")}>{formatTopSet(lift.detail, unit)}</div>}
@@ -83,7 +167,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
       )}
     >
       {pr && lift?.pr ? (
-        <span className="inline-block rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-950">
+        <span className="inline-block rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-[#2b1700]">
           New {SCOPE_WORD[lift.pr]}
         </span>
       ) : session ? (
@@ -128,9 +212,11 @@ type Props = {
   onOpenAuthor?: (author: CommunityAuthor) => void;
   onReact: (post: CommunityPost, next: ReactionKey | null) => void;
   onDelete: (post: CommunityPost) => void;
+  /** Notes only: edit the text (author or staff). */
+  onEdit?: (post: CommunityPost) => void;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, onDelete }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, onDelete, onEdit }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
@@ -139,7 +225,10 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const lift = s ? featuredLift(s) : null;
   const stats = s ? pickCardStats(s, unit) : [];
   const canDelete = post.is_mine || viewerIsStaff;
-  const sub = [postTimeLabel(post.created_at), post.visibility === "private" ? "Only me" : null].filter(Boolean).join(" · ");
+  const isNote = post.kind === "note";
+  const canEdit = isNote && !!onEdit && canDelete;
+  const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
+  const sub = [postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
 
   // Tap opens the workout; double-tap gives 🔥 (Instagram muscle memory).
   const onHeroTap = () => {
@@ -164,7 +253,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       <header className="flex items-center justify-between gap-2 px-3.5 py-3">
         <AuthorLine author={post.author} sub={sub} onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined} />
         <div className="flex shrink-0 items-center gap-1">
-          {post.visibility === "private" && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label="Only visible to you" />}
+          {post.visibility !== "community" && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : "Only visible to you"} />}
           {canDelete && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -173,6 +262,11 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {canEdit && (
+                  <DropdownMenuItem onSelect={() => onEdit!(post)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Edit post
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setConfirmDelete(true)}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   {post.is_mine ? "Delete post" : "Remove post"}
@@ -185,10 +279,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 
       {/* Hero: the photo, or the workout itself when there isn't one */}
       <div role="button" tabIndex={0} onClick={onHeroTap} onKeyDown={(e) => e.key === "Enter" && onOpen(post)} className="relative cursor-pointer select-none" aria-label="Open workout">
-        {post.media_type ? (
+        {isNote ? (
+          <NoteBody post={post} clamp />
+        ) : post.media_type ? (
           <PostMedia post={post} thumbUrl={thumbUrl} />
         ) : s ? (
           <WorkoutHero stats={s} unit={unit} />
+        ) : post.locked_in_at ? (
+          <LockInHero post={post} />
         ) : (
           <div className="px-4 py-6 text-sm text-muted-foreground">Workout was reopened, numbers will be back once it's finished.</div>
         )}
@@ -198,6 +296,17 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           </span>
         )}
       </div>
+
+      {/* A photo lock-in: the stamp sits under it until the numbers arrive */}
+      {post.media_type && !s && post.locked_in_at && (
+        <button type="button" onClick={() => onOpen(post)} className="block w-full px-3.5 pt-3 text-left">
+          <div className="flex items-center gap-2">
+            <h3 className="font-display shrink-0 text-[24px] uppercase leading-none">Locked in</h3>
+            {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-[12px] font-bold text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
+          </div>
+          {post.session_title && <div className="mt-1 truncate text-[12px] font-semibold text-muted-foreground">{post.session_title}</div>}
+        </button>
+      )}
 
       {/* With a photo, the numbers sit under it, Strava style */}
       {post.media_type && s && (
@@ -225,7 +334,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </button>
       )}
 
-      {post.caption && (
+      {post.caption && !isNote && (
         <p className="whitespace-pre-line px-3.5 pt-2.5 text-[14px] leading-snug">
           <span className="font-bold">{post.author.name}</span> {post.caption}
         </p>
@@ -251,8 +360,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             <AlertDialogTitle>{post.is_mine ? "Delete this post?" : "Remove this post?"}</AlertDialogTitle>
             <AlertDialogDescription>
               {post.is_mine
-                ? "It disappears from the community. Your workout itself isn't touched."
-                : "It disappears from the community for everyone. The athlete's workout isn't touched."}
+                ? isNote ? "It disappears from the community and your profile." : "It disappears from the community. Your workout itself isn't touched."
+                : isNote ? "It disappears from the community for everyone." : "It disappears from the community for everyone. The athlete's workout isn't touched."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

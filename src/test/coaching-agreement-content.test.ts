@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   AGREEMENT_CONTENT,
@@ -13,6 +14,7 @@ import {
   sectionNumber,
 } from "@/lib/coaching-agreement/content";
 import { sha256HexAsync } from "@/lib/coaching-agreement/hash";
+import { resolveAgreementState } from "@/lib/coaching-agreement/rules";
 
 const allText = () =>
   [
@@ -168,5 +170,60 @@ describe("helpers", () => {
     expect(compareVersions("2.1", "2.0")).toBe(1);
     expect(compareVersions("2.0", "10.0")).toBe(-1);
     expect(compareVersions("2", "2.0.0")).toBe(0);
+  });
+});
+
+describe("naming the Coach (version 2.1)", () => {
+  const json = JSON.stringify(AGREEMENT_CONTENT);
+  const text = allText();
+
+  it("names the individual who carries on the business, not the old trade name", () => {
+    expect(json).not.toMatch(/jared james fit/i);
+    // The only "jaredjamesfit" left is the working email address people send notices to.
+    expect(json.replace(/jaredjamesfit@gmail\.com/gi, "")).not.toMatch(/jaredjamesfit/i);
+    expect(text).toContain(
+      "Jared McIntyre (also known as Jared James McIntyre), an individual carrying on business as JF Effect in Winnipeg, Manitoba, Canada",
+    );
+    expect(COACH.operator).toBe("Jared McIntyre");
+    expect(COACH.business).toBe("JF Effect");
+  });
+
+  it("still releases and indemnifies the Coach personally, not just the business", () => {
+    expect(text).toContain("the Coach (including Jared McIntyre personally)");
+  });
+});
+
+describe("people who signed an earlier version are left exactly as they are", () => {
+  const sig = (version: string) => ({
+    id: "s", version, signedAt: "2026-10-03T12:00:00Z", typedName: "A Client", method: "typed" as const, hasGuardian: false,
+  });
+  const state = (version: string) =>
+    resolveAgreementState({ latestSignature: sig(version), exempt: null, resignRequestedAt: null, resignNote: null }).state;
+
+  it("does not ask anyone who signed 2.0 to sign again", () => {
+    expect(AGREEMENT_VERSION).toBe("2.1");
+    expect(RESIGN_REQUIRED_BELOW_VERSION).toBe("2.0");
+    expect(state("2.0")).toBe("signed");
+    expect(state("2.1")).toBe("signed");
+    expect(state("1.0")).toBe("needs_signature");
+  });
+
+  it("keeps the exact text of every earlier version, matching what was published", () => {
+    const earlier = Object.keys(PUBLISHED_CONTENT_HASHES).filter((v) => v !== AGREEMENT_VERSION);
+    expect(earlier).toContain("2.0");
+    for (const version of earlier) {
+      const file = `supabase/agreement-archive/${version}.json`;
+      expect(existsSync(file), `${file} is missing: archive the exact text before revising it`).toBe(true);
+      const archived = readFileSync(file, "utf8");
+      expect(createHash("sha256").update(archived).digest("hex"), version).toBe(PUBLISHED_CONTENT_HASHES[version]);
+      // It parses as the agreement people signed.
+      expect(JSON.parse(archived).version).toBe(version);
+    }
+  });
+
+  it("archived 2.0 is the wording people signed, old name and all", () => {
+    const v20 = readFileSync("supabase/agreement-archive/2.0.json", "utf8");
+    expect(v20).toContain("operated by Jared James McIntyre");
+    expect(v20).toContain("Jared James McIntyre personally");
   });
 });

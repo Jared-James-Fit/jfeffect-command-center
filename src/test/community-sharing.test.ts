@@ -18,6 +18,9 @@ import {
   formatExerciseBest,
   sessionLine,
   trainingSinceLabel,
+  isTrainingNow,
+  lockInTimeLabel,
+  LOCK_IN_CAPTIONS,
   type CommunityExercise,
   type CommunityFeedPage,
   type WorkoutShareStats,
@@ -322,7 +325,192 @@ describe("community is easy to find without taking over", () => {
     expect(shell).toContain("<CommunityNavButton />");
     expect(home).toContain("<CommunityHomeStrip />");
   });
-  it("never shows an empty social widget on Home", () => {
-    expect(entry).toContain("if (!activity?.enabled || people.length === 0) return null;");
+  it("is always on Home (clients live there), with Share first and an invite instead of an empty widget", () => {
+    expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" />');
+    expect(entry).toContain("Be the first to share this week");
+    expect(entry).not.toContain("people.length === 0) return null");
+  });
+});
+
+describe("community is its own page, reached from Home", () => {
+  const workouts = read("src/routes/_authenticated/portal/workouts.index.tsx");
+  const page = read("src/routes/_authenticated/portal/community.tsx");
+  const entry = read("src/components/community/community-entry.tsx");
+  const shellSrc = read("src/components/app-shell.tsx");
+  const admin = read("src/routes/_authenticated/admin/index.tsx");
+  const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
+  const screen = read("src/components/community/community-screen.tsx");
+
+  it("has a Back to Home and keeps Home lit, so nobody is stranded in Workouts", () => {
+    expect(page).toContain('backTo="/portal" backLabel="Home"');
+    expect(page).toContain("<CommunityScreen canShare={!isImpersonating} />");
+    expect(shellSrc).toContain('(item.to === "/portal" && pathname === "/portal/community")');
+  });
+  it("leaves Workouts as pure training and forwards old #community links", () => {
+    expect(workouts).not.toContain("CommunityScreen");
+    expect(workouts).toContain('throw redirect({ to: "/portal/community"');
+    expect(entry).not.toContain('to="/portal/workouts"');
+  });
+  it("opens a person's workout right on Home instead of navigating away", () => {
+    expect(entry).toContain("onClick={() => setOpenPost(p.id)}");
+    expect(entry).toContain("postId={openPost}");
+  });
+  it("only shows a header nudge when there is something new", () => {
+    expect(entry).toContain("data.unseen <= 0) return null;");
+  });
+  it("puts one-tap coach props on the coach dashboard, visible even before anyone posts", () => {
+    expect(admin).toContain("<CommunityCoachCard />");
+    expect(entry).toContain("No posts yet. Clients share from Home and after each workout");
+    expect(entry).toContain('react.mutate(given ? null : "fire"');
+  });
+  it("lets an athlete share any recent session (their own only)", () => {
+    expect(recent).toContain("c.user_id = auth.uid()");
+    expect(recent).toContain("interval '30 days'");
+    expect(recent).toContain("REVOKE ALL ON FUNCTION public.community_recent_completions(int) FROM PUBLIC, anon;");
+    expect(screen).toContain('label="Share your last workout"');
+  });
+  it("never lets a coach in View-as-client share for the athlete", () => {
+    expect(page).toContain("<CommunityScreen canShare={!isImpersonating} />");
+    expect(entry).toContain("{canShare && <ShareWorkoutButton");
+  });
+});
+
+describe("lock in (I showed up)", () => {
+  const sql = read("supabase/migrations/20261007090000_community_lock_in.sql");
+  const bar = read("src/components/community/lock-in.tsx");
+  const editor = read("src/components/community/lock-in-editor.tsx");
+  const day = read("src/components/workout-day/WorkoutDayView.tsx");
+  const card = read("src/lib/workout-share-card.ts");
+
+  it("is the session's one post: a started session can post, the finished numbers fill it in", () => {
+    expect(sql).toContain("AND (pc.completed_at IS NOT NULL OR pc.started_at IS NOT NULL OR pc.in_progress_at IS NOT NULL);");
+    expect(sql).toContain("CASE WHEN v_done THEN NULL ELSE now() END)");
+    // the upsert never rewrites locked_in_at
+    expect(sql.slice(sql.indexOf("ON CONFLICT"), sql.indexOf("RETURNING p.id"))).not.toContain("locked_in_at");
+    expect(sql).toContain("'live', pc.completed_at IS NULL,");
+  });
+  it("still refuses anyone but the athlete (coach View-as-client included)", () => {
+    expect(sql).toContain("WHERE pc.id = _completion_id AND c.user_id = uid");
+    expect(day).toContain("isClientWorkout && !isImpersonating && !completion?.completed_at");
+  });
+  it("starts the session through the normal start path, never on its own", () => {
+    expect(day).toContain('await startWorkoutSrv({ data: { kind: "client" as const, dayId, scheduledWorkoutId } });');
+    expect(editor).toContain("const id = completionId ?? (await ensureStarted());");
+  });
+  it("opens the camera inside the tap and keeps the logger light", () => {
+    expect(bar).toContain('capture="environment"');
+    expect(bar).toContain("camRef.current?.click();");
+    expect(bar).toContain('lazyWithRetry(() => import("@/components/community/lock-in-editor")');
+    expect(bar).not.toContain("workout-share-card");
+  });
+  it("draws a LOCKED IN card and carries the time onto the finished photo card", () => {
+    expect(card).toContain('else if (d.template === "lockin") drawLockIn(ctx, d, logo, L);');
+    expect(card).toContain("else if (d.lockedIn) pill(ctx, `LOCKED IN ${d.lockedIn.time}`");
+    expect(availableTemplates({ isPr: false, exercises: [], volume: null, media: null })).not.toContain("lockin");
+  });
+  it("labels and timing", () => {
+    expect(lockInTimeLabel(null)).toBeNull();
+    expect(lockInTimeLabel("2026-10-07T18:42:00Z")).toMatch(/\d{1,2}:42/);
+    const now = Date.parse("2026-10-07T19:00:00Z");
+    expect(isTrainingNow({ live: true, locked_in_at: "2026-10-07T18:00:00Z" }, now)).toBe(true);
+    expect(isTrainingNow({ live: true, locked_in_at: "2026-10-07T14:00:00Z" }, now)).toBe(false);
+    expect(isTrainingNow({ live: false, locked_in_at: "2026-10-07T18:30:00Z" }, now)).toBe(false);
+    expect(LOCK_IN_CAPTIONS.every((c) => c.length <= CAPTION_MAX && !c.includes("#"))).toBe(true);
+  });
+});
+
+describe("community photos are the athlete's own", () => {
+  const sql = read("supabase/migrations/20261007120000_community_avatars.sql");
+  const profile = read("src/components/community/profile-view.tsx");
+  const media = read("src/lib/community-media.ts");
+  it("starts empty: never the account / identity photo", () => {
+    const author = sql.slice(sql.indexOf("FUNCTION public.community_author"), sql.indexOf("REVOKE ALL ON FUNCTION public.community_author"));
+    expect(author).not.toContain("profile_picture_url");
+    expect(author).not.toContain("p.avatar_url");
+    expect(author.match(/'avatar_url', cp\.avatar_path/g)?.length).toBe(2);
+  });
+  it("only accepts a path in your own community folder", () => {
+    expect(sql).toContain("left(v_path, length(uid::text || '/community-')) <> uid::text || '/community-'");
+    expect(media).toContain("const path = `${userId}/community-${Date.now()}.jpg`;");
+  });
+  it("lets you add, change or remove it from your own profile only", () => {
+    expect(profile).toContain("disabled={!profile.is_me || setAvatar.isPending}");
+    expect(profile).toContain("setAvatar.mutate(null");
+  });
+});
+
+describe("who sees a post: JF crew, my coach, only me + hide weights", () => {
+  const sql = read("supabase/migrations/20261007150000_community_audience.sql");
+  it("uses one visibility rule everywhere (RLS, storage, feed, detail, reactions, comments, badge, profile)", () => {
+    expect(sql).toContain("CHECK (visibility IN ('community', 'coach', 'private'))");
+    expect(sql).toContain("USING (public.community_post_visible(visibility, author_user_id, client_id));");
+    expect(sql.match(/public\.community_post_visible\(p\.visibility, p\.author_user_id, p\.client_id\)/g)!.length).toBeGreaterThanOrEqual(8);
+    expect(sql).not.toContain("(p.visibility = 'community' OR p.author_user_id = uid)");
+  });
+  it("'coach' means the author, admins and the client's assigned coach, never other athletes", () => {
+    expect(sql).toContain("OR (_visibility = 'coach' AND (public.has_role(auth.uid(), 'admin') OR public.is_assigned_coach_for_client(_client))))");
+  });
+  it("hides weights server-side for everyone but the author", () => {
+    expect(sql).toContain("CASE WHEN n.hide_loads AND n.author_user_id IS DISTINCT FROM _viewer");
+    expect(sql).toContain("'tonnage_kg', 0,");
+    expect(sql).toContain("jsonb_build_object('best_load_kg', null,");
+    expect(sql).toContain("hide_loads = coalesce(_hide_loads, p.hide_loads),");
+  });
+  it("formats a hidden load as reps, never '0 kg'", () => {
+    expect(formatTopSet({ reps: 5, load_kg: null }, "kg")).toBe("5 reps");
+    expect(formatTopSet({ reps: 1, load_kg: null }, "lb")).toBe("1 rep");
+  });
+});
+
+describe("the crew: find anyone's profile", () => {
+  const sql = read("supabase/migrations/20261007170000_community_members.sql");
+  const screen = read("src/components/community/community-screen.tsx");
+  const entry = read("src/components/community/community-entry.tsx");
+  it("lists the same population as the community, minus you, counting only posts you can see", () => {
+    expect(sql).toContain("coalesce(c.portal_access_disabled, false) = false");
+    expect(sql).toContain("AND public.community_post_visible(p.visibility, p.author_user_id, p.client_id)");
+    expect(sql).toContain("WHERE m.user_id <> uid");
+    expect(sql).not.toMatch(/community_follow|is_following/i);
+  });
+  it("is a Crew tab, and Home opens a person's profile instead of dead-ending", () => {
+    expect(screen).toContain('(["feed", "crew", "you"] as const)');
+    expect(screen).toContain("<CrewList onOpen={openAuthor} />");
+    expect(entry).toContain("hash: a.user_id === user?.id ? undefined : `person=${a.user_id}`");
+  });
+});
+
+describe("Monday Motivation + Finish Strong Friday: real coach posts", () => {
+  const sql = read("supabase/migrations/20261008090000_community_coach_posts.sql");
+  const card = read("src/components/community/post-card.tsx");
+  it("are ordinary community posts (same table, feed, profile, reactions, comments)", () => {
+    expect(sql).toContain("CHECK ((kind = 'workout') = (completion_id IS NOT NULL))");
+    expect(sql).toContain("'note', 'community', v_item.body");
+    expect(sql).toContain("LEFT JOIN public.pl_day_completions pc ON pc.id = n.completion_id");
+    expect(card).toContain("<NoteBody post={post} clamp />");
+  });
+  it("publish once per theme per week, Winnipeg time, never twice even after a delete", () => {
+    expect(sql).toContain("AT TIME ZONE 'America/Winnipeg'");
+    expect(sql).toContain("v_local::time < time '07:00' OR v_local::time >= time '12:00'");
+    expect(sql).toContain("to_char(v_local, 'IYYY-\"W\"IW')");
+    expect(sql).toContain("series_key text PRIMARY KEY");
+    expect(sql).toContain("ON CONFLICT (series_key) DO NOTHING;\n  IF NOT FOUND THEN RETURN jsonb_build_object('status', 'exists'");
+    expect(sql).toContain("'*/15 11-18 * * 1,5', 'select public.community_publish_series();'");
+  });
+  it("can be paused, and only coaches can publish, edit the library or write notes", () => {
+    expect(sql).toContain("IF coalesce(v_settings.paused, false) THEN RETURN jsonb_build_object('status', 'paused')");
+    expect(sql).toContain("IF auth.uid() IS NOT NULL AND NOT public.is_community_staff() THEN");
+    expect(sql).toContain("IF uid IS NULL OR NOT public.community_is_coach(uid) THEN");
+  });
+  it("rotate mentors and never put words in anyone's mouth", () => {
+    expect(sql).toContain("ORDER BY (i.mentor = ANY (coalesce(v_recent, '{}'))) ASC, i.last_used_at ASC NULLS FIRST");
+    expect(sql).toContain("CONSTRAINT community_series_items_quote_has_source CHECK (quote IS NULL OR quote_source IS NOT NULL)");
+    // quotes are not editable after the fact, only the coach's own words
+    expect(sql).toMatch(/community_update_note\(_post_id uuid, _body text\)/);
+    for (const known of ["Rest at the end, not in the middle", "Pain is weakness leaving the body", "opportunity for me to rise"]) expect(sql).not.toContain(known);
+  });
+  it("show the coach once, as coach, folding a second login into the same person", () => {
+    expect(sql).toContain("'title', CASE WHEN staff.yes OR cp.title IS NOT NULL THEN coalesce(cp.title, 'Coach · JF Effect') END");
+    expect(sql).toContain("AND NOT EXISTS (SELECT 1 FROM public.community_profiles l WHERE l.user_id = m.user_id AND l.same_person_as IS NOT NULL)");
+    expect(sql).toContain("'is_mine', n.author_user_id = public.community_main_account(_viewer),");
   });
 });

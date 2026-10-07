@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2, Trash2, GripVertical, Target } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, Target, SlidersHorizontal, Repeat } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -65,9 +65,17 @@ import {
   equalDisplayLoads,
   persistedLoadForDisplayValue,
 } from "@/lib/workout-unit-persistence";
-import { WorkoutUndoProvider, useWorkoutUndo } from "@/lib/workout-undo";
+import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
+import { WarmupSection, useWarmupSets } from "@/components/workout-day/final-warmup-input";
+import { LoadSuggestionCard } from "@/components/workout-day/load-suggestion-card";
+import { TypedValueInput } from "@/components/workout-day/typed-value-input";
+import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
+import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
+import { fetchAllPages } from "@/lib/supabase-paginate";
+import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
+import { pickFinalWarmup } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
@@ -99,6 +107,7 @@ import {
   suggestedSessionRpe as computeSuggestedSessionRpe,
   planningTarget,
   predictReadiness,
+  suggestFinalWarmup,
   suggestSetLoad,
   NEUTRAL_READINESS,
   type LoadModel,
@@ -108,7 +117,7 @@ import {
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import { isSetLogComplete } from "@/lib/set-completion";
 import { planCascade, type CascadeOrigin, type CascadeSetState } from "@/lib/set-cascade";
-import { SET_INPUT_CASCADE_EVENT, canCascadeInputTo, markManualInputBoundary, parseRepTarget, type CascadedInputField } from "@/lib/set-input-cascade";
+import { parseRepTarget, planFieldCascade } from "@/lib/set-input-cascade";
 import {
   formatLoadDisplay,
   loadColumnLabel,
@@ -116,19 +125,9 @@ import {
   resolveLoadType,
   type LoadType,
 } from "@/lib/workout-load-type";
-import {
-  parseRepQuickTarget,
-  parseEffortQuickTarget,
-  repQuickOptions,
-  rpeQuickOptions,
-  rirQuickOptions,
-  moreOptions,
-  RPE_FULL_OPTIONS,
-  RIR_FULL_OPTIONS,
-} from "@/lib/workout-quick-select";
-import { QuickValueSelect } from "@/components/workout-day/quick-value-select";
 import { SetTimerInput } from "@/components/workout-day/set-timer-input";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
+import { LockInBar } from "@/components/community/lock-in";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { collectSessionPRs } from "@/lib/workout-takeaways";
 import { useWorkoutPoints, useWorkoutRecords } from "@/lib/training-records";
@@ -446,7 +445,6 @@ function WorkoutDay({
   // Phase B turn 2: day/rows/results reads route through the adapter when
   // provided. Other reads/writes still on sb.* for now (turns 3/4).
   const qc = useQueryClient();
-  const undo = useWorkoutUndo();
   const cacheScope = `portal:${dayId}`;
   // Gate the workout-detail queries on a fully hydrated auth session.
   // Root cause of the Ashley Santos "No exercises assigned" bug: on cold
@@ -900,33 +898,21 @@ function WorkoutDay({
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
           is_bodyweight, load_type,
           pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, exercises(name))`;
-      const requests: Promise<any>[] = [];
-      if (exerciseIds.length) {
-        requests.push(
-          (supabase as any)
-            .from("pl_row_results")
-            .select(columns)
-            .eq("client_id", historyOwnerId)
-            .in("pl_exercise_rows.exercise_id", exerciseIds)
-            .order("updated_at", { ascending: false })
-            .limit(2000),
-        );
-      }
-      if (fallbackNames.length) {
-        requests.push(
-          (supabase as any)
-            .from("pl_row_results")
-            .select(columns)
-            .eq("client_id", historyOwnerId)
-            .in("pl_exercise_rows.exercise_name_override", fallbackNames)
-            .order("updated_at", { ascending: false })
-            .limit(2000),
-        );
-      }
-      const batches = await Promise.all(requests);
-      for (const batch of batches) if (batch.error) throw batch.error;
+      // Confirmed sets only (drafts from "apply to remaining" are not history),
+      // newest first, paged past the 1,000-row response cap so long-term
+      // clients keep their full rep-max baselines.
+      const history = (filter: (q: any) => any) => fetchAllPages((from, to) =>
+        filter((supabase as any).from("pl_row_results").select(columns).eq("client_id", historyOwnerId))
+          .not("completed_at", "is", null)
+          .order("completed_at", { ascending: false })
+          .order("id", { ascending: true })
+          .range(from, to), { maxRows: 10_000 });
+      const batches = await Promise.all([
+        exerciseIds.length ? history((q) => q.in("pl_exercise_rows.exercise_id", exerciseIds)) : Promise.resolve([]),
+        fallbackNames.length ? history((q) => q.in("pl_exercise_rows.exercise_name_override", fallbackNames)) : Promise.resolve([]),
+      ]);
       const uniqueLogs = Array.from(
-        new Map(batches.flatMap((batch) => batch.data ?? []).map((log: any) => [log.id, log])).values(),
+        new Map(batches.flat().map((log: any) => [log.id, log])).values(),
       );
       return uniqueLogs.map((log: any) => {
         const historyRow = log.pl_exercise_rows;
@@ -968,15 +954,36 @@ function WorkoutDay({
     [results],
   );
 
+  // Bodyweight (smoothed) — strength scales with it, so past sets are adjusted
+  // for any change since they were lifted. See load-suggestion.ts.
+  const { data: bodyweightSeries = [] } = useQuery<BodyweightKgPoint[]>({
+    queryKey: ["load-bodyweight", historyOwnerId],
+    enabled: secondaryHydrationReady && adapter?.kind !== "member" && !!historyOwnerId,
+    staleTime: 10 * 60_000,
+    retry: 1,
+    queryFn: () => getClientBodyweightKgSeries(historyOwnerId!, 120),
+  });
+  const bodyweightNowKg = useMemo(
+    () => smoothedBodyweightKgAt(bodyweightSeries, Date.now()),
+    [bodyweightSeries],
+  );
+
   // Per-row history for RPE-based load suggestions — same batch, same matching
   // rules as Last Time, current session excluded.
   const loadHistoryByRow = useMemo(() => {
     const map = new Map<string, PreviousLiftLog[]>();
+    const bwAt = new Map<string, number | null>();
+    const withBodyweight = (log: PreviousLiftLog): PreviousLiftLog => {
+      if (!bodyweightSeries.length || !log.occurredAt) return log;
+      const day = log.occurredAt.slice(0, 10);
+      if (!bwAt.has(day)) bwAt.set(day, smoothedBodyweightKgAt(bodyweightSeries, Date.parse(log.occurredAt)));
+      return { ...log, bodyweightKg: bwAt.get(day) ?? null };
+    };
     for (const identity of previousLiftIdentities) {
-      map.set(identity.rowId, matchHistoryLogs(identity, previousLiftLogs, currentHistorySessionKey));
+      map.set(identity.rowId, matchHistoryLogs(identity, previousLiftLogs, currentHistorySessionKey).map(withBodyweight));
     }
     return map;
-  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey]);
+  }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey, bodyweightSeries]);
 
   // Predicted readiness from the most recent OTHER workout review. Only v2
   // reviews carry a real session RPE (legacy ones mapped status → fake RPE).
@@ -1255,6 +1262,15 @@ function WorkoutDay({
     }
   };
 
+  // Lock in (community): locking in is starting the session — same server
+  // path as the first logged set — and returns the completion it posts to.
+  const ensureStartedForLockIn = async (): Promise<string | null> => {
+    if (completion?.id && (completion.started_at || completion.in_progress_at)) return completion.id;
+    const res = await startWorkoutSrv({ data: { kind: "client" as const, dayId, scheduledWorkoutId } });
+    qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+    return (res as any)?.id ?? null;
+  };
+
   // Heartbeat: persist activity timestamps to localStorage while the
   // workout is in-flight so the final active_duration_seconds reflects
   // real engaged time and survives a mid-workout refresh.
@@ -1448,21 +1464,22 @@ function WorkoutDay({
       await qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
     }
 
-    undo.push({
-      label: `Set exercise unit to ${next.toUpperCase()}`,
-      coalesceKey: `ex-unit:${key}`,
-      undo: async () => {
-        setUnitOverrides((m) => ({ ...m, [key]: prevUnit }));
-        if (client?.id && exerciseId) {
-          try {
-            if (adapter) await adapter.saveExerciseUnitPref({ exerciseId, unit: prevUnit });
-            else await saveExerciseUnitPref(client.id, exerciseId, prevUnit);
-            await qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
-          } catch {
-            toast.error("Could not restore the previous exercise unit");
-          }
+    const restorePreviousUnit = async () => {
+      setUnitOverrides((m) => ({ ...m, [key]: prevUnit }));
+      if (client?.id && exerciseId) {
+        try {
+          if (adapter) await adapter.saveExerciseUnitPref({ exerciseId, unit: prevUnit });
+          else await saveExerciseUnitPref(client.id, exerciseId, prevUnit);
+          await qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
+        } catch {
+          toast.error("Could not restore the previous exercise unit");
         }
-      },
+      }
+    };
+    // Undo lives on the confirmation itself — right where the change happened.
+    toast.success(`Switched to ${next.toUpperCase()}`, {
+      duration: 5000,
+      action: { label: "Undo", onClick: () => void restorePreviousUnit() },
     });
   };
 
@@ -2262,6 +2279,14 @@ function WorkoutDay({
                   ])}
                 />
               ) : null}
+              {isClientWorkout && !isImpersonating && !completion?.completed_at && rowsLoaded && (rows as any[]).length > 0 && (
+                <LockInBar
+                  completionId={completion?.id ?? null}
+                  ensureStarted={ensureStartedForLockIn}
+                  workoutTitle={cleanDayTitle(day.title, day.day_index)}
+                  athleteName={(client as any)?.full_name ?? null}
+                />
+              )}
               {canEditWorkoutStructure && rowsLoaded && (rows as any[]).length === 0 && (
                 <WorkoutAddExercise onAdd={(exercise) => addExerciseNow(exercise, 0)} disabled={rowsFetching} />
               )}
@@ -2279,6 +2304,7 @@ function WorkoutDay({
                       previousLift={previousLiftByRow.get(r.id) ?? null}
                       repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
+                      bodyweightKg={bodyweightNowKg}
                       readiness={readiness}
                       assistedBests={assistedBestsByRow.get(r.id) ?? null}
                       blockId={blockId}
@@ -2580,6 +2606,7 @@ function WorkoutDay({
                     previousLift={previousLiftByRow.get(r.id) ?? null}
                     repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
+                      bodyweightKg={bodyweightNowKg}
                       readiness={readiness}
                     assistedBests={assistedBestsByRow.get(r.id) ?? null}
                     blockId={blockId}
@@ -2817,51 +2844,6 @@ function WorkoutDay({
  * Exercise-level RPE suggestion: the range for today's working sets, what it's
  * planned for, and why (history / today's sets / readiness / layoff).
  */
-function LoadSuggestionCard({
-  hint,
-  model,
-  plan,
-}: {
-  hint: LoadSuggestion | null;
-  model: LoadModel;
-  plan: { reps: number; rpe: number };
-}) {
-  if (model.status === "calibrating" || !hint) {
-    if (model.historySessions === 0) return null;
-    return (
-      <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-        <Target className="h-3 w-3" aria-hidden="true" />
-        Load suggestions unlock after a week of logs with RPE
-      </div>
-    );
-  }
-  const range = hint.low === hint.high
-    ? `${fmtNum(hint.target)} ${hint.unit}`
-    : `${fmtNum(hint.low)}–${fmtNum(hint.high)} ${hint.unit}`;
-  const why =
-    model.source === "history"
-      ? model.readiness.reasons.length
-        ? `eased for ${model.readiness.reasons[0]}`
-        : model.staleDays
-          ? `eased back after ${Math.round(model.staleDays / 7)} weeks off`
-          : `from your last ${Math.min(model.historySessions, 8)} sessions`
-      : "updated from today's sets";
-  return (
-    <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/5 px-2.5 py-1.5">
-      <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-      <div className="min-w-0 leading-tight">
-        <div className="text-sm font-bold tabular-nums text-foreground">
-          {range}
-          <span className="ml-1.5 text-[11px] font-medium text-muted-foreground">
-            {plan.reps} reps @ RPE {fmtNum(plan.rpe)}
-          </span>
-        </div>
-        <div className="truncate text-[11px] text-muted-foreground">Suggested · {why}</div>
-      </div>
-    </div>
-  );
-}
-
 function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: "kg" | "lb"; exerciseName: string }) {
   const nav = useWorkoutNavigation();
   // Cheap suspicious-load heuristic: extreme absolute values flag a likely unit / data error.
@@ -3046,14 +3028,14 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
       className={cn("inline-flex max-w-full items-center gap-1 rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-900 dark:text-sky-100", className)}
       title="Your top set the last time you trained this exercise"
     >
-      <span className="text-[9px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">Last time</span>
+      <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">Last time</span>
       <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}</span>
       {when && <span className="text-[10px] text-sky-700/70 dark:text-sky-300/70">· {when}</span>}
     </div>
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, loadHistory = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3254,15 +3236,52 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const hideWeight = !showWeight;
   // Single shared column template so the header and every set row line up
   // no matter which inputs are active.
+  // Phone-first: 44px-tall cells, a thumb-sized done circle, and room for the
+  // remove control only when a set can actually be removed.
+  const canRemoveSet = !readonly && adapter?.kind !== "member" && setCount > 1;
   const gridTemplate = [
-    focusMode ? "36px" : "28px",
+    focusMode ? "30px" : "22px",
     showReps ? "1fr" : null,
     showTimer ? "1fr" : null,
     showVelocity ? "1fr" : null,
     "1fr",
-    !hideWeight ? "1.3fr" : null,
-    focusMode ? "52px" : "44px",
+    !hideWeight ? "1.35fr" : null,
+    canRemoveSet ? "68px" : "44px",
   ].filter(Boolean).join(" ");
+  // The logging frontier: helper chips (suggested load, repeat previous set)
+  // appear only on the next set to log — never on every row.
+  const frontier = Array.from({ length: setCount }, (_, k) => k + 1)
+    .find((n) => !existingResults.find((x) => x.set_index === n && x.completed_at)) ?? null;
+  // "Repeat set N" — offered on the next set when the last logged set's numbers
+  // differ from what's waiting below it (blank or another value).
+  const repeatPrevious = (() => {
+    if (readonly || frontier == null || frontier < 2) return null;
+    const from = existingResults.find((x) => x.set_index === frontier - 1);
+    if (!from?.completed_at || from.actual_load == null) return null;
+    const loadType = resolveLoadType(from.load_type, from.is_bodyweight);
+    const values = {
+      load: String(from.actual_load),
+      reps: from.actual_reps != null ? String(from.actual_reps) : "",
+      rpe: from.actual_rpe_num != null ? String(from.actual_rpe_num) : from.actual_rpe != null ? String(from.actual_rpe) : "",
+      unit: ((from.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit),
+      loadType,
+    };
+    let differs = false;
+    let overwrites = false;
+    for (let n = frontier; n <= setCount; n++) {
+      const r = existingResults.find((x) => x.set_index === n);
+      if (r?.completed_at) continue;
+      const blank = r?.actual_load == null;
+      const same = !blank && Number(r.actual_load) === Number(from.actual_load)
+        && (r.actual_load_unit ?? activeUnit) === values.unit
+        && (r.actual_reps == null || String(r.actual_reps) === values.reps);
+      if (!same) differs = true;
+      if (!blank && !same) overwrites = true;
+    }
+    if (!differs) return null;
+    const label = `${formatLoadDisplay(Number(Number(from.actual_load).toFixed(2)), loadType, values.unit)}${values.reps ? ` × ${values.reps}` : ""}`;
+    return { fromSet: frontier - 1, values, label, overwrites };
+  })();
   const exMeta: ExerciseMeta | null = exercise
     ? {
         exercise_category: exercise.exercise_category ?? null,
@@ -3377,6 +3396,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => planningTarget({ repTarget, rpeTarget, rirTarget }),
     [repTarget, rpeTarget, rirTarget],
   );
+  // Optional final warm-up (squat / bench / deadlift family only). It sharpens
+  // the FIRST working-set suggestion, so it is offered only while no working
+  // set is logged yet today and only where the engine can suggest at all.
+  const workedToday = existingResults.some(
+    (r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external",
+  );
+  // Warm-up sets can be logged on any external-load exercise (before the first
+  // working set); the heaviest one feeds the suggestion engine for that exercise.
+  const warmupAllowed =
+    !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId && !workedToday;
+  const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
+  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
+  const [warmupForm, setWarmupForm] = useState<string | null>(null);
+  const warmupPromptable = warmupEligible && family !== "accessory";
+  const warmupForModel = warmupEligible ? pickFinalWarmup(warmupSets, activeUnit) : null;
   const loadModel = useMemo<LoadModel | null>(() => {
     if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== "external" || !loadPlan) return null;
     const today = existingResults
@@ -3388,12 +3422,34 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         rpe: parseRpe(r.actual_rpe_num ?? r.actual_rpe),
       }))
       .filter((x) => x.load > 0 && x.reps > 0);
-    return buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness });
-  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness]);
+    return buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel, bodyweightKg });
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg]);
   const loadHint = useMemo<LoadSuggestion | null>(
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
   );
+  // "Last warm-up" gauge on the suggestion card (squat / bench / deadlift, before
+  // the first working set): tells the athlete what to warm up to, then reads how
+  // it felt to tune the top-set number. Opens the warm-up form pre-filled.
+  const warmupGaugeSuggested = useMemo(
+    () => (loadHint && loadPlan ? suggestFinalWarmup(loadHint.target, loadPlan.reps, activeUnit) : null),
+    [loadHint?.target, loadPlan?.reps, activeUnit],
+  );
+  const heaviestWarmupId = useMemo(() => {
+    let best: { id: string; kg: number } | null = null;
+    for (const w of warmupSets) {
+      const kg = w.unit === "kg" ? w.load : w.load * 0.45359237;
+      if (!best || kg >= best.kg) best = { id: w.id, kg };
+    }
+    return best?.id ?? null;
+  }, [warmupSets]);
+  const warmupGauge = warmupPromptable && loadModel
+    ? {
+        suggested: warmupGaugeSuggested,
+        logged: warmupForModel,
+        onOpen: () => setWarmupForm(heaviestWarmupId ?? "new"),
+      }
+    : null;
 
   // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
   // into all later un-completed sets of this same exercise. Never overwrites
@@ -3558,6 +3614,60 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     }
   };
 
+  // ── Reps / RPE fill-down ──────────────────────────────────────────────
+  // Same mental model as weight: typing reps or RPE on set N fills the sets
+  // below that weren't set by hand (see planFieldCascade). Only that field is
+  // written; load and completion are untouched. The screen updates first
+  // (broadcast + cache patch), the server catches up behind it.
+  const fieldManualRef = useRef<Record<"reps" | "rpe", Set<number>>>({ reps: new Set(), rpe: new Set() });
+  const fieldCascadeTokenRef = useRef(0);
+  const [fieldCascade, setFieldCascade] = useState<{ token: number; targets: number[]; field: "reps" | "rpe"; value: string } | null>(null);
+  const cascadeFieldFromSet = async (fromSetIndex: number, field: "reps" | "rpe", value: string, previousValue: string) => {
+    if (!clientId || readonly) return;
+    fieldManualRef.current[field].add(fromSetIndex);
+    if (value === "") return; // clearing a set clears only that set
+    const states = Array.from({ length: setCount }, (_, i) => {
+      const idx = i + 1;
+      const ex = existingResults.find((x: any) => x.set_index === idx) as any;
+      const stored = field === "reps"
+        ? (ex?.actual_reps != null ? String(ex.actual_reps) : "")
+        : (ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? ""));
+      return { index: idx, value: stored, completed: !!ex?.completed_at, manual: fieldManualRef.current[field].has(idx) };
+    });
+    const targets = planFieldCascade(fromSetIndex, previousValue, states);
+    if (!targets.length) return;
+    setFieldCascade({ token: ++fieldCascadeTokenRef.current, targets, field, value });
+    const patchFor = (idx: number): Record<string, any> => field === "reps"
+      ? { actual_reps: parseInt(value, 10) }
+      : { actual_rpe: value, actual_rpe_num: Number(value) };
+    // Sets with no saved row yet only change on screen (like the prescription
+    // pre-fill) and save with the rest of the set when it's logged — creating
+    // rows here would mark untouched sets as drafts.
+    const saved = targets
+      .map((idx) => existingResults.find((x: any) => x.set_index === idx) as any)
+      .filter((ex) => ex?.id && !String(ex.id).startsWith("optimistic:"));
+    if (!saved.length) return;
+    qc.setQueriesData({ queryKey: ["pl-day-results", dayId] }, (old: any) => {
+      let next = old;
+      for (const ex of saved) next = applyOptimisticSetResult(next, { row_id: row.id, set_index: ex.set_index, ...patchFor(ex.set_index) }, ex.id);
+      return next;
+    });
+    const tasks = saved.map((ex) => {
+      const body: Record<string, any> = withMemberWorkoutIndexes({
+        row_id: row.id, client_id: clientId, set_index: ex.set_index, ...patchFor(ex.set_index),
+      }, adapter, dayId);
+      if (adapter) return adapter.upsertPlRowResultRaw(body, ex.id);
+      return sb.from("pl_row_results").update(body).eq("id", ex.id).then(({ error }: any) => { if (error) throw error; });
+    });
+    try {
+      await Promise.all(tasks);
+      onChange();
+    } catch {
+      toast.error("Some sets didn’t save — check your connection");
+    }
+    await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
+  };
+
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => {
     if (!clientId) return;
     beginWorkoutSession(dayId);
@@ -3614,7 +3724,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {position != null && <ExerciseOrderBadge position={position} family={family} className="mt-px" />}
-          <div className="min-w-0 flex-1 font-bold leading-snug break-words text-sm sm:text-base">{name}</div>
+          <div className="min-w-0 flex-1 text-base font-bold leading-snug break-words">{name}</div>
         </div>
         {!readonly && onUnitChange && (
           <div className="shrink-0">
@@ -3624,7 +3734,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       </div>
       {/* Row 2 — badges */}
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        <Badge variant="outline" className={cn("h-4 px-1 text-[10px] font-bold uppercase tracking-wider", purposeLabelBadgeClass(purposeLabel))}>
+        <Badge variant="outline" className={cn("h-5 px-1.5 text-[11px] font-bold uppercase tracking-wider", purposeLabelBadgeClass(purposeLabel))}>
           {purposeLabel || category}
         </Badge>
         {hasNote && (
@@ -3634,7 +3744,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         )}
       </div>
       {/* Standardized prescription line: Sets × Reps @ Weight | RPE */}
-      <div className="mt-1 text-sm font-semibold text-foreground leading-snug break-words">
+      <div className="mt-1.5 text-base font-bold text-foreground leading-snug break-words">
         {formatPrescription({
           sets: row.sets,
           repsText: row.reps_text,
@@ -3648,7 +3758,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           measurementType: showTimer && !showReps ? "time" : "reps",
           durationSeconds: effectivePrescribedDurationSec,
         })}
-        {row.tempo && <span className="ml-2 text-xs font-normal text-muted-foreground">tempo {row.tempo}</span>}
+        {row.tempo && <span className="ml-2 text-sm font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
       {/* Reference row: Last Time and History stay directly connected — History
           simply expands on the previous-performance information. */}
@@ -3671,9 +3781,24 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           )}
         </div>
       )}
-      {loadModel && loadPlan && (
-        <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} />
+      {loadModel && loadPlan && !(warmupForm && (loadModel.status === "calibrating" || !loadHint)) && (
+        <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} />
       )}
+      {(warmupSets.length > 0 && (!warmupGauge || warmupSets.length > 1)) || (warmupAllowed && !!warmupForm) ? (
+        <WarmupSection
+          sets={warmupSets}
+          unit={activeUnit}
+          form={warmupAllowed ? warmupForm : null}
+          canEdit={warmupAllowed}
+          onFormChange={setWarmupForm}
+          onSave={saveWarmup}
+          onRemove={removeWarmup}
+          showPrompt={false}
+          hasHistory={!!loadModel && loadModel.status === "ready" && loadModel.source !== "warmup"}
+          seed={warmupGauge?.suggested ?? null}
+          showList={!warmupGauge || warmupSets.length > 1}
+        />
+      ) : null}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge
           load={Number(
@@ -3742,41 +3867,41 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 swapContext={swapContext}
               />
             </DropdownMenuItem>
+            {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Exercise {movePosition} of {moveCount}
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  <DropdownMenuItem disabled={!canMoveUp} onSelect={onMoveUp} aria-label="Move exercise up" className="h-10 justify-center rounded-lg">
+                    <ArrowUp className="mr-1.5 h-4 w-4" /> Up
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={!canMoveDown} onSelect={onMoveDown} aria-label="Move exercise down" className="h-10 justify-center rounded-lg">
+                    <ArrowDown className="mr-1.5 h-4 w-4" /> Down
+                  </DropdownMenuItem>
+                </div>
+                {(moveCount ?? 0) > 2 && (
+                  <>
+                    <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Move to position</div>
+                    <div className="grid grid-cols-4 gap-1 p-1">
+                      {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
+                        <DropdownMenuItem
+                          key={position}
+                          disabled={position === movePosition}
+                          onSelect={() => onMoveTo?.(position)}
+                          className="h-10 justify-center rounded-lg p-0 font-semibold"
+                        >
+                          {position}
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </DropdownMenuContent>
         )}
-        reorderMenu={(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) ? (
-          <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5">
-              <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Exercise {movePosition} of {moveCount}
-              </div>
-              <div className="grid grid-cols-2 gap-1">
-                <DropdownMenuItem disabled={!canMoveUp} onSelect={onMoveUp} className="rounded-lg justify-center">
-                  <ArrowUp className="mr-1.5 h-4 w-4" /> Up
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canMoveDown} onSelect={onMoveDown} className="rounded-lg justify-center">
-                  <ArrowDown className="mr-1.5 h-4 w-4" /> Down
-                </DropdownMenuItem>
-              </div>
-              {(moveCount ?? 0) > 2 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <div className="px-2 py-1 text-xs text-muted-foreground">Move directly to</div>
-                  <div className="grid grid-cols-4 gap-1 p-1">
-                    {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
-                      <DropdownMenuItem
-                        key={position}
-                        disabled={position === movePosition}
-                        onSelect={() => onMoveTo?.(position)}
-                        className="h-9 justify-center rounded-lg p-0 font-semibold"
-                      >
-                        {position}
-                      </DropdownMenuItem>
-                    ))}
-                  </div>
-                </>
-              )}
-            </DropdownMenuContent>
-        ) : null}
         rest={(exerciseId || name) ? (
           <RestTimerButton
             seconds={effectiveRest ?? null}
@@ -3793,7 +3918,19 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         const hasFirstWeight = firstLoad != null && isFinite(Number(firstLoad));
         const uncompletedAfterFirst = Array.from({ length: setCount }, (_, i) => i + 1)
           .filter((i) => i > 1 && !existingResults.find((x: any) => x.set_index === i && x.completed_at)).length;
-        if (uncompletedAfterFirst === 0) return null;
+        if (uncompletedAfterFirst === 0 || firstSet?.completed_at) return null;
+        // Once set 1 is logged, "Repeat set N" on the next set takes over.
+        // Only offer it when it would change something: Set 1 has a weight and
+        // an open set below still differs (blank or another load). Otherwise
+        // it's a dead row — the weight cascade already fills blanks below.
+        const needsFill = hasFirstWeight && Array.from({ length: setCount }, (_, i) => i + 1).some((i) => {
+          if (i === 1) return false;
+          const r = existingResults.find((x) => x.set_index === i);
+          if (r?.completed_at) return false;
+          return r?.actual_load == null || Number(r.actual_load) !== Number(firstLoad)
+            || (r.actual_load_unit ?? activeUnit) !== (firstSet?.actual_load_unit ?? activeUnit);
+        });
+        if (!needsFill) return null;
         const firstUnit = (firstSet?.actual_load_unit as "kg" | "lb" | undefined) ?? activeUnit;
         const displayLoad = Number(Number(firstLoad ?? 0).toFixed(2));
         const firstLoadType = resolveLoadType(firstSet?.load_type, firstSet?.is_bodyweight);
@@ -3842,9 +3979,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 : "Enter a weight in Set 1 first"}
             >
               <Zap className="h-3.5 w-3.5" />
-              {hasFirstWeight
-                ? `Fill All Sets with ${fillLabel}`
-                : "Fill All Sets (enter Set 1 weight first)"}
+              {`Fill All Sets with ${fillLabel}`}
             </Button>
           </div>
         );
@@ -3856,67 +3991,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </p>
       )}
 
-      {/* Input type — optional athlete logging columns. Velocity uses mean concentric
-          velocity (m/s). Per-row choices are instant; the velocity default is account-wide. */}
-      {!readonly && (
-        <div className="mt-2 flex items-center gap-1.5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex h-6 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              >
-                Inputs
-                <ChevronDown className="h-3 w-3" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-40">
-              {([
-                ["reps", "Reps", showReps],
-                ["weight", "Weight", showWeight],
-                ["timer", "Timer", showTimer],
-                ["velocity", "Avg velocity (m/s)", showVelocity],
-              ] as const).map(([field, label, on]) => (
-                <DropdownMenuItem
-                  key={field}
-                  onSelect={(e) => { e.preventDefault(); toggleInput(field); }}
-                  className="text-xs font-semibold"
-                >
-                  <span className={cn("mr-2 inline-flex h-3.5 w-3.5 items-center justify-center", !on && "opacity-0")}>
-                    <Check className="h-3.5 w-3.5" />
-                  </span>
-                  {label}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  const next = !velocityDefault;
-                  void persistVelocityDefault(next)
-                    .then(() => {
-                      if (next && !showVelocity) {
-                        const updated = { ...inputOverrides, velocity: true };
-                        setInputOverridesState(updated);
-                        setRowInputs(row.id, updated);
-                      }
-                      toast.success(next ? "Velocity will open by default on your workouts" : "Velocity default turned off");
-                    })
-                    .catch(() => toast.error("Could not save velocity default"));
-                }}
-                className="text-xs font-semibold"
-              >
-                Velocity default: {velocityDefault ? "On" : "Off"}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
-
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div
           className={cn(
-            "grid items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground",
+            "grid items-center justify-items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground",
             focusMode && "text-xs",
           )}
           style={{ gridTemplateColumns: gridTemplate }}
@@ -3924,18 +4002,71 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <span>Set</span>
           {showReps && <span>Reps</span>}
           {showTimer && <span>Time</span>}
-          <span>{showRir ? "RIR" : "RPE"}</span>
+          <EffortScaleHeader rir={showRir} />
           {showVelocity && <span title="Average concentric velocity — enter the final rep for multi-rep sets">Avg Vel</span>}
           {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
-          <span className="text-right">Status</span>
+          {/* Status column header doubles as the column picker — the circles
+              below explain themselves, and the picker sits with the columns it changes. */}
+          {readonly ? <span className="justify-self-end">Done</span> : (
+            <div className="flex justify-self-end">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Log columns for ${name}`}
+                    title="Choose what to log (reps, weight, timer, velocity)"
+                    className="-my-1 ml-auto inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    <span className="sr-only">Log columns</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  {([
+                    ["reps", "Reps", showReps],
+                    ["weight", "Weight", showWeight],
+                    ["timer", "Timer", showTimer],
+                    ["velocity", "Avg velocity (m/s)", showVelocity],
+                  ] as const).map(([field, label, on]) => (
+                    <DropdownMenuItem
+                      key={field}
+                      onSelect={(e) => { e.preventDefault(); toggleInput(field); }}
+                      className="text-xs font-semibold"
+                    >
+                      <span className={cn("mr-2 inline-flex h-3.5 w-3.5 items-center justify-center", !on && "opacity-0")}>
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                      {label}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      const next = !velocityDefault;
+                      void persistVelocityDefault(next)
+                        .then(() => {
+                          if (next && !showVelocity) {
+                            const updated = { ...inputOverrides, velocity: true };
+                            setInputOverridesState(updated);
+                            setRowInputs(row.id, updated);
+                          }
+                          toast.success(next ? "Velocity will open by default on your workouts" : "Velocity default turned off");
+                        })
+                        .catch(() => toast.error("Could not save velocity default"));
+                    }}
+                    className="text-xs font-semibold"
+                  >
+                    Velocity default: {velocityDefault ? "On" : "Off"}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
           const prevExisting = i > 0 ? existingResults.find((x) => x.set_index === i) : undefined;
-          const hasUncompletedAfter = Array.from({ length: setCount - (i + 1) }).some((_, k) => {
-            const ex = existingResults.find((x) => x.set_index === i + 2 + k);
-            return !ex?.completed_at;
-          });
           return (
             <SetRow
               key={i}
@@ -3968,11 +4099,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               repTarget={repTarget}
               rpeTarget={rpeTarget}
               rirTarget={rirTarget}
-              hasUncompletedAfter={hasUncompletedAfter}
+              isNextSet={frontier === i + 1}
+              repeat={frontier === i + 1 ? repeatPrevious : null}
               onApplyToRemaining={applyToRemaining}
               cascade={cascade}
               autoFilled={cascadeOriginRef.current.get(i + 1) === "auto"}
               onCascadeFromSet={cascadeFromSet}
+              fieldCascade={fieldCascade}
+              onFieldCascade={cascadeFieldFromSet}
               forceHydrateToken={fillToken}
               forcedFill={fillSnapshot}
               readonly={readonly}
@@ -3981,24 +4115,52 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               focusMode={focusMode}
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
-              onRemoveSet={!readonly && adapter?.kind !== "member" && setCount > 1 ? removeSet : undefined}
+              onRemoveSet={canRemoveSet ? removeSet : undefined}
             />
           );
         })}
         {!readonly && adapter?.kind !== "member" && (
           <div className="flex justify-center border-t border-builder-card-border bg-background/80 py-1.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
-              onClick={() => void addSet()}
-              disabled={setCount >= 20}
-              aria-label={`Add set to ${name}`}
-            >
-              <span className="mr-1 text-base font-medium leading-none">+</span>
-              Add set
-            </Button>
+            {warmupAllowed ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
+                    aria-label={`Add set to ${name}`}
+                  >
+                    <span className="mr-1 text-base font-medium leading-none">+</span>
+                    Add set
+                  </Button>
+                </DropdownMenuTrigger>
+                {/* Don't hand focus back to "Add set" on close — the warm-up form's
+                    weight field takes it so the keyboard is ready to type. */}
+                <DropdownMenuContent align="center" className="w-56 rounded-xl p-1.5" onCloseAutoFocus={(e) => e.preventDefault()}>
+                  <DropdownMenuItem onSelect={() => void addSet()} disabled={setCount >= 20} className="rounded-lg">
+                    Working set
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setWarmupForm("new")} disabled={warmupAtLimit} className="rounded-lg">
+                    Warm-up set
+                    <span className="ml-auto text-[10px] text-muted-foreground">sharpens suggestion</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
+                onClick={() => void addSet()}
+                disabled={setCount >= 20}
+                aria-label={`Add set to ${name}`}
+              >
+                <span className="mr-1 text-base font-medium leading-none">+</span>
+                Add set
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -4266,11 +4428,14 @@ function SetRow({
   repMaxBests = null,
   assistedBests = null,
   defaultLoadType = "external",
-  hasUncompletedAfter, onApplyToRemaining, forceHydrateToken = 0,
+  isNextSet = true,
+  repeat = null, onApplyToRemaining, forceHydrateToken = 0,
   forcedFill = null,
   cascade = null,
   autoFilled = false,
   onCascadeFromSet,
+  fieldCascade = null,
+  onFieldCascade,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, showReps = true, showTimer = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
   onTimerTargetChange,
@@ -4313,7 +4478,10 @@ function SetRow({
   assistedBests?: Map<number, PreviousLiftLog> | null;
   /** Exercise-library default load type (assisted machines open in Assisted). */
   defaultLoadType?: LoadType;
-  hasUncompletedAfter?: boolean;
+  /** First set without a completion — where helper chips appear. */
+  isNextSet?: boolean;
+  /** Offered on the next set: repeat the last logged set into every open set below. */
+  repeat?: { fromSet: number; label: string; overwrites: boolean; values: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType } } | null;
   onApplyToRemaining?: (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => Promise<void> | void;
   /** Bumped by parent after a "Fill All Sets" write to force re-hydration
    *  from the freshly-saved `existing` even if the recent-save guard would
@@ -4334,6 +4502,10 @@ function SetRow({
   } | null;
   /** True when this set's values came from a cascade above (not typed or confirmed by hand). */
   autoFilled?: boolean;
+  /** Reps/RPE fill-down the parent just applied + persisted. */
+  fieldCascade?: { token: number; targets: number[]; field: "reps" | "rpe"; value: string } | null;
+  /** Called when this set's reps/RPE is typed by hand — starts the fill-down. */
+  onFieldCascade?: (fromSetIndex: number, field: "reps" | "rpe", value: string, previousValue: string) => void | Promise<void>;
   /** Called when this set's load is manually changed — starts the cascade. */
   onCascadeFromSet?: (
     fromSetIndex: number,
@@ -4752,6 +4924,12 @@ function SetRow({
         completed_at: completedAt,
       }, adapter, workoutId);
       let savedId: string | null = existing?.id ?? null;
+      // Optimistic: today's sets drive the load suggestions, so patch the cache
+      // now and let them recalculate instantly. The hydrate guard keeps this
+      // from touching the inputs; a failed write refetches the truth below.
+      recentlySavedRef.current = true;
+      qc.setQueriesData({ queryKey: ["pl-day-results", workoutId] }, (old: any) =>
+        applyOptimisticSetResult(old, payload, existing?.id ?? null));
       // PostgREST keeps a pooled connection in "current transaction is
       // aborted" (SQLSTATE 25P02) state if a prior statement on the same
       // connection failed. Detect that and retry exactly once after a brief
@@ -4781,6 +4959,7 @@ function SetRow({
             status: existing.completed_at ? "completed" : null,
           }
         : { weight: null, reps: null, rpe: null, unit: null, status: null };
+      try {
       if (existing) {
         if (adapter) {
           await writeWithAbortRetry(() => adapter.upsertPlRowResultRaw(payload, existing.id));
@@ -4817,6 +4996,11 @@ function SetRow({
           });
           savedId = (inserted as any)?.id ?? null;
         }
+      }
+      } catch (writeError) {
+        // Roll the optimistic patch back to whatever the server really has.
+        void qc.invalidateQueries({ queryKey: ["pl-day-results", workoutId] });
+        throw writeError;
       }
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
@@ -5065,14 +5249,6 @@ function SetRow({
     else if (rirTarget?.max != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.max))));
     else if (rirTarget?.min != null) setRpe(String(Math.min(10, Math.max(0, 10 - rirTarget.min))));
   };
-  const copyPrevious = () => {
-    if (!prevExisting) return;
-    const pkg = displayLoadInUnit(prevExisting, unit);
-    if (pkg != null) setLoad(fmtLoad(pkg));
-    if (prevExisting.actual_reps != null) setReps(String(prevExisting.actual_reps));
-    const prevRpe = prevExisting.actual_rpe_num ?? prevExisting.actual_rpe;
-    if (prevRpe != null) setRpe(String(prevRpe));
-  };
 
   const repChipValues = useMemo(() => (repTarget ? repChips(repTarget) : []), [repTarget]);
   const rpeChipValues = useMemo(() => (rpeTarget ? rpeChips(rpeTarget) : []), [rpeTarget]);
@@ -5081,22 +5257,6 @@ function SetRow({
 
   const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
 
-  // ── Fast tap selectors (reps / RPE / RIR) ─────────────────────────────
-  // Smart one-tap options parsed locally from the prescription text — no
-  // DB queries. Custom manual entry stays available inside the popover.
-  const repSelectOptions = useMemo(() => repQuickOptions(parseRepQuickTarget(targetReps)), [targetReps]);
-  const repSelectMore = useMemo(
-    () => moreOptions(Array.from({ length: 20 }, (_, i) => i + 1), repSelectOptions),
-    [repSelectOptions],
-  );
-  const effortSelectOptions = useMemo(
-    () => (showRir ? rirQuickOptions(parseEffortQuickTarget(targetRir)) : rpeQuickOptions(parseEffortQuickTarget(targetRpe))),
-    [showRir, targetRir, targetRpe],
-  );
-  const effortSelectMore = useMemo(
-    () => moreOptions(showRir ? RIR_FULL_OPTIONS : RPE_FULL_OPTIONS, effortSelectOptions),
-    [showRir, effortSelectOptions],
-  );
   // Selector-facing value: for RIR rows the stored value is RPE (10 − RIR),
   // so the selector displays/picks the RIR number and we convert on pick.
   const effortSelectValue = showRir
@@ -5109,22 +5269,16 @@ function SetRow({
     if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
     recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
   };
-  const dispatchInputCascade = (field: CascadedInputField, value: string) => {
-    if (typeof window === "undefined") return;
-    window.dispatchEvent(new CustomEvent(SET_INPUT_CASCADE_EVENT, {
-      detail: { rowId, fromSetIndex: setIndex, field, value },
-    }));
-  };
   const pickReps = (v: string) => {
+    const previous = reps;
     setReps(v);
     setRepsEdited(true);
-    markManualInputBoundary(rowId, "reps", setIndex);
     guardRecentSave();
-    dispatchInputCascade("reps", v);
+    void onFieldCascade?.(setIndex, "reps", v, previous);
   };
   const pickEffort = (v: string) => {
+    const previous = rpe;
     setRpeEdited(true);
-    markManualInputBoundary(rowId, "rpe", setIndex);
     let stored = v;
     if (v === "") {
       stored = "";
@@ -5139,34 +5293,19 @@ function SetRow({
       setRpe(v);
     }
     guardRecentSave();
-    dispatchInputCascade("rpe", stored);
+    void onFieldCascade?.(setIndex, "rpe", stored, previous);
   };
 
-  // Reps and RPE use the same downward funnel as weight. A manual edit on a
-  // lower set is a boundary: cascades from above stop there and never jump
-  // across it. Confirmed sets are also protected. Auto-derived values remain
-  // eligible for a later change from a higher set.
+  // Reps / RPE fill-down from a set above (planned + persisted by the parent,
+  // see planFieldCascade). Applied directly so it shows instantly.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ rowId: string; fromSetIndex: number; field: CascadedInputField; value: string }>).detail;
-      if (!detail || detail.rowId !== rowId) return;
-      // Same rule as weight: sets confirmed by hand are protected, but sets the
-      // weight cascade filled (and auto-completed) still follow edits above.
-      if (existing?.completed_at && !autoFilled) return;
-      if (!canCascadeInputTo(rowId, detail.field, detail.fromSetIndex, setIndex)) return;
-      if (detail.field === "reps") {
-        if (repsEdited) return;
-        setReps(detail.value);
-      } else {
-        if (rpeEdited) return;
-        setRpe(detail.value);
-      }
-      guardRecentSave();
-    };
-    window.addEventListener(SET_INPUT_CASCADE_EVENT, handler);
-    return () => window.removeEventListener(SET_INPUT_CASCADE_EVENT, handler);
-  }, [rowId, setIndex, existing?.completed_at, autoFilled, repsEdited, rpeEdited]);
+    if (!fieldCascade || !fieldCascade.targets.includes(setIndex)) return;
+    // Marked edited so the prescription pre-fill can't snap it back.
+    if (fieldCascade.field === "reps") { setReps(fieldCascade.value); setRepsEdited(true); }
+    else { setRpe(fieldCascade.value); setRpeEdited(true); }
+    queueMicrotask(() => { saveRef.current?.markClean(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldCascade?.token]);
 
   // ── Exact rep-max PR badge ────────────────────────────────────────────
   // Compares the confirmed set against the historical best for the same
@@ -5321,24 +5460,19 @@ function SetRow({
       statusError && "bg-destructive/10 border-l-2 border-l-destructive ring-1 ring-destructive/40",
     )}>
     <div
-      className="grid items-start gap-1.5 px-2.5 py-1.5"
+      className="grid items-center gap-1.5 px-2 py-1.5"
       style={{ gridTemplateColumns: gridTemplate }}
     >
-      <span className={cn("font-mono text-muted-foreground pt-1.5", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
+      <span className={cn("text-center font-semibold tabular-nums text-muted-foreground", focusMode ? "text-base" : "text-sm")}>{setIndex}</span>
       {/* Fast tap reps selector — smart chips from the prescription, custom entry inside */}
       {showReps && (
-      <QuickValueSelect
+      <TypedValueInput
         value={reps}
-        onPick={pickReps}
-        options={repSelectOptions}
-        moreOptions={repSelectMore}
+        kind="reps"
+        onCommit={pickReps}
         ariaLabel={`Set ${setIndex} reps`}
-        title="Reps"
-        inputMode="numeric"
-        sanitize={(v) => v.replace(/[^0-9]/g, "").slice(0, 3)}
         disabled={readonly}
         focusMode={focusMode}
-        customPlaceholder="Reps"
       />
       )}
       {/* Timer — just another set input, same size/aesthetic as the others */}
@@ -5359,18 +5493,13 @@ function SetRow({
         />
       )}
       {/* Fast tap RPE/RIR selector — half-step smart chips from the prescription */}
-      <QuickValueSelect
+      <TypedValueInput
           value={effortSelectValue}
-          onPick={pickEffort}
-          options={effortSelectOptions}
-          moreOptions={effortSelectMore}
+          kind={showRir ? "rir" : "rpe"}
+          onCommit={pickEffort}
           ariaLabel={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
-          title={showRir ? "RIR" : "RPE"}
-          inputMode="decimal"
-          sanitize={(v) => v.replace(/[^0-9.]/g, "").slice(0, 4)}
           disabled={readonly}
           focusMode={focusMode}
-          customPlaceholder={showRir ? "RIR" : "RPE"}
       />
       {showVelocity && (
         <Input
@@ -5428,7 +5557,7 @@ function SetRow({
         }}
       />
       )}
-      <div className="flex items-center justify-end gap-1">
+      <div className="relative flex items-center justify-end gap-1">
         {/* Compact indicator — smooth pencil (pending) → spinner (saving) →
             check (saved) transition so the row reflects sync status in real
             time. Full error label renders below the row to avoid overlapping
@@ -5443,7 +5572,15 @@ function SetRow({
                 ? "idle"
                 : null as any;
           if (!displayState) return null;
-          return <SaveStatus state={displayState} savedAt={save.savedAt} compact />;
+          // A corner badge, so the status column never changes width mid-save.
+          return (
+            <SaveStatus
+              state={displayState}
+              savedAt={save.savedAt}
+              compact
+              className="pointer-events-none absolute -top-1 left-0 z-10 rounded-full bg-background p-0.5"
+            />
+          );
         })()}
         {!readonly ? (
           <button
@@ -5453,7 +5590,7 @@ function SetRow({
             title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : "Mark set complete"}
             aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : `Mark set ${setIndex} complete`}
             className={cn(
-              "inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors",
+              "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors sm:h-9 sm:w-9 [&_svg]:size-5",
               isConfirmed
                 ? "border-green-500/40 bg-green-500/10 text-green-500"
                 : "border-border bg-background text-muted-foreground hover:border-green-500/50 hover:text-green-500",
@@ -5480,7 +5617,7 @@ function SetRow({
             onClick={() => void onRemoveSet(setIndex)}
             title={`Remove set ${setIndex}`}
             aria-label={`Remove set ${setIndex}`}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive"
+            className="inline-flex h-10 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-9"
           >
             <span className="text-base font-medium leading-none">−</span>
           </button>
@@ -5518,60 +5655,44 @@ function SetRow({
       </div>
     )}
 
-    {/* RPE-based suggestion for this set — one tap fills it, never auto-confirms */}
-    {!readonly && !isConfirmed && !hideWeight && loadHint && loadType === "external" && (
-      <div className="px-3 pb-1.5">
-        <button
-          type="button"
-          onClick={() => setLoad(fmtNum(loadHint.target))}
-          aria-label={`Use suggested ${fmtNum(loadHint.target)} ${loadHint.unit}`}
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
-        >
-          <Target className="h-3 w-3" aria-hidden="true" />
-          {loadHint.low === loadHint.high
-            ? `${fmtNum(loadHint.target)} ${loadHint.unit}`
-            : `${fmtNum(loadHint.low)}–${fmtNum(loadHint.high)} ${loadHint.unit}`}
-          {Number(load) !== loadHint.target && loadHint.low !== loadHint.high && (
-            <span className="font-normal text-primary/80">· use {fmtNum(loadHint.target)}</span>
-          )}
-        </button>
-      </div>
-    )}
-    {/* Quick-fill chip row — Suggested values are visible but never auto-confirm */}
-    {/* Copy Previous — compact secondary action for set 2+ */}
-    {!readonly && !isConfirmed && setIndex > 1 && prevExisting?.completed_at && (() => {
-      const prevWeight = prevExisting.actual_load;
-      if (prevWeight == null) return null;
-      return (
-        <div className="px-3 pb-1.5">
+    {/* Next-set helpers — one row, only on the set the athlete is about to log:
+        the suggested load (one tap fills it, never auto-confirms) and "Repeat
+        set N", which copies the last logged set into every open set below. */}
+    {!readonly && !isConfirmed && isNextSet && ((!hideWeight && loadHint && loadType === "external") || repeat) && (
+      <div className="flex flex-wrap gap-1.5 px-2 pb-2">
+        {!hideWeight && loadHint && loadType === "external" && (
           <button
             type="button"
-            onClick={copyPrevious}
-            className="h-7 rounded-md border border-border/60 bg-transparent px-2.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            onClick={() => setLoad(fmtNum(loadHint.target))}
+            aria-label={`Use suggested ${fmtNum(loadHint.target)} ${loadHint.unit}`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 active:scale-[0.98]"
           >
-            Copy Previous ({fmtNum(Number(prevWeight))} {unit})
+            <Target className="h-3.5 w-3.5" aria-hidden="true" />
+            {loadHint.low === loadHint.high
+              ? `${fmtNum(loadHint.target)} ${loadHint.unit}`
+              : `${fmtNum(loadHint.low)}–${fmtNum(loadHint.high)} ${loadHint.unit}`}
+            {Number(load) !== loadHint.target && loadHint.low !== loadHint.high && (
+              <span className="font-normal text-primary/80">· use {fmtNum(loadHint.target)}</span>
+            )}
           </button>
-        </div>
-      );
-    })()}
-
-    {/* Apply to remaining sets (visible after this set is confirmed) */}
-    {!readonly && isConfirmed && hasUncompletedAfter && onApplyToRemaining && (
-      <div className="px-3 pb-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-          onClick={async () => {
-            const ok = typeof window !== "undefined" ? window.confirm("Apply this result to the remaining sets as drafts?") : true;
-            if (!ok) return;
-            await onApplyToRemaining(setIndex, { load, reps, rpe, unit, loadType });
-          }}>
-            Apply to remaining sets
-        </Button>
+        )}
+        {repeat && onApplyToRemaining && (
+          <button
+            type="button"
+            onClick={async () => {
+              if (repeat.overwrites && typeof window !== "undefined"
+                && !window.confirm(`Replace the numbers in the remaining sets with set ${repeat.fromSet} (${repeat.label})?`)) return;
+              await onApplyToRemaining(repeat.fromSet, repeat.values);
+            }}
+            aria-label={`Same as set ${repeat.fromSet}: fill the remaining sets with ${repeat.label}`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-foreground transition-colors hover:bg-secondary active:scale-[0.98]"
+          >
+            <Repeat className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            Same as set {repeat.fromSet}
+          </button>
+        )}
       </div>
     )}
-
     {/* WorkoutTimerSheet replaced by DurationTimerInCard (in-card timer, no overlay) */}
     </div>
   );
@@ -5744,30 +5865,20 @@ function WorkoutLoadFailureCard({
 /* -------------------------------------------------------------------------- */
 
 function WorkoutTopMenu() {
-  const { undo, canUndo } = useWorkoutUndo();
+  // One tap to help. (Undo moved onto the unit-switch confirmation toast —
+  // the only action it ever reversed.)
   const [helpOpen, setHelpOpen] = useState(false);
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-9 w-9 text-muted-foreground hover:text-foreground"
-            aria-label="More actions"
-          >
-            <MoreHorizontal className="h-5 w-5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem disabled={!canUndo} onSelect={() => void undo()}>
-            <Undo2 className="mr-2 h-4 w-4" /> Undo
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setHelpOpen(true)}>
-            <HelpCircle className="mr-2 h-4 w-4" /> Help
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-9 w-9 text-muted-foreground hover:text-foreground"
+        aria-label="Help with logging"
+        onClick={() => setHelpOpen(true)}
+      >
+        <HelpCircle className="h-5 w-5" />
+      </Button>
       <TrainingHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </>
   );

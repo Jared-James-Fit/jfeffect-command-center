@@ -22,6 +22,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { markCheckinReviewed, refreshReviewQueries, reopenCheckinReview, reviewedViaLabel } from "@/lib/checkin-review";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { playAppSound } from "@/lib/app-sounds";
 import {
@@ -586,6 +587,38 @@ export function MessengerCheckinSubmissionCard({
       .catch(() => {});
   }, [role, data, analyze, submissionId, qc]);
 
+  // Reviewed state. A staff reply in the chat closes it automatically (database trigger);
+  // these are the one-tap paths: "Mark reviewed" and "Use reply".
+  const reviewedAt = ((data as any)?.reviewed_at ?? null) as string | null;
+  const reviewedVia = (data as any)?.reviewed_via as string | null | undefined;
+  const setReviewedLocally = (iso: string | null, via: string | null) =>
+    qc.setQueryData(["messenger-checkin", submissionId], (prev: any) =>
+      prev ? { ...prev, reviewed_at: iso, reviewed_via: via } : prev);
+  const markReviewed = async (via: "manual" | "use_reply" = "manual") => {
+    if (reviewedAt) return;
+    setReviewedLocally(new Date().toISOString(), via);
+    try {
+      await markCheckinReviewed(submissionId, via);
+      refreshReviewQueries(qc, submissionId);
+      if (via === "manual") toast.success("Marked reviewed");
+    } catch (e: any) {
+      setReviewedLocally(null, null);
+      toast.error(e?.message ?? "Couldn't mark this reviewed");
+    }
+  };
+  const reopen = async () => {
+    const prevAt = reviewedAt; const prevVia = reviewedVia ?? null;
+    setReviewedLocally(null, null);
+    try {
+      await reopenCheckinReview(submissionId);
+      refreshReviewQueries(qc, submissionId);
+      toast.success("Back in your to-review list");
+    } catch (e: any) {
+      setReviewedLocally(prevAt, prevVia);
+      toast.error(e?.message ?? "Couldn't reopen this");
+    }
+  };
+
   if (isLoading || !data) {
     return (
       <div className={cn(FORM_CARD, "flex items-center gap-2 text-xs")}>
@@ -617,8 +650,11 @@ export function MessengerCheckinSubmissionCard({
         <span className={cn("grid h-9 w-9 place-items-center rounded-full", FORM_ICON)}>
           <Sparkles className="h-5 w-5" />
         </span>
-        <div className="min-w-0">
-          <div className="text-sm font-bold">{titleFor(taskType)} recap</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 text-sm font-bold">
+            {titleFor(taskType)} recap
+            {reviewedAt ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-label="Reviewed" /> : null}
+          </div>
           <div className={cn("text-xs", FORM_MUTED)}>AI-assisted coach summary</div>
         </div>
       </div>
@@ -664,7 +700,7 @@ export function MessengerCheckinSubmissionCard({
                 type="button"
                 size="sm"
                 className="mt-3 w-full"
-                onClick={() => onUseReply(String(analysis.suggested_response))}
+                onClick={() => { void markReviewed("use_reply"); onUseReply(String(analysis.suggested_response)); }}
               >
                 Use reply
               </Button>
@@ -688,6 +724,22 @@ export function MessengerCheckinSubmissionCard({
             </div>
           </details>
         </div>
+      )}
+
+      {/* One-tap close. Replying in the chat also closes it by itself. */}
+      {reviewedAt ? (
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+          <span className="text-emerald-600">
+            Reviewed {fmtDateTime(reviewedAt)} · {reviewedViaLabel(reviewedVia as any)}
+          </span>
+          <button type="button" onClick={() => void reopen()} className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            Undo
+          </button>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" size="sm" className="mt-3 w-full" onClick={() => void markReviewed("manual")}>
+          <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden /> Mark reviewed
+        </Button>
       )}
     </div>
   );

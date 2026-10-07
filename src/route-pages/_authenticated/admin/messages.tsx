@@ -229,7 +229,7 @@ export function MessagesInbox({
     queryFn: async () => {
       const [native, checkins] = await Promise.all([
         (supabase.from("nf_submissions") as any).select("id, client_id, form_id, submitted_at, reviewed_at").not("submitted_at", "is", null).is("reviewed_at", null).limit(1000),
-        (supabase.from("messenger_checkins") as any).select("id, client_id, task_type, submitted_at, status").eq("status", "completed").not("submitted_at", "is", null).limit(1000),
+        (supabase.from("messenger_checkins") as any).select("id, client_id, task_type, submitted_at, status").eq("status", "completed").is("reviewed_at", null).not("submitted_at", "is", null).limit(1000),
       ]);
       if (native.error) throw native.error;
       if (checkins.error) throw checkins.error;

@@ -9,14 +9,14 @@ function json(body: unknown, init: ResponseInit = {}) {
 /**
  * pg_cron-triggered tick that copies any pending lift videos from primary
  * storage (Supabase Storage) into Google Drive as an archive. Public route
- * so pg_cron can hit it; gated by the project anon `apikey` header per the
- * documented scheduled-jobs pattern.
+ * so pg_cron can hit it; gated by the shared hook auth (worker secret, or the
+ * Vault-held cron secret the cron job sends as `x-hook-secret`).
  */
 export const Route = createFileRoute("/api/public/hooks/lift-archive-tick")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        if (!authorizeWorker(request)) return json({ error: "Unauthorized" }, { status: 401 });
+        if (!(await authorizeWorker(request))) return json({ error: "Unauthorized" }, { status: 401 });
         try {
           const { runLiftArchiveTick } = await import("@/lib/lift-archive.server");
           const result = await runLiftArchiveTick(5);
@@ -30,13 +30,8 @@ export const Route = createFileRoute("/api/public/hooks/lift-archive-tick")({
   },
 });
 
-function authorizeWorker(request: Request): boolean {
-  const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
-  if (!expected) return false;
-  const provided =
-    request.headers.get("x-worker-secret") ?? "";
-  if (!provided || provided.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
-  return diff === 0;
+/** Shared hook auth: worker secret (env) or the Vault-held cron secret. */
+async function authorizeWorker(request: Request): Promise<boolean> {
+  const { authorizeHookRequest } = await import("@/lib/hook-auth.server");
+  return authorizeHookRequest(request);
 }

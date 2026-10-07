@@ -3,12 +3,14 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AuthorLine, PostMedia, ReactionBar, WorkoutHero } from "@/components/community/post-card";
+import { AuthorLine, LockInHero, NoteBody, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote } from "@/components/community/post-card";
 import { CommentThread } from "@/components/community/comments-sheet";
 import {
   SCOPE_WORD,
   formatExerciseBest,
   formatWorkoutDuration,
+  isTrainingNow,
+  lockInTimeLabel,
   postTimeLabel,
   reactionEmoji,
   type CommunityAuthor,
@@ -113,14 +115,29 @@ function Detail({
         <AuthorLine
           author={post.author}
           size={44}
-          sub={[postTimeLabel(post.created_at), s ? new Date(s.completed_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : null].filter(Boolean).join(" · ")}
+          sub={[postTimeLabel(post.created_at), post.kind === "note" ? new Date(post.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : null, post.edited_at ? "Edited" : null, s ? new Date(s.completed_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : null, audienceNote(post)].filter(Boolean).join(" · ")}
           onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined}
         />
       </div>
 
-      {post.media_type ? <PostMedia post={post} thumbUrl={thumb} full /> : s ? <div className="px-4"><div className="overflow-hidden rounded-3xl"><WorkoutHero stats={s} unit={unit} size="detail" /></div></div> : null}
+      {post.kind === "note" ? (
+        <NoteBody post={post} />
+      ) : post.media_type ? (
+        <PostMedia post={post} thumbUrl={thumb} full />
+      ) : s ? (
+        <div className="px-4"><div className="overflow-hidden rounded-3xl"><WorkoutHero stats={s} unit={unit} size="detail" /></div></div>
+      ) : post.locked_in_at ? (
+        <div className="px-4"><div className="overflow-hidden rounded-3xl"><LockInHero post={post} size="detail" /></div></div>
+      ) : null}
 
-      {post.caption && (
+      {post.media_type && !s && post.locked_in_at && (
+        <div className="flex items-center gap-2 px-4 pt-4">
+          <h2 className="font-display text-[28px] uppercase leading-none">Locked in</h2>
+          {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-[13px] font-bold text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
+        </div>
+      )}
+
+      {post.caption && post.kind !== "note" && (
         <p className="whitespace-pre-line px-4 pt-3 text-[15px] leading-snug">
           <span className="font-bold">{post.author.name}</span> {post.caption}
         </p>

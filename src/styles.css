@@ -827,3 +827,17 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   100% { transform: scale(1.1) translateY(-18px); opacity: 0; }
 }
 .community-burst { animation: community-burst 0.85s ease-out forwards; }
+
+/* Charts are touched to inspect them: never select their text, raise the iOS
+   callout/loupe, or flash a tap highlight (all Recharts charts). */
+.recharts-wrapper,
+.recharts-wrapper * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}

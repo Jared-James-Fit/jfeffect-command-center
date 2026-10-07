@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { clientNav, clientBottomNav } from "@/lib/admin-nav";
-import { ClientPovBanner } from "@/components/client-pov-banner";
+import { ClientPovBanner, PovFrame } from "@/components/client-pov-banner";
 import { useActivityHeartbeat } from "@/hooks/use-activity-heartbeat";
 import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 import { ClientBirthdayCard } from "@/components/client-birthday-card";
@@ -17,6 +17,7 @@ function PortalLayout() {
   const { isImpersonating } = useClientImpersonation();
   return (
     <>
+      <PovFrame />
       <ClientPovBanner />
       <AppShell items={clientNav} bottomItems={clientBottomNav} title="Client Portal">
         {/* Onboarding requirements (profile photo, basic info, training schedule,

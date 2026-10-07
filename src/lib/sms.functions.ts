@@ -1,10 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  inSmsSendWindow,
+  pickAnchorMessages,
+  reminderLookbackMs,
+  SMS_CLIENT_COOLDOWN_MS,
+} from "@/lib/sms-reminder-rules";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
-function normalizePhone(raw: string | null | undefined): string | null {
+export function normalizePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const cleaned = String(raw).replace(/[^\d+]/g, "");
   if (!cleaned) return null;
@@ -33,7 +39,7 @@ async function assertCanMessage(supabase: any, userId: string, clientId: string)
   return { isAdmin: false };
 }
 
-async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
+export async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const twilioKey = process.env.TWILIO_API_KEY;
   if (!lovableKey) throw new Error("LOVABLE_API_KEY missing");
@@ -165,7 +171,14 @@ export const sendTestSms = createServerFn({ method: "POST" })
     return { ok: true, sid };
   });
 
-/** Core reminder engine — usable by both manual "run now" and cron. */
+/**
+ * Core reminder engine, usable by both manual "run now" and cron.
+ *
+ * Guard rails (see sms-reminder-rules.ts): only messages from the last
+ * (longest step + 1 day), one anchor message per client, one text per client per
+ * 24 hours, and only between 9am and 8pm in the client's timezone. Payment
+ * requests are excluded because they have their own timed text.
+ */
 export async function runReminderSweep(supabaseAdmin: any) {
   const { data: settings } = await supabaseAdmin.from("sms_settings").select("*").eq("singleton", true).maybeSingle();
   if (!settings?.enabled || !settings.from_phone) return { processed: 0, reason: "disabled_or_no_from" };
@@ -174,8 +187,7 @@ export async function runReminderSweep(supabaseAdmin: any) {
   if (enabledSteps.length === 0) return { processed: 0, reason: "no_steps" };
 
   const now = Date.now();
-  // Look back 30 days max
-  const lookback = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const lookback = new Date(now - reminderLookbackMs(enabledSteps)).toISOString();
 
   const { data: candidates, error } = await supabaseAdmin
     .from("messages")
@@ -183,13 +195,17 @@ export async function runReminderSweep(supabaseAdmin: any) {
     .eq("sender_role", "admin")
     .eq("is_internal_note", false)
     .is("read_by_client_at", null)
+    .is("deleted_at", null)
+    // Payment requests and their reminders have their own single, better timed
+    // text (payment-reminder-sms), so the generic unread sweep skips them.
+    .or("message_type.is.null,message_type.neq.Payment")
     .gte("created_at", lookback)
     .order("created_at", { ascending: true })
     .limit(500);
   if (error) throw new Error(error.message);
 
   let processed = 0;
-  for (const msg of candidates ?? []) {
+  for (const msg of pickAnchorMessages((candidates ?? []) as any[])) {
     const ageMin = (now - new Date(msg.created_at).getTime()) / 60000;
     // Find highest eligible step (sorted ascending by delay)
     const sorted = [...enabledSteps].sort((a, b) => a.delay_minutes - b.delay_minutes);
@@ -208,7 +224,7 @@ export async function runReminderSweep(supabaseAdmin: any) {
 
     // Get client
     const { data: client } = await supabaseAdmin
-      .from("clients").select("id, phone, sms_opt_out, first_name, full_name").eq("id", msg.client_id).maybeSingle();
+      .from("clients").select("id, phone, sms_opt_out, first_name, full_name, timezone").eq("id", msg.client_id).maybeSingle();
     if (!client) continue;
     if (client.sms_opt_out) {
       await supabaseAdmin.from("sms_log").insert({
@@ -225,6 +241,20 @@ export async function runReminderSweep(supabaseAdmin: any) {
       });
       continue;
     }
+
+    // Only text at a sane hour for the client; the next run (10 min later) tries again.
+    if (!inSmsSendWindow(client.timezone, new Date(now))) continue;
+
+    // One reminder text per client per 24 hours, however many messages are unread.
+    const cooldownSince = new Date(now - SMS_CLIENT_COOLDOWN_MS).toISOString();
+    const { count: recentReminders } = await supabaseAdmin
+      .from("sms_log")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", msg.client_id)
+      .eq("kind", "reminder")
+      .eq("status", "sent")
+      .gte("created_at", cooldownSince);
+    if ((recentReminders ?? 0) > 0) continue;
 
     // Rate limit
     const since = new Date(now - 60 * 60 * 1000).toISOString();
