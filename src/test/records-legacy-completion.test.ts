@@ -23,3 +23,20 @@ describe("records count legacy-logged sets finished through a scheduled instance
     expect(sql).toContain("REVOKE ALL ON FUNCTION public.client_qualifying_sets(uuid) FROM PUBLIC, anon, authenticated;");
   });
 });
+
+describe("one workout identity for points summary and community stats", () => {
+  const m = readFileSync("supabase/migrations/20261007100000_completion_workout_key.sql", "utf8");
+  it("defines the shared key with the same fallback rule as the records", () => {
+    expect(m).toContain("CREATE OR REPLACE FUNCTION public.completion_workout_key(_completion_id uuid)");
+    expect(m).toMatch(/r\.scheduled_workout_id IS NULL AND e\.day_id = pc\.day_id\s+AND r\.completed_at IS NOT NULL/);
+    expect(m).toContain("REVOKE ALL ON FUNCTION public.completion_workout_key(uuid) FROM PUBLIC, anon, authenticated;");
+  });
+  it("community stats/exercises and the points summary use it instead of the strict match", () => {
+    expect(m.match(/k := public\.completion_workout_key\(pc\.id\);/g)?.length).toBe(2);
+    expect(m).toContain("k := public.completion_workout_key(comp.id);");
+    expect(m).not.toMatch(/pc\.scheduled_workout_id IS NULL AND r\.scheduled_workout_id IS NULL/);
+  });
+  it("still finds a completion opened by its scheduled instance", () => {
+    expect(m).toMatch(/pc\.scheduled_workout_id = _scheduled_workout_id\s+OR \(pc\.day_id = _day_id AND public\.completion_workout_key\(pc\.id\) = k\)/);
+  });
+});
