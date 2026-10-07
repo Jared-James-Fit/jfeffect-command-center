@@ -24,7 +24,14 @@ export function reactionEmoji(key: string | null | undefined): string | null {
   return REACTIONS.find((r) => r.key === key)?.emoji ?? null;
 }
 
-export type CommunityVisibility = "community" | "private";
+export type CommunityVisibility = "community" | "coach" | "private";
+
+/** Who a post is for. "JF crew" = every active JF Effect client + coaches, never the public. */
+export const AUDIENCES: { key: CommunityVisibility; label: string; hint: string }[] = [
+  { key: "community", label: "JF crew", hint: "Only JF Effect clients and coaches see it" },
+  { key: "coach", label: "My coach", hint: "Just you and your coach" },
+  { key: "private", label: "Only me", hint: "Saved to your profile, nobody else sees it" },
+];
 
 export type RecordScope = "atpr" | "program_pr" | "block_pr";
 
@@ -34,9 +41,10 @@ export type WorkoutShareStats = {
   duration_min: number | null;
   working_sets: number;
   tonnage_kg: number;
-  top_lift: { exercise_name: string; reps: number; load_kg: number } | null;
+  /** load_kg is null when the athlete hid their weights. */
+  top_lift: { exercise_name: string; reps: number; load_kg: number | null } | null;
   pr_count: number;
-  prs: { exercise_name: string; reps: number; load_kg: number; scope: RecordScope }[];
+  prs: { exercise_name: string; reps: number; load_kg: number | null; scope: RecordScope }[];
   /** Completed sessions in the same local month / week, up to and including this one. */
   month_sessions?: number;
   week_sessions?: number;
@@ -79,6 +87,8 @@ export type CommunityPost = {
   live?: boolean;
   /** The day's title, available before any stats exist. */
   session_title?: string | null;
+  /** The author hid their weights (loads are already removed for everyone else). */
+  hide_loads?: boolean;
   is_mine: boolean;
   author: CommunityAuthor;
   /** null when the workout was reopened — the post then shows photo + caption only. */
@@ -131,7 +141,8 @@ export function formatWorkoutDuration(min: number | null | undefined): string | 
 }
 
 /** "220 kg × 3" — unit is the viewer's / athlete's own preference. */
-export function formatTopSet(lift: { reps: number; load_kg: number }, unit: "kg" | "lb"): string {
+export function formatTopSet(lift: { reps: number; load_kg: number | null }, unit: "kg" | "lb"): string {
+  if (lift.load_kg == null || lift.load_kg <= 0) return `${lift.reps} ${lift.reps === 1 ? "rep" : "reps"}`;
   return `${formatLoad(lift.load_kg, unit)} × ${lift.reps}`;
 }
 
@@ -162,7 +173,7 @@ export const SCOPE_WORD: Record<RecordScope, string> = {
  */
 export function featuredLift(s: WorkoutShareStats): {
   name: string;
-  detail: { reps: number; load_kg: number };
+  detail: { reps: number; load_kg: number | null };
   pr: RecordScope | null;
 } | null {
   const pr = s.prs[0];

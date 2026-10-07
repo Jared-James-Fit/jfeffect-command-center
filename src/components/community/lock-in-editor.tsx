@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Camera, Check, Images, Lock, Send, Users, X } from "lucide-react";
+import { Camera, Check, Images, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { invalidateCommunity, saveCommunityPost, type MyPostRow, type SavePostIn
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import { canvasToBlob, drawWorkoutShareCard, shareCardImage, type ShareCardData } from "@/lib/workout-share-card";
 import { InstagramGlyph } from "@/components/community/glyphs";
+import { AudiencePicker } from "@/components/community/audience-picker";
 import type { LockInPick } from "@/components/community/lock-in";
 
 const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)]";
@@ -45,6 +46,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
   const [removedExisting, setRemovedExisting] = useState(false);
   const [caption, setCaption] = useState(existing?.caption ?? "");
   const [visibility, setVisibility] = useState<CommunityVisibility>(existing?.visibility ?? "community");
+  const [hideLoads, setHideLoads] = useState(!!existing?.hide_loads);
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -178,12 +180,17 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
       let mediaArg: SavePostInput["media"] = { action: "keep" };
       if (media) mediaArg = { action: "set", ...(await uploadPicked(media, user.id, () => {})) };
       else if (removedExisting) mediaArg = { action: "remove" };
-      await saveCommunityPost({ completionId: id, caption, visibility, media: mediaArg });
+      await saveCommunityPost({ completionId: id, caption, visibility, media: mediaArg, hideLoads });
       if (mediaArg.action !== "keep" && existing?.media_path) await removeCommunityFiles([existing.media_path, existing.media_thumb_path]);
       invalidateCommunity(qc);
       setPosted(true);
-      toast.success(visibility === "community" ? "You're locked in 🔒" : "Saved to your profile", {
-        description: visibility === "community" ? "The crew sees you showed up. Your numbers land on it when you finish." : "Only you can see it.",
+      toast.success(visibility === "community" ? "You're locked in 🔒" : visibility === "coach" ? "Sent to your coach 🔒" : "Saved to your profile", {
+        description:
+          visibility === "community"
+            ? "The crew sees you showed up. Your numbers land on it when you finish."
+            : visibility === "coach"
+              ? "Only you and your coach can see it."
+              : "Only you can see it.",
       });
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't post. Try again.");
@@ -260,7 +267,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
               </button>
             ))}
           </div>
-          <div className="flex gap-2">
+          <div>
             <input
               value={caption}
               onChange={(e) => {
@@ -268,22 +275,23 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
                 setPosted(false);
               }}
               placeholder="Say something (optional)"
-              className="h-11 min-w-0 flex-1 rounded-xl border-0 bg-white/10 px-3 text-[16px] text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
+              className="h-11 w-full rounded-xl border-0 bg-white/10 px-3 text-[16px] text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
               aria-label="Caption"
             />
-            <button
-              type="button"
-              onClick={() => {
-                setVisibility((v) => (v === "community" ? "private" : "community"));
-                setPosted(false);
-              }}
-              className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl bg-white/10 px-3 text-[12px] font-bold text-white/85"
-              aria-label={visibility === "community" ? "Visible to everyone in JF. Tap for only me" : "Only you. Tap for everyone in JF"}
-            >
-              {visibility === "community" ? <Users className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              {visibility === "community" ? "Everyone" : "Only me"}
-            </button>
           </div>
+          <AudiencePicker
+            tone="dark"
+            value={visibility}
+            onChange={(v) => {
+              setVisibility(v);
+              setPosted(false);
+            }}
+            hideLoads={hideLoads}
+            onHideLoads={(v) => {
+              setHideLoads(v);
+              setPosted(false);
+            }}
+          />
         </div>
 
         {/* Actions */}
@@ -299,7 +307,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
             className={cn("h-14 rounded-2xl text-[15px] font-black shadow-lg", posted ? "bg-emerald-500 text-white disabled:opacity-100" : cn("text-white", SHARE_GRADIENT))}
           >
             {posted ? <Check className="mr-2 h-5 w-5" /> : <Send className="mr-2 h-5 w-5" />}
-            {posting ? "Posting…" : posted ? "Posted" : existing ? "Update" : visibility === "private" ? "Save" : "Post"}
+            {posting ? "Posting…" : posted ? (visibility === "coach" ? "Sent" : "Posted") : existing ? "Update" : visibility === "private" ? "Save" : visibility === "coach" ? "Send" : "Post"}
           </Button>
         </div>
       </DialogContent>

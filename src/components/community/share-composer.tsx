@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Check, Copy, Download, ImagePlus, Lock, RefreshCw, Send, Share2, Users, X } from "lucide-react";
+import { Check, Copy, Download, ImagePlus, RefreshCw, Send, Share2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { CAPTION_MAX, buildShareCardFields, lockInTimeLabel, type CommunityVisibility } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, type SavePostInput } from "@/lib/community.queries";
 import { InstagramGlyph } from "@/components/community/glyphs";
+import { AudiencePicker } from "@/components/community/audience-picker";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import {
   TEMPLATE_LABEL,
@@ -70,6 +71,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   const [postOpen, setPostOpen] = useState(false);
   const [caption, setCaption] = useState("");
   const [visibility, setVisibility] = useState<CommunityVisibility>("community");
+  const [hideLoads, setHideLoads] = useState(false);
   const [posting, setPosting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [postedAs, setPostedAs] = useState<CommunityVisibility | null>(null);
@@ -88,6 +90,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
     if (existing) {
       setCaption(existing.caption ?? "");
       setVisibility(existing.visibility);
+      setHideLoads(!!existing.hide_loads);
     }
   }, [open, existing, completionId]);
 
@@ -123,6 +126,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
     hydratedFor.current = null;
     setCaption("");
     setVisibility("community");
+    setHideLoads(false);
     setRemovedExisting(false);
     setPostedAs(null);
     setPostOpen(false);
@@ -281,7 +285,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
       if (media) mediaArg = { action: "set", ...(await uploadPicked(media, user.id, setProgress)) };
       else if (removedExisting) mediaArg = { action: "remove" };
 
-      await saveCommunityPost({ completionId, caption, visibility, media: mediaArg });
+      await saveCommunityPost({ completionId, caption, visibility, media: mediaArg, hideLoads });
       if (mediaArg.action !== "keep" && existing?.media_path) await removeCommunityFiles([existing.media_path, existing.media_thumb_path]);
 
       invalidateCommunity(qc);
@@ -297,6 +301,8 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         toast.success(existing ? "Post updated 🔥" : "You're in the feed 🔥", {
           action: { label: "View", onClick: () => navigate({ to: "/portal/community" }) },
         });
+      } else if (visibility === "coach") {
+        toast.success("Sent to your coach", { description: "Only you and your coach can see it." });
       } else {
         toast.success("Saved to your profile", { description: "Only you can see it." });
       }
@@ -453,7 +459,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
             className="h-12 w-full rounded-2xl bg-white text-[15px] font-black text-black hover:bg-white/90"
           >
             {postedAs ? <Check className="mr-2 h-5 w-5 text-emerald-600" /> : <Users className="mr-2 h-5 w-5" />}
-            {postedAs === "community" ? "Posted. Edit post" : postedAs === "private" ? "Saved. Edit post" : existing ? "Edit community post" : "Post to JF Community"}
+            {postedAs === "community" ? "Posted. Edit post" : postedAs === "coach" ? "Sent to coach. Edit" : postedAs === "private" ? "Saved. Edit post" : existing ? "Edit community post" : "Post to JF Community"}
           </Button>
         </div>
 
@@ -479,9 +485,9 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         {/* Post to the JF community */}
         {postOpen && (
           <Overlay onClose={() => !posting && setPostOpen(false)} light>
-            <div className="text-lg font-black text-foreground">Post to JF Community</div>
+            <div className="text-lg font-black text-foreground">Post it</div>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
-              {hasMedia ? "Your photo + workout go in the feed." : "Your workout goes in the feed. Add a photo to stand out."}
+              {hasMedia ? "Your photo + workout. Pick who sees it." : "Your workout. Add a photo to stand out."}
             </p>
             <Textarea
               autoFocus
@@ -492,32 +498,14 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
               className="mt-3 resize-none rounded-2xl text-[16px]"
               aria-label="Caption"
             />
-            <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Who can see it">
-              {([
-                ["community", "Everyone in JF", Users],
-                ["private", "Only me", Lock],
-              ] as const).map(([k, label, Icon]) => (
-                <button
-                  key={k}
-                  type="button"
-                  role="radio"
-                  aria-checked={visibility === k}
-                  onClick={() => setVisibility(k)}
-                  className={cn(
-                    "flex h-12 items-center justify-center gap-1.5 rounded-xl border px-2 text-[13px] font-bold transition-colors",
-                    visibility === k ? "border-primary bg-primary/[0.08] text-foreground" : "border-border text-muted-foreground",
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{label}</span>
-                </button>
-              ))}
+            <div className="mt-3">
+              <AudiencePicker value={visibility} onChange={setVisibility} hideLoads={hideLoads} onHideLoads={setHideLoads} />
             </div>
             <Button type="button" className="mt-4 h-13 w-full rounded-2xl py-3.5 text-[16px] font-black" disabled={posting} onClick={() => void post()}>
               <Send className="mr-2 h-5 w-5" />
               {posting
                 ? media?.kind === "video" && progress > 0 && progress < 100 ? `Uploading ${progress}%` : "Posting…"
-                : visibility === "private" ? "Save to my profile" : existing ? "Update post" : "Post"}
+                : visibility === "private" ? "Save to my profile" : visibility === "coach" ? (existing ? "Update" : "Send to my coach") : existing ? "Update post" : "Post"}
             </Button>
             <p className="mt-2 text-center text-[11px] text-muted-foreground">Sharing to Instagram never posts here, and posting here never shares outside the app.</p>
           </Overlay>

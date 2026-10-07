@@ -148,7 +148,7 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
                 <div className="h-full w-full bg-muted" />
               )}
               {p.media_type === "video" && <Play className="absolute right-1.5 top-1.5 h-4 w-4 fill-white text-white drop-shadow" />}
-              {p.visibility === "private" && <Lock className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 text-white drop-shadow" />}
+              {p.visibility !== "community" && <Lock className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 text-white drop-shadow" />}
             </button>
           );
         })}
