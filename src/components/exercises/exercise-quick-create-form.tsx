@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { searchLibrary, type ExerciseAlias, type LibraryExercise } from "@/lib/exercise-library";
 import { MuscleTagPicker } from "@/components/exercises/muscle-tag-picker";
+import { classifyExercise, NON_VOLUME_PATTERNS } from "@/lib/exercise-classifier";
 import { useIsCoarsePointer } from "@/hooks/use-touch-viewport";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
@@ -81,6 +82,7 @@ export function ExerciseQuickCreateForm({
   const [movementFamily, setMovementFamily] = useState<string>(AUTO);
   const [aliasText, setAliasText] = useState("");
   const [muscles, setMuscles] = useState<{ primary: string[]; secondary: string[] }>({ primary: [], secondary: [] });
+  const [musclesTouched, setMusclesTouched] = useState(false);
 
   // Live duplicate guard: canonical names AND aliases, as the coach types.
   const { data: lookup = [] } = useQuery({
@@ -116,6 +118,15 @@ export function ExerciseQuickCreateForm({
   const needsMuscles = librarySetup && muscles.primary.length === 0;
 
   useEffect(() => { setName(defaultName ?? ""); }, [defaultName]);
+
+  // Suggest muscles from the name (same rules the database applies to a blank
+  // tag) until the coach edits the picker; stretches/cardio suggest nothing.
+  useEffect(() => {
+    if (!librarySetup || musclesTouched) return;
+    const c = classifyExercise(name, category === AUTO ? null : category);
+    const usable = c.matched && !NON_VOLUME_PATTERNS.includes(c.pattern);
+    setMuscles(usable ? { primary: c.primary, secondary: c.secondary } : { primary: [], secondary: [] });
+  }, [name, category, librarySetup, musclesTouched]);
 
   const focusNameFromTouchGesture = () => {
     if (!coarsePointer || busy) return;
@@ -284,7 +295,16 @@ export function ExerciseQuickCreateForm({
           </div>
           <div>
             <Label>Primary &amp; secondary muscles *</Label>
-            <div className="mt-1.5"><MuscleTagPicker primary={muscles.primary} secondary={muscles.secondary} onChange={setMuscles} /></div>
+            <div className="mt-1.5">
+              <MuscleTagPicker
+                primary={muscles.primary}
+                secondary={muscles.secondary}
+                onChange={(next) => { setMusclesTouched(true); setMuscles(next); }}
+              />
+            </div>
+            {!musclesTouched && muscles.primary.length > 0 && (
+              <div className="mt-1 text-[11px] text-muted-foreground">Suggested from the name. Tap a muscle to change it.</div>
+            )}
           </div>
           <div>
             <Label>Aliases <span className="font-normal text-muted-foreground">(other names for this exact exercise)</span></Label>
