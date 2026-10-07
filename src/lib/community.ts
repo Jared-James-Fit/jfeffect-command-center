@@ -11,7 +11,12 @@ export const CAPTION_MAX = 280;
 export const COMMENT_MAX = 300;
 export const FEED_PAGE_SIZE = 10;
 
-/** Fixed, deliberately small set. One reaction per person per post. */
+/**
+ * The reaction is 🔥, one tap, one per person per post. A crew this size
+ * reads better as one number with faces than four split counts. The other
+ * three stay here only so anything saved under the old set still renders.
+ */
+export const REACTION = { key: "fire", emoji: "🔥", label: "Fire" } as const;
 export const REACTIONS = [
   { key: "fire", emoji: "🔥", label: "Fire" },
   { key: "muscle", emoji: "💪", label: "Strong" },
@@ -117,10 +122,39 @@ export type CommunityPost = {
   stats: WorkoutShareStats | null;
   reactions: Partial<Record<ReactionKey, number>>;
   my_reaction: ReactionKey | null;
+  /** Everyone who reacted (any key). Missing on older cached posts. */
+  reaction_count?: number;
+  /** The first few people who gave it 🔥: coaches first, then newest. */
+  reactors?: Reactor[];
   coach_reactions: { name: string; emoji: ReactionKey }[];
   comment_count: number;
   coach_commented: boolean;
 };
+
+export type Reactor = CommunityAuthor & { is_me?: boolean };
+
+export function reactionTotal(post: Pick<CommunityPost, "reaction_count" | "reactions">): number {
+  if (typeof post.reaction_count === "number") return post.reaction_count;
+  return Object.values(post.reactions ?? {}).reduce((a, b) => a + (b ?? 0), 0);
+}
+
+/**
+ * "Nicole" · "You and Nicole" · "Jared, Vicky and Nicole" ·
+ * "Jared, Vicky and 3 others". You always come first.
+ */
+export function reactorsLine(post: Pick<CommunityPost, "reaction_count" | "reactions" | "reactors">): string | null {
+  const total = reactionTotal(post);
+  if (total <= 0) return null;
+  const people = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me));
+  const names = people.map((r) => (r.is_me ? "You" : r.name));
+  if (names.length === 0) return `${total} ${total === 1 ? "person" : "people"}`;
+  if (total === 1) return names[0];
+  if (total === 2 && names.length >= 2) return `${names[0]} and ${names[1]}`;
+  if (total === 3 && names.length >= 3) return `${names[0]}, ${names[1]} and ${names[2]}`;
+  const shown = names.slice(0, 2);
+  const rest = total - shown.length;
+  return `${shown.join(", ")} and ${rest} ${rest === 1 ? "other" : "others"}`;
+}
 
 /** Someone in the crew (Crew tab). Counts only include posts you can see. */
 export type CommunityMember = {
@@ -365,6 +399,13 @@ export type WinsStats = {
   bodyweight: number;
   checkins: number;
   busiest_day: string | null;
+  /** Added with the history-aware card; missing on the first post. */
+  volume_prev_kg?: number;
+  /** 1 = the most the crew has lifted in any week on record. */
+  volume_rank?: number;
+  sessions_rank?: number;
+  weeks_tracked?: number;
+  history?: { wk: string; sessions: number }[];
 };
 
 /** "Sep 28 – Oct 4" for the Monday the week starts on. */
@@ -388,42 +429,86 @@ export function compactNumber(n: number): string {
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
-const PICKUP_LB = 5000;
+/**
+ * Everyday things that weigh about this much (lbs), for "that's about the
+ * weight of 90 pickup trucks". Rotates week to week so it stays fresh.
+ */
+const WEIGHT_OF = [
+  { one: "pickup truck", many: "pickup trucks", lb: 5000 },
+  { one: "elephant", many: "elephants", lb: 13000 },
+  { one: "car", many: "cars", lb: 4000 },
+  { one: "school bus", many: "school buses", lb: 25000 },
+] as const;
+
+function weekIndex(weekOf: string): number {
+  const [y, m, d] = weekOf.split("-").map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / (7 * 86_400_000));
+}
+
+const ORDINAL = ["", "", "2nd", "3rd"];
 
 /**
- * The tiles under the post, in plain words anyone gets: how many opened the
- * app, workouts, PRs, total weight (with a pickup-truck comparison), streaks
- * and the busiest day. Weight is shown in the viewer's own unit.
+ * The big number on the card, said so anyone gets it: everything the crew
+ * lifted together last week, in the viewer's unit, with an everyday
+ * comparison, a "biggest week ever" badge when it's earned, and how it beat
+ * the week before (only when it did).
  */
-export function winsStatTiles(s: WinsStats, unit: "kg" | "lb") {
+export function winsHero(s: WinsStats, unit: "kg" | "lb") {
   const lb = s.volume_kg * 2.20462;
-  const trucks = Math.round(lb / PICKUP_LB);
-  const change = s.sessions_prev > 0 ? Math.round(((s.sessions - s.sessions_prev) / s.sessions_prev) * 100) : null;
+  const raw = unit === "kg" ? s.volume_kg : lb;
+  const amount = raw >= 10_000_000 ? compactNumber(raw) : Math.round(raw).toLocaleString("en-US");
+  const start = weekIndex(s.week_of) % WEIGHT_OF.length;
+  let compare: string | null = null;
+  for (let k = 0; k < WEIGHT_OF.length && !compare; k++) {
+    const o = WEIGHT_OF[(start + k) % WEIGHT_OF.length];
+    const n = Math.round(lb / o.lb);
+    if (n >= 3 && n <= 300) compare = `That's about the weight of ${n} ${o.many}`;
+  }
+  const rank = s.volume_rank ?? null;
+  const badge =
+    rank != null && rank <= 3 && (s.weeks_tracked ?? 0) >= 6
+      ? rank === 1
+        ? "Biggest week the crew has ever had"
+        : `${ORDINAL[rank]} biggest week the crew has ever had`
+      : null;
+  const up = s.volume_prev_kg && s.volume_prev_kg > 0 ? Math.round((s.volume_kg / s.volume_prev_kg - 1) * 100) : 0;
+  return { amount, unit: unit === "kg" ? "kg" : "lbs", compare, badge, change: up >= 3 ? `${up}% more than the week before` : null };
+}
+
+/**
+ * Four plain numbers under the big one. Nothing a non-lifter has to decode:
+ * people, workouts, personal records, and who hasn't missed a week.
+ */
+export function winsTiles(s: WinsStats) {
+  const more = s.sessions - s.sessions_prev;
   const tiles: { value: string; label: string; sub?: string }[] = [
-    { value: `${pct(s.opened, s.roster)}%`, label: "opened the app", sub: `${s.opened} of ${s.roster}` },
+    { value: `${s.trained} of ${s.roster}`, label: "people trained", sub: `${pct(s.trained, s.roster)}% of the crew` },
     {
-      value: String(s.sessions),
-      label: "workouts done",
-      sub: change == null || change === 0 ? undefined : `${change > 0 ? "+" : ""}${change}% vs last week`,
+      value: s.sessions.toLocaleString("en-US"),
+      label: s.sessions === 1 ? "workout finished" : "workouts finished",
+      sub: s.sessions_prev > 0 && more > 0 ? `${more} more than the week before` : s.sessions_prev > 0 && more === 0 ? "same as the week before" : undefined,
     },
-    { value: String(s.prs), label: s.prs === 1 ? "new PR" : "new PRs", sub: s.pr_people > 0 ? `by ${s.pr_people} ${s.pr_people === 1 ? "person" : "people"}` : undefined },
+    {
+      value: s.prs.toLocaleString("en-US"),
+      label: s.prs === 1 ? "new personal record" : "new personal records",
+      sub: s.pr_people > 1 ? `set by ${s.pr_people} different people` : undefined,
+    },
   ];
-  if (s.volume_kg > 0)
-    tiles.push({
-      value: compactNumber(unit === "kg" ? s.volume_kg : lb),
-      label: `${unit} lifted`,
-      sub: trucks >= 2 ? `≈ ${trucks} pickup trucks` : undefined,
-    });
-  if (s.streaks > 0) tiles.push({ value: String(s.streaks), label: "on a 4+ week streak" });
-  if (s.busiest_day) tiles.push({ value: s.busiest_day.slice(0, 3), label: "busiest day" });
+  if (s.streaks > 0)
+    tiles.push({ value: String(s.streaks), label: s.streaks === 1 ? "person hasn't missed a week" : "people haven't missed a week", sub: "in a month or more" });
+  else if (s.reps > 0) tiles.push({ value: s.reps.toLocaleString("en-US"), label: "reps done" });
   return tiles;
 }
 
-/** The small habits line: "9 logged bodyweight · 4 sent a check-in · 6,015 reps". */
-export function winsHabitsLine(s: WinsStats): string {
-  const parts: string[] = [];
-  if (s.bodyweight > 0) parts.push(`${s.bodyweight} logged bodyweight`);
-  if (s.checkins > 0) parts.push(`${s.checkins} sent a check-in`);
-  if (s.reps > 0) parts.push(`${s.reps.toLocaleString("en-US")} reps`);
-  return parts.join(" · ");
+/** Workouts per week for the last 8 weeks, this week last. Empty on older posts. */
+export function winsChart(s: WinsStats) {
+  const h = s.history ?? [];
+  const max = Math.max(1, ...h.map((x) => x.sessions));
+  return h.map((x) => ({ ...x, label: winsWeekLabel(x.wk).split(" – ")[0], share: x.sessions / max, current: x.wk === s.week_of }));
+}
+
+/** Something to chase this week. */
+export function winsChallenge(s: WinsStats): string {
+  if (s.sessions_rank === 1 && (s.weeks_tracked ?? 0) >= 6) return "Most workouts the crew has ever done in a week. Run it back";
+  return `This week's goal: beat ${s.sessions} workouts`;
 }

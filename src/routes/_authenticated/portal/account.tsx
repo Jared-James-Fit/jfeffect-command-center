@@ -28,6 +28,7 @@ import { InstallAppCard } from "@/components/portal/install-app-card";
 import { WearablesCard } from "@/components/portal/wearables-card";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { PushNotificationCard } from "@/components/push/push-notification-card";
+import { WeightUnitCard } from "@/components/portal/weight-unit-card";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -208,6 +209,7 @@ function AccountPage() {
               {[
                 { id: "basic-information", label: "Basic Info" },
                 { id: "profile-picture", label: "Photo" },
+                { id: "units", label: "Units" },
                 { id: "training-schedule", label: "Schedule" },
                 { id: "goals-setup", label: "Goals" },
                 { id: "password", label: "Password" },
@@ -290,6 +292,12 @@ function AccountPage() {
             </p>
           </Card>
         </SectionErrorBoundary>
+
+        <div id="units" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Weight units">
+            <WeightUnitCard key={form.id} clientId={form.id} value={client?.preferred_weight_unit} />
+          </SectionErrorBoundary>
+        </div>
 
         <SectionErrorBoundary label="Social Media" className="md:col-span-3">
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">

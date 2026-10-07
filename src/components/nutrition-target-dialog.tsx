@@ -19,6 +19,7 @@ import { FileText, Upload, X, Plus, ChevronDown } from "lucide-react";
 import { todayLocalISO } from "@/lib/today";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { WorkoutMealTagger } from "@/components/nutrition/WorkoutMealTagger";
+import { AutoLabelWorkoutMeals } from "@/components/nutrition/AutoLabelWorkoutMeals";
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
 
 const QUICK_DAY_TYPES = [
@@ -293,8 +294,10 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
               if (phase) setPhaseAuto(true);
             }}
           />
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-xs uppercase tracking-widest text-muted-foreground">Day Targets</h4>
+            <div className="flex flex-wrap items-center gap-2">
+            <AutoLabelWorkoutMeals clientId={form.client_id || clientId} days={days} onApply={setDays} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="outline" className="gap-1">
@@ -309,6 +312,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
           {days.map((d, i) => (
             <div key={i} className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">

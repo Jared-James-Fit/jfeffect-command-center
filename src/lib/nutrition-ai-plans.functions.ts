@@ -319,6 +319,15 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
     };
   });
 
+/** Coach view: when this client actually trains, from their logged workouts. */
+export const getClientTrainingPatternFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    return loadTrainingPattern(await admin(), data.clientId);
+  });
+
 /** Mark a plan as applied to the client's targets (for the coach's history). */
 export const markNutritionPlanAppliedFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

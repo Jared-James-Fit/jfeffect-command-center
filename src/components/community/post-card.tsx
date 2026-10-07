@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
-  REACTIONS,
+  REACTION,
   SCOPE_WORD,
   SERIES_LABEL,
   featuredLift,
@@ -15,6 +15,8 @@ import {
   pickCardStats,
   postTimeLabel,
   reactionEmoji,
+  reactionTotal,
+  reactorsLine,
   sessionLine,
   type CommunityAuthor,
   type CommunityPost,
@@ -23,6 +25,7 @@ import {
 } from "@/lib/community";
 import { useFullMediaUrl } from "@/lib/community.queries";
 import { WinsStatsCard } from "@/components/community/wins-stats";
+import { ReactorsSheet } from "@/components/community/reactors-sheet";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -356,7 +359,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </div>
       )}
 
-      <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} />
+      <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
@@ -380,40 +383,74 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 
 export const PostCard = memo(PostCardInner);
 
-export function ReactionBar({ post, onReact, onOpenComments }: { post: CommunityPost; onReact: (p: CommunityPost, next: ReactionKey | null) => void; onOpenComments?: (p: CommunityPost) => void }) {
+/**
+ * One tap: 🔥 and how many, then the faces of who gave it ("🔥 from Jared,
+ * Vicky and 3 others"), which opens the full list. Comments on the right.
+ */
+export function ReactionBar({
+  post,
+  onReact,
+  onOpenComments,
+  onOpenAuthor,
+}: {
+  post: CommunityPost;
+  onReact: (p: CommunityPost, next: ReactionKey | null) => void;
+  onOpenComments?: (p: CommunityPost) => void;
+  onOpenAuthor?: (a: CommunityAuthor) => void;
+}) {
+  const [listFor, setListFor] = useState<string | null>(null);
+  const total = reactionTotal(post);
+  const mine = !!post.my_reaction;
+  const who = reactorsLine(post);
+  const faces = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me)).slice(0, 3);
   return (
     <div className="flex items-center gap-1 px-2 pb-2 pt-2">
-      {REACTIONS.map((r) => {
-        const count = post.reactions[r.key] ?? 0;
-        const mine = post.my_reaction === r.key;
-        return (
-          <button
-            key={r.key}
-            type="button"
-            onClick={() => onReact(post, mine ? null : r.key)}
-            aria-pressed={mine}
-            aria-label={`${r.label}${count ? `, ${count}` : ""}`}
-            className={cn(
-              "flex h-11 min-w-11 items-center justify-center gap-1 rounded-full px-2.5 text-[16px] transition-all active:scale-90",
-              mine ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-muted",
-            )}
-          >
-            <span className={cn(!mine && count === 0 && "opacity-60 grayscale-[30%]")}>{r.emoji}</span>
-            {count > 0 && <span className="text-[12px] font-bold tabular-nums text-muted-foreground">{count}</span>}
-          </button>
-        );
-      })}
+      <button
+        type="button"
+        onClick={() => onReact(post, mine ? null : REACTION.key)}
+        aria-pressed={mine}
+        aria-label={`${mine ? "Remove your fire" : "Give it fire"}${total ? `, ${total}` : ""}`}
+        className={cn(
+          "flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[18px] transition-all active:scale-90",
+          mine ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-muted",
+        )}
+      >
+        <span className={cn(!mine && "opacity-70 grayscale-[35%]")}>{REACTION.emoji}</span>
+        {total > 0 && <span className={cn("text-[13px] font-black tabular-nums", mine ? "text-primary" : "text-muted-foreground")}>{total}</span>}
+      </button>
+      {who && (
+        <button
+          type="button"
+          onClick={() => setListFor(post.id)}
+          className="flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-left hover:bg-muted"
+          aria-label={`See who gave it fire: ${who}`}
+        >
+          {faces.length > 0 && (
+            <span className="flex shrink-0 -space-x-1.5">
+              {faces.map((r) => (
+                <span key={r.user_id} className="rounded-full ring-2 ring-card">
+                  <UserAvatar src={r.avatar_url} name={r.is_me ? "You" : r.name} size={24} expandable={false} />
+                </span>
+              ))}
+            </span>
+          )}
+          <span className="truncate text-[12px] text-muted-foreground">
+            <span className="font-bold text-foreground">{who}</span>
+          </span>
+        </button>
+      )}
       {onOpenComments && (
         <button
           type="button"
           onClick={() => onOpenComments(post)}
-          className="ml-auto flex h-11 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold text-muted-foreground hover:bg-muted"
+          className="ml-auto flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold text-muted-foreground hover:bg-muted"
           aria-label={`Comments${post.comment_count ? `, ${post.comment_count}` : ""}`}
         >
           <MessageCircle className="h-4 w-4" />
           {post.comment_count > 0 ? post.comment_count : "Comment"}
         </button>
       )}
+      <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
     </div>
   );
 }
