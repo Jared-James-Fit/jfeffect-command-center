@@ -753,3 +753,14 @@ describe("coach POV shows the post buttons but never posts as the client", () =>
     expect(lockIn).toContain("if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);");
   });
 });
+
+describe("share editor never opens blank", () => {
+  const composer = read("src/components/community/share-composer.tsx");
+  it("measures and draws once the stage actually mounts, even when the workout is already cached", () => {
+    expect(composer).toContain("const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);");
+    expect(composer).toContain('<div ref={setStageEl} className="relative min-h-0 flex-1">');
+    expect(composer).toContain("}, [open, stageEl]);");
+    expect(composer).toContain("}, [open, base, templates, dataFor, stageEl]);");
+    expect(composer).not.toContain("stageRef");
+  });
+});
