@@ -1,15 +1,15 @@
 /**
- * Quick post-workout review (v2). One compact screen, minimum ONE tap:
+ * Quick post-workout review. One compact screen, session questions first:
  *
- *   Effort  — session RPE 6–10, pre-filled from today's logged set RPEs
- *   Sleep   — hours last night (optional)
- *   Energy  — how recovered you felt going in, 1–5 (optional)
- *   Pain    — No/Yes, blank until tapped; Yes asks where + how bad (feeds coach flags)
- *   Note    — behind "Add a note"
+ *   How hard was it?  — session RPE 6–10 (the one required tap)
+ *   Anything hurt?    — No/Yes; Yes asks where + how bad (feeds coach flags)
+ *   Sleep last night  — <5h / 5–6h / 6–7h / 7h+ (optional)
+ *   Energy going in   — 1–5 (optional)
+ *   Note              — behind "Add a note"
  *
- * Only effort is pre-filled (from real logged RPEs). Everything else starts
- * blank so a fast "Done" never invents data; the button says how many were
- * skipped, which nudges a tap without blocking the one-tap finish.
+ * Nothing is pre-selected, so every stored answer is one the athlete tapped.
+ * Fastest finish is two taps (effort, then the button); the button says how
+ * many optional answers that skips, which nudges filling them in.
  *
  * These are the markers the recovery score and the load suggestions use.
  * See src/lib/workout-review.ts for the mapping and why v1 was replaced.
@@ -29,17 +29,20 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Loader2, ChevronLeft, Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
 import {
   EFFORT_OPTIONS,
   PAIN_AREAS,
   PAIN_SEVERITY,
   REVIEW_VERSION,
+  SLEEP_OPTIONS,
   deriveOverallRating,
   checkoutCta,
   initialEffort,
+  sleepChip,
 } from "@/lib/workout-review";
+import type { SleepBucket } from "@/lib/analytics/recovery-score";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -62,16 +65,7 @@ export type ReviewInitial = {
   reviewVersion?: number | null;
 };
 
-export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9";
-
-const SLEEP_OPTIONS: { v: SleepBucket; label: string }[] = [
-  { v: "lt5", label: "<5h" },
-  { v: "5_6", label: "5–6h" },
-  { v: "6_7", label: "6–7h" },
-  { v: "7_8", label: "7–8h" },
-  { v: "8_9", label: "8–9h" },
-  { v: "gte9", label: "9h+" },
-];
+export type { SleepBucket };
 
 const RECOVERY_OPTIONS: { v: number; emoji: string; label: string }[] = [
   { v: 1, emoji: "😫", label: "Wrecked" },
@@ -90,8 +84,6 @@ type Props = {
   onSaved?: () => Promise<void> | void;
   onViewScore?: (rating: number | null) => void;
   actAsClientId?: string | null;
-  /** Session RPE pre-fill from today's logged sets (first review only). */
-  suggestedSessionRpe?: number | null;
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -149,13 +141,12 @@ export function WorkoutReviewEditor({
   onSaved,
   onViewScore,
   actAsClientId,
-  suggestedSessionRpe = null,
 }: Props) {
   const submit = useServerFn(submitOrEditReview);
   const qc = useQueryClient();
   const isEdit = !!initial?.submittedAt;
 
-  const [effort, setEffort] = useState<number | null>(() => initialEffort(initial, suggestedSessionRpe));
+  const [effort, setEffort] = useState<number | null>(() => initialEffort(initial));
   const [sleepBucket, setSleepBucket] = useState<SleepBucket | null>(initial?.sleepBucket ?? null);
   const [recoveryToday, setRecoveryToday] = useState<number | null>(initial?.recoveryToday ?? null);
   // null = not answered. Edits show the stored value; new reviews start blank.
@@ -167,7 +158,7 @@ export function WorkoutReviewEditor({
 
   useEffect(() => {
     if (!open) return;
-    setEffort(initialEffort(initial, suggestedSessionRpe));
+    setEffort(initialEffort(initial));
     setSleepBucket(initial?.sleepBucket ?? null);
     setRecoveryToday(initial?.recoveryToday ?? null);
     setPain(initial?.submittedAt ? !!initial.pain : null);
@@ -175,9 +166,8 @@ export function WorkoutReviewEditor({
     setPainLevel(initial?.painLevel ?? 5);
     setNote(initial?.clientNote ?? "");
     setNoteOpen(!!(initial?.clientNote ?? "").trim());
-  }, [open, initial?.submittedAt, suggestedSessionRpe]);
+  }, [open, initial?.submittedAt]);
 
-  const prefilled = effort != null && effort === suggestedSessionRpe && !isEdit;
   const cta = checkoutCta({ isEdit, effort, pain, painArea, sleepBucket, recoveryToday });
 
   const mutation = useMutation({
@@ -250,8 +240,8 @@ export function WorkoutReviewEditor({
       <SheetContent
         side="bottom"
         hideCloseButton
-        // Radix focuses the first button (Back) on open, which paints a focus
-        // ring on touch devices before the athlete has done anything.
+        // Radix focuses the first button on open, which paints a focus ring
+        // on touch devices before the athlete has done anything.
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="z-[70] flex max-h-[92svh] flex-col gap-0 rounded-t-3xl p-0"
       >
@@ -262,35 +252,26 @@ export function WorkoutReviewEditor({
           // (status bar / Dynamic Island) the sheet actually overlaps.
           style={{ paddingTop: "max(calc(env(safe-area-inset-top) - 8svh), 0px)" }}
         >
-          <div className="flex items-center px-3 pt-2 sm:px-4">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              aria-label="Back"
-              className="inline-flex h-9 items-center gap-0.5 rounded-full px-2 -ml-1 text-sm font-semibold text-foreground transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <ChevronLeft className="h-5 w-5" />
-              <span>Back</span>
-            </button>
-          </div>
-          <SheetHeader className="min-h-0 space-y-0.5 px-5 pb-3 pt-1 text-left">
+          <SheetHeader className="min-h-0 space-y-0.5 px-5 pb-3 pt-4 text-left">
             <SheetTitle className="text-lg font-black leading-tight">
-              {isEdit ? "Edit your review" : "Quick check-out"}
+              {isEdit ? "Edit your review" : "How'd it go?"}
             </SheetTitle>
             <SheetDescription className="text-xs">
-              {hasCoach ? "10 seconds. Your coach sees this." : "10 seconds. Tunes your next session."}
+              {hasCoach ? "4 quick taps. Your coach sees this." : "4 quick taps. Tunes your next session."}
             </SheetDescription>
           </SheetHeader>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5 pt-4">
-          <Row
-            title="How hard was it?"
-            hint={prefilled ? "From your logged RPE" : effort == null ? "Required" : "Session RPE"}
-          >
+          <Row title="How hard was it?" hint={effort == null ? "Required" : undefined}>
             <div className="grid grid-cols-5 gap-1.5">
               {EFFORT_OPTIONS.map((o) => (
-                <Chip key={o.v} active={effort === o.v} onClick={() => setEffort(o.v)} label={`Effort ${o.v} ${o.label}`}>
+                <Chip
+                  key={o.v}
+                  active={effort === o.v}
+                  onClick={() => setEffort(o.v)}
+                  label={`Effort ${o.v} ${o.label}`}
+                >
                   <span className="text-base tabular-nums">{o.v}</span>
                   <span className="text-[10px] font-semibold opacity-80">{o.label}</span>
                 </Chip>
@@ -298,45 +279,27 @@ export function WorkoutReviewEditor({
             </div>
           </Row>
 
-          <Row title="Sleep last night">
-            <div className="grid grid-cols-6 gap-1">
-              {SLEEP_OPTIONS.map((o) => (
-                <Chip
-                  key={o.v}
-                  active={sleepBucket === o.v}
-                  onClick={() => setSleepBucket(sleepBucket === o.v ? null : o.v)}
-                  label={`Sleep ${o.label}`}
-                  className="px-0.5 text-[11px]"
-                >
-                  {o.label}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-bold">Anything hurt?</span>
+              <div className="grid w-40 shrink-0 grid-cols-2 gap-1.5">
+                <Chip active={pain === false} onClick={() => setPain(false)} label="No pain">
+                  No
                 </Chip>
-              ))}
-            </div>
-          </Row>
-
-          <Row title="Energy going in">
-            <div className="grid grid-cols-5 gap-1.5">
-              {RECOVERY_OPTIONS.map((o) => (
                 <Chip
-                  key={o.v}
-                  active={recoveryToday === o.v}
-                  onClick={() => setRecoveryToday(recoveryToday === o.v ? null : o.v)}
-                  label={`Energy ${o.label}`}
+                  active={pain === true}
+                  onClick={() => {
+                    setPain(true);
+                    setNoteOpen(true);
+                  }}
+                  label="Yes, pain"
                 >
-                  <span className="text-xl leading-none" aria-hidden="true">{o.emoji}</span>
-                  <span className="text-[10px] font-semibold opacity-80">{o.label}</span>
+                  Yes
                 </Chip>
-              ))}
-            </div>
-          </Row>
-
-          <Row title="Any pain?">
-            <div className="grid grid-cols-2 gap-1.5">
-              <Chip active={pain === false} onClick={() => setPain(false)} label="No pain">No</Chip>
-              <Chip active={pain === true} onClick={() => { setPain(true); setNoteOpen(true); }} label="Yes, pain">Yes</Chip>
+              </div>
             </div>
             {pain && (
-              <div className="space-y-2 pt-1">
+              <div className="space-y-2">
                 <div className="flex flex-wrap gap-1.5">
                   {PAIN_AREAS.map((a) => (
                     <button
@@ -357,13 +320,57 @@ export function WorkoutReviewEditor({
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
                   {PAIN_SEVERITY.map((o) => (
-                    <Chip key={o.v} active={painLevel === o.v} onClick={() => setPainLevel(o.v)} label={`Pain ${o.label}`}>
+                    <Chip
+                      key={o.v}
+                      active={painLevel === o.v}
+                      onClick={() => setPainLevel(o.v)}
+                      label={`Pain ${o.label}`}
+                    >
                       {o.label}
                     </Chip>
                   ))}
                 </div>
               </div>
             )}
+          </div>
+
+          <Row title="Sleep last night">
+            <div className="grid grid-cols-4 gap-1.5">
+              {SLEEP_OPTIONS.map((o) => {
+                // An older review may hold 7_8 / 8_9 / 9h+; it shows as "7h+"
+                // and keeps its stored value unless the athlete changes it.
+                const active = sleepChip(sleepBucket) === o.v;
+                return (
+                  <Chip
+                    key={o.v}
+                    active={active}
+                    onClick={() => setSleepBucket(active ? null : o.v)}
+                    label={`Sleep ${o.label}`}
+                    className="text-sm"
+                  >
+                    {o.label}
+                  </Chip>
+                );
+              })}
+            </div>
+          </Row>
+
+          <Row title="Energy going in">
+            <div className="grid grid-cols-5 gap-1.5">
+              {RECOVERY_OPTIONS.map((o) => (
+                <Chip
+                  key={o.v}
+                  active={recoveryToday === o.v}
+                  onClick={() => setRecoveryToday(recoveryToday === o.v ? null : o.v)}
+                  label={`Energy ${o.label}`}
+                >
+                  <span className="text-xl leading-none" aria-hidden="true">
+                    {o.emoji}
+                  </span>
+                  <span className="text-[10px] font-semibold opacity-80">{o.label}</span>
+                </Chip>
+              ))}
+            </div>
           </Row>
 
           {noteOpen ? (

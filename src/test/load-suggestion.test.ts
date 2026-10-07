@@ -8,7 +8,6 @@ import {
   predictReadiness,
   setE1rm,
   suggestSetLoad,
-  suggestedSessionRpe,
   warmupE1rm,
   WARMUP_COLD_START_MAX_RATIO,
   audibleStep,
@@ -136,13 +135,6 @@ describe("helpers", () => {
     expect(loadStep("kg", 12)).toBe(1);
     expect(loadStep("lb", 30)).toBe(2.5);
     expect(loadStep("lb", 225)).toBe(5);
-  });
-
-  it("pre-fills session RPE from today's working sets", () => {
-    expect(suggestedSessionRpe([8, 8, 8.5, 9])).toBe(9);
-    expect(suggestedSessionRpe([7, 7])).toBe(7);
-    expect(suggestedSessionRpe([8])).toBeNull();
-    expect(suggestedSessionRpe([5, 4, null])).toBeNull();
   });
 });
 
