@@ -399,7 +399,7 @@ export function winsStatTiles(s: WinsStats, unit: "kg" | "lb") {
   const lb = s.volume_kg * 2.20462;
   const trucks = Math.round(lb / PICKUP_LB);
   const change = s.sessions_prev > 0 ? Math.round(((s.sessions - s.sessions_prev) / s.sessions_prev) * 100) : null;
-  const tiles: { value: string; label: string; sub?: string }[] = [
+  const tiles: { value: string; label: string; sub?: string; unitToggle?: boolean }[] = [
     { value: `${pct(s.opened, s.roster)}%`, label: "opened the app", sub: `${s.opened} of ${s.roster}` },
     {
       value: String(s.sessions),
@@ -413,6 +413,7 @@ export function winsStatTiles(s: WinsStats, unit: "kg" | "lb") {
       value: compactNumber(unit === "kg" ? s.volume_kg : lb),
       label: `${unit} lifted`,
       sub: trucks >= 2 ? `≈ ${trucks} pickup trucks` : undefined,
+      unitToggle: true,
     });
   if (s.streaks > 0) tiles.push({ value: String(s.streaks), label: "on a 4+ week streak" });
   if (s.busiest_day) tiles.push({ value: s.busiest_day.slice(0, 3), label: "busiest day" });
