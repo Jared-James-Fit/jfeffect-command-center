@@ -38,6 +38,7 @@ import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { formatClientDayNotes, formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { format, parseISO, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
+import { SessionTimeRow } from "@/components/workout-day/SessionTimeRow";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 import { getRowBlockSummariesFn } from "@/lib/exercise-blocks.functions";
 import {
@@ -2499,7 +2500,8 @@ function WorkoutDay({
             >
               <CheckCircle2 className="mr-1 h-3 w-3" />
               {reviewSubmitted ? "Completed" : "Completed · Review pending"}
-              {completion.actual_duration_min != null && completion.actual_duration_min > 0
+              {/* Client workouts show length on the Session time row below. */}
+              {!isClientWorkout && completion.actual_duration_min != null && completion.actual_duration_min > 0
                 ? ` · ${formatDurationMin(completion.actual_duration_min)}`
                 : ""}
             </Badge>
@@ -2514,6 +2516,9 @@ function WorkoutDay({
               </Button>
             )}
           </div>
+        )}
+        {completion?.completed_at && completion?.id && isClientWorkout && client?.id && (
+          <SessionTimeRow completion={completion as any} clientId={client.id} workoutTitle={day?.title ?? null} />
         )}
         {/* Compact Warm-Up launcher. Rescheduling lives on the outside
             workout card / Schedule Manager, not inside the logger. */}

@@ -93,15 +93,26 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
     queryKey: ["workout-review-for-dot", clientId, point?.day_id, point?.date],
     enabled: open && !!clientId && !!point?.day_id,
     queryFn: async () => {
-      // Find the member enrollment for this client and look up the review
-      // by day_id via member_workout_completions → member_workout_reviews
-      const { data } = await supabase
-        .from("member_workout_reviews")
-        .select("overall_rating, strength_feel, fatigue_feel, hit_target, pain, session_rpe, client_note, review_submitted_at, completion_id, enrollment_id")
-        .order("review_submitted_at", { ascending: false })
+      // The review for THIS workout: coached clients' reviews live in
+      // pl_workout_feedback keyed by client + day. (This used to read the
+      // newest member review of any workout, so old sets showed the wrong one.)
+      const { data } = await (supabase as any)
+        .from("pl_workout_feedback")
+        .select("overall_rating, strength_feel, fatigue_feel, hit_target, pain, session_rpe, client_note, review_submitted_at")
+        .eq("client_id", clientId)
+        .eq("day_id", point!.day_id)
+        .order("review_submitted_at", { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
-      return data;
+      return data as {
+        overall_rating: number;
+        strength_feel: string | null;
+        fatigue_feel: string | null;
+        hit_target: string | null;
+        pain: boolean;
+        session_rpe: number;
+        client_note: string | null;
+      } | null;
     },
     staleTime: 60_000,
   });

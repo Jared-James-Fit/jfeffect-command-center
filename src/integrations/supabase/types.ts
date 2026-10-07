@@ -14190,6 +14190,7 @@ export type Database = {
           session_weight_unit: string | null
           skipped_exercises_count: number | null
           started_at: string | null
+          training_started_at: string | null
           updated_at: string
         }
         Insert: {
@@ -14219,6 +14220,7 @@ export type Database = {
           session_weight_unit?: string | null
           skipped_exercises_count?: number | null
           started_at?: string | null
+          training_started_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -14248,6 +14250,7 @@ export type Database = {
           session_weight_unit?: string | null
           skipped_exercises_count?: number | null
           started_at?: string | null
+          training_started_at?: string | null
           updated_at?: string
         }
         Relationships: [
