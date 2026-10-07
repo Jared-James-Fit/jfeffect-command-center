@@ -69,6 +69,7 @@ import { WorkoutUndoProvider, useWorkoutUndo } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { WarmupSection, useWarmupSets } from "@/components/workout-day/final-warmup-input";
+import { LoadSuggestionCard } from "@/components/workout-day/load-suggestion-card";
 import { pickFinalWarmup } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
@@ -2819,55 +2820,6 @@ function WorkoutDay({
  * Exercise-level RPE suggestion: the range for today's working sets, what it's
  * planned for, and why (history / today's sets / readiness / layoff).
  */
-function LoadSuggestionCard({
-  hint,
-  model,
-  plan,
-}: {
-  hint: LoadSuggestion | null;
-  model: LoadModel;
-  plan: { reps: number; rpe: number };
-}) {
-  if (model.status === "calibrating" || !hint) {
-    if (model.historySessions === 0) return null;
-    return (
-      <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-        <Target className="h-3 w-3" aria-hidden="true" />
-        Load suggestions unlock after a week of logs with RPE
-      </div>
-    );
-  }
-  const range = hint.low === hint.high
-    ? `${fmtNum(hint.target)} ${hint.unit}`
-    : `${fmtNum(hint.low)}–${fmtNum(hint.high)} ${hint.unit}`;
-  const why =
-    model.source === "warmup"
-      ? "from your final warm-up · first lift, so kept conservative"
-      : model.source === "history_warmup"
-        ? "your history, nudged by your final warm-up"
-        : model.source === "history"
-      ? model.readiness.reasons.length
-        ? `eased for ${model.readiness.reasons[0]}`
-        : model.staleDays
-          ? `eased back after ${Math.round(model.staleDays / 7)} weeks off`
-          : `from your last ${Math.min(model.historySessions, 8)} sessions`
-      : "updated from today's sets";
-  return (
-    <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/5 px-2.5 py-1.5">
-      <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-      <div className="min-w-0 leading-tight">
-        <div className="text-sm font-bold tabular-nums text-foreground">
-          {range}
-          <span className="ml-1.5 text-[11px] font-medium text-muted-foreground">
-            {plan.reps} reps @ RPE {fmtNum(plan.rpe)}
-          </span>
-        </div>
-        <div className="truncate text-[11px] text-muted-foreground">Suggested · {why}</div>
-      </div>
-    </div>
-  );
-}
-
 function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: "kg" | "lb"; exerciseName: string }) {
   const nav = useWorkoutNavigation();
   // Cheap suspicious-load heuristic: extreme absolute values flag a likely unit / data error.

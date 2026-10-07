@@ -11,6 +11,8 @@ import {
   suggestedSessionRpe,
   warmupE1rm,
   WARMUP_COLD_START_MAX_RATIO,
+  audibleStep,
+  MIN_RPE,
   WARMUP_COLD_START_SPREAD,
   HISTORY_SPREAD,
 } from "@/lib/load-suggestion";
@@ -39,7 +41,8 @@ describe("RPE chart", () => {
   });
 
   it("ignores warm-ups and down-weights unlogged effort", () => {
-    expect(setE1rm({ load: 100, reps: 5, rpe: 5 })).toBeNull();
+    expect(setE1rm({ load: 100, reps: 5, rpe: 3.5 })).toBeNull(); // below RPE 4 = warm-up
+    expect(setE1rm({ load: 100, reps: 5, rpe: 5 })!.trust).toBeLessThan(setE1rm({ load: 100, reps: 5, rpe: 8 })!.trust);
     expect(setE1rm({ load: 100, reps: 5, rpe: null })!.trust).toBeLessThan(setE1rm({ load: 100, reps: 5, rpe: 8 })!.trust);
   });
 });
@@ -266,5 +269,37 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
     const s = suggestSetLoad(m, plan)!;
     expect(s.unit).toBe("lb");
     expect(s.target % 5).toBe(0);
+  });
+});
+
+describe("light prescriptions (RPE 4-5) are planned at their real effort", () => {
+  it("planningTarget keeps RPE 4-5 instead of bumping it to 6", () => {
+    expect(MIN_RPE).toBe(4);
+    expect(planningTarget({ repTarget: { exact: 5 }, rpeTarget: { min: 4, max: 5 }, rirTarget: {} })).toEqual({ reps: 5, rpe: 4.5 });
+    expect(planningTarget({ repTarget: { exact: 1 }, rpeTarget: { exact: 3 }, rirTarget: {} })).toEqual({ reps: 1, rpe: 4 });
+  });
+  it("a light target suggests less than the same reps at RPE 6", () => {
+    const m = buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW });
+    expect(suggestSetLoad(m, { reps: 5, rpe: 4.5 })!.target).toBeLessThan(suggestSetLoad(m, { reps: 5, rpe: 6 })!.target);
+  });
+  it("a light set logged today never drags a heavier target down", () => {
+    const cold = suggestSetLoad(buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW }), { reps: 5, rpe: 8 })!;
+    const afterLight = suggestSetLoad(buildLoadModel({ history: twoWeeks, today: [{ load: 80, reps: 5, rpe: 4 }], unit: "kg", now: NOW }), { reps: 5, rpe: 8 })!;
+    expect(afterLight.target).toBe(cold.target);
+  });
+  it("but it does calibrate the next light set", () => {
+    const m = buildLoadModel({ history: twoWeeks, today: [{ load: 80, reps: 5, rpe: 4 }], unit: "kg", now: NOW });
+    expect(estimateFor(m, 5, 4)!.load).toBeLessThan(estimateFor(buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW }), 5, 4)!.load);
+  });
+});
+
+describe("audibleStep (the 'moving fast / grinding' tip)", () => {
+  it("is ~2.5% rounded to real plates, never below one plate step", () => {
+    expect(audibleStep(225, "lb")).toBe(5);
+    expect(audibleStep(500, "lb")).toBe(15);
+    expect(audibleStep(140, "kg")).toBe(2.5);
+    expect(audibleStep(240, "kg")).toBe(5);
+    expect(audibleStep(30, "lb")).toBe(2.5);
+    expect(audibleStep(12, "kg")).toBe(1);
   });
 });

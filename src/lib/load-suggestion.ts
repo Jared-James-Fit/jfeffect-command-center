@@ -47,6 +47,14 @@ export const MIN_HISTORY_SESSIONS = 2;
 export const MIN_HISTORY_SPAN_DAYS = 6;
 const DAY_MS = 86_400_000;
 
+/**
+ * Lowest RPE used as evidence and as a target. Light prescriptions (RPE 4–5:
+ * primers, technique work, pivot weeks) are planned at their real effort
+ * instead of being bumped to RPE 6. Backtest on real logs: light-target error
+ * 10.9% → 8.5% cold and 13.7% → 9.8% once a set is in; normal targets unchanged.
+ */
+export const MIN_RPE = 4;
+
 /** Fraction of 1RM for `reps` performed with `rir` reps left in the tank. */
 export function percentOf1RM(reps: number, rir: number): number | null {
   const e = reps + Math.max(0, rir);
@@ -107,8 +115,10 @@ export interface SetSample {
 /** RPE-adjusted e1RM for one set and how much to trust it (0..1). */
 export function setE1rm(s: SetSample): { e1rm: number; trust: number } | null {
   if (!(s.load > 0) || !(s.reps >= 1) || s.reps > 15) return null;
-  // Below RPE 6 is warm-up territory: the RIR guess is unreliable.
-  if (s.rpe != null && s.rpe < 6) return null;
+  // Below RPE 4 is warm-up territory. RPE 4–6 counts, but its RIR guess is
+  // weak, so it's trusted less (see below) and its own reps/RPE neighbours
+  // dominate through the kernel.
+  if (s.rpe != null && s.rpe < MIN_RPE) return null;
   const rpe = s.rpe ?? 8.5; // unlogged working sets: assume a typical hard set
   const pct = percentOf1RM(s.reps, 10 - rpe);
   if (!pct) return null;
@@ -331,7 +341,10 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
     const variance = weightedMean(w.map((x) => ({ v: (x.v / mean - 1) ** 2, w: x.w }))) ?? 0;
     return { load: mean, spread: Math.sqrt(variance) };
   };
-  const t = model.today.length ? est(model.today, TODAY_ALPHA) : null;
+  // A light set (below RPE 6) says little about heavy capacity — athletes rate
+  // easy sets loosely — so it only calibrates light targets, never heavier ones.
+  const todayUsable = rpe >= 6 ? model.today.filter((s) => s.rpe >= 6) : model.today;
+  const t = todayUsable.length ? est(todayUsable, TODAY_ALPHA) : null;
   const h = model.history.length ? est(model.history, HISTORY_ALPHA) : null;
   // Final warm-up: only before any working set is logged today (model.warmup is
   // null otherwise). It nudges a history estimate, or — with no history — gives
@@ -381,11 +394,11 @@ export function suggestSetLoad(
   target: { reps: number; rpe: number },
 ): LoadSuggestion | null {
   const reps = Math.round(target.reps);
-  const rpe = Math.min(10, Math.max(6, target.rpe));
+  const rpe = Math.min(10, Math.max(MIN_RPE, target.rpe));
   const est = estimateFor(model, reps, rpe);
   if (!est) return null;
   const mid = percentOf1RM(reps, 10 - rpe);
-  const lowPct = percentOf1RM(reps, 10 - Math.max(6, rpe - 0.5));
+  const lowPct = percentOf1RM(reps, 10 - Math.max(MIN_RPE, rpe - 0.5));
   const highPct = percentOf1RM(reps, 10 - Math.min(10, rpe + 0.5));
   if (!mid || !lowPct || !highPct) return null;
   const raw = est.load;
@@ -400,6 +413,16 @@ export function suggestSetLoad(
   high = Math.max(high, targetLoad);
   if (!(targetLoad > 0) || !(low > 0)) return null;
   return { low, high, target: targetLoad, unit: model.unit };
+}
+
+/**
+ * The in-session "audible": how much to change the next set when the bar moves
+ * clearly faster or slower than planned. ~2.5% (about half an RPE on the chart),
+ * rounded to a loadable plate step and never less than one step.
+ */
+export function audibleStep(target: number, unit: "kg" | "lb"): number {
+  const step = loadStep(unit, target);
+  return Math.max(step, roundToStep(target * 0.025, step));
 }
 
 /**
@@ -419,7 +442,7 @@ export function planningTarget(input: {
   const rpe = mid(input.rpeTarget);
   const rir = mid(input.rirTarget);
   const effort = rpe != null ? rpe : rir != null ? 10 - rir : 8;
-  return { reps, rpe: Math.min(10, Math.max(6, Math.round(effort * 2) / 2)) };
+  return { reps, rpe: Math.min(10, Math.max(MIN_RPE, Math.round(effort * 2) / 2)) };
 }
 
 /** Session RPE to pre-fill in the review: mean of today's working-set RPEs. */
