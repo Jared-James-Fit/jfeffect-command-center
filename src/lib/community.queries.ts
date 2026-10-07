@@ -11,6 +11,8 @@ import {
   type CommunityComment,
   type CommunityFeedPage,
   type CommunityActivity,
+  type CommunityAuthor,
+  type CommunitySeries,
   type CommunityMember,
   type CommunityPost,
   type CommunityPostDetail,
@@ -292,6 +294,70 @@ export function useSetBio(userId: string | null) {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: communityKeys.profile(userId) }),
+  });
+}
+
+/* ---- coach notes + the weekly series ---------------------------------- */
+
+export type SeriesItem = { id: string; mentor: string; body: string; quote: string | null; quote_source: string | null };
+export type SeriesOverview = {
+  paused: boolean;
+  author: CommunityAuthor | null;
+  next: Partial<Record<CommunitySeries, SeriesItem>>;
+  library: Record<CommunitySeries, number>;
+  history: { id: string; series: CommunitySeries; created_at: string; mentor: string | null; caption: string | null }[];
+  this_week: Record<CommunitySeries, boolean>;
+};
+
+export function useSeriesOverview(enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-series"],
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<SeriesOverview> => {
+      const { data, error } = await db.rpc("community_series_overview");
+      if (error) throw error;
+      return data as SeriesOverview;
+    },
+  });
+}
+
+/** Every coach-side write here refreshes the overview and the feed. */
+export function useSeriesAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { kind: "pause"; paused: boolean } | { kind: "publish"; series: CommunitySeries } | { kind: "item"; id: string; body: string; active?: boolean } | { kind: "note"; body: string }) => {
+      const call =
+        a.kind === "pause"
+          ? db.rpc("community_series_set_paused", { _paused: a.paused })
+          : a.kind === "publish"
+            ? db.rpc("community_publish_series", { _series: a.series, _force: true })
+            : a.kind === "item"
+              ? db.rpc("community_series_update_item", { _id: a.id, _body: a.body, _active: a.active ?? true })
+              : db.rpc("community_create_note", { _body: a.body });
+      const { data, error } = await call;
+      if (error) throw error;
+      return data as { status?: string } | null;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["community-series"] });
+      invalidateCommunity(qc);
+    },
+  });
+}
+
+/** Edit a published note's text (author or staff). */
+export function useUpdateNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { postId: string; body: string }) => {
+      const { error } = await db.rpc("community_update_note", { _post_id: a.postId, _body: a.body });
+      if (error) throw error;
+    },
+    onSuccess: (_d, a) => {
+      invalidateCommunity(qc);
+      qc.invalidateQueries({ queryKey: communityKeys.post(a.postId) });
+    },
   });
 }
 
