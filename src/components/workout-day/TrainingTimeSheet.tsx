@@ -174,10 +174,10 @@ export function TrainingTimeSheet({
           <div
             className={cn(
               "flex items-center gap-3 rounded-xl border p-3",
-              inFuture ? "border-destructive/40 bg-destructive/10" : "border-primary/30 bg-primary/5",
+              inFuture ? "border-destructive/40 bg-destructive/10" : "border-border bg-muted/30",
             )}
           >
-            <Clock className={cn("h-5 w-5 shrink-0", inFuture ? "text-destructive" : "text-primary")} />
+            <Clock className={cn("h-5 w-5 shrink-0", inFuture ? "text-destructive" : "text-muted-foreground")} />
             <div className="min-w-0">
               <div className="text-base font-black tabular-nums text-foreground">
                 {start && end ? `${formatClockAt(start, timezone)} → ${formatClockAt(end, timezone)}` : "Pick a day and time"}

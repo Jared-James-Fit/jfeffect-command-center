@@ -252,7 +252,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
             color={ANALYTICS_COLORS.blue}
             label="Typical start"
             value={summary.typicalStartMinutes != null ? formatClock(summary.typicalStartMinutes) : "—"}
-            sub={summary.startSpreadMin != null && summary.timed.length >= 3 ? `Half within ±${formatMinutes(Math.max(5, summary.startSpreadMin))}` : "Needs 3+ timed sessions"}
+            sub={summary.timed.length >= 3 ? `${summary.nearTypicalCount} of ${summary.timed.length} within 1h` : "Needs 3+ timed sessions"}
           />
           <Kpi
             icon={<Timer className="h-4 w-4" />}
@@ -280,8 +280,8 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
             sub={
               best
                 ? best.metric === "strength"
-                  ? `+${best.delta.toFixed(1)}% strength vs other times`
-                  : `+${best.delta.toFixed(1)}★ vs other times`
+                  ? `+${best.delta.toFixed(1)}% strength`
+                  : `+${best.delta.toFixed(1)}★ rating`
                 : summary.best
                   ? "Similar at every time"
                   : "Needs 3+ sessions in 2 windows"
@@ -302,14 +302,14 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                     key={w.key}
                     className={cn(
                       "rounded-lg border px-3 py-2",
-                      isBest ? "border-primary/40 bg-primary/5" : "border-border bg-muted/20",
+                      isBest ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-muted/20",
                     )}
                   >
                     <div className="flex items-center gap-2">
                       <div className="w-[92px] shrink-0">
                         <div className="flex items-center gap-1 text-sm font-black text-foreground">
                           {w.label}
-                          {isBest && <span className="rounded bg-primary px-1 text-[9px] font-black uppercase text-primary-foreground">Best</span>}
+                          {isBest && <span className="rounded bg-emerald-600 px-1 text-[9px] font-black uppercase text-white">Best</span>}
                         </div>
                         <div className="text-[10px] text-muted-foreground">{w.range}</div>
                       </div>
@@ -401,7 +401,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                     <div className="truncate text-sm font-bold text-foreground">{s.title || "Workout"}</div>
                     <div className="truncate text-xs text-muted-foreground tabular-nums">
                       {s.source === "suspect"
-                        ? `Logged ${formatClockAt(s.start, timezone)} · time not set`
+                        ? `Logged ${formatClockAt(s.start, timezone)}`
                         : `${formatClockAt(s.start, timezone)} · ${formatMinutes(s.durationMin)}${s.loggedSets ? ` · ${s.loggedSets} sets` : ""}`}
                     </div>
                   </div>
@@ -730,9 +730,9 @@ function SessionDetailSheet({
 
 function Stat({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={cn("rounded-lg border p-2.5", highlight ? "border-primary/30 bg-primary/5" : "border-border bg-muted/30")}>
+    <div className={cn("rounded-lg border p-2.5", highlight ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-muted/30")}>
       <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("mt-0.5 truncate text-sm font-black tabular-nums", highlight ? "text-primary" : "text-foreground")}>{value}</div>
+      <div className={cn("mt-0.5 truncate text-sm font-black tabular-nums", highlight ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>{value}</div>
     </div>
   );
 }

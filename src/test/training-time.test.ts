@@ -174,6 +174,21 @@ describe("summarizeTrainingTime", () => {
     expect(s.insights.some((i) => i.id === "suspect")).toBe(true);
   });
 
+  it("doesn't call a split weekday-evening / weekend-morning schedule consistent", () => {
+    const split = summarizeTrainingTime([
+      ...[0, 1, 2, 3, 4, 5].map((i) => session({ id: `e${i}`, startMinutes: 18 * 60 + i * 5, window: "evening" })),
+      ...[0, 1, 2].map((i) => session({ id: `m${i}`, startMinutes: 9 * 60, window: "morning" })),
+    ]);
+    expect(split.insights.some((i) => i.id === "consistency" && i.tone === "good")).toBe(false);
+    expect(split.insights.find((i) => i.id === "split-schedule")?.title).toBe("You train in two slots: evening and morning");
+
+    const steady = summarizeTrainingTime(
+      [0, 1, 2, 3, 4, 5, 6, 7].map((i) => session({ id: `s${i}`, startMinutes: 18 * 60 + (i % 3) * 20, window: "evening" })),
+    );
+    expect(steady.nearTypicalCount).toBe(8);
+    expect(steady.insights.find((i) => i.id === "consistency")?.tone).toBe("good");
+  });
+
   it("tells a meet-prep athlete who trains at night to practice mornings", () => {
     const now = new Date("2026-10-07T12:00:00Z");
     const s = summarizeTrainingTime(
@@ -183,5 +198,17 @@ describe("summarizeTrainingTime", () => {
     const meet = s.insights.find((i) => i.id === "meet-time");
     expect(meet?.tone).toBe("warn");
     expect(meet?.title).toContain("4 wks");
+  });
+
+  it("doesn't tell a peaking athlete to put heavy days in the evening", () => {
+    const now = new Date("2026-10-07T12:00:00Z");
+    const sessions = [
+      ...[0, 1, 2, 3].map((i) => session({ id: `m${i}`, startMinutes: 9 * 60, window: "morning", strengthIndex: 96 })),
+      ...[0, 1, 2, 3, 4].map((i) => session({ id: `e${i}`, startMinutes: 18 * 60, window: "evening", strengthIndex: 100 })),
+    ];
+    const peaking = summarizeTrainingTime(sessions, { now, nextMeetDate: "2026-11-01" });
+    expect(peaking.insights.find((i) => i.id === "best-window")?.body).toContain("Outside meet prep");
+    const offSeason = summarizeTrainingTime(sessions, { now });
+    expect(offSeason.insights.find((i) => i.id === "best-window")?.body).toContain("Put your heaviest day there");
   });
 });

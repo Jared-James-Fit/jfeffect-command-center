@@ -1575,6 +1575,14 @@ function WorkoutDay({
     setCompletionHydrated(true);
   }, [draftHydrated, completionHydrated, completion]);
 
+  // The Session time sheet edits a finished workout's length server-side.
+  // Mirror it here, or the next notes autosave writes the old length back.
+  const serverDurationMin = completion?.completed_at ? completion?.actual_duration_min ?? null : null;
+  useEffect(() => {
+    if (!completionHydrated || serverDurationMin == null) return;
+    setActualMin(String(serverDurationMin));
+  }, [completionHydrated, serverDurationMin]);
+
   // Autosave workout-level notes + actual minutes into pl_day_completions (draft state — does NOT set completed_at).
   const metaSave = useAutosave({
     key: draftKey,

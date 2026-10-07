@@ -320,8 +320,8 @@ export type TrainingTimeSummary = {
   timed: TrainingSession[];
   suspectCount: number;
   typicalStartMinutes: number | null;
-  /** Median absolute deviation of start time, minutes. Half of sessions start within ± this. */
-  startSpreadMin: number | null;
+  /** Timed sessions starting within ±60 min of the typical start. */
+  nearTypicalCount: number;
   medianDurationMin: number | null;
   durationP25: number | null;
   durationP75: number | null;
@@ -394,7 +394,7 @@ export function summarizeTrainingTime(
 
   const starts = timed.map((s) => s.startMinutes);
   const typical = median(starts);
-  const spread = typical == null ? null : median(starts.map((m) => Math.abs(m - typical)));
+  const nearTypicalCount = typical == null ? 0 : starts.filter((m) => Math.abs(m - typical) <= 60).length;
 
   const durations = timed.map((s) => s.durationMin).filter((n): n is number => n != null);
   const density = timed.map((s) => s.setsPerHour).filter((n): n is number => n != null);
@@ -435,7 +435,7 @@ export function summarizeTrainingTime(
     timed,
     suspectCount,
     typicalStartMinutes: typical,
-    startSpreadMin: spread,
+    nearTypicalCount,
     medianDurationMin: median(durations),
     durationP25: quantile(durations, 0.25),
     durationP75: quantile(durations, 0.75),
@@ -457,6 +457,11 @@ function buildInsights(s: TrainingTimeSummary, now: Date, nextMeetDate: string |
   const out: Insight[] = [];
   const n = s.timed.length;
 
+  // Meet in the next 12 weeks: specificity to meet time beats the best window.
+  const meetDays = nextMeetDate ? Math.round((new Date(`${nextMeetDate}T12:00:00`).getTime() - now.getTime()) / 86_400_000) : null;
+  const meetSoon = meetDays != null && meetDays >= 0 && meetDays <= 84;
+  const bestIsMorning = s.best?.key === "morning" || s.best?.key === "early";
+
   // 1) Best window — only when the gap is real.
   if (s.best) {
     const w = TRAINING_WINDOWS.find((x) => x.key === s.best!.key)!;
@@ -467,7 +472,7 @@ function buildInsights(s: TrainingTimeSummary, now: Date, nextMeetDate: string |
         title: `${w.label} (${w.range}) is your strongest window`,
         body:
           s.best.metric === "strength"
-            ? `Your RPE-adjusted strength runs ${s.best.delta.toFixed(1)}% higher there than at your other training times (${s.best.sessions} sessions). Put your heaviest day there when your schedule allows.`
+            ? `Your RPE-adjusted strength runs ${s.best.delta.toFixed(1)}% higher there than at your other training times (${s.best.sessions} sessions). ${meetSoon && !bestIsMorning ? "Outside meet prep, that's where your heaviest day belongs. For this peak, see the meet note." : "Put your heaviest day there when your schedule allows."}`
             : `Sessions there rate ${s.best.delta.toFixed(1)} stars higher than your other times (${s.best.sessions} sessions). Log RPE on top sets to back this with strength data.`,
       });
     } else {
@@ -489,10 +494,9 @@ function buildInsights(s: TrainingTimeSummary, now: Date, nextMeetDate: string |
 
   // 2) Meet prep: most meets start lifting in the morning.
   if (nextMeetDate && s.typicalStartMinutes != null) {
-    const meet = new Date(`${nextMeetDate}T12:00:00`);
-    const days = Math.round((meet.getTime() - now.getTime()) / 86_400_000);
+    const days = meetDays!;
     const morning = s.typicalStartMinutes >= 7 * 60 && s.typicalStartMinutes < 11 * 60 + 30;
-    if (days >= 0 && days <= 84) {
+    if (meetSoon) {
       const weeks = Math.max(1, Math.round(days / 7));
       out.push(
         morning
@@ -512,21 +516,31 @@ function buildInsights(s: TrainingTimeSummary, now: Date, nextMeetDate: string |
     }
   }
 
-  // 3) Consistency.
-  if (n >= 6 && s.startSpreadMin != null && s.typicalStartMinutes != null) {
-    if (s.startSpreadMin > 90) {
-      out.push({
-        id: "consistency",
-        tone: "warn",
-        title: "Your start time moves around a lot",
-        body: `Half your sessions start more than ${formatMinutes(s.startSpreadMin)} away from your usual ${formatClock(s.typicalStartMinutes)}. Your body gets better at performing at a time you train often. Try to keep most sessions inside a 2-hour window.`,
-      });
-    } else if (s.startSpreadMin <= 45) {
+  // 3) Consistency. A median start alone hides a split schedule (weekday
+  // evenings + Saturday mornings), so judge by how many sessions sit near it.
+  if (n >= 6 && s.typicalStartMinutes != null) {
+    const share = s.nearTypicalCount / n;
+    const slots = s.windows.filter((w) => w.sessions / n >= 0.25).sort((a, b) => b.sessions - a.sessions);
+    if (share >= 0.75) {
       out.push({
         id: "consistency",
         tone: "good",
         title: "Consistent start time",
-        body: `Half your sessions start within ±${formatMinutes(s.startSpreadMin)} of ${formatClock(s.typicalStartMinutes)}. That routine is an edge, so keep it.`,
+        body: `${s.nearTypicalCount} of ${n} sessions start within an hour of ${formatClock(s.typicalStartMinutes)}. That routine is an edge, so keep it.`,
+      });
+    } else if (slots.length >= 2) {
+      out.push({
+        id: "split-schedule",
+        tone: "info",
+        title: `You train in two slots: ${slots[0].label.toLowerCase()} and ${slots[1].label.toLowerCase()}`,
+        body: "That's fine if it's a fixed weekly pattern. Keep each slot steady, and use the breakdown above to see which one your heavy days belong in.",
+      });
+    } else if (share < 0.5) {
+      out.push({
+        id: "consistency",
+        tone: "warn",
+        title: "Your start time moves around a lot",
+        body: `Only ${s.nearTypicalCount} of ${n} sessions start within an hour of your usual ${formatClock(s.typicalStartMinutes)}. Your body gets better at performing at a time you train often. Try to keep most sessions inside a 2-hour window.`,
       });
     }
   }
