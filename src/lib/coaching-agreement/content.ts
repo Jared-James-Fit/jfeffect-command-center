@@ -6,11 +6,13 @@
  * SHA-256, so every signature always renders the exact words that were agreed to,
  * even after the agreement is later revised.
  *
- * TO REVISE THE AGREEMENT: edit the text, bump AGREEMENT_VERSION, and record the
- * new hash in PUBLISHED_CONTENT_HASHES (a test fails until you do, so published
- * wording can never be changed silently). Clients re-sign automatically when
- * AGREEMENT_VERSION rises above the version they signed, unless the change is
- * non-material (see RESIGN_REQUIRED_BELOW_VERSION).
+ * TO REVISE THE AGREEMENT: before editing, copy the current exact text to
+ * supabase/agreement-archive/<version>.json; then edit, bump AGREEMENT_VERSION, and
+ * record the new hash in PUBLISHED_CONTENT_HASHES (tests fail until you do both, so
+ * published wording can never be changed silently or lost). Clients re-sign
+ * automatically only when RESIGN_REQUIRED_BELOW_VERSION rises above the version they
+ * signed; a wording-only fix (like 2.1, which only changes how the Coach is named)
+ * leaves everyone who signed earlier exactly as they were.
  *
  * Inline markup: `**bold**` only. Cross-references use `{{n:section-id}}`, which
  * resolves to that section's number so numbering can never drift.
@@ -22,14 +24,14 @@ export const AGREEMENT_SLUG = "coaching-agreement";
 export const AGREEMENT_TITLE = "JF Effect Coaching Agreement";
 export const AGREEMENT_SUBTITLE =
   "Liability Waiver, Release of Claims, Assumption of Risk & Indemnity";
-export const AGREEMENT_EFFECTIVE_DATE = "2026-10-06";
+export const AGREEMENT_EFFECTIVE_DATE = "2026-10-07";
 
 // Version numbers live in ./version so the always-loaded status rules never import this file.
 export { AGREEMENT_VERSION, RESIGN_REQUIRED_BELOW_VERSION, compareVersions } from "./version";
 
 export const COACH = {
-  business: "JF Effect / Jared James Fit",
-  operator: "Jared James McIntyre",
+  business: "JF Effect",
+  operator: "Jared McIntyre",
   location: "Winnipeg, Manitoba, Canada",
   email: "jaredjamesfit@gmail.com",
   timezone: "America/Winnipeg",
@@ -91,7 +93,7 @@ const RAW_SECTIONS: RawSection[] = [
     clauses: [
       {
         label: "The Coach.",
-        text: "JF Effect / Jared James Fit, operated by Jared James McIntyre, Winnipeg, Manitoba, Canada.",
+        text: "Jared McIntyre (also known as Jared James McIntyre), an individual carrying on business as JF Effect in Winnipeg, Manitoba, Canada.",
       },
       {
         label: "Official email.",
@@ -476,7 +478,7 @@ const RAW_SECTIONS: RawSection[] = [
     clauses: [
       {
         label: "Released Parties.",
-        text: "“Released Parties” means the Coach (including Jared James McIntyre personally), the Coach’s business, employees, contractors, assistants, agents, representatives, successors and anyone acting on the Coach’s behalf.",
+        text: "“Released Parties” means the Coach (including Jared McIntyre personally), the Coach’s business, employees, contractors, assistants, agents, representatives, successors and anyone acting on the Coach’s behalf.",
       },
       {
         label: "Release and waiver (including negligence).",
@@ -752,7 +754,7 @@ function finalize(): AgreementContent {
         text: "**READ CAREFULLY. THIS IS A LEGALLY BINDING AGREEMENT.** By signing, you confirm that you have read and understood it and agree to be legally bound by it. You may be giving up certain legal rights, including the right to make claims for negligence. Headings, the Key Terms summary and the “In short” notes are for convenience only and do not change the full terms.",
       },
       {
-        text: "This Agreement is between you (the “Client” or “you”) and **JF Effect / Jared James Fit**, operated by Jared James McIntyre in Winnipeg, Manitoba, Canada (together, the “Coach”). It applies to every service the Coach provides, including online coaching, in-person personal training, hybrid coaching, programs, templates, guides, consultations, education, form review, feedback, app access and any future service the Coach offers (the “Services”).",
+        text: "This Agreement is between you (the “Client” or “you”) and **Jared McIntyre** (also known as Jared James McIntyre), an individual carrying on business as JF Effect in Winnipeg, Manitoba, Canada (the “Coach”). It applies to every service the Coach provides, including online coaching, in-person personal training, hybrid coaching, programs, templates, guides, consultations, education, form review, feedback, app access and any future service the Coach offers (the “Services”).",
       },
       {
         label: "Start date.",
@@ -787,6 +789,7 @@ export const AGREEMENT_CONTENT_JSON: string = JSON.stringify(AGREEMENT_CONTENT);
  */
 export const PUBLISHED_CONTENT_HASHES: Record<string, string> = {
   "2.0": "4229b1a2f2913bbbc6728de7b3ad42b0257009cbea547d97de722d6c0a820711",
+  "2.1": "a5ae2ab9930c92b6637ebdfa12ee243f43cac1219aa89e4418026e2d12a729d0",
 };
 
 export function sectionNumber(id: string): number {
