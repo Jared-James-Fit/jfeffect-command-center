@@ -4,6 +4,8 @@
  * Pass 2 → full meal plan in the app's paste format (parseMealPlan).
  */
 
+import type { TrainingBucket, TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
+
 export const NUTRITION_REQUEST_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
 export const NUTRITION_REQUEST_FORM_TYPE = "nutrition_update";
 export const BRAND = "JF Effect";
@@ -153,8 +155,9 @@ export function manualMealPlanPrompt(
   targetsText: string,
   phase?: string | null,
   workoutMeals?: WorkoutMealsMode | null,
+  history?: TrainingPattern | null,
 ): string {
-  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase, workoutMeals)}`;
+  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase, workoutMeals, history)}`;
 }
 
 /** Coach override for pre/post-workout meals (stored on the request). */
@@ -180,33 +183,63 @@ const WORKOUT_MEALS_RULE: Record<Exclude<WorkoutMealsMode, "auto">, string> = {
  * like to eat before training) into an explicit placement rule for the
  * Pre-/Post-Workout meals. Deterministic so the AI never has to guess.
  */
-export function workoutTimingRule(trainTime: string, preEat = ""): string {
+export type TrainingTimeClass = TrainingBucket | "varies" | "none" | "other";
+
+/** Bucket a free-text / dropdown training-time answer. */
+export function classifyTrainingTime(trainTime: string): TrainingTimeClass {
   const t = trainTime.toLowerCase();
-  let rule: string;
-  if (!t) {
-    rule = "Training time not given — assume late afternoon (about 4–6pm): the mid-afternoon meal is Pre-Workout, dinner is Post-Workout.";
-  } else if (/vari|random|depends|changes|different/.test(t)) {
-    rule = "Training time changes day to day. Make Pre-Workout and Post-Workout two back-to-back meals in the middle of the day, built from simple, portable foods (e.g. bagel + jam + whey; rice + chicken), so the client can slide that pair to wherever training lands. The other meals stay normal.";
-  } else if (/early|before 8|5am|6am|7am/.test(t)) {
-    rule = "Trains early morning (before 8am). Meal 1 is a small Pre-Workout snack 30–60 min before (or skip it if they train fasted). The next meal, straight after training, is the Post-Workout meal and one of the biggest meals of the day.";
-  } else if (/midday|\bnoon\b|lunch|11am[–-]2|11[–-]2/.test(t)) {
-    rule = "Trains midday (11am–2pm). Breakfast stays a normal meal; the late-morning meal 1–2 h before training is Pre-Workout; lunch after training is Post-Workout.";
-  } else if (/morning|8–11|8-11/.test(t)) {
-    rule = "Trains in the morning (8–11am). Meal 1 (breakfast, 60–120 min before) is Pre-Workout; Meal 2 straight after training is Post-Workout.";
-  } else if (/afternoon|2–5|2-5/.test(t)) {
-    rule = "Trains in the afternoon (2–5pm). Lunch / the early-afternoon meal is Pre-Workout; the next meal after training is Post-Workout.";
-  } else if (/evening|5–8|5-8|after work/.test(t)) {
-    rule = "Trains in the evening (5–8pm). The mid-afternoon meal (about 3–4pm) is Pre-Workout; dinner after training is Post-Workout; any later meal is a normal evening meal.";
-  } else if (/night|after 8|late/.test(t)) {
-    rule = "Trains at night (after 8pm). Dinner (about 6–7pm) is Pre-Workout; the last meal of the day, straight after training, is Post-Workout — protein-forward (e.g. Greek yogurt or casein + carbs). Carbs at night are fine.";
-  } else {
-    rule = `Trains: ${trainTime}. Place Pre-Workout 60–120 min before training and Post-Workout within 2 hours after.`;
-  }
+  if (!t.trim()) return "none";
+  if (/vari|random|depends|changes|different/.test(t)) return "varies";
+  if (/early|before 8|5am|6am|7am/.test(t)) return "early";
+  if (/midday|\bnoon\b|lunch|11am[–-]2|11[–-]2/.test(t)) return "midday";
+  if (/morning|8–11|8-11/.test(t)) return "morning";
+  if (/afternoon|2–5|2-5/.test(t)) return "afternoon";
+  if (/evening|5–8|5-8|after work/.test(t)) return "evening";
+  if (/night|after 8|late/.test(t)) return "night";
+  return "other";
+}
+
+const TIMING_RULES: Record<Exclude<TrainingTimeClass, "other">, string> = {
+  none: "Training time not given — assume late afternoon (about 4–6pm): the mid-afternoon meal is Pre-Workout, dinner is Post-Workout.",
+  varies: "Training time changes day to day. Make Pre-Workout and Post-Workout two back-to-back meals in the middle of the day, built from simple, portable foods (e.g. bagel + jam + whey; rice + chicken), so the client can slide that pair to wherever training lands. The other meals stay normal.",
+  early: "Trains early morning (before 8am). Meal 1 is a small Pre-Workout snack 30–60 min before (or skip it if they train fasted). The next meal, straight after training, is the Post-Workout meal and one of the biggest meals of the day.",
+  morning: "Trains in the morning (8–11am). Meal 1 (breakfast, 60–120 min before) is Pre-Workout; Meal 2 straight after training is Post-Workout.",
+  midday: "Trains midday (11am–2pm). Breakfast stays a normal meal; the late-morning meal 1–2 h before training is Pre-Workout; lunch after training is Post-Workout.",
+  afternoon: "Trains in the afternoon (2–5pm). Lunch / the early-afternoon meal is Pre-Workout; the next meal after training is Post-Workout.",
+  evening: "Trains in the evening (5–8pm). The mid-afternoon meal (about 3–4pm) is Pre-Workout; dinner after training is Post-Workout; any later meal is a normal evening meal.",
+  night: "Trains at night (after 8pm). Dinner (about 6–7pm) is Pre-Workout; the last meal of the day, straight after training, is Post-Workout — protein-forward (e.g. Greek yogurt or casein + carbs). Carbs at night are fine.",
+};
+
+export function workoutTimingRule(trainTime: string, preEat = ""): string {
+  const c = classifyTrainingTime(trainTime);
+  let rule =
+    c === "other"
+      ? `Trains: ${trainTime}. Place Pre-Workout 60–120 min before training and Post-Workout within 2 hours after.`
+      : TIMING_RULES[c];
   const p = preEat.toLowerCase();
   if (/fasted|empty/.test(p)) rule += " Client prefers training fasted: no Pre-Workout meal.";
   else if (/snack/.test(p)) rule += " Client prefers a small snack 30–60 min before: make Pre-Workout a snack.";
   else if (/full meal/.test(p)) rule += " Client prefers a full meal 1–2 hours before training.";
   return rule;
+}
+
+/** A form answer too vague to place workout meals from ("It varies" / blank). */
+export function isVagueTrainingTime(answer: string): boolean {
+  const c = classifyTrainingTime(answer);
+  return c === "none" || c === "varies";
+}
+
+/**
+ * Which training time places the workout meals: the client's form answer
+ * when it's specific (it's the newest info), otherwise a consistent pattern
+ * from their logged workouts, otherwise the vague answer as-is.
+ */
+export function effectiveTrainingTime(
+  formAnswer: string,
+  history?: TrainingPattern | null,
+): { time: string; fromHistory: boolean } {
+  if (isVagueTrainingTime(formAnswer) && history?.confident) return { time: history.label, fromHistory: true };
+  return { time: formAnswer, fromHistory: false };
 }
 
 /** Pass 2 input: the CLIENT DETAILS block filled from the form + pass-1 targets. */
@@ -215,8 +248,14 @@ export function mealPlanUserPrompt(
   targetsText: string,
   phase?: string | null,
   workoutMeals?: WorkoutMealsMode | null,
+  history?: TrainingPattern | null,
 ): string {
   const trainTime = answerFor(qas, "time", "train");
+  const placed = effectiveTrainingTime(trainTime, history);
+  const formClass = classifyTrainingTime(trainTime);
+  const disagrees =
+    !placed.fromHistory && !!history?.confident && formClass !== "other" && !isVagueTrainingTime(trainTime) &&
+    formClass !== history.bucket;
   const preEat = answerFor(qas, "eat before training");
   const bw = answerFor(qas, "bodyweight") || answerFor(qas, "weight");
   const days = answerFor(qas, "training days") || answerFor(qas, "days per week");
@@ -235,7 +274,10 @@ export function mealPlanUserPrompt(
     meals ? `- Meals per day: ${meals}` : "",
     `- Usual training time: ${trainTime || "not given — assume late afternoon"}`,
     preEat ? `- Eating before training: ${preEat}` : "",
-    `- TRAINING TIME RULE: ${workoutTimingRule(trainTime, preEat)}`,
+    history ? `- Logged workouts (last 8 weeks): ${history.summary}` : "",
+    `- TRAINING TIME RULE: ${workoutTimingRule(placed.time, preEat)}${
+      placed.fromHistory ? " (Based on their logged workout times.)" : ""
+    }${disagrees ? ` (Logged workouts point to ${history!.label}; the form answer is newer, so follow the form.)` : ""}`,
     workoutMeals && workoutMeals !== "auto" ? `- COACH WORKOUT MEALS: ${WORKOUT_MEALS_RULE[workoutMeals]}` : "",
     "",
     "TARGETS (match each menu's Daily Total to these within ±3%):",
