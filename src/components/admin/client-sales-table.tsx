@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ShoppingBag, Plus, MoreHorizontal, ExternalLink, Pencil, Copy, Send, Download,
-  CheckCircle2, AlertTriangle, RefreshCw, Share2, Archive, ArchiveRestore, Trash2,
+  CheckCircle2, AlertTriangle, RefreshCw, Share2, Archive, ArchiveRestore, Trash2, BellOff, Bell, CalendarClock,
 } from "lucide-react";
 import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
@@ -30,6 +30,8 @@ import {
   removeUnpaidPurchaseRecord,
 } from "@/lib/purchase-archive.functions";
 import { resolvePaymentDisplay, formatMoney, type PaymentDisplay } from "@/lib/payment-display";
+import { paymentReminderStatus, paymentLinkExpiryText } from "@/lib/payment-reminder-status";
+import { PaymentLinkExpiryDialog } from "@/components/admin/payment-link-expiry-dialog";
 
 type SortKey = "recent" | "name" | "status" | "next";
 type ArchiveFilter = "current" | "archived" | "all";
@@ -117,6 +119,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("current");
   const [picker, setPicker] = useState(false);
   const [editingDates, setEditingDates] = useState<any | null>(null);
+  const [editingExpiry, setEditingExpiry] = useState<any | null>(null);
   const updateFn = useServerFn(updatePurchasePayment);
   const sendFn = useServerFn(sendPaymentLinkEmail);
 
@@ -217,36 +220,49 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
                 <TableCell className="max-w-[220px]"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="font-medium hover:underline">{raw.offer_name ?? "Product"}</Link><InstallmentSummary display={display} /></TableCell>
                 <TableCell className="text-sm text-muted-foreground">{raw.offer_type ?? "—"}</TableCell><TableCell className="text-sm">{fmtDate(raw.purchased_at) ?? "—"}</TableCell>
                 <TableCell className="text-sm">{fmtDate(raw.term_start_date) ?? <span className="text-muted-foreground italic">Not set</span>}</TableCell><TableCell className="text-sm">{fmtDate(raw.term_end_date) ?? <span className="text-muted-foreground italic">Not set</span>}</TableCell>
-                <TableCell className="text-sm"><span className={next.tone}>{next.text}</span>{next.helper && <div className="text-[11px] text-muted-foreground">{next.helper}</div>}</TableCell>
+                <TableCell className="text-sm"><span className={next.tone}>{next.text}</span>{next.helper && <div className="text-[11px] text-muted-foreground">{next.helper}</div>}<ReminderLines raw={raw} /></TableCell>
                 <TableCell><Badge variant="outline" className={status.tone}>{status.label}</Badge>{!raw.archived_at && <AccessBadge raw={raw} />}</TableCell>
-                <TableCell><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></TableCell>
+                <TableCell><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onSetExpiry={() => setEditingExpiry(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></TableCell>
               </TableRow>
             ))}</TableBody></Table>
         </div>
 
         <ul className="space-y-3 md:hidden">{rows.map(({ raw, display, status, next }) => (
           <li key={raw.id} className={`rounded-lg border border-border bg-secondary/20 p-3 space-y-2 ${raw.archived_at ? "opacity-70" : ""}`}>
-            <div className="flex items-start justify-between gap-2"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="min-w-0"><div className="truncate font-semibold">{raw.offer_name ?? "Product"}</div><div className="text-xs text-muted-foreground">{raw.offer_type ?? "—"}</div></Link><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></div>
+            <div className="flex items-start justify-between gap-2"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="min-w-0"><div className="truncate font-semibold">{raw.offer_name ?? "Product"}</div><div className="text-xs text-muted-foreground">{raw.offer_type ?? "—"}</div></Link><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onSetExpiry={() => setEditingExpiry(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></div>
             <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline" className={status.tone}>{status.label}</Badge>{!raw.archived_at && <AccessBadge raw={raw} />}<span className="text-sm font-mono">{formatMoney(display.contractTotal, display.currency)}</span>{display.amountOutstanding > 0 && <Badge variant="outline" className={TONE.warn}>{formatMoney(display.amountOutstanding, display.currency)} remaining</Badge>}</div>
             <InstallmentSummary display={display} />
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs"><Field label="Date added" value={fmtDate(raw.purchased_at) ?? "—"} /><Field label="Start" value={fmtDate(raw.term_start_date) ?? "Not set"} /><Field label="End" value={fmtDate(raw.term_end_date) ?? "Not set"} /><div><dt className="text-muted-foreground">Next payment</dt><dd className={next.tone}>{next.text}</dd></div></dl>
             {next.helper && <p className="text-[11px] text-muted-foreground">{next.helper}</p>}
+            <ReminderLines raw={raw} />
           </li>
         ))}</ul>
       </>}
 
       <AddSaleDialog open={picker} onOpenChange={setPicker} clientId={clientId} clientName={clientLite?.full_name ?? null} />
       {editingDates && <TermDateEditor purchase={editingDates} clientId={clientId} onClose={() => setEditingDates(null)} />}
+      {editingExpiry && <PaymentLinkExpiryDialog purchase={editingExpiry} clientId={clientId} onClose={() => setEditingExpiry(null)} />}
     </Card>
   );
+}
+
+/** Reminder progress and any explicit link expiry, under the sale's next-payment text. */
+function ReminderLines({ raw }: { raw: any }) {
+  const reminder = paymentReminderStatus(raw);
+  const expiry = paymentLinkExpiryText(raw);
+  if (!reminder && !expiry) return null;
+  return <div className="space-y-0.5">
+    {reminder && <div className={`text-[11px] ${reminder.tone === "warn" ? "text-amber-500" : "text-muted-foreground"}`}>{reminder.text}</div>}
+    {expiry && <div className="text-[11px] text-muted-foreground">{expiry}</div>}
+  </div>;
 }
 
 function Field({ label, value }: { label: string; value: string }) {
   return <div><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>;
 }
 
-function RowMenu({ raw, clientName, onEditDates, onMarkPaid, onMarkOverdue, onEmailLink, onChanged }: {
-  raw: any; clientName?: string | null; onEditDates: () => void; onMarkPaid: () => void; onMarkOverdue: () => void; onEmailLink: () => void; onChanged: () => void;
+function RowMenu({ raw, clientName, onEditDates, onSetExpiry, onMarkPaid, onMarkOverdue, onEmailLink, onChanged }: {
+  raw: any; clientName?: string | null; onEditDates: () => void; onSetExpiry: () => void; onMarkPaid: () => void; onMarkOverdue: () => void; onEmailLink: () => void; onChanged: () => void;
 }) {
   const paid = raw.payment_status === "Paid" || raw.payment_status === "Active Subscription";
   const linkReady = hasPaymentDestination(raw);
@@ -273,6 +289,14 @@ function RowMenu({ raw, clientName, onEditDates, onMarkPaid, onMarkOverdue, onEm
       await navigator.clipboard.writeText(url);
       toast.success("Payment link copied", { id: t, description: shareKindLabel(kind as any) });
     } catch (e: any) { toast.error(e?.message ?? "Could not get a payment link", { id: t }); }
+  };
+
+  const toggleReminders = async () => {
+    const pause = !raw.payment_reminders_paused;
+    const { error } = await (supabase as any).from("purchase_records").update({ payment_reminders_paused: pause }).eq("id", raw.id);
+    if (error) return void toast.error(error.message ?? "Could not update reminders");
+    toast.success(pause ? "Payment reminders paused" : "Payment reminders back on");
+    onChanged();
   };
 
   const archive = async () => {
@@ -313,6 +337,8 @@ function RowMenu({ raw, clientName, onEditDates, onMarkPaid, onMarkOverdue, onEm
         <DropdownMenuItem onSelect={() => void copyLink("copy")}><Copy className="mr-2 h-3.5 w-3.5" />{linkReady ? "Copy payment link" : "Create payment link"}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void copyLink("share")}><Share2 className="mr-2 h-3.5 w-3.5" />{linkReady ? "Share payment link" : "Create & share payment link"}</DropdownMenuItem>
         {raw.stripe_payment_link && <DropdownMenuItem onSelect={onEmailLink}><Send className="mr-2 h-3.5 w-3.5" />Email payment setup request</DropdownMenuItem>}
+        {linkReady && <DropdownMenuItem onSelect={() => void toggleReminders()}>{raw.payment_reminders_paused ? <Bell className="mr-2 h-3.5 w-3.5" /> : <BellOff className="mr-2 h-3.5 w-3.5" />}{raw.payment_reminders_paused ? "Resume payment reminders" : "Pause payment reminders"}</DropdownMenuItem>}
+        {linkReady && <DropdownMenuItem onSelect={onSetExpiry}><CalendarClock className="mr-2 h-3.5 w-3.5" />{raw.payment_link_expires_at ? "Change link expiry" : "Set link expiry"}</DropdownMenuItem>}
       </>}
       {(raw.stripe_subscription_id || raw.stripe_checkout_session_id) && <DropdownMenuItem onSelect={() => void syncWithStripe()}><RefreshCw className="mr-2 h-3.5 w-3.5" />Sync with Stripe</DropdownMenuItem>}
       <DropdownMenuItem onSelect={() => void downloadPurchasePdf(raw, clientName)}><Download className="mr-2 h-3.5 w-3.5" />Download PDF</DropdownMenuItem>
