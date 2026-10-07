@@ -95,3 +95,49 @@ export function parseRepTarget(text?: string | null): { exact?: number; min?: nu
   if (n) return { exact: Number(n[1]) };
   return {};
 }
+
+export interface FieldCascadeSet {
+  index: number;
+  /** Current stored value for the field ("" when blank). */
+  value: string;
+  /** Confirmed (completed) set. */
+  completed: boolean;
+  /** The athlete typed this field on this set by hand. */
+  manual: boolean;
+}
+
+/**
+ * Reps / RPE fill-down. A change on set `from` flows to the sets below until
+ * the first one the athlete set by hand, or a completed set holding its own
+ * different value (a real rating). Completed sets that still match the source
+ * set's previous value (or are blank) were just following along — they update
+ * too, which keeps this correct after a reload. Never flows upward.
+ */
+export function planFieldCascade(from: number, previousValue: string, sets: FieldCascadeSet[]): number[] {
+  const out: number[] = [];
+  const same = (a: string, b: string) => a === b || (a !== "" && b !== "" && Number(a) === Number(b));
+  for (const s of [...sets].filter((x) => x.index > from).sort((a, b) => a.index - b.index)) {
+    if (s.manual) break;
+    if (s.completed && s.value !== "" && !same(s.value, previousValue)) break;
+    out.push(s.index);
+  }
+  return out;
+}
+
+/** Typed reps / RPE / RIR validation for the set logger. */
+export function validateSetField(kind: "reps" | "rpe" | "rir", raw: string):
+  | { ok: true; value: string }
+  | { ok: false; error: string } {
+  const text = raw.trim().replace(",", ".");
+  if (text === "") return { ok: true, value: "" };
+  const n = Number(text);
+  if (!Number.isFinite(n)) return { ok: false, error: "Numbers only" };
+  if (kind === "reps") {
+    if (!Number.isInteger(n) || n < 0 || n > 200) return { ok: false, error: "Whole reps, 0–200" };
+    return { ok: true, value: String(n) };
+  }
+  const lo = kind === "rpe" ? 1 : 0;
+  if (n < lo || n > 10) return { ok: false, error: kind === "rpe" ? "RPE is 1–10" : "RIR is 0–10" };
+  const half = Math.round(n * 2) / 2; // RPE/RIR are rated in half steps
+  return { ok: true, value: String(half) };
+}

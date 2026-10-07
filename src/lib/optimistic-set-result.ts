@@ -23,10 +23,12 @@ export function applyOptimisticSetResult<T extends Record<string, any>>(
   existingId: string | null,
 ): T[] | undefined {
   if (!Array.isArray(rows)) return rows;
-  const patch = {
-    ...payload,
-    ...optimisticNormalizedLoads(payload.entered_value ?? payload.actual_load, payload.entered_unit ?? payload.actual_load_unit),
-  };
+  // Only a patch that carries a load recomputes the normalized loads — an
+  // RPE-only or reps-only patch must never wipe the set's weight.
+  const hasLoad = "entered_value" in payload || "actual_load" in payload;
+  const patch = hasLoad
+    ? { ...payload, ...optimisticNormalizedLoads(payload.entered_value ?? payload.actual_load, payload.entered_unit ?? payload.actual_load_unit) }
+    : { ...payload };
   const idx = rows.findIndex((r) =>
     (existingId != null && r.id === existingId) || (r.row_id === payload.row_id && r.set_index === payload.set_index));
   if (idx >= 0) {

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, MoreHorizontal, Undo2, HelpCircle, Loader2, Trash2, GripVertical, Target } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, Target } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -65,11 +65,13 @@ import {
   equalDisplayLoads,
   persistedLoadForDisplayValue,
 } from "@/lib/workout-unit-persistence";
-import { WorkoutUndoProvider, useWorkoutUndo } from "@/lib/workout-undo";
+import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { WarmupSection, useWarmupSets } from "@/components/workout-day/final-warmup-input";
 import { LoadSuggestionCard } from "@/components/workout-day/load-suggestion-card";
+import { TypedValueInput } from "@/components/workout-day/typed-value-input";
+import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
 import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
@@ -114,7 +116,7 @@ import {
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import { isSetLogComplete } from "@/lib/set-completion";
 import { planCascade, type CascadeOrigin, type CascadeSetState } from "@/lib/set-cascade";
-import { SET_INPUT_CASCADE_EVENT, canCascadeInputTo, markManualInputBoundary, parseRepTarget, type CascadedInputField } from "@/lib/set-input-cascade";
+import { parseRepTarget, planFieldCascade } from "@/lib/set-input-cascade";
 import {
   formatLoadDisplay,
   loadColumnLabel,
@@ -122,17 +124,6 @@ import {
   resolveLoadType,
   type LoadType,
 } from "@/lib/workout-load-type";
-import {
-  parseRepQuickTarget,
-  parseEffortQuickTarget,
-  repQuickOptions,
-  rpeQuickOptions,
-  rirQuickOptions,
-  moreOptions,
-  RPE_FULL_OPTIONS,
-  RIR_FULL_OPTIONS,
-} from "@/lib/workout-quick-select";
-import { QuickValueSelect } from "@/components/workout-day/quick-value-select";
 import { SetTimerInput } from "@/components/workout-day/set-timer-input";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
@@ -452,7 +443,6 @@ function WorkoutDay({
   // Phase B turn 2: day/rows/results reads route through the adapter when
   // provided. Other reads/writes still on sb.* for now (turns 3/4).
   const qc = useQueryClient();
-  const undo = useWorkoutUndo();
   const cacheScope = `portal:${dayId}`;
   // Gate the workout-detail queries on a fully hydrated auth session.
   // Root cause of the Ashley Santos "No exercises assigned" bug: on cold
@@ -1463,21 +1453,22 @@ function WorkoutDay({
       await qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
     }
 
-    undo.push({
-      label: `Set exercise unit to ${next.toUpperCase()}`,
-      coalesceKey: `ex-unit:${key}`,
-      undo: async () => {
-        setUnitOverrides((m) => ({ ...m, [key]: prevUnit }));
-        if (client?.id && exerciseId) {
-          try {
-            if (adapter) await adapter.saveExerciseUnitPref({ exerciseId, unit: prevUnit });
-            else await saveExerciseUnitPref(client.id, exerciseId, prevUnit);
-            await qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
-          } catch {
-            toast.error("Could not restore the previous exercise unit");
-          }
+    const restorePreviousUnit = async () => {
+      setUnitOverrides((m) => ({ ...m, [key]: prevUnit }));
+      if (client?.id && exerciseId) {
+        try {
+          if (adapter) await adapter.saveExerciseUnitPref({ exerciseId, unit: prevUnit });
+          else await saveExerciseUnitPref(client.id, exerciseId, prevUnit);
+          await qc.invalidateQueries({ queryKey: ["client-exercise-unit-prefs"] });
+        } catch {
+          toast.error("Could not restore the previous exercise unit");
         }
-      },
+      }
+    };
+    // Undo lives on the confirmation itself — right where the change happened.
+    toast.success(`Switched to ${next.toUpperCase()}`, {
+      duration: 5000,
+      action: { label: "Undo", onClick: () => void restorePreviousUnit() },
     });
   };
 
@@ -3545,6 +3536,60 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     }
   };
 
+  // ── Reps / RPE fill-down ──────────────────────────────────────────────
+  // Same mental model as weight: typing reps or RPE on set N fills the sets
+  // below that weren't set by hand (see planFieldCascade). Only that field is
+  // written; load and completion are untouched. The screen updates first
+  // (broadcast + cache patch), the server catches up behind it.
+  const fieldManualRef = useRef<Record<"reps" | "rpe", Set<number>>>({ reps: new Set(), rpe: new Set() });
+  const fieldCascadeTokenRef = useRef(0);
+  const [fieldCascade, setFieldCascade] = useState<{ token: number; targets: number[]; field: "reps" | "rpe"; value: string } | null>(null);
+  const cascadeFieldFromSet = async (fromSetIndex: number, field: "reps" | "rpe", value: string, previousValue: string) => {
+    if (!clientId || readonly) return;
+    fieldManualRef.current[field].add(fromSetIndex);
+    if (value === "") return; // clearing a set clears only that set
+    const states = Array.from({ length: setCount }, (_, i) => {
+      const idx = i + 1;
+      const ex = existingResults.find((x: any) => x.set_index === idx) as any;
+      const stored = field === "reps"
+        ? (ex?.actual_reps != null ? String(ex.actual_reps) : "")
+        : (ex?.actual_rpe_num != null ? String(ex.actual_rpe_num) : (ex?.actual_rpe ?? ""));
+      return { index: idx, value: stored, completed: !!ex?.completed_at, manual: fieldManualRef.current[field].has(idx) };
+    });
+    const targets = planFieldCascade(fromSetIndex, previousValue, states);
+    if (!targets.length) return;
+    setFieldCascade({ token: ++fieldCascadeTokenRef.current, targets, field, value });
+    const patchFor = (idx: number): Record<string, any> => field === "reps"
+      ? { actual_reps: parseInt(value, 10) }
+      : { actual_rpe: value, actual_rpe_num: Number(value) };
+    // Sets with no saved row yet only change on screen (like the prescription
+    // pre-fill) and save with the rest of the set when it's logged — creating
+    // rows here would mark untouched sets as drafts.
+    const saved = targets
+      .map((idx) => existingResults.find((x: any) => x.set_index === idx) as any)
+      .filter((ex) => ex?.id && !String(ex.id).startsWith("optimistic:"));
+    if (!saved.length) return;
+    qc.setQueriesData({ queryKey: ["pl-day-results", dayId] }, (old: any) => {
+      let next = old;
+      for (const ex of saved) next = applyOptimisticSetResult(next, { row_id: row.id, set_index: ex.set_index, ...patchFor(ex.set_index) }, ex.id);
+      return next;
+    });
+    const tasks = saved.map((ex) => {
+      const body: Record<string, any> = withMemberWorkoutIndexes({
+        row_id: row.id, client_id: clientId, set_index: ex.set_index, ...patchFor(ex.set_index),
+      }, adapter, dayId);
+      if (adapter) return adapter.upsertPlRowResultRaw(body, ex.id);
+      return sb.from("pl_row_results").update(body).eq("id", ex.id).then(({ error }: any) => { if (error) throw error; });
+    });
+    try {
+      await Promise.all(tasks);
+      onChange();
+    } catch {
+      toast.error("Some sets didn’t save — check your connection");
+    }
+    await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
+  };
+
   const applyToRemaining = async (fromSetIndex: number, payload: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType }) => {
     if (!clientId) return;
     beginWorkoutSession(dayId);
@@ -3924,7 +3969,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <span>Set</span>
           {showReps && <span>Reps</span>}
           {showTimer && <span>Time</span>}
-          <span>{showRir ? "RIR" : "RPE"}</span>
+          <EffortScaleHeader rir={showRir} />
           {showVelocity && <span title="Average concentric velocity — enter the final rep for multi-rep sets">Avg Vel</span>}
           {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
           <span className="text-right">Status</span>
@@ -3973,6 +4018,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               cascade={cascade}
               autoFilled={cascadeOriginRef.current.get(i + 1) === "auto"}
               onCascadeFromSet={cascadeFromSet}
+              fieldCascade={fieldCascade}
+              onFieldCascade={cascadeFieldFromSet}
               forceHydrateToken={fillToken}
               forcedFill={fillSnapshot}
               readonly={readonly}
@@ -4297,6 +4344,8 @@ function SetRow({
   cascade = null,
   autoFilled = false,
   onCascadeFromSet,
+  fieldCascade = null,
+  onFieldCascade,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
   setCount, showReps = true, showTimer = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
   onTimerTargetChange,
@@ -4360,6 +4409,10 @@ function SetRow({
   } | null;
   /** True when this set's values came from a cascade above (not typed or confirmed by hand). */
   autoFilled?: boolean;
+  /** Reps/RPE fill-down the parent just applied + persisted. */
+  fieldCascade?: { token: number; targets: number[]; field: "reps" | "rpe"; value: string } | null;
+  /** Called when this set's reps/RPE is typed by hand — starts the fill-down. */
+  onFieldCascade?: (fromSetIndex: number, field: "reps" | "rpe", value: string, previousValue: string) => void | Promise<void>;
   /** Called when this set's load is manually changed — starts the cascade. */
   onCascadeFromSet?: (
     fromSetIndex: number,
@@ -5119,22 +5172,6 @@ function SetRow({
 
   const hasAnyTarget = suggestedWeight != null || repChipValues.length > 0 || rpeChipValues.length > 0 || rirChipValues.length > 0;
 
-  // ── Fast tap selectors (reps / RPE / RIR) ─────────────────────────────
-  // Smart one-tap options parsed locally from the prescription text — no
-  // DB queries. Custom manual entry stays available inside the popover.
-  const repSelectOptions = useMemo(() => repQuickOptions(parseRepQuickTarget(targetReps)), [targetReps]);
-  const repSelectMore = useMemo(
-    () => moreOptions(Array.from({ length: 20 }, (_, i) => i + 1), repSelectOptions),
-    [repSelectOptions],
-  );
-  const effortSelectOptions = useMemo(
-    () => (showRir ? rirQuickOptions(parseEffortQuickTarget(targetRir)) : rpeQuickOptions(parseEffortQuickTarget(targetRpe))),
-    [showRir, targetRir, targetRpe],
-  );
-  const effortSelectMore = useMemo(
-    () => moreOptions(showRir ? RIR_FULL_OPTIONS : RPE_FULL_OPTIONS, effortSelectOptions),
-    [showRir, effortSelectOptions],
-  );
   // Selector-facing value: for RIR rows the stored value is RPE (10 − RIR),
   // so the selector displays/picks the RIR number and we convert on pick.
   const effortSelectValue = showRir
@@ -5147,22 +5184,16 @@ function SetRow({
     if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
     recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
   };
-  const dispatchInputCascade = (field: CascadedInputField, value: string) => {
-    if (typeof window === "undefined") return;
-    window.dispatchEvent(new CustomEvent(SET_INPUT_CASCADE_EVENT, {
-      detail: { rowId, fromSetIndex: setIndex, field, value },
-    }));
-  };
   const pickReps = (v: string) => {
+    const previous = reps;
     setReps(v);
     setRepsEdited(true);
-    markManualInputBoundary(rowId, "reps", setIndex);
     guardRecentSave();
-    dispatchInputCascade("reps", v);
+    void onFieldCascade?.(setIndex, "reps", v, previous);
   };
   const pickEffort = (v: string) => {
+    const previous = rpe;
     setRpeEdited(true);
-    markManualInputBoundary(rowId, "rpe", setIndex);
     let stored = v;
     if (v === "") {
       stored = "";
@@ -5177,34 +5208,19 @@ function SetRow({
       setRpe(v);
     }
     guardRecentSave();
-    dispatchInputCascade("rpe", stored);
+    void onFieldCascade?.(setIndex, "rpe", stored, previous);
   };
 
-  // Reps and RPE use the same downward funnel as weight. A manual edit on a
-  // lower set is a boundary: cascades from above stop there and never jump
-  // across it. Confirmed sets are also protected. Auto-derived values remain
-  // eligible for a later change from a higher set.
+  // Reps / RPE fill-down from a set above (planned + persisted by the parent,
+  // see planFieldCascade). Applied directly so it shows instantly.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ rowId: string; fromSetIndex: number; field: CascadedInputField; value: string }>).detail;
-      if (!detail || detail.rowId !== rowId) return;
-      // Same rule as weight: sets confirmed by hand are protected, but sets the
-      // weight cascade filled (and auto-completed) still follow edits above.
-      if (existing?.completed_at && !autoFilled) return;
-      if (!canCascadeInputTo(rowId, detail.field, detail.fromSetIndex, setIndex)) return;
-      if (detail.field === "reps") {
-        if (repsEdited) return;
-        setReps(detail.value);
-      } else {
-        if (rpeEdited) return;
-        setRpe(detail.value);
-      }
-      guardRecentSave();
-    };
-    window.addEventListener(SET_INPUT_CASCADE_EVENT, handler);
-    return () => window.removeEventListener(SET_INPUT_CASCADE_EVENT, handler);
-  }, [rowId, setIndex, existing?.completed_at, autoFilled, repsEdited, rpeEdited]);
+    if (!fieldCascade || !fieldCascade.targets.includes(setIndex)) return;
+    // Marked edited so the prescription pre-fill can't snap it back.
+    if (fieldCascade.field === "reps") { setReps(fieldCascade.value); setRepsEdited(true); }
+    else { setRpe(fieldCascade.value); setRpeEdited(true); }
+    queueMicrotask(() => { saveRef.current?.markClean(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldCascade?.token]);
 
   // ── Exact rep-max PR badge ────────────────────────────────────────────
   // Compares the confirmed set against the historical best for the same
@@ -5365,18 +5381,13 @@ function SetRow({
       <span className={cn("font-mono text-muted-foreground pt-1.5", focusMode ? "text-sm" : "text-xs")}>{setIndex}</span>
       {/* Fast tap reps selector — smart chips from the prescription, custom entry inside */}
       {showReps && (
-      <QuickValueSelect
+      <TypedValueInput
         value={reps}
-        onPick={pickReps}
-        options={repSelectOptions}
-        moreOptions={repSelectMore}
+        kind="reps"
+        onCommit={pickReps}
         ariaLabel={`Set ${setIndex} reps`}
-        title="Reps"
-        inputMode="numeric"
-        sanitize={(v) => v.replace(/[^0-9]/g, "").slice(0, 3)}
         disabled={readonly}
         focusMode={focusMode}
-        customPlaceholder="Reps"
       />
       )}
       {/* Timer — just another set input, same size/aesthetic as the others */}
@@ -5397,18 +5408,13 @@ function SetRow({
         />
       )}
       {/* Fast tap RPE/RIR selector — half-step smart chips from the prescription */}
-      <QuickValueSelect
+      <TypedValueInput
           value={effortSelectValue}
-          onPick={pickEffort}
-          options={effortSelectOptions}
-          moreOptions={effortSelectMore}
+          kind={showRir ? "rir" : "rpe"}
+          onCommit={pickEffort}
           ariaLabel={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
-          title={showRir ? "RIR" : "RPE"}
-          inputMode="decimal"
-          sanitize={(v) => v.replace(/[^0-9.]/g, "").slice(0, 4)}
           disabled={readonly}
           focusMode={focusMode}
-          customPlaceholder={showRir ? "RIR" : "RPE"}
       />
       {showVelocity && (
         <Input
@@ -5782,30 +5788,20 @@ function WorkoutLoadFailureCard({
 /* -------------------------------------------------------------------------- */
 
 function WorkoutTopMenu() {
-  const { undo, canUndo } = useWorkoutUndo();
+  // One tap to help. (Undo moved onto the unit-switch confirmation toast —
+  // the only action it ever reversed.)
   const [helpOpen, setHelpOpen] = useState(false);
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-9 w-9 text-muted-foreground hover:text-foreground"
-            aria-label="More actions"
-          >
-            <MoreHorizontal className="h-5 w-5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem disabled={!canUndo} onSelect={() => void undo()}>
-            <Undo2 className="mr-2 h-4 w-4" /> Undo
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setHelpOpen(true)}>
-            <HelpCircle className="mr-2 h-4 w-4" /> Help
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-9 w-9 text-muted-foreground hover:text-foreground"
+        aria-label="Help with logging"
+        onClick={() => setHelpOpen(true)}
+      >
+        <HelpCircle className="h-5 w-5" />
+      </Button>
       <TrainingHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </>
   );
