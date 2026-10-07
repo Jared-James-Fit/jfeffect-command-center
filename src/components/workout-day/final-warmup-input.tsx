@@ -10,17 +10,23 @@ import { WARMUP_MAX_REPS } from "@/lib/load-suggestion";
 const sb = supabase as any;
 const MAX_WARMUPS = 8;
 
-/** Logged warm-up sets for one exercise card (pl_warmup_sets — never counted as work). */
-export function useWarmupSets(rowId: string, clientId: string | null | undefined) {
+/**
+ * Logged warm-up sets for one exercise card (pl_warmup_sets — never counted as
+ * work). Keyed to the workout instance like the logged sets, so a program day
+ * that repeats weekly doesn't show last week's warm-ups.
+ */
+export function useWarmupSets(rowId: string, clientId: string | null | undefined, scheduledWorkoutId: string | null = null) {
   const qc = useQueryClient();
-  const key = ["pl-warmup-sets", rowId, clientId ?? null];
+  const key = ["pl-warmup-sets", rowId, clientId ?? null, scheduledWorkoutId];
   const { data } = useQuery({
     queryKey: key,
     enabled: !!clientId && !!rowId,
     staleTime: 60_000,
     queryFn: async (): Promise<WarmupSetRow[]> => {
-      const { data } = await sb.from("pl_warmup_sets").select("id,load,unit,reps,rpe,created_at")
-        .eq("row_id", rowId).eq("client_id", clientId).order("created_at", { ascending: true }).throwOnError();
+      let q = sb.from("pl_warmup_sets").select("id,load,unit,reps,rpe,created_at")
+        .eq("row_id", rowId).eq("client_id", clientId);
+      q = scheduledWorkoutId ? q.eq("scheduled_workout_id", scheduledWorkoutId) : q.is("scheduled_workout_id", null);
+      const { data } = await q.order("created_at", { ascending: true }).throwOnError();
       return ((data ?? []) as any[]).map(normalizeWarmupRow).filter((r): r is WarmupSetRow => !!r);
     },
   });
@@ -35,7 +41,7 @@ export function useWarmupSets(rowId: string, clientId: string | null | undefined
           .eq("id", input.id).eq("client_id", clientId).throwOnError();
       } else {
         if (sets.length >= MAX_WARMUPS) { toast.error(`Up to ${MAX_WARMUPS} warm-up sets`); return; }
-        await sb.from("pl_warmup_sets").insert({ row_id: rowId, client_id: clientId, load: input.load, unit: input.unit, reps: input.reps, rpe: input.rpe }).throwOnError();
+        await sb.from("pl_warmup_sets").insert({ row_id: rowId, client_id: clientId, scheduled_workout_id: scheduledWorkoutId, load: input.load, unit: input.unit, reps: input.reps, rpe: input.rpe }).throwOnError();
       }
       await refresh();
     } catch (e) { fail(e); }

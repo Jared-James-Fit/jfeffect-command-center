@@ -3407,7 +3407,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const warmupAllowed =
     !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId && !workedToday;
   const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
-  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId);
+  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
   const [warmupForm, setWarmupForm] = useState<string | null>(null);
   const warmupPromptable = warmupEligible && family !== "accessory";
   const warmupForModel = warmupEligible ? pickFinalWarmup(warmupSets, activeUnit) : null;
