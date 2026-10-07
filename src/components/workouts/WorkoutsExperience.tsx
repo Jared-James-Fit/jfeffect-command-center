@@ -38,6 +38,7 @@ import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
+import { WorkoutHistorySheet } from "@/components/workout-history-sheet";
 import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout-preview";
 import { usePreviewOpen } from "@/lib/preview-open-store";
 import { InlineWorkoutEditor } from "@/components/workout/shared/inline-workout-editor";
@@ -1033,6 +1034,7 @@ function SelectedDayCard({
   const [moveOpen, setMoveOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [backupAction, setBackupAction] = useState<"remove" | "cancel" | null>(null);
   const qc = useQueryClient();
@@ -1140,7 +1142,7 @@ function SelectedDayCard({
     || (item?.logged_sets_count ?? 0) > 0
   );
   const canReset = canChangeWorkoutStatus && hasActivity;
-  const hasMenuActions = canReset || isCompleted
+  const hasMenuActions = canChangeWorkoutStatus || isCompleted
     || (canManageBackupLifecycle && (backupState?.lifecycle === "in_progress" || backupState?.lifecycle === "empty"));
 
   if (!item) {
@@ -1293,6 +1295,11 @@ function SelectedDayCard({
                     </Link>
                   </DropdownMenuItem>
                 )}
+                {canChangeWorkoutStatus && (
+                  <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
+                    <History className="mr-2 h-4 w-4" /> Version history
+                  </DropdownMenuItem>
+                )}
                 {canReset && (
                   <DropdownMenuItem
                     onSelect={() => setResetOpen(true)}
@@ -1396,6 +1403,17 @@ function SelectedDayCard({
           scheduledWorkoutId={item.scheduledWorkoutId ?? null}
           invalidateKeys={[["workouts-experience-client", clientId]]}
           loggedSets={item.logged_sets_count ?? progress?.completedSets ?? null}
+          showHistoryLink={false}
+        />
+      )}
+      {canChangeWorkoutStatus && (
+        <WorkoutHistorySheet
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          dayId={item.day.id}
+          clientId={clientId}
+          scheduledWorkoutId={item.scheduledWorkoutId ?? null}
+          invalidateKeys={[["workouts-experience-client", clientId]]}
         />
       )}
       {canReset && (
