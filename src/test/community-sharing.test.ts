@@ -21,9 +21,14 @@ import {
   isTrainingNow,
   lockInTimeLabel,
   SERIES_LABEL,
+  REACTION,
+  reactionTotal,
+  reactorsLine,
   compactNumber,
-  winsHabitsLine,
-  winsStatTiles,
+  winsChallenge,
+  winsChart,
+  winsHero,
+  winsTiles,
   winsWeekLabel,
   type WinsStats,
   LOCK_IN_CAPTIONS,
@@ -578,24 +583,58 @@ describe("Wednesday Wins reads like the coach wrote it, with the crew's numbers"
     week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,
     volume_kg: 204215, reps: 6015, streaks: 10, bodyweight: 9, checkins: 4, busiest_day: "Friday",
   };
-  it("turns them into numbers anyone gets", () => {
+  const full: WinsStats = {
+    ...s, volume_prev_kg: 206865, volume_rank: 4, sessions_rank: 5, weeks_tracked: 16,
+    history: [49, 36, 34, 34, 35, 31, 32, 36].map((n, i) => ({ wk: ["2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"][i], sessions: n })),
+  };
+  it("leads with one team number anyone gets, said as a team total", () => {
     expect(winsWeekLabel("2026-09-28")).toBe("Sep 28 – Oct 4");
-    const lb = winsStatTiles(s, "lb");
-    expect(lb.map((t) => t.value)).toEqual(["94%", "36", "41", "450K", "10", "Fri"]);
-    expect(lb[0].sub).toBe("15 of 16");
-    expect(lb[1].sub).toBe("+13% vs last week");
-    expect(lb[2].sub).toBe("by 9 people");
-    expect(lb[3]).toMatchObject({ label: "lb lifted", sub: "≈ 90 pickup trucks" });
-    expect(winsStatTiles(s, "kg")[3]).toMatchObject({ value: "204K", label: "kg lifted" });
-    expect(winsHabitsLine(s)).toBe("9 logged bodyweight · 4 sent a check-in · 6,015 reps");
-    expect(compactNumber(6015)).toBe("6,015");
-    expect(compactNumber(45200)).toBe("45.2K");
-    expect(compactNumber(1_250_000)).toBe("1.3M");
+    const lb = winsHero(full, "lb");
+    expect(lb).toMatchObject({ amount: "450,216", unit: "lbs" });
+    expect(lb.compare).toMatch(/^That's about the weight of \d+ (pickup trucks|elephants|cars|school buses)$/);
+    expect(winsHero(full, "kg")).toMatchObject({ amount: "204,215", unit: "kg" });
+    // 4th best week: no badge; lighter than the week before: no change pill
+    expect(lb.badge).toBeNull();
+    expect(lb.change).toBeNull();
+    expect(winsHero({ ...full, volume_rank: 1 }, "lb").badge).toBe("Biggest week the crew has ever had");
+    expect(winsHero({ ...full, volume_rank: 2 }, "lb").badge).toBe("2nd biggest week the crew has ever had");
+    expect(winsHero({ ...full, volume_rank: 1, weeks_tracked: 3 }, "lb").badge).toBeNull();
+    expect(winsHero({ ...full, volume_prev_kg: 180000 }, "lb").change).toBe("13% more than the week before");
+    expect(compactNumber(12_500_000)).toBe("12.5M");
   });
-  it("leaves out tiles that would be empty or misleading", () => {
-    const quiet = winsStatTiles({ ...s, volume_kg: 0, streaks: 0, busiest_day: null, sessions_prev: 0, prs: 1, pr_people: 1 }, "lb");
-    expect(quiet.map((t) => t.label)).toEqual(["opened the app", "workouts done", "new PR"]);
-    expect(quiet[1].sub).toBeUndefined();
+  it("keeps the comparison sensible at any size and rotates it week to week", () => {
+    const picks = new Set(["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"].map((w) => winsHero({ ...full, week_of: w }, "lb").compare?.split(" ").pop()));
+    expect(picks.size).toBeGreaterThan(1);
+    for (const kg of [2_000, 50_000, 204_215, 900_000]) {
+      const n = Number(winsHero({ ...full, volume_kg: kg }, "lb").compare?.match(/\d+/)?.[0] ?? "0");
+      expect(n === 0 || (n >= 3 && n <= 300)).toBe(true);
+    }
+  });
+  it("uses plain words in the tiles, no coach jargon", () => {
+    const t = winsTiles(full);
+    expect(t.map((x) => [x.value, x.label])).toEqual([
+      ["12 of 16", "people trained"],
+      ["36", "workouts finished"],
+      ["41", "new personal records"],
+      ["10", "people haven't missed a week"],
+    ]);
+    expect(t[0].sub).toBe("75% of the crew");
+    expect(t[1].sub).toBe("4 more than the week before");
+    expect(t[2].sub).toBe("set by 9 different people");
+    expect(t[3].sub).toBe("in a month or more");
+    const words = JSON.stringify(t);
+    for (const jargon of ["opened the app", "busiest day", "PRs", "streak", "volume"]) expect(words).not.toContain(jargon);
+    // a down week never shows a negative
+    expect(winsTiles({ ...full, sessions_prev: 40 })[1].sub).toBeUndefined();
+  });
+  it("shows 8 weeks of workouts with this week highlighted, and a goal to chase", () => {
+    const bars = winsChart(full);
+    expect(bars).toHaveLength(8);
+    expect(bars.filter((b) => b.current).map((b) => b.sessions)).toEqual([36]);
+    expect(bars[0].share).toBe(1);
+    expect(winsChart({ ...full, history: undefined })).toEqual([]);
+    expect(winsChallenge(full)).toBe("This week's goal: beat 36 workouts");
+    expect(winsChallenge({ ...full, sessions_rank: 1 })).toBe("Most workouts the crew has ever done in a week. Run it back");
   });
 });
 
@@ -624,10 +663,82 @@ describe("weight units: a setting for clients, a tap on the community card", () 
     volume_kg: 204215, reps: 6015, streaks: 10, bodyweight: 9, checkins: 4, busiest_day: "Friday",
   };
   it("the weight tile on Wednesday Wins flips lb/kg on tap, only for that viewer, without opening the post", () => {
-    expect(winsStatTiles(s, "lb").filter((t) => t.unitToggle).map((t) => t.label)).toEqual(["lb lifted"]);
+    expect(winsHero(s, "lb").unit).toBe("lbs");
+    expect(winsHero(s, "kg").unit).toBe("kg");
     expect(wins).toContain('setShown(shown === "lb" ? "kg" : "lb")');
     expect(wins).toContain("e.stopPropagation();");
     // a tap never writes the viewer's saved preference
     expect(wins).not.toContain("preferred_weight_unit");
+  });
+});
+
+describe("Wednesday Wins sounds like Jared texts", () => {
+  const sql = read("supabase/migrations/20261008160000_community_wins_voice.sql");
+  const body = sql.split("$$").filter((_, i) => i % 2 === 1).join("").replace(/--.*$/gm, "");
+  it("uses gym shorthand for lifts and sets", () => {
+    expect(sql).toContain("regexp_replace(s, '\\mcompetition\\M', 'comp', 'g')");
+    expect(sql).toContain("regexp_replace(s, '\\mromanian deadlifts?\\M', 'RDL', 'g')");
+    expect(sql).toContain("regexp_replace(s, '\\mdumbbells?\\M', 'DB', 'g')");
+    expect(sql).toContain("|| CASE WHEN _reps = 1 THEN ' single' ELSE ' x ' || _reps END END");
+    expect(sql).toContain("v_set := CASE WHEN v_hide THEN NULL ELSE public.community_fmt_set(pr.load_kg, pr.reps, v_unit) END;");
+  });
+  it("is casual: few commas, no em dashes, not capitalized every week", () => {
+    expect(body).not.toContain("—");
+    expect(sql).toContain("'big week. ' || v_prs || ' PRs between all of you last week heres who stood out'");
+    expect(sql).toContain("IF v_wk % 2 = 1 THEN");
+    // the only comma left in the words is between names in the shoutout list
+    const words = [...body.matchAll(/'([^']*)'/g)].map((m) => m[1]).filter((t) => /[a-z]{3}/.test(t));
+    expect(words.filter((t) => t.includes(",") && t !== ", ").length).toBe(0);
+  });
+  it("never repeats the big PR week reaction on lines next to each other", () => {
+    expect(sql).toContain("' PRs in 1 week thats insane'");
+    expect(sql).toContain("' PRs in 1 week crazy'");
+    expect(sql).toContain("' PRs on the week lowkey insane'");
+  });
+});
+
+describe("Wednesday Wins card v2 + voice", () => {
+  const sql = read("supabase/migrations/20261008180000_community_wins_card_v2.sql");
+  const body = sql.split("$$").filter((_, i) => i % 2 === 1).join("").replace(/--.*$/gm, "");
+  it("keeps the history the card needs", () => {
+    for (const k of ["'volume_prev_kg'", "'volume_rank'", "'sessions_rank'", "'weeks_tracked'", "'history'"]) expect(sql).toContain(k);
+    expect(sql).toContain("FROM generate_series(0, 7) i");
+  });
+  it("never says ur or u, and only says yall when it's hype", () => {
+    expect(body).not.toMatch(/\bur\b|\bu\b/);
+    const yall = [...body.matchAll(/'[^']*yall[^']*'/g)].map((m) => m[0]);
+    expect(yall).toEqual(["'yall are cooking. '"]);
+  });
+});
+
+describe("one reaction (🔥) and who gave it", () => {
+  const sql = read("supabase/migrations/20261008200000_community_one_reaction.sql");
+  const card = read("src/components/community/post-card.tsx");
+  const p = (n: number, names: [string, boolean?][]) => ({
+    reaction_count: n,
+    reactions: { fire: n },
+    reactors: names.map(([name, me]) => ({ user_id: name, name, avatar_url: null, is_coach: false, is_me: !!me })),
+  });
+  it("is one tap, and old reactions all count as 🔥", () => {
+    expect(REACTION.emoji).toBe("🔥");
+    expect(sql).toContain("UPDATE public.community_reactions SET emoji = 'fire' WHERE emoji IS DISTINCT FROM 'fire';");
+    expect(sql).toContain("VALUES (_post_id, uid, 'fire')");
+    expect(card).toContain("onReact(post, mine ? null : REACTION.key)");
+    expect(card).not.toContain("REACTIONS.map(");
+    expect(reactionTotal({ reactions: { fire: 2, heart: 1 } })).toBe(3);
+  });
+  it("says who in plain words, you first", () => {
+    expect(reactorsLine(p(0, []))).toBeNull();
+    expect(reactorsLine(p(1, [["Nicole"]]))).toBe("Nicole");
+    expect(reactorsLine(p(2, [["Nicole"], ["Jared", true]]))).toBe("You and Nicole");
+    expect(reactorsLine(p(3, [["Jared"], ["Vicky"], ["Nicole"]]))).toBe("Jared, Vicky and Nicole");
+    expect(reactorsLine(p(5, [["Jared"], ["Vicky"], ["Nicole"]]))).toBe("Jared, Vicky and 3 others");
+    expect(reactorsLine(p(3, [["Jared"], ["Vicky"]]))).toBe("Jared, Vicky and 1 other");
+  });
+  it("only people who can see the post can see who reacted", () => {
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.community_post_reactors(_post_id uuid)");
+    expect(sql).toMatch(/community_post_reactors[\s\S]*community_post_visible\(p\.visibility, p\.author_user_id, p\.client_id\)/);
+    expect(sql).toContain("'reactors', coalesce(");
+    expect(card).toContain("<ReactorsSheet postId={listFor}");
   });
 });

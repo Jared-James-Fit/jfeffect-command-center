@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { describeWarmup, normalizeWarmupRow, pickFinalWarmup, warmupInUnit } from "@/lib/final-warmup";
+import {
+  describeWarmup,
+  normalizeWarmupRow,
+  pickFinalWarmup,
+  warmupInUnit,
+  offersLastWarmup,
+} from "@/lib/final-warmup";
 
 const w = { id: "a", load: 140, unit: "kg" as const, reps: 2, rpe: 7 };
 
@@ -26,7 +32,9 @@ describe("warm-up set helpers", () => {
     expect(pickFinalWarmup([], "kg")).toBeNull();
   });
   it("normalises DB rows (numeric strings) and drops junk", () => {
-    expect(normalizeWarmupRow({ id: "x", load: "142.5", unit: "kg", reps: 3, rpe: "7.5" })).toMatchObject({ load: 142.5, reps: 3, rpe: 7.5 });
+    expect(
+      normalizeWarmupRow({ id: "x", load: "142.5", unit: "kg", reps: 3, rpe: "7.5" }),
+    ).toMatchObject({ load: 142.5, reps: 3, rpe: 7.5 });
     expect(normalizeWarmupRow({ id: "x", load: "0", unit: "kg", reps: 3 })).toBeNull();
     expect(normalizeWarmupRow({ id: "x", load: 100, unit: "stone", reps: 3 })).toBeNull();
   });
@@ -43,5 +51,44 @@ describe("warm-up sets stay out of everything that counts", () => {
     const src = readFileSync("src/components/workout-day/final-warmup-input.tsx", "utf8");
     expect(src).not.toContain("pl_row_results");
     expect(src).toContain("pl_warmup_sets");
+  });
+});
+
+describe("which lifts offer the last-warm-up gauge", () => {
+  it("every loaded compound lift, not just squat / bench / deadlift", () => {
+    for (const name of [
+      "Romanian Deadlift",
+      "Landmine Belt Squat",
+      "Leg Press",
+      "Bulgarian Split Squat",
+      "Barbell Hip Thrust",
+      "Incline Dumbbell Press",
+      "Overhead Press",
+      "Chest Supported Row",
+      "Lat Pulldown",
+    ]) {
+      expect(offersLastWarmup("accessory", name), name).toBe(true);
+    }
+  });
+
+  it("skips isolation work, where a feeler set is clutter", () => {
+    for (const name of [
+      "EZ Bar Curl",
+      "Tricep Pushdown",
+      "Lateral Raise",
+      "Cable Fly",
+      "Leg Extension",
+      "Seated Leg Curl",
+      "Standing Calf Raise",
+      "Ab Wheel",
+    ]) {
+      expect(offersLastWarmup("accessory", name), name).toBe(false);
+    }
+  });
+
+  it("competition-lift families always ramp up, whatever the name", () => {
+    expect(offersLastWarmup("squat", "SSB Pin Squat")).toBe(true);
+    expect(offersLastWarmup("bench", null)).toBe(true);
+    expect(offersLastWarmup("accessory", null)).toBe(false);
   });
 });

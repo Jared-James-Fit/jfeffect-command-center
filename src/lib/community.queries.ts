@@ -21,6 +21,8 @@ import {
   type ReactionKey,
   type WorkoutShareStats,
   type WinsStats,
+  type Reactor,
+  reactionTotal,
 } from "@/lib/community";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, type UploadedMedia } from "@/lib/community-media";
@@ -33,6 +35,7 @@ export const communityKeys = {
   preview: (completionId: string | null | undefined) => ["community-preview", completionId ?? null] as const,
   myPost: (completionId: string | null | undefined) => ["community-my-post", completionId ?? null] as const,
   post: (postId: string | null) => ["community-post", postId] as const,
+  reactors: (postId: string | null) => ["community-reactors", postId] as const,
   profile: (userId: string | null) => ["community-profile", userId] as const,
   activity: ["community-activity"] as const,
 };
@@ -107,7 +110,12 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
         const reactions = { ...p.reactions };
         if (p.my_reaction) reactions[p.my_reaction] = Math.max(0, (reactions[p.my_reaction] ?? 1) - 1);
         if (next) reactions[next] = (reactions[next] ?? 0) + 1;
-        return { ...p, reactions, my_reaction: next };
+        const had = !!p.my_reaction;
+        const total = reactionTotal(p) + (next && !had ? 1 : !next && had ? -1 : 0);
+        // "You" shows up in the who-reacted line straight away
+        const others = (p.reactors ?? []).filter((r) => !r.is_me);
+        const reactors = next ? [{ user_id: "me", name: "You", avatar_url: null, is_coach: false, is_me: true } as Reactor, ...others] : others;
+        return { ...p, reactions, my_reaction: next, reaction_count: Math.max(0, total), reactors };
       });
       return { snapshot };
     },
@@ -115,6 +123,21 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["community-feed"] });
       qc.invalidateQueries({ queryKey: communityKeys.post(post.id) });
+      qc.invalidateQueries({ queryKey: communityKeys.reactors(post.id) });
+    },
+  });
+}
+
+/** Everyone who gave a post 🔥, for the "who reacted" sheet. */
+export function usePostReactors(postId: string | null) {
+  return useQuery({
+    queryKey: communityKeys.reactors(postId),
+    enabled: !!postId,
+    staleTime: 15_000,
+    queryFn: async (): Promise<{ author: CommunityAuthor; is_me: boolean; created_at: string }[]> => {
+      const { data, error } = await db.rpc("community_post_reactors", { _post_id: postId });
+      if (error) throw error;
+      return (data ?? []) as any;
     },
   });
 }
