@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { featuredLift, formatTopSet, postTimeLabel, SCOPE_WORD, type CommunityPost } from "@/lib/community";
 import { useCommunityActivity, useCommunityFeed, useReact, useViewerUnit } from "@/lib/community.queries";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 
 /** Where the community lives for clients: a tab inside Workouts. */
 export const CLIENT_COMMUNITY_HASH = "community";
@@ -74,15 +76,20 @@ export function WorkoutsViewSwitch({ view, onChange }: { view: "training" | "com
 }
 
 /**
- * Home: who shared recently, Instagram-stories style. Renders nothing when
- * nobody has shared in the last week, so it never becomes an empty social
- * widget on the training dashboard.
+ * Home: the community's front door, right under today's training. Always
+ * there for clients (that's where they are: Home and the workout itself), so
+ * it can't be missed — "+ Share" first, Instagram-stories style, then who
+ * shared this week (ring = new to you). With nothing shared yet it's a single
+ * inviting line, never an empty widget.
  */
 export function CommunityHomeStrip() {
   const { user } = useAuth();
+  const { isImpersonating } = useClientImpersonation();
+  const { data: unit = "lb" } = useViewerUnit(user?.id);
   const { data: activity } = useCommunityActivity(true);
   const feed = useCommunityFeed(null);
   const seenAt = activity?.seen_at ? new Date(activity.seen_at).getTime() : 0;
+  const canShare = !isImpersonating;
 
   const people = useMemo(() => {
     const posts = feed.data?.pages[0]?.posts ?? [];
@@ -98,7 +105,7 @@ export function CommunityHomeStrip() {
     return out;
   }, [feed.data, seenAt, user?.id]);
 
-  if (!activity?.enabled || people.length === 0) return null;
+  if (!activity?.enabled || feed.isLoading) return null;
 
   return (
     <section className="rounded-2xl border border-border/80 bg-card px-3.5 pb-3 pt-3">
@@ -108,10 +115,11 @@ export function CommunityHomeStrip() {
           {activity.unseen > 0 && <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>}
         </div>
         <Link to="/portal/workouts" hash={CLIENT_COMMUNITY_HASH} className="flex items-center text-[12px] font-bold text-muted-foreground">
-          See all <ChevronRight className="h-3.5 w-3.5" />
+          {people.length ? "See all" : "Open"} <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
-      <div className="-mx-1 mt-2.5 flex gap-3 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="-mx-1 mt-2.5 flex items-start gap-3 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {canShare && <ShareWorkoutButton unit={unit} label="Share" variant="bubble" />}
         {people.map((p) => (
           <Link key={p.userId} to="/portal/workouts" hash={clientCommunityHash(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1" aria-label={`${p.name}'s latest workout`}>
             <span className={cn("rounded-full p-[2.5px]", p.fresh ? "bg-[linear-gradient(135deg,#f58529,#dd2a7b,#8134af)]" : "bg-border")}>
@@ -122,6 +130,12 @@ export function CommunityHomeStrip() {
             <span className="w-full truncate text-center text-[11px] font-semibold">{p.mine ? "You" : p.name}</span>
           </Link>
         ))}
+        {people.length === 0 && (
+          <div className="flex min-h-[61px] flex-1 flex-col justify-center pr-1">
+            <div className="text-[13px] font-bold leading-tight">Be the first to share this week</div>
+            <div className="mt-0.5 text-[12px] leading-snug text-muted-foreground">Post a session for the crew. Your coach sees every one.</div>
+          </div>
+        )}
       </div>
     </section>
   );
