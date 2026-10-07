@@ -598,3 +598,14 @@ describe("Wednesday Wins reads like the coach wrote it, with the crew's numbers"
     expect(quiet[1].sub).toBeUndefined();
   });
 });
+
+describe("Wednesday Wins shows a PR in the unit the athlete logs that lift in", () => {
+  const sql = read("supabase/migrations/20261008150000_community_wins_lift_unit.sql");
+  it("uses the per-exercise kg/lb toggle first, then the account default", () => {
+    expect(sql).toContain("SELECT x.exercise_id, x.exercise_name, x.reps, x.load_kg,");
+    expect(sql).toContain("FROM public.client_exercise_unit_prefs u");
+    expect(sql).toContain("WHERE u.client_id = c.id AND u.exercise_id = pr.exercise_id AND u.unit IN ('kg', 'lb') LIMIT 1), c.unit);");
+    expect(sql).toContain("public.community_fmt_load(pr.load_kg, v_unit)");
+    expect(sql).not.toContain("community_fmt_load(pr.load_kg, c.unit)");
+  });
+});
