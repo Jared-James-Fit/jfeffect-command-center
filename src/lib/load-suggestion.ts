@@ -487,11 +487,3 @@ export function planningTarget(input: {
   return { reps, rpe: Math.min(10, Math.max(MIN_RPE, Math.round(effort * 2) / 2)) };
 }
 
-/** Session RPE to pre-fill in the review: mean of today's working-set RPEs. */
-export function suggestedSessionRpe(rpes: Array<number | null | undefined>): number | null {
-  const valid = rpes.map((r) => parseRpe(r ?? null)).filter((r): r is number => r != null && r >= 6);
-  if (valid.length < 2) return null;
-  // Session RPE runs a touch above the average set RPE (accumulated fatigue).
-  const avg = valid.reduce((a, b) => a + b, 0) / valid.length;
-  return Math.min(10, Math.max(6, Math.round(avg + 0.3)));
-}
