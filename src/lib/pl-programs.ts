@@ -788,6 +788,7 @@ export async function applyProgression(blockId: string, rule: ProgressionRule): 
 // backward compatibility with existing callers.
 import { epley1RM } from "@/lib/analytics/e1rm";
 import { neutralizeObviousLoadOutliers } from "@/lib/analytics/load-sanity";
+import { fetchAllPages } from "@/lib/supabase-paginate";
 export { epley1RM };
 
 export interface LiftResultPoint {
@@ -816,16 +817,21 @@ export async function getClientResults(
     if (dayIds.length === 0) return [];
     allowedDayIds = new Set(dayIds);
   }
-  const { data, error } = await sb
+  // Paged: a single request is capped at 1,000 rows, which silently dropped
+  // every newer set once a client passed ~1,000 completed sets.
+  const data = await fetchAllPages((from, to) => sb
     .from("pl_row_results")
-    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, mean_concentric_velocity_mps, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, category))")
+    .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, mean_concentric_velocity_mps, is_bodyweight, load_type, is_working_set, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, category))")
     .eq("client_id", clientId)
     .not("actual_reps", "is", null)
     .not("completed_at", "is", null)
-    .order("completed_at", { ascending: true });
-  if (error) throw error;
+    .order("completed_at", { ascending: true })
+    .order("id", { ascending: true })
+    .range(from, to));
   const LB_PER_KG = 2.2046226;
   const mapped = (data ?? [])
+    // Warm-ups never count toward volume, tonnage or PRs.
+    .filter((r: any) => r.is_working_set !== false)
     .filter((r: any) => {
       if (!allowedDayIds) return true;
       const did = r.pl_exercise_rows?.day_id ?? null;
@@ -948,10 +954,15 @@ export function weeklyMuscleVolume(results: any[], days = 7) {
 }
 
 /** Newest est-1RM PR per exercise in last `days` days. */
+/** Highest rep count whose e1RM is trusted for PR detection. */
+export const E1RM_PR_MAX_REPS = 12;
+
 export function recentPRs(results: any[], days = 30) {
   const cutoff = Date.now() - days * 86400000;
-  // Loaded sets only — a bodyweight set can never be a 0 lb / 0 kg PR.
-  const loaded = results.filter((r) => (r.load ?? 0) > 0);
+  // Loaded sets only — a bodyweight set can never be a 0 lb / 0 kg PR. Sets
+  // above 12 reps are excluded: e1RM estimates from high-rep sets are unreliable
+  // (20 reps ≈ 1.67× load) and would headline fake "PRs".
+  const loaded = results.filter((r) => (r.load ?? 0) > 0 && (r.reps ?? 0) >= 1 && (r.reps ?? 0) <= E1RM_PR_MAX_REPS);
   const recent = loaded.filter((r) => r.date && new Date(r.date).getTime() >= cutoff);
   const all = loaded;
   const prs: any[] = [];
