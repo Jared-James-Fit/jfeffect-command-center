@@ -5,6 +5,7 @@ import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 import { ChevronLeft } from "lucide-react";
 
+import { focusOverlayOnOpen } from "@/lib/overlay-focus";
 import { cn } from "@/lib/utils";
 
 const Sheet = SheetPrimitive.Root;
@@ -31,7 +32,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-50 gap-4 bg-background dark:bg-card p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  "fixed z-50 gap-4 bg-background dark:bg-card p-6 shadow-lg transition ease-in-out focus:outline-none data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {
@@ -64,7 +65,7 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, hideCloseButton, safeTopClose, ...props }, ref) => {
+>(({ side = "right", className, children, hideCloseButton, safeTopClose, onOpenAutoFocus, ...props }, ref) => {
   // Bottom sheets originate at the bottom of the viewport, so
   // `env(safe-area-inset-top)` would push the Back pill *down* into the
   // sheet's content. Only offset for sheets that actually touch the top
@@ -81,7 +82,12 @@ const SheetContent = React.forwardRef<
   return (
     <SheetPortal>
       <SheetOverlay />
-      <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        onOpenAutoFocus={(e) => focusOverlayOnOpen(e, onOpenAutoFocus)}
+        {...props}
+      >
         {!hideCloseButton && (
           <SheetPrimitive.Close
             aria-label="Back"

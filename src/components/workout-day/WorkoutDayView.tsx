@@ -75,7 +75,7 @@ import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
 import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
-import { pickFinalWarmup } from "@/lib/final-warmup";
+import { offersLastWarmup, pickFinalWarmup } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
@@ -3397,9 +3397,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => planningTarget({ repTarget, rpeTarget, rirTarget }),
     [repTarget, rpeTarget, rirTarget],
   );
-  // Optional final warm-up (squat / bench / deadlift family only). It sharpens
-  // the FIRST working-set suggestion, so it is offered only while no working
-  // set is logged yet today and only where the engine can suggest at all.
+  // Optional final warm-up (squat / bench / deadlift and other loaded compound
+  // lifts). It sharpens the FIRST working-set suggestion, so it is offered only
+  // while no working set is logged yet today and only where the engine can
+  // suggest at all.
   const workedToday = existingResults.some(
     (r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external",
   );
@@ -3410,7 +3411,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
   const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
   const [warmupForm, setWarmupForm] = useState<string | null>(null);
-  const warmupPromptable = warmupEligible && family !== "accessory";
+  const rampsUp = useMemo(() => offersLastWarmup(family, name), [family, name]);
+  const warmupPromptable = warmupEligible && rampsUp;
   const warmupForModel = warmupEligible ? pickFinalWarmup(warmupSets, activeUnit) : null;
   const loadModel = useMemo<LoadModel | null>(() => {
     if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== "external" || !loadPlan) return null;
@@ -3429,8 +3431,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
   );
-  // "Last warm-up" gauge on the suggestion card (squat / bench / deadlift, before
-  // the first working set): tells the athlete what to warm up to, then reads how
+  // "Last warm-up" gauge on the suggestion card (compound lifts, before the
+  // first working set): tells the athlete what to warm up to, then reads how
   // it felt to tune the top-set number. Opens the warm-up form pre-filled.
   const warmupGaugeSuggested = useMemo(
     () => (loadHint && loadPlan ? suggestFinalWarmup(loadHint.target, loadPlan.reps, activeUnit) : null),
