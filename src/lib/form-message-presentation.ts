@@ -1,6 +1,5 @@
 /**
- * Presentation plan for recurring chat forms (Weekly Check-In, Nutrition
- * Review). Pure + synchronous so the thread decides expanded vs compact
+ * Presentation plan for recurring chat forms (Weekly Check-In). Pure + synchronous so the thread decides expanded vs compact
  * BEFORE rendering — no flash of big cards that then collapse.
  *
  * Rules, per form type (types are independent):
@@ -19,7 +18,7 @@
  */
 import type { Message } from "@/lib/messages";
 
-export type FormTaskType = "weekly_checkin" | "nutrition_review";
+export type FormTaskType = "weekly_checkin";
 export type FormUnitState = "pending" | "completed" | "superseded";
 
 export type FormPresentation = {
@@ -43,7 +42,7 @@ export function formAttachment(m: Pick<Message, "attachments" | "deleted_at">): 
     if (
       (a?.kind === "checkin_request" || a?.kind === "checkin_submission") &&
       a.checkin_submission_id &&
-      (a.checkin_task_type === "weekly_checkin" || a.checkin_task_type === "nutrition_review")
+      a.checkin_task_type === "weekly_checkin"
     ) {
       return { kind: a.kind, id: a.checkin_submission_id, taskType: a.checkin_task_type };
     }

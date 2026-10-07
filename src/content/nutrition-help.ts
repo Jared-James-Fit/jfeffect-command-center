@@ -1,3 +1,5 @@
+import { workoutMealExplainerText } from "@/lib/nutrition-targets/meal-timing";
+
 export type FaqItem = { q: string; a: string };
 export type ResourceItem = { title: string; bullets: string[] };
 
@@ -8,6 +10,7 @@ export const NUTRITION_FAQS: FaqItem[] = [
   { q: "What happens if I eat below my targets?", a: "One low day is not a crisis. Repeatedly under-eating can affect recovery, energy, training performance, and adherence." },
   { q: "Can I save calories for the weekend?", a: "A weekly calorie approach can work, but large restriction-and-binge cycles usually make progress harder. Keep daily intake reasonably consistent." },
   { q: "How much protein should I eat?", a: "Use the protein target shown in your plan. Spread protein across several meals when possible." },
+  { q: "What are Pre-Workout and Post-Workout meals?", a: workoutMealExplainerText() },
   { q: "Should I eat before training?", a: "A meal containing carbohydrates and protein before training can support energy and performance. Choose foods that digest comfortably." },
   { q: "What should I eat after training?", a: "Have a normal meal containing protein and carbohydrates within a reasonable period after training. Exact timing is less important than total daily intake." },
   { q: "Are carbohydrates bad for fat loss?", a: "No. Fat loss is primarily driven by sustained energy balance. Carbohydrates can support training performance and recovery." },
@@ -56,8 +59,10 @@ export const NUTRITION_RESOURCES: ResourceItem[] = [
     "Save frequently used meals for faster logging.",
   ]},
   { title: "Eating Around Workouts", bullets: [
-    "Before training: protein plus carbohydrates, moderate portions, foods that digest comfortably.",
-    "After training: protein, carbohydrates, fluids, and a normal balanced meal.",
+    "Pre-Workout meal (1–2 hours before): mostly carbs + some protein, light on fat and fibre so it digests easily.",
+    "Post-Workout meal (within 2 hours after): protein + carbs to recover and refuel. A normal balanced meal works.",
+    "Training at a different time? Move these two meals with your workout.",
+    "Ideal, not mandatory: eating all your meals and hitting your daily numbers matters most.",
   ]},
   { title: "Managing Hunger", bullets: [
     "Eat enough protein.",

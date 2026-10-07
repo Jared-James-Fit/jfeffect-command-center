@@ -5,6 +5,7 @@
  */
 import { Dumbbell, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WorkoutMealInfo } from "@/components/nutrition/WorkoutMealInfo";
 import { listMealHeaders, setMealTiming, type MealTiming } from "@/lib/nutrition-targets/meal-timing";
 
 const CHOICES: { value: MealTiming; label: string }[] = [
@@ -20,6 +21,7 @@ export function WorkoutMealTagger({ text, onChange }: { text: string; onChange: 
     <div className="rounded-md border border-border/70 bg-background/60 p-2">
       <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
         <Dumbbell className="h-3 w-3 text-primary" /> Workout meals
+        <WorkoutMealInfo className="h-4 w-4" />
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1.5">
         {meals.map((m, idx) => (

@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { AuthorLine, LockInHero, NoteBody, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote } from "@/components/community/post-card";
 import { CommentThread } from "@/components/community/comments-sheet";
+import { WinsStatsCard } from "@/components/community/wins-stats";
 import {
   SCOPE_WORD,
   formatExerciseBest,
@@ -121,7 +122,10 @@ function Detail({
       </div>
 
       {post.kind === "note" ? (
-        <NoteBody post={post} />
+        <>
+          <NoteBody post={post} />
+          {post.series_data && <WinsStatsCard stats={post.series_data} unit={unit} className="mx-4 mb-2 mt-2" />}
+        </>
       ) : post.media_type ? (
         <PostMedia post={post} thumbUrl={thumb} full />
       ) : s ? (

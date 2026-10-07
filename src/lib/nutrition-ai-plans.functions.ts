@@ -19,6 +19,7 @@ import {
 import { NUTRITION_PHASES, phaseFromText } from "@/lib/nutrition-cardio";
 import { calcAge, formatHeight, type HeightUnit } from "@/lib/basic-info";
 import { sexLabel } from "@/lib/athlete-sex";
+import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 
 const phaseSchema = z.enum(NUTRITION_PHASES.filter((p) => p !== "Custom") as [string, ...string[]]);
 const workoutMealsSchema = z.enum(["auto", "pre_post", "post_only", "pre_only", "none"]);
@@ -86,6 +87,23 @@ async function loadClientBasics(
   };
 }
 
+/** When the client actually trains, from their logged workouts (last 8 weeks). */
+async function loadTrainingPattern(sb: any, clientId: string): Promise<TrainingPattern | null> {
+  const since = new Date(Date.now() - 56 * 86_400_000).toISOString();
+  const [{ data: client }, { data: rows }] = await Promise.all([
+    sb.from("clients").select("timezone").eq("id", clientId).maybeSingle(),
+    sb
+      .from("pl_day_completions")
+      .select("started_at, in_progress_at, completed_at")
+      .eq("client_id", clientId)
+      .gte("completed_at", since)
+      .order("completed_at", { ascending: false })
+      .limit(200),
+  ]);
+  const starts = (rows ?? []).map((r: any) => r.started_at ?? r.in_progress_at ?? r.completed_at);
+  return summarizeTrainingTimes(starts, client?.timezone || "UTC");
+}
+
 async function coachSettings(sb: any, clientId: string): Promise<{ phase: string | null; workoutMeals: WorkoutMealsMode | null }> {
   const { data } = await sb
     .from("nf_assignments")
@@ -105,9 +123,11 @@ async function runPlan(
   workoutMealsOverride?: WorkoutMealsMode | null,
 ) {
   const { sub, qas } = await loadQAs(sb, submissionId);
-  const [coach, basics] = await Promise.all([
+  const [coach, basics, history] = await Promise.all([
     coachSettings(sb, sub.client_id),
     loadClientBasics(sb, sub.client_id),
+    // Never let a history lookup block the plan.
+    loadTrainingPattern(sb, sub.client_id).catch(() => null),
   ]);
   const selected = phaseOverride ?? coach.phase;
   const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
@@ -135,7 +155,7 @@ async function runPlan(
     const m = await generateText({
       model: gateway(modelId),
       system: MEAL_PLAN_PROMPT,
-      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals),
+      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals, history),
     });
     const mealPlanText = cleanAiText(m.text);
 
@@ -295,6 +315,7 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
       requestedWorkoutMeals: ((assignment?.settings as any)?.workout_meals as WorkoutMealsMode | null) ?? null,
       clientName: client.name,
       client,
+      trainingPattern: await loadTrainingPattern(sb, data.clientId).catch(() => null),
     };
   });
 

@@ -9,7 +9,7 @@ import {
 } from "@/lib/nutrition-ai-prompts";
 
 const read = (p: string) => readFileSync(p, "utf8");
-const migration = read("supabase/migrations/20261008120000_athlete_sex_profile.sql");
+const migration = read("supabase/migrations/20261008130000_athlete_sex_profile.sql");
 
 describe("athlete sex values", () => {
   it("round-trips between stored values and form answers", () => {
