@@ -12,10 +12,13 @@ import {
   cleanAiText,
   mealPlanUserPrompt,
   targetsUserPrompt,
+  type ClientBasics,
   type QA,
   type WorkoutMealsMode,
 } from "@/lib/nutrition-ai-prompts";
 import { NUTRITION_PHASES, phaseFromText } from "@/lib/nutrition-cardio";
+import { calcAge, formatHeight, type HeightUnit } from "@/lib/basic-info";
+import { sexLabel } from "@/lib/athlete-sex";
 import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 
 const phaseSchema = z.enum(NUTRITION_PHASES.filter((p) => p !== "Custom") as [string, ...string[]]);
@@ -62,6 +65,28 @@ async function loadQAs(sb: any, submissionId: string): Promise<{ sub: any; qas: 
   return { sub, qas };
 }
 
+/** Name, sex, age and height from the client profile, for the AI and the coach's copy. */
+async function loadClientBasics(
+  sb: Awaited<ReturnType<typeof admin>>,
+  clientId: string,
+): Promise<ClientBasics> {
+  const { data: c } = await sb
+    .from("clients")
+    .select("full_name, sex, date_of_birth, height_cm, preferred_height_unit")
+    .eq("id", clientId)
+    .maybeSingle();
+  const sex = c?.sex === "male" || c?.sex === "female" ? sexLabel(c.sex) : null;
+  return {
+    name: c?.full_name ?? "Client",
+    sex,
+    age: calcAge(c?.date_of_birth ?? null),
+    height:
+      c?.height_cm != null
+        ? formatHeight(Number(c.height_cm), (c.preferred_height_unit as HeightUnit) ?? "imperial")
+        : null,
+  };
+}
+
 /** When the client actually trains, from their logged workouts (last 8 weeks). */
 async function loadTrainingPattern(sb: any, clientId: string): Promise<TrainingPattern | null> {
   const since = new Date(Date.now() - 56 * 86_400_000).toISOString();
@@ -98,8 +123,9 @@ async function runPlan(
   workoutMealsOverride?: WorkoutMealsMode | null,
 ) {
   const { sub, qas } = await loadQAs(sb, submissionId);
-  const [coach, history] = await Promise.all([
+  const [coach, basics, history] = await Promise.all([
     coachSettings(sb, sub.client_id),
+    loadClientBasics(sb, sub.client_id),
     // Never let a history lookup block the plan.
     loadTrainingPattern(sb, sub.client_id).catch(() => null),
   ]);
@@ -122,7 +148,7 @@ async function runPlan(
     const t = await generateText({
       model: gateway(modelId),
       system: TARGETS_PROMPT,
-      prompt: targetsUserPrompt(sub.client?.full_name ?? "Client", qas, selected),
+      prompt: targetsUserPrompt(basics, qas, selected),
     });
     const targetsText = cleanAiText(t.text);
 
@@ -269,7 +295,7 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
     const { data: plans } = ids.length
       ? await sb.from("nutrition_ai_plans").select("*").in("submission_id", ids)
       : { data: [] };
-    const { data: client } = await sb.from("clients").select("full_name").eq("id", data.clientId).maybeSingle();
+    const client = await loadClientBasics(sb, data.clientId);
     const { data: assignment } = await sb
       .from("nf_assignments")
       .select("created_at, settings")
@@ -287,7 +313,8 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
       requestedAt: assignment?.created_at ?? null,
       requestedPhase: ((assignment?.settings as any)?.phase as string | null) ?? null,
       requestedWorkoutMeals: ((assignment?.settings as any)?.workout_meals as WorkoutMealsMode | null) ?? null,
-      clientName: client?.full_name ?? "Client",
+      clientName: client.name,
+      client,
       trainingPattern: await loadTrainingPattern(sb, data.clientId).catch(() => null),
     };
   });

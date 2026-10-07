@@ -272,7 +272,9 @@ export function ClientProfileWorkspace({
       // Never write the schedule columns back from this (possibly stale) copy
       // of the row — that would undo a schedule change without realigning the
       // client's workouts. The Training Schedule card owns those fields.
-      const { id: _id, created_at, updated_at, ...rest } = form;
+      // Same for sex: the client can answer it any time (Home prompt, nutrition
+      // form), and the Personal Details card writes it on its own.
+      const { id: _id, created_at, updated_at, sex: _sex, sex_updated_at: _sexAt, ...rest } = form;
       const patch = omitScheduleFields(rest) as any;
       const { error } = await supabase.from("clients").update(patch).eq("id", id);
       if (error) return toast.error(error.message);

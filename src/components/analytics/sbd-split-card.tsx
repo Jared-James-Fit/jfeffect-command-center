@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { Lightbulb, MessageCircle, Target, TrendingUp, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { ATHLETE_SEX_KEYS, SexChoice } from "@/components/athlete-sex";
+import { asAthleteSex, type AthleteSex } from "@/lib/athlete-sex";
 import { fmtNum, LIFT_COLORS } from "@/lib/analytics-format";
 import { resultLoadLb } from "@/lib/pl-programs";
 import { neutralizeObviousLoadOutliers } from "@/lib/analytics/load-sanity";
@@ -32,6 +35,8 @@ type SbdData = {
   coach: Partial<Record<SbdLift, SbdMax>>;
   meet: Meet | null;
   sex: NormSex | null;
+  /** The athlete's own answer: lets "prefer not to say" differ from "never asked". */
+  profileSex: AthleteSex | null;
 };
 
 function asSex(v: unknown): NormSex | null {
@@ -41,7 +46,7 @@ function asSex(v: unknown): NormSex | null {
 
 async function loadSbd(clientId: string): Promise<SbdData> {
   const since = new Date(Date.now() - WINDOW_WEEKS * 7 * 86_400_000).toISOString();
-  const [exRes, maxRes, athleteRes] = await Promise.all([
+  const [exRes, maxRes, athleteRes, clientRes] = await Promise.all([
     supabase.from("exercises").select("id, competition_lift_type").eq("is_competition_lift", true),
     supabase
       .from("pl_client_maxes")
@@ -53,6 +58,7 @@ async function loadSbd(clientId: string): Promise<SbdData> {
       .select("id, sex")
       .eq("client_id", clientId)
       .maybeSingle(),
+    supabase.from("clients").select("sex").eq("id", clientId).maybeSingle(),
   ]);
 
   const liftByExercise = new Map<string, SbdLift>();
@@ -144,7 +150,20 @@ async function loadSbd(clientId: string): Promise<SbdData> {
         }
       : null;
 
-  return { sets, coach, meet, sex: asSex(athlete?.sex) ?? asSex(m?.sex) };
+  const profileSex = asAthleteSex(clientRes.data?.sex);
+  return {
+    sets,
+    coach,
+    meet,
+    // The athlete's profile first; meet records only when it was never answered.
+    sex:
+      profileSex === "male" || profileSex === "female"
+        ? profileSex
+        : profileSex === "unspecified"
+          ? null
+          : (asSex(athlete?.sex) ?? asSex(m?.sex)),
+    profileSex,
+  };
 }
 
 /**
@@ -172,24 +191,17 @@ export function SbdSplitCard({
     queryFn: () => loadSbd(clientId),
   });
 
-  // Sex isn't stored for most clients; the viewer can pick which norms to
-  // compare against, remembered on this device only.
-  const normKey = `sbd-norms:${clientId}`;
-  const [pickedSex, setPickedSex] = useState<NormSex | null>(null);
-  useEffect(() => {
-    try {
-      setPickedSex(asSex(localStorage.getItem(normKey)));
-    } catch {
-      /* storage unavailable */
-    }
-  }, [normKey]);
-  const pickSex = (s: NormSex) => {
-    setPickedSex(s);
-    try {
-      localStorage.setItem(normKey, s);
-    } catch {
-      /* storage unavailable */
-    }
+  const qc = useQueryClient();
+  const [savingSex, setSavingSex] = useState<AthleteSex | null>(null);
+  // Never asked: answer right here; it saves to the athlete's profile.
+  const saveSex = async (sex: AthleteSex) => {
+    setSavingSex(sex);
+    const { error } = await supabase.from("clients").update({ sex }).eq("id", clientId);
+    setSavingSex(null);
+    if (error) return toast.error("Couldn't save", { description: error.message });
+    await Promise.all(
+      ATHLETE_SEX_KEYS.map((queryKey) => qc.invalidateQueries({ queryKey: [...queryKey] })),
+    );
   };
 
   const model = useMemo(() => {
@@ -203,7 +215,7 @@ export function SbdSplitCard({
     }
     const maxes = pickCurrentMaxes(logged, data.coach, meetMaxes);
     const complete = SBD_LIFTS.every((l) => maxes[l]);
-    const sex = data.sex ?? pickedSex;
+    const sex = data.sex;
     const split = complete
       ? sbdSplit(
           { squat: maxes.squat!.lb, bench: maxes.bench!.lb, deadlift: maxes.deadlift!.lb },
@@ -234,12 +246,12 @@ export function SbdSplitCard({
         );
       }
     }
-    return { maxes, split, sex, notes, sexKnown: !!data.sex };
-  }, [data, pickedSex]);
+    return { maxes, split, sex, notes, askSex: !data.sex && !data.profileSex };
+  }, [data]);
 
   if (isLoading || !model || !SBD_LIFTS.some((l) => model.maxes[l])) return null;
 
-  const { maxes, split, sex, notes, sexKnown } = model;
+  const { maxes, split, notes, askSex } = model;
   const fmtLb = (lb: number) => fmtNum(conv(lb));
   const fmtTotal = (lb: number) => Math.round(conv(lb)).toLocaleString();
   const meetDelta = split && data?.meet ? split.total - data.meet.total : null;
@@ -363,31 +375,24 @@ export function SbdSplitCard({
               })}
             </ul>
 
-            {!sexKnown && (
-              <div className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-muted-foreground">Compare to</span>
-                <div
-                  className="flex gap-1 rounded-lg bg-muted/50 p-0.5"
-                  role="group"
-                  aria-label="Typical split for"
-                >
-                  {(["male", "female"] as NormSex[]).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      aria-pressed={sex === s}
-                      onClick={() => pickSex(s)}
-                      className={cn(
-                        "h-8 rounded-md px-3 font-bold",
-                        sex === s
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {s === "male" ? "Men" : "Women"}
-                    </button>
-                  ))}
+            {askSex && (
+              <div
+                className="rounded-xl border border-border bg-background p-3"
+                data-testid="sbd-ask-sex"
+              >
+                <div className="mb-2 text-xs">
+                  <span className="font-bold">Sex isn't on file yet.</span>{" "}
+                  <span className="text-muted-foreground">
+                    Typical splits differ for men and women; until it's set, this uses combined
+                    ranges.
+                  </span>
                 </div>
+                <SexChoice
+                  value={null}
+                  onChange={(v) => void saveSex(v)}
+                  disabled={!!savingSex}
+                  pending={savingSex}
+                />
               </div>
             )}
 

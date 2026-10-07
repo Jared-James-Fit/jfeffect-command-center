@@ -7,6 +7,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { calcAge, cmToFtIn, ftInToCm } from "@/lib/basic-info";
 import { todayLocalISO } from "@/lib/today";
+import { SexChoice } from "@/components/athlete-sex";
+import { SEX_REASON, type AthleteSex } from "@/lib/athlete-sex";
 
 const COUNTRIES = ["Canada", "United States", "United Kingdom", "Australia", "New Zealand", "Other"];
 
@@ -16,6 +18,8 @@ export type BasicInfoValues = {
   preferred_name?: string | null;
   phone?: string | null;
   date_of_birth?: string | null;
+  /** male | female | unspecified ("Prefer not to say"). Optional. */
+  sex?: AthleteSex | null;
   height_cm?: number | null;
   preferred_height_unit?: "imperial" | "metric";
   address?: string | null;
@@ -148,6 +152,16 @@ export function BasicInfoForm({
             <Input type="number" inputMode="numeric" min={50} max={250} value={cm} onChange={(e) => updateMetric(e.target.value)} placeholder="cm" />
           )}
         </div>
+      </div>
+
+      <div>
+        <Label>Sex</Label>
+        <SexChoice
+          className="mt-1.5"
+          value={values.sex ?? null}
+          onChange={(v) => onChange({ sex: v })}
+        />
+        <p className="mt-1 text-[11px] text-muted-foreground">{SEX_REASON}</p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
