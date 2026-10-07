@@ -28,6 +28,15 @@ describe("exercise classifier", () => {
     ["Competition Bench Press", "horizontal_press", ["chest", "triceps"]],
     ["Sumo Deadlift", "hinge", ["glutes", "quads", "adductors"]],
     ["Kneeling Hip Flexor Stretch", "mobility", ["other"]],
+    // Shoulder ab/adduction and kickbacks: the body part decides, not the verb.
+    ["Shoulder Abduction", "lateral_raise", ["side_delts"]],
+    ["Resistance Band Shoulder Adduction", "pullover", ["lats"]],
+    ["Cable Pushdown (Straight Arm)", "pullover", ["lats"]],
+    ["Cable Straight-Leg Kickback", "hip_thrust", ["glutes"]],
+    ["Cable Donkey Kickback", "hip_thrust", ["glutes"]],
+    ["Tricep Cable Kickback On Crossover Machine", "elbow_extension", ["triceps"]],
+    ["Cable Triceps Pushdown", "elbow_extension", ["triceps"]],
+    ["Theraband Scapula Retraction", "horizontal_pull", ["upper_back"]],
   ])("%s → %s", (name, pattern, primary) => {
     const c = classifyExercise(name);
     expect(c.pattern).toBe(pattern);
@@ -103,6 +112,57 @@ describe("quick swap suggestions", () => {
     const names = out.map((s) => (s.ex as { name: string }).name);
     expect(names[0]).toBe("Adductor Machine");
     expect(names[1]).toBe("Copenhagen Plank");
+  });
+
+  it("Copenhagen → adductor work, then adductor-dominant lunges; never stretches, squats or ab wheels", () => {
+    const src = ex("0", "Copenhagen Plank", {
+      muscle_groups: ["adductors"],
+      secondary_muscle_groups: ["core"],
+      category: "Abdominals",
+      equipment: "Bodyweight",
+    });
+    const out = rankSuggestions(src, [
+      ex("1", "Ab Wheel All The Way Out", {
+        muscle_groups: ["core"],
+        category: "Abdominals",
+        equipment: "Bodyweight",
+      }),
+      ex("2", "Ab Wheel Plank", {
+        muscle_groups: ["core"],
+        category: "Yoga",
+        equipment: "Bodyweight",
+      }),
+      ex("3", "Adductor Stretch", {
+        muscle_groups: ["adductors"],
+        counts_toward_volume: false,
+        equipment: "Bodyweight",
+      }),
+      ex("4", "Bodyweight Overhead Squat", {
+        muscle_groups: ["quads", "glutes", "adductors"],
+        equipment: "Bodyweight",
+      }),
+      ex("5", "Kettlebell Lateral Lunge", {
+        muscle_groups: ["adductors", "quads", "glutes"],
+        equipment: "Kettlebell",
+      }),
+      ex("6", "Band Hip Adduction", { muscle_groups: ["adductors"], equipment: "Bands" }),
+      ex("7", "Adductor Machine", { muscle_groups: ["adductors"], equipment: "Machine" }),
+    ]);
+    const names = out.map((s) => (s.ex as { name: string }).name);
+    expect(names).toEqual(["Adductor Machine", "Band Hip Adduction", "Kettlebell Lateral Lunge"]);
+  });
+
+  it("a stretch still finds other stretches", () => {
+    const out = rankSuggestions(
+      ex("0", "Adductor Stretch", { muscle_groups: ["adductors"], counts_toward_volume: false }),
+      [
+        ex("1", "Standing Adductor Stretch", {
+          muscle_groups: ["adductors"],
+          counts_toward_volume: false,
+        }),
+      ],
+    );
+    expect(out.map((s) => (s.ex as { name: string }).name)).toEqual(["Standing Adductor Stretch"]);
   });
 });
 

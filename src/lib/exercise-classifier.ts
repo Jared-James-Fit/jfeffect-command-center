@@ -198,21 +198,29 @@ export const RULES: ReadonlyArray<Rule> = [
 
   // ── hip abduction / adduction / flexion / glute isolation ──
   R(
-    / (copenhagen|adduction|adductor|adductors|hip adduct|groin squeeze|inner thigh) /,
+    {
+      re: / (copenhagen|adduction|adductor|adductors|hip adduct|groin squeeze|inner thigh) /,
+      // "Shoulder Adduction" is a lat movement (pullover rule below).
+      not: / (shoulder|arm) (adduction|adductor) /,
+    },
     "hip_adduction",
     ["adductors"],
     ["core"],
   ),
   R(
-    / (abduction|abductor|abductors|clamshell|clam shell|clams?|fire hydrants?|monster walks?|lateral band walks?|band walks?|crab walks?|side lying leg (raise|lift)s?|side lying hip raises?|standing side leg raises?|side kicks?) /,
+    {
+      re: / (abduction|abductor|abductors|clamshell|clam shell|clams?|fire hydrants?|monster walks?|lateral band walks?|band walks?|crab walks?|side lying leg (raise|lift)s?|side lying hip raises?|standing side leg raises?|side kicks?) /,
+      // "Shoulder Abduction" is a lateral raise (rule below).
+      not: / (shoulder|arm) (abduction|abductor) /,
+    },
     "hip_abduction",
     ["glutes"],
   ),
   R(/ (hip flexion|hip flexor march|psoas march) /, "hip_flexion", ["core"]),
   R(
     {
-      re: / (glute kick ?backs?|kickback glute|donkey kicks?|glute medius kickback|hip extension|glute extension|cable kickback|reverse lunge kickback|quadruped kickback|rear kicks?) /,
-      not: / pullover /,
+      re: / (glute kick ?backs?|kickback glute|donkey kicks?|donkey kickbacks?|(straight |bent )?leg kickbacks?|hip kickbacks?|glute medius kickback|hip extension|glute extension|cable kickback|reverse lunge kickback|quadruped kickback|rear kicks?) /,
+      not: / (pullover|tricep|triceps) /,
     },
     "hip_thrust",
     ["glutes"],
@@ -227,6 +235,12 @@ export const RULES: ReadonlyArray<Rule> = [
     ["upper_back"],
   ),
   R(/ (upward rotation|scapular elevation) /, "shrug", ["traps"]),
+  R(
+    / (scap|scapula|scapular) (retraction|retractions|squeeze|squeezes) /,
+    "horizontal_pull",
+    ["upper_back"],
+    ["traps"],
+  ),
   R(
     / (wrist curl|wrist extension|reverse wrist|wrist roller|pronation|supination|palm up palm down|gripper|grip trainer|grip strength|hand grip|dead hang|plate pinch|farmer s hold) /,
     "wrist",
@@ -306,7 +320,11 @@ export const RULES: ReadonlyArray<Rule> = [
     ["front_delts"],
   ),
   R(
-    / (tricep|triceps|pushdown|push down|skull crusher|skullcrusher|kickback|french press|overhead extension|lying extension|elbow extension) /,
+    {
+      re: / (tricep|triceps|pushdown|push down|skull crusher|skullcrusher|kickback|french press|overhead extension|lying extension|elbow extension) /,
+      // A straight-arm pushdown is a lat movement (pullover rule below).
+      not: / straight arm /,
+    },
     "elbow_extension",
     ["triceps"],
   ),
@@ -356,7 +374,7 @@ export const RULES: ReadonlyArray<Rule> = [
 
   // ── pulling before pressing ("incline row", "bench pull up") ──
   R(
-    / (pullover|pull over|straight arm pulldown|straight arm pull down|lat prayer|shoulder adduction|shoulder extension) /,
+    / (pullover|pull over|straight arm pulldown|straight arm pull down|straight arm pushdown|straight arm push down|pushdown straight arm|push down straight arm|lat prayer|shoulder adduction|shoulder extension) /,
     "pullover",
     ["lats"],
     ["chest", "triceps"],
