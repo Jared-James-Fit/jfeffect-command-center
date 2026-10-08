@@ -345,6 +345,8 @@ export const syncStripePayments = createServerFn({ method: "POST" })
             txn_type: "payment",
             method: "stripe",
             amount_minor: s.amount_total,
+            // GST/HST collected; the tax reports read this, so never leave it at 0.
+            tax_minor: s.total_details?.amount_tax ?? 0,
             currency: (s.currency ?? "usd").toUpperCase(),
             transaction_date: (occurredAt ?? new Date().toISOString()).slice(0, 10),
             received_at: occurredAt,

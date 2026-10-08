@@ -17,7 +17,7 @@ import {
   Link as LinkIcon, Trophy, Tag, ShieldCheck, Home as HomeIcon, ListChecks,
   Star, FileText, ExternalLink, Image as ImageIcon, PowerOff, Bell, Image,
   Mail, Smartphone, ListTodo, Database, GitBranch, Globe, Package,
-  Wrench, Plus, Send, Mic, Music, Eye, type LucideIcon,
+  Wrench, Plus, Send, Mic, Music, Eye, Landmark, type LucideIcon,
 } from "lucide-react";
 
 export type AdminRole = "admin" | "coach" | "media_manager";
@@ -232,6 +232,9 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
   // ── SALES & PAYMENTS ────────────────────────────────────────────────
   { id: "sales", label: "Sales Dashboard", to: "/admin/sales", category: "Sales & Payments",
     parent: "Admin → Sales", roles: ADMIN, icon: BarChart3, keywords: ["revenue", "pipeline"] },
+  { id: "taxes-books", label: "Taxes & Books", to: "/admin/sales?tab=taxes", category: "Sales & Payments",
+    parent: "Admin → Sales", roles: ADMIN, icon: Landmark,
+    keywords: ["tax", "gst", "hst", "cra", "bookkeeping", "expenses", "receipts", "accountant", "summer ledger"] },
   { id: "payments", label: "Payments", to: "/admin/payments", category: "Sales & Payments",
     parent: "Admin → Sales", roles: ADMIN, icon: CreditCard, keywords: ["billing", "charges"] },
   { id: "purchases", label: "Purchases", to: "/admin/purchases", category: "Sales & Payments",
