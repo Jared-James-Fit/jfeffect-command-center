@@ -48,7 +48,65 @@ export type LeagueRecap = {
     program_pr_lifts: number;
     improved_exercises: number;
   }>;
+  /** From get_month_training_stats; null when unavailable. */
+  training?: MonthTraining | null;
 };
+
+export type MonthTraining = {
+  unit: "kg" | "lb";
+  tonnage_kg: number;
+  prev_tonnage_kg: number;
+  sets: number;
+  reps: number;
+  sessions_timed: number;
+  minutes: number;
+  heaviest: { exercise_name: string; load_kg: number; reps: number } | null;
+  /** Lifts whose estimated 1-rep max beat every earlier month, biggest % first. */
+  gains: Array<{ exercise_name: string; prev_e1rm_kg: number; e1rm_kg: number }>;
+};
+
+const COMPARISONS = [
+  { kg: 150_000, one: "blue whale", many: "blue whales", emoji: "🐋" },
+  { kg: 41_000, one: "Boeing 737", many: "Boeing 737s", emoji: "✈️" },
+  { kg: 11_000, one: "school bus", many: "school buses", emoji: "🚌" },
+  { kg: 6_000, one: "elephant", many: "elephants", emoji: "🐘" },
+  { kg: 1_800, one: "car", many: "cars", emoji: "🚗" },
+  { kg: 450, one: "grand piano", many: "grand pianos", emoji: "🎹" },
+];
+
+/** "That's like 13.8 elephants" — the biggest object they lifted at least one of. */
+export function liftComparison(tonnageKg: number): { emoji: string; text: string } | null {
+  const c = COMPARISONS.find((o) => tonnageKg >= o.kg);
+  if (!c) return null;
+  const n = tonnageKg / c.kg;
+  const v = n < 10 ? Math.round(n * 10) / 10 : Math.round(n);
+  return { emoji: c.emoji, text: `${v.toLocaleString()} ${v === 1 ? c.one : c.many}` };
+}
+
+/** Whole-percent change, or null when there's nothing to compare against. */
+export function pctChange(cur: number, prev: number): number | null {
+  if (!(prev > 0) || !(cur > 0)) return null;
+  return Math.round((cur / prev - 1) * 100);
+}
+
+/** "45 min" under an hour, else "12.5 hrs". */
+export function formatTrainingTime(minutes: number): { value: string; label: string } {
+  if (minutes < 60) return { value: String(minutes), label: "Minutes" };
+  const h = Math.round((minutes / 60) * 10) / 10;
+  return { value: String(h), label: h === 1 ? "Hour" : "Hours" };
+}
+
+/** 1,842 stays as is; 12,450 becomes "12.5K" so it fits a small tile. */
+export function compactCount(n: number): string {
+  if (n < 10_000) return n.toLocaleString();
+  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
+/** "182K lb" for tight spaces (share card tiles). */
+export function compactWeight(kg: number, unit: "kg" | "lb") {
+  const v = unit === "lb" ? kg / 0.45359237 : kg;
+  return `${new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: v < 100_000 ? 1 : 0 }).format(v)} ${unit}`;
+}
 
 /** Recap is offered automatically during the first week of a new month. */
 export const RECAP_WINDOW_DAYS = 7;
@@ -125,9 +183,14 @@ export function outroLine(recap: LeagueRecap) {
 export async function fetchLeagueRecap(month: string, asUser?: string | null): Promise<LeagueRecap | null> {
   const args: Record<string, unknown> = { _month: month };
   if (asUser) args._as_user = asUser;
-  const { data, error } = await db.rpc("get_league_month_recap", args);
-  if (error) throw error;
-  return (data ?? null) as LeagueRecap | null;
+  const [recap, training] = await Promise.all([
+    db.rpc("get_league_month_recap", args),
+    // Extra slides only — a failure here must never cost the athlete their recap.
+    db.rpc("get_month_training_stats", args).then((r: any) => (r.error ? null : r.data), () => null),
+  ]);
+  if (recap.error) throw recap.error;
+  if (!recap.data) return null;
+  return { ...(recap.data as LeagueRecap), training: (training ?? null) as MonthTraining | null };
 }
 
 export async function hasSeenFeature(userId: string, key: string): Promise<boolean> {

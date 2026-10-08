@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
-const { inRecapWindow, monthName, nextMonthName, ordinal, outroLine, previousLeagueMonth, rankChange, recapSeenKey, rivalLine } =
-  await import("@/lib/league-recap");
+const {
+  compactCount, compactWeight, formatTrainingTime, inRecapWindow, liftComparison, monthName, nextMonthName, ordinal, outroLine, pctChange,
+  previousLeagueMonth, rankChange, recapSeenKey, rivalLine,
+} = await import("@/lib/league-recap");
 
 const base: any = {
   month_start: "2026-09-01",
@@ -48,5 +50,34 @@ describe("monthly league recap", () => {
     const rivals = sql.slice(sql.indexOf("'rivals'"));
     expect(rivals).not.toMatch(/adherence|eligible_workouts|bodyweight_value/);
     expect(sql).toContain("where s.user_id = auth.uid()");
+  });
+  it("turns total weight lifted into something relatable", () => {
+    expect(liftComparison(82_760)).toEqual({ emoji: "✈️", text: "2 Boeing 737s" });
+    expect(liftComparison(40_000)).toEqual({ emoji: "🚌", text: "3.6 school buses" });
+    expect(liftComparison(6_000)).toEqual({ emoji: "🐘", text: "1 elephant" });
+    expect(liftComparison(99_000)).toEqual({ emoji: "✈️", text: "2.4 Boeing 737s" });
+    expect(liftComparison(450 * 12)).toEqual({ emoji: "🚗", text: "3 cars" });
+    expect(liftComparison(300)).toBeNull();
+  });
+  it("compares months only when both have data", () => {
+    expect(pctChange(1180, 1000)).toBe(18);
+    expect(pctChange(880, 1000)).toBe(-12);
+    expect(pctChange(1000, 0)).toBeNull();
+    expect(pctChange(0, 1000)).toBeNull();
+  });
+  it("formats training time and compact weights", () => {
+    expect(formatTrainingTime(45)).toEqual({ value: "45", label: "Minutes" });
+    expect(formatTrainingTime(60)).toEqual({ value: "1", label: "Hour" });
+    expect(formatTrainingTime(750)).toEqual({ value: "12.5", label: "Hours" });
+    expect(compactCount(1_842)).toBe("1,842");
+    expect(compactCount(12_450)).toBe("12.5K");
+    expect(compactWeight(82_760, "lb")).toBe("182K lb");
+    expect(compactWeight(20_000, "kg")).toBe("20K kg");
+  });
+  it("keeps training stats private to the viewer (same POV rules as the recap)", () => {
+    const sql = readFileSync("supabase/migrations/20261005230000_month_training_stats.sql", "utf8");
+    expect(sql).toContain("public.portal_viewer_uid(_as_user)");
+    expect(sql).toContain("client_qualifying_sets(me.client_id)");
+    expect(sql).toMatch(/revoke all on function public\.get_month_training_stats\(date, uuid\) from public, anon/);
   });
 });

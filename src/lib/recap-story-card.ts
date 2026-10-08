@@ -3,7 +3,7 @@
  * Same visual language and safe zone as the workout story card.
  */
 import { STORY_H, STORY_W, SAFE_BOTTOM, SAFE_TOP, ellipsize, fitFont, font, loadImage, roundRect } from "@/lib/workout-story-card";
-import { monthName, type LeagueRecap } from "@/lib/league-recap";
+import { compactWeight, monthName, type LeagueRecap } from "@/lib/league-recap";
 
 const RED = "#ef3340";
 
@@ -101,9 +101,12 @@ export async function drawRecapStory(canvas: HTMLCanvasElement, r: LeagueRecap, 
   // Stat tiles
   const recordsEra = r.month_start >= "2026-10-01";
   const records = me.atpr_lifts + me.program_pr_lifts + me.block_pr_lifts;
+  const t = r.training;
   const stats = [
     { label: "WORKOUTS", value: String(me.workouts_completed) },
-    { label: "FULLY LOGGED", value: String(me.fully_logged) },
+    t && t.tonnage_kg > 0
+      ? { label: "LIFTED", value: compactWeight(t.tonnage_kg, t.unit === "kg" ? "kg" : "lb") }
+      : { label: "FULLY LOGGED", value: String(me.fully_logged) },
     recordsEra
       ? { label: me.atpr_lifts ? "ATPRs" : "PRs", value: String(me.atpr_lifts || records) }
       : { label: "WEIGH-INS", value: String(me.bodyweight_logs) },
