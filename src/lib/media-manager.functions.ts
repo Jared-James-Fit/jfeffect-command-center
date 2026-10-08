@@ -131,12 +131,10 @@ export const inviteMediaManager = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // A finance login is a separate staff-only account: its email can't
-    // already belong to a user, client or member. Checked again on redeem.
-    if (data.role === "finance") {
-      const { assertEmailFreeForStaffOnly } = await import("@/lib/setup-link-guard.server");
-      await assertEmailFreeForStaffOnly(supabaseAdmin, data.email);
-    }
+    // Staff logins are separate from personal ones: the email can't already
+    // belong to a login, client or member. Checked again on redeem.
+    const { assertEmailFreeForStaffInvite } = await import("@/lib/setup-link-guard.server");
+    await assertEmailFreeForStaffInvite(supabaseAdmin, data.email);
     // Multiple Media Managers are allowed — they all share the same admin workspace.
     // Guard only against an outstanding pending invite for the SAME email.
     const { data: pendingSame } = await supabaseAdmin
@@ -222,10 +220,8 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => RedeemInput.parse(i))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const {
-      findAuthUserByEmail, assertNotPrivilegedUser, assertInviteRoleRedeemable,
-      isStaffOnlyRole, assertEmailFreeForStaffOnly, finalizeStaffOnlyUser,
-    } = await import("@/lib/setup-link-guard.server");
+    const { assertInviteRoleRedeemable, assertEmailFreeForStaffInvite, finalizeStaffOnlyUser } =
+      await import("@/lib/setup-link-guard.server");
     const { data: invite, error } = await supabaseAdmin
       .from("staff_invites").select("*").eq("setup_token", data.token).maybeSingle();
     if (error || !invite) throw new Error("Invalid setup link");
@@ -235,47 +231,23 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
       throw new Error("Setup link expired — ask the admin for a new one");
     }
 
-    // Staff-only roles (finance) always get a brand-new login of their own.
-    if (isStaffOnlyRole(invite.role)) {
-      await assertEmailFreeForStaffOnly(supabaseAdmin, invite.email);
-      const { data: created, error: cErr } = await supabaseAdmin.auth.admin.createUser({
-        email: invite.email, password: data.password, email_confirm: true,
-        app_metadata: { account_kind: "staff" },
-        user_metadata: { full_name: `${invite.first_name ?? ""} ${invite.last_name ?? ""}`.trim() },
-      });
-      if (cErr) throw new Error(cErr.message);
-      await finalizeStaffOnlyUser(supabaseAdmin, created.user.id, invite.role);
-      await supabaseAdmin.from("staff_invites").update({
-        status: "redeemed", redeemed_user_id: created.user.id, redeemed_at: new Date().toISOString(),
-        setup_token: null,
-      }).eq("id", invite.id);
-      return { ok: true, email: invite.email, role: invite.role };
-    }
-
-    let userId: string | null = null;
-    const existing = await findAuthUserByEmail(supabaseAdmin, invite.email);
-    if (existing) {
-      await assertNotPrivilegedUser(supabaseAdmin, existing.id);
-      userId = existing.id;
-      await supabaseAdmin.auth.admin.updateUserById(existing.id, { password: data.password });
-    } else {
-      const { data: created, error: cErr } = await supabaseAdmin.auth.admin.createUser({
-        email: invite.email, password: data.password, email_confirm: true,
-        user_metadata: { full_name: `${invite.first_name ?? ""} ${invite.last_name ?? ""}`.trim() },
-      });
-      if (cErr) throw new Error(cErr.message);
-      userId = created.user.id;
-    }
-
-    await supabaseAdmin.from("user_roles")
-      .upsert({ user_id: userId, role: invite.role }, { onConflict: "user_id,role" });
+    // Staff accounts are separate from personal ones: an invite always
+    // creates a brand-new staff-only login, never reuses an existing one.
+    await assertEmailFreeForStaffInvite(supabaseAdmin, invite.email);
+    const { data: created, error: cErr } = await supabaseAdmin.auth.admin.createUser({
+      email: invite.email, password: data.password, email_confirm: true,
+      app_metadata: { account_kind: "staff" },
+      user_metadata: { full_name: `${invite.first_name ?? ""} ${invite.last_name ?? ""}`.trim() },
+    });
+    if (cErr) throw new Error(cErr.message);
+    await finalizeStaffOnlyUser(supabaseAdmin, created.user.id, invite.role);
 
     await supabaseAdmin.from("staff_invites").update({
-      status: "redeemed", redeemed_user_id: userId, redeemed_at: new Date().toISOString(),
+      status: "redeemed", redeemed_user_id: created.user.id, redeemed_at: new Date().toISOString(),
       setup_token: null,
     }).eq("id", invite.id);
 
-    return { ok: true, email: invite.email };
+    return { ok: true, email: invite.email, role: invite.role };
   });
 
 /* ---------- Approval workflow ---------- */

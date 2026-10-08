@@ -14,15 +14,13 @@ function fakeAdmin(opts: { users?: Array<{ id: string; email: string }>; roles?:
       },
     },
     from: () => {
-      let userId = "";
-      let allowed: string[] = [];
+      let userIds: string[] = [];
       const q: any = {
         select: () => q,
-        eq: (_col: string, v: string) => { userId = v; return q; },
-        in: async (_col: string, v: string[]) => {
-          allowed = v;
-          const data = (roles[userId] ?? []).filter((r) => allowed.includes(r)).map((role) => ({ role }));
-          return { data, error: null };
+        in: (col: string, v: string[]) => {
+          if (col === "user_id") { userIds = v; return q; }
+          const data = userIds.flatMap((id) => (roles[id] ?? []).filter((r) => v.includes(r)).map((role) => ({ user_id: id, role })));
+          return Promise.resolve({ data, error: null });
         },
       };
       return q;
@@ -44,10 +42,11 @@ describe("findAuthUserByEmail", () => {
 });
 
 describe("assertNotPrivilegedUser", () => {
-  it("refuses admin and coach accounts", async () => {
-    const admin = fakeAdmin({ roles: { owner: ["admin", "client"], coach1: ["coach"] } });
-    await expect(assertNotPrivilegedUser(admin, "owner")).rejects.toThrow(/staff account/);
-    await expect(assertNotPrivilegedUser(admin, "coach1")).rejects.toThrow(/staff account/);
+  it("refuses every staff account", async () => {
+    const admin = fakeAdmin({ roles: { owner: ["admin", "client"], coach1: ["coach"], mm: ["media_manager"], books: ["finance"] } });
+    for (const id of ["owner", "coach1", "mm", "books"]) {
+      await expect(assertNotPrivilegedUser(admin, id)).rejects.toThrow(/staff account/);
+    }
   });
 
   it("allows client and member accounts", async () => {

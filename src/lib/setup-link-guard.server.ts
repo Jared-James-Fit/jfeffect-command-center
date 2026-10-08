@@ -1,27 +1,27 @@
 /**
- * Guards for public setup-link redemption (member and staff invites).
+ * Guards for account setup links and for the staff / personal account split.
  *
- * A setup token sets the password of whatever auth user owns the invite's
- * email. These helpers stop that from ever touching an admin or coach
- * account, and find existing users without missing anyone past the first
- * page of auth users.
+ * Staff accounts are separate from personal accounts:
+ *   - anyone with a staff role (admin, coach, media_manager, finance) uses a
+ *     staff-only login with its own email;
+ *   - a personal client or member account never holds a staff role;
+ *   - a staff account never has a clients or app_members row.
+ * One person's staff roles share one staff account.
+ *
+ * The database enforces the same rules for new grants and links (migration
+ * 20261015090300_staff_personal_split.sql); these helpers give the admin a
+ * clear error first.
  *
  * Server-only. Do NOT import from client modules.
  */
 
 const PAGE_SIZE = 1000;
 
-// Roles a staff invite link may grant. Admin (and any other privileged role)
-// is granted only by an existing admin inside the app, never by a link.
+export const STAFF_ROLES = ["admin", "coach", "media_manager", "finance"] as const;
+
+// Roles a staff invite link may grant. Admin is granted only by an existing
+// admin inside the app, never by a link. Coaches have their own invite flow.
 const LINK_REDEEMABLE_ROLES = new Set(["media_manager", "finance"]);
-
-// Roles that live on their own staff-only login: a fresh account with its own
-// email, no client role, no clients/app_members row, no client portal.
-const STAFF_ONLY_ROLES = new Set(["finance"]);
-
-export function isStaffOnlyRole(role: string | null | undefined): boolean {
-  return !!role && STAFF_ONLY_ROLES.has(role);
-}
 
 export function assertInviteRoleRedeemable(role: string | null | undefined): void {
   if (!role || !LINK_REDEEMABLE_ROLES.has(role)) {
@@ -41,34 +41,80 @@ export async function findAuthUserByEmail(supabaseAdmin: any, email: string): Pr
   }
 }
 
-export async function assertNotPrivilegedUser(supabaseAdmin: any, userId: string): Promise<void> {
+async function targetUserIds(supabaseAdmin: any, opts: { email?: string | null; userId?: string | null }): Promise<string[]> {
+  const ids = new Set<string>();
+  if (opts.userId) ids.add(opts.userId);
+  if (opts.email) {
+    const match = await findAuthUserByEmail(supabaseAdmin, opts.email);
+    if (match) ids.add(match.id);
+  }
+  return Array.from(ids);
+}
+
+/**
+ * Personal side: refuse when the email or user belongs to a staff account.
+ * Used before creating or sending credentials for a client or member, and
+ * before a setup link sets a password.
+ */
+export async function assertNotStaffAccount(
+  supabaseAdmin: any,
+  opts: { email?: string | null; userId?: string | null },
+  message = "This email belongs to a staff account. Use a different email for this client or member.",
+): Promise<void> {
+  const ids = await targetUserIds(supabaseAdmin, opts);
+  if (ids.length === 0) return;
   const { data, error } = await supabaseAdmin
     .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .in("role", ["admin", "coach"]);
+    .select("user_id, role")
+    .in("user_id", ids)
+    .in("role", STAFF_ROLES as unknown as string[]);
   if (error) throw new Error(error.message);
-  if (data && data.length > 0) {
-    throw new Error(
-      "This email belongs to a staff account, so this link can't set its password. Sign in with your existing password or use Forgot password.",
-    );
+  if (data && data.length > 0) throw new Error(message);
+}
+
+/** A setup link must never set the password of a staff account. */
+export async function assertNotPrivilegedUser(supabaseAdmin: any, userId: string): Promise<void> {
+  await assertNotStaffAccount(
+    supabaseAdmin,
+    { userId },
+    "This email belongs to a staff account, so this link can't set its password. Sign in with your existing password or use Forgot password.",
+  );
+}
+
+/**
+ * Staff side: refuse when the email or user is a personal account, meaning it
+ * has a clients or app_members row. Used before inviting or granting a staff role.
+ */
+export async function assertNoPersonalAccount(
+  supabaseAdmin: any,
+  opts: { email?: string | null; userId?: string | null },
+): Promise<void> {
+  const personal = "This email belongs to a client or member account. Staff need a separate staff-only email.";
+  const ids = await targetUserIds(supabaseAdmin, opts);
+  for (const table of ["clients", "app_members"]) {
+    if (ids.length) {
+      const { data, error } = await supabaseAdmin.from(table).select("id").in("user_id", ids).limit(1);
+      if (error) throw new Error(error.message);
+      if (data && data.length > 0) throw new Error(personal);
+    }
+    if (opts.email) {
+      const { data, error } = await supabaseAdmin.from(table).select("id").ilike("email", opts.email.trim()).limit(1);
+      if (error) throw new Error(error.message);
+      if (data && data.length > 0) throw new Error(personal);
+    }
   }
 }
 
 /**
- * A staff-only login must be a brand-new account. Refuse an email that already
- * belongs to an auth user, a client or a member, so a client's own login can
- * never be turned into (or merged with) a staff login.
+ * A staff invite link always creates a brand-new staff-only login. Refuse an
+ * email that already has any login (personal or staff) or a client/member
+ * record. Adding a role to an existing staff account is an in-app grant.
  */
-export async function assertEmailFreeForStaffOnly(supabaseAdmin: any, email: string): Promise<void> {
-  const target = email.trim().toLowerCase();
-  const taken = "This email already has a JF Effect account. A finance login needs its own email. Ask the admin for an invite to a different address.";
-  if (await findAuthUserByEmail(supabaseAdmin, target)) throw new Error(taken);
-  for (const table of ["clients", "app_members"]) {
-    const { data, error } = await supabaseAdmin.from(table).select("id").ilike("email", target).limit(1);
-    if (error) throw new Error(error.message);
-    if (data && data.length > 0) throw new Error(taken);
+export async function assertEmailFreeForStaffInvite(supabaseAdmin: any, email: string): Promise<void> {
+  if (await findAuthUserByEmail(supabaseAdmin, email)) {
+    throw new Error("This email already has a JF Effect login. A staff invite needs an email with no account. Ask the admin to add the role to an existing staff login instead.");
   }
+  await assertNoPersonalAccount(supabaseAdmin, { email });
 }
 
 /**
@@ -82,7 +128,7 @@ export async function finalizeStaffOnlyUser(supabaseAdmin: any, userId: string, 
     .from("user_roles").upsert({ user_id: userId, role }, { onConflict: "user_id,role" });
   if (roleErr) throw new Error(roleErr.message);
   const { error: delErr } = await supabaseAdmin
-    .from("user_roles").delete().eq("user_id", userId).neq("role", role);
+    .from("user_roles").delete().eq("user_id", userId).eq("role", "client");
   if (delErr) throw new Error(delErr.message);
   for (const table of ["clients", "app_members"]) {
     const { data, error } = await supabaseAdmin.from(table).select("id").eq("user_id", userId).limit(1);
