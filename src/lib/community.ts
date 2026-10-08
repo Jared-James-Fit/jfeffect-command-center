@@ -743,7 +743,8 @@ export function lockInCameraCard(i: { workoutTitle: string; athleteName: string 
       sessionLine: null,
       lockedIn: { time: lockInTimeLabel(now.toISOString()) ?? "", live: true },
     },
-    looks: i.plan.length ? ["lockin", "lockclock", "lockplan"] : ["lockin", "lockclock"],
+    // "plain" last: post just the photo, no filter
+    looks: i.plan.length ? ["lockin", "lockclock", "lockplan", "plain"] : ["lockin", "lockclock", "plain"],
   };
 }
 

@@ -47,6 +47,7 @@ import {
   type WorkoutShareStats,
 } from "@/lib/community";
 import { availableTemplates, cameraLooks, exportType, wrapLines } from "@/lib/workout-share-card";
+import { densityFor, remapStickers, snapAngle } from "@/components/community/sticker-layer";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const migration = read("supabase/migrations/20261006090000_community_sharing.sql");
@@ -984,17 +985,17 @@ describe("stat cards anyone can read: receipt, streak, vs last time", () => {
     const base = buildShareCardFields({ stats: tonight, unit: "lb", athleteName: "Jared", dateLabel: "Wed, Oct 7" });
     expect(base.workoutTitle).toBe("Secondary Deadlift + Secondary Bench");
     expect(availableTemplates({ ...base, media: null })).toEqual(["progress", "receipt", "streak", "stats", "photo", "volume", "sticker"]);
-    expect(cameraLooks(base)).toEqual(["photo", "progress", "receipt", "streak", "stats", "volume"]);
+    expect(cameraLooks(base)).toEqual(["photo", "progress", "receipt", "streak", "stats", "volume", "plain"]);
     // old posts / previews without the extras keep the old set
     expect(availableTemplates({ isPr: false, exercises: [], volume: null, media: null })).toEqual(["photo", "sticker"]);
   });
   it("lock in on the camera: Locked in · Clock · Today's plan", () => {
     const c = lockInCameraCard({ workoutTitle: "Monday — Lower B", athleteName: "Marc Smith", plan: [{ name: "Squat", detail: "4 × 3" }] });
-    expect(c.looks).toEqual(["lockin", "lockclock", "lockplan"]);
+    expect(c.looks).toEqual(["lockin", "lockclock", "lockplan", "plain"]);
     expect(c.data.workoutTitle).toBe("Lower B");
     expect(c.data.athleteName).toBe("Marc");
     expect(c.data.lockedIn?.live).toBe(true);
-    expect(lockInCameraCard({ workoutTitle: "Lower B", athleteName: null, plan: [] }).looks).toEqual(["lockin", "lockclock"]);
+    expect(lockInCameraCard({ workoutTitle: "Lower B", athleteName: null, plan: [] }).looks).toEqual(["lockin", "lockclock", "plain"]);
   });
 });
 
@@ -1071,5 +1072,38 @@ describe("feels like our app, not Instagram", () => {
     expect(layer).toContain("fontSize: m.size * k");
     // style / colour taps keep the keyboard up
     expect(layer).toContain("onPointerDown={(e) => e.preventDefault()}");
+  });
+});
+
+describe("post what you see; rotate smooth and sharp; snap to centre", () => {
+  const read = (f: string) => readFileSync(f, "utf8");
+  const studio = read("src/components/community/share-studio.tsx");
+  const layer = read("src/components/community/sticker-layer.tsx");
+  it("the post is the look you're on (4:5), 'No filter' and Hide weights post just the photo", () => {
+    expect(studio).toContain('if (card.look === "plain" || (post?.showHideLoads && hideLoads)) return finalPhoto();');
+    expect(studio).toContain('paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot.src }, logo, 1);');
+    expect(studio).toContain("await post.onPost({ photo: await postPhoto(),");
+  });
+  it("snaps to straight angles and to the centre lines (with a guide)", () => {
+    expect(snapAngle(0.03).r).toBe(0);
+    expect(snapAngle(Math.PI / 2 + 0.04)).toEqual({ r: Math.PI / 2, snapped: true });
+    expect(snapAngle(0.3).snapped).toBe(false);
+    expect(layer).toContain("const v = Math.abs(nx - 0.5) * width < SNAP_PX;");
+    expect(layer).toContain('guides.v ? "bg-[#ffd400] opacity-100" : "bg-white opacity-25"');
+  });
+  it("redraws a pinched item at the density its size needs, within canvas limits", () => {
+    expect(densityFor(1, 0.35, 3, 900)).toBe(2);
+    expect(densityFor(3, 0.35, 3, 900)).toBe(4);
+    expect(densityFor(8, 0.35, 3, 900)).toBeLessThanOrEqual(4096 / 900);
+    // moved on the GPU, smooth
+    expect(layer).toContain("translate3d(${it.x * width}px, ${it.y * height}px, 0) translate(-50%, -50%) rotate(${it.r}rad) scale(${it.s})");
+  });
+  it("stickers keep their spot on the photo when the post is the 4:5 version", () => {
+    const photo = { width: 1440, height: 1920 } as any;
+    const it: any = { x: 0.5, y: 0.5, s: 1 };
+    const [m] = remapStickers([it], photo, { w: 1080, h: 1920 }, { w: 1080, h: 1350 });
+    expect(m.x).toBeCloseTo(0.5);
+    expect(m.y).toBeCloseTo(0.5);
+    expect(m.s).toBeCloseTo(0.75); // the 4:5 shows the photo smaller
   });
 });

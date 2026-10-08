@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { cn } from "@/lib/utils";
 import type { CommunityVisibility } from "@/lib/community";
 import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
-import { StickerLayer, bakeStickers, drawStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
+import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 
 export type CameraMode = { key: string; label: string };
 
@@ -377,11 +377,25 @@ export function ShareStudio({
     return canvasToBlob(c, "image/jpeg", 0.92);
   };
 
+  // What gets posted is what you see: the look you're on, as a 4:5 feed card
+  // (stickers moved onto the same spot of the photo). "No filter" posts the
+  // photo itself; so does Hide weights, so a card never shows your numbers.
+  const postPhoto = async (): Promise<File | null> => {
+    if (!shot || !card) return null;
+    if (card.look === "plain" || (post?.showHideLoads && hideLoads)) return finalPhoto();
+    const FEED_H = 1350;
+    const c = document.createElement("canvas");
+    paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot.src }, logo, 1);
+    drawStickers(c.getContext("2d")!, remapStickers(items, shot.src, { w: CARD_W, h: CARD_H }, { w: CARD_W, h: FEED_H }), CARD_W, FEED_H);
+    const b = await canvasToBlob(c, "image/jpeg", 0.92);
+    return b ? new File([b], `jf-${card.look}.jpg`, { type: "image/jpeg" }) : finalPhoto();
+  };
+
   const doPost = async () => {
     if (!post || busy || posted || !card) return;
     setBusy("post");
     try {
-      await post.onPost({ photo: await finalPhoto(), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card.look });
+      await post.onPost({ photo: await postPhoto(), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card.look });
       setPosted(true);
       setTimeout(onClose, 900);
     } catch (e: any) {
@@ -583,7 +597,8 @@ export function ShareStudio({
                   <button
                     type="button"
                     onClick={() => {
-                      setHideLoads((v) => !v);
+                      if (!hideLoads) toast.message("Weights hidden", { description: "Your post will be just the photo, no numbers." });
+                      setHideLoads(!hideLoads);
                       setPosted(false);
                     }}
                     className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-full active:scale-95", hideLoads ? "bg-white text-black" : "bg-white/10")}
