@@ -2,7 +2,6 @@ import React, { createContext, Fragment, useCallback, useContext, useEffect, use
 import { getMicStream } from "@/lib/audio-session";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -51,6 +50,7 @@ import { ScheduledStrip } from "@/components/messages/scheduled-strip";
 import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { ScheduleButton } from "@/components/messages/schedule-button";
 import { renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
+import { CommunityPostChatCard, type PostCardAttachment } from "@/components/community/post-chat-card";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
@@ -445,24 +445,6 @@ function LinkAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }
  * A community post shared in the chat (e.g. the coach's birthday post): one
  * tap opens it in the community, right in the app.
  */
-function CommunityPostChatCard({ postId, title, snippet, role }: { postId: string; title: string | null; snippet: string | null; role: SenderRole }) {
-  const birthday = /birthday/i.test(title ?? "");
-  return (
-    <Link
-      to={role === "client" ? "/portal/community" : "/admin/community"}
-      hash={`post=${postId}`}
-      className="flex w-[260px] max-w-full items-center gap-3 rounded-2xl border border-border bg-background p-3 text-left text-foreground shadow-sm transition hover:bg-muted/60 active:scale-[0.98]"
-    >
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-[22px]">{birthday ? "🎂" : "💬"}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-bold">{title || "Community post"}</span>
-        {snippet && <span className="block truncate text-[12px] text-muted-foreground">{snippet}</span>}
-        <span className="mt-0.5 block text-[12px] font-bold text-primary">View post</span>
-      </span>
-    </Link>
-  );
-}
-
 function AttachmentView({
   att,
   mine,
@@ -479,7 +461,7 @@ function AttachmentView({
   onUseReply?: (text: string) => void;
 }) {
   if (att.kind === "community_post" && att.post_id) {
-    return <CommunityPostChatCard postId={att.post_id} title={att.title ?? null} snippet={att.request_note ?? null} role={role} />;
+    return <CommunityPostChatCard att={att as PostCardAttachment} mine={mine} staff={role !== "client"} />;
   }
   if (att.kind === "checkin_request" && att.checkin_submission_id && att.checkin_task_type) {
     return (

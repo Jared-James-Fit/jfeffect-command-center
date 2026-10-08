@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from "react";
-import { BadgeCheck, Lock, MessageCircle, Play } from "lucide-react";
+import { BadgeCheck, Lock, MessageCircle, Play, Send } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import {
@@ -26,6 +26,8 @@ import { WinsStatsCard } from "@/components/community/wins-stats";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
+import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
+import { useAuth } from "@/lib/auth";
 import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
@@ -360,6 +362,10 @@ export function ReactionBar({
   onOpenAuthor?: (a: CommunityAuthor) => void;
 }) {
   const [listFor, setListFor] = useState<string | null>(null);
+  const [messaging, setMessaging] = useState(false);
+  const { role } = useAuth();
+  // Message the person who posted (never yourself; coaches use team chat with each other).
+  const canMessage = !post.is_mine && !(post.author.is_coach && (role === "admin" || role === "coach"));
   const who = reactorsLine(post);
   // the little ❤️🔥😂 beside the names, once it's not just hearts
   const kinds = reactionKinds(post);
@@ -401,7 +407,22 @@ export function ReactionBar({
           {post.comment_count > 0 ? post.comment_count : "Comment"}
         </button>
       )}
+      {canMessage && (
+        <button
+          type="button"
+          onClick={() => setMessaging(true)}
+          className={cn(
+            "grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
+            !onOpenComments && "ml-auto",
+          )}
+          aria-label={`Message ${post.author.name}`}
+          title={`Message ${post.author.name}`}
+        >
+          <Send className="h-[18px] w-[18px] -rotate-12" />
+        </button>
+      )}
       <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
+      {canMessage && <MessageAuthorSheet post={post} open={messaging} onOpenChange={setMessaging} />}
     </div>
   );
 }

@@ -124,6 +124,6 @@ describe("POV leaves no 'seen' marks", () => {
     const portal = readFileSync("src/routes/_authenticated/portal/messages.tsx", "utf8");
     expect(portal).toContain('useChatPresence(viewingAsClient ? null : client?.id ?? null, "client")');
     const group = readFileSync("src/components/group-message-thread.tsx", "utf8");
-    expect(group).toContain("useGroupPresence(viewingAsClient ? null : groupId");
+    expect(group).toContain("useGroupPresence(viewingAsClient || hidePresence ? null : groupId");
   });
 });

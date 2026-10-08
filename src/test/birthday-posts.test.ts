@@ -110,7 +110,8 @@ describe("birthday posts: reviewed by the coach, then out at 8am their time", ()
   it("Messenger shows the post as a card that opens it in the app", () => {
     const thread = read("src/components/message-thread.tsx");
     expect(thread).toContain('if (att.kind === "community_post" && att.post_id) {');
-    expect(thread).toContain('to={role === "client" ? "/portal/community" : "/admin/community"}');
+    expect(thread).toContain('<CommunityPostChatCard att={att as PostCardAttachment} mine={mine} staff={role !== "client"} />');
+    expect(read("src/components/community/post-chat-card.tsx")).toContain('to={staff ? "/admin/community" : "/portal/community"}');
   });
   it("the dashboard's own birthday message goes through the normal send (so it pushes)", () => {
     const w = read("src/components/upcoming-birthdays-widget.tsx");
