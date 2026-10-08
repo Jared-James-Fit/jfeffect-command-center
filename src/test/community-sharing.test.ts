@@ -47,7 +47,7 @@ import {
   type WorkoutShareStats,
 } from "@/lib/community";
 import { availableTemplates, cameraLooks, exportType, wrapLines } from "@/lib/workout-share-card";
-import { densityFor, remapStickers, snapAngle } from "@/components/community/sticker-layer";
+import { densityFor, highlightShape, nextTextStyle, remapStickers, snapAngle, TEXT_STYLES } from "@/components/community/sticker-layer";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const migration = read("supabase/migrations/20261006090000_community_sharing.sql");
@@ -1105,5 +1105,45 @@ describe("post what you see; rotate smooth and sharp; snap to centre", () => {
     expect(m.x).toBeCloseTo(0.5);
     expect(m.y).toBeCloseTo(0.5);
     expect(m.s).toBeCloseTo(0.75); // the 4:5 shows the photo smaller
+  });
+});
+
+describe("Highlight text: a box carved round each line", () => {
+  const layer = readFileSync("src/components/community/sticker-layer.tsx", "utf8");
+  const o = { lineH: 80, padX: 24, padY: 8, r: 20 };
+  it("sits next to Box in the Aa cycle, and the cycle visits every style", () => {
+    expect(TEXT_STYLES[4]).toBe("Highlight");
+    expect(nextTextStyle(1)).toBe(4);
+    const seen = new Set<number>();
+    let s = 0;
+    for (let i = 0; i < TEXT_STYLES.length; i++) seen.add((s = nextTextStyle(s)));
+    expect(seen.size).toBe(TEXT_STYLES.length);
+    expect(s).toBe(0);
+  });
+  it("each line gets its own width; lines touch with no gap", () => {
+    const { boxes } = highlightShape([600, 300, 500], o);
+    expect(boxes.map((b) => b.half)).toEqual([324, 174, 274]);
+    expect(boxes[0].top).toBe(0);
+    for (let i = 1; i < boxes.length; i++) expect(boxes[i].top).toBe(boxes[i - 1].bottom);
+    expect(boxes[2].bottom).toBe(8 * 2 + 80 * 3);
+  });
+  it("rounds only the exposed corners and curves the inside ones", () => {
+    const { boxes, fillets } = highlightShape([600, 300], o);
+    expect(boxes[0].radii).toEqual([20, 20, 20, 20]); // wider line: all four show
+    expect(boxes[1].radii).toEqual([0, 0, 20, 20]); // narrow line tucks under it
+    expect(fillets).toEqual([{ x: 174, y: 88, r: 20, down: true }]);
+    // narrow on top of wide: the curve sits above the seam
+    expect(highlightShape([300, 600], o).fillets[0].down).toBe(false);
+  });
+  it("near-equal lines share a width so the edge doesn't stair-step", () => {
+    const { boxes, fillets } = highlightShape([500, 480, 300], o);
+    expect(boxes[0].half).toBe(boxes[1].half);
+    expect(boxes[0].radii.slice(2)).toEqual([0, 0]);
+    expect(boxes[1].radii.slice(0, 2)).toEqual([0, 0]);
+    expect(fillets).toHaveLength(1);
+  });
+  it("the editor shows the card's own render of it while you type", () => {
+    expect(layer).toContain("renderText(hlText, 4, hlColor)");
+    expect(layer).toContain('caretColor: readable(editing.color)');
   });
 });
