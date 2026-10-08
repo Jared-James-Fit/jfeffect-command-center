@@ -23,6 +23,27 @@ async function isAdmin(supabase: any, userId: string): Promise<boolean> {
   return (data ?? []).some((r: any) => r.role === "admin");
 }
 
+/**
+ * A coach may only book their own clients, and a credit package must belong
+ * to the appointment's client: completing or cancelling runs the credit
+ * ledger with the service role, so this is what keeps a coach from spending
+ * another client's sessions.
+ */
+async function assertAppointmentTargets(
+  supabase: any, userId: string, clientId: string | null | undefined, packageId: string | null | undefined,
+) {
+  if (clientId && !(await isAdmin(supabase, userId))) {
+    const { data: assigned } = await supabase.rpc("is_assigned_coach", { _client_id: clientId });
+    if (!assigned) throw new Error("You can only book your own clients");
+  }
+  if (packageId) {
+    if (!clientId) throw new Error("A session package needs a client");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: pkg } = await supabaseAdmin.from("purchase_records").select("client_id").eq("id", packageId).maybeSingle();
+    if (!pkg || pkg.client_id !== clientId) throw new Error("That session package belongs to a different client");
+  }
+}
+
 async function scheduleReminders(opts: {
   appointmentId: string;
   startsAt: string;
@@ -197,6 +218,7 @@ export const createAppointment = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     let coachId = data.host_coach_id ?? (await getCoachIdForUser(supabase, userId));
     if (!coachId) throw new Error("No host coach selected");
+    await assertAppointmentTargets(supabase, userId, data.client_id, data.session_credit_package_id);
 
     // Resolve attendee info
     let attendeeEmail = data.external_email || null;
@@ -287,6 +309,15 @@ export const updateAppointment = createServerFn({ method: "POST" })
     const { id, ...patch } = data as any;
     const { data: existing } = await supabase.from("appointments").select("*").eq("id", id).maybeSingle();
     if (!existing) throw new Error("Appointment not found");
+    // Re-check only what changes, so a host can still reschedule a booking
+    // an admin made for them.
+    if ("client_id" in patch || "session_credit_package_id" in patch) {
+      await assertAppointmentTargets(
+        supabase, userId,
+        "client_id" in patch ? patch.client_id : existing.client_id,
+        "session_credit_package_id" in patch ? patch.session_credit_package_id : existing.session_credit_package_id,
+      );
+    }
     const update: any = { ...patch };
     delete update.meet_enabled;
     delete update.reminder_offsets_minutes;

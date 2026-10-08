@@ -28,11 +28,16 @@ export const shareRecipeWithClients = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    await assertCoachOrAdmin(supabase, userId);
+    const roles = await assertCoachOrAdmin(supabase, userId);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const ids = Array.from(new Set(data.client_ids));
+    if (!roles.includes("admin")) {
+      // Coaches share with their own clients only (clients RLS = assigned).
+      const { data: visible } = await supabase.from("clients").select("id").in("id", ids);
+      if ((visible ?? []).length !== ids.length) throw new Error("You can only share with your own clients");
+    }
 
     const { data: recipe, error: rErr } = await supabaseAdmin
       .from("recipes").select("id, access_scope").eq("id", data.recipe_id).maybeSingle();
