@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { PostCard } from "@/components/community/post-card";
+import { doubleTapTipKeys } from "@/components/community/reaction-button";
 import { CommentsSheet } from "@/components/community/comments-sheet";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
@@ -37,6 +38,9 @@ function personFromHash(): string | null {
  * profile per person, and a full workout page per post. Shared by the client
  * portal and the coach view. No follower counts, no rankings.
  */
+/** The double-tap tip plays once per visit (app load), not on every feed render. */
+let tipShownThisVisit = false;
+
 export function CommunityScreen({ canShare = false, previewOnly = false }: { canShare?: boolean; previewOnly?: boolean }) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
@@ -51,12 +55,21 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
 
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
-  // "Double-tap to like" shows on the first post (a workout before a note)
-  // until the first double-tap; it's remembered on the account.
+  // "Double-tap to like": a few seconds on the first post (a workout before a
+  // note), once a visit, until the first double-tap, and only for the first
+  // few visits either way. Remembered on the account, not the device.
   const hints = useHintsSeen();
   const markHint = useMarkHintSeen();
   const onDoubleTap = useCallback(() => markHint("double_tap"), [markHint]);
-  const hintId = hints.data && !hints.data.includes("double_tap") ? (posts.find((p) => p.kind !== "note") ?? posts[0])?.id ?? null : null;
+  const [tipDone, setTipDone] = useState(tipShownThisVisit);
+  const tipVisit = hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k)) : undefined;
+  const hintId = !tipDone && tipVisit && posts.length ? ((posts.find((p) => p.kind !== "note") ?? posts[0])?.id ?? null) : null;
+  useEffect(() => {
+    if (!hintId || !tipVisit || tipShownThisVisit) return;
+    tipShownThisVisit = true;
+    markHint(tipVisit);
+  }, [hintId, tipVisit, markHint]);
+  const onTipDone = useCallback(() => setTipDone(true), []);
   const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? posts : []);
 
   // Opening the community clears the "new posts" badge (server-side, every device).
@@ -173,6 +186,7 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
               onOpenAuthor={openAuthor}
               doubleTapHint={p.id === hintId}
               onDoubleTap={onDoubleTap}
+              onTipDone={onTipDone}
             />
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
@@ -197,6 +211,7 @@ function PostRow(props: {
   onOpenAuthor: (a: CommunityAuthor) => void;
   doubleTapHint?: boolean;
   onDoubleTap?: () => void;
+  onTipDone?: () => void;
 }) {
   const react = useReact(props.post, props.viewerIsStaff);
   return (

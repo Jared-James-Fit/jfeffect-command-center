@@ -17,6 +17,8 @@ export type AppEvent =
   | "lift_video_uploaded"
   | "client_lift_comment"
   | "agreement_signed"
+  | "birthday_post_ready"
+  | "birthday_post_reminder"
   // → client
   | "agreement_requested"
   | "checkin_requested"
@@ -42,6 +44,20 @@ type EventSpec = {
 };
 
 export const APP_EVENTS: Record<AppEvent, EventSpec> = {
+  // Birthday posts (birthday-posts.server.ts): the draft is ready the evening
+  // before, and a nudge on the day if it's still waiting. Opens the review.
+  birthday_post_ready: {
+    to: "staff", category: "wins",
+    title: (n) => `🎂 ${n}'s birthday post is ready`,
+    body: () => "Tap to review it. Approve and it goes out at 8am on their birthday.",
+    url: (id) => `/admin#birthday=${id}`, rateMinutes: 60,
+  },
+  birthday_post_reminder: {
+    to: "staff", category: "wins",
+    title: (n) => `🎂 It's ${n}'s birthday today`,
+    body: () => "Their post is still waiting. Tap to review and post it.",
+    url: (id) => `/admin#birthday=${id}`, rateMinutes: 60,
+  },
   checkin_submitted: {
     to: "staff", category: "check_ins",
     title: (n) => `Check-in from ${n}`,
@@ -118,8 +134,8 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
   // The only push the community ever sends: no likes, no peer activity.
   community_coach_recognition: {
     to: "client", category: "lift_reviews",
-    title: () => "Coach Feedback",
-    body: "Your coach saw your training.",
+    title: () => "Props from your coach",
+    body: (n) => `${n} saw your training.`,
     url: () => "/portal/community", rateMinutes: 180,
   },
 };

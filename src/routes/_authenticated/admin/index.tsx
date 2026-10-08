@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { CommunityCoachCard } from "@/components/community/community-entry";
+import { BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo, Suspense } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -456,6 +457,11 @@ function AdminDashboard() {
       >
         <DriveSetupBanner />
         <NotificationSetupPrompt problemsOnly />
+
+        {/* ---------------- BIRTHDAY POSTS: drafts to review (only when there are some) ---------------- */}
+        <SectionErrorBoundary label="Birthday posts">
+          <BirthdayPostsCard />
+        </SectionErrorBoundary>
 
         {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
         <SnapshotGrid tiles={snapshot} loading={directoryLoading} />

@@ -1275,11 +1275,17 @@ describe("like: tap the heart, hold for more, double-tap the post", () => {
     expect(detail).toContain("if (!post.my_reaction) onReact(post, REACTION.key);");
     expect(detail).toContain("const onHeroTap = useDoubleTap(() => {");
   });
-  it("shows the double-tap demo on one post until the first double-tap, saved on the account", () => {
-    expect(screen).toContain('const hintId = hints.data && !hints.data.includes("double_tap")');
+  it("the double-tap demo is brief and out of the way: low pill, fades by itself, once a visit, retires after a few", () => {
     expect(screen).toContain("doubleTapHint={p.id === hintId}");
-    expect(card).toContain("{doubleTapHint && burst === 0 && <DoubleTapHint />}");
+    expect(screen).toContain('hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k))');
+    expect(screen).toContain("let tipShownThisVisit = false;");
+    expect(card).toContain("{doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}");
     expect(card).toContain("onDoubleTap?.();");
+    expect(btn).toContain('className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center"');
+    expect(btn).toContain('e.animationName === "community-hint-life" && onDone?.()');
+    expect(read("src/styles.css")).toContain(".community-hint { animation: community-hint-life 5.2s ease-out forwards; }");
+    // not on the post page (the feed teaches it); a double-tap there still counts
+    expect(detail).not.toContain("<DoubleTapHint");
     expect(detail).toContain('markHint("double_tap");');
     // server-side (not localStorage), one row per tip, only your own
     const q = read("src/lib/community.queries.ts");
