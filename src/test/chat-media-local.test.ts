@@ -76,7 +76,7 @@ describe("chat videos kept on the phone", () => {
     expect(tile).toContain("playNativeFullscreen(playSrc, fallback)");
     expect(tile).toContain("warmChatVideo(path, { url: src, size })");
     for (const src of [shared, thread]) expect(src).toContain("path={att.storage_path}");
-    expect(shared).toContain("keepChatVideo(path, uploadFile);");
+    expect(shared).toContain("keepChatVideo(path, sentFile);");
   });
 
   it("isn't wiped by the launch-time cache cleanup, but is on sign-out", () => {

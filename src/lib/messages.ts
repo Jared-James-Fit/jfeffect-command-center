@@ -13,6 +13,8 @@ export type MessageAttachment = {
   storage_path?: string;
   /** Videos: a small still frame uploaded next to the file, so bubbles don't have to load the video itself. */
   thumbnail_storage_path?: string;
+  /** Videos: how the upload went on the sender's phone (compressed or not, why, timings). */
+  transfer?: Record<string, string | number | null>;
   width?: number;
   height?: number;
   peaks?: number[];

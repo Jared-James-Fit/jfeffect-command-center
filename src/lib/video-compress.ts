@@ -14,7 +14,7 @@
 // video track is refused rather than sending a broken clip.
 
 export const TARGET_LONG_EDGE = 1280; // 720p
-export const TARGET_VIDEO_BITRATE = 3_000_000; // ~3 Mbps: clean 720p for form checks on a phone
+export const TARGET_VIDEO_BITRATE = 2_500_000; // ~2.5 Mbps: clean 720p for form checks, ~19 MB per minute
 export const MAX_FPS = 30;
 /** Below this the original uploads about as fast as compressing would take. */
 export const MIN_BYTES_TO_COMPRESS = 4 * 1024 * 1024;
@@ -82,27 +82,53 @@ function supportsWebCodecs(): boolean {
 }
 
 /**
+ * What happened, for the upload record: "ok", or why the original was sent
+ * instead. Real phones are the only place to learn why compression did or
+ * didn't happen, so every exit says so.
+ */
+export type CompressOutcome = {
+  file: File | null;
+  reason: string;
+  ms: number;
+  durationSec?: number;
+};
+
+/**
  * Compress `file` for chat. Resolves to a smaller MP4 File, or null to mean
  * "upload the original". Never throws. `onProgress` reports 0..1.
  */
-export function compressVideoForChat(
+export async function compressVideoForChat(
   file: File,
   opts: { onProgress?: (p: number) => void; signal?: AbortSignal } = {},
 ): Promise<File | null> {
-  return compressVideoWith(file, "avc", opts);
+  return (await compressVideoDetailed(file, "avc", opts)).file;
 }
 
-/**
- * Same as compressVideoForChat with a chosen codec. Chat always uses "avc"
- * (H.264, plays everywhere); the codec is a parameter only so the pipeline can
- * be exercised in test browsers that lack H.264.
- */
+/** Same as compressVideoDetailed(...).file; kept for the test harness. */
 export async function compressVideoWith(
   file: File,
   codec: "avc" | "vp9",
   opts: { onProgress?: (p: number) => void; signal?: AbortSignal } = {},
 ): Promise<File | null> {
-  if (!supportsWebCodecs() || file.size < MIN_BYTES_TO_COMPRESS) return null;
+  return (await compressVideoDetailed(file, codec, opts)).file;
+}
+
+/**
+ * Compress with a chosen codec and say what happened. Chat always uses "avc"
+ * (H.264, plays everywhere); the codec is a parameter only so the pipeline can
+ * be exercised in test browsers that lack H.264.
+ */
+export async function compressVideoDetailed(
+  file: File,
+  codec: "avc" | "vp9",
+  opts: { onProgress?: (p: number) => void; signal?: AbortSignal } = {},
+): Promise<CompressOutcome> {
+  const t0 = Date.now();
+  let durationSec: number | undefined;
+  const done = (reason: string, out: File | null = null): CompressOutcome =>
+    ({ file: out, reason, ms: Date.now() - t0, durationSec });
+  if (!supportsWebCodecs()) return done("no-webcodecs");
+  if (file.size < MIN_BYTES_TO_COMPRESS) return done("small");
   let conversion: { cancel(): Promise<void> } | null = null;
   const onAbort = () => { void conversion?.cancel().catch(() => {}); };
   opts.signal?.addEventListener("abort", onAbort, { once: true });
@@ -111,8 +137,8 @@ export async function compressVideoWith(
     const mb = await import("mediabunny");
     const input = new mb.Input({ source: new mb.BlobSource(file), formats: mb.ALL_FORMATS });
     const track = await input.getPrimaryVideoTrack();
-    if (!track) return null;
-    const durationSec = await input.computeDuration();
+    if (!track) return done("no-video-track");
+    durationSec = await input.computeDuration();
     let fps: number | null = null;
     try { fps = (await track.computePacketStats(60)).averagePacketRate; } catch { /* unknown fps: keep it */ }
 
@@ -123,12 +149,14 @@ export async function compressVideoWith(
       displayHeight: track.displayHeight,
       fps,
     });
-    if (!plan) return null;
+    if (!plan) return done("not-needed");
 
     const outW = plan.width ?? Math.round((track.displayWidth * (plan.height ?? track.displayHeight)) / track.displayHeight);
     const outH = plan.height ?? Math.round((track.displayHeight * (plan.width ?? track.displayWidth)) / track.displayWidth);
-    if (!(await mb.canEncodeVideo(codec, { width: outW, height: outH, bitrate: TARGET_VIDEO_BITRATE }))) return null;
-    if (opts.signal?.aborted) return null;
+    if (!(await mb.canEncodeVideo(codec, { width: outW, height: outH, bitrate: TARGET_VIDEO_BITRATE }))) {
+      return done(`cannot-encode:${track.codec ?? "?"}`);
+    }
+    if (opts.signal?.aborted) return done("aborted");
 
     const output = new mb.Output({
       format: new mb.Mp4OutputFormat({ fastStart: "in-memory" }),
@@ -147,7 +175,10 @@ export async function compressVideoWith(
     });
     conversion = conv;
     // Refuse anything that would lose a track: a silent or blank clip is worse than a slow one.
-    if (!conv.isValid || conv.discardedTracks.length > 0) return null;
+    if (!conv.isValid) return done("invalid");
+    if (conv.discardedTracks.length > 0) {
+      return done(`dropped:${conv.discardedTracks.map((d) => `${d.track.type}-${d.reason}`).join(",")}`);
+    }
     // Safety valve: if this device is slow at it, give up and send the original.
     // Decided early (~2.5s in) from the measured pace, so a slow phone never
     // wastes long on it; the hard limit is only a backstop.
@@ -155,27 +186,36 @@ export async function compressVideoWith(
     let timedOut = false;
     const giveUp = () => { if (!timedOut) { timedOut = true; void conv.cancel().catch(() => {}); } };
     const startedAt = Date.now();
+    let lastProgress = 0;
     conv.onProgress = (p: number) => {
       const clamped = Math.max(0, Math.min(1, p));
+      lastProgress = clamped;
       opts.onProgress?.(clamped);
       if (projectedTooSlow(Date.now() - startedAt, clamped, limitMs)) giveUp();
     };
     const timer = setTimeout(giveUp, limitMs * 1.2);
     try {
       await conv.execute();
+    } catch (e) {
+      if (opts.signal?.aborted) return done("aborted");
+      if (timedOut) return done(`too-slow@${Math.round(lastProgress * 100)}%`);
+      throw e;
     } finally {
       clearTimeout(timer);
     }
-    if (timedOut || opts.signal?.aborted) return null;
+    if (opts.signal?.aborted) return done("aborted");
+    if (timedOut) return done(`too-slow@${Math.round(lastProgress * 100)}%`);
 
     const buffer = (output.target as InstanceType<typeof mb.BufferTarget>).buffer;
-    if (!buffer || buffer.byteLength === 0) return null;
+    if (!buffer || buffer.byteLength === 0) return done("empty");
     // Only worth it if it's clearly smaller.
-    if (buffer.byteLength > file.size * 0.8) return null;
+    if (buffer.byteLength > file.size * 0.8) return done(`not-smaller:${Math.round((100 * buffer.byteLength) / file.size)}%`);
     const base = file.name.replace(/\.[^.]+$/, "") || "video";
-    return new File([buffer], `${base}.mp4`, { type: "video/mp4", lastModified: file.lastModified });
-  } catch {
-    return null;
+    return done("ok", new File([buffer], `${base}.mp4`, { type: "video/mp4", lastModified: file.lastModified }));
+  } catch (e) {
+    if (opts.signal?.aborted) return done("aborted");
+    const msg = e instanceof Error ? `${e.name}:${e.message}` : String(e);
+    return done(`error:${msg.slice(0, 120)}`);
   } finally {
     opts.signal?.removeEventListener("abort", onAbort);
   }

@@ -18,7 +18,8 @@ import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
 import { ChatVideoTile } from "@/components/chat-video-tile";
 import { captureVideoPoster } from "@/lib/video-poster";
-import { compressVideoForChat } from "@/lib/video-compress";
+import { compressVideoDetailed } from "@/lib/video-compress";
+import { raceVideoUpload } from "@/lib/video-upload-race";
 import { chatUrlCache, useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
 import { keepChatVideo } from "@/lib/chat-video-store";
 import { compressImage } from "@/lib/image-compress";
@@ -35,6 +36,8 @@ export type SharedAttachment = {
   duration?: number;
   storage_path?: string;
   thumbnail_storage_path?: string;
+  /** Videos: how the upload went on the sender's phone (compressed or not, why, timings). */
+  transfer?: Record<string, string | number | null>;
   width?: number;
   height?: number;
   peaks?: number[];
@@ -230,76 +233,111 @@ export async function uploadChatAttachment(
   if (signal?.aborted) throw new Error("Upload cancelled.");
 
   const isVideo = fileToAttachmentType(file) === "video";
-  // Grab a still frame from the original right away (alongside everything else, never blocking it).
-  const posterP = isVideo ? captureVideoPoster(file) : Promise.resolve(null);
+  const stem = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const extOf = (f: File) => (f.name.includes(".") ? f.name.split(".").pop() : "");
+  const pathFor = (f: File) => {
+    const ext = extOf(f);
+    return `${stem}${ext ? "." + ext : ""}`;
+  };
+  const put = (f: File, path: string, progress?: (pct: number) => void, sig?: AbortSignal) =>
+    uploadLiftFileToStorage({ file: f, userId: folder, bucket: "message-attachments", path, onProgress: progress, signal: sig });
 
-  // Videos: shrink on the phone first, iMessage-style (720p H.264). Short clips
-  // go from ~12-60 MB to ~4 MB. Falls back to the original on any problem.
-  let uploadFrom = 3;
-  onProgress?.(3);
-  if (isVideo) {
-    const compressed = await compressVideoForChat(file, {
-      signal,
-      onProgress: (p) => onProgress?.(Math.round(3 + p * 37)),
-    });
-    if (signal?.aborted) throw new Error("Upload cancelled.");
-    if (compressed) {
-      uploadFile = compressed;
-      uploadFrom = 40;
-      onProgress?.(40);
+  if (!isVideo) {
+    onProgress?.(3);
+    const path = pathFor(uploadFile);
+    await put(uploadFile, path, (pct) => onProgress?.(Math.round(3 + (pct * 97) / 100)), signal);
+    const att: SharedAttachment = {
+      type: fileToAttachmentType(uploadFile),
+      url: "",
+      storage_path: path,
+      name: file.name,
+      size: uploadFile.size,
+      mime: uploadFile.type || file.type,
+    };
+    if (att.type === "image" && typeof URL !== "undefined") {
+      // The sender sees their picture without waiting for a signed URL.
+      chatUrlCache.seed(path, URL.createObjectURL(uploadFile));
     }
+    return att;
   }
 
-  const ext = uploadFile.name.includes(".") ? uploadFile.name.split(".").pop() : "";
-  const stem = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const path = `${stem}${ext ? "." + ext : ""}`;
-
-  await uploadLiftFileToStorage({
-    file: uploadFile,
-    userId: folder,
-    bucket: "message-attachments",
-    path,
-    // Upload fills the rest of the bar after compression.
-    onProgress: (pct) => onProgress?.(Math.round(uploadFrom + (pct * (100 - uploadFrom)) / 100)),
-    signal,
+  // Videos. Everything starts at once:
+  //  - a still frame for the bubble, uploaded the moment it's ready;
+  //  - the original, uploading immediately;
+  //  - a 720p copy compressed on the phone, which takes over only if it would
+  //    land sooner (see raceVideoUpload).
+  const startedAt = Date.now();
+  const thumbPath = `${stem}-poster.jpg`;
+  const posterP = captureVideoPoster(file);
+  const posterUpload = posterP.then(async (poster) => {
+    if (!poster) return null;
+    try {
+      await put(new File([poster.blob], "poster.jpg", { type: "image/jpeg" }), thumbPath, undefined, signal);
+      // The sender's own bubble shows it instantly, no signing round trip.
+      chatUrlCache.seed(thumbPath, URL.createObjectURL(poster.blob));
+      return poster;
+    } catch {
+      return null; // no poster: the bubble falls back to loading the video frame
+    }
   });
 
+  onProgress?.(3);
+  const originalPath = pathFor(file);
+  let compressedPath = `${stem}.mp4`;
+  if (compressedPath === originalPath) compressedPath = `${stem}-720p.mp4`;
+  let result;
+  try {
+    result = await raceVideoUpload(
+      {
+        originalBytes: file.size,
+        uploadOriginal: (p, sig) => put(file, originalPath, (pct) => p(pct / 100), sig).then(() => {}),
+        compress: (p, sig) => compressVideoDetailed(file, "avc", { onProgress: p, signal: sig }),
+        uploadCompressed: (f, p, sig) => put(f, compressedPath, (pct) => p(pct / 100), sig).then(() => {}),
+      },
+      { signal, onProgress: (f) => onProgress?.(Math.max(3, Math.round(f * 100))) },
+    );
+  } catch (e) {
+    if (signal?.aborted) throw new Error("Upload cancelled.");
+    throw e;
+  }
+  const sentFile = result.sent === "compressed" && result.compressed ? result.compressed : file;
+  const path = result.sent === "compressed" ? compressedPath : originalPath;
+
   const att: SharedAttachment = {
-    type: fileToAttachmentType(uploadFile),
+    type: "video",
     url: "",
     storage_path: path,
     name: file.name,
-    size: uploadFile.size,
-    mime: uploadFile.type || file.type,
+    size: sentFile.size,
+    mime: sentFile.type || file.type,
   };
+  // The sender already has the clip: keep it on the phone so it plays (and replays) without downloading.
+  keepChatVideo(path, sentFile);
 
-  if (isVideo) {
-    // The sender already has the clip: keep it on the phone so it plays (and replays) without downloading.
-    keepChatVideo(path, uploadFile);
-    // Don't wait long: the poster is a nicety, the message must go out.
-    const poster = await Promise.race([posterP, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
-    if (poster) {
-      try {
-        const thumbPath = `${stem}-poster.jpg`;
-        await uploadLiftFileToStorage({
-          file: new File([poster.blob], "poster.jpg", { type: "image/jpeg" }),
-          userId: folder,
-          bucket: "message-attachments",
-          path: thumbPath,
-          signal,
-        });
-        att.thumbnail_storage_path = thumbPath;
-        att.width = poster.width;
-        att.height = poster.height;
-        att.duration = poster.duration || undefined;
-        // The sender's own bubble shows it instantly, no signing round trip.
-        chatUrlCache.seed(thumbPath, URL.createObjectURL(poster.blob));
-      } catch { /* no poster: the bubble falls back to loading the video frame */ }
-    }
-  } else if (att.type === "image" && typeof URL !== "undefined") {
-    // Same for photos: the sender sees their picture without waiting for a signed URL.
-    chatUrlCache.seed(path, URL.createObjectURL(uploadFile));
+  // Don't wait long: the poster is a nicety, the message must go out.
+  const poster = await Promise.race([posterUpload, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+  if (poster) {
+    att.thumbnail_storage_path = thumbPath;
+    att.width = poster.width;
+    att.height = poster.height;
+    att.duration = poster.duration || undefined;
   }
+  // What actually happened on this phone. Stored with the message so slow
+  // sends can be diagnosed from real devices (no message text involved).
+  const mb = (n: number) => Math.round((n / 1048576) * 10) / 10;
+  att.transfer = {
+    v: 1,
+    sent: result.sent,
+    why: result.why,
+    compress: result.compress?.reason ?? null,
+    compress_ms: result.compress?.ms ?? null,
+    dur: result.compress?.durationSec != null ? Math.round(result.compress.durationSec * 10) / 10 : null,
+    orig_mb: mb(file.size),
+    sent_mb: mb(sentFile.size),
+    total_ms: Date.now() - startedAt,
+    poster: poster ? "ok" : "none",
+    ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : null,
+  };
   return att;
 }
 
