@@ -86,6 +86,7 @@ const LiftVideosPanel = lazyDefault(() => import("@/components/lift-videos-panel
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
+const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-file-notes"), "ClientFileNotes");
 const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-exercise-notes-card"), "ClientExerciseNotesCard");
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
@@ -930,6 +931,9 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="notes" className={WORKSPACE_GRID_CLASS}>
+          <Suspense fallback={<TabFallback />}>
+            <ClientFileNotes clientId={id} className="md:col-span-3" />
+          </Suspense>
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Coaching Notes</h3>
             <div><Label>Goals</Label><Textarea rows={2} value={form.goals ?? ""} onChange={(e) => set("goals", e.target.value)} /></div>
