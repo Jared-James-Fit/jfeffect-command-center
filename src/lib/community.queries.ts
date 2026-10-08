@@ -3,6 +3,7 @@
  * 20261006090000_community_sharing.sql. Row-level security and the RPCs are
  * the real gate; nothing here is trusted for permissions.
  */
+import { useCallback } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -133,18 +134,54 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
   });
 }
 
-/** Everyone who gave a post 🔥, for the "who reacted" sheet. */
+/** Everyone who reacted to a post (and with what), for the "who reacted" sheet. */
 export function usePostReactors(postId: string | null) {
   return useQuery({
     queryKey: communityKeys.reactors(postId),
     enabled: !!postId,
     staleTime: 15_000,
-    queryFn: async (): Promise<{ author: CommunityAuthor; is_me: boolean; created_at: string }[]> => {
+    queryFn: async (): Promise<{ author: CommunityAuthor; is_me: boolean; emoji: string | null; created_at: string }[]> => {
       const { data, error } = await db.rpc("community_post_reactors", { _post_id: postId });
       if (error) throw error;
       return (data ?? []) as any;
     },
   });
+}
+
+/* ---- one-time tips (e.g. "double-tap to like") ------------------------ */
+
+const HINTS_KEY = ["community-hints"] as const;
+
+/** The tips this account has already got. Kept on the account, so a tip doesn't come back on another device. */
+export function useHintsSeen() {
+  return useQuery({
+    queryKey: HINTS_KEY,
+    staleTime: Infinity,
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await db.from("community_hints_seen").select("hint");
+      if (error) throw error;
+      return ((data ?? []) as { hint: string }[]).map((r) => r.hint);
+    },
+  });
+}
+
+/** Mark a tip as got (once; it disappears straight away). */
+export function useMarkHintSeen() {
+  const qc = useQueryClient();
+  return useCallback(
+    (hint: string) => {
+      const cur = qc.getQueryData<string[]>(HINTS_KEY);
+      if (cur?.includes(hint)) return;
+      qc.setQueryData<string[]>(HINTS_KEY, [...(cur ?? []), hint]);
+      void db
+        .from("community_hints_seen")
+        .upsert({ hint }, { onConflict: "user_id,hint", ignoreDuplicates: true })
+        .then(({ error }: { error: unknown }) => {
+          if (error) console.warn("[community] couldn't save tip", error);
+        });
+    },
+    [qc],
+  );
 }
 
 /* ---- comments ------------------------------------------------------- */

@@ -13,7 +13,7 @@ import {
   pickCardStats,
   postTimeLabel,
   reactionEmoji,
-  reactionTotal,
+  reactionKinds,
   reactorsLine,
   sessionLine,
   type CommunityAuthor,
@@ -26,6 +26,7 @@ import { WinsStatsCard } from "@/components/community/wins-stats";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
+import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -215,9 +216,13 @@ type Props = {
   onOpenComments: (post: CommunityPost) => void;
   onOpenAuthor?: (author: CommunityAuthor) => void;
   onReact: (post: CommunityPost, next: ReactionKey | null) => void;
+  /** Show the "double-tap to like" tip on this post (until the first double-tap). */
+  doubleTapHint?: boolean;
+  /** Someone double-tapped this post (so the tip can go). */
+  onDoubleTap?: () => void;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
   const singleTimer = useRef<number | null>(null);
@@ -228,7 +233,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
   const sub = [postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
 
-  // Tap opens the workout; double-tap gives 🔥 (Instagram muscle memory).
+  // Tap opens the workout; double-tap gives ❤️ (Instagram muscle memory).
+  // Already reacted? It stays as it is (a double-tap never takes one back).
   const onHeroTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 280) {
@@ -236,7 +242,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       singleTimer.current = null;
       lastTap.current = 0;
       setBurst((b) => b + 1);
-      if (post.my_reaction !== "fire") onReact(post, "fire");
+      if (!post.my_reaction) onReact(post, REACTION.key);
+      onDoubleTap?.();
       return;
     }
     lastTap.current = now;
@@ -272,11 +279,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         ) : (
           <div className="px-4 py-6 text-sm text-muted-foreground">Workout was reopened, numbers will be back once it's finished.</div>
         )}
-        {burst > 0 && (
-          <span key={burst} className="community-burst pointer-events-none absolute inset-0 grid place-items-center text-[88px] drop-shadow-xl" aria-hidden>
-            🔥
-          </span>
-        )}
+        {doubleTapHint && burst === 0 && <DoubleTapHint />}
+        <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
       </div>
 
       {/* A photo lock-in: the stamp sits under it until the numbers arrive */}
@@ -338,8 +342,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 export const PostCard = memo(PostCardInner);
 
 /**
- * One tap: 🔥 and how many, then the faces of who gave it ("🔥 from Jared,
- * Vicky and 3 others"), which opens the full list. Comments on the right.
+ * The heart (tap for ❤️, hold for 👍 ‼️ 🔥 😂) and how many, then the faces
+ * of who reacted ("Jared, Vicky and 3 others", with the kinds they gave),
+ * which opens the full list. Comments on the right.
  */
 export function ReactionBar({
   post,
@@ -353,31 +358,20 @@ export function ReactionBar({
   onOpenAuthor?: (a: CommunityAuthor) => void;
 }) {
   const [listFor, setListFor] = useState<string | null>(null);
-  const total = reactionTotal(post);
-  const mine = !!post.my_reaction;
   const who = reactorsLine(post);
+  // the little ❤️🔥😂 beside the names, once it's not just hearts
+  const kinds = reactionKinds(post);
+  const showKinds = kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji);
   const faces = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me)).slice(0, 3);
   return (
     <div className="flex items-center gap-1 px-2 pb-2 pt-2">
-      <button
-        type="button"
-        onClick={() => onReact(post, mine ? null : REACTION.key)}
-        aria-pressed={mine}
-        aria-label={`${mine ? "Remove your fire" : "Give it fire"}${total ? `, ${total}` : ""}`}
-        className={cn(
-          "flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[18px] transition-all active:scale-90",
-          mine ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-muted",
-        )}
-      >
-        <span className={cn(!mine && "opacity-70 grayscale-[35%]")}>{REACTION.emoji}</span>
-        {total > 0 && <span className={cn("text-[13px] font-black tabular-nums", mine ? "text-primary" : "text-muted-foreground")}>{total}</span>}
-      </button>
+      <ReactionButton post={post} onReact={onReact} />
       {who && (
         <button
           type="button"
           onClick={() => setListFor(post.id)}
           className="flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-left hover:bg-muted"
-          aria-label={`See who gave it fire: ${who}`}
+          aria-label={`See who reacted: ${who}`}
         >
           {faces.length > 0 && (
             <span className="flex shrink-0 -space-x-1.5">
@@ -388,6 +382,7 @@ export function ReactionBar({
               ))}
             </span>
           )}
+          {showKinds && <span className="shrink-0 text-[13px] leading-none tracking-[-0.15em]">{kinds.join("")}</span>}
           <span className="truncate text-[12px] text-muted-foreground">
             <span className="font-bold text-foreground">{who}</span>
           </span>
