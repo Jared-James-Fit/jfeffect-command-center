@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Camera, Check, Images, Send, X } from "lucide-react";
+import { Camera, Check, Download, Images, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -11,11 +11,10 @@ import { CAPTION_MAX, LOCK_IN_CAPTIONS, lockInTimeLabel, type CommunityVisibilit
 import { invalidateCommunity, saveCommunityPost, type MyPostRow, type SavePostInput } from "@/lib/community.queries";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import { TEMPLATE_LABEL, canvasToBlob, drawWorkoutShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
-import { InstagramGlyph } from "@/components/community/glyphs";
 import { AudiencePicker } from "@/components/community/audience-picker";
 import type { LockInPick } from "@/components/community/lock-in";
 
-const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)]";
+const SHARE_GRADIENT = "bg-primary";
 const firstName = (full?: string | null) => (full ?? "").trim().split(/\s+/)[0] || null;
 
 type Props = {
@@ -40,7 +39,7 @@ export type LockTemplate = Extract<ShareTemplate, "lockin" | "lockclock" | "lock
 
 /**
  * The lock-in editor: the LOCKED IN card with their photo, a one-tap caption,
- * then Post (JF community) and/or Share (Instagram story). Posting starts the
+ * then Post (JF community) and/or save the card. Posting starts the
  * session if it hasn't been; sharing out never posts, posting never shares.
  */
 export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, workoutTitle, athleteName, existing, pick, onCamera, onLibrary, plan = [], initialTemplate }: Props) {
@@ -173,9 +172,8 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
       const blob = await canvasToBlob(c, "image/jpeg", 0.92);
       if (!blob) throw new Error("Couldn't build the card");
       const outcome = await shareCardImage(blob, { filename: "jf-effect-locked-in.jpg", title: "Locked in" });
-      if (outcome === "shared") toast.success("Locked in. Now go get it 🔒");
-      else if (outcome === "downloaded") toast.success("Card saved", { description: "Post it from your photos." });
-      else if (outcome === "failed") toast.error("Couldn't share on this device");
+      if (outcome === "downloaded") toast.success("Saved to your phone");
+      else if (outcome === "failed") toast.error("Couldn't save on this device");
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't share the card");
     } finally {
@@ -324,9 +322,9 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
 
         {/* Actions */}
         <div className="grid shrink-0 grid-cols-2 gap-2 px-4 pt-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.9rem)" }}>
-          <Button type="button" disabled={sharing} onClick={() => void shareOut()} className={cn("h-14 rounded-2xl text-[15px] font-black text-white shadow-lg", posted ? SHARE_GRADIENT : "bg-white/10 hover:bg-white/20")}>
-            <InstagramGlyph className="mr-2 h-5 w-5" />
-            {sharing ? "Preparing…" : "Story"}
+          <Button type="button" disabled={sharing} onClick={() => void shareOut()} className="h-14 rounded-2xl bg-white/10 text-[15px] font-black text-white shadow-lg hover:bg-white/20" aria-label="Save image">
+            <Download className="mr-2 h-5 w-5" />
+            {sharing ? "Preparing…" : "Save"}
           </Button>
           <Button
             type="button"

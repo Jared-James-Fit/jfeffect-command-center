@@ -15,7 +15,7 @@ const ShareStudio = lazyWithRetry(() => import("@/components/community/share-stu
 
 export type LockInPick = { file: File; live: boolean; n: number };
 
-const LOCK_GRADIENT = "bg-[linear-gradient(135deg,#ef3340_0%,#dd2a7b_60%,#8134af_100%)]";
+const LOCK_GRADIENT = "bg-primary";
 
 /**
  * "Lock in" at the top of today's workout: one tap opens the share studio
@@ -82,7 +82,7 @@ export function LockInBar({
         </button>
       ) : (
         <button type="button" onClick={start} className="flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card px-3 py-2.5 text-left active:scale-[0.99]">
-          <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full text-white shadow-md shadow-rose-500/20", LOCK_GRADIENT)}>
+          <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full text-white shadow-md shadow-primary/25", LOCK_GRADIENT)}>
             <Camera className="h-5 w-5" />
           </span>
           <span className="min-w-0 flex-1">

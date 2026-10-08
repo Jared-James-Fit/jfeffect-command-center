@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Camera, Check, ChevronLeft, EyeOff, Images, Lock, RefreshCcw, Send, Smile, Timer, Type, User, Users, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, Download, EyeOff, Images, Lock, RefreshCcw, Send, Smile, Timer, Type, User, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { CommunityVisibility } from "@/lib/community";
 import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
-import { InstagramGlyph } from "@/components/community/glyphs";
 import { StickerLayer, bakeStickers, drawStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 
 export type CameraMode = { key: string; label: string };
@@ -44,12 +43,12 @@ const AUDIENCE: { key: CommunityVisibility; label: string; icon: typeof Users }[
 const timeLabel = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
 /**
- * The whole share, on one screen, Instagram-story style. The viewfinder IS
+ * The whole share, on one screen, story-camera style. The viewfinder IS
  * the card: the real share card painted live on the camera. Swipe for the
  * next look. Tap the shutter and the frame freezes right there; the same
  * screen becomes the editor — text and stickers on the card, a caption, who
- * sees it, then Post (JF community) or Story (Instagram). No second screen,
- * nothing reloads, no blank.
+ * sees it, then Post (JF community) or save the card to the phone. No second
+ * screen, nothing reloads, no blank.
  *
  * No live camera (permission denied, old webview)? It falls back to the
  * phone's own camera and picker, and carries on from the frozen frame.
@@ -96,7 +95,7 @@ export function ShareStudio({
   const [caption, setCaption] = useState("");
   const [visibility, setVisibility] = useState<CommunityVisibility>("community");
   const [hideLoads, setHideLoads] = useState(false);
-  const [busy, setBusy] = useState<null | "post" | "story">(null);
+  const [busy, setBusy] = useState<null | "post" | "save">(null);
   const [posted, setPosted] = useState(false);
   const [area, setArea] = useState<HTMLDivElement | null>(null);
   const [areaSize, setAreaSize] = useState({ w: 0, h: 0 });
@@ -370,7 +369,7 @@ export function ShareStudio({
     const b = await canvasToBlob(shot.src as HTMLCanvasElement, "image/jpeg", 0.92);
     return b ? new File([b], "jf-live.jpg", { type: "image/jpeg" }) : null;
   };
-  const storyBlob = async (): Promise<Blob | null> => {
+  const cardBlob = async (): Promise<Blob | null> => {
     if (!card) return null;
     const c = document.createElement("canvas");
     paintShareCard(c, { ...card.data, lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);
@@ -391,18 +390,19 @@ export function ShareStudio({
       setBusy(null);
     }
   };
-  const doStory = async () => {
+  // Save the card to the phone. On phones that's the system sheet (its "Save
+  // Image" puts it in Photos); elsewhere it downloads.
+  const doSave = async () => {
     if (busy || !card) return;
-    setBusy("story");
+    setBusy("save");
     try {
-      const blob = await storyBlob();
+      const blob = await cardBlob();
       if (!blob) throw new Error("Couldn't build the card");
-      const outcome = await shareCardImage(blob, { filename: `jf-effect-${card.look}.jpg`, title: TEMPLATE_LABEL[card.look] });
-      if (outcome === "shared") toast.success("Nice. Go get those 🔥");
-      else if (outcome === "downloaded") toast.success("Card saved", { description: "Post it from your photos." });
-      else if (outcome === "failed") toast.error("Couldn't share on this device");
+      const outcome = await shareCardImage(blob, { filename: `jf-effect-${card.look}.jpg`, title: "JF Effect" });
+      if (outcome === "downloaded") toast.success("Saved to your phone");
+      else if (outcome === "failed") toast.error("Couldn't save on this device");
     } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't share the card");
+      toast.error(e?.message ?? "Couldn't save the card");
     } finally {
       setBusy(null);
     }
@@ -594,18 +594,24 @@ export function ShareStudio({
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-[auto_1fr] gap-2">
-                <button type="button" disabled={!!busy || !card} onClick={() => void doStory()} className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/10 px-5 text-[15px] font-black active:scale-[0.98] disabled:opacity-60" aria-label="Share to your Instagram story">
-                  <InstagramGlyph className="h-5 w-5" />
-                  {busy === "story" ? "…" : "Story"}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={!!busy || !card}
+                  onClick={() => void doSave()}
+                  className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/10 active:scale-[0.97] disabled:opacity-60"
+                  aria-label="Save image"
+                >
+                  {busy === "save" ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Download className="h-6 w-6" />}
                 </button>
                 <button
                   type="button"
                   disabled={!!busy || posted || !post || !card}
                   onClick={() => void doPost()}
                   className={cn(
-                    "inline-flex h-14 items-center justify-center gap-2 rounded-2xl text-[16px] font-black shadow-lg active:scale-[0.98] disabled:opacity-100",
-                    posted ? "bg-emerald-500 text-white" : "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)] text-white",
+                    // the app's own primary button: JF red, solid
+                    "inline-flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl text-[16px] font-black shadow-lg shadow-primary/25 active:scale-[0.98] disabled:opacity-100",
+                    posted ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground",
                     !post && "opacity-60",
                   )}
                 >
