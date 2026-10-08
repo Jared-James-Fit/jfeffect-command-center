@@ -35,7 +35,10 @@ const DISPLAY = `"Anton", "Impact", "Arial Narrow Bold", sans-serif`;
 const SANS = `-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif`;
 const RED = "#ef3340";
 export const TEXT_COLORS = ["#ffffff", "#000000", RED, "#facc15", "#22c55e"] as const;
-export const TEXT_STYLES = ["Bold", "Box", "Display", "Outline"] as const;
+export const TEXT_STYLES = ["Bold", "Box", "Display", "Outline", "Highlight"] as const;
+/** The order the Aa button steps through (Highlight sits next to Box). */
+const STYLE_CYCLE = [0, 1, 4, 2, 3];
+export const nextTextStyle = (s: number) => STYLE_CYCLE[(STYLE_CYCLE.indexOf(s) + 1) % STYLE_CYCLE.length];
 const EMOJI = ["🔥", "💪", "🏋️", "⚡", "🎯", "😤", "🫡", "🏆"] as const;
 
 export type DecorContext = { time: string; date: string; workoutTitle?: string | null };
@@ -108,12 +111,84 @@ export function textMetrics(style: number) {
     display,
     size: display ? 104 : 68,
     lineH: display ? 1.0 : 1.18,
-    padX: style === 1 ? 34 : 18,
-    padY: style === 1 ? 20 : 14,
-    radius: 26,
+    // Highlight: padding round each line (it hugs every line on its own)
+    padX: style === 1 ? 34 : style === 4 ? 24 : 18,
+    padY: style === 1 ? 20 : style === 4 ? 8 : 14,
+    radius: style === 4 ? 20 : 26,
     family: display ? DISPLAY : SANS,
     weight: display ? 400 : 800,
   };
+}
+
+/** A rect with its own radius per corner (tl, tr, br, bl). */
+function cornerRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, [tl, tr, br, bl]: number[]) {
+  ctx.moveTo(x + tl, y);
+  ctx.arcTo(x + w, y, x + w, y + h, tr);
+  ctx.arcTo(x + w, y + h, x, y + h, br);
+  ctx.arcTo(x, y + h, x, y, bl);
+  ctx.arcTo(x, y, x + w, y, tl);
+  ctx.closePath();
+}
+
+/**
+ * Instagram's "background" text: a box that hugs each line on its own.
+ * Lines touch; where one is wider than the next, the wide one keeps round
+ * outer corners and the narrow one gets a smooth inside curve. Lines within
+ * a corner's width of each other share a width, so edges don't stair-step.
+ * Pure geometry (centred on x = 0) so it can be checked without a canvas.
+ */
+export function highlightShape(lineWidths: number[], o: { lineH: number; padX: number; padY: number; r: number }) {
+  const { lineH, padX, padY, r } = o;
+  const half = lineWidths.map((w) => w / 2 + padX);
+  for (let pass = 0; pass < half.length; pass++) {
+    let changed = false;
+    for (let i = 0; i < half.length - 1; i++)
+      if (half[i] !== half[i + 1] && Math.abs(half[i] - half[i + 1]) < r * 2) {
+        half[i] = half[i + 1] = Math.max(half[i], half[i + 1]);
+        changed = true;
+      }
+    if (!changed) break;
+  }
+  const n = half.length;
+  const boxes = half.map((hw, i) => {
+    const top = i === 0 ? 0 : padY + i * lineH;
+    const bottom = i === n - 1 ? padY * 2 + n * lineH : padY + (i + 1) * lineH;
+    const rr = Math.min(r, (bottom - top) / 2);
+    const upOpen = i === 0 || half[i - 1] < hw;
+    const downOpen = i === n - 1 || half[i + 1] < hw;
+    // corners: top-left, top-right, bottom-right, bottom-left
+    return { half: hw, top, bottom, radii: [upOpen ? rr : 0, upOpen ? rr : 0, downOpen ? rr : 0, downOpen ? rr : 0] };
+  });
+  // inside curves where a narrower line meets a wider one, on the narrow side of the seam
+  const fillets: { x: number; y: number; r: number; down: boolean }[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const a = half[i];
+    const b = half[i + 1];
+    if (a === b) continue;
+    fillets.push({ x: Math.min(a, b), y: padY + (i + 1) * lineH, r: Math.min(r, Math.abs(a - b) / 2, lineH / 2), down: b < a });
+  }
+  return { boxes, fillets };
+}
+
+function drawHighlight(ctx: CanvasRenderingContext2D, lines: string[], o: { cx: number; lineH: number; padX: number; padY: number; r: number; color: string }) {
+  const { boxes, fillets } = highlightShape(lines.map((l) => ctx.measureText(l).width), o);
+  ctx.save();
+  ctx.fillStyle = o.color;
+  ctx.beginPath();
+  for (const b of boxes) cornerRect(ctx, o.cx - b.half, b.top, b.half * 2, b.bottom - b.top, b.radii);
+  ctx.fill();
+  for (const f of fillets)
+    for (const side of [1, -1]) {
+      const x = o.cx + side * f.x;
+      const dy = f.down ? f.r : -f.r;
+      ctx.beginPath();
+      ctx.moveTo(x, f.y);
+      ctx.lineTo(x + side * f.r, f.y);
+      ctx.arcTo(x, f.y, x, f.y + dy, f.r);
+      ctx.closePath();
+      ctx.fill();
+    }
+  ctx.restore();
 }
 
 /** Word-wrap like the browser does: on spaces, breaking words longer than a line. */
@@ -167,6 +242,7 @@ export function renderText(text: string, style: number, color: string): Bitmap {
   ctx.font = f;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  if (style === 4) drawHighlight(ctx, lines, { cx: c.width / 2, lineH, padX, padY, r: m.radius * PX, color });
   if (style === 1) {
     ctx.fillStyle = color;
     roundRect(ctx, 0, 0, c.width, c.height, m.radius * PX);
@@ -181,7 +257,7 @@ export function renderText(text: string, style: number, color: string): Bitmap {
       ctx.strokeText(l, c.width / 2, y);
       ctx.fillStyle = color;
       ctx.fillText(l, c.width / 2, y);
-    } else if (style === 1) {
+    } else if (style === 1 || style === 4) {
       ctx.fillStyle = readable(color);
       ctx.fillText(l, c.width / 2, y);
     } else {
@@ -614,6 +690,15 @@ export function StickerLayer({
   };
 
   const k = width / REF;
+  // Highlight's carved boxes can't be done in CSS, so the editor shows the
+  // card's own render of it (at screen density) under a see-through textarea.
+  const hlText = editing?.style === 4 ? editing.text || "Type something" : null;
+  const hlColor = editing?.color;
+  const highlight = useMemo(() => {
+    if (hlText == null || !hlColor || typeof document === "undefined") return null;
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    return atDensity(Math.min(4, Math.max(1, Math.ceil(k * dpr * 2) / 2)), () => renderText(hlText, 4, hlColor));
+  }, [hlText, hlColor, k]);
 
   return (
     <>
@@ -668,7 +753,7 @@ export function StickerLayer({
               // keep the keyboard up: don't take focus from the text
               onPointerDown={(e) => e.preventDefault()}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setEditing({ ...editing, style: (editing.style + 1) % TEXT_STYLES.length })}
+              onClick={() => setEditing({ ...editing, style: nextTextStyle(editing.style) })}
               className="h-10 rounded-full bg-white/15 px-4 text-[13px] font-black"
               aria-label="Text style"
             >
@@ -684,6 +769,36 @@ export function StickerLayer({
             {(() => {
               const m = textMetrics(editing.style);
               const font = { fontFamily: m.family, fontWeight: m.weight, fontSize: m.size * k, lineHeight: m.lineH, textTransform: m.display ? ("uppercase" as const) : undefined };
+              if (editing.style === 4) {
+                return (
+                  <div className="relative inline-grid" style={{ maxWidth: (WRAP + m.padX * 2) * k, padding: `${m.padY * k}px ${m.padX * k}px` }}>
+                    {highlight && (
+                      <img
+                        src={highlight.url}
+                        alt=""
+                        draggable={false}
+                        className="pointer-events-none absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 select-none"
+                        style={{ width: (highlight.bw / highlight.px) * k, opacity: editing.text ? 1 : 0.55 }}
+                      />
+                    )}
+                    <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre-wrap text-center [overflow-wrap:anywhere]" style={font}>
+                      {(editing.text || "Type something") + " "}
+                    </span>
+                    <textarea
+                      autoFocus
+                      value={editing.text}
+                      onChange={(e) => setEditing({ ...editing, text: e.target.value.slice(0, TEXT_MAX) })}
+                      maxLength={TEXT_MAX}
+                      rows={1}
+                      cols={1}
+                      aria-label="Text"
+                      // the letters you see are the render under it; this only carries the caret
+                      style={{ ...font, color: "transparent", caretColor: readable(editing.color) }}
+                      className="relative col-start-1 row-start-1 h-full min-h-0 w-full min-w-0 resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 text-center outline-none [overflow-wrap:anywhere]"
+                    />
+                  </div>
+                );
+              }
               const look =
                 editing.style === 1
                   ? { background: editing.color, color: readable(editing.color), borderRadius: m.radius * k }
