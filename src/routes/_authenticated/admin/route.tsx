@@ -8,6 +8,7 @@ import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { SummerAssistant } from "@/components/summer/summer-assistant";
+import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
 import { ClipboardList, LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
@@ -146,6 +147,7 @@ function AdminLayout() {
       <AdminTopBar showDashboardMode={!isCoach} />
       <Outlet />
       <TaskPopupGate />
+      <ReturnToDashboardPill />
       {role === "admin" && <SummerAssistant />}
     </AppShell>
   );
