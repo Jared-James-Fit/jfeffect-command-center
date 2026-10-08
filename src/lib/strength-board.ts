@@ -3,7 +3,7 @@
  * get_strength_board_meets() (JF Effect meet history) rows into the boards
  * clients see, plus the copy and math that make them easy to read.
  * Ranking itself happens in the database
- * (20261017090000_strength_board_everyone.sql, 20261017100000_hall_of_strength_meets.sql).
+ * (20261017110000_strength_board_everyone.sql, 20261017120000_hall_of_strength_meets.sql).
  */
 import type { WeightUnit } from "@/lib/weight-lifted";
 

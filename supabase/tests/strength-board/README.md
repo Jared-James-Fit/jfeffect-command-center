@@ -12,8 +12,8 @@ createdb strength_board_test
 psql -d strength_board_test -f supabase/tests/strength-board/schema.sql
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261016090000_all_time_strength_board.sql
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261016100000_strength_board_faster.sql
-psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261017090000_strength_board_everyone.sql
-psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261017100000_hall_of_strength_meets.sql
+psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261017110000_strength_board_everyone.sql
+psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261017120000_hall_of_strength_meets.sql
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/tests/strength-board/scenario.sql
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/tests/strength-board/scenario-meets.sql
 ```

@@ -1,4 +1,4 @@
--- JF Effect meet history (20261017100000_hall_of_strength_meets.sql).
+-- JF Effect meet history (20261017120000_hall_of_strength_meets.sql).
 -- Run after scenario.sql's schema + migrations; independent of its data.
 do $$
 declare
