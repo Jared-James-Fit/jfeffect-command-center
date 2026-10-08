@@ -365,51 +365,68 @@ export const getSummerMessages = createServerFn({ method: "GET" })
     return ((data ?? []) as Array<{ id: string; role: "user" | "assistant"; content: string; created_at: string }>).reverse();
   });
 
+const AskInput = z.object({
+  message: z.string().trim().min(1).max(4000),
+  year: z.number().int().min(2000).max(2100).optional(),
+  route: z.string().max(300).optional(),
+  voice: z.boolean().optional(),
+});
+
 export const askSummer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ message: z.string().trim().min(1).max(4000), year: z.number().int().min(2000).max(2100) }).parse(d))
+  .inputValidator((d: unknown) => AskInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const server = await import("@/lib/business-books.server");
-    await server.assertAdmin(supabase, userId);
-    const { buildSummerContext, summerSystemPrompt } = await import("@/lib/summer-context");
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
+    const { answerSummer } = await import("@/lib/summer.server");
+    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice });
+  });
 
-    const [books, history] = await Promise.all([
-      server.loadBooksData(supabase),
-      supabase
-        .from("summer_messages")
-        .select("role, content")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(16),
-    ]);
-    const year = books.years.includes(data.year) ? data.year : Number(books.asOf.slice(0, 4));
+const VoiceInput = z.object({
+  /** Base64 audio (webm/opus on most browsers, mp4/aac on iPhone). ~45s max. */
+  audio: z.string().min(16).max(4_000_000),
+  mime: z.string().max(80),
+  year: z.number().int().min(2000).max(2100).optional(),
+  route: z.string().max(300).optional(),
+});
 
-    const past = ((history.data ?? []) as Array<{ role: string; content: string }>).reverse();
-    const reply = await server.gatewayChat([
-      {
-        role: "system",
-        content: `${summerSystemPrompt({ tone: books.settings?.assistant_tone, instructions: books.settings?.assistant_instructions })}\n\nBOOKS\n${buildSummerContext(books, year)}`,
-      },
-      ...past.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
-      { role: "user", content: data.message },
-    ]);
-    const text = reply.trim() || "I couldn't come up with an answer to that. Try asking it another way.";
+/** Talk to Summer: hear the question, answer it in voice mode. */
+export const askSummerVoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => VoiceInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
+    const { answerSummer, transcribeAudio } = await import("@/lib/summer.server");
+    const transcript = await transcribeAudio(data.audio, data.mime);
+    if (!transcript) return { transcript: "", user: null, assistant: null };
+    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true });
+    return { transcript, ...res };
+  });
 
-    // Saved only once there is an answer, so a failed call leaves no orphan question.
-    const now = Date.now();
-    const { data: saved, error: saveErr } = await supabase
-      .from("summer_messages")
-      .insert([
-        { user_id: userId, role: "user", content: data.message, created_at: new Date(now).toISOString() },
-        { user_id: userId, role: "assistant", content: text, created_at: new Date(now + 1).toISOString() },
-      ])
-      .select("id, role, content, created_at");
-    if (saveErr) throw new Error(saveErr.message);
-    const rows = (saved ?? []) as Array<{ id: string; role: "user" | "assistant"; content: string; created_at: string }>;
-    const userMsg = rows.find((r) => r.role === "user")!;
-    const botMsg = rows.find((r) => r.role === "assistant")!;
-    return { user: userMsg, assistant: botMsg };
+/** Summer's voice for a reply. ok:false means the browser should use a device voice. */
+export const summerSpeech = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ text: z.string().trim().min(1).max(1500) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
+    const { synthesizeSpeech } = await import("@/lib/summer.server");
+    return synthesizeSpeech(data.text);
+  });
+
+/** Light read for the global Summer button: her vibe and instructions. */
+export const getSummerProfile = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
+    const { data } = await supabase.from("business_tax_settings").select("assistant_tone, assistant_instructions").maybeSingle();
+    return { tone: (data?.assistant_tone as string | null) ?? null, instructions: (data?.assistant_instructions as string | null) ?? null };
   });
 
 const SummerSettingsInput = z.object({

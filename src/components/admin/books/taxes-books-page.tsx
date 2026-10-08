@@ -33,7 +33,7 @@ import {
 } from "@/lib/business-books.functions";
 import { RECEIPT_ACCEPT, receiptSignedUrl, uploadReceiptFile } from "@/lib/receipt-upload";
 import { ExpenseDialog } from "./expense-dialog";
-import { SummerChat } from "./summer-chat";
+import { openSummer } from "@/components/summer/summer-assistant";
 import { SummerCustomizeDialog } from "./summer-customize";
 import { summerTone } from "@/lib/summer-persona";
 
@@ -75,7 +75,6 @@ export function TaxesBooksPage() {
 
   const [year, setYear] = useState(currentYear);
   const [tab, setTab] = useState("overview");
-  const [summerOpen, setSummerOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [expenseFilter, setExpenseFilter] = useState<string>("all");
@@ -218,7 +217,7 @@ export function TaxesBooksPage() {
             {scanState ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Camera className="mr-1.5 h-4 w-4" />}
             {scanState ? `Reading ${scanState.done + (scanState.done < scanState.total ? 1 : 0)} of ${scanState.total}` : "Snap receipt"}
           </Button>
-          <Button size="sm" variant="outline" className="h-9" onClick={() => setSummerOpen(true)}>
+          <Button size="sm" variant="outline" className="h-9" onClick={() => openSummer({ year })}>
             <Sparkles className="mr-1.5 h-4 w-4 text-amber-500" /> Ask {ASSISTANT_SHORT}
           </Button>
           <DropdownMenu>
@@ -325,13 +324,7 @@ export function TaxesBooksPage() {
         onChanged={refresh}
         gstRegistered={gstRegistered}
       />
-      <SummerChat
-        open={summerOpen}
-        onOpenChange={setSummerOpen}
-        year={year}
-        persona={{ tone: data.settings?.assistant_tone, instructions: data.settings?.assistant_instructions }}
-        onPersonaSaved={refresh}
-      />
+
     </div>
   );
 }
@@ -848,6 +841,7 @@ function YearEndTab({
 // ---------------------------------------------------------------------------
 
 function SummerSettingsCard({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const persona = { tone: data.settings?.assistant_tone, instructions: data.settings?.assistant_instructions };
   const tone = summerTone(persona.tone);
@@ -867,7 +861,15 @@ function SummerSettingsCard({ data, onSaved }: { data: BooksData; onSaved: () =>
           <SlidersHorizontal className="mr-1.5 h-4 w-4" /> Customize
         </Button>
       </div>
-      <SummerCustomizeDialog open={open} onClose={() => setOpen(false)} persona={persona} onSaved={onSaved} />
+      <SummerCustomizeDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        persona={persona}
+        onSaved={() => {
+          onSaved();
+          qc.invalidateQueries({ queryKey: ["summer-profile"] });
+        }}
+      />
     </Card>
   );
 }
