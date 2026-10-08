@@ -264,6 +264,7 @@ import { Route as AuthenticatedAdminSettingsNotificationsCoachingApplicationsRou
 import { Route as AuthenticatedMFormsAssignmentIdCompleteRouteImport } from './routes/_authenticated/m/forms.$assignmentId.complete'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
 import { Route as ApiPublicWearablesOuraCallbackRouteImport } from './routes/api/public/wearables/oura/callback'
+import { Route as AuthenticatedMMyWorkoutsDayIdRouteImport } from './routes/_authenticated/m/my-workouts.$dayId'
 import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
 
 const IndexRoute = IndexRouteImport.update({
@@ -1734,6 +1735,11 @@ const ApiPublicWearablesOuraCallbackRoute =
     path: '/api/public/wearables/oura/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedMMyWorkoutsDayIdRoute = AuthenticatedMMyWorkoutsDayIdRouteImport.update({
+  id: '/my-workouts/$dayId',
+  path: '/my-workouts/$dayId',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
 const AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute =
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport.update({
     id: '/workouts/$enrollmentId/$week/$day',
@@ -1996,6 +2002,7 @@ export interface FileRoutesByFullPath {
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
+  '/m/my-workouts/$dayId': typeof AuthenticatedMMyWorkoutsDayIdRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRoutesByTo {
@@ -2249,6 +2256,7 @@ export interface FileRoutesByTo {
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
+  '/m/my-workouts/$dayId': typeof AuthenticatedMMyWorkoutsDayIdRoute
   '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRoutesById {
@@ -2508,6 +2516,7 @@ export interface FileRoutesById {
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
+  '/_authenticated/m/my-workouts/$dayId': typeof AuthenticatedMMyWorkoutsDayIdRoute
   '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRouteTypes {
@@ -2767,6 +2776,7 @@ export interface FileRouteTypes {
     | '/api/public/google/oauth/callback'
     | '/api/public/wearables/oura/callback'
     | '/admin/crm/contacts/'
+    | '/m/my-workouts/$dayId'
     | '/m/workouts/$enrollmentId/$week/$day'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -3020,6 +3030,7 @@ export interface FileRouteTypes {
     | '/api/public/google/oauth/callback'
     | '/api/public/wearables/oura/callback'
     | '/admin/crm/contacts'
+    | '/m/my-workouts/$dayId'
     | '/m/workouts/$enrollmentId/$week/$day'
   id:
     | '__root__'
@@ -3278,6 +3289,7 @@ export interface FileRouteTypes {
     | '/api/public/google/oauth/callback'
     | '/api/public/wearables/oura/callback'
     | '/_authenticated/admin/crm/contacts/'
+    | '/_authenticated/m/my-workouts/$dayId'
     | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
   fileRoutesById: FileRoutesById
 }
@@ -5131,6 +5143,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWearablesOuraCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/m/my-workouts/$dayId': {
+      id: '/_authenticated/m/my-workouts/$dayId'
+      path: '/my-workouts/$dayId'
+      fullPath: '/m/my-workouts/$dayId'
+      preLoaderRoute: typeof AuthenticatedMMyWorkoutsDayIdRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
     '/_authenticated/m/workouts/$enrollmentId/$week/$day': {
       id: '/_authenticated/m/workouts/$enrollmentId/$week/$day'
       path: '/workouts/$enrollmentId/$week/$day'
@@ -5640,6 +5659,7 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMNutritionIndexRoute: typeof AuthenticatedMNutritionIndexRoute
   AuthenticatedMWorkoutsIndexRoute: typeof AuthenticatedMWorkoutsIndexRoute
   AuthenticatedMFormsAssignmentIdCompleteRoute: typeof AuthenticatedMFormsAssignmentIdCompleteRoute
+  AuthenticatedMMyWorkoutsDayIdRoute: typeof AuthenticatedMMyWorkoutsDayIdRoute
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 
@@ -5665,6 +5685,7 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMWorkoutsIndexRoute: AuthenticatedMWorkoutsIndexRoute,
   AuthenticatedMFormsAssignmentIdCompleteRoute:
     AuthenticatedMFormsAssignmentIdCompleteRoute,
+  AuthenticatedMMyWorkoutsDayIdRoute: AuthenticatedMMyWorkoutsDayIdRoute,
   AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute:
     AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute,
 }

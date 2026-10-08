@@ -24,6 +24,8 @@ import { RecoveryPreviewCard } from "@/components/analytics/recovery-preview-car
 import { MemberBlockWeekColumns } from "@/components/member/member-block-week-columns";
 import { MemberPlanCalendar } from "@/components/member/member-plan-calendar";
 import { MemberDataTracker } from "@/components/member/member-data-tracker";
+import { MyWorkoutsCard, MY_WORKOUTS_KEY } from "@/components/member/my-workouts-card";
+import { listMyMemberWorkouts } from "@/lib/member-workouts.functions";
 
 export const Route = createFileRoute("/_authenticated/m/workouts/")({
   component: MemberWorkouts,
@@ -37,7 +39,11 @@ function MemberWorkouts() {
   const { data: me } = useQuery({ queryKey: ["m-me"], queryFn: () => fetchMe() });
   const memberId = me?.member?.id;
   const userId = (me?.member as any)?.user_id ?? null;
-  const clientId = (me as any)?.member?.client_id ?? null;
+  // Training analytics need a pl_* athlete; a member has one once they build
+  // a workout (their member athlete profile).
+  const listMine = useServerFn(listMyMemberWorkouts);
+  const { data: mine } = useQuery({ queryKey: MY_WORKOUTS_KEY, queryFn: () => listMine() });
+  const clientId = mine?.athleteId ?? (me as any)?.member?.client_id ?? null;
   const preferredUnit: "lb" | "kg" =
     (me?.member as any)?.preferred_weight_unit === "kg" ? "kg" : "lb";
 
@@ -155,6 +161,10 @@ function MemberWorkouts() {
           </div>
         }
       />
+
+      <div className="px-4">
+        <MyWorkoutsCard />
+      </div>
 
       {activeLoading ? (
         <Card className="mx-4 flex items-center gap-2 p-6 text-sm text-muted-foreground">
