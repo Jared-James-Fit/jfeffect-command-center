@@ -1015,3 +1015,20 @@ describe("lock in never attaches to an old unfinished session", () => {
     expect(pickLockInSession([done], now)).toBeNull();
   });
 });
+
+describe("every Share is the same one-screen studio", () => {
+  const read = (f: string) => readFileSync(f, "utf8");
+  it("the workout recap's Share opens the studio on the workout just finished", () => {
+    const recap = read("src/components/workout-submission-summary.tsx");
+    expect(recap).toContain('import("@/components/community/workout-share-studio")');
+    expect(recap).toContain("<WorkoutShareStudio");
+    expect(recap).not.toContain("<ShareComposer");
+  });
+  it("Community Share and the recap build workout looks and posts the same way", () => {
+    const hook = read("src/components/community/use-workout-studio.ts");
+    expect(read("src/components/community/share-workout-picker.tsx")).toContain("const workout = useWorkoutStudio(target, unit, capturing);");
+    expect(read("src/components/community/workout-share-studio.tsx")).toContain("const w = useWorkoutStudio(target, unit, open);");
+    expect(hook).toContain("return { data, looks: cameraLooks(data) };");
+    expect(hook).toContain("await shareToCommunity(qc, {");
+  });
+});

@@ -19,9 +19,9 @@ import { SCOPE_LABEL, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLa
 import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
 
-// The share composer (photo/video pipeline, upload client) is only fetched the
-// first time someone taps Share workout, so the recap itself stays light.
-const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
+// The share studio (camera, cards, upload) is only fetched the first time
+// someone taps Share workout, so the recap itself stays light.
+const WorkoutShareStudio = lazyWithRetry(() => import("@/components/community/workout-share-studio").then((m) => ({ default: m.WorkoutShareStudio })));
 
 type Props = {
   open: boolean;
@@ -52,8 +52,8 @@ type Props = {
   cardio?: CardioTakeawayInput;
   /**
    * pl_day_completions.id of this finished workout. When present, the footer
-   * offers the optional "Share workout" composer (community post and/or
-   * external card). Omit it where sharing isn't supported (memberships, coach
+   * offers the optional "Share workout" studio (camera → card → community
+   * post and/or Instagram story, one screen). Omit it where sharing isn't supported (memberships, coach
    * "View as client"); the legacy story Share/Save buttons remain there.
    */
   completionId?: string | null;
@@ -422,9 +422,9 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     </Dialog>
     {completionId && shareMounted && (
       <Suspense fallback={null}>
-        <ShareComposer
+        <WorkoutShareStudio
           open={shareOpen}
-          onOpenChange={setShareOpen}
+          onClose={() => setShareOpen(false)}
           completionId={completionId}
           athleteName={athleteName}
           workoutTitle={workoutTitle}

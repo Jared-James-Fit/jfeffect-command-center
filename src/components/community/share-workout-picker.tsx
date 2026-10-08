@@ -1,7 +1,5 @@
 import { Suspense, useMemo, useState } from "react";
-import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, ChevronRight, Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -10,13 +8,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, buildShareCardFields, formatWorkoutDuration, groupSessions, lockInCameraCard, sessionDisplayTitle, sessionWhen, type CommunityVisibility } from "@/lib/community";
-import { invalidateCommunity, shareToCommunity, useCompletionPreview, useDayPlan, useMyPostForCompletion, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
-import { cameraLooks, type ShareTemplate } from "@/lib/workout-share-card";
+import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, lockInCameraCard, sessionDisplayTitle, sessionWhen } from "@/lib/community";
+import { shareToCommunity, useDayPlan, useMyPostForCompletion, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
+import type { ShareTemplate } from "@/lib/workout-share-card";
 import type { CameraCard, StudioPost } from "@/components/community/share-studio";
 import { startWorkout as startWorkoutFn } from "@/lib/workout-completion.functions";
 import { audienceDoneLabel } from "@/components/community/audience-picker";
 import { CameraChip } from "@/components/community/camera-overlays";
+import { postedToast, useWorkoutStudio } from "@/components/community/use-workout-studio";
 
 const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
 const ShareStudio = lazyWithRetry(() => import("@/components/community/share-studio").then((m) => ({ default: m.ShareStudio })));
@@ -25,14 +24,6 @@ type Mode = "lockin" | "workout";
 type LockLook = Extract<ShareTemplate, "lockin" | "lockclock" | "lockplan">;
 
 export const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)]";
-
-/** What a fresh post says, by who it's for. */
-export function postedToast(visibility: CommunityVisibility, lockIn: boolean, updated: boolean) {
-  if (visibility === "coach") return { title: lockIn ? "Sent to your coach 🔒" : "Sent to your coach", description: "Only you and your coach can see it." };
-  if (visibility === "private") return { title: "Saved to your profile", description: "Only you can see it." };
-  if (lockIn) return { title: updated ? "Lock in updated 🔒" : "You're locked in 🔒", description: "The crew sees you showed up. Your numbers land on it when you finish." };
-  return { title: updated ? "Post updated 🔥" : "You're in the feed 🔥", description: undefined };
-}
 
 /**
  * "+ Share" — the whole thing on one screen (ShareStudio). Opens straight to
@@ -58,7 +49,6 @@ export function ShareWorkoutButton({
   previewOnly?: boolean;
 }) {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   // The session list (from the camera's chip).
   const [rawOpen, setRawOpen] = useState(false);
@@ -79,41 +69,22 @@ export function ShareWorkoutButton({
   const lockCompletionId = today ? startedId ?? today.completionId : null;
   const { data: lockExisting } = useMyPostForCompletion(lockCompletionId, capturing && !!lockCompletionId);
   const { data: plan } = useDayPlan(capturing ? today?.dayId ?? null : null);
-  const { data: targetPost } = useMyPostForCompletion(target?.completion_id, capturing && !!target);
   const startSrv = useServerFn(startWorkoutFn);
 
   // The look they're on (swipe to change).
   const [lockLook, setLockLook] = useState<LockLook>("lockin");
-  const [workoutLook, setWorkoutLook] = useState<ShareTemplate | null>(null);
-  const { data: targetStats } = useCompletionPreview(target?.completion_id ?? "", capturing && !!target);
-  const workoutCard = useMemo(() => {
-    if (!targetStats || !target) return null;
-    const data = {
-      format: "story" as const,
-      ...buildShareCardFields({
-        stats: targetStats,
-        unit,
-        athleteName: (target.athlete_name ?? "").trim().split(/\s+/)[0] || null,
-        workoutTitle: target.title,
-        dateLabel: format(new Date(targetStats.completed_at), "EEE, MMM d"),
-      }),
-    };
-    return { data, looks: cameraLooks(data) };
-  }, [targetStats, target, unit]);
-  const currentWorkoutLook = workoutCard ? (workoutLook && workoutCard.looks.includes(workoutLook) ? workoutLook : workoutCard.looks[0]) : null;
+  const workout = useWorkoutStudio(target, unit, capturing);
   const lockCard = useMemo(() => (today ? lockInCameraCard({ workoutTitle: today.title, athleteName: today.athleteName, plan: plan ?? [] }) : null), [today, plan]);
   const cameraCard: CameraCard | null =
     activeMode === "lockin" && lockCard
       ? { data: lockCard.data, looks: lockCard.looks, look: lockCard.looks.includes(lockLook) ? lockLook : "lockin", onLook: (t) => setLockLook(t as LockLook) }
-      : workoutCard && currentWorkoutLook
-        ? { data: workoutCard.data, looks: workoutCard.looks, look: currentWorkoutLook, onLook: setWorkoutLook }
-        : null;
+      : workout.card;
 
   const begin = () => {
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
     setMode(null);
     setChosen(null);
-    setWorkoutLook(null);
+    workout.resetLook();
     setCapturing(true);
   };
 
@@ -144,23 +115,6 @@ export function ShareWorkoutButton({
         },
       }
     : null;
-  const workoutPost: StudioPost | null = target
-    ? {
-        key: `workout:${target.completion_id}:${targetPost?.id ?? ""}`,
-        label: targetPost ? "Update" : "Post",
-        caption: targetPost?.caption,
-        visibility: targetPost?.visibility,
-        hideLoads: targetPost?.hide_loads,
-        showHideLoads: true,
-        onPost: async (a) => {
-          if (!user?.id) throw new Error("Sign in again to post");
-          await shareToCommunity(qc, { userId: user.id, completionId: target.completion_id, caption: a.caption, visibility: a.visibility, hideLoads: a.hideLoads, photo: a.photo, existing: targetPost });
-          const t = postedToast(a.visibility, false, !!targetPost);
-          toast.success(t.title, { description: t.description, action: a.visibility === "community" ? { label: "View", onClick: () => navigate({ to: "/portal/community" }) } : undefined });
-        },
-      }
-    : null;
-
   const changeTarget = () => setRawOpen(true);
 
   return (
@@ -224,7 +178,7 @@ export function ShareWorkoutButton({
                         type="button"
                         onClick={() => {
                           setChosen(s);
-                          setWorkoutLook(null);
+                          workout.resetLook();
                           setRawOpen(false);
                         }}
                         className={cn(
@@ -288,9 +242,9 @@ export function ShareWorkoutButton({
             modes={today ? [{ key: "lockin", label: "Lock in" }, { key: "workout", label: "Workout" }] : undefined}
             mode={activeMode}
             onMode={(k) => setMode(k as Mode)}
-            canShoot={activeMode === "lockin" ? !!today : !!target && !!workoutCard}
+            canShoot={activeMode === "lockin" ? !!today : !!target && workout.ready}
             card={cameraCard}
-            post={activeMode === "lockin" ? lockPost : workoutPost}
+            post={activeMode === "lockin" ? lockPost : workout.post}
             chip={
               activeMode === "lockin" && today ? (
                 <CameraChip icon="🔒" title={today.title} sub={today.completionId ? "In progress · update your lock in" : "Posting it starts your session"} />
