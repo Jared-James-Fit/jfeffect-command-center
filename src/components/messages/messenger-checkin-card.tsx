@@ -17,6 +17,7 @@ import {
   Flag,
   Loader2,
   MessageSquareText,
+  RotateCcw,
   Sparkles,
   Target,
   Trophy,
@@ -587,6 +588,20 @@ export function MessengerCheckinSubmissionCard({
       .catch(() => {});
   }, [role, data, analyze, submissionId, qc]);
 
+  // Coach re-roll of the recap + suggested reply (e.g. after the voice changed).
+  const [redoing, setRedoing] = useState(false);
+  const redoSuggestion = async () => {
+    setRedoing(true);
+    try {
+      await analyze({ data: { submissionId, force: true } });
+      await qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] });
+    } catch {
+      toast.error("Couldn't write a new suggestion. Try again.");
+    } finally {
+      setRedoing(false);
+    }
+  };
+
   // Reviewed state. A staff reply in the chat closes it automatically (database trigger);
   // these are the one-tap paths: "Mark reviewed" and "Use reply".
   const reviewedAt = ((data as any)?.reviewed_at ?? null) as string | null;
@@ -691,6 +706,17 @@ export function MessengerCheckinSubmissionCard({
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
               <MessageSquareText className="h-3.5 w-3.5" /> Suggested response
+              {role === "admin" && (
+                <button
+                  type="button"
+                  onClick={() => void redoSuggestion()}
+                  disabled={redoing}
+                  className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-primary hover:bg-primary/10 disabled:opacity-60"
+                  title="Write a new suggestion"
+                >
+                  <RotateCcw className={cn("h-3 w-3", redoing && "animate-spin")} /> {redoing ? "Writing…" : "Redo"}
+                </button>
+              )}
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
               {analysis.suggested_response}

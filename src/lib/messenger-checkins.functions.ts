@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { ensureNextOccurrence } from "@/lib/action-centre.functions";
+import { COACH_VOICE_RULES, casualize } from "@/lib/coach-voice";
 
 export type MessengerCheckinTaskType = "weekly_checkin";
 
@@ -646,9 +647,10 @@ async function generateAnalysis(
       "Be concise and practical. Do not diagnose medical conditions.",
       "A red flag means something the coach should notice or ask about, not a medical diagnosis.",
       "Pain/injury, unusually poor recovery, very low sleep/energy, major adherence problems, or a direct request for help should be surfaced clearly.",
-      "The suggested response must sound human, direct and short. It should acknowledge a win, name the main focus, give 1-3 concrete goals for the new week, and address any red flag or request for help.",
+      "The suggested response acknowledges a real win, names the main focus, gives 1-3 concrete goals for the new week, and addresses any red flag or request for help.",
       globalCfg?.brand_voice ? `BRAND VOICE: ${globalCfg.brand_voice}` : "",
       globalCfg?.tone ? `TONE: ${globalCfg.tone}` : "",
+      COACH_VOICE_RULES,
       "Return ONLY JSON matching:",
       '{"summary":string,"wins":string[],"focus":string[],"goals":string[],"red_flags":string[],"coach_notes":string[],"suggested_response":string,"urgency":"low"|"normal"|"high"|"urgent"}',
     ].filter(Boolean).join("\n\n");
@@ -691,7 +693,7 @@ async function generateAnalysis(
       goals: Array.isArray(parsed.goals) ? parsed.goals.map(String).slice(0, 5) : fallback.goals,
       red_flags: Array.isArray(parsed.red_flags) ? parsed.red_flags.map(String).slice(0, 5) : fallback.red_flags,
       coach_notes: Array.isArray(parsed.coach_notes) ? parsed.coach_notes.map(String).slice(0, 5) : [],
-      suggested_response: String(parsed.suggested_response ?? fallback.suggested_response),
+      suggested_response: casualize(String(parsed.suggested_response ?? fallback.suggested_response)),
       urgency: ["low", "normal", "high", "urgent"].includes(parsed.urgency)
         ? parsed.urgency
         : fallback.urgency,
@@ -845,8 +847,8 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
  */
 export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { submissionId: string }) =>
-    z.object({ submissionId: z.string().uuid() }).parse(d),
+  .inputValidator((d: { submissionId: string; force?: boolean }) =>
+    z.object({ submissionId: z.string().uuid(), force: z.boolean().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const sb = await adminClient();
@@ -858,7 +860,9 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
     if (!row) throw new Error("Check-in not found.");
     const actor = await resolveClientAccess(context.supabase, context.userId, row.client_id);
     if (actor !== "client" && actor !== "admin" && actor !== "coach") throw new Error("Not allowed.");
-    if (row.status !== "completed" || row.ai_status === "ready") return { status: row.ai_status };
+    // Coaches can re-roll a finished recap ("Redo" on the suggested response).
+    const redo = !!data.force && (actor === "admin" || actor === "coach");
+    if (row.status !== "completed" || (row.ai_status === "ready" && !redo)) return { status: row.ai_status };
 
     const taskType = row.task_type as MessengerCheckinTaskType;
     const { data: occurrence } = row.occurrence_id
