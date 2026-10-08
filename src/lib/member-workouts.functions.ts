@@ -112,7 +112,7 @@ export const repeatMemberWorkout = createServerFn({ method: "POST" })
     if (!src || src.week_id !== weekId) throw new Error("That workout isn't one of yours.");
     const { data: rows } = await supabaseAdmin.from("pl_exercise_rows").select("*").eq("day_id", data.dayId).order("sort_order");
     if (!rows?.length) throw new Error("That workout has no exercises.");
-    return createDay(supabaseAdmin, clientId, weekId, src.title, data.date, (dayId) =>
+    return createDay(supabaseAdmin, clientId, weekId, src.title ?? "Workout", data.date, (dayId) =>
       rows.map((r: any, i: number) => ({
         day_id: dayId, sort_order: i, exercise_id: r.exercise_id, exercise_name_override: r.exercise_name_override,
         sets: r.sets, reps_text: r.reps_text, load_kg: r.load_kg, load_unit: r.load_unit,
