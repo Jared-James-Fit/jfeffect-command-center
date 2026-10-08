@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findAuthUserByEmail, assertNotPrivilegedUser } from "@/lib/setup-link-guard.server";
+import { findAuthUserByEmail, assertNotPrivilegedUser, assertInviteRoleRedeemable } from "@/lib/setup-link-guard.server";
 
 function fakeAdmin(opts: { users?: Array<{ id: string; email: string }>; roles?: Record<string, string[]> }) {
   const users = opts.users ?? [];
@@ -53,5 +53,17 @@ describe("assertNotPrivilegedUser", () => {
   it("allows client and member accounts", async () => {
     const admin = fakeAdmin({ roles: { member1: ["client"] } });
     await expect(assertNotPrivilegedUser(admin, "member1")).resolves.toBeUndefined();
+  });
+});
+
+describe("assertInviteRoleRedeemable", () => {
+  it("allows the media_manager invite role", () => {
+    expect(() => assertInviteRoleRedeemable("media_manager")).not.toThrow();
+  });
+
+  it("refuses admin, coach and any role not meant for invite links", () => {
+    for (const role of ["admin", "coach", "client", "", null, undefined]) {
+      expect(() => assertInviteRoleRedeemable(role as any)).toThrow(/can't be redeemed/);
+    }
   });
 });

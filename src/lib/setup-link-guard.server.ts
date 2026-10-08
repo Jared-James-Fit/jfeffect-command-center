@@ -11,6 +11,16 @@
 
 const PAGE_SIZE = 1000;
 
+// Roles a staff invite link may grant. Admin (and any other privileged role)
+// is granted only by an existing admin inside the app, never by a link.
+const LINK_REDEEMABLE_ROLES = new Set(["media_manager"]);
+
+export function assertInviteRoleRedeemable(role: string | null | undefined): void {
+  if (!role || !LINK_REDEEMABLE_ROLES.has(role)) {
+    throw new Error("This invite can't be redeemed. Ask the admin for a new one.");
+  }
+}
+
 export async function findAuthUserByEmail(supabaseAdmin: any, email: string): Promise<{ id: string } | null> {
   const target = email.trim().toLowerCase();
   for (let page = 1; ; page++) {
