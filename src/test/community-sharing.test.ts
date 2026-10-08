@@ -19,6 +19,11 @@ import {
   groupSessions,
   sessionDisplayTitle,
   sessionWhen,
+  everydayWeight,
+  streakGrid,
+  progressVsLast,
+  buildCardExtras,
+  lockInCameraCard,
   formatExerciseBest,
   sessionLine,
   trainingSinceLabel,
@@ -40,7 +45,7 @@ import {
   type CommunityFeedPage,
   type WorkoutShareStats,
 } from "@/lib/community";
-import { availableTemplates, exportType, wrapLines } from "@/lib/workout-share-card";
+import { availableTemplates, cameraLooks, exportType, wrapLines } from "@/lib/workout-share-card";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const migration = read("supabase/migrations/20261006090000_community_sharing.sql");
@@ -902,14 +907,85 @@ describe("share camera: options right away, no list in the way", () => {
     expect(picker).toContain("if (target) setPicked(target);");
     expect(picker).toContain("if (choosing) setChosen(s);");
   });
-  it("shows what the shot becomes, live on the viewfinder", () => {
-    expect(picker).toContain("<LockInStampPreview title={today.title} />");
-    expect(picker).toContain("<WorkoutStampPreview");
-    expect(read("src/components/community/lock-in.tsx")).toContain("overlay={<LockInStampPreview title={workoutTitle} />}");
+  it("the viewfinder is the real card, live, and the editor opens on the look you shot", () => {
+    expect(picker).toContain("card={cameraCard}");
+    expect(picker).toContain("setPickedLook(currentWorkoutLook);");
+    expect(picker).toContain("initialTemplate={pickedLook}");
+    expect(picker).toContain("initialTemplate={lockLook}");
+    expect(read("src/components/community/lock-in.tsx")).toContain("lockInCameraCard({ workoutTitle, athleteName, plan: plan ?? [] })");
+    expect(cam).toContain("paintShareCard(cardEl, { ...c.data, lockedIn, template: c.look, media }, logo, PREVIEW_SCALE);");
+    // swipe sideways = next look; small movement = tap
+    expect(cam).toContain("if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) changeLook(dx < 0 ? 1 : -1);");
   });
   it("self-timer, double-tap flip, and the camera light goes off", () => {
     expect(cam).toContain("setTimer((t) => (t === 0 ? 3 : t === 3 ? 10 : 0))");
     expect(cam).toContain("if (now - lastTap.current < 300) flip();");
     expect(cam).toContain("if (video) video.srcObject = null;");
+  });
+});
+
+describe("stat cards anyone can read: receipt, streak, vs last time", () => {
+  const tonight: any = {
+    workout_title: "Tuesday — Secondary Deadlift + Secondary Bench", completed_at: "2026-10-08T02:17:01Z", duration_min: 120, working_sets: 14, tonnage_kg: 6808.4,
+    top_lift: { exercise_name: "Sumo Deadlift", reps: 7, load_kg: 102 }, pr_count: 0, prs: [],
+    exercises: [{ name: "Sumo Deadlift", sets: 3, best_load_kg: 102, best_reps: 7, max_reps: null, max_seconds: null, pr: null }, { name: "Plank", sets: 0, best_load_kg: null, best_reps: null, max_reps: null, max_seconds: 60, pr: null }],
+    local_date: "2026-10-07", total_reps: 202, lifetime_sessions: 71, streak_weeks: 17,
+    days_trained: ["2026-09-14", "2026-09-30", "2026-10-06", "2026-10-07"],
+    prev: { completed_at: "2026-10-01T03:39:10Z", tonnage_kg: 4535.9, working_sets: 8, top_lift: { exercise_name: "Sumo Deadlift", reps: 7, load_kg: 142.9 } },
+  };
+  it("says the weight like anyone would", () => {
+    expect(everydayWeight(6808.4, 2)).toBe("≈ the weight of 3 pickup trucks");
+    expect(everydayWeight(6808.4, 1)).toBe("≈ the weight of 4 cars");
+    expect(everydayWeight(400)).toBe("≈ the weight of a grand piano");
+    expect(everydayWeight(100)).toBeNull();
+  });
+  it("lays 4 Mon–Sun weeks out as a calendar, future days empty", () => {
+    const g = streakGrid(tonight.days_trained, "2026-10-07");
+    expect(g.cells).toHaveLength(28);
+    expect(g.cells[0].date).toBe("2026-09-14"); // a Monday, 3 weeks before this week
+    expect(g.trained).toBe(4);
+    const today = g.cells.find((c) => c.today)!;
+    expect(today).toMatchObject({ date: "2026-10-07", state: "trained" });
+    expect(g.cells[27]).toMatchObject({ date: "2026-10-11", state: "future" });
+  });
+  it("vs last time only when it went up, said plainly", () => {
+    const p = progressVsLast(tonight, "lb")!;
+    expect(p.headline).toBe("+50%");
+    expect(p.sub).toBe("more weight moved than last time");
+    expect(p.bars.map((b) => b.today)).toEqual([false, true]);
+    expect(p.bars[1].share).toBe(1);
+    // the top lift went down, so it isn't bragged about
+    expect(p.lift).toBeNull();
+    expect(progressVsLast({ ...tonight, tonnage_kg: 4000 }, "lb")).toBeNull();
+    const heavier = progressVsLast({ ...tonight, tonnage_kg: 4000, top_lift: { exercise_name: "Sumo Deadlift", reps: 7, load_kg: 150 } }, "kg")!;
+    expect(heavier.headline).toBe("+7 kg");
+    expect(heavier.sub).toBe("heavier on Sumo Deadlift");
+    expect(progressVsLast({ ...tonight, prev: null }, "lb")).toBeNull();
+  });
+  it("feeds every card from the one preview", () => {
+    const x = buildCardExtras(tonight, "lb");
+    expect(x.reps).toBe(202);
+    expect(x.workoutNumber).toBe(71);
+    expect(x.duration).toBe("2h");
+    expect(x.receipt.map((r) => r.name)).toEqual(["Sumo Deadlift"]);
+    expect(x.streak?.weeks).toBe(17);
+    expect(x.progress?.headline).toBe("+50%");
+    expect(buildCardExtras({ ...tonight, days_trained: ["2026-10-07"] }, "lb").streak).toBeNull();
+  });
+  it("offers the new cards, and only on a photo in the camera", () => {
+    const base = buildShareCardFields({ stats: tonight, unit: "lb", athleteName: "Jared", dateLabel: "Wed, Oct 7" });
+    expect(base.workoutTitle).toBe("Secondary Deadlift + Secondary Bench");
+    expect(availableTemplates({ ...base, media: null })).toEqual(["progress", "receipt", "streak", "stats", "photo", "volume", "sticker"]);
+    expect(cameraLooks(base)).toEqual(["photo", "progress", "receipt", "streak", "stats", "volume"]);
+    // old posts / previews without the extras keep the old set
+    expect(availableTemplates({ isPr: false, exercises: [], volume: null, media: null })).toEqual(["photo", "sticker"]);
+  });
+  it("lock in on the camera: Locked in · Clock · Today's plan", () => {
+    const c = lockInCameraCard({ workoutTitle: "Monday — Lower B", athleteName: "Marc Smith", plan: [{ name: "Squat", detail: "4 × 3" }] });
+    expect(c.looks).toEqual(["lockin", "lockclock", "lockplan"]);
+    expect(c.data.workoutTitle).toBe("Lower B");
+    expect(c.data.athleteName).toBe("Marc");
+    expect(c.data.lockedIn?.live).toBe(true);
+    expect(lockInCameraCard({ workoutTitle: "Lower B", athleteName: null, plan: [] }).looks).toEqual(["lockin", "lockclock"]);
   });
 });

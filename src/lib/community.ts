@@ -6,6 +6,7 @@
  * same records the recap uses (see migration 20261006090000_community_sharing).
  */
 import { formatLoad, formatTonnage } from "@/lib/training-records";
+import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
 
 export const CAPTION_MAX = 280;
 export const COMMENT_MAX = 300;
@@ -58,6 +59,18 @@ export type WorkoutShareStats = {
   week_sessions?: number;
   /** Present on the composer preview and the post detail (not in the feed). */
   exercises?: CommunityExercise[];
+  /* Composer preview only (community_completion_extras): the athlete's own workout. */
+  /** The workout's local date, YYYY-MM-DD, in the athlete's time zone. */
+  local_date?: string;
+  total_reps?: number;
+  /** "Workout #71" — every finished session up to this one. */
+  lifetime_sessions?: number;
+  /** Weeks in a row with at least one workout, this one included. */
+  streak_weeks?: number;
+  /** Local days trained in the 4 Mon–Sun weeks ending this week. */
+  days_trained?: string[];
+  /** The same workout (same day name) the last time they did it. */
+  prev?: { completed_at: string; tonnage_kg: number; working_sets: number; top_lift: { exercise_name: string; reps: number; load_kg: number | null } | null } | null;
 };
 
 /** One line of the workout breakdown (rows of the same lift merged). */
@@ -353,7 +366,8 @@ export function buildShareCardFields(i: ShareCardInput) {
     .map((e) => ({ name: e.name, detail: formatExerciseBest(e, i.unit), pr: !!e.pr }));
   return {
     athleteName: i.athleteName,
-    workoutTitle: s.workout_title || i.workoutTitle || "Workout",
+    // The program's weekday ("Tuesday — ") clashes with the real date on the card.
+    workoutTitle: sessionDisplayTitle(s.workout_title || i.workoutTitle || "Workout"),
     dateLabel: i.dateLabel,
     lift: lift ? { name: lift.name, detail: formatTopSet(lift.detail, i.unit), prLabel: lift.pr ? SCOPE_WORD[lift.pr].toUpperCase() : null } : null,
     stats: pickCardStats(s, i.unit),
@@ -361,6 +375,7 @@ export function buildShareCardFields(i: ShareCardInput) {
     exercises,
     volume: s.tonnage_kg > 0 ? formatTonnage(s.tonnage_kg, i.unit) : null,
     sessionLine: sessionLine(s),
+    extras: buildCardExtras(s, i.unit),
   };
 }
 
@@ -582,4 +597,151 @@ export function groupSessions<T extends { completed_at: string }>(sessions: T[],
     out.set(group, [...(out.get(group) ?? []), { session: s, when }]);
   }
   return order.filter((k) => out.has(k)).map((k) => ({ key: k, label: SESSION_GROUP_LABEL[k], items: out.get(k)! }));
+}
+
+/* ---- Share cards anyone can read (receipt, streak, vs last time) -------- */
+
+/** Everyday things a single workout weighs about as much as (lb). */
+const SOLO_WEIGHT_OF = [
+  { one: "grand piano", many: "grand pianos", lb: 1000 },
+  { one: "car", many: "cars", lb: 4000 },
+  { one: "pickup truck", many: "pickup trucks", lb: 5000 },
+  { one: "elephant", many: "elephants", lb: 13000 },
+  { one: "school bus", many: "school buses", lb: 25000 },
+] as const;
+
+/** "≈ the weight of 3 pickup trucks". Rotates with `seed` so it stays fresh. */
+export function everydayWeight(kg: number, seed = 0): string | null {
+  const lb = kg * 2.20462;
+  if (!(lb >= 800)) return null;
+  const n = SOLO_WEIGHT_OF.length;
+  for (let k = 0; k < n; k++) {
+    const o = SOLO_WEIGHT_OF[(Math.abs(seed) + k) % n];
+    const count = Math.round(lb / o.lb);
+    if (count === 1 && lb / o.lb >= 0.8) return `≈ the weight of a ${o.one}`;
+    if (count >= 2 && count <= 25) return `≈ the weight of ${count} ${o.many}`;
+  }
+  return null;
+}
+
+export type StreakCell = { date: string; state: "trained" | "rest" | "future"; today: boolean };
+
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Four Mon–Sun weeks ending with the workout's week, oldest first (28 cells). */
+export function streakGrid(days: string[], localDate: string): { cells: StreakCell[]; trained: number } {
+  const [y, m, d] = localDate.split("-").map(Number);
+  const today = new Date(Date.UTC(y, m - 1, d));
+  const monday = new Date(today);
+  monday.setUTCDate(today.getUTCDate() - ((today.getUTCDay() + 6) % 7));
+  const start = new Date(monday);
+  start.setUTCDate(monday.getUTCDate() - 21);
+  const set = new Set(days);
+  const cells: StreakCell[] = [];
+  let trained = 0;
+  for (let i = 0; i < 28; i++) {
+    const c = new Date(start);
+    c.setUTCDate(start.getUTCDate() + i);
+    const key = isoDay(c);
+    const state = key > localDate ? "future" : set.has(key) ? "trained" : "rest";
+    if (state === "trained") trained++;
+    cells.push({ date: key, state, today: key === localDate });
+  }
+  return { cells, trained };
+}
+
+export type ShareCardExtras = {
+  /** When it was finished, "9:17 PM". */
+  timeLabel: string | null;
+  sets: number;
+  reps: number;
+  duration: string | null;
+  workoutNumber: number | null;
+  compare: string | null;
+  receipt: { name: string; sets: number; detail: string; pr: boolean }[];
+  streak: { weeks: number; trained: number; cells: StreakCell[] } | null;
+  progress: {
+    headline: string;
+    sub: string;
+    bars: { label: string; value: string; share: number; today: boolean }[];
+    lift: string | null;
+  } | null;
+};
+
+/**
+ * Today vs the last time they did this same workout, said plainly. Only when
+ * it went up: more total weight moved, or a heavier (or longer) top lift.
+ */
+export function progressVsLast(s: WorkoutShareStats, unit: "kg" | "lb"): ShareCardExtras["progress"] {
+  const p = s.prev;
+  if (!p) return null;
+  const when = new Date(p.completed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  let lift: string | null = null;
+  let liftHead: { headline: string; sub: string } | null = null;
+  const a = p.top_lift;
+  const b = s.top_lift;
+  if (a && b && a.exercise_name === b.exercise_name && a.load_kg != null && b.load_kg != null) {
+    if (b.load_kg > a.load_kg + 0.01) {
+      lift = `${b.exercise_name}: ${formatLoad(a.load_kg, unit)} → ${formatLoad(b.load_kg, unit)}`;
+      const diff = formatLoad(b.load_kg - a.load_kg, unit);
+      liftHead = { headline: `+${diff}`, sub: `heavier on ${b.exercise_name}` };
+    } else if (Math.abs(b.load_kg - a.load_kg) <= 0.01 && b.reps > a.reps) {
+      lift = `${b.exercise_name}: ${a.reps} → ${b.reps} reps at ${formatLoad(b.load_kg, unit)}`;
+      liftHead = { headline: `+${b.reps - a.reps} ${b.reps - a.reps === 1 ? "rep" : "reps"}`, sub: `on ${b.exercise_name}` };
+    }
+  }
+  const pct = p.tonnage_kg > 0 && s.tonnage_kg > 0 ? Math.round((s.tonnage_kg / p.tonnage_kg - 1) * 100) : 0;
+  const head = pct >= 1 ? { headline: `+${Math.min(pct, 999)}%`, sub: "more weight moved than last time" } : liftHead;
+  if (!head) return null;
+  const max = Math.max(p.tonnage_kg, s.tonnage_kg, 1);
+  const bars =
+    p.tonnage_kg > 0 && s.tonnage_kg > 0
+      ? [
+          { label: `Last time · ${when}`, value: formatTonnage(p.tonnage_kg, unit), share: p.tonnage_kg / max, today: false },
+          { label: "Today", value: formatTonnage(s.tonnage_kg, unit), share: s.tonnage_kg / max, today: true },
+        ]
+      : [];
+  return { ...head, bars, lift: pct >= 1 ? lift : null };
+}
+
+/** Everything the receipt / streak / progress / volume cards print. */
+export function buildCardExtras(s: WorkoutShareStats, unit: "kg" | "lb"): ShareCardExtras {
+  const grid = s.days_trained && s.local_date ? streakGrid(s.days_trained, s.local_date) : null;
+  return {
+    timeLabel: lockInTimeLabel(s.completed_at),
+    sets: s.working_sets,
+    reps: s.total_reps ?? 0,
+    duration: formatWorkoutDuration(s.duration_min),
+    workoutNumber: s.lifetime_sessions && s.lifetime_sessions > 0 ? s.lifetime_sessions : null,
+    compare: s.tonnage_kg > 0 ? everydayWeight(s.tonnage_kg, s.lifetime_sessions ?? 0) : null,
+    receipt: (s.exercises ?? []).filter((e) => e.sets > 0).map((e) => ({ name: e.name, sets: e.sets, detail: formatExerciseBest(e, unit), pr: !!e.pr })),
+    streak: grid && grid.trained >= 2 ? { weeks: s.streak_weeks ?? 0, trained: grid.trained, cells: grid.cells } : null,
+    progress: progressVsLast(s, unit),
+  };
+}
+
+/* ---- The camera's live card ------------------------------------------- */
+
+export type CameraCardBase = Omit<ShareCardData, "media" | "template">;
+const first = (full?: string | null) => (full ?? "").trim().split(/\s+/)[0] || null;
+
+/** Lock in on the camera: Locked in · Clock · Today's plan, the clock ticking live. */
+export function lockInCameraCard(i: { workoutTitle: string; athleteName: string | null; plan: { name: string; detail: string }[]; now?: Date }): { data: CameraCardBase; looks: ShareTemplate[] } {
+  const now = i.now ?? new Date();
+  return {
+    data: {
+      format: "story",
+      athleteName: first(i.athleteName),
+      workoutTitle: sessionDisplayTitle(i.workoutTitle || "Workout"),
+      dateLabel: now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
+      lift: null,
+      stats: [],
+      isPr: false,
+      exercises: i.plan.map((p) => ({ name: p.name, detail: p.detail, pr: false })),
+      volume: null,
+      sessionLine: null,
+      lockedIn: { time: lockInTimeLabel(now.toISOString()) ?? "", live: true },
+    },
+    looks: i.plan.length ? ["lockin", "lockclock", "lockplan"] : ["lockin", "lockclock"],
+  };
 }

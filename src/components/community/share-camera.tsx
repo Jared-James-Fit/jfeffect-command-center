@@ -2,8 +2,20 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Camera, Images, RefreshCcw, Timer, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { TEMPLATE_LABEL, cardLogo, ensureDisplayFont, paintShareCard, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
 
 export type CameraMode = { key: string; label: string };
+
+/** A card painted live over the viewfinder; swipe sideways to change the look. */
+export type CameraCard = {
+  data: Omit<ShareCardData, "media" | "template">;
+  looks: ShareTemplate[];
+  look: ShareTemplate;
+  onLook: (t: ShareTemplate) => void;
+};
+
+const PREVIEW_SCALE = 0.72;
+const FRAME_MS = 33;
 
 /**
  * Camera-first share, Instagram-style: opens straight to a live camera with
@@ -13,9 +25,10 @@ export type CameraMode = { key: string; label: string };
  * picker. A web page can't read the camera roll, so the library button
  * opens the system picker rather than showing thumbnails.
  *
- * `chip` (what this becomes, tap to change) sits above the shutter and
- * `overlay` previews the card's stamp on the viewfinder, so people can frame
- * the shot for it. Self-timer (3s / 10s) for a phone propped on a rack;
+ * `chip` (what this becomes, tap to change) sits above the shutter. With a
+ * `card`, the viewfinder IS the card: the real share card painted live on the
+ * camera feed, Snapchat-style — swipe left/right to flip through the looks,
+ * and the one you shoot on is the one you get. Self-timer (3s / 10s) for a phone propped on a rack;
  * double-tap the viewfinder to flip.
  */
 export function ShareCamera({
@@ -29,7 +42,7 @@ export function ShareCamera({
   onMode,
   hint,
   chip,
-  overlay,
+  card,
   canShoot = true,
   accept = "image/*",
 }: {
@@ -44,7 +57,7 @@ export function ShareCamera({
   onMode?: (key: string) => void;
   hint?: string | null;
   chip?: ReactNode;
-  overlay?: ReactNode;
+  card?: CameraCard | null;
   /** False while there's nothing to share yet (the chip says why). */
   canShoot?: boolean;
   accept?: string;
@@ -60,6 +73,13 @@ export function ShareCamera({
   const [count, setCount] = useState<number | null>(null);
   const countRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTap = useRef(0);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const [cardEl, setCardEl] = useState<HTMLCanvasElement | null>(null);
+  const [lookFlash, setLookFlash] = useState<string | null>(null);
+  // If a phone ever can't paint the live card, fall back to the plain camera.
+  const [cardFailed, setCardFailed] = useState(false);
+  const cardRef = useRef(card);
+  cardRef.current = card;
 
   const cancelCount = () => {
     if (countRef.current) clearInterval(countRef.current);
@@ -108,6 +128,66 @@ export function ShareCamera({
     if (!open) stop();
   }, [open]);
 
+  // Paint the card on the live feed (~30 fps, a lighter-res preview).
+  const hasCard = !!card && !cardFailed;
+  useEffect(() => {
+    if (!open || !cardEl || !hasCard) return;
+    let raf = 0;
+    let last = 0;
+    let alive = true;
+    let logo: HTMLImageElement | null = null;
+    const mirror = document.createElement("canvas");
+    const frame = (t: number) => {
+      if (!alive) return;
+      raf = requestAnimationFrame(frame);
+      if (t - last < FRAME_MS) return;
+      last = t;
+      const c = cardRef.current;
+      if (!c) return;
+      let media: ShareCardData["media"] = null;
+      if (status === "live" && video && video.videoWidth) {
+        if (facing === "user") {
+          const w = Math.min(960, video.videoWidth);
+          const h = Math.round((w * video.videoHeight) / video.videoWidth);
+          if (mirror.width !== w) mirror.width = w;
+          if (mirror.height !== h) mirror.height = h;
+          const m = mirror.getContext("2d")!;
+          m.setTransform(-1, 0, 0, 1, w, 0);
+          m.drawImage(video, 0, 0, w, h);
+          media = mirror;
+        } else media = video;
+      }
+      const lockedIn = c.data.lockedIn?.live ? { time: new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }), live: true } : c.data.lockedIn;
+      try {
+        paintShareCard(cardEl, { ...c.data, lockedIn, template: c.look, media }, logo, PREVIEW_SCALE);
+      } catch {
+        alive = false;
+        setCardFailed(true);
+      }
+    };
+    void Promise.all([ensureDisplayFont(), cardLogo()]).then(([, l]) => {
+      logo = l;
+      if (alive) raf = requestAnimationFrame(frame);
+    });
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [open, cardEl, hasCard, status, video, facing]);
+
+  const changeLook = (dir: 1 | -1) => {
+    if (!card || card.looks.length < 2) return;
+    const i = Math.max(0, card.looks.indexOf(card.look));
+    const next = card.looks[(i + dir + card.looks.length) % card.looks.length];
+    card.onLook(next);
+    setLookFlash(TEMPLATE_LABEL[next]);
+  };
+  useEffect(() => {
+    if (!lookFlash) return;
+    const t = setTimeout(() => setLookFlash(null), 900);
+    return () => clearTimeout(t);
+  }, [lookFlash]);
+
   const capture = () => {
     if (!video || status !== "live" || !video.videoWidth) return;
     const c = document.createElement("canvas");
@@ -155,6 +235,21 @@ export function ShareCamera({
     if (now - lastTap.current < 300) flip();
     lastTap.current = now;
   };
+  // Swipe sideways = next look; a small movement is a tap (double-tap flips).
+  const onDown = (e: React.PointerEvent) => {
+    // Buttons on the viewfinder (close, timer, no photo) aren't swipes or taps.
+    if ((e.target as Element).closest("button")) return void (swipe.current = null);
+    swipe.current = { x: e.clientX, y: e.clientY };
+  };
+  const onUp = (e: React.PointerEvent) => {
+    const st = swipe.current;
+    swipe.current = null;
+    if (!st) return;
+    const dx = e.clientX - st.x;
+    const dy = e.clientY - st.y;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) changeLook(dx < 0 ? 1 : -1);
+    else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) onViewfinderTap();
+  };
 
   const fromInput = (e: React.ChangeEvent<HTMLInputElement>, live: boolean) => {
     const f = e.target.files?.[0];
@@ -175,16 +270,17 @@ export function ShareCamera({
         <input ref={libRef} type="file" accept={accept} hidden onChange={(e) => fromInput(e, false)} />
         <input ref={capRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => fromInput(e, true)} />
 
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded-b-[28px] bg-zinc-900 sm:rounded-[28px]" onClick={onViewfinderTap}>
+        <div className="relative min-h-0 flex-1 touch-pan-y select-none overflow-hidden rounded-b-[28px] bg-zinc-900 sm:rounded-[28px]" onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={() => (swipe.current = null)}>
           <video
             ref={setVideo}
             playsInline
             muted
             autoPlay
-            className={cn("absolute inset-0 h-full w-full object-cover transition-opacity", status === "live" ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
+            className={cn("absolute inset-0 h-full w-full object-cover transition-opacity", status === "live" && !hasCard ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
           />
+          {hasCard && card && <canvas ref={setCardEl} className="pointer-events-none absolute inset-0 h-full w-full object-cover" aria-label={`${TEMPLATE_LABEL[card.look]} look`} />}
           {status === "fallback" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
+            <div className={cn("absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center", card && "bg-black/55 backdrop-blur-[2px]")}>
               <button type="button" onClick={() => capRef.current?.click()} className="grid h-24 w-24 place-items-center rounded-full bg-white text-black shadow-xl active:scale-95" aria-label="Open the camera">
                 <Camera className="h-10 w-10" />
               </button>
@@ -192,7 +288,18 @@ export function ShareCamera({
               <p className="max-w-[260px] text-[12px] text-white/60">The live camera isn't available here, so this opens your phone's camera. Allow camera access in settings to shoot right in the app.</p>
             </div>
           )}
-          {status !== "fallback" && overlay && <div className="pointer-events-none absolute inset-0">{overlay}</div>}
+          {card && card.looks.length > 1 && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center gap-1.5" aria-hidden>
+              {card.looks.map((t) => (
+                <span key={t} className={cn("h-1.5 rounded-full transition-all", t === card.look ? "w-5 bg-white" : "w-1.5 bg-white/45")} />
+              ))}
+            </div>
+          )}
+          {lookFlash && (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center">
+              <span key={lookFlash} className="font-display animate-in fade-in zoom-in-95 rounded-2xl bg-black/35 px-5 py-2 text-[34px] uppercase leading-none backdrop-blur-sm">{lookFlash}</span>
+            </div>
+          )}
           {count != null && (
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
               <span key={count} className="font-display animate-in zoom-in-50 fade-in text-[140px] leading-none text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.5)]">{count}</span>

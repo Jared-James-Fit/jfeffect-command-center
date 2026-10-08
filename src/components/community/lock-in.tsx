@@ -3,9 +3,10 @@ import { Camera, Check, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, lockInTimeLabel } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, lockInCameraCard, lockInTimeLabel } from "@/lib/community";
 import { useCommunityActivity, useDayPlan, useMyPostForCompletion } from "@/lib/community.queries";
-import { CameraChip, LockInStampPreview } from "@/components/community/camera-overlays";
+import { CameraChip } from "@/components/community/camera-overlays";
+import type { LockTemplate } from "@/components/community/lock-in-editor";
 
 const LockInEditor = lazyWithRetry(() => import("@/components/community/lock-in-editor").then((m) => ({ default: m.LockInEditor })));
 const CaptureFlow = lazyWithRetry(() => import("@/components/community/capture-flow").then((m) => ({ default: m.CaptureFlow })));
@@ -49,6 +50,7 @@ export function LockInBar({
   const [open, setOpen] = useState(false);
   const [pick, setPick] = useState<LockInPick | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [look, setLook] = useState<LockTemplate>("lockin");
   const seq = useRef(0);
 
   if (!activity?.enabled) return null;
@@ -106,6 +108,7 @@ export function LockInBar({
             onCamera={() => setCapturing(true)}
             onLibrary={() => setCapturing(true)}
             plan={plan ?? []}
+            initialTemplate={look}
           />
         </Suspense>
       )}
@@ -127,7 +130,10 @@ export function LockInBar({
             skipLabel="No photo"
             workoutTitle={workoutTitle}
             chip={<CameraChip icon="🔒" title={workoutTitle} sub="Snap the gym, your setup, the vibe" />}
-            overlay={<LockInStampPreview title={workoutTitle} />}
+            card={(() => {
+              const c = lockInCameraCard({ workoutTitle, athleteName, plan: plan ?? [] });
+              return { data: c.data, looks: c.looks, look: c.looks.includes(look) ? look : "lockin", onLook: (t) => setLook(t as LockTemplate) };
+            })()}
           />
         </Suspense>
       )}
