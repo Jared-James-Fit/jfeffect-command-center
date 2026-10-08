@@ -39,7 +39,7 @@ export const listUpcomingUnified = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => Input.parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const { supabase } = context as any;
+    const { supabase, userId } = context as any;
     const now = new Date();
     const past = new Date(now.getTime() - 24 * 3600 * 1000).toISOString(); // include last 24h so "today" past items still show
     const future = new Date(now.getTime() + data.windowDays * 24 * 3600 * 1000).toISOString();
@@ -67,8 +67,9 @@ export const listUpcomingUnified = createServerFn({ method: "POST" })
     // 3. Google events (best-effort)
     let googleEvents: any[] = [];
     try {
-      const { gcalListEvents } = await import("./google-cal.server");
-      googleEvents = await gcalListEvents(data.coachId ?? null, past, future);
+      const { gcalListEvents, calendarCoachForCaller } = await import("./google-cal.server");
+      const access = await calendarCoachForCaller(supabase, userId, data.coachId ?? null);
+      googleEvents = access.ok ? await gcalListEvents(access.coachId, past, future) : [];
     } catch {
       googleEvents = [];
     }
