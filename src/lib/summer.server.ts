@@ -322,9 +322,10 @@ export async function answerSummer(
 ): Promise<{ user: SummerMsg; assistant: SummerMsg }> {
   const books = await import("@/lib/business-books.server");
   const { buildSummerContext, summerSystemPrompt } = await import("@/lib/summer-context");
+  const { buildOpenSalesContext } = await import("@/lib/summer-app");
 
-  const [data, app, links, history] = await Promise.all([
-    books.loadBooksData(supabase),
+  const [owner, app, links, history, profile, me, ownerName] = await Promise.all([
+    books.isBusinessOwner(supabase, userId),
     loadAppSnapshot(supabase).catch(() => EMPTY_APP_SNAPSHOT),
     summerLinkCatalog(),
     supabase
@@ -333,15 +334,34 @@ export async function answerSummer(
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(16),
+    supabase.from("summer_profiles").select("tone, instructions").eq("user_id", userId).maybeSingle(),
+    supabase.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
+    ownerFirstName(),
   ]);
-  const currentYear = Number(businessToday().slice(0, 4));
-  const year = input.year && data.years.includes(input.year) ? input.year : currentYear;
+
+  // The books (taxes, expenses, income) are the owner's. Other admins get the
+  // rest of the app plus who still owes money, which is operational.
+  let booksSection: string;
+  if (owner) {
+    const data = await books.loadBooksData(supabase);
+    const currentYear = Number(businessToday().slice(0, 4));
+    const year = input.year && data.years.includes(input.year) ? input.year : currentYear;
+    booksSection = ["BOOKS", buildSummerContext(data, year)].join("\n");
+  } else {
+    booksSection = ["OPEN SALES", buildOpenSalesContext(await books.loadOpenSales(supabase))].join("\n");
+  }
 
   const system = [
-    summerSystemPrompt({ tone: data.settings?.assistant_tone, instructions: data.settings?.assistant_instructions, voice: input.voice }),
+    summerSystemPrompt({
+      tone: profile.data?.tone,
+      instructions: profile.data?.instructions,
+      voice: input.voice,
+      owner,
+      userName: firstName(me.data?.full_name),
+      ownerName,
+    }),
     "",
-    "BOOKS",
-    buildSummerContext(data, year),
+    booksSection,
     "",
     "APP",
     buildAppContext(app, links, { tz: BUSINESS_TZ, route: input.route ?? null }),
@@ -367,4 +387,22 @@ export async function answerSummer(
   if (error) throw new Error(error.message);
   const rows = (saved ?? []) as SummerMsg[];
   return { user: rows.find((r) => r.role === "user")!, assistant: rows.find((r) => r.role === "assistant")! };
+}
+
+function firstName(full: string | null | undefined): string | null {
+  const f = (full ?? "").trim().split(/\s+/)[0];
+  return f || null;
+}
+
+/** The owner's first name, for "that's private to Jared". Service role: other admins can't read owners. */
+async function ownerFirstName(): Promise<string | null> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: o } = await (supabaseAdmin as any).from("business_owners").select("user_id").limit(1).maybeSingle();
+    if (!o?.user_id) return null;
+    const { data: p } = await (supabaseAdmin as any).from("profiles").select("full_name").eq("id", o.user_id).maybeSingle();
+    return firstName(p?.full_name);
+  } catch {
+    return null;
+  }
 }

@@ -23,8 +23,8 @@ export const getBooksData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin, loadBooksData } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertBusinessOwner, loadBooksData } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     return loadBooksData(supabase);
   });
 
@@ -52,8 +52,8 @@ export const saveExpense = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ExpenseInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertBusinessOwner } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     const row = {
       expense_date: data.expense_date,
       vendor: data.vendor || null,
@@ -88,8 +88,8 @@ export const deleteExpense = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertBusinessOwner } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     const { data: row } = await supabase.from("business_expenses").select("receipt_path").eq("id", data.id).maybeSingle();
     const { error } = await supabase.from("business_expenses").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -102,8 +102,8 @@ export const markExpensesReviewed = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertBusinessOwner } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     const { error } = await supabase.from("business_expenses").update({ status: "reviewed" }).in("id", data.ids);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -150,7 +150,7 @@ export const scanReceipt = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const server = await import("@/lib/business-books.server");
-    await server.assertAdmin(supabase, userId);
+    await server.assertBusinessOwner(supabase, userId);
     const today = businessToday();
 
     let read: import("@/lib/business-books.server").ReceiptRead | null = null;
@@ -216,8 +216,8 @@ export const saveTaxSettings = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SettingsInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertBusinessOwner } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     const { error } = await supabase
       .from("business_tax_settings")
       .upsert({ id: true, ...data, gst_number: data.gst_number || null, accountant_name: data.accountant_name || null, notes: data.notes || null, updated_at: new Date().toISOString(), updated_by: userId });
@@ -240,8 +240,8 @@ export const addTaxPayment = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => PaymentInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertBusinessOwner } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     const { error } = await supabase.from("business_tax_payments").insert({
       ...data,
       period_label: data.period_label || null,
@@ -257,8 +257,8 @@ export const deleteTaxPayment = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertBusinessOwner } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     const { error } = await supabase.from("business_tax_payments").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -272,8 +272,8 @@ export const syncStripeFees = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ year: z.number().int().min(2020).max(2100) }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertBusinessOwner } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     const { stripeFetch, getStripeKeyForMode } = await import("@/lib/stripe.server");
     const { aggregateStripeFees, stripeFeesExternalKey } = await import("@/lib/stripe-fees");
     const { MONTH_NAMES } = await import("@/lib/business-tax");
@@ -418,15 +418,18 @@ export const summerSpeech = createServerFn({ method: "POST" })
     return synthesizeSpeech(data.text);
   });
 
-/** Light read for the global Summer button: her vibe and instructions. */
+/** Light read for the global Summer button: this admin's Summer settings and whether they own the books. */
 export const getSummerProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
+    const { assertAdmin, isBusinessOwner } = await import("@/lib/business-books.server");
     await assertAdmin(supabase, userId);
-    const { data } = await supabase.from("business_tax_settings").select("assistant_tone, assistant_instructions").maybeSingle();
-    return { tone: (data?.assistant_tone as string | null) ?? null, instructions: (data?.assistant_instructions as string | null) ?? null };
+    const [{ data }, owner] = await Promise.all([
+      supabase.from("summer_profiles").select("tone, instructions").eq("user_id", userId).maybeSingle(),
+      isBusinessOwner(supabase, userId),
+    ]);
+    return { tone: (data?.tone as string | null) ?? null, instructions: (data?.instructions as string | null) ?? null, isOwner: owner };
   });
 
 const SummerSettingsInput = z.object({
@@ -434,7 +437,7 @@ const SummerSettingsInput = z.object({
   instructions: z.string().trim().max(2000).nullable(),
 });
 
-/** Customize Summer: her vibe and the owner's own instructions. */
+/** Customize Summer: her vibe and this admin's own instructions. */
 export const saveSummerSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SummerSettingsInput.parse(d))
@@ -443,8 +446,8 @@ export const saveSummerSettings = createServerFn({ method: "POST" })
     const { assertAdmin } = await import("@/lib/business-books.server");
     await assertAdmin(supabase, userId);
     const { error } = await supabase
-      .from("business_tax_settings")
-      .upsert({ id: true, assistant_tone: data.tone, assistant_instructions: data.instructions || null, updated_at: new Date().toISOString(), updated_by: userId });
+      .from("summer_profiles")
+      .upsert({ user_id: userId, tone: data.tone, instructions: data.instructions || null, updated_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
     return { ok: true };
   });

@@ -47,7 +47,7 @@ export function SummerAssistant() {
 
   const { data: persona } = useQuery({
     queryKey: ["summer-profile"],
-    queryFn: () => profileFn() as Promise<{ tone: string | null; instructions: string | null }>,
+    queryFn: () => profileFn() as Promise<{ tone: string | null; instructions: string | null; isOwner: boolean }>,
     staleTime: 5 * 60_000,
   });
 
@@ -151,6 +151,7 @@ export function SummerAssistant() {
           qc.invalidateQueries({ queryKey: ["books-data"] });
         }}
         route={href}
+        isOwner={persona?.isOwner ?? false}
         startCall={startCall}
         onCallStarted={() => setStartCall(false)}
       />

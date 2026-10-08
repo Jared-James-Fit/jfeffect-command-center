@@ -136,3 +136,12 @@ export function buildAppContext(s: AppSnapshot, links: LinkEntry[], opts: { tz: 
   }
   return lines.join("\n");
 }
+
+/** Who still owes money, for admins who don't see the books. */
+export function buildOpenSalesContext(rows: Array<{ client: string | null; offer: string | null; status: string | null; outstandingMinor: number; createdOn: string | null }>): string {
+  if (!rows.length) return "- none";
+  return rows
+    .slice(0, 50)
+    .map((o) => `- ${o.client ?? "?"} | ${o.offer ?? "?"} | ${o.status ?? "?"} | outstanding $${(o.outstandingMinor / 100).toFixed(2)} | since ${o.createdOn ?? "?"}`)
+    .join("\n");
+}

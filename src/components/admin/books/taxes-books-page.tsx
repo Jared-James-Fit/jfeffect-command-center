@@ -29,7 +29,7 @@ import {
 import { buildBooksSnapshot, expenseTaxView, fmtCad, MONTH_NAMES, type BooksSnapshot } from "@/lib/business-tax";
 import { businessToday } from "@/lib/billing-schedule";
 import {
-  addTaxPayment, deleteTaxPayment, getBooksData, markExpensesReviewed, saveTaxSettings, scanReceipt, syncStripeFees,
+  addTaxPayment, deleteTaxPayment, getBooksData, getSummerProfile, markExpensesReviewed, saveTaxSettings, scanReceipt, syncStripeFees,
 } from "@/lib/business-books.functions";
 import { RECEIPT_ACCEPT, receiptSignedUrl, uploadReceiptFile } from "@/lib/receipt-upload";
 import { ExpenseDialog } from "./expense-dialog";
@@ -840,10 +840,16 @@ function YearEndTab({
 
 // ---------------------------------------------------------------------------
 
-function SummerSettingsCard({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
+function SummerSettingsCard({ onSaved }: { onSaved: () => void }) {
   const qc = useQueryClient();
+  const profileFn = useServerFn(getSummerProfile);
   const [open, setOpen] = useState(false);
-  const persona = { tone: data.settings?.assistant_tone, instructions: data.settings?.assistant_instructions };
+  const { data: profile } = useQuery({
+    queryKey: ["summer-profile"],
+    queryFn: () => profileFn() as Promise<{ tone: string | null; instructions: string | null; isOwner: boolean }>,
+    staleTime: 5 * 60_000,
+  });
+  const persona = { tone: profile?.tone, instructions: profile?.instructions };
   const tone = summerTone(persona.tone);
   return (
     <Card className="max-w-2xl p-4">
@@ -877,7 +883,7 @@ function SummerSettingsCard({ data, onSaved }: { data: BooksData; onSaved: () =>
 function SettingsTab({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
   return (
     <div className="space-y-4">
-      <SummerSettingsCard data={data} onSaved={onSaved} />
+      <SummerSettingsCard onSaved={onSaved} />
       <TaxSettingsForm data={data} onSaved={onSaved} />
     </div>
   );
