@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { saveCommittedSchedule } from "@/lib/schedule-bulk.functions";
@@ -52,6 +52,7 @@ import { notifyMissingMaxesFn } from "@/lib/missing-maxes.functions";
 import { todayLocalISO } from "@/lib/today";
 import { LibrarySection } from "@/components/library-section";
 import { groupTemplates } from "@/lib/library-grouping";
+import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 
 // Quick-pick weight class tags (admin-only). Free-form tags still supported in the input.
 const WEIGHT_CLASS_TAGS: string[] = [
@@ -1719,7 +1720,17 @@ function MaxesGate({
     "Romanian Deadlift",
   ];
   type Row = { lift: string; oneRm: string; tm: string };
-  const [unit, setUnit] = useState<"kg" | "lb">("kg");
+  // Start on the client's own unit; a coach choice afterwards wins.
+  const { unit: clientUnit, ready: unitReady } = useClientWeightUnit(clientId);
+  const [unit, setUnitState] = useState<"kg" | "lb">("lb");
+  const unitTouched = useRef(false);
+  const setUnit = (u: "kg" | "lb") => {
+    unitTouched.current = true;
+    setUnitState(u);
+  };
+  useEffect(() => {
+    if (unitReady && !unitTouched.current) setUnitState(clientUnit);
+  }, [unitReady, clientUnit]);
   const [rows, setRows] = useState<Row[]>([
     { lift: "Competition Squat", oneRm: "", tm: "" },
     { lift: "Competition Bench Press", oneRm: "", tm: "" },

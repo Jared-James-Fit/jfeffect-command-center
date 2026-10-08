@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   bestLoggedMaxes,
   compLiftFromName,
+  implausibleCoachMaxes,
   LIFT_FOCUS,
   pickCurrentMaxes,
   sbdSplit,
@@ -71,6 +72,34 @@ describe("SBD split", () => {
     expect(out.squat!.source).toBe("coach");
     expect(out.bench!.lb).toBe(300);
     expect(out.deadlift!.source).toBe("meet");
+  });
+
+  it("ignores a coach max saved in kg that was meant as lb (the 315 kg bench case)", () => {
+    const logged = {
+      squat: { lift: "squat" as const, lb: 545.6, source: "logged" as const, date: "2026-07-26" },
+      bench: { lift: "bench" as const, lb: 356, source: "logged" as const, date: "2026-09-01" },
+      deadlift: { lift: "deadlift" as const, lb: 615, source: "logged" as const, date: "2026-09-01" },
+    };
+    // 315 and 600 typed as lb, stored as kg → ×2.2046.
+    const coach = {
+      bench: { lift: "bench" as const, lb: 315 * 2.2046226, source: "coach" as const, date: "2026-06-09" },
+      deadlift: { lift: "deadlift" as const, lb: 600 * 2.2046226, source: "coach" as const, date: "2026-06-09" },
+    };
+    const bad = implausibleCoachMaxes(logged, coach);
+    expect(bad.map((b) => b.lift)).toEqual(["bench", "deadlift"]);
+    expect(bad.every((b) => b.likelyKgLbMixup)).toBe(true);
+    const out = pickCurrentMaxes(logged, coach, {});
+    expect(out.bench).toMatchObject({ source: "logged", lb: 356 });
+    expect(out.deadlift).toMatchObject({ source: "logged", lb: 615 });
+    const total = out.squat!.lb + out.bench!.lb + out.deadlift!.lb;
+    expect(Math.round(total)).toBe(1517); // not 2,563
+  });
+
+  it("still trusts a real tested max above submax e1RMs", () => {
+    const logged = { squat: { lift: "squat" as const, lb: 470, source: "logged" as const, date: "2026-09-20" } };
+    const coach = { squat: { lift: "squat" as const, lb: 540, source: "coach" as const, date: "2026-09-25" } };
+    expect(implausibleCoachMaxes(logged, coach)).toEqual([]);
+    expect(pickCurrentMaxes(logged, coach, {}).squat!.source).toBe("coach");
   });
 
   it("maps comp lift names, never variations", () => {

@@ -17,6 +17,7 @@ import {
   type ClientMaxRow, type MaxSource, type RoundingMode,
 } from "@/lib/pl-maxes";
 import { cn } from "@/lib/utils";
+import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 
 const COMMON_LIFTS = [
   "Competition Squat", "Competition Bench Press", "Competition Deadlift",
@@ -26,6 +27,7 @@ const COMMON_LIFTS = [
 
 export function ClientMaxesPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
+  const { unit: clientUnit } = useClientWeightUnit(clientId);
   const [editing, setEditing] = useState<Partial<ClientMaxRow> | null>(null);
 
   const { data: maxes = [], isLoading } = useQuery({
@@ -41,11 +43,11 @@ export function ClientMaxesPanel({ clientId }: { clientId: string }) {
   const openNew = () => setEditing({
     client_id: clientId,
     lift: "",
-    unit: "kg",
+    unit: clientUnit,
     source: "tested",
     active: true,
     rounding_mode: "nearest",
-    rounding_step: 2.5,
+    rounding_step: defaultRoundingStep(clientUnit),
     manual_override: false,
   });
 
@@ -171,6 +173,7 @@ export function MaxEditorDialog({
 }) {
   const [form, setForm] = useState<Partial<ClientMaxRow>>({});
   const [saving, setSaving] = useState(false);
+  const { unit: clientUnit } = useClientWeightUnit(clientId);
 
   // Reset form whenever a new value is opened.
   useEffect(() => { if (value) setForm(value); }, [value]);
@@ -188,9 +191,9 @@ export function MaxEditorDialog({
         ...form,
         client_id: clientId,
         lift: form.lift.trim(),
-        unit: (form.unit as "kg" | "lb") ?? "kg",
+        unit: (form.unit as "kg" | "lb") ?? clientUnit,
         rounding_mode: (form.rounding_mode as RoundingMode) ?? "nearest",
-        rounding_step: form.rounding_step ?? defaultRoundingStep((form.unit as "kg" | "lb") ?? "kg"),
+        rounding_step: form.rounding_step ?? defaultRoundingStep((form.unit as "kg" | "lb") ?? clientUnit),
         source: (form.source as MaxSource) ?? "manual",
         active: form.active ?? true,
         manual_override: form.manual_override ?? false,
@@ -204,6 +207,11 @@ export function MaxEditorDialog({
   };
 
   const others = existing.filter((m) => m.id !== form.id);
+  const unit = (form.unit as "kg" | "lb") ?? clientUnit;
+  const mismatch = unit !== clientUnit && form.one_rm != null && Number(form.one_rm) > 0;
+  const converted = mismatch
+    ? Math.round(Number(form.one_rm) * (unit === "kg" ? 2.2046226 : 1 / 2.2046226) * 10) / 10
+    : null;
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -230,7 +238,7 @@ export function MaxEditorDialog({
 
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <Label>1RM</Label>
+              <Label>1RM ({unit})</Label>
               <Input
                 inputMode="decimal"
                 value={form.one_rm ?? ""}
@@ -238,7 +246,7 @@ export function MaxEditorDialog({
               />
             </div>
             <div>
-              <Label>Training Max</Label>
+              <Label>Training Max ({unit})</Label>
               <Input
                 inputMode="decimal"
                 value={form.training_max ?? ""}
@@ -246,7 +254,7 @@ export function MaxEditorDialog({
               />
             </div>
             <div>
-              <Label>Est. 1RM</Label>
+              <Label>Est. 1RM ({unit})</Label>
               <Input
                 inputMode="decimal"
                 value={form.estimated_1rm ?? ""}
@@ -255,10 +263,16 @@ export function MaxEditorDialog({
             </div>
           </div>
 
+          {mismatch && (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-800 dark:text-amber-200">
+              This client logs in <b>{clientUnit}</b>. {form.one_rm} {unit} = <b>{converted} {clientUnit}</b>. If you meant {form.one_rm} {clientUnit}, switch the unit below.
+            </p>
+          )}
+
           <div className="grid grid-cols-3 gap-2">
             <div>
               <Label>Unit</Label>
-              <Select value={form.unit ?? "kg"} onValueChange={(v) => set({ unit: v as "kg" | "lb", rounding_step: defaultRoundingStep(v as "kg" | "lb") })}>
+              <Select value={unit} onValueChange={(v) => set({ unit: v as "kg" | "lb", rounding_step: defaultRoundingStep(v as "kg" | "lb") })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="kg">kg</SelectItem>
@@ -296,11 +310,11 @@ export function MaxEditorDialog({
               </Select>
             </div>
             <div>
-              <Label>Round to step ({form.unit ?? "kg"})</Label>
+              <Label>Round to step ({unit})</Label>
               <Input
                 inputMode="decimal"
                 value={form.rounding_step ?? ""}
-                placeholder={String(defaultRoundingStep((form.unit as "kg" | "lb") ?? "kg"))}
+                placeholder={String(defaultRoundingStep(unit))}
                 onChange={(e) => set({ rounding_step: e.target.value ? Number(e.target.value) : null })}
               />
             </div>

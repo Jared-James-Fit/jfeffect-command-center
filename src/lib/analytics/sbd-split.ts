@@ -78,20 +78,55 @@ export function bestLoggedMaxes(
   return out;
 }
 
+const LB_PER_KG = 2.2046226;
+
+/**
+ * A tested max runs ~5–20 % over an e1RM from submax work. Past 1.5× the best
+ * logged e1RM it isn't strength, it's a typo or a max saved in the wrong unit
+ * (a kg/lb mix-up is exactly ×2.2).
+ */
+export const COACH_MAX_SANITY_RATIO = 1.5;
+
+export type ImplausibleCoachMax = {
+  lift: SbdLift;
+  coachLb: number;
+  loggedLb: number;
+  /** Read as lb instead of kg, the max would sit near what they lift. */
+  likelyKgLbMixup: boolean;
+};
+
+/** Coach maxes too far above the athlete's own logged lifts to trust. */
+export function implausibleCoachMaxes(
+  logged: Partial<Record<SbdLift, SbdMax>>,
+  coach: Partial<Record<SbdLift, SbdMax>>,
+): ImplausibleCoachMax[] {
+  const out: ImplausibleCoachMax[] = [];
+  for (const lift of SBD_LIFTS) {
+    const l = logged[lift];
+    const c = coach[lift];
+    if (!l || !c || !(l.lb > 0) || c.lb <= l.lb * COACH_MAX_SANITY_RATIO) continue;
+    const asLb = c.lb / LB_PER_KG;
+    out.push({ lift, coachLb: c.lb, loggedLb: l.lb, likelyKgLbMixup: asLb >= l.lb * 0.75 && asLb <= l.lb * 1.35 });
+  }
+  return out;
+}
+
 /**
  * Current max per lift: the higher of the best logged e1RM and the coach's
- * max (a tested 1RM usually beats an e1RM from submax volume work). A meet
- * result fills in only when neither exists.
+ * max (a tested 1RM usually beats an e1RM from submax volume work), unless the
+ * coach max is implausible next to what they actually lift. A meet result
+ * fills in only when neither exists.
  */
 export function pickCurrentMaxes(
   logged: Partial<Record<SbdLift, SbdMax>>,
   coach: Partial<Record<SbdLift, SbdMax>>,
   meet: Partial<Record<SbdLift, SbdMax>>,
 ): Partial<Record<SbdLift, SbdMax>> {
+  const ignored = new Set(implausibleCoachMaxes(logged, coach).map((x) => x.lift));
   const out: Partial<Record<SbdLift, SbdMax>> = {};
   for (const lift of SBD_LIFTS) {
     const l = logged[lift];
-    const c = coach[lift];
+    const c = ignored.has(lift) ? undefined : coach[lift];
     out[lift] = l && c ? (c.lb > l.lb ? c : l) : (l ?? c ?? meet[lift]);
     if (!out[lift]) delete out[lift];
   }

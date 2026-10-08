@@ -18,6 +18,7 @@ import {
 } from "@/lib/pl-maxes";
 import { movementAccent } from "@/components/program-builder";
 import { cn } from "@/lib/utils";
+import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 
 const DEFAULT_LIFTS = ["Competition Squat", "Competition Bench Press", "Competition Deadlift"];
 const MORE_LIFTS = [
@@ -102,12 +103,15 @@ function BlockMaxesDialog({
   const [customMode, setCustomMode] = useState(false);
   const [customName, setCustomName] = useState("");
   // Main lift unit selector (applies to Squat/Bench/Deadlift rows only).
-  const [mainUnit, setMainUnit] = useState<"kg" | "lb">("kg");
+  // Starts on the unit the client logs in, never a blanket kg.
+  const { unit: clientUnit, ready: unitReady } = useClientWeightUnit(clientId);
+  const [mainUnit, setMainUnit] = useState<"kg" | "lb">("lb");
   const [applyExistingRows, setApplyExistingRows] = useState<"yes" | "no">("no");
 
   // Seed drafts from existing maxes once loaded.
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || !unitReady) return;
+    setMainUnit(clientUnit);
     const byLift = new Map<string, ClientMaxRow>();
     for (const m of maxes) if (m.active) byLift.set(m.lift, m);
     const initial: Draft[] = [];
@@ -123,7 +127,7 @@ function BlockMaxesDialog({
           variation_modifier: m.variation_modifier ?? "",
         });
       } else {
-        initial.push({ lift, one_rm: "", training_max: "", unit: "kg", scope: "profile" });
+        initial.push({ lift, one_rm: "", training_max: "", unit: clientUnit, scope: "profile" });
       }
     }
     // Any extra existing maxes the user added beyond the defaults.
@@ -139,7 +143,7 @@ function BlockMaxesDialog({
       });
     }
     setDrafts(initial);
-  }, [isLoading, maxes]);
+  }, [isLoading, maxes, unitReady, clientUnit]);
 
   const index = useMemo(() => buildMaxIndex(maxes), [maxes]);
 
@@ -358,6 +362,15 @@ function BlockMaxesDialog({
                         </Button>
                       </div>
                     </div>
+                    {d.unit !== clientUnit && d.one_rm !== "" && Number(d.one_rm) > 0 && (
+                      <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-800 dark:text-amber-200">
+                        Client logs in <b>{clientUnit}</b>: {d.one_rm} {d.unit} ={" "}
+                        <b>
+                          {Math.round(Number(d.one_rm) * (d.unit === "kg" ? 2.20462262 : 1 / 2.20462262) * 10) / 10} {clientUnit}
+                        </b>
+                        . Meant {d.one_rm} {clientUnit}? Change this row's unit.
+                      </div>
+                    )}
                     {/* Variation mapping: "Use max from … modifier %" */}
                     <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[10px] text-muted-foreground">
                       <span className="font-semibold uppercase tracking-wide">Use max from</span>

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Lightbulb, MessageCircle, Target, TrendingUp, Trophy } from "lucide-react";
+import { AlertTriangle, Lightbulb, MessageCircle, Target, TrendingUp, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ import { neutralizeObviousLoadOutliers } from "@/lib/analytics/load-sanity";
 import {
   bestLoggedMaxes,
   compLiftFromName,
+  implausibleCoachMaxes,
   LIFT_FOCUS,
   LIFT_LABEL,
   pickCurrentMaxes,
@@ -214,6 +215,7 @@ export function SbdSplitCard({
       }
     }
     const maxes = pickCurrentMaxes(logged, data.coach, meetMaxes);
+    const badCoachMaxes = implausibleCoachMaxes(logged, data.coach);
     const complete = SBD_LIFTS.every((l) => maxes[l]);
     const sex = data.sex;
     const split = complete
@@ -246,12 +248,12 @@ export function SbdSplitCard({
         );
       }
     }
-    return { maxes, split, sex, notes, askSex: !data.sex && !data.profileSex };
+    return { maxes, split, sex, notes, badCoachMaxes, askSex: !data.sex && !data.profileSex };
   }, [data]);
 
   if (isLoading || !model || !SBD_LIFTS.some((l) => model.maxes[l])) return null;
 
-  const { maxes, split, notes, askSex } = model;
+  const { maxes, split, notes, badCoachMaxes, askSex } = model;
   const fmtLb = (lb: number) => fmtNum(conv(lb));
   const fmtTotal = (lb: number) => Math.round(conv(lb)).toLocaleString();
   const meetDelta = split && data?.meet ? split.total - data.meet.total : null;
@@ -265,6 +267,22 @@ export function SbdSplitCard({
     <section aria-label="SBD Total">
       {header}
       <Card className="space-y-4 border-border/80 bg-card p-4" data-testid="sbd-split">
+        {badCoachMaxes.map((b) => (
+          <Callout
+            key={b.lift}
+            icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+            tone="focus"
+          >
+            <b>
+              {LIFT_LABEL[b.lift]} coach max ({fmtLb(b.coachLb)} {displayUnit}) left out.
+            </b>{" "}
+            It's {fmtNum(b.coachLb / b.loggedLb)}× the best logged {LIFT_LABEL[b.lift].toLowerCase()} (
+            {fmtLb(b.loggedLb)} {displayUnit}), so the logged number is used.
+            {b.likelyKgLbMixup
+              ? " It looks saved in kg instead of lb. Fix the unit in the client's maxes; it also sets their % loads."
+              : " Check the client's maxes; it also sets their % loads."}
+          </Callout>
+        ))}
         {split ? (
           <>
             <div>
