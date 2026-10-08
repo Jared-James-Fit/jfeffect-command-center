@@ -37,7 +37,7 @@ export async function recordStripePayment(
     member_id: memberId,
     payment_date: opts.paidAt ?? new Date().toISOString(),
     amount_cents: opts.amountCents ?? null,
-    currency: (opts.currency ?? "usd").toUpperCase(),
+    currency: (opts.currency ?? "cad").toUpperCase(),
     service_product: opts.serviceProduct ?? "JF Membership",
     payment_method: "stripe",
     stripe_payment_id: opts.stripePaymentId ?? null,
