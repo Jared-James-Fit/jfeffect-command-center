@@ -953,7 +953,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                           stripeMode: eventMode ?? null,
                           receiptUrl: obj.hosted_invoice_url ?? null,
                           amountCents: obj.amount_paid,
-                          currency: obj.currency ?? "usd",
+                          currency: obj.currency ?? "cad",
                           paidAt: new Date((obj.status_transitions?.paid_at ?? event.created) * 1000).toISOString(),
                         });
                       } catch (e: any) {
