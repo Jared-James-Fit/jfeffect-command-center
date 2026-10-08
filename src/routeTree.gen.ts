@@ -125,6 +125,7 @@ import { Route as AuthenticatedMIndexRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedMAccountRouteImport } from './routes/_authenticated/m/account'
 import { Route as AuthenticatedMAnnouncementsRouteImport } from './routes/_authenticated/m/announcements'
 import { Route as AuthenticatedMBillingRouteImport } from './routes/_authenticated/m/billing'
+import { Route as AuthenticatedMCommunityRouteImport } from './routes/_authenticated/m/community'
 import { Route as AuthenticatedMMoreRouteImport } from './routes/_authenticated/m/more'
 import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticated/m/my-plans'
 import { Route as AuthenticatedMPlansRouteImport } from './routes/_authenticated/m/plans'
@@ -911,6 +912,11 @@ const AuthenticatedMAnnouncementsRoute =
 const AuthenticatedMBillingRoute = AuthenticatedMBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
+  getParentRoute: () => AuthenticatedMRouteRoute,
+} as any)
+const AuthenticatedMCommunityRoute = AuthenticatedMCommunityRouteImport.update({
+  id: '/community',
+  path: '/community',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
 const AuthenticatedMMoreRoute = AuthenticatedMMoreRouteImport.update({
@@ -1862,6 +1868,7 @@ export interface FileRoutesByFullPath {
   '/m/account': typeof AuthenticatedMAccountRoute
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/billing': typeof AuthenticatedMBillingRoute
+  '/m/community': typeof AuthenticatedMCommunityRoute
   '/m/more': typeof AuthenticatedMMoreRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
@@ -2116,6 +2123,7 @@ export interface FileRoutesByTo {
   '/m/account': typeof AuthenticatedMAccountRoute
   '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/m/billing': typeof AuthenticatedMBillingRoute
+  '/m/community': typeof AuthenticatedMCommunityRoute
   '/m/more': typeof AuthenticatedMMoreRoute
   '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
@@ -2376,6 +2384,7 @@ export interface FileRoutesById {
   '/_authenticated/m/account': typeof AuthenticatedMAccountRoute
   '/_authenticated/m/announcements': typeof AuthenticatedMAnnouncementsRoute
   '/_authenticated/m/billing': typeof AuthenticatedMBillingRoute
+  '/_authenticated/m/community': typeof AuthenticatedMCommunityRoute
   '/_authenticated/m/more': typeof AuthenticatedMMoreRoute
   '/_authenticated/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
   '/_authenticated/m/plans': typeof AuthenticatedMPlansRouteWithChildren
@@ -2636,6 +2645,7 @@ export interface FileRouteTypes {
     | '/m/account'
     | '/m/announcements'
     | '/m/billing'
+    | '/m/community'
     | '/m/more'
     | '/m/my-plans'
     | '/m/plans'
@@ -2890,6 +2900,7 @@ export interface FileRouteTypes {
     | '/m/account'
     | '/m/announcements'
     | '/m/billing'
+    | '/m/community'
     | '/m/more'
     | '/m/my-plans'
     | '/m/plans'
@@ -3149,6 +3160,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/account'
     | '/_authenticated/m/announcements'
     | '/_authenticated/m/billing'
+    | '/_authenticated/m/community'
     | '/_authenticated/m/more'
     | '/_authenticated/m/my-plans'
     | '/_authenticated/m/plans'
@@ -4169,6 +4181,13 @@ declare module '@tanstack/react-router' {
       path: '/billing'
       fullPath: '/m/billing'
       preLoaderRoute: typeof AuthenticatedMBillingRouteImport
+      parentRoute: typeof AuthenticatedMRouteRoute
+    }
+    '/_authenticated/m/community': {
+      id: '/_authenticated/m/community'
+      path: '/community'
+      fullPath: '/m/community'
+      preLoaderRoute: typeof AuthenticatedMCommunityRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/m/more': {
@@ -5645,6 +5664,7 @@ interface AuthenticatedMRouteRouteChildren {
   AuthenticatedMAccountRoute: typeof AuthenticatedMAccountRoute
   AuthenticatedMAnnouncementsRoute: typeof AuthenticatedMAnnouncementsRoute
   AuthenticatedMBillingRoute: typeof AuthenticatedMBillingRoute
+  AuthenticatedMCommunityRoute: typeof AuthenticatedMCommunityRoute
   AuthenticatedMMoreRoute: typeof AuthenticatedMMoreRoute
   AuthenticatedMMyPlansRoute: typeof AuthenticatedMMyPlansRouteWithChildren
   AuthenticatedMPlansRoute: typeof AuthenticatedMPlansRouteWithChildren
@@ -5668,6 +5688,7 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
   AuthenticatedMAccountRoute: AuthenticatedMAccountRoute,
   AuthenticatedMAnnouncementsRoute: AuthenticatedMAnnouncementsRoute,
   AuthenticatedMBillingRoute: AuthenticatedMBillingRoute,
+  AuthenticatedMCommunityRoute: AuthenticatedMCommunityRoute,
   AuthenticatedMMoreRoute: AuthenticatedMMoreRoute,
   AuthenticatedMMyPlansRoute: AuthenticatedMMyPlansRouteWithChildren,
   AuthenticatedMPlansRoute: AuthenticatedMPlansRouteWithChildren,
