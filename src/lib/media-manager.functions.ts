@@ -212,18 +212,21 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => RedeemInput.parse(i))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { findAuthUserByEmail, assertNotPrivilegedUser } = await import("@/lib/setup-link-guard.server");
     const { data: invite, error } = await supabaseAdmin
       .from("staff_invites").select("*").eq("setup_token", data.token).maybeSingle();
     if (error || !invite) throw new Error("Invalid setup link");
+    // Admin is granted only by an existing admin in the app, never by a link.
+    if (invite.role === "admin") throw new Error("This invite can't be redeemed. Ask the admin for a new one.");
     if (invite.status === "revoked") throw new Error("This invite has been revoked");
     if (invite.setup_token_expires_at && new Date(invite.setup_token_expires_at) < new Date()) {
       throw new Error("Setup link expired — ask the admin for a new one");
     }
 
     let userId: string | null = null;
-    const { data: list } = await supabaseAdmin.auth.admin.listUsers();
-    const existing = list.users.find((u: any) => (u.email || "").toLowerCase() === invite.email.toLowerCase());
+    const existing = await findAuthUserByEmail(supabaseAdmin, invite.email);
     if (existing) {
+      await assertNotPrivilegedUser(supabaseAdmin, existing.id);
       userId = existing.id;
       await supabaseAdmin.auth.admin.updateUserById(existing.id, { password: data.password });
     } else {
