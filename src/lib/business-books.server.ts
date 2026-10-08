@@ -1,5 +1,5 @@
 /**
- * Server-side loading for Taxes & Books and Summer Ledger. Every query runs on
+ * Server-side loading for Taxes & Books and Cleo. Every query runs on
  * the caller's (RLS-scoped) client, so only admins ever get rows back.
  */
 import type { BooksData, ExpenseRow, LedgerRowIn, MemberLedgerRowIn, OpenSaleRow, TaxPaymentRow, TaxSettingsRow } from "@/lib/business-books";
@@ -122,8 +122,8 @@ export async function gatewayChat(messages: any[], opts: { model?: string } = {}
     headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
     body: JSON.stringify({ model: opts.model ?? BOOKS_AI_MODEL, messages }),
   });
-  if (resp.status === 429) throw new Error("Summer is getting too many requests. Try again in a minute.");
-  if (resp.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Summer.");
+  if (resp.status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
+  if (resp.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
     throw new Error(`AI request failed (${resp.status})${text ? `: ${text.slice(0, 200)}` : ""}`);

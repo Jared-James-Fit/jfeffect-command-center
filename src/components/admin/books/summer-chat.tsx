@@ -40,7 +40,7 @@ const TEAM_STARTERS = [
   "Open the client list.",
 ];
 
-/** Opens an in-app link from Summer: router navigation, query string kept. */
+/** Opens an in-app link from Cleo: router navigation, query string kept. */
 function useOpenLink(onNavigated: () => void) {
   const navigate = useNavigate();
   return useCallback(
@@ -239,7 +239,7 @@ export function SummerChat({
       } catch (e: any) {
         toast.error(
           e?.name === "NotAllowedError"
-            ? "Allow the microphone to talk to Summer."
+            ? "Allow the microphone to talk to Cleo."
             : isAudioSessionError(e)
               ? "Your phone's audio is busy (music or a call?). Pause it and tap the mic again."
               : e?.message ?? "Couldn't use the microphone",
@@ -285,7 +285,7 @@ export function SummerChat({
 
   const startTalking = (call: boolean) => {
     if (!canTalk) {
-      toast.error("Voice isn't supported in this browser. Type to Summer instead.");
+      toast.error("Voice isn't supported in this browser. Type to Cleo instead.");
       return;
     }
     speaker.unlock(); // this tap is what lets her reply play by itself
@@ -295,7 +295,7 @@ export function SummerChat({
     void talk();
   };
 
-  // Long-press on the Summer button: open straight into a call.
+  // Long-press on the Cleo button: open straight into a call.
   useEffect(() => {
     if (open && startCall && voiceState === "idle") {
       onCallStarted?.();
@@ -385,13 +385,13 @@ export function SummerChat({
                   size="sm"
                   className={cn("h-8 text-xs", !inCall && "text-muted-foreground")}
                   onClick={() => (inCall ? endCall() : startTalking(true))}
-                  aria-label={inCall ? "End call" : "Call Summer"}
+                  aria-label={inCall ? "End call" : "Call Cleo"}
                 >
                   {inCall ? <PhoneOff className="h-3.5 w-3.5 sm:mr-1" /> : <Phone className="h-3.5 w-3.5 sm:mr-1" />}
                   <span className="sr-only sm:not-sr-only">{inCall ? "End" : "Call"}</span>
                 </Button>
               )}
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setCustomizing(true)} aria-label="Customize Summer">
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setCustomizing(true)} aria-label="Customize Cleo">
                 <SlidersHorizontal className="h-3.5 w-3.5 sm:mr-1" /><span className="sr-only sm:not-sr-only">Customize</span>
               </Button>
               {messages.length > 0 && (
@@ -501,7 +501,7 @@ export function SummerChat({
                   className="h-10 w-10 shrink-0 rounded-full"
                   onClick={() => startTalking(false)}
                   disabled={!!pending}
-                  aria-label="Talk to Summer"
+                  aria-label="Talk to Cleo"
                 >
                   <Mic className="h-4 w-4" />
                 </Button>

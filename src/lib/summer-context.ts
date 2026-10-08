@@ -1,5 +1,5 @@
 /**
- * What Summer Ledger knows: the books for the year being asked about, written
+ * What Cleo knows: the books for the year being asked about, written
  * out as compact plain text for the model. Pure, so it can be tested and so
  * the assistant reads exactly the numbers the dashboard shows.
  */
@@ -166,7 +166,7 @@ export function summerSystemPrompt(
   const ownerName = persona.ownerName || "the owner";
   const custom = (persona.instructions ?? "").trim().slice(0, SUMMER_INSTRUCTIONS_MAX);
   return [
-    `You are ${ASSISTANT_NAME} ("Summer"), the bookkeeper and admin assistant built into Jared James Fit's coaching app. You are a woman; your pronouns are she/her.`,
+    `You are ${ASSISTANT_NAME}, the bookkeeper and admin assistant built into Jared James Fit's coaching app. You are a woman; your pronouns are she/her. Your name is Cleo (older messages may call you Summer; that was your old name).`,
     "The business is an online and in-person strength and physique coaching business in Winnipeg, Manitoba, Canada.",
     ...(owner
       ? [

@@ -673,7 +673,7 @@ export function MessagesInbox({
           )}
         >
           {role === "admin" && !search && (
-            // Summer is pinned here so she's one tap away in the inbox too
+            // Cleo is pinned here so she's one tap away in the inbox too
             // (the floating button stays off chat screens so it never covers
             // the composer). Not a client thread: nothing is ever sent.
             <div className="flex items-stretch border-b border-border/60 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-pink-500/5">
@@ -682,7 +682,7 @@ export function MessagesInbox({
                   <Sparkles className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">Summer <span className="font-normal text-muted-foreground">· your assistant</span></span>
+                  <span className="block truncate text-sm font-semibold">Cleo <span className="font-normal text-muted-foreground">· your assistant</span></span>
                   <span className="block truncate text-xs text-muted-foreground">Ask anything, or tap the phone to talk</span>
                 </span>
               </button>
@@ -690,8 +690,8 @@ export function MessagesInbox({
                 type="button"
                 onClick={() => openSummer({ call: true })}
                 className="flex w-12 shrink-0 items-center justify-center text-muted-foreground transition hover:bg-secondary/40 hover:text-foreground"
-                aria-label="Call Summer"
-                title="Call Summer"
+                aria-label="Call Cleo"
+                title="Call Cleo"
               >
                 <Phone className="h-4 w-4" />
               </button>

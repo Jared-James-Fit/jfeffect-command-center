@@ -1,5 +1,5 @@
 /**
- * Hands-free mic for Summer: records one spoken question and stops by itself
+ * Hands-free mic for Cleo: records one spoken question and stops by itself
  * when the owner stops talking (or taps). Resolves null when nothing was said.
  *
  * Voice activity is a simple loudness gate calibrated on the first moments of

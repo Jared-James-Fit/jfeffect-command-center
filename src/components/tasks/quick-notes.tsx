@@ -1010,7 +1010,7 @@ function NoteEditor({
   );
 }
 
-/** Tells other floating buttons (Summer) that this page has its own, so they move up. */
+/** Tells other floating buttons (Cleo) that this page has its own, so they move up. */
 function PageFabFlag() {
   useEffect(() => {
     document.documentElement.dataset.pageFab = "1";

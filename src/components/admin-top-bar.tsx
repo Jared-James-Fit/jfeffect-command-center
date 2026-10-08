@@ -123,13 +123,13 @@ export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: 
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent("summer:toggle"))}
             className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2 text-xs font-semibold text-foreground hover:bg-muted md:px-2.5"
-            aria-label="Summer, your assistant"
-            title="Summer (⌘⇧S)"
+            aria-label="Cleo, your assistant"
+            title="Cleo (⌘⇧S)"
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white">
               <Sparkles className="h-3 w-3" />
             </span>
-            <span className="hidden md:inline">Summer</span>
+            <span className="hidden md:inline">Cleo</span>
           </button>
         )}
         <div className="hidden items-center gap-1.5 text-xs font-medium text-muted-foreground sm:flex">
