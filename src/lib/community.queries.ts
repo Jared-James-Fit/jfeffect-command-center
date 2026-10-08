@@ -148,6 +148,64 @@ export function usePostReactors(postId: string | null) {
   });
 }
 
+/* ---- birthday posts (coach reviews, then they go out) ------------------ */
+
+export type BirthdayPost = {
+  id: string;
+  client_id: string;
+  birthday: string;
+  birthday_year: number;
+  status: "ready" | "scheduled" | "posted" | "skipped";
+  /** 8am on their birthday, their time. */
+  post_at: string;
+  body: string;
+  dm_body: string;
+  post_id: string | null;
+  message_id: string | null;
+  posted_at: string | null;
+  person: { name: string; full_name: string; avatar_url: string | null; timezone: string | null };
+};
+export type BirthdayAction = "save" | "reroll" | "approve" | "post_now" | "unschedule" | "skip";
+
+const BIRTHDAYS_KEY = ["community-birthdays"] as const;
+
+/** Birthday posts waiting for review or going out (and ones posted in the last day). */
+export function useBirthdayPosts(enabled = true) {
+  return useQuery({
+    queryKey: BIRTHDAYS_KEY,
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<BirthdayPost[]> => {
+      const { data, error } = await db.rpc("community_birthdays_upcoming");
+      if (error) throw error;
+      return (data ?? []) as BirthdayPost[];
+    },
+  });
+}
+
+/** Save / new wording / approve / post now / unschedule / skip. Posting now also pushes the message straight away. */
+export function useBirthdayAct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { id: string; action: BirthdayAction; body?: string; dmBody?: string }): Promise<BirthdayPost> => {
+      const { data, error } = await db.rpc("community_birthday_act", { _id: a.id, _action: a.action, _body: a.body ?? null, _dm_body: a.dmBody ?? null });
+      if (error) throw error;
+      return data as BirthdayPost;
+    },
+    onSuccess: (row) => {
+      qc.setQueryData<BirthdayPost[]>(BIRTHDAYS_KEY, (cur) => (cur ?? []).map((b) => (b.id === row.id ? row : b)));
+      if (row.status === "posted") {
+        qc.invalidateQueries({ queryKey: ["community-feed"] });
+        if (row.message_id) {
+          void import("@/lib/push/events.functions")
+            .then(({ notifyNewMessage }) => notifyNewMessage({ data: { messageId: row.message_id! } }))
+            .catch(() => {});
+        }
+      }
+    },
+  });
+}
+
 /* ---- one-time tips (e.g. "double-tap to like") ------------------------ */
 
 const HINTS_KEY = ["community-hints"] as const;

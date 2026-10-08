@@ -24,6 +24,7 @@ const SHORTCUT_GROUPS: Group[] = [
     items: [
       { keys: ["?"], label: "Show keyboard shortcuts" },
       { keys: ["⌘", "K"], label: "Open command palette / quick search" },
+      { keys: ["⌘", "⇧", "S"], label: "Open / close Summer, your assistant" },
       { keys: ["⌘", "B"], label: "Toggle sidebar" },
       { keys: ["⌘", "⇧", "M"], label: "Toggle client preview (POV)" },
       { keys: ["⌘", "⇧", "E"], label: "Open / close all sidebar sections" },

@@ -220,9 +220,11 @@ type Props = {
   doubleTapHint?: boolean;
   /** Someone double-tapped this post (so the tip can go). */
   onDoubleTap?: () => void;
+  /** The tip finished playing. */
+  onTipDone?: () => void;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
   const singleTimer = useRef<number | null>(null);
@@ -279,7 +281,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         ) : (
           <div className="px-4 py-6 text-sm text-muted-foreground">Workout was reopened, numbers will be back once it's finished.</div>
         )}
-        {doubleTapHint && burst === 0 && <DoubleTapHint />}
+        {doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}
         <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
       </div>
 
