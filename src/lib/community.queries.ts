@@ -183,6 +183,44 @@ export function useBirthdayPosts(enabled = true) {
   });
 }
 
+/** The next birthdays without a draft yet (so the dashboard card is never empty). */
+export type BirthdayNext = {
+  client_id: string;
+  birthday: string;
+  days: number;
+  /** 5pm Winnipeg the evening before: when the draft (and its push) lands on its own. */
+  draft_at: string;
+  person: { name: string; full_name: string; avatar_url: string | null };
+};
+
+export function useBirthdaysNext(enabled = true) {
+  return useQuery({
+    queryKey: ["community-birthdays-next"],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<BirthdayNext[]> => {
+      const { data, error } = await db.rpc("community_birthdays_next", { _limit: 3 });
+      if (error) throw error;
+      return (data ?? []) as BirthdayNext[];
+    },
+  });
+}
+
+/** Write someone's draft today instead of the evening before. */
+export function useDraftBirthdayNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (clientId: string): Promise<BirthdayPost> => {
+      const { draftBirthdayNow } = await import("@/lib/birthday-posts.functions");
+      return (await draftBirthdayNow({ data: { clientId } })) as unknown as BirthdayPost;
+    },
+    onSuccess: (row) => {
+      qc.setQueryData<BirthdayPost[]>(BIRTHDAYS_KEY, (cur) => [...(cur ?? []).filter((b) => b.id !== row.id), row]);
+      qc.invalidateQueries({ queryKey: ["community-birthdays-next"] });
+    },
+  });
+}
+
 /** Save / new wording / approve / post now / unschedule / skip. Posting now also pushes the message straight away. */
 export function useBirthdayAct() {
   const qc = useQueryClient();

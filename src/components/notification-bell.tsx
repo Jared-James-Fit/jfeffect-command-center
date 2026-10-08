@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isUnread, listDirectThreads, previewLine } from "@/lib/direct-chats";
+import { crewPreview, isCrewUnread, listCrewThreads } from "@/lib/crew-chats";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { markRead } from "@/lib/messages";
@@ -114,9 +115,10 @@ async function fetchUnreadGroupItems(userId: string): Promise<Omit<BellItem, "is
     .in("id", groupIds);
   // Member-to-member chats are added below, from their own list (names, requests).
   const gMap = new Map<string, { name: string; archived: boolean }>(
-    (groups ?? []).filter((g: any) => g.kind !== "direct").map((g: any) => [g.id, { name: g.name, archived: !!g.archived }]),
+    (groups ?? []).filter((g: any) => (g.kind ?? "group") === "group").map((g: any) => [g.id, { name: g.name, archived: !!g.archived }]),
   );
   const hasDirects = (groups ?? []).some((g: any) => g.kind === "direct");
+  const hasCrews = (groups ?? []).some((g: any) => g.kind === "crew");
 
   const { data: msgs } = await (supabase.from("group_messages") as any)
     .select("id, group_id, sender_id, sender_role, body, attachments, created_at, deleted_at")
@@ -179,6 +181,27 @@ async function fetchUnreadGroupItems(userId: string): Promise<Omit<BellItem, "is
       /* the bell never fails over a side list */
     }
   }
+  if (hasCrews) {
+    try {
+      for (const t of await listCrewThreads()) {
+        if (!isCrewUnread(t, userId)) continue;
+        items.push({
+          id: makeId("group_message", t.group_id),
+          kind: "group_message",
+          sourceId: t.group_id,
+          clientId: "",
+          groupId: t.group_id,
+          name: t.name,
+          // An invite never shows what's been said until it's opened.
+          title: t.status === "invited" ? "Group chat invite" : `New in ${t.name}`,
+          body: t.status === "invited" ? `${t.invited_by ?? "Someone"} invited you to ${t.name}.` : crewPreview(t, userId),
+          created_at: t.last?.created_at ?? t.last_at,
+        });
+      }
+    } catch {
+      /* the bell never fails over a side list */
+    }
+  }
   return items;
 }
 
@@ -224,6 +247,7 @@ function acquireNotificationsChannel(userId: string, qc: QC): () => void {
         playAppSound("message");
       } else if (table === "group_messages") {
         qc.invalidateQueries({ queryKey: ["direct-threads"] });
+        qc.invalidateQueries({ queryKey: ["crew-threads"] });
         if (row.sender_id === userId || isThreadOpen(`group:${row.group_id}`)) return;
         playAppSound("message");
       } else if (table === "lift_video_comments") {

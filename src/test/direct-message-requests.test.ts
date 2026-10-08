@@ -129,7 +129,7 @@ describe("the Chats list", () => {
     expect(ui).toContain("Sent as a message request. {name} can reply when they see it.");
     expect(ui).toContain("You can send more once {name} replies.");
     const pane = read("src/components/group-chats-pane.tsx");
-    expect(pane).toContain("<RequestsEntry count={requests.length}");
+    expect(pane).toContain("count={requestCount}");
     expect(pane).toContain("useDirectThreads(!asAdmin && !isImpersonating)");
   });
   it("Messenger: 'Chats' tab, and push links open it", () => {

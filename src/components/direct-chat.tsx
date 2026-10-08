@@ -18,6 +18,8 @@ import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { listGroupMessages } from "@/lib/group-chats";
 import { fmtTime } from "@/components/chat-shared";
 import { isUnread, previewLine, useRespondToChat, type DirectThread, type RequestAction } from "@/lib/direct-chats";
+import { CrewRow } from "@/components/crew-chat";
+import type { CrewThread } from "@/lib/crew-chats";
 
 /** A request holds this many messages until it's answered (chat_request_cap()). */
 export const REQUEST_CAP = 3;
@@ -202,7 +204,7 @@ export function DirectRow({ thread, me, selected, onClick }: { thread: DirectThr
   );
 }
 
-/** The "Message requests" row at the top of Chats. */
+/** The "Requests" row at the top of Chats (DM requests + group chat invites). */
 export function RequestsEntry({ count, fresh, onClick }: { count: number; fresh: boolean; onClick: () => void }) {
   return (
     <button
@@ -214,19 +216,20 @@ export function RequestsEntry({ count, fresh, onClick }: { count: number; fresh:
         <Inbox className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cn("block text-sm", fresh ? "font-bold" : "font-semibold")}>Message requests</span>
-        <span className="block truncate text-xs text-muted-foreground">{count === 1 ? "1 person wants to message you" : `${count} people want to message you`}</span>
+        <span className={cn("block text-sm", fresh ? "font-bold" : "font-semibold")}>Requests</span>
+        <span className="block truncate text-xs text-muted-foreground">{count === 1 ? "1 waiting for you" : `${count} waiting for you`}</span>
       </span>
       <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">{count}</span>
     </button>
   );
 }
 
-/** Requests, on their own screen. */
+/** Requests (DMs and group chat invites), on their own screen. */
 export function RequestsList({
-  threads, me, selectedId, onOpen, onBack,
+  threads, crews = [], me, selectedId, onOpen, onBack,
 }: {
   threads: DirectThread[];
+  crews?: CrewThread[];
   me: string | null | undefined;
   selectedId: string | null;
   onOpen: (id: string) => void;
@@ -238,17 +241,23 @@ export function RequestsList({
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack} aria-label="Back to chats">
           <ChevronLeft className="h-5 w-5" />
         </Button>
-        <div className="text-sm font-bold tracking-tight">Message requests</div>
+        <div className="text-sm font-bold tracking-tight">Requests</div>
       </header>
       <p className="border-b border-border/60 px-4 py-2.5 text-[12px] text-muted-foreground">
-        From people you haven't chatted with yet. Open one to read it. They won't know you've seen it unless you accept.
+        Messages from people you haven't chatted with, and group chats you're invited to. Open one to read it. Nobody knows you've seen it unless you accept or join.
       </p>
       <div className="flex-1 overflow-y-auto">
-        {threads.length === 0 ? (
+        {threads.length + crews.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">No requests.</div>
-        ) : threads.map((t) => (
-          <DirectRow key={t.group_id} thread={t} me={me} selected={selectedId === t.group_id} onClick={() => onOpen(t.group_id)} />
-        ))}
+        ) : (
+          ([...threads.map((t) => ({ at: t.last_at, t })), ...crews.map((c) => ({ at: c.last_at, c }))] as Array<{ at: string; t?: DirectThread; c?: CrewThread }>)
+            .sort((a, b) => b.at.localeCompare(a.at))
+            .map((r) => r.c ? (
+              <CrewRow key={r.c.group_id} thread={r.c} me={me} selected={selectedId === r.c.group_id} onClick={() => onOpen(r.c!.group_id)} />
+            ) : r.t && (
+              <DirectRow key={r.t.group_id} thread={r.t} me={me} selected={selectedId === r.t.group_id} onClick={() => onOpen(r.t!.group_id)} />
+            ))
+        )}
       </div>
     </>
   );
