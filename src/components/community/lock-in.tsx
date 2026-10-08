@@ -1,24 +1,26 @@
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Camera, Check, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
 import { PREVIEW_ONLY_MESSAGE, lockInCameraCard, lockInTimeLabel } from "@/lib/community";
-import { useCommunityActivity, useDayPlan, useMyPostForCompletion } from "@/lib/community.queries";
+import { shareToCommunity, useCommunityActivity, useDayPlan, useMyPostForCompletion } from "@/lib/community.queries";
+import { useAuth } from "@/lib/auth";
 import { CameraChip } from "@/components/community/camera-overlays";
 import type { LockTemplate } from "@/components/community/lock-in-editor";
 
 const LockInEditor = lazyWithRetry(() => import("@/components/community/lock-in-editor").then((m) => ({ default: m.LockInEditor })));
-const CaptureFlow = lazyWithRetry(() => import("@/components/community/capture-flow").then((m) => ({ default: m.CaptureFlow })));
+const ShareStudio = lazyWithRetry(() => import("@/components/community/share-studio").then((m) => ({ default: m.ShareStudio })));
 
 export type LockInPick = { file: File; live: boolean; n: number };
 
 const LOCK_GRADIENT = "bg-[linear-gradient(135deg,#ef3340_0%,#dd2a7b_60%,#8134af_100%)]";
 
 /**
- * "Lock in" at the top of today's workout: one tap opens the camera (add
- * text and stickers if you want), the photo becomes a LOCKED IN card, one
- * more tap posts it. Locking in starts
+ * "Lock in" at the top of today's workout: one tap opens the share studio
+ * (the camera, already showing the LOCKED IN card), snap, add text or
+ * stickers if you want, Post. All on one screen. Locking in starts
  * the session (same path as logging the first set), and the post is the
  * session's post: when they finish, it fills in with the real numbers.
  *
@@ -48,17 +50,17 @@ export function LockInBar({
   const { data: plan } = useDayPlan(dayId ?? null);
   const { data: existing } = useMyPostForCompletion(completionId, !!completionId);
   const [open, setOpen] = useState(false);
-  const [pick, setPick] = useState<LockInPick | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [look, setLook] = useState<LockTemplate>("lockin");
-  const seq = useRef(0);
+  const { user } = useAuth();
+  const qc = useQueryClient();
 
   if (!activity?.enabled) return null;
 
   const done = !!existing;
   const time = lockInTimeLabel(existing?.locked_in_at);
 
-  // Camera first. Skip it → the editor still offers Library and "post without a photo".
+  // Camera first, and the camera is the whole share. Already locked in → edit it.
   const start = () => {
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
     if (done) setOpen(true);
@@ -95,18 +97,21 @@ export function LockInBar({
         <Suspense fallback={null}>
           <LockInEditor
             open={open}
-            onOpenChange={(o) => {
-              setOpen(o);
-              if (!o) setPick(null);
-            }}
+            onOpenChange={setOpen}
             completionId={completionId}
             ensureStarted={ensureStarted}
             workoutTitle={workoutTitle}
             athleteName={athleteName}
             existing={existing ?? null}
-            pick={pick}
-            onCamera={() => setCapturing(true)}
-            onLibrary={() => setCapturing(true)}
+            pick={null}
+            onCamera={() => {
+              setOpen(false);
+              setCapturing(true);
+            }}
+            onLibrary={() => {
+              setOpen(false);
+              setCapturing(true);
+            }}
             plan={plan ?? []}
             initialTemplate={look}
           />
@@ -115,25 +120,37 @@ export function LockInBar({
 
       {capturing && (
         <Suspense fallback={null}>
-          <CaptureFlow
+          <ShareStudio
             open={capturing}
             onClose={() => setCapturing(false)}
-            onDone={(file, live) => {
-              setPick({ file, live, n: ++seq.current });
-              setCapturing(false);
-              setOpen(true);
-            }}
-            onSkip={() => {
-              setCapturing(false);
-              setOpen(true);
-            }}
-            skipLabel="No photo"
-            workoutTitle={workoutTitle}
-            chip={<CameraChip icon="🔒" title={workoutTitle} sub="Snap the gym, your setup, the vibe" />}
+            chip={<CameraChip icon="🔒" title={workoutTitle} sub={existing ? "Update your lock in" : "Snap the gym, your setup, the vibe"} />}
             card={(() => {
               const c = lockInCameraCard({ workoutTitle, athleteName, plan: plan ?? [] });
               return { data: c.data, looks: c.looks, look: c.looks.includes(look) ? look : "lockin", onLook: (t) => setLook(t as LockTemplate) };
             })()}
+            post={{
+              key: `lock:${completionId ?? ""}:${existing?.id ?? ""}`,
+              label: existing ? "Update" : "Post",
+              caption: existing?.caption,
+              visibility: existing?.visibility,
+              onPost: async (a) => {
+                if (!user?.id) throw new Error("Sign in again to post");
+                const id = completionId ?? (await ensureStarted());
+                if (!id) throw new Error("Couldn't start your session. Try again.");
+                await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing });
+                toast.success(
+                  a.visibility === "community" ? (existing ? "Lock in updated 🔒" : "You're locked in 🔒") : a.visibility === "coach" ? "Sent to your coach 🔒" : "Saved to your profile",
+                  {
+                    description:
+                      a.visibility === "community"
+                        ? "The crew sees you showed up. Your numbers land on it when you finish."
+                        : a.visibility === "coach"
+                          ? "Only you and your coach can see it."
+                          : "Only you can see it.",
+                  },
+                );
+              },
+            }}
           />
         </Suspense>
       )}

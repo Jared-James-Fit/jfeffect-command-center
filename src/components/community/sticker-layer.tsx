@@ -1,21 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronLeft, Smile, Trash2, Type } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ensureDisplayFont } from "@/lib/workout-share-card";
 
 /**
- * Instagram-style photo editing before a share: add text (4 styles, 5
- * colours) and stickers (LOCKED IN, the time, the date, JF EFFECT, the
- * workout, a couple of lines, emoji). Drag to move, pinch to resize and
- * rotate, drag onto the bin to delete, tap text to edit it. "Next" bakes
- * everything into the photo, so the feed, the cards and the Instagram story
- * all show it the same way.
+ * Text and stickers, Instagram-style, placed right on the share card: text
+ * (4 styles, 5 colours) and stickers (LOCKED IN, the time, the date, JF
+ * EFFECT, the workout, a couple of lines, emoji). Drag to move, pinch to
+ * resize and rotate (second finger anywhere), drop on the bin to delete, tap
+ * text to edit it.
+ *
+ * Items live in card space (fractions of the 1080×1920 story card), so the
+ * preview, the Instagram story (drawn on top of the card) and the community
+ * photo (baked into the photo through the card's crop) all match.
  */
 
-const REF = 1080;
-/** Where new items land (fractions of the photo), so they don't stack. */
-const SLOTS = [[0.5, 0.5], [0.5, 0.3], [0.5, 0.7], [0.5, 0.18], [0.5, 0.84], [0.3, 0.42], [0.7, 0.58]] as const; // overlay sizes are designed against a 1080px-wide photo
+const REF = 1080; // card width; item sizes are designed against it
+const CARD_H = 1920;
+/** Where new items land (fractions of the card): the upper half, clear of the card's own text. */
+const SLOTS = [[0.5, 0.36], [0.5, 0.24], [0.5, 0.48], [0.32, 0.3], [0.68, 0.42], [0.5, 0.14]] as const;
 const PX = 2; // bitmaps are rendered at 2x for sharp exports
 const DISPLAY = `"Anton", "Impact", "Arial Narrow Bold", sans-serif`;
 const SANS = `-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif`;
@@ -26,21 +28,25 @@ const EMOJI = ["🔥", "💪", "🏋️", "⚡", "🎯", "😤", "🫡", "🏆"]
 
 export type DecorContext = { time: string; date: string; workoutTitle?: string | null };
 
-type Item = {
+export type StickerItem = {
   id: number;
   kind: "text" | "sticker";
   text?: string;
   style?: number;
   color?: string;
   sticker?: string;
+  /** The rendered bitmap (2x), drawn straight onto the card or photo. */
+  canvas: HTMLCanvasElement;
   url: string;
   bw: number;
   bh: number;
+  /** Centre, as fractions of the card. */
   x: number;
   y: number;
   s: number;
   r: number;
 };
+type Item = StickerItem;
 
 type Bitmap = { url: string; bw: number; bh: number; canvas: HTMLCanvasElement };
 
@@ -221,10 +227,27 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
-/** Bake the overlays into the photo. Longest side capped at 2048px. */
-export async function composeDecorated(img: HTMLImageElement, items: Pick<Item, "url" | "bw" | "bh" | "x" | "y" | "s" | "r">[]): Promise<Blob | null> {
-  const nw = img.naturalWidth || img.width;
-  const nh = img.naturalHeight || img.height;
+/** Draw the items on a card-sized context (W×H = the card). */
+export function drawStickers(ctx: CanvasRenderingContext2D, items: StickerItem[], W = REF, H = CARD_H) {
+  for (const it of items) {
+    const w = (it.bw / PX) * (W / REF) * it.s;
+    const h = (it.bh / PX) * (W / REF) * it.s;
+    ctx.save();
+    ctx.translate(it.x * W, it.y * H);
+    ctx.rotate(it.r);
+    ctx.drawImage(it.canvas, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+}
+
+/**
+ * Bake card-space items into the photo itself (for the community post), via
+ * the same cover crop the card uses. Longest side capped at 2048px.
+ */
+export function bakeStickers(src: CanvasImageSource & { width?: number; height?: number }, items: StickerItem[]): Promise<Blob | null> {
+  const any = src as unknown as { naturalWidth?: number; naturalHeight?: number; width?: number; height?: number };
+  const nw = any.naturalWidth || any.width || 1;
+  const nh = any.naturalHeight || any.height || 1;
   const k = Math.min(1, 2048 / Math.max(nw, nh));
   const W = Math.round(nw * k);
   const H = Math.round(nh * k);
@@ -232,87 +255,70 @@ export async function composeDecorated(img: HTMLImageElement, items: Pick<Item, 
   c.width = W;
   c.height = H;
   const ctx = c.getContext("2d")!;
-  ctx.drawImage(img, 0, 0, W, H);
+  ctx.drawImage(src, 0, 0, W, H);
+  // card → photo: the card shows the photo cover-cropped to 1080×1920
+  const s = Math.max(REF / W, CARD_H / H);
+  const ox = (REF - W * s) / 2;
+  const oy = (CARD_H - H * s) / 2;
   for (const it of items) {
-    const bmp = await loadImage(it.url);
-    if (!bmp) continue;
-    const w = (it.bw / PX) * (W / REF) * it.s;
-    const h = (it.bh / PX) * (W / REF) * it.s;
+    const w = ((it.bw / PX) * it.s) / s;
+    const h = ((it.bh / PX) * it.s) / s;
     ctx.save();
-    ctx.translate(it.x * W, it.y * H);
+    ctx.translate((it.x * REF - ox) / s, (it.y * CARD_H - oy) / s);
     ctx.rotate(it.r);
-    ctx.drawImage(bmp, -w / 2, -h / 2, w, h);
+    ctx.drawImage(it.canvas, -w / 2, -h / 2, w, h);
     ctx.restore();
   }
   return new Promise((resolve) => c.toBlob((b) => resolve(b), "image/jpeg", 0.9));
 }
 
-export function PhotoDecorator({
-  file,
+export type StickerRequest = { kind: "text" | "stickers"; n: number } | null;
+
+/**
+ * The editable layer over the card. The parent sizes it to the card (absolute
+ * inset-0 inside the card box) and opens the text editor / tray via `request`.
+ */
+export function StickerLayer({
+  items,
+  setItems,
+  width,
+  height,
   context,
-  onBack,
-  onDone,
+  request,
 }: {
-  file: File | null;
+  items: StickerItem[];
+  setItems: React.Dispatch<React.SetStateAction<StickerItem[]>>;
+  /** On-screen size of the card. */
+  width: number;
+  height: number;
   context: DecorContext;
-  onBack: () => void;
-  /** The photo to use: decorated, or the original when nothing was added. */
-  onDone: (file: File) => void;
+  request: StickerRequest;
 }) {
-  const [img, setImg] = useState<HTMLImageElement | null>(null);
-  const [stage, setStage] = useState<HTMLDivElement | null>(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  const [items, setItems] = useState<Item[]>([]);
   const [tray, setTray] = useState(false);
   const [editing, setEditing] = useState<{ id: number | null; text: string; style: number; color: string } | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
   const [overTrash, setOverTrash] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [logo, setLogo] = useState<HTMLImageElement | null>(null);
+  const root = useRef<HTMLDivElement | null>(null);
   const nextId = useRef(1);
   const stickers = useMemo(() => stickerDefs(context), [context]);
 
   useEffect(() => {
-    void ensureDisplayFont();
     void loadImage("/logo.png").then(setLogo);
   }, []);
-
   useEffect(() => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    let alive = true;
-    void loadImage(url).then((i) => alive && setImg(i));
-    setItems([]);
-    return () => {
-      alive = false;
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
-    };
-  }, [file]);
+    if (!request) return;
+    if (request.kind === "text") setEditing({ id: null, text: "", style: 0, color: "#ffffff" });
+    else setTray(true);
+  }, [request]);
 
-  useEffect(() => {
-    if (!stage || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => setBox({ w: e.contentRect.width, h: e.contentRect.height }));
-    ro.observe(stage);
-    return () => ro.disconnect();
-  }, [stage]);
-
-  // Where the photo sits inside the stage (object-contain).
-  const rect = useMemo(() => {
-    if (!img || !box.w || !box.h) return null;
-    const iw = img.naturalWidth || 1;
-    const ih = img.naturalHeight || 1;
-    const k = Math.min(box.w / iw, box.h / ih);
-    const w = iw * k;
-    const h = ih * k;
-    return { w, h, left: (box.w - w) / 2, top: (box.h - h) / 2 };
-  }, [img, box]);
-
+  const place = (cur: Item[]) => SLOTS[cur.length % SLOTS.length];
   const addSticker = (d: StickerDef) => {
     const b = d.render(logo);
     const id = nextId.current++;
     setItems((cur) => {
-      const [x, y] = SLOTS[cur.length % SLOTS.length];
-      return [...cur, { id, kind: "sticker", sticker: d.key, url: b.url, bw: b.bw, bh: b.bh, x, y, s: d.key.startsWith("emoji:") ? 0.9 : 1, r: 0 }];
+      const [x, y] = place(cur);
+      return [...cur, { id, kind: "sticker", sticker: d.key, canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, x, y, s: d.key.startsWith("emoji:") ? 0.9 : 1, r: 0 }];
     });
     setTray(false);
   };
@@ -327,12 +333,12 @@ export function PhotoDecorator({
     }
     const b = renderText(text, editing.style, editing.color);
     if (editing.id != null) {
-      setItems((cur) => cur.map((i) => (i.id === editing.id ? { ...i, text, style: editing.style, color: editing.color, url: b.url, bw: b.bw, bh: b.bh } : i)));
+      setItems((cur) => cur.map((i) => (i.id === editing.id ? { ...i, text, style: editing.style, color: editing.color, canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh } : i)));
     } else {
       const id = nextId.current++;
       setItems((cur) => {
-        const [x, y] = SLOTS[cur.length % SLOTS.length];
-        return [...cur, { id, kind: "text", text, style: editing.style, color: editing.color, url: b.url, bw: b.bw, bh: b.bh, x, y, s: 1, r: 0 }];
+        const [x, y] = place(cur);
+        return [...cur, { id, kind: "text", text, style: editing.style, color: editing.color, canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, x, y, s: 1, r: 0 }];
       });
     }
     setEditing(null);
@@ -350,11 +356,9 @@ export function PhotoDecorator({
   } | null>(null);
 
   const trashHit = (clientX: number, clientY: number) => {
-    if (!stage) return false;
-    const b = stage.getBoundingClientRect();
-    const tx = b.left + b.width / 2;
-    const ty = b.bottom - 56;
-    return Math.hypot(clientX - tx, clientY - ty) < 64;
+    const b = root.current?.getBoundingClientRect();
+    if (!b) return false;
+    return Math.hypot(clientX - (b.left + b.width / 2), clientY - (b.bottom - 52)) < 60;
   };
 
   const addPointer = (e: React.PointerEvent, id: number) => {
@@ -380,17 +384,19 @@ export function PhotoDecorator({
     setDragging(it.id);
   };
 
-  // Second finger anywhere on the photo pinches the item the first one holds.
-  const onStageDown = (e: React.PointerEvent) => {
+  // While an item is held, the layer takes the whole card, so a second finger
+  // anywhere pinches it (and the card underneath doesn't swipe).
+  const onRootDown = (e: React.PointerEvent) => {
     const st = g.current;
     if (!st || st.pointers.size !== 1) return;
+    e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     addPointer(e, st.id);
   };
 
   const onMove = (e: React.PointerEvent) => {
     const st = g.current;
-    if (!st || !rect || !st.pointers.has(e.pointerId)) return;
+    if (!st || !st.pointers.has(e.pointerId) || !width || !height) return;
     st.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const pts = [...st.pointers.values()];
     let nx = st.start.x;
@@ -400,13 +406,13 @@ export function PhotoDecorator({
     if (pts.length >= 2 && st.pinch0) {
       const [a, b] = pts;
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      nx += (mid.x - st.p0.x) / rect.w;
-      ny += (mid.y - st.p0.y) / rect.h;
+      nx += (mid.x - st.p0.x) / width;
+      ny += (mid.y - st.p0.y) / height;
       ns = Math.min(6, Math.max(0.25, st.start.s * (Math.hypot(b.x - a.x, b.y - a.y) / st.pinch0.d)));
       nr = st.start.r + (Math.atan2(b.y - a.y, b.x - a.x) - st.pinch0.a);
     } else {
-      nx += (pts[0].x - st.p0.x) / rect.w;
-      ny += (pts[0].y - st.p0.y) / rect.h;
+      nx += (pts[0].x - st.p0.x) / width;
+      ny += (pts[0].y - st.p0.y) / height;
     }
     if (Math.hypot(pts[0].x - st.p0.x, pts[0].y - st.p0.y) > 6) st.moved = true;
     setOverTrash(pts.length === 1 && trashHit(pts[0].x, pts[0].y));
@@ -416,9 +422,9 @@ export function PhotoDecorator({
   const onUp = (e: React.PointerEvent) => {
     const st = g.current;
     if (!st || !st.pointers.has(e.pointerId)) return;
+    e.stopPropagation();
     st.pointers.delete(e.pointerId);
     if (st.pointers.size === 1) {
-      // one finger left after a pinch: carry on dragging from here
       const [p] = [...st.pointers.values()];
       const cur = items.find((i) => i.id === st.id);
       if (cur) {
@@ -439,158 +445,114 @@ export function PhotoDecorator({
   };
 
   const fieldText = editing?.style === 2 ? "font-display text-[44px] uppercase leading-none" : "text-[30px] font-extrabold leading-tight";
-
-  const next = async () => {
-    if (!file || !img) return;
-    if (!items.length) return onDone(file);
-    setBusy(true);
-    try {
-      const blob = await composeDecorated(img, items);
-      onDone(blob ? new File([blob], "jf-photo.jpg", { type: "image/jpeg" }) : file);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const k = width / REF;
 
   return (
-    <Dialog open={!!file} onOpenChange={(o) => !o && onBack()}>
-      <DialogContent
-        className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
-        onOpenAutoFocus={(e) => e.preventDefault()}
+    <>
+      <div
+        ref={root}
+        className={cn("absolute inset-0 touch-none", dragging == null && "pointer-events-none")}
+        onPointerDown={onRootDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
       >
-        <DialogTitle className="sr-only">Edit photo</DialogTitle>
-        <DialogDescription className="sr-only">Add text and stickers, then continue.</DialogDescription>
+        {items.map((it) => (
+          <img
+            key={it.id}
+            src={it.url}
+            alt={it.text ?? it.sticker ?? ""}
+            draggable={false}
+            onPointerDown={(e) => onItemDown(e, it)}
+            className={cn("pointer-events-auto absolute max-w-none cursor-grab touch-none select-none", dragging === it.id && overTrash && "opacity-50")}
+            style={{ left: it.x * width, top: it.y * height, width: (it.bw / PX) * k * it.s, transform: `translate(-50%, -50%) rotate(${it.r}rad)` }}
+          />
+        ))}
+        {dragging != null && (
+          <div className={cn("pointer-events-none absolute bottom-6 left-1/2 grid h-14 w-14 -translate-x-1/2 place-items-center rounded-full border-2 transition-all", overTrash ? "scale-125 border-red-500 bg-red-500 text-white" : "border-white/70 bg-black/50 text-white")}>
+            <Trash2 className="h-6 w-6" />
+          </div>
+        )}
+      </div>
 
-        <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-3" style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}>
-          <button type="button" onClick={onBack} className="grid h-11 w-11 place-items-center rounded-full bg-black/45 backdrop-blur active:scale-95" aria-label="Back to camera">
-            <ChevronLeft className="h-6 w-6" />
-          </button>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setEditing({ id: null, text: "", style: 0, color: "#ffffff" })} className="grid h-11 w-11 place-items-center rounded-full bg-black/45 backdrop-blur active:scale-95" aria-label="Add text">
-              <Type className="h-5 w-5" />
+      {/* Text editor — over the whole screen (fixed inside the dialog) */}
+      {editing && (
+        <div className="fixed inset-0 z-[70] flex flex-col bg-black/70 text-white backdrop-blur-sm" style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}>
+          <div className="flex items-center justify-between px-3">
+            <button
+              type="button"
+              onClick={() => setEditing({ ...editing, style: (editing.style + 1) % TEXT_STYLES.length })}
+              className="h-10 rounded-full bg-white/15 px-4 text-[13px] font-black"
+              aria-label="Text style"
+            >
+              Aa · {TEXT_STYLES[editing.style]}
             </button>
-            <button type="button" onClick={() => setTray(true)} className="grid h-11 w-11 place-items-center rounded-full bg-black/45 backdrop-blur active:scale-95" aria-label="Add a sticker">
-              <Smile className="h-5 w-5" />
+            <button type="button" onClick={saveText} className="inline-flex h-10 items-center gap-1 rounded-full bg-white px-4 text-[14px] font-black text-black">
+              <Check className="h-4 w-4" /> Done
             </button>
           </div>
-        </div>
-
-        <div ref={setStage} className="relative min-h-0 flex-1 touch-none select-none" onPointerDown={onStageDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
-          {img && rect && (
-            <>
-              <img src={img.src} alt="" className="pointer-events-none absolute rounded-2xl" style={{ left: rect.left, top: rect.top, width: rect.w, height: rect.h }} draggable={false} />
-              {/* Not clipped, so a sticker can be dragged past the edge and back (the export crops it). */}
-              <div className="absolute" style={{ left: rect.left, top: rect.top, width: rect.w, height: rect.h }}>
-                {items.map((it) => {
-                  const w = (it.bw / PX) * (rect.w / REF) * it.s;
-                  return (
-                    <img
-                      key={it.id}
-                      src={it.url}
-                      alt={it.text ?? it.sticker ?? ""}
-                      draggable={false}
-                      onPointerDown={(e) => onItemDown(e, it)}
-                      className={cn("absolute max-w-none cursor-grab touch-none", dragging === it.id && overTrash && "opacity-50")}
-                      style={{ left: it.x * rect.w, top: it.y * rect.h, width: w, transform: `translate(-50%, -50%) rotate(${it.r}rad)` }}
-                    />
-                  );
-                })}
-              </div>
-            </>
-          )}
-          {dragging != null && (
-            <div className={cn("pointer-events-none absolute bottom-6 left-1/2 grid h-14 w-14 -translate-x-1/2 place-items-center rounded-full border-2 transition-all", overTrash ? "scale-125 border-red-500 bg-red-500 text-white" : "border-white/70 bg-black/50 text-white")}>
-              <Trash2 className="h-6 w-6" />
+          <div className="flex min-h-0 flex-1 items-center justify-center px-6">
+            <div
+              className={cn("inline-grid max-w-full", editing.style === 1 && "rounded-2xl px-4 py-2")}
+              style={editing.style === 1 ? { background: editing.color, color: readable(editing.color) } : { color: editing.color, WebkitTextStroke: editing.style === 3 ? "1.5px #000" : undefined }}
+            >
+              <span aria-hidden className={cn("invisible col-start-1 row-start-1 whitespace-pre-wrap break-words text-center", fieldText)}>
+                {(editing.text || "Type something") + " "}
+              </span>
+              <textarea
+                autoFocus
+                value={editing.text}
+                onChange={(e) => setEditing({ ...editing, text: e.target.value.slice(0, 120) })}
+                rows={1}
+                cols={1}
+                placeholder="Type something"
+                aria-label="Text"
+                // beats the global 16px input rule (iOS zoom guard); it's well over 16 anyway
+                style={{ fontSize: editing.style === 2 ? 44 : 30 }}
+                className={cn("col-start-1 row-start-1 h-full min-h-0 w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 text-center outline-none placeholder:text-current placeholder:opacity-40", fieldText)}
+              />
             </div>
-          )}
-        </div>
-
-        <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.9rem)" }}>
-          <span className="text-[12px] text-white/55">{items.length ? "Drag, pinch to resize, drop on the bin to delete" : "Add text or stickers, or keep it clean"}</span>
-          <button type="button" disabled={busy || !img} onClick={() => void next()} className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-black text-black active:scale-95 disabled:opacity-60">
-            {busy ? "…" : "Next"}
-          </button>
-        </div>
-
-        {/* Text editor */}
-        {editing && (
-          <div className="absolute inset-0 z-30 flex flex-col bg-black/70 backdrop-blur-sm" style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}>
-            <div className="flex items-center justify-between px-3">
+          </div>
+          <div className="flex justify-center gap-3 pb-6" role="group" aria-label="Text colour">
+            {TEXT_COLORS.map((c) => (
               <button
+                key={c}
                 type="button"
-                onClick={() => setEditing({ ...editing, style: (editing.style + 1) % TEXT_STYLES.length })}
-                className="h-10 rounded-full bg-white/15 px-4 text-[13px] font-black"
-                aria-label="Text style"
-              >
-                Aa · {TEXT_STYLES[editing.style]}
-              </button>
-              <button type="button" onClick={saveText} className="inline-flex h-10 items-center gap-1 rounded-full bg-white px-4 text-[14px] font-black text-black">
-                <Check className="h-4 w-4" /> Done
-              </button>
-            </div>
-            <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-              <div
-                className={cn("inline-grid max-w-full", editing.style === 1 && "rounded-2xl px-4 py-2")}
-                style={editing.style === 1 ? { background: editing.color, color: readable(editing.color) } : { color: editing.color, WebkitTextStroke: editing.style === 3 ? "1.5px #000" : undefined }}
-              >
-                <span aria-hidden className={cn("invisible col-start-1 row-start-1 whitespace-pre-wrap break-words text-center", fieldText)}>
-                  {(editing.text || "Type something") + " "}
-                </span>
-                <textarea
-                  autoFocus
-                  value={editing.text}
-                  onChange={(e) => setEditing({ ...editing, text: e.target.value.slice(0, 120) })}
-                  rows={1}
-                  cols={1}
-                  placeholder="Type something"
-                  aria-label="Text"
-                  // beats the global 16px input rule (iOS zoom guard); it's well over 16 anyway
-                  style={{ fontSize: editing.style === 2 ? 44 : 30 }}
-                  className={cn("col-start-1 row-start-1 h-full min-h-0 w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 text-center outline-none placeholder:text-current placeholder:opacity-40", fieldText)}
-                />
-              </div>
-            </div>
-            <div className="flex justify-center gap-3 pb-6" role="group" aria-label="Text colour">
-              {TEXT_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setEditing({ ...editing, color: c })}
-                  className={cn("h-9 w-9 rounded-full border-2", editing.color === c ? "scale-110 border-white" : "border-white/40")}
-                  style={{ background: c }}
-                  aria-label={`Colour ${c}`}
-                />
-              ))}
-            </div>
+                onClick={() => setEditing({ ...editing, color: c })}
+                className={cn("h-9 w-9 rounded-full border-2", editing.color === c ? "scale-110 border-white" : "border-white/40")}
+                style={{ background: c }}
+                aria-label={`Colour ${c}`}
+              />
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Sticker tray */}
-        {tray && (
-          <div className="absolute inset-0 z-30 flex flex-col justify-end bg-black/50" onClick={() => setTray(false)}>
-            <div className="max-h-[62%] overflow-y-auto rounded-t-[24px] bg-[#16161a] p-4" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }} onClick={(e) => e.stopPropagation()}>
-              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
-              <div className="grid grid-cols-2 gap-2.5">
-                {stickers
-                  .filter((s) => !s.key.startsWith("emoji:"))
-                  .map((s) => (
-                    <StickerButton key={s.key} def={s} logo={logo} onPick={() => addSticker(s)} />
-                  ))}
-              </div>
-              <div className="mt-3 grid grid-cols-4 gap-2.5">
-                {stickers
-                  .filter((s) => s.key.startsWith("emoji:"))
-                  .map((s) => (
-                    <button key={s.key} type="button" onClick={() => addSticker(s)} className="grid h-16 place-items-center rounded-2xl bg-white/[0.06] text-[34px] active:scale-95" aria-label={`Sticker ${s.label}`}>
-                      {s.label}
-                    </button>
-                  ))}
-              </div>
+      {/* Sticker tray */}
+      {tray && (
+        <div className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/50 text-white" onClick={() => setTray(false)}>
+          <div className="max-h-[62%] overflow-y-auto rounded-t-[24px] bg-[#16161a] p-4" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
+            <div className="grid grid-cols-2 gap-2.5">
+              {stickers
+                .filter((s) => !s.key.startsWith("emoji:"))
+                .map((s) => (
+                  <StickerButton key={s.key} def={s} logo={logo} onPick={() => addSticker(s)} />
+                ))}
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-2.5">
+              {stickers
+                .filter((s) => s.key.startsWith("emoji:"))
+                .map((s) => (
+                  <button key={s.key} type="button" onClick={() => addSticker(s)} className="grid h-16 place-items-center rounded-2xl bg-white/[0.06] text-[34px] active:scale-95" aria-label={`Sticker ${s.label}`}>
+                    {s.label}
+                  </button>
+                ))}
             </div>
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
+        </div>
+      )}
+    </>
   );
 }
 

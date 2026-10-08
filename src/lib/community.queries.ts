@@ -24,11 +24,12 @@ import {
   type Reactor,
   reactionTotal,
   planDetail,
+  pickLockInSession,
 } from "@/lib/community";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
 import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
-import { removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, type UploadedMedia } from "@/lib/community-media";
+import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, type UploadedMedia } from "@/lib/community-media";
 
 const db = supabase as any;
 
@@ -276,6 +277,30 @@ export function useDeletePost() {
   });
 }
 
+/**
+ * Post (or update) the community post for a session in one go: upload the
+ * photo if there's a new one, save, and tidy up the old photo. No photo =
+ * keep whatever the post already has.
+ */
+export async function shareToCommunity(
+  qc: ReturnType<typeof useQueryClient>,
+  i: { userId: string; completionId: string; caption: string; visibility: CommunityVisibility; hideLoads?: boolean; photo: File | null; existing: MyPostRow | null | undefined },
+): Promise<void> {
+  let media: SavePostInput["media"] = { action: "keep" };
+  if (i.photo) {
+    const res = await pickMedia(i.photo);
+    if (!res.ok) throw new Error(res.reason);
+    try {
+      media = { action: "set", ...(await uploadPicked(res.media, i.userId)) };
+    } finally {
+      releasePicked(res.media);
+    }
+  }
+  await saveCommunityPost({ completionId: i.completionId, caption: i.caption, visibility: i.visibility, media, hideLoads: i.hideLoads });
+  if (media.action === "set" && i.existing?.media_path) await removeCommunityFiles([i.existing.media_path, i.existing.media_thumb_path]);
+  invalidateCommunity(qc);
+}
+
 export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-feed"] });
   qc.invalidateQueries({ queryKey: ["community-my-post"] });
@@ -459,9 +484,10 @@ export function useDayPlan(dayId: string | null | undefined) {
 export type TodaySession = { dayId: string; scheduledWorkoutId: string | null; title: string; completionId: string | null; athleteName: string | null };
 
 /**
- * Today's workout for the signed-in client (same rules as the Home "today"
- * card), so Lock In works from the Community tab too. Null on a rest day,
- * with no program, or once today's session is finished.
+ * Today's workout for the signed-in client, so Lock In works from the
+ * Community tab too: one really in progress (started in the last 12h) or
+ * the one scheduled today. Null on a rest day, with no program, or once
+ * today's session is finished — never an old unfinished session.
  */
 export function useTodaySession(enabled: boolean) {
   return useQuery({
@@ -473,10 +499,11 @@ export function useTodaySession(enabled: boolean) {
       if (!auth.user) return null;
       const { data: client } = await supabase.from("clients").select("id, full_name, preferred_training_days, preferred_rest_days").eq("user_id", auth.user.id).maybeSingle();
       if (!client) return null;
-      const state = computeTodayState(await getClientTodayItems(client.id), client as any);
-      if (state.kind !== "workout_today" && state.kind !== "in_progress") return null;
-      const it = state.item;
-      if (!it.day?.id || it.completion?.completed_at) return null;
+      const items = await getClientTodayItems(client.id);
+      // A rest day means nothing to lock into (same rule as the Home card).
+      if (computeTodayState(items, client as any).kind === "rest_day") return null;
+      const it = pickLockInSession(items);
+      if (!it) return null;
       return { dayId: it.day.id, scheduledWorkoutId: it.scheduledWorkoutId ?? null, title: cleanDayTitle(it.day.title, it.day.day_index), completionId: it.completion?.id ?? null, athleteName: (client as any).full_name ?? null };
     },
   });
