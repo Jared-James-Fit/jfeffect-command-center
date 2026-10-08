@@ -34,6 +34,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedCoachRouteRouteImport } from './routes/_authenticated/coach/route'
+import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
@@ -388,6 +389,11 @@ const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
 const AuthenticatedCoachRouteRoute = AuthenticatedCoachRouteRouteImport.update({
   id: '/coach',
   path: '/coach',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFinanceRoute = AuthenticatedFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMRouteRoute = AuthenticatedMRouteRouteImport.update({
@@ -1769,6 +1775,7 @@ export interface FileRoutesByFullPath {
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/book/': typeof BookRoute
+  '/finance': typeof AuthenticatedFinanceRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -2023,6 +2030,7 @@ export interface FileRoutesByTo {
   '/unsubscribe': typeof UnsubscribeRoute
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/book': typeof BookRoute
+  '/finance': typeof AuthenticatedFinanceRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -2281,6 +2289,7 @@ export interface FileRoutesById {
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/book/': typeof BookRoute
+  '/_authenticated/finance': typeof AuthenticatedFinanceRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -2540,6 +2549,7 @@ export interface FileRouteTypes {
     | '/m'
     | '/portal'
     | '/book/'
+    | '/finance'
     | '/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -2794,6 +2804,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/coach'
     | '/book'
+    | '/finance'
     | '/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -3051,6 +3062,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m'
     | '/_authenticated/portal'
     | '/book/'
+    | '/_authenticated/finance'
     | '/_authenticated/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -3519,6 +3531,13 @@ declare module '@tanstack/react-router' {
       path: '/coach'
       fullPath: '/coach'
       preLoaderRoute: typeof AuthenticatedCoachRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/finance': {
+      id: '/_authenticated/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof AuthenticatedFinanceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/m': {
@@ -5799,6 +5818,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCoachRouteRoute: typeof AuthenticatedCoachRouteRouteWithChildren
   AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
+  AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
 }
 
@@ -5807,6 +5827,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCoachRouteRoute: AuthenticatedCoachRouteRouteWithChildren,
   AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,
+  AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
 }
 
