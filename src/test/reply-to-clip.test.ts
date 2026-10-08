@@ -148,7 +148,7 @@ describe("reply to one clip of several", () => {
   it("lets each clip be held or hovered to reply, and jumps back to that clip", () => {
     expect(thread).toContain("data-media-index={i}");
     expect(thread).toContain("id={`att-${m.id}-${i}`}");
-    expect(thread).toContain("startLongPress(m.id, e.clientX, e.clientY, Number(tile.dataset.mediaIndex))");
+    expect(thread).toContain("tile ? Number(tile.dataset.mediaIndex) : null,");
     expect(thread).toContain("startReply(m, index)");
     expect(thread).toContain("Reply to whole message");
     expect(thread).toContain("jumpToReplySource(m.reply_to_message_id, m.reply_preview?.attachment_index)");
