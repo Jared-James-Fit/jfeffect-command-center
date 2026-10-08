@@ -5,8 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { cn } from "@/lib/utils";
 import type { CommunityVisibility } from "@/lib/community";
 import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
-import { CaptionInput } from "@/components/community/caption-input";
-import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
+import { CaptionEditor, CaptionField, captionThumb } from "@/components/community/caption-editor";
 import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 
 export type CameraMode = { key: string; label: string };
@@ -100,12 +99,9 @@ export function ShareStudio({
   const [busy, setBusy] = useState<null | "post" | "save">(null);
   const [posted, setPosted] = useState(false);
   const [area, setArea] = useState<HTMLDivElement | null>(null);
-  // While the keyboard is up (caption or text), fit the whole studio into
-  // the part of the screen you can see: iOS otherwise slides the page up and
-  // cuts off the top. The card shrinks to fit; the text editor (fixed inside
-  // this dialog) fills it too. Phones only: the desktop dialog is centred.
-  const view = useVisualViewportBox(open && phase === "edit");
-  const fitView = view?.keyboard && typeof window !== "undefined" && window.innerWidth < 640 ? { top: view.top, height: view.height } : undefined;
+  // Writing the caption happens on its own screen (with a preview of the post).
+  const [captioning, setCaptioning] = useState(false);
+  const [thumb, setThumb] = useState<string | null>(null);
   const [areaSize, setAreaSize] = useState({ w: 0, h: 0 });
   const [cardEl, setCardEl] = useState<HTMLCanvasElement | null>(null);
   const [logo, setLogo] = useState<HTMLImageElement | null>(null);
@@ -155,13 +151,6 @@ export function ShareStudio({
     const w = Math.min(areaSize.w, (areaSize.h * CARD_W) / CARD_H);
     return { w: Math.floor(w), h: Math.floor((w * CARD_H) / CARD_W) };
   }, [areaSize]);
-  // The card's full size (not the shrunken one while the keyboard is up), so
-  // the text editor previews text at its real size.
-  const [fullW, setFullW] = useState(0);
-  const fitted = !!fitView;
-  useEffect(() => {
-    if (!fitted && box.w) setFullW(box.w);
-  }, [fitted, box.w]);
 
   /* ---- camera ------------------------------------------------------- */
   const cancelCount = () => {
@@ -406,6 +395,12 @@ export function ShareStudio({
     return b ? new File([b], `jf-${card.look}.jpg`, { type: "image/jpeg" }) : finalPhoto();
   };
 
+  // The caption screen's preview: the card as it is now, stickers and all, small.
+  const openCaption = () => {
+    setThumb(captionThumb(cardEl, (ctx, w, h) => drawStickers(ctx, items, w, h)));
+    setCaptioning(true);
+  };
+
   const doPost = async () => {
     if (!post || busy || posted || !card) return;
     setBusy("post");
@@ -450,7 +445,6 @@ export function ShareStudio({
       <DialogContent
         className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
-        style={fitView}
       >
         <DialogTitle className="sr-only">Share</DialogTitle>
         <DialogDescription className="sr-only">Take a photo, add text or stickers, then post it to the community or share it to your story.</DialogDescription>
@@ -487,7 +481,7 @@ export function ShareStudio({
               </div>
             )}
 
-            {phase === "edit" && <StickerLayer items={items} setItems={setItems} width={box.w} height={box.h} editorWidth={fullW || box.w} context={stickerContext} request={request} />}
+            {phase === "edit" && <StickerLayer items={items} setItems={setItems} width={box.w} height={box.h} context={stickerContext} request={request} />}
 
             {count != null && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -587,14 +581,7 @@ export function ShareStudio({
             </>
           ) : (
             <div className="space-y-2">
-              {/* full width, and it grows as you write, so you can read it back like a text */}
-              <CaptionInput
-                value={caption}
-                onChange={(v) => {
-                  setCaption(v);
-                  setPosted(false);
-                }}
-              />
+              <CaptionField value={caption} onOpen={openCaption} />
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -649,6 +636,17 @@ export function ShareStudio({
             </div>
           )}
         </div>
+        {captioning && (
+          <CaptionEditor
+            value={caption}
+            onChange={(v) => {
+              setCaption(v);
+              setPosted(false);
+            }}
+            onDone={() => setCaptioning(false)}
+            thumb={thumb}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
