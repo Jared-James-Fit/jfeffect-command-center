@@ -56,14 +56,26 @@ export function useWarmupSets(rowId: string, clientId: string | null | undefined
   return { sets, save, remove, atLimit: sets.length >= MAX_WARMUPS };
 }
 
-const FEEL: Array<{ rpe: number; label: string }> = [
-  { rpe: 6, label: "Easy" },
-  { rpe: 7, label: "Solid" },
-  { rpe: 8, label: "Heavy" },
+/**
+ * How a last warm-up felt, on the same RPE scale as the set table. Only the
+ * range that changes the number: anything easier than 6 counts as 6 (the
+ * engine floors it there — easy-set ratings are unreliable and would inflate
+ * the estimate), and 9+ catches a grindy warm-up, which pulls today's weight
+ * down. Whole numbers only: halves are false precision on a warm-up.
+ */
+export const WARMUP_RPE_SCALE: Array<{ rpe: number; label: string; left: string; feel: string }> = [
+  { rpe: 6, label: "≤6", left: "4+ left", feel: "Fast and easy — 4 or more reps left" },
+  { rpe: 7, label: "7", left: "3 left", feel: "Moving well — about 3 reps left" },
+  { rpe: 8, label: "8", left: "2 left", feel: "Slowing down — about 2 reps left" },
+  { rpe: 9, label: "9+", left: "1 left", feel: "Grindy — 1 rep left at most. Today's weight drops" },
 ];
 
-const feelLabel = (rpe: number | null) =>
-  rpe == null ? null : FEEL.find((f) => f.rpe === rpe)?.label ?? `RPE ${rpe}`;
+/** The scale step a stored warm-up RPE falls on. */
+export function warmupRpeStep(rpe: number | null | undefined) {
+  if (rpe == null || !Number.isFinite(rpe)) return null;
+  const r = Math.min(9, Math.max(6, Math.round(rpe)));
+  return WARMUP_RPE_SCALE.find((x) => x.rpe === r) ?? null;
+}
 
 type WarmupSaveInput = { id?: string; load: number; unit: WarmupUnit; reps: number; rpe: number | null };
 
@@ -143,7 +155,9 @@ export function WarmupRows({
               <span className="font-bold tabular-nums text-foreground">
                 {warmupDisplay(s, unit)} {unit} × {s.reps}
               </span>
-              {feelLabel(s.rpe) && <span className="text-xs text-muted-foreground">· {feelLabel(s.rpe)}</span>}
+              {warmupRpeStep(s.rpe) && (
+                <span className="text-xs text-muted-foreground">@ RPE {warmupRpeStep(s.rpe)!.label}</span>
+              )}
               {tunedId === s.id && (
                 <span className="truncate text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">✓ set your weight</span>
               )}
@@ -220,6 +234,7 @@ function WarmupForm({
   const [load, setLoad] = useState(base ? String(base.load) : "");
   const [reps, setReps] = useState(base ? String(base.reps) : "");
   const [rpe, setRpe] = useState<number | null>(base?.rpe ?? null);
+  const picked = warmupRpeStep(rpe);
   const loadRef = useRef<HTMLInputElement | null>(null);
 
   // A blank new warm-up starts with the weight field focused. Retried once the
@@ -290,22 +305,34 @@ function WarmupForm({
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">reps</span>
         </label>
       </form>
-      <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="How the warm-up felt">
-        {FEEL.map((f) => (
-          <button
-            key={f.rpe}
-            type="button"
-            onClick={() => setRpe(rpe === f.rpe ? null : f.rpe)}
-            aria-pressed={rpe === f.rpe}
-            className={cn(
-              "flex h-11 flex-col items-center justify-center rounded-lg border leading-tight transition active:scale-[0.98]",
-              rpe === f.rpe ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-muted",
-            )}
-          >
-            <span className="text-sm font-bold">{f.label}</span>
-            <span className="text-[11px] font-medium opacity-70">RPE {f.rpe}</span>
-          </button>
-        ))}
+      <div role="group" aria-label="How hard was it (RPE)">
+        <div className="mb-1 flex items-baseline justify-between text-[11px] font-semibold text-muted-foreground">
+          <span>How hard? <span className="font-normal">RPE · reps left</span></span>
+        </div>
+        <div className="grid grid-cols-4 gap-1">
+          {WARMUP_RPE_SCALE.map((f) => {
+            const on = picked?.rpe === f.rpe;
+            return (
+              <button
+                key={f.rpe}
+                type="button"
+                onClick={() => setRpe(on ? null : f.rpe)}
+                aria-pressed={on}
+                aria-label={`RPE ${f.label}, ${f.left}`}
+                className={cn(
+                  "flex h-12 flex-col items-center justify-center rounded-lg border leading-none transition active:scale-[0.97]",
+                  on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-muted",
+                )}
+              >
+                <span className="text-base font-bold tabular-nums">{f.label}</span>
+                <span className="mt-1 text-[10px] font-medium opacity-70">{f.left}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1 min-h-4 text-center text-[11px] leading-snug text-muted-foreground" aria-live="polite" data-testid="warmup-rpe-feel">
+          {picked ? picked.feel : "Rate it by reps you had left in the tank"}
+        </p>
       </div>
       <div className="flex gap-1.5">
         {onRemove && (
@@ -326,7 +353,7 @@ function WarmupForm({
           {editing ? "Save warm-up" : "Add warm-up"}
         </button>
       </div>
-      <p className="text-center text-[11px] leading-snug text-muted-foreground">Sets today's suggested weight. Not counted in volume, records or points.</p>
+      <p className="text-center text-[11px] leading-snug text-muted-foreground">Not counted in volume, records or points.</p>
     </div>
   );
 }
