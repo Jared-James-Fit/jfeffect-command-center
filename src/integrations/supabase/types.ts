@@ -19667,6 +19667,16 @@ export type Database = {
           xp: number
         }[]
       }
+      get_athlete_weight_lifted: {
+        Args: { _client_id: string }
+        Returns: {
+          client_id: string
+          lifetime_lb: number
+          lifetime_sessions: number
+          month_lb: number
+          month_sessions: number
+        }[]
+      }
       get_athlete_rankings: {
         Args: { _limit?: number }
         Returns: {

@@ -47,7 +47,14 @@ updates amounts and keeps any category change.
 
 ## Summer Ledger
 
+Summer is she/her. Her voice is a preset the owner picks (Girly pop by
+default, Chill, Straight business) plus optional custom instructions, both
+set in Customize Summer (chat header or Settings tab) and stored on
+`business_tax_settings` (`assistant_tone`, `assistant_instructions`). The
+voice text lives in `src/lib/summer-persona.ts`. Custom instructions are
+placed after the facts rules and can't override them.
+
 `askSummer` builds a plain-text copy of the books for the selected year
 (`src/lib/summer-context.ts`) and sends it with the last 16 messages. Summer
-reads; it cannot write. Messages are saved per admin in `summer_messages`
+reads; she cannot write. Messages are saved per admin in `summer_messages`
 only after a reply comes back.

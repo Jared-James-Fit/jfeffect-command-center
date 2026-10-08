@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   AlertTriangle, CalendarClock, Camera, CheckCircle2, ChevronDown, Download, FileSpreadsheet, FileText,
-  Info, Lightbulb, Loader2, Paperclip, Plus, RefreshCw, Search, Sparkles, Trash2,
+  Info, Lightbulb, Loader2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card } from "@/components/ui/card";
@@ -34,6 +34,8 @@ import {
 import { RECEIPT_ACCEPT, receiptSignedUrl, uploadReceiptFile } from "@/lib/receipt-upload";
 import { ExpenseDialog } from "./expense-dialog";
 import { SummerChat } from "./summer-chat";
+import { SummerCustomizeDialog } from "./summer-customize";
+import { summerTone } from "@/lib/summer-persona";
 
 const BOOKS_KEY = ["books-data"];
 const STRIPE_FEE_STALE_MS = 12 * 60 * 60 * 1000;
@@ -323,7 +325,13 @@ export function TaxesBooksPage() {
         onChanged={refresh}
         gstRegistered={gstRegistered}
       />
-      <SummerChat open={summerOpen} onOpenChange={setSummerOpen} year={year} />
+      <SummerChat
+        open={summerOpen}
+        onOpenChange={setSummerOpen}
+        year={year}
+        persona={{ tone: data.settings?.assistant_tone, instructions: data.settings?.assistant_instructions }}
+        onPersonaSaved={refresh}
+      />
     </div>
   );
 }
@@ -839,7 +847,41 @@ function YearEndTab({
 
 // ---------------------------------------------------------------------------
 
+function SummerSettingsCard({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const persona = { tone: data.settings?.assistant_tone, instructions: data.settings?.assistant_instructions };
+  const tone = summerTone(persona.tone);
+  return (
+    <Card className="max-w-2xl p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-orange-500 text-white">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">{ASSISTANT_NAME} <span className="font-normal text-muted-foreground">· she/her</span></div>
+            <p className="text-xs text-muted-foreground">Vibe: {tone.label}. {persona.instructions?.trim() ? "Your custom instructions are on." : "No custom instructions yet."}</p>
+          </div>
+        </div>
+        <Button size="sm" variant="outline" className="shrink-0" onClick={() => setOpen(true)}>
+          <SlidersHorizontal className="mr-1.5 h-4 w-4" /> Customize
+        </Button>
+      </div>
+      <SummerCustomizeDialog open={open} onClose={() => setOpen(false)} persona={persona} onSaved={onSaved} />
+    </Card>
+  );
+}
+
 function SettingsTab({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
+  return (
+    <div className="space-y-4">
+      <SummerSettingsCard data={data} onSaved={onSaved} />
+      <TaxSettingsForm data={data} onSaved={onSaved} />
+    </div>
+  );
+}
+
+function TaxSettingsForm({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
   const saveFn = useServerFn(saveTaxSettings);
   const st = toTaxSettings(data.settings);
   const [form, setForm] = useState({

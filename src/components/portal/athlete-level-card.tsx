@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { Info, Trophy, Medal, Zap, ChevronRight, Scale, Crown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +18,8 @@ import { ArrowLeft } from "lucide-react";
 import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 import { RecordBadges } from "@/components/portal/record-badges";
 import { LeagueRecapButton } from "@/components/portal/league-recap";
+import { formatWeightLifted, type WeightUnit } from "@/lib/weight-lifted";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 import { CoachTag } from "@/components/portal/coach-tag";
@@ -262,6 +265,62 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 type LeagueStat = { workouts_completed: number; rank: number; qualified: boolean; xp: number };
 
+type WeightLifted = { month_lb: number; lifetime_lb: number; month_sessions: number; lifetime_sessions: number };
+
+function useWeightLifted(clientId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["athlete-weight-lifted", clientId],
+    enabled: !!clientId,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WeightLifted | null> => {
+      const { data, error } = await (supabase as any).rpc("get_athlete_weight_lifted", { _client_id: clientId });
+      if (error) throw error;
+      const r = (data ?? [])[0];
+      if (!r) return null;
+      return {
+        month_lb: Number(r.month_lb ?? 0),
+        lifetime_lb: Number(r.lifetime_lb ?? 0),
+        month_sessions: Number(r.month_sessions ?? 0),
+        lifetime_sessions: Number(r.lifetime_sessions ?? 0),
+      };
+    },
+  });
+}
+
+// lb by default; the choice is saved on the client (clients.preferred_weight_unit,
+// the same preference the analytics pages seed from). A coach in "View as client"
+// can flip the display but never writes to the client's record.
+function useWeightUnit() {
+  const qc = useQueryClient();
+  const portalUserId = usePortalUserId();
+  const viewingAsClient = !!useClientImpersonation().client;
+  const key = ["league-weight-unit", portalUserId];
+  const { data: saved } = useQuery({
+    queryKey: key,
+    enabled: !!portalUserId,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WeightUnit> => {
+      const { data } = await supabase.from("clients").select("preferred_weight_unit").eq("user_id", portalUserId!).maybeSingle();
+      return data?.preferred_weight_unit === "kg" ? "kg" : "lb";
+    },
+  });
+  const [local, setLocal] = useState<WeightUnit | null>(null);
+  const unit: WeightUnit = local ?? saved ?? "lb";
+  const setUnit = async (next: WeightUnit) => {
+    const prev = unit;
+    setLocal(next);
+    if (viewingAsClient || !portalUserId) return;
+    qc.setQueryData(key, next);
+    const { error } = await supabase.from("clients").update({ preferred_weight_unit: next }).eq("user_id", portalUserId);
+    if (error) {
+      qc.setQueryData(key, prev);
+      setLocal(null);
+      toast.error("Couldn't save your unit preference");
+    }
+  };
+  return { unit, setUnit };
+}
+
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-2xl border bg-card px-3 py-2.5">
@@ -272,8 +331,9 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, onBack }: {
+function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague, myLeague, onBack }: {
   clientId: string;
+  myClientId?: string | null;
   myStats: BadgeStats;
   myBadgeCount: number;
   theirLeague?: LeagueStat;
@@ -293,6 +353,9 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
   const povClientId = useClientImpersonation().client?.id ?? null;
   const isMe = !!p?.is_me || (!!povClientId && clientId === povClientId);
   const theirXp = Number(p?.xp ?? 0);
+  const { unit, setUnit } = useWeightUnit();
+  const { data: theirWeight, isPending: weightPending } = useWeightLifted(clientId);
+  const { data: myWeight } = useWeightLifted(!isMe ? myClientId : null);
   const { data: publicBadges = [] } = usePublicAchievements(clientId);
   const monthName = format(new Date(), "MMMM");
   const lifetimeWorkouts = Number(p?.workouts_completed ?? 0);
@@ -301,6 +364,8 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
   const loggedPct = lifetimeWorkouts > 0 ? Math.round((Math.min(fullyLogged, lifetimeWorkouts) / lifetimeWorkouts) * 100) : 0;
   const since = p?.first_workout_at ? format(new Date(p.first_workout_at), "MMM yyyy") : null;
   const lastWorkout = p?.last_workout_at ? format(new Date(p.last_workout_at), "MMM d") : null;
+  const weightValue = (lb?: number) => (theirWeight ? formatWeightLifted(lb ?? 0, unit) : weightPending ? "…" : "—");
+  const weightSub = (n?: number) => (theirWeight ? plural(n ?? 0, "session") : undefined);
   const leagueSub = theirLeague?.qualified && theirLeague.rank < 999
     ? `#${theirLeague.rank} · ${formatLeaguePoints(theirLeague.xp)} pts`
     : undefined;
@@ -323,9 +388,20 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
             </div>
           </div>
 
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Weight units</span>
+            <ToggleGroup type="single" value={unit} onValueChange={(v) => v && setUnit(v as WeightUnit)} className="rounded-lg border bg-card p-0.5">
+              {(["lb", "kg"] as const).map((u) => (
+                <ToggleGroupItem key={u} value={u} aria-label={`Show weight in ${u}`} className="h-9 px-3 text-xs font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">{u}</ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <StatTile label="Lifetime workouts" value={lifetimeWorkouts.toLocaleString()} sub={since ? `Training since ${since}` : undefined} />
             <StatTile label={`${monthName} workouts`} value={monthWorkouts.toLocaleString()} sub={leagueSub} />
+            <StatTile label={`${monthName} weight lifted`} value={weightValue(theirWeight?.month_lb)} sub={weightSub(theirWeight?.month_sessions)} />
+            <StatTile label="Lifetime weight lifted" value={weightValue(theirWeight?.lifetime_lb)} sub={weightSub(theirWeight?.lifetime_sessions)} />
             <StatTile label="Fully logged" value={fullyLogged.toLocaleString()} sub={lifetimeWorkouts > 0 ? `${loggedPct}% of workouts` : undefined} />
             <StatTile label="Last workout" value={lastWorkout ?? "—"} sub={p?.month_workouts_fully_logged != null ? `${p.month_workouts_fully_logged} fully logged in ${monthName}` : undefined} />
           </div>
@@ -340,6 +416,8 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
                 ["Lifetime points", Number(myStats?.xp ?? 0).toLocaleString(), Number(theirXp ?? 0).toLocaleString()],
                 ["Lifetime workouts", Number(myStats?.workouts_completed ?? 0).toLocaleString(), lifetimeWorkouts.toLocaleString()],
                 [`${monthName} workouts`, myLeague ? String(myLeague.workouts_completed) : "—", String(monthWorkouts)],
+                [`${monthName} weight lifted`, myWeight ? formatWeightLifted(myWeight.month_lb, unit) : "—", theirWeight ? formatWeightLifted(theirWeight.month_lb, unit) : "—"],
+                ["Lifetime weight lifted", myWeight ? formatWeightLifted(myWeight.lifetime_lb, unit) : "—", theirWeight ? formatWeightLifted(theirWeight.lifetime_lb, unit) : "—"],
                 ["Badges", String(myBadgeCount), String(publicBadges.length)],
               ].map(([k, a, b]) => (
                 <div key={k} className="grid grid-cols-3 border-t px-3 py-2.5">
@@ -410,6 +488,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     return (
       <CompareView
         clientId={selected}
+        myClientId={me?.client_id ?? null}
         myStats={myStats}
         myBadgeCount={myBadgeCount}
         theirLeague={toStat(data.find((r) => r.client_id === selected))}

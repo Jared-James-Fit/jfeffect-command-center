@@ -2,10 +2,10 @@ import { BadgeCheck, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
-import { postTimeLabel, type CommunityAuthor } from "@/lib/community";
+import { postTimeLabel, reactionEmoji, type CommunityAuthor } from "@/lib/community";
 import { usePostReactors } from "@/lib/community.queries";
 
-/** Everyone who gave a post 🔥. Tap someone to open their profile. */
+/** Everyone who reacted to a post, and with what. Tap someone to open their profile. */
 export function ReactorsSheet({
   postId,
   onClose,
@@ -21,8 +21,8 @@ export function ReactorsSheet({
       <SheetContent side="bottom" hideCloseButton className="max-h-[70dvh] gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="text-[16px] font-black">🔥 {data ? `${data.length} ${data.length === 1 ? "person" : "people"}` : ""}</SheetTitle>
-            <SheetDescription className="text-[12px]">Everyone who gave this fire</SheetDescription>
+            <SheetTitle className="text-[16px] font-black">Reactions{data ? ` · ${data.length}` : ""}</SheetTitle>
+            <SheetDescription className="text-[12px]">Everyone who reacted to this</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
             <X className="h-4 w-4" />
@@ -57,9 +57,10 @@ export function ReactorsSheet({
                 {r.author.title && <div className="truncate text-[11px] text-muted-foreground">{r.author.title}</div>}
               </div>
               <span className="shrink-0 text-[11px] text-muted-foreground">{postTimeLabel(r.created_at)}</span>
+              {reactionEmoji(r.emoji) && <span className="w-7 shrink-0 text-center text-[20px] leading-none" aria-label={`Reacted ${reactionEmoji(r.emoji)}`}>{reactionEmoji(r.emoji)}</span>}
             </button>
           ))}
-          {data && data.length === 0 && <div className="p-6 text-center text-[13px] text-muted-foreground">No fire yet.</div>}
+          {data && data.length === 0 && <div className="p-6 text-center text-[13px] text-muted-foreground">No reactions yet.</div>}
         </div>
       </SheetContent>
     </Sheet>

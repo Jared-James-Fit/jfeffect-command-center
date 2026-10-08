@@ -30,7 +30,6 @@ const PriceCardPickerDialog = lazyWithRetry(() =>
 );
 import { UserAvatar } from "@/components/user-avatar";
 import { getCoachIntel } from "@/lib/coach-intel";
-import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 import { cn } from "@/lib/utils";
@@ -459,7 +458,6 @@ function AdminDashboard() {
         <NotificationSetupPrompt problemsOnly />
 
         {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
-        <div className="flex justify-end -mb-2"><DashboardRefreshIndicator /></div>
         <SnapshotGrid tiles={snapshot} loading={directoryLoading} />
 
         {/* ---------------- TODAY: who trains today and who already has ---------------- */}
