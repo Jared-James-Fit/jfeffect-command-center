@@ -639,7 +639,8 @@ export function WorkoutsExperience({
         </Tabs>
 
         {mode === "self" && (
-          <>
+          // Each section carries its own label, so give them room to breathe.
+          <div className="space-y-6 pt-2">
             <ClientCardioSection
               clientId={clientId}
               hideWhenEmpty
@@ -657,7 +658,7 @@ export function WorkoutsExperience({
               analyticsTo={"/portal/workouts/analytics"}
             />
             <DeferredAnalytics clientId={clientId} />
-          </>
+          </div>
         )}
       </div>
 

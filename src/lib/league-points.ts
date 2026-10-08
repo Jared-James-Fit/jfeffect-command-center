@@ -10,7 +10,12 @@ export const LEAGUE_RULES = [
   { key: "atpr", label: "New ATPR", points: 10, note: "all-time record" },
   { key: "program_pr", label: "PROGRAM PR", points: 5 },
   { key: "block_pr", label: "BLOCK PR", points: 3 },
+  { key: "community", label: "Post a workout to the Community", points: 15, note: "1 a day, 2 a week" },
 ] as const;
+
+/** Community posting points (DB: league_month_scores community CTE + community_post_xp_sync). */
+export const LEAGUE_COMMUNITY_POINTS = 15;
+export const LEAGUE_COMMUNITY_WEEKLY_CAP = 2;
 
 /** Record points: best record per lift, per month, capped monthly (DB: league_month_scores). */
 export const LEAGUE_RECORD_CAP = 40;

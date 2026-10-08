@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Archive, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -7,7 +8,9 @@ import { AuthorLine, LockInHero, NoteBody, PostMedia, ReactionBar, TrainingNowPi
 import { CommentThread } from "@/components/community/comments-sheet";
 import { PostActions } from "@/components/community/post-actions";
 import { WinsStatsCard } from "@/components/community/wins-stats";
+import { DoubleTapHint, ReactionBurst, useDoubleTap } from "@/components/community/reaction-button";
 import {
+  REACTION,
   SCOPE_WORD,
   formatExerciseBest,
   formatWorkoutDuration,
@@ -19,7 +22,7 @@ import {
   type CommunityPost,
   type ReactionKey,
 } from "@/lib/community";
-import { usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
+import { useHintsSeen, useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { formatTonnage } from "@/lib/training-records";
 
 /**
@@ -101,6 +104,16 @@ function Detail({
   const react = useReact(post, viewerIsStaff);
   const s = post.stats;
   const onReact = (_p: CommunityPost, next: ReactionKey | null) => react.mutate(next, { onError: () => toast.error("Couldn't save that reaction") });
+  // Double-tap the photo / card for ❤️, same as in the feed.
+  const [burst, setBurst] = useState(0);
+  const hints = useHintsSeen();
+  const markHint = useMarkHintSeen();
+  const onHeroTap = useDoubleTap(() => {
+    setBurst((b) => b + 1);
+    if (!post.my_reaction) onReact(post, REACTION.key);
+    markHint("double_tap");
+  });
+  const showHint = !!hints.data && !hints.data.includes("double_tap") && burst === 0;
 
   const tiles = s
     ? [
@@ -133,12 +146,18 @@ function Detail({
           <NoteBody post={post} />
           {post.series_data && <WinsStatsCard stats={post.series_data} unit={unit} className="mx-4 mb-2 mt-2" />}
         </>
-      ) : post.media_type ? (
-        <PostMedia post={post} thumbUrl={thumb} full />
-      ) : s ? (
-        <div className="px-4"><div className="overflow-hidden rounded-3xl"><WorkoutHero stats={s} unit={unit} size="detail" /></div></div>
-      ) : post.locked_in_at ? (
-        <div className="px-4"><div className="overflow-hidden rounded-3xl"><LockInHero post={post} size="detail" /></div></div>
+      ) : post.media_type || s || post.locked_in_at ? (
+        <div className="relative select-none" onClick={onHeroTap}>
+          {post.media_type ? (
+            <PostMedia post={post} thumbUrl={thumb} full />
+          ) : s ? (
+            <div className="px-4"><div className="overflow-hidden rounded-3xl"><WorkoutHero stats={s} unit={unit} size="detail" /></div></div>
+          ) : (
+            <div className="px-4"><div className="overflow-hidden rounded-3xl"><LockInHero post={post} size="detail" /></div></div>
+          )}
+          {showHint && <DoubleTapHint />}
+          <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+        </div>
       ) : null}
 
       {post.media_type && !s && post.locked_in_at && (
