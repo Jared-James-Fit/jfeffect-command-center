@@ -42,13 +42,11 @@ export function CommunityNavButton({ className }: { className?: string }) {
 }
 
 /**
- * Home: the community's front door, right under today's training. Always
- * there for clients (that's where they are: Home and the workout itself), so
- * it can't be missed — "+ Share" first, Instagram-stories style, then who
- * shared this week (ring = new to you). Tapping a person opens their workout
- * right here over Home; "See all" opens the community page, whose Back
- * returns to Home. With nothing shared yet it's a single inviting line,
- * never an empty widget.
+ * Home: the community strip, right under today's training: "+ Share" first,
+ * Instagram-stories style, then who shared this week (ring = new to you).
+ * Tapping a person opens their workout right here over Home; the title or
+ * "See all" opens the feed (which is also its own tab in the bottom bar).
+ * With nothing shared yet it's a single inviting line, never an empty widget.
  */
 export function CommunityHomeStrip() {
   const { user } = useAuth();
@@ -88,7 +86,7 @@ export function CommunityHomeStrip() {
   return (
     <section className="rounded-2xl border border-border/80 bg-card px-3.5 pb-3 pt-3">
       <div className="flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[13px] font-black">
+        <Link to="/portal/community" className="-my-1 flex min-w-0 items-center gap-1.5 whitespace-nowrap py-1 text-[13px] font-black">
           <Flame className="h-4 w-4 shrink-0 text-orange-500" /> Community
           {/* Who showed up today beats "N new": it's the nudge to go train. */}
           {lockedToday > 0 ? (
@@ -96,7 +94,7 @@ export function CommunityHomeStrip() {
           ) : activity.unseen > 0 ? (
             <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>
           ) : null}
-        </div>
+        </Link>
         <Link to="/portal/community" className="-my-1 flex shrink-0 items-center whitespace-nowrap py-1 pl-3 text-[12px] font-bold text-muted-foreground">
           {people.length ? "See all" : "Open"} <ChevronRight className="h-3.5 w-3.5" />
         </Link>

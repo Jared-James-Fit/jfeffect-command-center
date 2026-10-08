@@ -184,11 +184,13 @@ export const clientNav: NavItem[] = [
 // Mobile bottom-tab nav for the client portal. Max 5 single-word labels so
 // nothing wraps and tap targets stay large. Everything else lives in the
 // side drawer (clientNav) via the "More" trigger in AppShell.
+// Community sits in the middle: it's the one people should be one tap from
+// (it was buried behind Home and barely opened). Nutrition is in More.
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  { to: "/portal/community", label: "Community", icon: Flame },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
-  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
 ];
 
 // App Member portal navigation

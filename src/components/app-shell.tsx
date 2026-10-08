@@ -1500,8 +1500,6 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }:
         : null;
     const active =
       pathname === item.to ||
-      // Community opens from Home, so Home stays lit while it's open.
-      (item.to === "/portal" && pathname === "/portal/community") ||
       (tabAlias != null &&
         pathname === tabAlias.path &&
         (search?.tab === tabAlias.tab ||
@@ -1510,7 +1508,17 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }:
     return (
       <Link
         to={item.to}
-        onClick={() => onNavigate(item.to)}
+        onClick={() => {
+          // Tapping the tab you're already on goes back to the top (and the
+          // page can refresh itself), like every app with a feed.
+          if (pathname === item.to) {
+            try {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+              window.dispatchEvent(new CustomEvent("nav-retap", { detail: item.to }));
+            } catch {}
+          }
+          onNavigate(item.to);
+        }}
         style={{ WebkitTapHighlightColor: "transparent" }}
         className={cn(
           "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors touch-manipulation select-none",

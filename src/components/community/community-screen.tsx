@@ -15,6 +15,7 @@ import { CrewList } from "@/components/community/crew-list";
 import { markCommunitySeen, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notification-bell";
 
 type Tab = "feed" | "crew" | "you";
 type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
@@ -41,7 +42,16 @@ function personFromHash(): string | null {
 /** The double-tap tip plays once per visit (app load), not on every feed render. */
 let tipShownThisVisit = false;
 
-export function CommunityScreen({ canShare = false, previewOnly = false }: { canShare?: boolean; previewOnly?: boolean }) {
+export function CommunityScreen({
+  canShare = false, previewOnly = false, bell = false, retapPath,
+}: {
+  canShare?: boolean;
+  previewOnly?: boolean;
+  /** The page has no header of its own: put the notifications bell in the top row. */
+  bell?: boolean;
+  /** Re-tapping this bottom-bar tab goes back to the feed and pulls the newest posts. */
+  retapPath?: string;
+}) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const viewerIsStaff = role === "admin" || role === "coach";
@@ -81,6 +91,19 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
   }, [feed.isSuccess, qc]);
 
   const { data: unit = "lb" } = useViewerUnit(user?.id);
+
+  // Tab tapped again: back to the feed (the shell already scrolls to the top) with the newest posts.
+  const refetchFeed = feed.refetch;
+  useEffect(() => {
+    if (!retapPath) return;
+    const onRetap = (e: Event) => {
+      if ((e as CustomEvent).detail !== retapPath) return;
+      setScope({ kind: "feed" });
+      void refetchFeed();
+    };
+    window.addEventListener("nav-retap", onRetap);
+    return () => window.removeEventListener("nav-retap", onRetap);
+  }, [retapPath, refetchFeed]);
 
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
@@ -135,13 +158,16 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
               role="tab"
               aria-selected={scope.kind === k}
               onClick={() => setScope({ kind: k })}
-              className={cn("h-9 rounded-full px-4 text-[13px] font-bold transition-colors", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+              className={cn("h-9 rounded-full px-3.5 text-[13px] font-bold transition-colors", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
             >
               {k === "feed" ? "Feed" : k === "crew" ? "Crew" : "You"}
             </button>
           ))}
         </div>
-        {canShare && <ShareWorkoutButton unit={unit} label="Share" previewOnly={previewOnly} />}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {bell && <NotificationBell />}
+          {canShare && <ShareWorkoutButton unit={unit} label="Share" previewOnly={previewOnly} />}
+        </div>
         </div>
       )}
 
