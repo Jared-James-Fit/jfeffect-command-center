@@ -7,10 +7,11 @@ import {
   listMessages, sendMessage, markRead, setConversationStatus, setConversationPriority,
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
   editMessage, deleteMessageForEveryone, adminDeleteMessages, replyMediaFor,
+  makeReplyPreview, replyPreviewText, mediaAttachments, keepReplyClip,
   listReactions, toggleReaction, REACTION_EMOJIS,
   listOlderMessages,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
-  type MessageReaction, type MessageReplyPreview,
+  type MessageReaction,
 } from "@/lib/messages";
 import type { SharedAttachment } from "@/components/chat-shared";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
@@ -95,32 +96,6 @@ function fmtTime(iso: string) {
   if (isToday(d)) return format(d, "h:mm a");
   if (isYesterday(d)) return `Yesterday ${format(d, "h:mm a")}`;
   return format(d, "MMM d, h:mm a");
-}
-
-function makeReplyPreview(message: Message): MessageReplyPreview {
-  const first = message.attachments?.[0];
-  const isMedia = first?.type === "image" || first?.type === "video";
-  return {
-    sender_role: message.sender_role,
-    body: (message.body || "").trim().slice(0, 260),
-    attachment_type: first?.type ?? null,
-    attachment_name: first?.name ?? null,
-    // Lets the quote show a thumbnail without loading the original message.
-    attachment_path: isMedia ? first?.storage_path ?? null : null,
-    attachment_url: isMedia && !first?.storage_path ? first?.url || null : null,
-    is_internal_note: !!message.is_internal_note,
-  };
-}
-
-function replyPreviewText(preview?: MessageReplyPreview | null) {
-  if (!preview) return "Original message";
-  if (preview.body) return preview.body;
-  // "IMG_5678.mov" means nothing in a quote; say what it is, like iMessage.
-  if (preview.attachment_type === "video") return "Video";
-  if (preview.attachment_type === "image") return "Photo";
-  if (preview.attachment_name) return preview.attachment_name;
-  if (preview.attachment_type) return `${preview.attachment_type.charAt(0).toUpperCase()}${preview.attachment_type.slice(1)} attachment`;
-  return "Attachment";
 }
 
 const LINK_RE = /\bhttps?:\/\/[^\s)]+/gi;
@@ -772,7 +747,11 @@ export function MessageThread({
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
-  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  // What the composer is replying to: a message, or one photo/video of it
+  // (`att` = index in its attachments) when several were sent at once.
+  const [reply, setReply] = useState<{ to: Message; att: number | null } | null>(null);
+  const replyingTo = reply?.to ?? null;
+  const replyAtt = reply?.att ?? null;
   const [flashMessageId, setFlashMessageId] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -818,6 +797,8 @@ export function MessageThread({
   const [actionsForId, setActionsForId] = useState<string | null>(null);
   // Mobile/tablet long-press action sheet + iMessage-style selection mode.
   const [sheetForId, setSheetForId] = useState<string | null>(null);
+  // The photo/video that was long-pressed to open the sheet, if any.
+  const [sheetClip, setSheetClip] = useState<number | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
@@ -871,7 +852,7 @@ export function MessageThread({
   const resetUploads = uploads.reset;
   useEffect(() => {
     setOlderMessages([]);
-    setReplyingTo(null);
+    setReply(null);
     setFlashMessageId(null);
     setAttachments([]);
     resetUploads();
@@ -957,10 +938,14 @@ export function MessageThread({
     for (const m of allMessages) {
       const rp = m.reply_preview?.attachment_path;
       if (rp) out.push(rp);
+      const poster = m.reply_preview?.attachment_poster_path;
+      if (poster) out.push(poster);
     }
     for (const r of replySources?.values() ?? []) {
-      const first = r.attachments?.[0];
-      if (first?.storage_path) out.push(first.storage_path);
+      for (const a of r.attachments ?? []) {
+        if (a?.storage_path) out.push(a.storage_path);
+        if (a?.thumbnail_storage_path) out.push(a.thumbnail_storage_path);
+      }
     }
     return out;
   }, [allMessages, replySources]);
@@ -1135,7 +1120,7 @@ export function MessageThread({
           );
           if (tempIdx >= 0) {
             const copy = existing.slice();
-            copy[tempIdx] = newMsg;
+            copy[tempIdx] = keepReplyClip(newMsg, existing[tempIdx]);
             return copy;
           }
           return [...existing, newMsg];
@@ -1402,26 +1387,29 @@ export function MessageThread({
     focusComposerAtEnd(composerRef.current);
   }, []);
 
-  const startReply = (message: Message) => {
+  const startReply = (message: Message, att: number | null = null) => {
     if (message.deleted_at || message.is_internal_note || message.id.startsWith("optimistic-")) return;
-    setReplyingTo(message);
+    setReply({ to: message, att });
     setSheetForId(null);
     setActionsForId(null);
     // Wait for the mobile action sheet to release focus before opening the keyboard.
     window.setTimeout(() => composerRef.current?.focus(), 120);
   };
 
-  const jumpToReplySource = (messageId?: string | null) => {
+  const jumpToReplySource = (messageId?: string | null, att?: number | null) => {
     if (!messageId) return;
-    const node = document.getElementById(`message-${messageId}`);
+    // A reply about one clip lands on (and highlights) that clip.
+    const clipNode = att != null ? document.getElementById(`att-${messageId}-${att}`) : null;
+    const node = clipNode ?? document.getElementById(`message-${messageId}`);
     if (!node) {
       toast.message("Original message is outside the loaded history.");
       return;
     }
     node.scrollIntoView({ behavior: "smooth", block: "center" });
-    setFlashMessageId(messageId);
+    const flashKey = clipNode ? `${messageId}#${att}` : messageId;
+    setFlashMessageId(flashKey);
     window.setTimeout(() => {
-      setFlashMessageId((current) => current === messageId ? null : current);
+      setFlashMessageId((current) => current === flashKey ? null : current);
     }, 1400);
   };
 
@@ -1433,14 +1421,14 @@ export function MessageThread({
     !(e.currentTarget as Node).contains(e.target as Node);
 
   // ---------- Long-press + selection helpers ----------
-  const startLongPress = (id: string, x: number, y: number) => {
+  const startLongPress = (id: string, x: number, y: number, clip: number | null = null) => {
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
     const t = setTimeout(() => {
       suppressClickRef.current = true;
       // Haptic feedback when available.
       try { (navigator as any).vibrate?.(10); } catch {}
       if (selectionMode) toggleSelected(id);
-      else setSheetForId(id);
+      else { setSheetClip(clip); setSheetForId(id); }
     }, 450);
     longPressRef.current = { id, t, x, y };
   };
@@ -1620,7 +1608,8 @@ export function MessageThread({
     const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.is_internal_note && !replyingTo.id.startsWith("optimistic-")
       ? replyingTo
       : null;
-    const replyPreview = replyTarget ? makeReplyPreview(replyTarget) : null;
+    const replyClip = replyTarget ? replyAtt : null;
+    const replyPreview = replyTarget ? makeReplyPreview(replyTarget, replyClip) : null;
     
     // Direct send — no ProgressDrawer popup for simple messages.
     // The button spinner (Loader2) provides sufficient feedback.
@@ -1666,7 +1655,7 @@ export function MessageThread({
     if (belongsInInbox(optimistic)) patchInbox((prev) => (prev ? upsertRow(prev, optimistic) : prev));
     setBody("");
     setAttachments([]);
-    setReplyingTo(null);
+    setReply(null);
     setInternalNote(false);
     broadcastTyping(true);
     const releaseDrafts = () => {
@@ -1685,7 +1674,7 @@ export function MessageThread({
         drafts.forEach(releaseDraft);
         // Nothing was sent: put the caption back so the coach can re-attach and retry.
         if (text) setBody((b) => b || text);
-        if (replyTarget) setReplyingTo((r) => r ?? replyTarget);
+        if (replyTarget) setReply((r) => r ?? { to: replyTarget, att: replyClip });
         playUiSound("error");
         haptic("error");
         toast.error(`Upload failed: ${e?.message ?? "try again"}`);
@@ -1718,7 +1707,11 @@ export function MessageThread({
       qc.setQueryData<Message[]>(key, (prev) => {
         const list = prev ?? [];
         const withoutTemp = list.filter((m) => m.id !== tempId);
-        if (withoutTemp.some((m) => m.id === sent.id)) return withoutTemp;
+        // Realtime may have delivered the row first; the send's copy has the
+        // final quote (which clip was replied to).
+        if (withoutTemp.some((m) => m.id === sent.id)) {
+          return withoutTemp.map((m) => (m.id === sent.id ? { ...m, reply_preview: sent.reply_preview } : m));
+        }
         return [...withoutTemp, sent];
       });
       playUiSound("message");
@@ -1733,7 +1726,7 @@ export function MessageThread({
           ? { ...m, delivery_status: "failed" as const, delivery_error: e?.message ?? "Failed to send" }
           : m),
       );
-      if (replyTarget) setReplyingTo(replyTarget);
+      if (replyTarget) setReply({ to: replyTarget, att: replyClip });
       playUiSound("error");
       haptic("error");
       toast.error(e?.message ?? "Failed to send");
@@ -1924,8 +1917,19 @@ export function MessageThread({
                 }}
                 onContextMenu={(e) => { if (!isDeleted && !fromPortal(e)) e.preventDefault(); }}
                 onPointerDown={(e) => {
+                  // A new press is a new gesture: a long-press whose release
+                  // never produced a click must not eat this tap (e.g. play).
+                  if (!fromPortal(e)) suppressClickRef.current = false;
                   if (isEditing || (isDeleted && !isAdmin) || fromPortal(e)) return;
-                  if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video")) return;
+                  const target = e.target as HTMLElement;
+                  // Photos/videos are buttons (tap = open), but holding one opens
+                  // the actions for that clip; the release tap is swallowed below.
+                  const tile = target.closest<HTMLElement>("[data-media-index]");
+                  if (tile && !target.closest("[data-clip-reply]")) {
+                    startLongPress(m.id, e.clientX, e.clientY, Number(tile.dataset.mediaIndex));
+                    return;
+                  }
+                  if (target.closest("a,button,textarea,input,audio,video")) return;
                   startLongPress(m.id, e.clientX, e.clientY);
                 }}
                 onPointerMove={onPointerMoveDuringHold}
@@ -1973,7 +1977,7 @@ export function MessageThread({
                     data-no-doubletap
                     onClick={(e) => {
                       e.stopPropagation();
-                      jumpToReplySource(m.reply_to_message_id);
+                      jumpToReplySource(m.reply_to_message_id, m.reply_preview?.attachment_index);
                     }}
                     className={cn(
                       "mb-2 block w-full rounded-xl border-l-2 px-2.5 py-2 text-left transition",
@@ -2005,7 +2009,7 @@ export function MessageThread({
                           )}>
                             {replyPreviewText(m.reply_preview)}
                           </div>
-                          {media && <ReplyThumb media={media} signedUrl={media.path ? signedUrlMap[media.path] : undefined} />}
+                          {media && <ReplyThumb media={media} signedUrl={media.path ? signedUrlMap[media.path] : undefined} posterUrl={media.posterPath ? signedUrlMap[media.posterPath] : undefined} />}
                         </div>
                       );
                     })()}
@@ -2088,17 +2092,53 @@ export function MessageThread({
                 )}
                 {!isDeleted && !isEditing && m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
-                    {m.attachments.map((a, i) => (
-                      <AttachmentView
-                        key={i}
-                        att={a}
-                        mine={mine}
-                        message={m}
-                        role={role}
-                        clientId={clientId}
-                        onUseReply={useSuggestedReply}
-                      />
-                    ))}
+                    {(() => {
+                      // Several photos/videos sent at once: each one can be
+                      // replied to on its own (hold it, or the hover button).
+                      const media = mediaAttachments(m);
+                      const clipReplies = media.length > 1 && !m.is_internal_note && !m.id.startsWith("optimistic-");
+                      const clipAt = new Map(media.map((x, k) => [x.index, k]));
+                      return m.attachments.map((a, i) => {
+                        const view = (
+                          <AttachmentView
+                            key={i}
+                            att={a}
+                            mine={mine}
+                            message={m}
+                            role={role}
+                            clientId={clientId}
+                            onUseReply={useSuggestedReply}
+                          />
+                        );
+                        const k = clipAt.get(i);
+                        if (!clipReplies || k === undefined) return view;
+                        const noun = a.type === "video" ? "video" : "photo";
+                        return (
+                          <div
+                            key={i}
+                            id={`att-${m.id}-${i}`}
+                            data-media-index={i}
+                            className={cn(
+                              "group/clip relative w-fit max-w-full rounded-md transition-shadow duration-500",
+                              flashMessageId === `${m.id}#${i}` && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                            )}
+                          >
+                            {view}
+                            <button
+                              type="button"
+                              data-clip-reply
+                              data-no-doubletap
+                              onClick={(e) => { e.stopPropagation(); startReply(m, i); }}
+                              aria-label={`Reply to ${noun} ${k + 1} of ${media.length}`}
+                              title={`Reply to this ${noun}`}
+                              className="absolute right-1.5 top-1.5 hidden h-8 w-8 place-items-center rounded-full bg-black/60 text-white opacity-0 ring-1 ring-white/30 backdrop-blur-sm transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover/clip:opacity-100 [@media(hover:hover)]:grid"
+                            >
+                              <Reply className="h-4 w-4" />
+                            </button>
+                          </div>
+                        );
+                      });
+                    })()}
                     {(m as any).local_upload_ids?.length > 0 && (
                       <DraftUploadStatus store={uploads.store} ids={(m as any).local_upload_ids} />
                     )}
@@ -2357,19 +2397,19 @@ export function MessageThread({
                     : "Coach Jared"}
               </div>
               <div className="truncate text-xs text-muted-foreground">
-                {replyPreviewText(makeReplyPreview(replyingTo))}
+                {replyPreviewText(makeReplyPreview(replyingTo, replyAtt))}
               </div>
             </div>
             {(() => {
-              const media = replyMediaFor(makeReplyPreview(replyingTo), replyingTo);
-              return media ? <ReplyThumb media={media} signedUrl={media.path ? signedUrlMap[media.path] : undefined} /> : null;
+              const media = replyMediaFor(makeReplyPreview(replyingTo, replyAtt), replyingTo);
+              return media ? <ReplyThumb media={media} signedUrl={media.path ? signedUrlMap[media.path] : undefined} posterUrl={media.posterPath ? signedUrlMap[media.posterPath] : undefined} /> : null;
             })()}
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="h-7 w-7 shrink-0 rounded-full"
-              onClick={() => setReplyingTo(null)}
+              onClick={() => setReply(null)}
               aria-label="Cancel reply"
             >
               <X className="h-4 w-4" />
@@ -2513,9 +2553,9 @@ export function MessageThread({
                     isInternalNote: role === "admin" ? internalNote : false,
                     priority: role === "admin" ? priority : undefined,
                     replyToMessageId: replyingTo?.id ?? null,
-                    replyPreview: replyingTo ? makeReplyPreview(replyingTo) : null,
+                    replyPreview: replyingTo ? makeReplyPreview(replyingTo, replyAtt) : null,
                   });
-                  setReplyingTo(null);
+                  setReply(null);
                   qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
                   try { await markRecent(user.id, g.id); } catch {}
                 } catch (e: any) {
@@ -2546,9 +2586,9 @@ export function MessageThread({
                     isInternalNote: role === "admin" ? internalNote : false,
                     priority: role === "admin" ? priority : undefined,
                     replyToMessageId: replyingTo?.id ?? null,
-                    replyPreview: replyingTo ? makeReplyPreview(replyingTo) : null,
+                    replyPreview: replyingTo ? makeReplyPreview(replyingTo, replyAtt) : null,
                   });
-                  setReplyingTo(null);
+                  setReply(null);
                   qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
                   try { await markSoundRecent(user.id, s.id); } catch {}
                 } catch (e: any) {
@@ -2686,7 +2726,7 @@ export function MessageThread({
       )}
 
       {/* Mobile/tablet long-press action sheet. */}
-      <Sheet open={!!sheetForId} onOpenChange={(o) => { if (!o) setSheetForId(null); }}>
+      <Sheet open={!!sheetForId} onOpenChange={(o) => { if (!o) { setSheetForId(null); setSheetClip(null); } }}>
         <SheetContent
           side="bottom"
           className="rounded-t-2xl pb-[calc(max(env(safe-area-inset-bottom),0.75rem))]"
@@ -2698,6 +2738,14 @@ export function MessageThread({
             const canDelete = canDeleteMessage(m);
             const canReact = !m.deleted_at;
             const canReply = !m.deleted_at && !m.is_internal_note && !m.id.startsWith("optimistic-");
+            // Several photos/videos at once: reply to one clip, not the batch.
+            const media = canReply ? mediaAttachments(m) : [];
+            const clipPick = media.length > 1;
+            const held = clipPick && sheetClip != null ? media.findIndex((x) => x.index === sheetClip) : -1;
+            const nounOf = (a: MessageAttachment) => (a.type === "video" ? "video" : "photo");
+            const pickNoun = media.every((x) => x.att.type === "video")
+              ? "video"
+              : media.every((x) => x.att.type === "image") ? "photo" : "photo or video";
             return (
               <>
                 <SheetHeader className="text-left">
@@ -2731,7 +2779,57 @@ export function MessageThread({
                     })}
                   </div>
                 )}
+                {clipPick && (
+                  <div className="mt-3">
+                    <div className="mb-1.5 px-1 text-xs font-semibold text-muted-foreground">
+                      Reply to one {pickNoun}
+                    </div>
+                    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 pt-1">
+                      {media.map(({ att, index }, k) => {
+                        const thumb = {
+                          type: att.type as "image" | "video",
+                          path: att.storage_path || undefined,
+                          url: att.storage_path ? undefined : att.url,
+                          posterPath: att.type === "video" ? att.thumbnail_storage_path || undefined : undefined,
+                        };
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => startReply(m, index)}
+                            aria-label={`Reply to ${nounOf(att)} ${k + 1} of ${media.length}`}
+                            className={cn(
+                              "relative shrink-0 rounded-xl transition active:scale-95",
+                              k === held && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                            )}
+                          >
+                            <ReplyThumb
+                              media={thumb}
+                              signedUrl={thumb.path ? signedUrlMap[thumb.path] : undefined}
+                              posterUrl={thumb.posterPath ? signedUrlMap[thumb.posterPath] : undefined}
+                              className="h-16 w-16 rounded-xl"
+                            />
+                            <span className="absolute bottom-1 left-1 rounded-full bg-black/65 px-1.5 text-[10px] font-semibold tabular-nums text-white">
+                              {k + 1}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3 grid gap-1">
+                  {held >= 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-12 justify-start text-base"
+                      onClick={() => startReply(m, media[held].index)}
+                    >
+                      <Reply className="mr-3 h-5 w-5" /> Reply to this {nounOf(media[held].att)}
+                      <span className="ml-auto text-sm text-muted-foreground">{held + 1} of {media.length}</span>
+                    </Button>
+                  )}
                   {canReply && (
                     <Button
                       type="button"
@@ -2739,7 +2837,7 @@ export function MessageThread({
                       className="h-12 justify-start text-base"
                       onClick={() => startReply(m)}
                     >
-                      <Reply className="mr-3 h-5 w-5" /> Reply
+                      <Reply className="mr-3 h-5 w-5" /> {clipPick ? "Reply to whole message" : "Reply"}
                     </Button>
                   )}
                   {canEdit && (
