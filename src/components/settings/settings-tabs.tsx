@@ -12,6 +12,7 @@ type Tab = { to: string; label: string; roles: Array<"admin" | "coach"> };
 
 const TABS: Tab[] = [
   { to: "/admin/account",       label: "Account",      roles: ["admin", "coach"] },
+  { to: "/admin/voice",         label: "My Voice",     roles: ["admin", "coach"] },
   { to: "/admin/settings",      label: "Workspace",    roles: ["admin"] },
   { to: "/admin/apps",          label: "Integrations", roles: ["admin"] },
   { to: "/admin/legal",         label: "Legal & Disclaimers", roles: ["admin"] },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COACH_VOICE_RULES, casualize } from "@/lib/coach-voice";
+import { COACH_VOICE_RULES, DEFAULT_VOICE, buildVoicePrompt, casualize, normalizeVoiceProfile } from "@/lib/coach-voice";
 import { readFileSync } from "node:fs";
 
 describe("casualize", () => {
@@ -23,16 +23,78 @@ describe("casualize", () => {
   });
 });
 
-describe("voice rules", () => {
-  it("bans the AI-isms and asks for nerd specifics without inventing data", () => {
-    for (const s of ["em dashes", "Great work this week, Name.", "navigating", "Mostly lowercase", "RPE", "Never invent"]) {
+describe("buildVoicePrompt", () => {
+  it("carries his words, hype-only words, sparing emojis and the never list", () => {
+    for (const s of ["cooking", "sheeeesh", "No emoji unless something is hype enough", "🔥🔥🔥", "em dashes", "navigating"]) {
       expect(COACH_VOICE_RULES).toContain(s);
     }
   });
 
-  it("is wired into the check-in recap and cleans the suggestion", () => {
-    const src = readFileSync("src/lib/messenger-checkins.functions.ts", "utf8");
-    expect(src).toContain("COACH_VOICE_RULES,");
-    expect(src).toContain("suggested_response: casualize(");
+  it("guys get guy terms; edgy humour only when switched on", () => {
+    const guy = buildVoicePrompt(DEFAULT_VOICE, { sex: "male", edgyOk: false });
+    expect(guy).toContain("big man");
+    expect(guy).toContain("Never use: 👅💦, zesty");
+    const edgy = buildVoicePrompt(DEFAULT_VOICE, { sex: "male", edgyOk: true });
+    expect(edgy).toContain("OK with edgy humour");
+    expect(edgy).not.toContain("Never use: 👅💦");
+  });
+
+  it("girls get girl terms and never the edgy stuff, even if flagged", () => {
+    const girl = buildVoicePrompt(DEFAULT_VOICE, { sex: "female", edgyOk: true });
+    expect(girl).toContain("gurllll");
+    expect(girl).toContain("Never use: 👅💦, zesty");
+    expect(girl).not.toContain("big man");
+  });
+
+  it("unknown sex: no gendered terms", () => {
+    const p = buildVoicePrompt(DEFAULT_VOICE, null);
+    expect(p).toContain("no gendered terms");
+    expect(p).not.toContain("You can call him");
+  });
+
+  it("a nickname is only for that client", () => {
+    const p = buildVoicePrompt(DEFAULT_VOICE, { sex: "male", nickname: "brudda" });
+    expect(p).toContain('nickname is "brudda"');
+    expect(buildVoicePrompt(DEFAULT_VOICE, { sex: "male" })).not.toContain("brudda");
+  });
+
+  it("group posts: no nicknames, no edgy humour", () => {
+    const p = buildVoicePrompt(DEFAULT_VOICE, { sex: "male", nickname: "brudda", edgyOk: true }, { group: true });
+    expect(p).toContain("a post to the whole group");
+    expect(p).not.toContain("brudda");
+    expect(p).not.toContain("OK with edgy humour");
+  });
+});
+
+describe("normalizeVoiceProfile", () => {
+  it("fills missing keys with defaults but respects a list the coach emptied", () => {
+    const p = normalizeVoiceProfile({ hype: [], everyday: ["  cooked ", "cooked", "", "ngl"] });
+    expect(p.hype).toEqual([]);
+    expect(p.everyday).toEqual(["cooked", "ngl"]);
+    expect(p.emojis).toEqual(DEFAULT_VOICE.emojis);
+    expect(p.rules).toBe(DEFAULT_VOICE.rules);
+  });
+
+  it("survives junk", () => {
+    expect(normalizeVoiceProfile(null)).toEqual(DEFAULT_VOICE);
+    expect(normalizeVoiceProfile({ everyday: "nope", examples: [1, ""] }).examples).toEqual(["1"]);
+  });
+});
+
+describe("wiring", () => {
+  it("check-in recap and form-review replies use the per-client voice and clean the text", () => {
+    const checkins = readFileSync("src/lib/messenger-checkins.functions.ts", "utf8");
+    expect(checkins).toContain("voicePromptForClient(sb, clientId)");
+    expect(checkins).toContain("suggested_response: casualize(");
+    const reviews = readFileSync("src/lib/submission-reviews.functions.ts", "utf8");
+    expect(reviews).toContain("voicePromptForClient(sb, row.client_id)");
+    expect(reviews).toContain("safe.client_response = casualize(safe.client_response)");
+  });
+
+  it("My Voice is reachable from settings tabs, the gear menu and search", () => {
+    expect(readFileSync("src/components/settings/settings-tabs.tsx", "utf8")).toContain('"/admin/voice"');
+    expect(readFileSync("src/lib/admin-nav.ts", "utf8")).toContain('to: "/admin/voice"');
+    expect(readFileSync("src/lib/admin-route-registry.ts", "utf8")).toContain('to: "/admin/voice"');
+    expect(readFileSync("src/routeTree.gen.ts", "utf8")).toContain("'/admin/voice'");
   });
 });

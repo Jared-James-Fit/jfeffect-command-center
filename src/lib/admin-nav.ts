@@ -76,6 +76,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Team / Ops" },
   // ACCOUNT
   { to: "/admin/account", label: "Account", icon: UserCog, group: "Account" },
+  { to: "/admin/voice", label: "My Voice", icon: Sparkles, group: "Account" },
   { to: "/admin/settings", label: "Settings", icon: Settings, group: "Account" },
   { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Account" },
 ];
@@ -134,6 +135,7 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Team / Ops" },
   // ACCOUNT
   { to: "/admin/account", label: "Account", icon: UserCog, group: "Account" },
+  { to: "/admin/voice", label: "My Voice", icon: Sparkles, group: "Account" },
   { to: "/admin/settings", label: "Settings", icon: Settings, group: "Account" },
   { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Account" },
 ];

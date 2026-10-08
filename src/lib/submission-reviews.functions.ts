@@ -18,6 +18,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { casualize } from "@/lib/coach-voice";
+import { voicePromptForClient } from "@/lib/coach-voice.functions";
 
 // ---------- Input validators -------------------------------------------------
 
@@ -561,11 +563,14 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
         )
       : null;
 
+    // Jared's voice for this client (Admin → My Voice) shapes client_response.
+    const voice = await voicePromptForClient(sb, row.client_id);
     const systemPrompt = [
       "You are an AI assistant helping a strength & conditioning coach review a client submission.",
       "Reply ONLY in the structured JSON schema requested. Never fabricate medical advice.",
       globalCfg?.brand_voice && `BRAND VOICE: ${globalCfg.brand_voice}`,
       globalCfg?.tone && `TONE: ${globalCfg.tone}`,
+      `CLIENT_RESPONSE VOICE (applies to client_response only; the analysis fields stay plain and clear):\n${voice}`,
       globalCfg?.safety_rules && `SAFETY RULES: ${globalCfg.safety_rules}`,
       globalCfg?.escalation_rules && `ESCALATION: ${globalCfg.escalation_rules}`,
       formCfg?.instructions && `FORM-SPECIFIC INSTRUCTIONS: ${formCfg.instructions}`,
@@ -659,6 +664,7 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
       }
       // Validate strictly with Zod (rejects malformed/missing fields)
       const safe = AiOutputSchema.parse(parsed);
+      safe.client_response = casualize(safe.client_response);
 
       const updated = await sb
         .from("submission_ai_generations")

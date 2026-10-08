@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { ensureNextOccurrence } from "@/lib/action-centre.functions";
-import { COACH_VOICE_RULES, casualize } from "@/lib/coach-voice";
+import { casualize } from "@/lib/coach-voice";
+import { voicePromptForClient } from "@/lib/coach-voice.functions";
 
 export type MessengerCheckinTaskType = "weekly_checkin";
 
@@ -625,11 +626,14 @@ async function generateAnalysis(
   taskType: MessengerCheckinTaskType,
   answers: Record<string, unknown>,
   contextSnapshot: Record<string, unknown>,
+  clientId?: string | null,
 ): Promise<MessengerCheckinAnalysis> {
   const fallback = fallbackAnalysis(taskType, answers as any);
   try {
-    const [{ data: globalCfg }] = await Promise.all([
+    const [{ data: globalCfg }, voice] = await Promise.all([
       sb.from("global_ai_config").select("*").limit(1).maybeSingle(),
+      // Jared's voice for this client (Admin → My Voice).
+      voicePromptForClient(sb, clientId),
     ]);
     const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
     const { generateText } = await import("ai");
@@ -650,7 +654,7 @@ async function generateAnalysis(
       "The suggested response acknowledges a real win, names the main focus, gives 1-3 concrete goals for the new week, and addresses any red flag or request for help.",
       globalCfg?.brand_voice ? `BRAND VOICE: ${globalCfg.brand_voice}` : "",
       globalCfg?.tone ? `TONE: ${globalCfg.tone}` : "",
-      COACH_VOICE_RULES,
+      voice,
       "Return ONLY JSON matching:",
       '{"summary":string,"wins":string[],"focus":string[],"goals":string[],"red_flags":string[],"coach_notes":string[],"suggested_response":string,"urgency":"low"|"normal"|"high"|"urgent"}',
     ].filter(Boolean).join("\n\n");
@@ -872,7 +876,7 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
       dueLocalDate: occurrence?.due_local_date ?? null,
       clientTz: occurrence?.client_tz ?? null,
     });
-    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, contextSnapshot);
+    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, contextSnapshot, row.client_id);
     await sb
       .from("messenger_checkins")
       .update({
