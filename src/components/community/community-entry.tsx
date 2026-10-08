@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ChevronRight, Flame } from "lucide-react";
+import { ChevronRight, Flame, Heart, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,17 @@ import { ShareWorkoutButton } from "@/components/community/share-workout-picker"
 import { PostDetailDialog } from "@/components/community/post-detail";
 
 const NEW_GRADIENT = "bg-primary";
+
+/** One line that says what a post is: a coach note's first line, or the session and its best lift. */
+function postLine(post: CommunityPost, unit: "kg" | "lb"): string {
+  if (post.kind === "note") return (post.caption ?? "").split("\n").map((l) => l.trim()).find(Boolean) ?? "Posted";
+  const lift = post.stats ? featuredLift(post.stats) : null;
+  return (
+    (!post.stats && post.locked_in_at ? `🔒 Locked in · ${post.session_title ?? "Workout"}` : post.stats?.workout_title ?? post.session_title ?? "Workout") +
+    (lift ? ` · ${lift.name} ${formatTopSet(lift.detail, unit)}` : "") +
+    (lift?.pr ? ` · ${SCOPE_WORD[lift.pr]}` : "")
+  );
+}
 
 /**
  * Header nudge, only when there is something new ("🔥 3 new"). With nothing
@@ -42,11 +53,13 @@ export function CommunityNavButton({ className }: { className?: string }) {
 }
 
 /**
- * Home: the community strip, right under today's training: "+ Share" first,
- * Instagram-stories style, then who shared this week (ring = new to you).
- * Tapping a person opens their workout right here over Home; the title or
- * "See all" opens the feed (which is also its own tab in the bottom bar).
- * With nothing shared yet it's a single inviting line, never an empty widget.
+ * Home: the community, right under today's training, so it's seen without
+ * costing a tab. "+ Share" first, Instagram-stories style, then who shared
+ * this week (ring = new to you), and one line with the newest post (from the
+ * last 3 days, someone else's, unseen first). Tapping a person or the post
+ * opens it right here over Home; the title or "See all" / "N new" opens the
+ * feed. With nothing shared yet it's a single inviting line, never an empty
+ * widget.
  */
 export function CommunityHomeStrip() {
   const { user } = useAuth();
@@ -80,6 +93,14 @@ export function CommunityHomeStrip() {
     for (const p of feed.data?.pages[0]?.posts ?? []) if (p.locked_in_at && new Date(p.locked_in_at) >= start) ids.add(p.author.user_id);
     return ids.size;
   }, [feed.data]);
+  // The newest post worth a glance: someone else's, last 3 days, unseen first.
+  const latest = useMemo(() => {
+    const cutoff = Date.now() - 3 * 86_400_000;
+    const others = (feed.data?.pages[0]?.posts ?? []).filter((p) => !p.is_mine && new Date(p.created_at).getTime() > cutoff);
+    const fresh = others.find((p) => new Date(p.created_at).getTime() > seenAt);
+    const post = fresh ?? others[0] ?? null;
+    return post ? { post, fresh: !!fresh } : null;
+  }, [feed.data, seenAt]);
 
   if (!activity?.enabled || feed.isLoading) return null;
 
@@ -96,7 +117,14 @@ export function CommunityHomeStrip() {
           ) : null}
         </Link>
         <Link to="/portal/community" className="-my-1 flex shrink-0 items-center whitespace-nowrap py-1 pl-3 text-[12px] font-bold text-muted-foreground">
-          {people.length ? "See all" : "Open"} <ChevronRight className="h-3.5 w-3.5" />
+          {activity.unseen > 0 && lockedToday > 0 ? (
+            <span className="text-primary">{activity.unseen > 9 ? "9+" : activity.unseen} new</span>
+          ) : people.length ? (
+            "See all"
+          ) : (
+            "Open"
+          )}
+          <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
       <div className="-mx-1 mt-2.5 flex items-start gap-3 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -119,6 +147,38 @@ export function CommunityHomeStrip() {
           </div>
         )}
       </div>
+      {latest && (
+        <button
+          type="button"
+          onClick={() => setOpenPost(latest.post.id)}
+          className="mt-2.5 flex w-full items-center gap-2.5 border-t border-border/70 pt-2.5 text-left active:opacity-70"
+          aria-label={`${latest.post.author.name}'s post`}
+        >
+          <UserAvatar src={latest.post.author.avatar_url} name={latest.post.author.name} size={32} expandable={false} />
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-1.5 text-[12px] leading-tight">
+              {latest.fresh && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="New" />}
+              <span className="truncate font-bold">{latest.post.author.name}</span>
+              <span className="shrink-0 text-muted-foreground">· {postTimeLabel(latest.post.created_at)}</span>
+            </div>
+            <div className="mt-0.5 truncate text-[13px] leading-snug text-foreground/85">{postLine(latest.post, unit)}</div>
+          </div>
+          {((latest.post.reaction_count ?? 0) > 0 || latest.post.comment_count > 0) && (
+            <span className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-muted-foreground">
+              {(latest.post.reaction_count ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <Heart className="h-3.5 w-3.5" /> {latest.post.reaction_count}
+                </span>
+              )}
+              {latest.post.comment_count > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <MessageCircle className="h-3.5 w-3.5" /> {latest.post.comment_count}
+                </span>
+              )}
+            </span>
+          )}
+        </button>
+      )}
       <PostDetailDialog
         postId={openPost}
         unit={unit}
@@ -197,7 +257,6 @@ export function CommunityCoachCard() {
 
 function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
   const react = useReact(post, true);
-  const lift = post.stats ? featuredLift(post.stats) : null;
   // any reaction counts as props given (a ❤️ from the feed too); props itself is 🔥
   const given = !!post.my_reaction;
   return (
@@ -207,11 +266,7 @@ function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }
         <div className="truncate text-[14px] font-bold">
           {post.author.name} <span className="font-normal text-muted-foreground">· {postTimeLabel(post.created_at)}</span>
         </div>
-        <div className="truncate text-[12px] text-muted-foreground">
-          {!post.stats && post.locked_in_at ? `🔒 Locked in · ${post.session_title ?? "Workout"}` : post.stats?.workout_title ?? post.session_title ?? "Workout"}
-          {lift ? ` · ${lift.name} ${formatTopSet(lift.detail, unit)}` : ""}
-          {lift?.pr ? ` · ${SCOPE_WORD[lift.pr]}` : ""}
-        </div>
+        <div className="truncate text-[12px] text-muted-foreground">{postLine(post, unit)}</div>
       </Link>
       <button
         type="button"

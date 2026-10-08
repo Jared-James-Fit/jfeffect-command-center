@@ -361,7 +361,7 @@ describe("community is easy to find without taking over", () => {
   });
 });
 
-describe("community is its own tab, one tap from anywhere", () => {
+describe("community lives on Home (and in More), Nutrition keeps its tab", () => {
   const workouts = read("src/routes/_authenticated/portal/workouts.index.tsx");
   const page = read("src/routes/_authenticated/portal/community.tsx");
   const entry = read("src/components/community/community-entry.tsx");
@@ -370,16 +370,24 @@ describe("community is its own tab, one tap from anywhere", () => {
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("sits in the middle of the bottom bar, starts right under the app bar, and re-tapping goes to the top", () => {
+  it("bottom bar is Home, Workouts, Messages, Nutrition; the feed opens from Home with Home still lit", () => {
     const nav = read("src/lib/admin-nav.ts");
-    expect(nav).toContain('{ to: "/portal/community", label: "Community", icon: Flame },');
-    expect(page).toContain('<CommunityScreen canShare previewOnly={isImpersonating} bell retapPath="/portal/community" />');
-    expect(page).not.toContain("PageHeader");
-    expect(shellSrc).toContain('window.dispatchEvent(new CustomEvent("nav-retap", { detail: item.to }));');
-    expect(screen).toContain('if ((e as CustomEvent).detail !== retapPath) return;');
+    const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
+    expect(bottom).toContain('{ to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },');
+    expect(bottom).not.toContain("/portal/community");
+    // still one tap away in More, with the new-posts count there
+    expect(nav).toContain('{ to: "/portal/community", label: "Community", icon: Users');
     expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
-    // Nutrition is still a tap away in More
-    expect(nav).toContain('{ to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple');
+    expect(shellSrc).toContain('(item.to === "/portal" && pathname === "/portal/community") ||');
+    // the feed starts right under the app bar: a back arrow, not a page header
+    expect(page).toContain('<CommunityScreen canShare previewOnly={isImpersonating} bell backTo="/portal" />');
+    expect(page).not.toContain("PageHeader");
+    expect(screen).toContain('<Link to={backTo} aria-label="Back to Home"');
+  });
+  it("Home's card shows the newest post worth a glance and opens it right there", () => {
+    expect(entry).toContain("const others = (feed.data?.pages[0]?.posts ?? []).filter((p) => !p.is_mine && new Date(p.created_at).getTime() > cutoff);");
+    expect(entry).toContain("onClick={() => setOpenPost(latest.post.id)}");
+    expect(entry).toContain("{postLine(latest.post, unit)}");
   });
   it("leaves Workouts as pure training and forwards old #community links", () => {
     expect(workouts).not.toContain("CommunityScreen");
