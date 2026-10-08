@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { moveExerciseInFutureDays } from "@/lib/exercise-move-db";
 
 const ImpactInput = z.object({ rowId: z.string().uuid() });
 const ApplyInput = z.object({
@@ -173,6 +174,14 @@ const ReorderExerciseInput = z.object({
   orderedRowIds: z.array(z.string().uuid()).min(1),
 });
 
+const MoveInFutureInput = z.object({
+  dayId: z.string().uuid(),
+  rowId: z.string().uuid(),
+  /** Rows directly above / below the moved row, as they were when it was moved. */
+  prevRowId: z.string().uuid().nullable(),
+  nextRowId: z.string().uuid().nullable(),
+});
+
 const RemoveExerciseInput = z.object({
   dayId: z.string().uuid(),
   rowId: z.string().uuid(),
@@ -265,6 +274,23 @@ export const reorderWorkoutExercises = createServerFn({ method: "POST" })
     return { count: data.orderedRowIds.length };
   });
 
+
+/**
+ * Carry one exercise move to the same workout in later weeks of the block.
+ *
+ * "Same workout" = same day slot (day_index) in a later week of this client's
+ * own block. Workouts with a completion record are left alone (history stays
+ * as it was), and template blocks are refused. Only the moved exercise is
+ * repositioned — see planMove — and only sort_order is written.
+ */
+export const moveExerciseInFutureWorkouts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => MoveInFutureInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVisibleDay(context.supabase, data.dayId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    return moveExerciseInFutureDays(supabaseAdmin, data);
+  });
 
 /**
  * Remove one prescription row from this workout day only.
