@@ -2,13 +2,15 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowUp, Loader2, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowUp, Loader2, RotateCcw, SlidersHorizontal, Sparkles } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { ASSISTANT_NAME, ASSISTANT_SHORT } from "@/lib/business-books";
 import { askSummer, clearSummer, getSummerMessages } from "@/lib/business-books.functions";
+import { summerTone } from "@/lib/summer-persona";
+import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string };
 
@@ -76,8 +78,18 @@ function SummerText({ text }: { text: string }) {
   return <div className="space-y-2">{blocks}</div>;
 }
 
-export function SummerChat({ open, onOpenChange, year }: { open: boolean; onOpenChange: (o: boolean) => void; year: number }) {
+export function SummerChat({
+  open, onOpenChange, year, persona, onPersonaSaved,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  year: number;
+  persona: SummerPersona;
+  onPersonaSaved: () => void;
+}) {
   const qc = useQueryClient();
+  const tone = summerTone(persona.tone);
+  const [customizing, setCustomizing] = useState(false);
   const load = useServerFn(getSummerMessages);
   const ask = useServerFn(askSummer);
   const clear = useServerFn(clearSummer);
@@ -131,16 +143,23 @@ export function SummerChat({ open, onOpenChange, year }: { open: boolean; onOpen
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-orange-500 text-white">
                 <Sparkles className="h-4 w-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <SheetTitle className="text-base">{ASSISTANT_NAME}</SheetTitle>
-                <SheetDescription className="text-xs">Your bookkeeper for {year}.</SheetDescription>
+                <SheetDescription className="text-xs">
+                  {tone.value === "girly_pop" ? "Your bookkeeper bestie" : "Your bookkeeper"} · she/her
+                </SheetDescription>
               </div>
             </div>
-            {messages.length > 0 && (
-              <Button variant="ghost" size="sm" className="h-8 shrink-0 text-xs text-muted-foreground" onClick={() => void reset()}>
-                <RotateCcw className="h-3.5 w-3.5 sm:mr-1" /><span className="sr-only sm:not-sr-only">New chat</span>
+            <div className="flex shrink-0 items-center">
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setCustomizing(true)} aria-label="Customize Summer">
+                <SlidersHorizontal className="h-3.5 w-3.5 sm:mr-1" /><span className="sr-only sm:not-sr-only">Customize</span>
               </Button>
-            )}
+              {messages.length > 0 && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => void reset()} aria-label="New chat">
+                  <RotateCcw className="h-3.5 w-3.5 sm:mr-1" /><span className="sr-only sm:not-sr-only">New chat</span>
+                </Button>
+              )}
+            </div>
           </div>
         </SheetHeader>
 
@@ -148,9 +167,7 @@ export function SummerChat({ open, onOpenChange, year }: { open: boolean; onOpen
           {isLoading && <div className="flex justify-center py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
           {!isLoading && messages.length === 0 && !pending && (
             <div className="space-y-3">
-              <p className="text-muted-foreground">
-                Hi, I'm {ASSISTANT_SHORT}. Ask me what you owe, where something went, what you can still deduct, or what your accountant will need.
-              </p>
+              <p className="text-muted-foreground">{tone.greeting}</p>
               <div className="flex flex-wrap gap-2">
                 {STARTERS.map((s) => (
                   <button key={s} type="button" onClick={() => void send(s)} className="rounded-full border px-3 py-1.5 text-left text-xs hover:bg-accent">
@@ -173,7 +190,7 @@ export function SummerChat({ open, onOpenChange, year }: { open: boolean; onOpen
                 <div className="max-w-[88%] whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-primary-foreground">{pending}</div>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {ASSISTANT_SHORT} is going through the books…
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {ASSISTANT_SHORT} is going through the books{tone.value === "girly_pop" ? " 💅" : "…"}
               </div>
             </>
           )}
@@ -202,6 +219,7 @@ export function SummerChat({ open, onOpenChange, year }: { open: boolean; onOpen
           </div>
           <p className="mt-1.5 text-[11px] text-muted-foreground">Tax figures are estimates. {ASSISTANT_SHORT} reads your books but can't change them.</p>
         </form>
+        <SummerCustomizeDialog open={customizing} onClose={() => setCustomizing(false)} persona={persona} onSaved={onPersonaSaved} />
       </SheetContent>
     </Sheet>
   );

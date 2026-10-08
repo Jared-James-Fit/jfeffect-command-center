@@ -1070,8 +1070,8 @@ describe("feels like our app, not Instagram", () => {
     const layer = read("src/components/community/sticker-layer.tsx");
     expect(layer).toContain("export const TEXT_MAX = 400;");
     expect(layer).toContain("const lines = wrapText(ctx, m.display ? raw.toUpperCase() : raw, WRAP * PX)");
-    expect(layer).toContain("maxWidth: (WRAP + m.padX * 2) * ke");
-    expect(layer).toContain("fontSize: m.size * ke");
+    expect(layer).toContain("maxWidth: (WRAP + m.padX * 2) * k");
+    expect(layer).toContain("fontSize: m.size * k");
     // style / colour taps keep the keyboard up
     expect(layer).toContain("onPointerDown={(e) => e.preventDefault()}");
   });
@@ -1199,32 +1199,40 @@ describe("text size slider, alignment, and the editor above the keyboard", () =>
   it("huge text draws less dense instead of blowing the canvas limit", () => {
     expect(layer).toContain("if (w * h > MAX_AREA) return atDensity(");
   });
-  it("the editor fills the studio, which fits above the iOS keyboard, so the top bar and colours stay in view", () => {
+  it("the editor pins to the visible screen so the top bar and colours stay above the iOS keyboard", () => {
     expect(layer).toContain("const view = useVisualViewportBox(!!editing);");
-    expect(layer).toContain('className="fixed inset-0 z-[70] flex flex-col bg-black/70');
-    expect(readFileSync("src/components/community/share-studio.tsx", "utf8")).toContain("style={fitView}");
+    expect(layer).toContain('top: view?.keyboard ? view.top : 0, height: view?.keyboard ? view.height : "100%"');
   });
 });
 
-describe("captions: longer, and a box that grows like a text", () => {
+describe("captions: Instagram-length, written on their own screen", () => {
   const read = (f: string) => readFileSync(f, "utf8");
+  const editor = read("src/components/community/caption-editor.tsx");
   it("allows Instagram-length captions", () => {
     expect(CAPTION_MAX).toBe(2200);
   });
-  it("the studio and lock-in editor use the growing caption box, worded as a caption", () => {
-    const box = read("src/components/community/caption-input.tsx");
-    expect(box).toContain('placeholder="Write a caption…"');
-    expect(box).toContain("t.style.height = `${Math.min(t.scrollHeight,");
-    expect(read("src/components/community/share-studio.tsx")).toContain("<CaptionInput");
-    expect(read("src/components/community/lock-in-editor.tsx")).toContain("<CaptionInput");
-    expect(read("src/components/community/share-studio.tsx")).not.toContain("Say something");
+  it("tapping the caption opens a caption screen: preview, roomy text, Return for new lines, Done", () => {
+    expect(editor).toContain('placeholder="Write a caption…"');
+    expect(editor).toContain('enterKeyHint="enter"');
+    expect(editor).toContain("<Check className=\"h-4 w-4\" /> Done");
+    // keyboard up on iOS: pinned to what you can see
+    expect(editor).toContain("const view = useVisualViewportBox(true);");
+    // caret after what's there, focused within the tap so iOS raises the keyboard
+    expect(editor).toContain("t.setSelectionRange(t.value.length, t.value.length);");
+    for (const f of ["src/components/community/share-studio.tsx", "src/components/community/lock-in-editor.tsx"]) {
+      const src = read(f);
+      expect(src).toContain("<CaptionField");
+      expect(src).toContain("<CaptionEditor");
+      expect(src).not.toContain("Say something");
+    }
   });
-  it("the studio fits above the keyboard while you type", () => {
-    const studio = read("src/components/community/share-studio.tsx");
-    expect(studio).toContain('const view = useVisualViewportBox(open && phase === "edit");');
-    expect(studio).toContain("style={fitView}");
-    // the text editor keeps the full card's scale, not the shrunken one
-    expect(studio).toContain("editorWidth={fullW || box.w}");
+  it("the folded caption shows your line breaks", () => {
+    expect(editor).toContain('line-clamp-2 whitespace-pre-wrap');
+    expect(read("src/components/community/feed-caption.tsx")).toContain("whitespace-pre-line");
+    expect(read("src/components/community/post-detail.tsx")).toContain('<p className="whitespace-pre-line');
+  });
+  it("the preview on the caption screen includes the stickers and text", () => {
+    expect(read("src/components/community/share-studio.tsx")).toContain("captionThumb(cardEl, (ctx, w, h) => drawStickers(ctx, items, w, h))");
   });
   it("long captions fold to three lines in the feed with 'more'", () => {
     expect(read("src/components/community/feed-caption.tsx")).toContain('!open && "line-clamp-3"');

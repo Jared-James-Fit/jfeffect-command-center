@@ -12,7 +12,7 @@ import { invalidateCommunity, saveCommunityPost, usePostPointsStatus, type MyPos
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import { TEMPLATE_LABEL, canvasToBlob, drawWorkoutShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
 import { AudiencePicker } from "@/components/community/audience-picker";
-import { CaptionInput } from "@/components/community/caption-input";
+import { CaptionEditor, CaptionField, captionThumb } from "@/components/community/caption-editor";
 import type { LockInPick } from "@/components/community/lock-in";
 
 const SHARE_GRADIENT = "bg-primary";
@@ -57,6 +57,8 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
   const [existingDrawable, setExistingDrawable] = useState<HTMLImageElement | null>(null);
   const [removedExisting, setRemovedExisting] = useState(false);
   const [caption, setCaption] = useState(existing?.caption ?? "");
+  const [captioning, setCaptioning] = useState(false);
+  const [thumb, setThumb] = useState<string | null>(null);
   const [visibility, setVisibility] = useState<CommunityVisibility>(existing?.visibility ?? "community");
   const { data: pointsStatus } = usePostPointsStatus(open);
   const pointsHint = postPointsHint(pointsStatus, visibility, existing?.visibility === "community", { lockIn: true });
@@ -297,11 +299,11 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
             ))}
           </div>
           <div>
-            <CaptionInput
+            <CaptionField
               value={caption}
-              onChange={(v) => {
-                setCaption(v);
-                setPosted(false);
+              onOpen={() => {
+                setThumb(captionThumb(canvasRef.current));
+                setCaptioning(true);
               }}
             />
           </div>
@@ -341,6 +343,17 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
             {posting ? "Posting…" : posted ? (visibility === "coach" ? "Sent" : "Posted") : existing ? "Update" : visibility === "private" ? "Save" : visibility === "coach" ? "Send" : "Post"}
           </Button>
         </div>
+        {captioning && (
+          <CaptionEditor
+            value={caption}
+            onChange={(v) => {
+              setCaption(v);
+              setPosted(false);
+            }}
+            onDone={() => setCaptioning(false)}
+            thumb={thumb}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

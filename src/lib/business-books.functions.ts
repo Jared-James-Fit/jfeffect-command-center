@@ -387,7 +387,10 @@ export const askSummer = createServerFn({ method: "POST" })
 
     const past = ((history.data ?? []) as Array<{ role: string; content: string }>).reverse();
     const reply = await server.gatewayChat([
-      { role: "system", content: `${summerSystemPrompt()}\n\nBOOKS\n${buildSummerContext(books, year)}` },
+      {
+        role: "system",
+        content: `${summerSystemPrompt({ tone: books.settings?.assistant_tone, instructions: books.settings?.assistant_instructions })}\n\nBOOKS\n${buildSummerContext(books, year)}`,
+      },
       ...past.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
       { role: "user", content: data.message },
     ]);
@@ -407,6 +410,26 @@ export const askSummer = createServerFn({ method: "POST" })
     const userMsg = rows.find((r) => r.role === "user")!;
     const botMsg = rows.find((r) => r.role === "assistant")!;
     return { user: userMsg, assistant: botMsg };
+  });
+
+const SummerSettingsInput = z.object({
+  tone: z.enum(["girly_pop", "chill", "professional"]),
+  instructions: z.string().trim().max(2000).nullable(),
+});
+
+/** Customize Summer: her vibe and the owner's own instructions. */
+export const saveSummerSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SummerSettingsInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
+    const { error } = await supabase
+      .from("business_tax_settings")
+      .upsert({ id: true, assistant_tone: data.tone, assistant_instructions: data.instructions || null, updated_at: new Date().toISOString(), updated_by: userId });
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const clearSummer = createServerFn({ method: "POST" })
