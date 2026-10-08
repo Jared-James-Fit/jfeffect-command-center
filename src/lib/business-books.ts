@@ -56,6 +56,9 @@ export type TaxSettingsRow = {
   accountant_name: string | null;
   notes: string | null;
   stripe_fees_synced_at: string | null;
+  /** Summer's vibe preset and the owner's custom instructions. */
+  assistant_tone?: string | null;
+  assistant_instructions?: string | null;
 };
 
 /** A revenue row ready for the engine, plus what the tables and exports show. */
