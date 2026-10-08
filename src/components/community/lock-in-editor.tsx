@@ -7,8 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { CAPTION_MAX, LOCK_IN_CAPTIONS, lockInTimeLabel, type CommunityVisibility } from "@/lib/community";
-import { invalidateCommunity, saveCommunityPost, type MyPostRow, type SavePostInput } from "@/lib/community.queries";
+import { CAPTION_MAX, LOCK_IN_CAPTIONS, lockInTimeLabel, postPointsHint, type CommunityVisibility } from "@/lib/community";
+import { invalidateCommunity, saveCommunityPost, usePostPointsStatus, type MyPostRow, type SavePostInput } from "@/lib/community.queries";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import { TEMPLATE_LABEL, canvasToBlob, drawWorkoutShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
 import { AudiencePicker } from "@/components/community/audience-picker";
@@ -57,6 +57,8 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
   const [removedExisting, setRemovedExisting] = useState(false);
   const [caption, setCaption] = useState(existing?.caption ?? "");
   const [visibility, setVisibility] = useState<CommunityVisibility>(existing?.visibility ?? "community");
+  const { data: pointsStatus } = usePostPointsStatus(open);
+  const pointsHint = postPointsHint(pointsStatus, visibility, existing?.visibility === "community", { lockIn: true });
   const [hideLoads, setHideLoads] = useState(!!existing?.hide_loads);
   const [posting, setPosting] = useState(false);
   const [posted, setPosted] = useState(false);
@@ -198,7 +200,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
       toast.success(visibility === "community" ? "You're locked in 🔒" : visibility === "coach" ? "Sent to your coach 🔒" : "Saved to your profile", {
         description:
           visibility === "community"
-            ? "The crew sees you showed up. Your numbers land on it when you finish."
+            ? `The crew sees you showed up. Your numbers land on it when you finish.${pointsHint?.tone === "earn" ? ` +${pointsStatus?.points} league points when you do.` : ""}`
             : visibility === "coach"
               ? "Only you and your coach can see it."
               : "Only you can see it.",
@@ -318,6 +320,11 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
               setPosted(false);
             }}
           />
+          {pointsHint && !posted && (
+            <p className={cn("rounded-xl px-3 py-2 text-[13px]", pointsHint.tone === "earn" ? "bg-white/10 font-black text-white" : "text-white/60")}>
+              {pointsHint.text}
+            </p>
+          )}
         </div>
 
         {/* Actions */}

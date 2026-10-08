@@ -149,7 +149,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   const drawable = media?.drawable ?? existingDrawable ?? null;
   const hasMedia = !!media || (!!existing?.media_path && !removedExisting);
   const { data: pointsStatus } = usePostPointsStatus(postOpen);
-  const pointsHint = postPointsHint(pointsStatus, visibility, existing?.visibility === "community", stats?.completed_at);
+  const pointsHint = postPointsHint(pointsStatus, visibility, existing?.visibility === "community", { completedAt: stats?.completed_at });
 
   const base = useMemo(() => {
     if (!stats) return null;
