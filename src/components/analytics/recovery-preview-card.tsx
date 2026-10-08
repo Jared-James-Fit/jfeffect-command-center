@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
+import { Activity, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   Sheet,
@@ -14,7 +14,6 @@ import { InfoTip } from "@/components/analytics/info-tip";
 import { fetchRecoveryScoreSeries, type SleepBucket } from "@/lib/analytics/recovery-score";
 import {
   buildReadinessBreakdown,
-  buildPersonalInsights,
   type FactorDetail,
   type FactorKey,
   type FactorStatus,
@@ -30,6 +29,7 @@ import {
   type CardioTargetRow,
 } from "@/lib/analytics/cardio-adherence";
 import { cn } from "@/lib/utils";
+import { SectionLabel } from "@/components/ui/section-label";
 
 interface Props {
   clientId: string;
@@ -91,22 +91,6 @@ const statusColor: Record<FactorStatus, { ring: string; soft: string; text: stri
     dot: "bg-rose-500",
   },
 };
-
-function rollingTrend(scores: number[]) {
-  const valid = scores.filter((n) => Number.isFinite(n));
-  if (valid.length < 6) return { label: null as null | "Improving" | "Stable" | "Dropping", diff: 0 };
-  const r = valid.slice(-3).reduce((s, n) => s + n, 0) / 3;
-  const p = valid.slice(-6, -3).reduce((s, n) => s + n, 0) / 3;
-  const diff = r - p;
-  if (diff >= 3) return { label: "Improving" as const, diff };
-  if (diff <= -3) return { label: "Dropping" as const, diff };
-  return { label: "Stable" as const, diff };
-}
-
-function avg(nums: number[]): number | null {
-  if (!nums.length) return null;
-  return Math.round(nums.reduce((s, n) => s + n, 0) / nums.length);
-}
 
 export function RecoveryPreviewCard({ clientId }: Props) {
   const { data, isLoading } = useQuery({
@@ -395,11 +379,6 @@ export function RecoveryPreviewCard({ clientId }: Props) {
         };
       });
 
-      // Kept for legacy insight builder (30-day adherence sentence).
-      const scheduled30dInsight = scheduledRows.filter(
-        (r) => r.scheduled_date >= since30.toISOString().slice(0, 10)
-          && r.scheduled_date <= todayISO,
-      ).length || null;
       void completedPrev30d;
 
       // Sleep samples merged (reviews + feedback)
@@ -447,18 +426,6 @@ export function RecoveryPreviewCard({ clientId }: Props) {
 
       const allScores = series.map((r) => r.score);
       const latest = allScores.length ? allScores[allScores.length - 1] : null;
-      const trend = rollingTrend(allScores);
-
-      const inCurBlock = (ts: string) => {
-        if (!curBlock) return false;
-        const t = new Date(ts).getTime();
-        const s = curBlock.start_date ? new Date(curBlock.start_date).getTime() : null;
-        const e = curBlock.end_date ? new Date(curBlock.end_date + "T23:59:59Z").getTime() : null;
-        if (s != null && t < s) return false;
-        if (e != null && t > e) return false;
-        return true;
-      };
-      const curBlockAvg = avg(series.filter((r) => inCurBlock(r.ts)).map((r) => r.score));
 
       const breakdown = buildReadinessBreakdown({
         sleepSamples,
@@ -480,36 +447,36 @@ export function RecoveryPreviewCard({ clientId }: Props) {
         painDays7d,
       });
       // avoid unused var warning under strict TS
-      void workouts7d; void since14; void streak;
-
-      const insights = buildPersonalInsights(series, sleepSamples, completed30d, scheduled30dInsight);
+      void workouts7d; void since14; void streak; void completed30d;
 
       return {
         hasData: latest != null,
         latest: latest ?? 0,
-        curBlockAvg,
-        trend: trend.label,
         breakdown,
-        insights,
       };
     },
   });
 
   const [openFactor, setOpenFactor] = useState<FactorKey | null>(null);
 
-  const header = (
-    <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-base font-black uppercase tracking-wider text-foreground">
-        Training Readiness
-      </h2>
-    </div>
+  const label = (
+    <SectionLabel
+      icon={<Activity className="h-4 w-4 shrink-0" />}
+      action={
+        data?.hasData ? (
+          <span className="text-[11px] normal-case tracking-normal text-muted-foreground/80">Tap a factor for details</span>
+        ) : undefined
+      }
+    >
+      Today's readiness
+    </SectionLabel>
   );
 
   if (isLoading) {
     return (
       <section aria-label="Training Readiness">
-        {header}
-        <Card className="h-[380px] animate-pulse border-border/60 bg-muted/20 shadow-sm" aria-hidden />
+        {label}
+        <Card className="h-[236px] animate-pulse border-border/60 bg-muted/20 shadow-sm" aria-hidden />
       </section>
     );
   }
@@ -517,11 +484,11 @@ export function RecoveryPreviewCard({ clientId }: Props) {
   if (!data || !data.hasData) {
     return (
       <section aria-label="Training Readiness">
-        {header}
-        <Card className="border-border/60 bg-card p-5 shadow-sm">
-          <div className="text-sm font-bold text-foreground">Not Enough Data</div>
+        {label}
+        <Card className="border-border/60 bg-card p-4 shadow-sm">
+          <div className="text-sm font-bold text-foreground">Not enough data yet</div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Complete a few workouts and log sleep to unlock your Training Readiness.
+            Finish a few workouts and their quick check-outs to unlock your readiness.
           </p>
         </Card>
       </section>
@@ -529,26 +496,16 @@ export function RecoveryPreviewCard({ clientId }: Props) {
   }
 
   const tier = tierFor(data.latest);
-  const trend = data.trend;
-  const trendIcon =
-    trend === "Improving" ? <TrendingUp className="h-3.5 w-3.5" />
-      : trend === "Dropping" ? <TrendingDown className="h-3.5 w-3.5" />
-      : <Minus className="h-3.5 w-3.5" />;
-  const trendClass =
-    trend === "Improving" ? "text-emerald-600 dark:text-emerald-400"
-      : trend === "Dropping" ? "text-rose-600 dark:text-rose-400"
-      : "text-muted-foreground";
-
   const bd = data.breakdown;
   const activeFactor = openFactor ? bd.factors[openFactor] : null;
 
   return (
-    <section aria-label="Training Readiness" className="space-y-4">
-      {header}
-
-      {/* MAIN CARD */}
-      <Card className="relative overflow-hidden border-border/60 bg-gradient-to-b from-card to-card/60 p-5 shadow-sm">
-        <div className="flex flex-col items-center text-center">
+    <section aria-label="Training Readiness">
+      {label}
+      {/* One card: the score, what to do about it, and the six inputs. The
+          score's history (block average, trend) lives in full analytics. */}
+      <Card className="border-border/60 bg-card p-4 shadow-sm">
+        <div className="flex items-center gap-4">
           <ReadinessRing
             score={data.latest}
             label={tier.label}
@@ -556,116 +513,34 @@ export function RecoveryPreviewCard({ clientId }: Props) {
             ringClass={tier.ringClass}
             ringSoftClass={tier.ringSoftClass}
           />
-          <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Estimated Training Readiness
-          </div>
-        </div>
-
-        {/* Block avg + trend */}
-        <div className="mt-4 grid grid-cols-2 gap-2.5">
-          <div className="rounded-xl border border-border/50 bg-muted/30 px-3.5 py-2.5">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Current Block Avg
-            </div>
-            <div className="mt-0.5 text-lg font-black text-foreground tabular-nums">
-              {data.curBlockAvg != null ? `${data.curBlockAvg}%` : "—"}
-            </div>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-muted/30 px-3.5 py-2.5">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Trend
-            </div>
-            {trend ? (
-              <div className={cn("mt-0.5 inline-flex items-center gap-1 text-sm font-bold", trendClass)}>
-                {trendIcon}
-                {trend}
-              </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold leading-snug text-foreground" data-testid="readiness-call">
+              {bd.recommendation}
+            </p>
+            {bd.limiter ? (
+              <button
+                type="button"
+                onClick={() => setOpenFactor(bd.limiter!.key)}
+                className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-700 transition active:scale-[0.98] dark:text-amber-300"
+              >
+                <span className="truncate">Limiter: {bd.limiter.label}</span>
+                <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+              </button>
             ) : (
-              <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Building Trend
+              <div className="mt-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                Nothing holding you back
               </div>
             )}
           </div>
         </div>
 
-        {/* Positive / Limiter / Recommendation */}
-        <div className="mt-4 space-y-2.5">
-          {bd.positive && (
-            <FactorPill
-              tone="positive"
-              heading="Biggest Positive"
-              emoji={bd.positive.emoji}
-              label={bd.positive.label}
-              hint={bd.positive.currentValue}
-              onClick={() => setOpenFactor(bd.positive!.key)}
-            />
-          )}
-          {bd.limiter && (
-            <FactorPill
-              tone="limiter"
-              heading="Biggest Limiter"
-              emoji={bd.limiter.emoji}
-              label={bd.limiter.label}
-              hint={bd.limiter.currentValue}
-              onClick={() => setOpenFactor(bd.limiter!.key)}
-            />
-          )}
-          <div className="rounded-xl border border-border/50 bg-muted/30 px-3.5 py-3">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              💡 Today's Recommendation
-            </div>
-            <p className="mt-1 text-sm leading-snug text-foreground">
-              {bd.recommendation}
-            </p>
-          </div>
+        <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-1 border-t border-border/50 pt-2">
+          {bd.order.map((k) => (
+            <FactorBar key={k} factor={bd.factors[k]} onClick={() => setOpenFactor(k)} />
+          ))}
         </div>
       </Card>
 
-      {/* BREAKDOWN */}
-      <div>
-        <div className="mb-2.5 flex items-baseline justify-between">
-          <h3 className="text-xs font-black uppercase tracking-[0.18em] text-foreground">
-            What's Affecting Today's Readiness
-          </h3>
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            Tap to explore
-          </span>
-        </div>
-        <Card className="border-border/60 bg-card p-3 shadow-sm">
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {bd.order.map((k) => (
-              <FactorRing
-                key={k}
-                factor={bd.factors[k]}
-                onClick={() => setOpenFactor(k)}
-              />
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* INSIGHTS */}
-      {data.insights.length > 0 && (
-        <div>
-          <div className="mb-2.5 flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <h3 className="text-xs font-black uppercase tracking-[0.18em] text-foreground">
-              Personalized Insights
-            </h3>
-          </div>
-          <Card className="border-border/60 bg-card p-3 shadow-sm">
-            <ul className="divide-y divide-border/50">
-              {data.insights.map((line, i) => (
-                <li key={i} className="py-2 text-sm leading-snug text-foreground">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-      )}
-
-      {/* DETAIL SHEET */}
       <Sheet open={!!openFactor} onOpenChange={(v) => !v && setOpenFactor(null)}>
         <SheetContent side="bottom" className="rounded-t-2xl border-border/60 p-0">
           {activeFactor && <FactorSheet factor={activeFactor} />}
@@ -682,20 +557,20 @@ function ReadinessRing({
 }: {
   score: number; label: string; labelClass: string; ringClass: string; ringSoftClass: string;
 }) {
-  const size = 156;
-  const stroke = 12;
+  const size = 96;
+  const stroke = 9;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(100, score));
   const dash = (pct / 100) * c;
   return (
     <div
-      className="relative"
+      className="relative shrink-0"
       style={{ width: size, height: size }}
       role="img"
       aria-label={`Training readiness ${pct}% — ${label}`}
     >
-      <svg width={size} height={size} className="-rotate-90 drop-shadow-sm">
+      <svg width={size} height={size} className="-rotate-90">
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none"
           strokeWidth={stroke}
@@ -710,10 +585,10 @@ function ReadinessRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-black leading-none tabular-nums text-foreground">
+        <span className="text-2xl font-black leading-none tabular-nums text-foreground">
           {pct}%
         </span>
-        <span className={cn("mt-1.5 text-[11px] font-black uppercase tracking-[0.2em] leading-none", labelClass)}>
+        <span className={cn("mt-1 text-[9px] font-black uppercase leading-none tracking-[0.12em]", labelClass)}>
           {label}
         </span>
       </div>
@@ -721,90 +596,33 @@ function ReadinessRing({
   );
 }
 
-function FactorPill({
-  tone, heading, emoji, label, hint, onClick,
-}: {
-  tone: "positive" | "limiter";
-  heading: string;
-  emoji: string;
-  label: string;
-  hint: string;
-  onClick: () => void;
-}) {
-  const tint =
-    tone === "positive"
-      ? "border-emerald-500/30 bg-emerald-500/8"
-      : "border-amber-500/30 bg-amber-500/8";
-  const iconTint =
-    tone === "positive"
-      ? "text-emerald-600 dark:text-emerald-400"
-      : "text-amber-600 dark:text-amber-400";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition active:scale-[0.99]",
-        tint,
-      )}
-    >
-      <span className="text-2xl leading-none" aria-hidden>{emoji}</span>
-      <div className="min-w-0 flex-1">
-        <div className={cn("text-[10px] font-bold uppercase tracking-widest", iconTint)}>
-          {heading}
-        </div>
-        <div className="mt-0.5 flex items-baseline gap-2">
-          <span className="truncate text-sm font-bold text-foreground">{label}</span>
-          <span className="truncate text-xs text-muted-foreground">{hint}</span>
-        </div>
-      </div>
-    </button>
-  );
-}
+/** Grid labels that fit half a phone width; the sheet keeps the full name. */
+const SHORT_LABEL: Partial<Record<FactorKey, string>> = { performance: "Performance" };
 
-function FactorRing({ factor, onClick }: { factor: FactorDetail; onClick: () => void }) {
-  const size = 64;
-  const stroke = 6;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(100, factor.score));
-  const dash = (pct / 100) * c;
-  const colors = factor.isBuilding
-    ? {
-        ring: "text-muted-foreground/55",
-        soft: "text-muted-foreground/15",
-        text: "text-muted-foreground",
-        dot: "bg-muted-foreground/40",
-      }
-    : statusColor[factor.status];
+/** One readiness input as a label, score and thin bar — tap for the detail sheet. */
+function FactorBar({ factor, onClick }: { factor: FactorDetail; onClick: () => void }) {
   const dim = factor.isMissing || factor.isBuilding;
+  const pct = Math.max(0, Math.min(100, factor.score));
+  const bar = dim ? "bg-muted-foreground/30" : statusColor[factor.status].dot;
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex flex-col items-center gap-1.5 rounded-lg p-2 transition active:scale-95 hover:bg-muted/40"
-      aria-label={`${factor.label}: ${factor.currentValue}`}
+      className="-mx-1 rounded-md px-1 py-1.5 text-left transition active:bg-muted/50"
+      aria-label={`${factor.label}: ${dim ? "not enough data" : `${pct} — ${factor.currentValue}`}`}
+      data-testid="readiness-factor"
     >
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke}
-            className={cn("stroke-current", dim ? "text-muted-foreground/15" : colors.soft)} />
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={`${dash} ${c - dash}`}
-            className={cn("stroke-current transition-[stroke-dasharray] duration-700", dim ? "text-muted-foreground/40" : colors.ring)} />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-sm font-black tabular-nums text-foreground">
-            {dim ? "—" : `${pct}`}
-          </span>
-        </div>
-      </div>
-      <div className="flex items-center gap-1">
-        <span className="text-[13px] leading-none" aria-hidden>{factor.emoji}</span>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/80">
-          {factor.label}
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="flex min-w-0 items-center gap-1.5 font-semibold text-foreground/90">
+          <span aria-hidden="true">{factor.emoji}</span>
+          <span className="truncate">{SHORT_LABEL[factor.key] ?? factor.label}</span>
         </span>
+        <span className={cn("font-bold tabular-nums", dim ? "text-muted-foreground" : "text-foreground")}>
+          {dim ? "—" : pct}
+        </span>
+      </div>
+      <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
+        <div className={cn("h-full rounded-full", bar)} style={{ width: dim ? "0%" : `${Math.max(pct, 4)}%` }} />
       </div>
     </button>
   );
