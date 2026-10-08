@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { AccountProfileSettings } from "@/components/account-profile-settings";
 import { JfMembershipSettingsCard } from "@/components/admin/jf-membership-settings-card";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
+import { DeletionRequestsCard } from "@/components/admin/deletion-requests-card";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({ component: SettingsPage });
 
@@ -110,6 +111,7 @@ function SettingsPage() {
       <div className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
         <AccountProfileSettings title="Your Profile" roleLabel="Admin / Owner" />
         <JfMembershipSettingsCard />
+        <DeletionRequestsCard />
 
         <Card className="border-primary/30 bg-primary/5 p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-primary">Admin Access</h3>
