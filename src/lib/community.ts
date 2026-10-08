@@ -543,3 +543,43 @@ export function planDetail(r: Pick<PlanRow, "sets" | "reps_text" | "duration_sec
   if (r.duration_seconds) return fmtSeconds(r.duration_seconds);
   return sets ? `${sets} sets` : "";
 }
+
+/* ---- Share: picking which session ---------------------------------------- */
+
+const WEEKDAY_PREFIX = /^(mon|tues|wednes|thurs|fri|satur|sun)day\s*[—–-]\s*/i;
+
+/** "Tuesday — Secondary Deadlift" → "Secondary Deadlift": the program's day
+ *  name, not the day it was trained, so it only confuses in a list of dates. */
+export function sessionDisplayTitle(title: string): string {
+  const t = (title ?? "").trim();
+  return t.replace(WEEKDAY_PREFIX, "").trim() || t || "Workout";
+}
+
+export type SessionGroupKey = "today" | "yesterday" | "week" | "earlier";
+export const SESSION_GROUP_LABEL: Record<SessionGroupKey, string> = { today: "Today", yesterday: "Yesterday", week: "This week", earlier: "Earlier" };
+
+/** "Finished 11 min ago" · "Yesterday, 7:12 PM" · "Sat, Oct 3", in the phone's own time zone. */
+export function sessionWhen(iso: string, now: Date = new Date()): { group: SessionGroupKey; when: string } {
+  const t = new Date(iso);
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(t)) / 86_400_000);
+  const clock = t.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (days <= 0) {
+    const min = Math.max(0, Math.floor((+now - +t) / 60_000));
+    return { group: "today", when: min < 1 ? "Finished just now" : min < 60 ? `Finished ${min} min ago` : `Finished at ${clock}` };
+  }
+  if (days === 1) return { group: "yesterday", when: `Yesterday, ${clock}` };
+  const date = t.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return { group: days < 7 ? "week" : "earlier", when: date };
+}
+
+/** Newest first, bucketed Today / Yesterday / This week / Earlier (empty buckets dropped). */
+export function groupSessions<T extends { completed_at: string }>(sessions: T[], now: Date = new Date()) {
+  const order: SessionGroupKey[] = ["today", "yesterday", "week", "earlier"];
+  const out = new Map<SessionGroupKey, { session: T; when: string }[]>();
+  for (const s of [...sessions].sort((a, b) => +new Date(b.completed_at) - +new Date(a.completed_at))) {
+    const { group, when } = sessionWhen(s.completed_at, now);
+    out.set(group, [...(out.get(group) ?? []), { session: s, when }]);
+  }
+  return order.filter((k) => out.has(k)).map((k) => ({ key: k, label: SESSION_GROUP_LABEL[k], items: out.get(k)! }));
+}

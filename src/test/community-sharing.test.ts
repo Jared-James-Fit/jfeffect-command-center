@@ -16,6 +16,9 @@ import {
   postTimeLabel,
   buildShareCardFields,
   planDetail,
+  groupSessions,
+  sessionDisplayTitle,
+  sessionWhen,
   formatExerciseBest,
   sessionLine,
   trainingSinceLabel,
@@ -862,5 +865,29 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
     for (const f of ["share-composer", "lock-in-editor", "share-camera", "photo-decorator", "post-detail"]) {
       expect(read(`src/components/community/${f}.tsx`)).toContain("h-[100dvh] max-h-none");
     }
+  });
+});
+
+describe("share picker: which workout was today", () => {
+  const now = new Date(2026, 9, 7, 21, 28); // Wed Oct 7, 9:28 PM local
+  const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).toISOString();
+  it("drops the program's weekday so it can't clash with the real date", () => {
+    expect(sessionDisplayTitle("Tuesday — Secondary Deadlift + Secondary Bench")).toBe("Secondary Deadlift + Secondary Bench");
+    expect(sessionDisplayTitle("Saturday - Tertiary Squat")).toBe("Tertiary Squat");
+    expect(sessionDisplayTitle("Workout")).toBe("Workout");
+    expect(sessionDisplayTitle("Sunday Funday")).toBe("Sunday Funday");
+  });
+  it("says when, in plain words", () => {
+    expect(sessionWhen(at(7, 21, 17), now)).toEqual({ group: "today", when: "Finished 11 min ago" });
+    expect(sessionWhen(at(7, 21, 28), now).when).toBe("Finished just now");
+    expect(sessionWhen(at(7, 9, 5), now).when).toMatch(/^Finished at 9:05/);
+    expect(sessionWhen(at(6, 19, 0), now).when).toMatch(/^Yesterday, 7:00/);
+    expect(sessionWhen(at(3, 10), now).group).toBe("week");
+    expect(sessionWhen(new Date(2026, 8, 21, 10).toISOString(), now)).toEqual({ group: "earlier", when: expect.stringMatching(/Sep 21/) });
+  });
+  it("buckets newest first and skips empty buckets", () => {
+    const g = groupSessions([{ completed_at: at(3, 10) }, { completed_at: at(7, 21, 17) }, { completed_at: at(7, 8) }], now);
+    expect(g.map((x) => x.label)).toEqual(["Today", "This week"]);
+    expect(g[0].items.map((i) => i.when)[0]).toBe("Finished 11 min ago");
   });
 });
