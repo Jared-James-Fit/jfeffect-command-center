@@ -205,3 +205,16 @@ begin
   exception when others then perform t_assert(sqlerrm = 'Invalid status', 'bad status rejected');
   end;
 end $$;
+
+-- Two bodyweight logs on the same day: the most recently entered one is used
+-- (the same rule as the league's current bodyweight), never an arbitrary pick.
+do $$
+declare dupe uuid := t_client('Dee P', 'male');
+begin
+  insert into progress_bodyweight (user_id, weight_value, weight_unit, logged_date, created_at)
+  values (t_uid(dupe), 180, 'lb', '2026-08-01', now() - interval '1 hour'),
+         (t_uid(dupe), 190, 'lb', '2026-08-01', now());
+  perform t_set(dupe, 'Competition Squat', 150, 'kg', 1, wpg('2026-08-01 10:00'));
+  perform t_assert((select bw_kg from strength_board_sets() where client_id = dupe) = 86.2,
+    'same-day duplicate bodyweight: the newest entry (190 lb) is used');
+end $$;
