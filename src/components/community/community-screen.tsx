@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -43,14 +44,14 @@ function personFromHash(): string | null {
 let tipShownThisVisit = false;
 
 export function CommunityScreen({
-  canShare = false, previewOnly = false, bell = false, retapPath,
+  canShare = false, previewOnly = false, bell = false, backTo,
 }: {
   canShare?: boolean;
   previewOnly?: boolean;
   /** The page has no header of its own: put the notifications bell in the top row. */
   bell?: boolean;
-  /** Re-tapping this bottom-bar tab goes back to the feed and pulls the newest posts. */
-  retapPath?: string;
+  /** A small back arrow at the start of the top row (instead of a page header). */
+  backTo?: string;
 }) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
@@ -91,19 +92,6 @@ export function CommunityScreen({
   }, [feed.isSuccess, qc]);
 
   const { data: unit = "lb" } = useViewerUnit(user?.id);
-
-  // Tab tapped again: back to the feed (the shell already scrolls to the top) with the newest posts.
-  const refetchFeed = feed.refetch;
-  useEffect(() => {
-    if (!retapPath) return;
-    const onRetap = (e: Event) => {
-      if ((e as CustomEvent).detail !== retapPath) return;
-      setScope({ kind: "feed" });
-      void refetchFeed();
-    };
-    window.addEventListener("nav-retap", onRetap);
-    return () => window.removeEventListener("nav-retap", onRetap);
-  }, [retapPath, refetchFeed]);
 
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
@@ -150,6 +138,12 @@ export function CommunityScreen({
         </Button>
       ) : (
         <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1">
+        {backTo && (
+          <Link to={backTo} aria-label="Back to Home" className="-ml-1.5 inline-flex h-9 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-muted">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        )}
         <div className="inline-flex rounded-full bg-muted p-1" role="tablist" aria-label="Community view">
           {(["feed", "crew", "you"] as const).map((k) => (
             <button
@@ -163,6 +157,7 @@ export function CommunityScreen({
               {k === "feed" ? "Feed" : k === "crew" ? "Crew" : "You"}
             </button>
           ))}
+        </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           {bell && <NotificationBell />}
