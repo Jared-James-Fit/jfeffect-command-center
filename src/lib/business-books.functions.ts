@@ -1,9 +1,13 @@
 /**
  * business-books.functions.ts
  *
- * Admin-only server functions for Taxes & Books (Sales hub) and Summer Ledger.
+ * Server functions for Taxes & Books and Summer Ledger, for anyone with the
+ * finance permissions (admin, finance) in an MFA-verified session:
+ *   finance.read   – load the books, Summer
+ *   finance.record – add/edit expenses, receipts, tax payments, settings
+ *   finance.delete – delete books records (admin only)
  * Reads and writes go through the caller's RLS-scoped client; the tables and
- * the receipts bucket only admit admins.
+ * the receipts bucket enforce the same permissions (has_permission).
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -23,8 +27,9 @@ export const getBooksData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin, loadBooksData } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { loadBooksData } = await import("@/lib/business-books.server");
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.read");
     return loadBooksData(supabase);
   });
 
@@ -52,8 +57,8 @@ export const saveExpense = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ExpenseInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.record");
     const row = {
       expense_date: data.expense_date,
       vendor: data.vendor || null,
@@ -88,8 +93,8 @@ export const deleteExpense = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.delete");
     const { data: row } = await supabase.from("business_expenses").select("receipt_path").eq("id", data.id).maybeSingle();
     const { error } = await supabase.from("business_expenses").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -102,8 +107,8 @@ export const markExpensesReviewed = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.record");
     const { error } = await supabase.from("business_expenses").update({ status: "reviewed" }).in("id", data.ids);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -150,7 +155,7 @@ export const scanReceipt = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const server = await import("@/lib/business-books.server");
-    await server.assertAdmin(supabase, userId);
+    await (await import("@/lib/permissions.server")).assertPermission(context as any, "finance.record");
     const today = businessToday();
 
     let read: import("@/lib/business-books.server").ReceiptRead | null = null;
@@ -216,8 +221,8 @@ export const saveTaxSettings = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SettingsInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.record");
     const { error } = await supabase
       .from("business_tax_settings")
       .upsert({ id: true, ...data, gst_number: data.gst_number || null, accountant_name: data.accountant_name || null, notes: data.notes || null, updated_at: new Date().toISOString(), updated_by: userId });
@@ -240,8 +245,8 @@ export const addTaxPayment = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => PaymentInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.record");
     const { error } = await supabase.from("business_tax_payments").insert({
       ...data,
       period_label: data.period_label || null,
@@ -257,8 +262,8 @@ export const deleteTaxPayment = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.delete");
     const { error } = await supabase.from("business_tax_payments").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -272,8 +277,8 @@ export const syncStripeFees = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ year: z.number().int().min(2020).max(2100) }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.record");
     const { stripeFetch, getStripeKeyForMode } = await import("@/lib/stripe.server");
     const { aggregateStripeFees, stripeFeesExternalKey } = await import("@/lib/stripe-fees");
     const { MONTH_NAMES } = await import("@/lib/business-tax");
@@ -353,8 +358,8 @@ export const getSummerMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.read");
     const { data, error } = await supabase
       .from("summer_messages")
       .select("id, role, content, created_at")
@@ -371,7 +376,7 @@ export const askSummer = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const server = await import("@/lib/business-books.server");
-    await server.assertAdmin(supabase, userId);
+    await (await import("@/lib/permissions.server")).assertPermission(context as any, "finance.read");
     const { buildSummerContext, summerSystemPrompt } = await import("@/lib/summer-context");
 
     const [books, history] = await Promise.all([
@@ -423,8 +428,8 @@ export const saveSummerSettings = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SummerSettingsInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.record");
     const { error } = await supabase
       .from("business_tax_settings")
       .upsert({ id: true, assistant_tone: data.tone, assistant_instructions: data.instructions || null, updated_at: new Date().toISOString(), updated_by: userId });
@@ -436,8 +441,8 @@ export const clearSummer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { assertPermission } = await import("@/lib/permissions.server");
+    await assertPermission(context as any, "finance.read");
     const { error } = await supabase.from("summer_messages").delete().eq("user_id", userId);
     if (error) throw new Error(error.message);
     return { ok: true };

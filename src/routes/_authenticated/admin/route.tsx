@@ -45,6 +45,10 @@ function AdminLayout() {
       navigate({ to: "/m", replace: true });
       return;
     }
+    if (role === "finance") {
+      navigate({ to: "/finance" as any, replace: true });
+      return;
+    }
     // Any other role (client / unknown / the retired media_manager) → portal
     navigate({ to: "/portal", replace: true });
   }, [role, loading, navigate]);

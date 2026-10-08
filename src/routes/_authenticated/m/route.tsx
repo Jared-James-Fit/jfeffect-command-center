@@ -23,6 +23,7 @@ function MemberLayout() {
   useEffect(() => {
     if (loading) return;
     if (role === "client") navigate({ to: "/portal", replace: true });
+    else if (role === "finance") navigate({ to: "/finance" as any, replace: true });
     // Admins are allowed into /m only while POV mode is active; otherwise send back to /admin.
     else if ((role === "admin" || role === "coach") && !pov.active) {
       navigate({ to: "/admin", replace: true });
