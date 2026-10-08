@@ -1284,3 +1284,26 @@ begin
   );
 end;
 $function$;
+
+-- get_athlete_rankings (Logging Level rankings): from drizzle/migrations/0009_athlete_xp.sql
+CREATE OR REPLACE FUNCTION public.get_athlete_rankings(_limit integer DEFAULT 10)
+RETURNS TABLE (client_id uuid, display_name text, avatar_url text, xp bigint, rank bigint, is_me boolean)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  WITH totals AS (
+    SELECT c.id AS client_id,
+      COALESCE(NULLIF(trim(coalesce(c.first_name,'') || ' ' || left(coalesce(c.last_name,''),1)), ''), split_part(coalesce(c.full_name,'Athlete'),' ',1)) AS display_name,
+      p.avatar_url,
+      COALESCE((SELECT sum(e.xp) FROM public.athlete_xp_events e WHERE e.client_id = c.id), 0)::bigint AS xp,
+      (c.user_id = auth.uid()) AS is_me
+    FROM public.clients c
+    LEFT JOIN public.profiles p ON p.id = c.user_id
+    WHERE COALESCE(c.archived, false) = false AND c.archived_at IS NULL AND COALESCE(c.status,'') <> 'Archived'
+      AND c.athlete_kind = 'coaching'
+  ), ranked AS (
+    SELECT t.*, rank() OVER (ORDER BY t.xp DESC, t.display_name) AS rank FROM totals t
+  )
+  SELECT client_id, display_name, avatar_url, xp, rank, COALESCE(is_me,false)
+  FROM ranked
+  WHERE auth.uid() IS NOT NULL AND (rank <= LEAST(GREATEST(_limit,1),50) OR is_me)
+  ORDER BY rank;
+$$;
