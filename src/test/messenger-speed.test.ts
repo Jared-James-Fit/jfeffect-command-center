@@ -170,7 +170,7 @@ describe("media replies and video playback", () => {
   const shared = readFileSync("src/components/chat-shared.tsx", "utf8");
 
   it("opens videos full screen and autoplays instead of an inline player", () => {
-    expect(tile).toContain('viewer.open(src, { kind: "video"');
+    expect(tile).toContain('viewer.open(url, { kind: "video"');
     expect(viewer).toContain("autoPlay");
     expect(viewer).toContain("function VideoViewer");
     for (const src of [thread, shared]) {

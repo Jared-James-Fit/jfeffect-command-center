@@ -164,6 +164,8 @@ function VideoAttachment({ att }: { att: MessageAttachment }) {
       height={att.height}
       duration={att.duration}
       cacheKey={att.storage_path}
+      path={att.storage_path}
+      size={att.size}
       name={att.name}
     />
   );

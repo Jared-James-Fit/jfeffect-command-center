@@ -20,6 +20,7 @@ import { ChatVideoTile } from "@/components/chat-video-tile";
 import { captureVideoPoster } from "@/lib/video-poster";
 import { compressVideoForChat } from "@/lib/video-compress";
 import { chatUrlCache, useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
+import { keepChatVideo } from "@/lib/chat-video-store";
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 
@@ -273,6 +274,8 @@ export async function uploadChatAttachment(
   };
 
   if (isVideo) {
+    // The sender already has the clip: keep it on the phone so it plays (and replays) without downloading.
+    keepChatVideo(path, uploadFile);
     // Don't wait long: the poster is a nicety, the message must go out.
     const poster = await Promise.race([posterP, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
     if (poster) {
@@ -535,6 +538,8 @@ function VideoAttachment({ att }: { att: SharedAttachment }) {
       height={att.height}
       duration={att.duration}
       cacheKey={att.storage_path}
+      path={att.storage_path}
+      size={att.size}
       name={att.name}
     />
   );

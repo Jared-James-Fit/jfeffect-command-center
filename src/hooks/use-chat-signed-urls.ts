@@ -1,18 +1,40 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { createSignedUrlCache } from "@/lib/signed-url-cache";
+import { createSignedUrlCache, type SignedUrlEntry, type SignedUrlStorage } from "@/lib/signed-url-cache";
 
 const BUCKET = "message-attachments";
 
-/** App-wide cache: shared by every thread, survives navigating between chats. */
+// Links last a day and are kept across app launches, so reopening the app
+// reuses the same addresses and photos/thumbnails come from the phone's cache
+// instead of downloading again. Refreshed an hour before they expire.
+const SIGN_SECONDS = 24 * 3600;
+const REUSE_MS = (SIGN_SECONDS - 3600) * 1000;
+const STORAGE_KEY = "jf-chat-signed-urls-v1";
+
+const localStore: SignedUrlStorage = {
+  load() {
+    if (typeof localStorage === "undefined") return [];
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(parsed) ? (parsed as Array<[string, SignedUrlEntry]>) : [];
+  },
+  save(entries) {
+    if (typeof localStorage === "undefined") return;
+    if (entries.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    else localStorage.removeItem(STORAGE_KEY);
+  },
+};
+
+/** App-wide cache: shared by every thread, survives navigating between chats and relaunches. */
 export const chatUrlCache = createSignedUrlCache(async (paths) => {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrls(paths, 3600);
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrls(paths, SIGN_SECONDS);
   if (error) throw error;
   const out: Record<string, string> = {};
   for (const item of data ?? []) if (item?.path && item.signedUrl) out[item.path] = item.signedUrl;
   return out;
-});
+}, { ttlMs: REUSE_MS, storage: localStore });
 
+/** Signed-in user changed (sign-out): forget every link, in memory and on disk. */
 export function clearChatSignedUrls() {
   chatUrlCache.clear();
 }
