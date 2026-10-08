@@ -150,6 +150,6 @@ export const listDeletionRequests = createServerFn({ method: "GET" })
     const { data: profiles } = ids.length
       ? await supabase.from("profiles").select("id, email, full_name").in("id", ids)
       : { data: [] as any[] };
-    const byId = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    const byId = new Map<string, any>((profiles ?? []).map((p: any) => [p.id, p]));
     return (rows ?? []).map((r: any) => ({ ...r, email: byId.get(r.user_id)?.email ?? null, full_name: byId.get(r.user_id)?.full_name ?? null }));
   });
