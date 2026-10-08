@@ -1,4 +1,5 @@
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
+import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, ChevronRight, Plus, X } from "lucide-react";
@@ -7,12 +8,15 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { Skeleton } from "@/components/ui/skeleton";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, sessionDisplayTitle, sessionWhen } from "@/lib/community";
-import { invalidateCommunity, useDayPlan, useMyPostForCompletion, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
+import { PREVIEW_ONLY_MESSAGE, buildShareCardFields, formatWorkoutDuration, groupSessions, lockInCameraCard, sessionDisplayTitle, sessionWhen } from "@/lib/community";
+import { invalidateCommunity, useCompletionPreview, useDayPlan, useMyPostForCompletion, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
+import { cameraLooks, type ShareTemplate } from "@/lib/workout-share-card";
+import type { CameraCard } from "@/components/community/share-camera";
+import type { LockTemplate } from "@/components/community/lock-in-editor";
 import { startWorkout as startWorkoutFn } from "@/lib/workout-completion.functions";
 import type { LockInPick } from "@/components/community/lock-in";
 import { audienceDoneLabel } from "@/components/community/audience-picker";
-import { CameraChip, LockInStampPreview, WorkoutStampPreview } from "@/components/community/camera-overlays";
+import { CameraChip } from "@/components/community/camera-overlays";
 
 const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
 const CaptureFlow = lazyWithRetry(() => import("@/components/community/capture-flow").then((m) => ({ default: m.CaptureFlow })));
@@ -75,17 +79,47 @@ export function ShareWorkoutButton({
   const seq = useRef(0);
   const lockCompletionId = today ? startedId ?? today.completionId : null;
   const { data: lockExisting } = useMyPostForCompletion(lockCompletionId, lockOpen && !!lockCompletionId);
-  const { data: plan } = useDayPlan(lockOpen ? today?.dayId ?? null : null);
+  const { data: plan } = useDayPlan(lockOpen || capturing ? today?.dayId ?? null : null);
   const startSrv = useServerFn(startWorkoutFn);
   const qc = useQueryClient();
 
   const activeMode: Mode = today ? mode ?? "lockin" : "workout";
+
+  // The look they're on in the camera (swipe to change), carried into the editor.
+  const [lockLook, setLockLook] = useState<LockTemplate>("lockin");
+  const [workoutLook, setWorkoutLook] = useState<ShareTemplate | null>(null);
+  // Snapshot at the shutter: the editor opens on exactly what they shot.
+  const [pickedLook, setPickedLook] = useState<ShareTemplate | null>(null);
+  const { data: targetStats } = useCompletionPreview(target?.completion_id ?? "", capturing && activeMode === "workout" && !!target);
+  const workoutCard = useMemo(() => {
+    if (!targetStats || !target) return null;
+    const data = {
+      format: "story" as const,
+      ...buildShareCardFields({
+        stats: targetStats,
+        unit,
+        athleteName: (target.athlete_name ?? "").trim().split(/\s+/)[0] || null,
+        workoutTitle: target.title,
+        dateLabel: format(new Date(targetStats.completed_at), "EEE, MMM d"),
+      }),
+    };
+    return { data, looks: cameraLooks(data) };
+  }, [targetStats, target, unit]);
+  const currentWorkoutLook = workoutCard ? (workoutLook && workoutCard.looks.includes(workoutLook) ? workoutLook : workoutCard.looks[0]) : null;
+  const lockCard = today ? lockInCameraCard({ workoutTitle: today.title, athleteName: today.athleteName, plan: plan ?? [] }) : null;
+  const cameraCard: CameraCard | null =
+    activeMode === "lockin" && lockCard
+      ? { data: lockCard.data, looks: lockCard.looks, look: lockCard.looks.includes(lockLook) ? lockLook : "lockin", onLook: (t) => setLockLook(t as LockTemplate) }
+      : workoutCard && currentWorkoutLook
+        ? { data: workoutCard.data, looks: workoutCard.looks, look: currentWorkoutLook, onLook: setWorkoutLook }
+        : null;
 
   const begin = () => {
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
     setMode(null);
     setPhoto(null);
     setChosen(null);
+    setWorkoutLook(null);
     setCapturing(true);
   };
 
@@ -96,6 +130,7 @@ export function ShareWorkoutButton({
       setLockOpen(true);
     } else {
       setPhoto(file);
+      setPickedLook(currentWorkoutLook);
       if (target) setPicked(target);
       else setRawOpen(true);
     }
@@ -185,7 +220,10 @@ export function ShareWorkoutButton({
                         type="button"
                         onClick={() => {
                           if (choosing) setChosen(s);
-                          else setPicked(s);
+                          else {
+                            setPicked(s);
+                            if (!photo) setPickedLook(null);
+                          }
                           setChoosing(false);
                           setOpen(false);
                         }}
@@ -229,6 +267,7 @@ export function ShareWorkoutButton({
             workoutTitle={picked.title}
             unit={unit}
             initialFile={photo}
+            initialTemplate={pickedLook}
           />
         </Suspense>
       )}
@@ -263,13 +302,7 @@ export function ShareWorkoutButton({
                 <CameraChip icon="🏁" title="Finish a workout to share it" sub="Or lock in before your next one" tone="muted" />
               )
             }
-            overlay={
-              activeMode === "lockin" && today ? (
-                <LockInStampPreview title={today.title} />
-              ) : target ? (
-                <WorkoutStampPreview title={sessionDisplayTitle(target.title)} sub={formatWorkoutDuration(target.duration_min) ? `${formatWorkoutDuration(target.duration_min)} session` : null} />
-              ) : null
-            }
+            card={cameraCard}
           />
         </Suspense>
       )}
@@ -297,6 +330,7 @@ export function ShareWorkoutButton({
               setCapturing(true);
             }}
             plan={plan ?? []}
+            initialTemplate={lockLook}
           />
         </Suspense>
       )}

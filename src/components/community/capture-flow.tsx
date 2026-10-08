@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { format } from "date-fns";
-import { ShareCamera, type CameraMode } from "@/components/community/share-camera";
+import { ShareCamera, type CameraCard, type CameraMode } from "@/components/community/share-camera";
 import { PhotoDecorator } from "@/components/community/photo-decorator";
 
 /**
@@ -19,7 +19,7 @@ export function CaptureFlow({
   onMode,
   hint,
   chip,
-  overlay,
+  card,
   canShoot,
   accept,
 }: {
@@ -34,7 +34,7 @@ export function CaptureFlow({
   onMode?: (key: string) => void;
   hint?: string | null;
   chip?: ReactNode;
-  overlay?: ReactNode;
+  card?: CameraCard | null;
   canShoot?: boolean;
   accept?: string;
 }) {
@@ -67,7 +67,7 @@ export function CaptureFlow({
         onMode={onMode}
         hint={hint}
         chip={chip}
-        overlay={overlay}
+        card={card}
         canShoot={canShoot}
         accept={accept}
       />

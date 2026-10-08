@@ -32,17 +32,23 @@ type Props = {
   onLibrary: () => void;
   /** Today's exercises ("4 × 5"), for the Today's plan card. */
   plan?: { name: string; detail: string }[];
+  /** The look they shot on in the camera. */
+  initialTemplate?: LockTemplate | null;
 };
 
-type LockTemplate = Extract<ShareTemplate, "lockin" | "lockclock" | "lockplan">;
+export type LockTemplate = Extract<ShareTemplate, "lockin" | "lockclock" | "lockplan">;
 
 /**
  * The lock-in editor: the LOCKED IN card with their photo, a one-tap caption,
  * then Post (JF community) and/or Share (Instagram story). Posting starts the
  * session if it hasn't been; sharing out never posts, posting never shares.
  */
-export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, workoutTitle, athleteName, existing, pick, onCamera, onLibrary, plan = [] }: Props) {
-  const [template, setTemplate] = useState<LockTemplate>("lockin");
+export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, workoutTitle, athleteName, existing, pick, onCamera, onLibrary, plan = [], initialTemplate }: Props) {
+  const [template, setTemplate] = useState<LockTemplate>(initialTemplate ?? "lockin");
+  // A new shot from the camera brings its look with it.
+  useEffect(() => {
+    if (initialTemplate) setTemplate(initialTemplate);
+  }, [initialTemplate, pick?.n]);
   const templates: LockTemplate[] = plan.length ? ["lockin", "lockclock", "lockplan"] : ["lockin", "lockclock"];
   const { user } = useAuth();
   const qc = useQueryClient();

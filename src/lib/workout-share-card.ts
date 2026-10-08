@@ -26,10 +26,10 @@
  * Always rendered dark: the image has to read the same wherever it's posted.
  */
 import { ellipsize, fitFont as fitSystemFont, font, loadImage, roundRect } from "@/lib/workout-story-card";
-import type { CardStat } from "@/lib/community";
+import type { CardStat, ShareCardExtras } from "@/lib/community";
 
 export type ShareFormat = "feed" | "story";
-export type ShareTemplate = "pr" | "photo" | "stats" | "sticker" | "volume" | "lockin" | "lockclock" | "lockplan";
+export type ShareTemplate = "pr" | "photo" | "stats" | "sticker" | "volume" | "receipt" | "streak" | "progress" | "lockin" | "lockclock" | "lockplan";
 
 export const SHARE_SIZES: Record<ShareFormat, { w: number; h: number; safeTop: number; safeBottom: number }> = {
   feed: { w: 1080, h: 1350, safeTop: 80, safeBottom: 80 },
@@ -42,6 +42,9 @@ export const TEMPLATE_LABEL: Record<ShareTemplate, string> = {
   stats: "Stats",
   sticker: "Sticker",
   volume: "Volume",
+  receipt: "Receipt",
+  streak: "Streak",
+  progress: "vs last time",
   lockin: "Locked in",
   lockclock: "Clock",
   lockplan: "Today's plan",
@@ -71,18 +74,29 @@ export type ShareCardData = {
   media: ShareCardMedia | null;
   /** When they locked in ("6:42 PM"); `live` = the photo was just taken in-app. */
   lockedIn?: { time: string; live: boolean } | null;
+  /** Receipt / streak / vs-last-time numbers (composer preview only). */
+  extras?: ShareCardExtras | null;
 };
 
 /** Templates worth offering for this workout, best first. */
-export function availableTemplates(d: Pick<ShareCardData, "isPr" | "exercises" | "volume" | "media">): ShareTemplate[] {
+export function availableTemplates(d: Pick<ShareCardData, "isPr" | "exercises" | "volume" | "media"> & { extras?: ShareCardExtras | null }): ShareTemplate[] {
   const out: ShareTemplate[] = [];
+  const x = d.extras;
   if (d.isPr) out.push("pr");
   if (d.media) out.push("photo");
+  if (x?.progress) out.push("progress");
+  if (x?.receipt.length) out.push("receipt");
+  if (x?.streak) out.push("streak");
   if (d.exercises.length) out.push("stats");
   if (!d.media) out.push("photo");
-  out.push("sticker");
   if (d.volume) out.push("volume");
+  out.push("sticker");
   return out;
+}
+
+/** The looks you can swipe through on the camera: every card that sits on a photo. */
+export function cameraLooks(d: Pick<ShareCardData, "isPr" | "exercises" | "volume"> & { extras?: ShareCardExtras | null }): ShareTemplate[] {
+  return availableTemplates({ ...d, media: {} as ShareCardMedia }).filter((t) => t !== "sticker");
 }
 
 const INK = "#ffffff";
@@ -281,19 +295,38 @@ function pill(ctx: Ctx, text: string, x: number, y: number, fill: string | Canva
 /*  Entry point                                                        */
 /* ------------------------------------------------------------------ */
 
+let logoPromise: Promise<HTMLImageElement | null> | null = null;
+/** The brand mark, loaded once. */
+export function cardLogo(): Promise<HTMLImageElement | null> {
+  return (logoPromise ??= loadImage("/logo.png"));
+}
+
 export async function drawWorkoutShareCard(canvas: HTMLCanvasElement, d: ShareCardData): Promise<void> {
   await ensureDisplayFont();
-  const logo = await loadImage("/logo.png");
+  const logo = await cardLogo();
   if (d.template === "sticker") {
     drawSticker(canvas, d, logo);
     return;
   }
+  paintShareCard(canvas, d, logo);
+}
+
+/**
+ * Synchronous paint (fonts and logo already loaded), so the camera can run a
+ * card live over the viewfinder. `scale` < 1 renders a lighter preview.
+ */
+export function paintShareCard(canvas: HTMLCanvasElement, d: ShareCardData, logo: HTMLImageElement | null, scale = 1): void {
+  if (d.template === "sticker") return drawSticker(canvas, d, logo);
   const size = SHARE_SIZES[d.format];
-  canvas.width = size.w;
-  canvas.height = size.h;
+  const cw = Math.round(size.w * scale);
+  const ch = Math.round(size.h * scale);
+  if (canvas.width !== cw) canvas.width = cw;
+  if (canvas.height !== ch) canvas.height = ch;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  ctx.clearRect(0, 0, size.w, size.h);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
   const L: Layout = { W: size.w, H: size.h, PAD: 80, innerW: size.w - 160, top: size.safeTop, bottom: size.h - size.safeBottom, story: d.format === "story" };
   if (d.template === "pr") drawPr(ctx, d, logo, L);
   else if (d.template === "photo") drawPhoto(ctx, d, logo, L);
@@ -301,7 +334,19 @@ export async function drawWorkoutShareCard(canvas: HTMLCanvasElement, d: ShareCa
   else if (d.template === "lockin") drawLockIn(ctx, d, logo, L);
   else if (d.template === "lockclock") drawLockClock(ctx, d, logo, L);
   else if (d.template === "lockplan") drawLockPlan(ctx, d, logo, L);
+  else if (d.template === "receipt") drawReceipt(ctx, d, logo, L);
+  else if (d.template === "streak") drawStreak(ctx, d, logo, L);
+  else if (d.template === "progress") drawProgress(ctx, d, logo, L);
   else drawVolume(ctx, d, logo, L);
+}
+
+/** The photo, dimmed so data reads on it — or the brand glow without one. */
+function backdrop(ctx: Ctx, d: ShareCardData, L: Layout, dim: number, tint: "red" | "gold" = "red") {
+  if (d.media) {
+    drawCover(ctx, d.media, L.W, L.H);
+    ctx.fillStyle = `rgba(8,8,11,${dim})`;
+    ctx.fillRect(0, 0, L.W, L.H);
+  } else darkGlow(ctx, L.W, L.H, tint);
 }
 
 type Layout = { W: number; H: number; PAD: number; innerW: number; top: number; bottom: number; story: boolean };
@@ -612,7 +657,7 @@ function drawLockPlan(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null,
 /* ------------------------------------------------------------------ */
 function drawStats(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
   const { W, PAD, innerW } = L;
-  darkGlow(ctx, W, L.H, d.isPr ? "gold" : "red");
+  backdrop(ctx, d, L, 0.74, d.isPr ? "gold" : "red");
   brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel);
 
   let y = L.top + 120;
@@ -685,13 +730,14 @@ function drawStats(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
 /* ------------------------------------------------------------------ */
 function drawVolume(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
   const { W, PAD, innerW } = L;
-  darkGlow(ctx, W, L.H, "red");
+  backdrop(ctx, d, L, 0.6);
   brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel);
 
   const vol = (d.volume ?? "").toUpperCase();
   const [num, unit] = vol.split(" ");
   const numSize = fitDisplay(ctx, num ?? "", innerW, L.story ? 330 : 280, 120);
-  const blockH = 40 + numSize * 0.92 + 56 + 80 + 40 + 60;
+  const compare = d.extras?.compare ?? null;
+  const blockH = 40 + numSize * 0.92 + 56 + 80 + 40 + 60 + (compare ? 80 : 0);
   const regionTop = L.top + 100;
   const regionBottom = L.bottom - 240;
   let y = regionTop + Math.max(0, (regionBottom - regionTop - blockH) * 0.4);
@@ -714,10 +760,345 @@ function drawVolume(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L
   ctx.font = display(88);
   ctx.fillText(`${(unit ?? "KG").toUpperCase()} LIFTED`, PAD - 2, y + 80);
   y += 80 + 40;
+  if (compare) {
+    // The bit anyone gets: "≈ the weight of 3 pickup trucks".
+    ctx.font = font(800, 44);
+    ctx.fillStyle = "#ffb4b9";
+    ctx.fillText(ellipsize(ctx, compare, innerW), PAD, y + 46);
+    y += 80;
+  }
   ctx.font = font(700, 36);
   ctx.fillStyle = MUTED;
   ctx.fillText(ellipsize(ctx, d.workoutTitle, innerW), PAD, y + 40);
 
+  drawFooterStats(ctx, d, logo, L);
+}
+
+/* ------------------------------------------------------------------ */
+/*  RECEIPT (the session, itemised: anyone can read a receipt)         */
+/* ------------------------------------------------------------------ */
+const MONO = `"SF Mono", "Menlo", "Roboto Mono", "Courier New", monospace`;
+const mono = (w: number, s: number) => `${w} ${s}px ${MONO}`;
+const PAPER = "#f6f4ee";
+const PAPER_INK = "#17171b";
+const PAPER_MUTED = "#6e6d72";
+
+function zigzag(ctx: Ctx, x: number, y: number, w: number, tooth: number, down: boolean) {
+  const n = Math.max(1, Math.round(w / (tooth * 2)));
+  const step = w / n;
+  for (let i = 0; i < n; i++) {
+    ctx.lineTo(x + i * step + step / 2, y + (down ? tooth : -tooth));
+    ctx.lineTo(x + (i + 1) * step, y);
+  }
+}
+
+function drawReceipt(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
+  const { W } = L;
+  backdrop(ctx, d, L, 0.42);
+  const x = d.extras;
+  const PW = L.story ? 820 : 740;
+  const px = (W - PW) / 2;
+  const IN = 56; // paper padding
+  const iw = PW - IN * 2;
+  const lh = L.story ? 54 : 48;
+
+  const totals: [string, string][] = [];
+  if (x?.sets) totals.push(["Sets", String(x.sets)]);
+  if (x?.reps) totals.push(["Reps", x.reps.toLocaleString("en-US")]);
+  if (x?.duration) totals.push(["Time", x.duration]);
+  const fixed = 70 + 96 + 44 + 44 + (d.athleteName ? 44 : 0) + 44 + 44 + totals.length * lh + (d.volume ? 92 : 0) + (x?.compare ? 50 : 0) + 44 + 110 + 50 + (x?.workoutNumber ? 40 : 0) + 60;
+  const room = L.bottom - L.top - 40;
+  const all = x?.receipt ?? [];
+  const maxRows = Math.max(1, Math.min(all.length, L.story ? 8 : 5, Math.floor((room - fixed) / lh) - (all.length > 1 ? 1 : 0)));
+  const rows = all.slice(0, maxRows);
+  const more = all.length - rows.length;
+  const PH = fixed + rows.length * lh + (more > 0 ? lh : 0);
+  const py = L.top + 20 + Math.max(0, (room - PH) / 2);
+
+  ctx.save();
+  // A slight tilt so it reads as a real slip of paper.
+  ctx.translate(W / 2, py + PH / 2);
+  ctx.rotate(-0.018);
+  ctx.translate(-W / 2, -(py + PH / 2));
+  ctx.shadowColor = "rgba(0,0,0,0.45)";
+  ctx.shadowBlur = 40;
+  ctx.shadowOffsetY = 18;
+  ctx.fillStyle = PAPER;
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  zigzag(ctx, px, py, PW, 12, false);
+  ctx.lineTo(px + PW, py + PH);
+  const n = Math.max(1, Math.round(PW / 24));
+  for (let i = n - 1; i >= 0; i--) {
+    ctx.lineTo(px + (i + 0.5) * (PW / n), py + PH + 12);
+    ctx.lineTo(px + i * (PW / n), py + PH);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+
+  const cx = W / 2;
+  const L0 = px + IN;
+  const R0 = px + PW - IN;
+  let y = py + 70;
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "center";
+  ctx.fillStyle = PAPER_INK;
+  ctx.font = display(84);
+  ctx.fillText("JF EFFECT", cx, y + 60);
+  y += 96;
+  ctx.font = mono(800, 26);
+  setSpacing(ctx, 8);
+  ctx.fillText("WORKOUT RECEIPT", cx, y + 20);
+  setSpacing(ctx, 0);
+  y += 44;
+  ctx.font = mono(600, 26);
+  ctx.fillStyle = PAPER_MUTED;
+  ctx.fillText([d.dateLabel, x?.timeLabel].filter(Boolean).join("  ·  ").toUpperCase(), cx, y + 20);
+  y += 44;
+  if (d.athleteName) {
+    ctx.fillText(`MEMBER: ${d.athleteName.toUpperCase()}`, cx, y + 20);
+    y += 44;
+  }
+
+  const dash = () => {
+    ctx.save();
+    ctx.strokeStyle = "rgba(23,23,27,0.35)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 10]);
+    ctx.beginPath();
+    ctx.moveTo(L0, y + 18);
+    ctx.lineTo(R0, y + 18);
+    ctx.stroke();
+    ctx.restore();
+    y += 44;
+  };
+  const line = (left: string, right: string, opts: { bold?: boolean; size?: number; color?: string } = {}) => {
+    const size = opts.size ?? (L.story ? 30 : 28);
+    ctx.font = mono(opts.bold ? 800 : 600, size);
+    ctx.fillStyle = opts.color ?? PAPER_INK;
+    ctx.textAlign = "right";
+    const rw = ctx.measureText(right).width;
+    ctx.fillText(right, R0, y + size);
+    ctx.textAlign = "left";
+    ctx.fillText(ellipsize(ctx, left, iw - rw - 30), L0, y + size);
+    y += lh;
+  };
+
+  dash();
+  rows.forEach((r) => line(`${r.sets}× ${r.name.toUpperCase()}`, r.detail.toUpperCase(), { color: r.pr ? "#b45309" : PAPER_INK, bold: r.pr }));
+  if (more > 0) line(`+ ${more} MORE`, "", { color: PAPER_MUTED });
+  dash();
+  const totalsY = y;
+  totals.forEach(([k, v]) => line(k.toUpperCase(), v.toUpperCase()));
+  if (d.volume) {
+    ctx.font = mono(800, 30);
+    ctx.fillStyle = PAPER_INK;
+    ctx.textAlign = "left";
+    ctx.fillText("TOTAL LIFTED", L0, y + 56);
+    ctx.textAlign = "right";
+    fitDisplay(ctx, d.volume.toUpperCase(), iw * 0.6, 76, 44);
+    ctx.fillText(d.volume.toUpperCase(), R0, y + 64);
+    y += 92;
+  }
+  if (x?.compare) {
+    ctx.font = mono(700, 26);
+    ctx.fillStyle = PAPER_MUTED;
+    ctx.textAlign = "right";
+    ctx.fillText(x.compare.toUpperCase(), R0, y + 26);
+    y += 50;
+  }
+  dash();
+
+  // Barcode, seeded by the workout so it's stable.
+  let seed = 7;
+  for (const ch of d.workoutTitle) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  ctx.fillStyle = PAPER_INK;
+  let bx = L0 + 40;
+  while (bx < R0 - 40) {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    const bw = 2 + (seed % 5);
+    if ((seed >> 4) % 3) ctx.fillRect(bx, y + 4, bw, 92);
+    bx += bw + 3 + ((seed >> 8) % 4);
+  }
+  y += 110;
+  ctx.textAlign = "center";
+  ctx.font = mono(800, 26);
+  setSpacing(ctx, 4);
+  ctx.fillText("THANK YOU FOR SHOWING UP", cx, y + 26);
+  setSpacing(ctx, 0);
+  y += 50;
+  if (x?.workoutNumber) {
+    ctx.font = mono(600, 24);
+    ctx.fillStyle = PAPER_MUTED;
+    ctx.fillText(`WORKOUT #${x.workoutNumber}`, cx, y + 22);
+  }
+
+  // The stamp: across the gap between the labels and the numbers.
+  ctx.save();
+  ctx.translate(cx - 10, totalsY + Math.max(1, totals.length) * lh * 0.5 + 6);
+  ctx.rotate(-0.16);
+  ctx.strokeStyle = "rgba(239,51,64,0.85)";
+  ctx.fillStyle = "rgba(239,51,64,0.85)";
+  ctx.lineWidth = 6;
+  roundRect(ctx, -150, -46, 300, 92, 16);
+  ctx.stroke();
+  ctx.font = display(48);
+  ctx.textAlign = "center";
+  ctx.fillText("PAID IN SWEAT", 0, 17);
+  ctx.restore();
+  ctx.restore();
+  void logo;
+}
+
+/* ------------------------------------------------------------------ */
+/*  STREAK (4 weeks of showing up, as a calendar)                      */
+/* ------------------------------------------------------------------ */
+function drawStreak(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
+  const { W, PAD, innerW } = L;
+  backdrop(ctx, d, L, 0.62);
+  brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
+  const st = d.extras?.streak;
+  if (!st) return brandFooter(ctx, d, L);
+  const gap = 14;
+  const cell = Math.min(L.story ? 112 : 88, (innerW - gap * 6) / 7);
+  const gridH = cell * 4 + gap * 3;
+  const stats: CardStat[] = [];
+  if (st.weeks >= 2) stats.push({ value: String(st.weeks), label: "weeks in a row" });
+  if (d.extras?.workoutNumber) stats.push({ value: `#${d.extras.workoutNumber}`, label: "workout" });
+  if (d.extras?.duration) stats.push({ value: d.extras.duration, label: "today" });
+
+  const heroSize = L.story ? 230 : 170;
+  const blockH = 34 + 20 + heroSize * 0.92 + 30 + 46 + 60 + 40 + gridH + (stats.length ? 70 + 84 * 0.92 + 40 : 0);
+  const regionTop = L.top + 100;
+  const regionBottom = L.bottom - 40;
+  let y = regionTop + Math.max(0, (regionBottom - regionTop - blockH) * 0.5);
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = font(800, 30);
+  setSpacing(ctx, 6);
+  ctx.fillStyle = RED;
+  ctx.fillText("THE LAST 4 WEEKS", PAD, y + 30);
+  setSpacing(ctx, 0);
+  y += 34 + 20;
+  ctx.fillStyle = INK;
+  ctx.font = display(heroSize);
+  const num = String(st.trained);
+  ctx.fillText(num, PAD - 6, y + heroSize * 0.92);
+  const nw = ctx.measureText(num).width;
+  ctx.font = display(Math.round(heroSize * 0.42));
+  ctx.fillText(st.trained === 1 ? "DAY" : "DAYS", PAD + nw + 18, y + heroSize * 0.92);
+  y += heroSize * 0.92 + 30;
+  ctx.font = font(800, 40);
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.fillText("in the gym. Showed up.", PAD, y + 40);
+  y += 46 + 60;
+
+  // M T W T F S S
+  ctx.font = font(800, 24);
+  ctx.fillStyle = MUTED;
+  ctx.textAlign = "center";
+  "MTWTFSS".split("").forEach((ch, i) => ctx.fillText(ch, PAD + i * (cell + gap) + cell / 2, y + 22));
+  y += 40;
+  st.cells.forEach((c, i) => {
+    const cx0 = PAD + (i % 7) * (cell + gap);
+    const cy0 = y + Math.floor(i / 7) * (cell + gap);
+    ctx.save();
+    roundRect(ctx, cx0, cy0, cell, cell, cell * 0.24);
+    if (c.state === "trained") {
+      ctx.fillStyle = RED;
+      ctx.fill();
+      if (c.today) {
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = INK;
+        ctx.stroke();
+      }
+    } else if (c.state === "rest") {
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fill();
+    } else {
+      ctx.setLineDash([8, 8]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(255,255,255,0.28)";
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+  y += gridH;
+  ctx.textAlign = "left";
+  if (stats.length) {
+    y += 70;
+    statRow(ctx, stats, PAD, y, innerW, 84);
+  }
+  brandFooter(ctx, d, L);
+}
+
+/* ------------------------------------------------------------------ */
+/*  VS LAST TIME (same workout, the last time they did it)             */
+/* ------------------------------------------------------------------ */
+function drawProgress(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
+  const { W, PAD, innerW } = L;
+  backdrop(ctx, d, L, 0.62);
+  brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
+  const p = d.extras?.progress;
+  if (!p) return drawFooterStats(ctx, d, logo, L);
+  const head = (L.story ? 280 : 210);
+  const barH = L.story ? 66 : 56;
+  const barBlock = 44 + 16 + barH + 44;
+  const blockH = 34 + 24 + head * 0.92 + 30 + 84 + 70 + p.bars.length * barBlock + (p.lift ? 70 : 0);
+  const regionTop = L.top + 100;
+  const regionBottom = L.bottom - 250;
+  let y = regionTop + Math.max(0, (regionBottom - regionTop - blockH) * 0.45);
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = font(800, 30);
+  setSpacing(ctx, 6);
+  ctx.fillStyle = RED;
+  ctx.fillText("VS LAST TIME", PAD, y + 30);
+  setSpacing(ctx, 0);
+  y += 34 + 24;
+  const g = ctx.createLinearGradient(0, y, 0, y + head);
+  g.addColorStop(0, "#ffffff");
+  g.addColorStop(1, "#ffb4b9");
+  ctx.fillStyle = g;
+  const hs = fitDisplay(ctx, p.headline.toUpperCase(), innerW, head, 120);
+  ctx.fillText(p.headline.toUpperCase(), PAD - 8, y + hs * 0.92);
+  y += head * 0.92 + 30;
+  ctx.fillStyle = INK;
+  const ss = fitDisplay(ctx, p.sub.toUpperCase(), innerW, 76, 44);
+  ctx.fillText(p.sub.toUpperCase(), PAD - 2, y + ss * 0.92);
+  y += 84 + 70;
+
+  p.bars.forEach((b) => {
+    ctx.textAlign = "left";
+    ctx.font = font(800, 30);
+    ctx.fillStyle = b.today ? INK : MUTED;
+    ctx.fillText(b.label.toUpperCase(), PAD, y + 32);
+    ctx.textAlign = "right";
+    ctx.font = display(48);
+    ctx.fillText(b.value.toUpperCase(), W - PAD, y + 40);
+    y += 44 + 16;
+    roundRect(ctx, PAD, y, innerW, barH, barH / 2);
+    ctx.fillStyle = "rgba(255,255,255,0.10)";
+    ctx.fill();
+    roundRect(ctx, PAD, y, Math.max(barH, innerW * b.share), barH, barH / 2);
+    if (b.today) {
+      const bg = ctx.createLinearGradient(PAD, 0, PAD + innerW, 0);
+      bg.addColorStop(0, "#ef3340");
+      bg.addColorStop(1, "#ff7a59");
+      ctx.fillStyle = bg;
+    } else ctx.fillStyle = "rgba(255,255,255,0.42)";
+    ctx.fill();
+    y += barH + 44;
+  });
+  if (p.lift) {
+    ctx.textAlign = "left";
+    ctx.font = font(800, 38);
+    ctx.fillStyle = INK;
+    ctx.fillText(ellipsize(ctx, `↑ ${p.lift}`, innerW), PAD, y + 40);
+  }
   drawFooterStats(ctx, d, logo, L);
 }
 

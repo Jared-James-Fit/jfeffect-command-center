@@ -38,6 +38,8 @@ type Props = {
   unit: "kg" | "lb";
   /** A photo already taken in the camera step: lands on the Photo card. */
   initialFile?: File | null;
+  /** The look they shot on in the camera: opens on that card. */
+  initialTemplate?: ShareTemplate | null;
 };
 
 const firstName = (full?: string | null) => (full ?? "").trim().split(/\s+/)[0] || null;
@@ -54,7 +56,7 @@ const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134a
  * independent: nothing leaves the phone until a button is tapped. Every
  * number comes from the canonical completion via RPC.
  */
-export function ShareComposer({ open, onOpenChange, completionId, athleteName, workoutTitle, unit, initialFile }: Props) {
+export function ShareComposer({ open, onOpenChange, completionId, athleteName, workoutTitle, unit, initialFile, initialTemplate }: Props) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -160,7 +162,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   }, [stats, unit, athleteName, workoutTitle]);
 
   const templates = useMemo<ShareTemplate[]>(
-    () => (base ? availableTemplates({ isPr: base.isPr, exercises: base.exercises, volume: base.volume, media: drawable }) : []),
+    () => (base ? availableTemplates({ isPr: base.isPr, exercises: base.exercises, volume: base.volume, media: drawable, extras: base.extras }) : []),
     [base, drawable],
   );
   const current: ShareTemplate | undefined = templates[Math.min(index, templates.length - 1)];
@@ -217,36 +219,43 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
     setRemovedExisting(false);
     // Jump to the photo card so the athlete sees their photo straight away.
     requestAnimationFrame(() => {
-      const next = availableTemplates({ isPr: !!base?.isPr, exercises: base?.exercises ?? [], volume: base?.volume ?? null, media: res.media.drawable });
+      const next = availableTemplates({ isPr: !!base?.isPr, exercises: base?.exercises ?? [], volume: base?.volume ?? null, media: res.media.drawable, extras: base?.extras });
       goTo(Math.max(0, next.indexOf("photo")), false);
     });
   };
 
-  // The camera step's photo: attach it once, then show the Photo card.
+  // The camera step's photo: attach it once, then open on the look they shot
+  // with (or the Photo card). Waits for the photo so the slides don't shift.
   const usedInitial = useRef<File | null>(null);
-  const jumpToPhoto = useRef(false);
+  const jumpTo = useRef<ShareTemplate | null>(null);
+  const photoReady = useRef(false);
+  useEffect(() => {
+    if (!open) return;
+    jumpTo.current = initialTemplate ?? (initialFile ? "photo" : null);
+    photoReady.current = !initialFile;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   useEffect(() => {
     if (!open || !initialFile || usedInitial.current === initialFile) return;
     usedInitial.current = initialFile;
     void pickMedia(initialFile).then((res) => {
+      photoReady.current = true;
       if (!res.ok) return void toast.error(res.reason);
       setMedia((prev) => {
         releasePicked(prev);
         return res.media;
       });
       setRemovedExisting(false);
-      jumpToPhoto.current = true;
     });
   }, [open, initialFile]);
   useEffect(() => {
     if (!open) usedInitial.current = null;
   }, [open]);
   useEffect(() => {
-    if (!jumpToPhoto.current || !railRef.current) return;
-    const i = templates.indexOf("photo");
-    if (i < 0) return;
-    jumpToPhoto.current = false;
-    requestAnimationFrame(() => goTo(i, false));
+    if (!jumpTo.current || !photoReady.current || !railRef.current || (initialFile && !media)) return;
+    const i = templates.indexOf(jumpTo.current);
+    jumpTo.current = null;
+    if (i >= 0) requestAnimationFrame(() => goTo(i, false));
   });
 
   const removeMedia = () => {
@@ -448,17 +457,22 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
 
         {/* Template chips */}
         {templates.length > 1 && (
-          <div className="flex shrink-0 justify-center gap-1.5 px-3 pt-1">
-            {templates.map((t, i) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => goTo(i)}
-                className={cn("h-8 rounded-full px-3 text-[12px] font-bold transition-colors", i === index ? "bg-white text-black" : "bg-white/10 text-white/70")}
-              >
-                {TEMPLATE_LABEL[t]}
-              </button>
-            ))}
+          <div className="shrink-0 overflow-x-auto px-3 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mx-auto flex w-max gap-1.5">
+              {templates.map((t, i) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => goTo(i)}
+                  ref={(el) => {
+                    if (el && i === index) el.scrollIntoView({ block: "nearest", inline: "center" });
+                  }}
+                  className={cn("h-8 shrink-0 rounded-full px-3 text-[12px] font-bold transition-colors", i === index ? "bg-white text-black" : "bg-white/10 text-white/70")}
+                >
+                  {TEMPLATE_LABEL[t]}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
