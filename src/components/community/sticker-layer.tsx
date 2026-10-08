@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Trash2 } from "lucide-react";
+import { Check, TextAlignCenter, TextAlignEnd, TextAlignStart, Trash2 } from "lucide-react";
+import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { cn } from "@/lib/utils";
 
 /**
@@ -39,6 +40,11 @@ export const TEXT_STYLES = ["Bold", "Box", "Display", "Outline", "Highlight"] as
 /** The order the Aa button steps through (Highlight sits next to Box). */
 const STYLE_CYCLE = [0, 1, 4, 2, 3];
 export const nextTextStyle = (s: number) => STYLE_CYCLE[(STYLE_CYCLE.indexOf(s) + 1) % STYLE_CYCLE.length];
+export type TextAlign = "center" | "left" | "right";
+const ALIGN_CYCLE: TextAlign[] = ["center", "left", "right"];
+export const nextTextAlign = (a: TextAlign) => ALIGN_CYCLE[(ALIGN_CYCLE.indexOf(a) + 1) % ALIGN_CYCLE.length];
+/** The size slider's range, × the style's base size (1 = default). */
+export const TEXT_SIZE = { min: 0.5, max: 2.5 } as const;
 const EMOJI = ["🔥", "💪", "🏋️", "⚡", "🎯", "😤", "🫡", "🏆"] as const;
 
 export type DecorContext = { time: string; date: string; workoutTitle?: string | null };
@@ -49,6 +55,9 @@ export type StickerItem = {
   text?: string;
   style?: number;
   color?: string;
+  /** Text size (× the style's base) and alignment. */
+  size?: number;
+  align?: TextAlign;
   sticker?: string;
   /** The rendered bitmap, drawn straight onto the card or photo. */
   canvas: HTMLCanvasElement;
@@ -105,16 +114,19 @@ const WRAP = 900;
  * bitmap and the live editor, so what you type is exactly what lands on the
  * card: same font, size, line height, padding and wrapping.
  */
-export function textMetrics(style: number) {
+export function textMetrics(style: number, scale = 1) {
   const display = style === 2;
   return {
     display,
-    size: display ? 104 : 68,
+    size: (display ? 104 : 68) * scale,
     lineH: display ? 1.0 : 1.18,
     // Highlight: padding round each line (it hugs every line on its own)
-    padX: style === 1 ? 34 : style === 4 ? 24 : 18,
-    padY: style === 1 ? 20 : style === 4 ? 8 : 14,
-    radius: style === 4 ? 20 : 26,
+    padX: (style === 1 ? 34 : style === 4 ? 24 : 18) * scale,
+    padY: (style === 1 ? 20 : style === 4 ? 8 : 14) * scale,
+    radius: (style === 4 ? 20 : 26) * scale,
+    stroke: 9 * scale,
+    shadow: 14 * scale,
+    drop: 3 * scale,
     family: display ? DISPLAY : SANS,
     weight: display ? 400 : 800,
   };
@@ -132,62 +144,76 @@ function cornerRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numb
 
 /**
  * Instagram's "background" text: a box that hugs each line on its own.
- * Lines touch; where one is wider than the next, the wide one keeps round
- * outer corners and the narrow one gets a smooth inside curve. Lines within
- * a corner's width of each other share a width, so edges don't stair-step.
- * Pure geometry (centred on x = 0) so it can be checked without a canvas.
+ * Lines touch; where one sticks out past the next, it keeps round outer
+ * corners and the shorter one gets a smooth inside curve. Edges within a
+ * corner's width of each other line up, so they don't stair-step. Works per
+ * side, so left / right aligned text gets a straight edge on that side.
+ * A blank line is a clean gap: no box, and the lines either side of it
+ * round off as if it were the end.
+ * Pure geometry (x from 0 to the canvas width) so it's checked without a canvas.
  */
-export function highlightShape(lineWidths: number[], o: { lineH: number; padX: number; padY: number; r: number }) {
+export function highlightShape(lineWidths: number[], o: { lineH: number; padX: number; padY: number; r: number; align?: TextAlign; width?: number }) {
   const { lineH, padX, padY, r } = o;
-  const half = lineWidths.map((w) => w / 2 + padX);
-  for (let pass = 0; pass < half.length; pass++) {
-    let changed = false;
-    for (let i = 0; i < half.length - 1; i++)
-      if (half[i] !== half[i + 1] && Math.abs(half[i] - half[i + 1]) < r * 2) {
-        half[i] = half[i + 1] = Math.max(half[i], half[i + 1]);
-        changed = true;
-      }
-    if (!changed) break;
-  }
-  const n = half.length;
-  const boxes = half.map((hw, i) => {
-    const top = i === 0 ? 0 : padY + i * lineH;
-    const bottom = i === n - 1 ? padY * 2 + n * lineH : padY + (i + 1) * lineH;
+  const align = o.align ?? "center";
+  const gap = lineWidths.map((w) => w < 0.5);
+  const bw = lineWidths.map((w) => w + padX * 2);
+  const W = o.width ?? Math.max(...bw);
+  // a gap sits "inside" everything, so its neighbours see open space
+  const L = bw.map((b, i) => (gap[i] ? Infinity : align === "left" ? 0 : align === "right" ? W - b : (W - b) / 2));
+  const R = L.map((l, i) => (gap[i] ? -Infinity : l + bw[i]));
+  const settle = (e: number[], out: (a: number, b: number) => number) => {
+    for (let pass = 0; pass < e.length; pass++) {
+      let changed = false;
+      for (let i = 0; i < e.length - 1; i++)
+        if (e[i] !== e[i + 1] && Math.abs(e[i] - e[i + 1]) < r * 2) {
+          e[i] = e[i + 1] = out(e[i], e[i + 1]);
+          changed = true;
+        }
+      if (!changed) break;
+    }
+  };
+  settle(L, Math.min);
+  settle(R, Math.max);
+  const n = bw.length;
+  const boxes = L.flatMap((left, i) => {
+    if (gap[i]) return [];
+    const right = R[i];
+    const first = i === 0 || gap[i - 1];
+    const last = i === n - 1 || gap[i + 1];
+    // the ends of each run get the outer padding (into the gap, for a blank line)
+    const top = padY + i * lineH - (first ? padY : 0);
+    const bottom = padY + (i + 1) * lineH + (last ? padY : 0);
     const rr = Math.min(r, (bottom - top) / 2);
-    const upOpen = i === 0 || half[i - 1] < hw;
-    const downOpen = i === n - 1 || half[i + 1] < hw;
-    // corners: top-left, top-right, bottom-right, bottom-left
-    return { half: hw, top, bottom, radii: [upOpen ? rr : 0, upOpen ? rr : 0, downOpen ? rr : 0, downOpen ? rr : 0] };
+    // corners: top-left, top-right, bottom-right, bottom-left — round where nothing sits outside them
+    const radii = [first || L[i - 1] > left ? rr : 0, first || R[i - 1] < right ? rr : 0, last || R[i + 1] < right ? rr : 0, last || L[i + 1] > left ? rr : 0];
+    return [{ left, right, top, bottom, radii }];
   });
-  // inside curves where a narrower line meets a wider one, on the narrow side of the seam
-  const fillets: { x: number; y: number; r: number; down: boolean }[] = [];
+  // inside curves where a shorter edge meets a longer one, on the short line's side of the seam
+  const fillets: { x: number; y: number; r: number; down: boolean; side: 1 | -1 }[] = [];
   for (let i = 0; i < n - 1; i++) {
-    const a = half[i];
-    const b = half[i + 1];
-    if (a === b) continue;
-    fillets.push({ x: Math.min(a, b), y: padY + (i + 1) * lineH, r: Math.min(r, Math.abs(a - b) / 2, lineH / 2), down: b < a });
+    if (gap[i] || gap[i + 1]) continue;
+    const y = padY + (i + 1) * lineH;
+    if (R[i] !== R[i + 1]) fillets.push({ x: Math.min(R[i], R[i + 1]), y, r: Math.min(r, Math.abs(R[i] - R[i + 1]) / 2, lineH / 2), down: R[i + 1] < R[i], side: 1 });
+    if (L[i] !== L[i + 1]) fillets.push({ x: Math.max(L[i], L[i + 1]), y, r: Math.min(r, Math.abs(L[i] - L[i + 1]) / 2, lineH / 2), down: L[i + 1] > L[i], side: -1 });
   }
   return { boxes, fillets };
 }
 
-function drawHighlight(ctx: CanvasRenderingContext2D, lines: string[], o: { cx: number; lineH: number; padX: number; padY: number; r: number; color: string }) {
+function drawHighlight(ctx: CanvasRenderingContext2D, lines: string[], o: { width: number; align: TextAlign; lineH: number; padX: number; padY: number; r: number; color: string }) {
   const { boxes, fillets } = highlightShape(lines.map((l) => ctx.measureText(l).width), o);
   ctx.save();
   ctx.fillStyle = o.color;
   ctx.beginPath();
-  for (const b of boxes) cornerRect(ctx, o.cx - b.half, b.top, b.half * 2, b.bottom - b.top, b.radii);
+  for (const b of boxes) cornerRect(ctx, b.left, b.top, b.right - b.left, b.bottom - b.top, b.radii);
   ctx.fill();
-  for (const f of fillets)
-    for (const side of [1, -1]) {
-      const x = o.cx + side * f.x;
-      const dy = f.down ? f.r : -f.r;
-      ctx.beginPath();
-      ctx.moveTo(x, f.y);
-      ctx.lineTo(x + side * f.r, f.y);
-      ctx.arcTo(x, f.y, x, f.y + dy, f.r);
-      ctx.closePath();
-      ctx.fill();
-    }
+  for (const f of fillets) {
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.y);
+    ctx.lineTo(f.x + f.side * f.r, f.y);
+    ctx.arcTo(f.x, f.y, f.x, f.y + (f.down ? f.r : -f.r), f.r);
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -223,8 +249,12 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, max: number): str
 }
 
 /** Text in one of the styles, rendered to a bitmap (2x), wrapped like the editor. */
-export function renderText(text: string, style: number, color: string): Bitmap {
-  const m = textMetrics(style);
+/** Biggest bitmap we draw (px): under iOS Safari's canvas limit, with room to spare. */
+const MAX_AREA = 12_000_000;
+
+export function renderText(text: string, style: number, color: string, opts: { size?: number; align?: TextAlign } = {}): Bitmap {
+  const align = opts.align ?? "center";
+  const m = textMetrics(style, opts.size ?? 1);
   const size = m.size * PX;
   const c = document.createElement("canvas");
   const ctx = c.getContext("2d")!;
@@ -237,12 +267,15 @@ export function renderText(text: string, style: number, color: string): Bitmap {
   const padY = m.padY * PX;
   const w = Math.ceil(Math.max(...lines.map((l) => ctx.measureText(l).width)) + padX * 2);
   const h = Math.ceil(lineH * lines.length + padY * 2);
+  // big text drawn dense would blow past the canvas limit (and come out blank): draw it less dense
+  if (w * h > MAX_AREA) return atDensity(PX * Math.sqrt(MAX_AREA / (w * h)) * 0.98, () => renderText(text, style, color, opts));
   c.width = Math.max(w, 2);
   c.height = Math.max(h, 2);
   ctx.font = f;
-  ctx.textAlign = "center";
+  ctx.textAlign = align;
   ctx.textBaseline = "middle";
-  if (style === 4) drawHighlight(ctx, lines, { cx: c.width / 2, lineH, padX, padY, r: m.radius * PX, color });
+  const tx = align === "left" ? padX : align === "right" ? c.width - padX : c.width / 2;
+  if (style === 4) drawHighlight(ctx, lines, { width: c.width, align, lineH, padX, padY, r: m.radius * PX, color });
   if (style === 1) {
     ctx.fillStyle = color;
     roundRect(ctx, 0, 0, c.width, c.height, m.radius * PX);
@@ -252,20 +285,20 @@ export function renderText(text: string, style: number, color: string): Bitmap {
     const y = padY + lineH * (i + 0.5);
     if (style === 3) {
       ctx.lineJoin = "round";
-      ctx.lineWidth = 9 * PX;
+      ctx.lineWidth = m.stroke * PX;
       ctx.strokeStyle = color === "#000000" ? "#ffffff" : "#000000";
-      ctx.strokeText(l, c.width / 2, y);
+      ctx.strokeText(l, tx, y);
       ctx.fillStyle = color;
-      ctx.fillText(l, c.width / 2, y);
+      ctx.fillText(l, tx, y);
     } else if (style === 1 || style === 4) {
       ctx.fillStyle = readable(color);
-      ctx.fillText(l, c.width / 2, y);
+      ctx.fillText(l, tx, y);
     } else {
       ctx.shadowColor = "rgba(0,0,0,0.45)";
-      ctx.shadowBlur = 14 * PX;
-      ctx.shadowOffsetY = 3 * PX;
+      ctx.shadowBlur = m.shadow * PX;
+      ctx.shadowOffsetY = m.drop * PX;
       ctx.fillStyle = color;
-      ctx.fillText(l, c.width / 2, y);
+      ctx.fillText(l, tx, y);
       ctx.shadowColor = "transparent";
     }
   });
@@ -478,6 +511,8 @@ export function remapStickers(
 
 export type StickerRequest = { kind: "text" | "stickers"; n: number } | null;
 
+type TextDraft = { id: number | null; text: string; style: number; color: string; size: number; align: TextAlign };
+
 /**
  * The editable layer over the card. The parent sizes it to the card (absolute
  * inset-0 inside the card box) and opens the text editor / tray via `request`.
@@ -499,7 +534,7 @@ export function StickerLayer({
   request: StickerRequest;
 }) {
   const [tray, setTray] = useState(false);
-  const [editing, setEditing] = useState<{ id: number | null; text: string; style: number; color: string } | null>(null);
+  const [editing, setEditing] = useState<TextDraft | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
   const [overTrash, setOverTrash] = useState(false);
   const [logo, setLogo] = useState<HTMLImageElement | null>(null);
@@ -512,7 +547,7 @@ export function StickerLayer({
   }, []);
   useEffect(() => {
     if (!request) return;
-    if (request.kind === "text") setEditing({ id: null, text: "", style: 0, color: "#ffffff" });
+    if (request.kind === "text") setEditing({ id: null, text: "", style: 0, color: "#ffffff", size: 1, align: "center" });
     else setTray(true);
   }, [request]);
 
@@ -535,16 +570,16 @@ export function StickerLayer({
       setEditing(null);
       return;
     }
-    const { style, color } = editing;
+    const { style, color, size, align } = editing;
     const old = editing.id != null ? items.find((i) => i.id === editing.id) : null;
-    const { b, make } = made(() => renderText(text, style, color), old?.res ?? 2);
+    const { b, make } = made(() => renderText(text, style, color, { size, align }), old?.res ?? 2);
     if (old) {
-      setItems((cur) => cur.map((i) => (i.id === old.id ? { ...i, text, style, color, canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, res: b.px, make } : i)));
+      setItems((cur) => cur.map((i) => (i.id === old.id ? { ...i, text, style, color, size, align, canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, res: b.px, make } : i)));
     } else {
       const id = nextId.current++;
       setItems((cur) => {
         const [x, y] = place(cur);
-        return [...cur, { id, kind: "text", text, style, color, canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, res: b.px, make, x, y, s: 1, r: 0 }];
+        return [...cur, { id, kind: "text", text, style, color, size, align, canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, res: b.px, make, x, y, s: 1, r: 0 }];
       });
     }
     setEditing(null);
@@ -679,7 +714,7 @@ export function StickerLayer({
     if (st.pointers.size === 0) {
       const it = items.find((i) => i.id === st.id);
       if (trashHit(e.clientX, e.clientY)) setItems((cur) => cur.filter((i) => i.id !== st.id));
-      else if (!st.moved && Date.now() - st.t0 < 300 && it?.kind === "text") setEditing({ id: it.id, text: it.text ?? "", style: it.style ?? 0, color: it.color ?? "#ffffff" });
+      else if (!st.moved && Date.now() - st.t0 < 300 && it?.kind === "text") setEditing({ id: it.id, text: it.text ?? "", style: it.style ?? 0, color: it.color ?? "#ffffff", size: it.size ?? 1, align: it.align ?? "center" });
       else sharpen(st.id);
       g.current = null;
       setDragging(null);
@@ -694,11 +729,17 @@ export function StickerLayer({
   // card's own render of it (at screen density) under a see-through textarea.
   const hlText = editing?.style === 4 ? editing.text || "Type something" : null;
   const hlColor = editing?.color;
+  const hlSize = editing?.size ?? 1;
+  const hlAlign = editing?.align ?? "center";
   const highlight = useMemo(() => {
     if (hlText == null || !hlColor || typeof document === "undefined") return null;
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-    return atDensity(Math.min(4, Math.max(1, Math.ceil(k * dpr * 2) / 2)), () => renderText(hlText, 4, hlColor));
-  }, [hlText, hlColor, k]);
+    return atDensity(Math.min(4, Math.max(1, Math.ceil(k * dpr * 2) / 2)), () => renderText(hlText, 4, hlColor, { size: hlSize, align: hlAlign }));
+  }, [hlText, hlColor, hlSize, hlAlign, k]);
+  // iOS doesn't shrink the screen for the keyboard (it slides the page up
+  // instead), so the editor pins itself to the part you can see: the top
+  // bar stays put and the colours sit right on the keyboard.
+  const view = useVisualViewportBox(!!editing);
 
   return (
     <>
@@ -744,44 +785,86 @@ export function StickerLayer({
         )}
       </div>
 
-      {/* Text editor — over the whole screen (fixed inside the dialog) */}
+      {/* Text editor — over the visible screen (fixed inside the dialog) */}
       {editing && (
-        <div className="fixed inset-0 z-[70] flex flex-col bg-black/70 text-white backdrop-blur-sm" style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}>
-          <div className="flex items-center justify-between px-3">
-            <button
-              type="button"
-              // keep the keyboard up: don't take focus from the text
-              onPointerDown={(e) => e.preventDefault()}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setEditing({ ...editing, style: nextTextStyle(editing.style) })}
-              className="h-10 rounded-full bg-white/15 px-4 text-[13px] font-black"
-              aria-label="Text style"
-            >
-              Aa · {TEXT_STYLES[editing.style]}
-            </button>
+        <div
+          className="fixed inset-x-0 z-[70] flex flex-col bg-black/70 text-white backdrop-blur-sm"
+          style={{ top: view?.top ?? 0, height: view?.height ?? "100%", paddingTop: view?.keyboard && view.top > 0 ? "0.5rem" : "max(env(safe-area-inset-top), 0.75rem)" }}
+        >
+          <div className="flex items-center justify-between gap-2 px-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                // keep the keyboard up: don't take focus from the text
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setEditing({ ...editing, style: nextTextStyle(editing.style) })}
+                className="h-10 rounded-full bg-white/15 px-4 text-[13px] font-black"
+                aria-label="Text style"
+              >
+                Aa · {TEXT_STYLES[editing.style]}
+              </button>
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setEditing({ ...editing, align: nextTextAlign(editing.align) })}
+                className="grid h-10 w-10 place-items-center rounded-full bg-white/15"
+                aria-label={`Align ${editing.align}`}
+              >
+                {editing.align === "left" ? <TextAlignStart className="h-5 w-5" /> : editing.align === "right" ? <TextAlignEnd className="h-5 w-5" /> : <TextAlignCenter className="h-5 w-5" />}
+              </button>
+            </div>
             <button type="button" onClick={saveText} className="inline-flex h-10 items-center gap-1 rounded-full bg-white px-4 text-[14px] font-black text-black">
               <Check className="h-4 w-4" /> Done
             </button>
           </div>
           {/* True size: the card's scale, font, padding and wrap width, so it looks
               exactly like it will on the card while you type. */}
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-3 py-4">
-            {(() => {
-              const m = textMetrics(editing.style);
-              const font = { fontFamily: m.family, fontWeight: m.weight, fontSize: m.size * k, lineHeight: m.lineH, textTransform: m.display ? ("uppercase" as const) : undefined };
-              if (editing.style === 4) {
-                return (
-                  <div className="relative inline-grid" style={{ maxWidth: (WRAP + m.padX * 2) * k, padding: `${m.padY * k}px ${m.padX * k}px` }}>
-                    {highlight && (
-                      <img
-                        src={highlight.url}
-                        alt=""
-                        draggable={false}
-                        className="pointer-events-none absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 select-none"
-                        style={{ width: (highlight.bw / highlight.px) * k, opacity: editing.text ? 1 : 0.55 }}
+          <div className="relative flex min-h-0 flex-1">
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-3 py-4">
+              {(() => {
+                const m = textMetrics(editing.style, editing.size);
+                const font = { fontFamily: m.family, fontWeight: m.weight, fontSize: m.size * k, lineHeight: m.lineH, textAlign: editing.align, textTransform: m.display ? ("uppercase" as const) : undefined };
+                if (editing.style === 4) {
+                  return (
+                    <div className="relative inline-grid shrink-0" style={{ maxWidth: (WRAP + m.padX * 2) * k, padding: `${m.padY * k}px ${m.padX * k}px` }}>
+                      {highlight && (
+                        <img
+                          src={highlight.url}
+                          alt=""
+                          draggable={false}
+                          className="pointer-events-none absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 select-none"
+                          style={{ width: (highlight.bw / highlight.px) * k, opacity: editing.text ? 1 : 0.55 }}
+                        />
+                      )}
+                      <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre-wrap [overflow-wrap:anywhere]" style={font}>
+                        {(editing.text || "Type something") + " "}
+                      </span>
+                      <textarea
+                        autoFocus
+                        value={editing.text}
+                        onChange={(e) => setEditing({ ...editing, text: e.target.value.slice(0, TEXT_MAX) })}
+                        maxLength={TEXT_MAX}
+                        rows={1}
+                        cols={1}
+                        aria-label="Text"
+                        // the letters you see are the render under it; this only carries the caret
+                        style={{ ...font, color: "transparent", caretColor: readable(editing.color) }}
+                        className="relative col-start-1 row-start-1 h-full min-h-0 w-full min-w-0 resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 outline-none [overflow-wrap:anywhere]"
                       />
-                    )}
-                    <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre-wrap text-center [overflow-wrap:anywhere]" style={font}>
+                    </div>
+                  );
+                }
+                const look =
+                  editing.style === 1
+                    ? { background: editing.color, color: readable(editing.color), borderRadius: m.radius * k }
+                    : editing.style === 3
+                      ? { color: editing.color, WebkitTextStroke: `${m.stroke * k}px ${editing.color === "#000000" ? "#fff" : "#000"}`, paintOrder: "stroke fill" as const }
+                      : { color: editing.color, textShadow: `0 ${m.drop * k}px ${m.shadow * k}px rgba(0,0,0,0.45)` };
+                return (
+                  <div className="inline-grid shrink-0" style={{ ...look, maxWidth: (WRAP + m.padX * 2) * k, padding: `${m.padY * k}px ${m.padX * k}px` }}>
+                    <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre-wrap [overflow-wrap:anywhere]" style={font}>
                       {(editing.text || "Type something") + " "}
                     </span>
                     <textarea
@@ -791,44 +874,25 @@ export function StickerLayer({
                       maxLength={TEXT_MAX}
                       rows={1}
                       cols={1}
+                      placeholder="Type something"
                       aria-label="Text"
-                      // the letters you see are the render under it; this only carries the caret
-                      style={{ ...font, color: "transparent", caretColor: readable(editing.color) }}
-                      className="relative col-start-1 row-start-1 h-full min-h-0 w-full min-w-0 resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 text-center outline-none [overflow-wrap:anywhere]"
+                      // inline font beats the global 16px input rule (iOS zoom guard)
+                      style={{ ...font, color: "inherit" }}
+                      className="col-start-1 row-start-1 h-full min-h-0 w-full min-w-0 resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 outline-none [overflow-wrap:anywhere] placeholder:text-current placeholder:opacity-40"
                     />
                   </div>
                 );
-              }
-              const look =
-                editing.style === 1
-                  ? { background: editing.color, color: readable(editing.color), borderRadius: m.radius * k }
-                  : editing.style === 3
-                    ? { color: editing.color, WebkitTextStroke: `${9 * k}px ${editing.color === "#000000" ? "#fff" : "#000"}`, paintOrder: "stroke fill" as const }
-                    : { color: editing.color, textShadow: `0 ${3 * k}px ${14 * k}px rgba(0,0,0,0.45)` };
-              return (
-                <div className="inline-grid" style={{ ...look, maxWidth: (WRAP + m.padX * 2) * k, padding: `${m.padY * k}px ${m.padX * k}px` }}>
-                  <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre-wrap text-center [overflow-wrap:anywhere]" style={font}>
-                    {(editing.text || "Type something") + " "}
-                  </span>
-                  <textarea
-                    autoFocus
-                    value={editing.text}
-                    onChange={(e) => setEditing({ ...editing, text: e.target.value.slice(0, TEXT_MAX) })}
-                    maxLength={TEXT_MAX}
-                    rows={1}
-                    cols={1}
-                    placeholder="Type something"
-                    aria-label="Text"
-                    // inline font beats the global 16px input rule (iOS zoom guard)
-                    style={{ ...font, color: "inherit" }}
-                    className="col-start-1 row-start-1 h-full min-h-0 w-full min-w-0 resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 text-center outline-none [overflow-wrap:anywhere] placeholder:text-current placeholder:opacity-40"
-                  />
-                </div>
-              );
-            })()}
+              })()}
+            </div>
+            <SizeSlider value={editing.size} onChange={(size) => setEditing((cur) => (cur ? { ...cur, size } : cur))} />
           </div>
           {editing.text.length > TEXT_MAX - 60 && <div className="pb-2 text-center text-[11px] tabular-nums text-white/55">{editing.text.length}/{TEXT_MAX}</div>}
-          <div className="flex justify-center gap-3 pb-6" role="group" aria-label="Text colour">
+          <div
+            className="flex justify-center gap-3 pt-1"
+            style={{ paddingBottom: view?.keyboard ? "0.625rem" : "max(env(safe-area-inset-bottom), 1.5rem)" }}
+            role="group"
+            aria-label="Text colour"
+          >
             {TEXT_COLORS.map((c) => (
               <button
                 key={c}
@@ -870,6 +934,48 @@ export function StickerLayer({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Instagram's text size slider: a tapered track down the left edge, drag the
+ * dot up for bigger text. The text re-wraps as it grows (the wrap width is
+ * fixed), exactly as it will on the card. Taps don't take focus, so the
+ * keyboard stays up.
+ */
+function SizeSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const track = useRef<HTMLDivElement | null>(null);
+  const t = (value - TEXT_SIZE.min) / (TEXT_SIZE.max - TEXT_SIZE.min);
+  const set = (clientY: number) => {
+    const b = track.current?.getBoundingClientRect();
+    if (!b || !b.height) return;
+    const f = 1 - Math.min(1, Math.max(0, (clientY - b.top) / b.height));
+    onChange(Math.round((TEXT_SIZE.min + f * (TEXT_SIZE.max - TEXT_SIZE.min)) * 100) / 100);
+  };
+  return (
+    <div
+      role="slider"
+      aria-label="Text size"
+      aria-orientation="vertical"
+      aria-valuemin={TEXT_SIZE.min}
+      aria-valuemax={TEXT_SIZE.max}
+      aria-valuenow={value}
+      className="absolute left-0 top-1/2 z-10 flex h-[min(15rem,70%)] w-11 -translate-y-1/2 touch-none justify-center py-3"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        set(e.clientY);
+      }}
+      onPointerMove={(e) => {
+        if (e.currentTarget.hasPointerCapture?.(e.pointerId)) set(e.clientY);
+      }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <div ref={track} className="relative h-full w-4">
+        <div className="absolute inset-0 bg-white/45" style={{ clipPath: "polygon(0 0, 100% 0, 64% 100%, 36% 100%)", borderRadius: 3 }} />
+        <div className="absolute left-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_6px_rgba(0,0,0,0.55)]" style={{ top: `${(1 - t) * 100}%` }} />
+      </div>
+    </div>
   );
 }
 

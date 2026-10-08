@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import { QUADRANTS, type TaskQuadrant } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
+import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 
 /** `deletedAt` set ⇒ the note is in Recently Deleted. */
 export type Note = { id: string; title: string; body: string; updatedAt: number; deletedAt?: number };
@@ -194,26 +195,6 @@ async function copyText(text: string) {
       return false;
     }
   }
-}
-
-/** Box of the visual viewport — shrinks when the iOS keyboard opens. */
-function useVisualViewportBox(active: boolean) {
-  const [box, setBox] = useState<{ top: number; height: number } | null>(null);
-  useEffect(() => {
-    if (!active || typeof window === "undefined") return;
-    const vv = window.visualViewport;
-    const update = () => setBox(vv ? { top: vv.offsetTop, height: vv.height } : { top: 0, height: window.innerHeight });
-    update();
-    vv?.addEventListener("resize", update);
-    vv?.addEventListener("scroll", update);
-    window.addEventListener("resize", update);
-    return () => {
-      vv?.removeEventListener("resize", update);
-      vv?.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, [active]);
-  return box;
 }
 
 function useMounted() {
