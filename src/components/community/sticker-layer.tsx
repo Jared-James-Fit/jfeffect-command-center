@@ -524,7 +524,6 @@ export function StickerLayer({
   height,
   context,
   request,
-  editorWidth,
 }: {
   items: StickerItem[];
   setItems: React.Dispatch<React.SetStateAction<StickerItem[]>>;
@@ -533,9 +532,6 @@ export function StickerLayer({
   height: number;
   context: DecorContext;
   request: StickerRequest;
-  /** The card's full on-screen width, for the text editor's true-size preview
-   *  (the card itself shrinks while the keyboard is up). Defaults to `width`. */
-  editorWidth?: number;
 }) {
   const [tray, setTray] = useState(false);
   const [editing, setEditing] = useState<TextDraft | null>(null);
@@ -729,7 +725,6 @@ export function StickerLayer({
   };
 
   const k = width / REF;
-  const ke = (editorWidth || width) / REF;
   // Highlight's carved boxes can't be done in CSS, so the editor shows the
   // card's own render of it (at screen density) under a see-through textarea.
   const hlText = editing?.style === 4 ? editing.text || "Type something" : null;
@@ -739,12 +734,11 @@ export function StickerLayer({
   const highlight = useMemo(() => {
     if (hlText == null || !hlColor || typeof document === "undefined") return null;
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-    return atDensity(Math.min(4, Math.max(1, Math.ceil(ke * dpr * 2) / 2)), () => renderText(hlText, 4, hlColor, { size: hlSize, align: hlAlign }));
-  }, [hlText, hlColor, hlSize, hlAlign, ke]);
-  // With the keyboard up the studio fits itself to the part of the screen you
-  // can see (share-studio), and this editor fills the studio, so the top bar
-  // stays put and the colours sit right on the keyboard. Its text stays true
-  // to the full-size card (`ke`), not the shrunken one behind it.
+    return atDensity(Math.min(4, Math.max(1, Math.ceil(k * dpr * 2) / 2)), () => renderText(hlText, 4, hlColor, { size: hlSize, align: hlAlign }));
+  }, [hlText, hlColor, hlSize, hlAlign, k]);
+  // iOS doesn't shrink the screen for the keyboard (it slides the page up
+  // instead), so the editor pins itself to the part you can see: the top
+  // bar stays put and the colours sit right on the keyboard.
   const view = useVisualViewportBox(!!editing);
 
   return (
@@ -794,8 +788,8 @@ export function StickerLayer({
       {/* Text editor — over the visible screen (fixed inside the dialog) */}
       {editing && (
         <div
-          className="fixed inset-0 z-[70] flex flex-col bg-black/70 text-white backdrop-blur-sm"
-          style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
+          className="fixed inset-x-0 z-[70] flex flex-col bg-black/70 text-white backdrop-blur-sm"
+          style={{ top: view?.keyboard ? view.top : 0, height: view?.keyboard ? view.height : "100%", paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}
         >
           <div className="flex items-center justify-between gap-2 px-3">
             <div className="flex items-center gap-2">
@@ -831,17 +825,17 @@ export function StickerLayer({
             <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-3 py-4">
               {(() => {
                 const m = textMetrics(editing.style, editing.size);
-                const font = { fontFamily: m.family, fontWeight: m.weight, fontSize: m.size * ke, lineHeight: m.lineH, textAlign: editing.align, textTransform: m.display ? ("uppercase" as const) : undefined };
+                const font = { fontFamily: m.family, fontWeight: m.weight, fontSize: m.size * k, lineHeight: m.lineH, textAlign: editing.align, textTransform: m.display ? ("uppercase" as const) : undefined };
                 if (editing.style === 4) {
                   return (
-                    <div className="relative inline-grid shrink-0" style={{ maxWidth: (WRAP + m.padX * 2) * ke, padding: `${m.padY * ke}px ${m.padX * ke}px` }}>
+                    <div className="relative inline-grid shrink-0" style={{ maxWidth: (WRAP + m.padX * 2) * k, padding: `${m.padY * k}px ${m.padX * k}px` }}>
                       {highlight && (
                         <img
                           src={highlight.url}
                           alt=""
                           draggable={false}
                           className="pointer-events-none absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 select-none"
-                          style={{ width: (highlight.bw / highlight.px) * ke, opacity: editing.text ? 1 : 0.55 }}
+                          style={{ width: (highlight.bw / highlight.px) * k, opacity: editing.text ? 1 : 0.55 }}
                         />
                       )}
                       <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre-wrap [overflow-wrap:anywhere]" style={font}>
@@ -864,12 +858,12 @@ export function StickerLayer({
                 }
                 const look =
                   editing.style === 1
-                    ? { background: editing.color, color: readable(editing.color), borderRadius: m.radius * ke }
+                    ? { background: editing.color, color: readable(editing.color), borderRadius: m.radius * k }
                     : editing.style === 3
-                      ? { color: editing.color, WebkitTextStroke: `${m.stroke * ke}px ${editing.color === "#000000" ? "#fff" : "#000"}`, paintOrder: "stroke fill" as const }
-                      : { color: editing.color, textShadow: `0 ${m.drop * ke}px ${m.shadow * ke}px rgba(0,0,0,0.45)` };
+                      ? { color: editing.color, WebkitTextStroke: `${m.stroke * k}px ${editing.color === "#000000" ? "#fff" : "#000"}`, paintOrder: "stroke fill" as const }
+                      : { color: editing.color, textShadow: `0 ${m.drop * k}px ${m.shadow * k}px rgba(0,0,0,0.45)` };
                 return (
-                  <div className="inline-grid shrink-0" style={{ ...look, maxWidth: (WRAP + m.padX * 2) * ke, padding: `${m.padY * ke}px ${m.padX * ke}px` }}>
+                  <div className="inline-grid shrink-0" style={{ ...look, maxWidth: (WRAP + m.padX * 2) * k, padding: `${m.padY * k}px ${m.padX * k}px` }}>
                     <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre-wrap [overflow-wrap:anywhere]" style={font}>
                       {(editing.text || "Type something") + " "}
                     </span>
