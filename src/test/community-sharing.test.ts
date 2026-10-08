@@ -207,9 +207,10 @@ describe("sharing stays optional", () => {
   const composer = read("src/components/community/share-composer.tsx");
   const dayView = read("src/components/workout-day/WorkoutDayView.tsx");
 
-  it("only opens when the athlete taps Share workout", () => {
+  it("only opens when the athlete taps Share, and Done is the main action", () => {
     expect(summary).toContain("useState(false);\n  const [shareMounted");
-    expect(summary).toContain("Share workout");
+    expect(summary).toContain('<Share2 className="mr-1.5 h-4 w-4" />Share\n');
+    expect(summary).toContain("Done\n");
     expect(summary).toContain("setShareOpen(true)");
     expect(summary).not.toMatch(/useEffect\([^)]*setShareOpen\(true\)/);
   });
