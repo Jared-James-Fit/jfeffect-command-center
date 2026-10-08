@@ -74,7 +74,8 @@ begin
   -- Archived client and non-competition exercises never count.
   update clients set archived = true where id = gone;
   perform t_set(gone, 'Competition Squat', 400, 'kg', 1, wpg('2026-08-01 10:00'));
-  perform t_set(jared, 'High Bar Squat', 300, 'kg', 1, wpg('2026-08-01 10:00'));
+  perform t_set(jared, 'Hack Squat', 300, 'kg', 1, wpg('2026-08-01 10:00'));
+  perform t_set(jared, 'Romanian Deadlift', 300, 'kg', 1, wpg('2026-08-01 10:00'));
 
   -- Jamie: every other session tops out at 100 kg; a 140 single (+40%) is a jump.
   -- Jo: 100 then a 130 single (+30%) is a real PR and counts.
@@ -101,7 +102,7 @@ begin
   perform t_assert((select count(*) from strength_board_sets() where client_id = dwayne and flag is not null) = 0,
     '315 kg x2 deadlift at 203 lb passes');
   perform t_assert(not exists (select 1 from strength_board_sets() where client_id = gone), 'archived clients never count');
-  perform t_assert(not exists (select 1 from strength_board_sets() where load_kg = 300), 'non-competition exercises never count');
+  perform t_assert(not exists (select 1 from strength_board_sets() where load_kg = 300), 'hack squats and RDLs never count');
 
   -- 2. Bodyweight closest to the lift.
   perform t_assert((select bw_kg from strength_board_sets() where client_id = jared and lift = 'squat' and load_kg = 242.5) = 66.2,
@@ -126,7 +127,7 @@ begin
 
   -- 5. Pound for pound: one board, DOTS ranked, x bodyweight shown.
   select * into r from get_strength_board(t_uid(jared)) where client_id = jared and lift = 'total';
-  perform t_assert(r.p4p_rank = 1, 'Jared #1 pound for pound (665 kg at 147 lb beats 765 kg at 203 lb)');
+  perform t_assert(r.p4p_rank = 1, 'Jared #1 pound for pound (9.97x bodyweight beats 765 kg at 203 lb, 8.3x)');
   perform t_assert(r.bw_kg = 66.7, 'total uses the heaviest of the three lifts'' bodyweights (147 lb)');
   perform t_assert(r.bw_multiple = 9.97, 'total x bodyweight = 665 / 66.7');
   perform t_assert(r.dots = dots_points('male', 66.7, 665), 'DOTS from the real formula');
@@ -137,12 +138,12 @@ begin
 
   -- 6. Unranked athletes still see themselves.
   select * into r from get_strength_board(t_uid(jarrett)) where client_id = jarrett and lift = 'squat';
-  perform t_assert(r.is_me and r.kg = 150 and r.abs_rank is null and r.p4p_rank is null,
-    'Jarrett sees his real 150 kg squat, unranked until he picks a division');
+  perform t_assert(r.is_me and r.kg = 150 and r.abs_rank is null and r.all_rank is not null and r.p4p_rank is not null,
+    'Jarrett (no division) is ranked on All and pound for pound, just not Men / Women');
   perform t_assert(not exists (select 1 from get_strength_board(t_uid(jarrett)) where client_id = jarrett and lift in ('bench', 'total')),
     'no counted bench yet, so no total');
-  perform t_assert(not exists (select 1 from get_strength_board(t_uid(jared)) where client_id = jarrett),
-    'unranked athletes are not shown to others');
+  perform t_assert(exists (select 1 from get_strength_board(t_uid(jared)) where client_id = jarrett and lift = 'squat'),
+    'athletes without a division still show to everyone on All');
   select * into r from get_strength_board(t_uid(shy)) where client_id = shy and lift = 'deadlift';
   perform t_assert(r.sex is null and r.abs_rank is null, '"Prefer not to say" wins over the curated profile');
   update clients set sex = 'male' where id = jarrett;
@@ -156,8 +157,9 @@ begin
     perform t_set(extra, 'Competition Squat', 100 + i, 'kg', 1, wpg('2026-09-02 10:00'));
     if i = 1 then me13 := extra; end if;
   end loop;
-  perform t_assert((select count(*) from get_strength_board(t_uid(jared)) where lift = 'squat' and sex = 'male' and abs_rank > 10) = 0,
-    'others outside the top 10 are not returned');
+  perform t_assert((select count(*) from get_strength_board(t_uid(jared)) where lift = 'squat' and not is_me
+      and all_rank > 10 and coalesce(abs_rank, 99) > 10 and coalesce(p4p_rank, 99) > 10) = 0,
+    'others outside every top 10 are not returned');
   select * into r from get_strength_board(t_uid(me13)) where client_id = me13 and lift = 'squat';
   perform t_assert(r.abs_rank > 10 and r.abs_count >= 16, 'the viewer outside the top 10 still gets their rank and the board size');
 
@@ -217,4 +219,51 @@ begin
   perform t_set(dupe, 'Competition Squat', 150, 'kg', 1, wpg('2026-08-01 10:00'));
   perform t_assert((select bw_kg from strength_board_sets() where client_id = dupe) = 86.2,
     'same-day duplicate bodyweight: the newest entry (190 lb) is used');
+end $$;
+
+-- Everyone who squats, benches and deadlifts: variations count, rank by x bodyweight.
+do $$
+declare
+  hb uuid := t_client('Hana B');                  -- no sex set, only logs variations
+  old_bw uuid := t_client('Otto W', 'male');      -- only weighed in months before lifting
+  r record;
+begin
+  perform t_bw(hb, 130, '2026-09-01');
+  perform t_set(hb, 'High Bar Squat', 100, 'kg', 3, wpg('2026-09-02 10:00'));
+  perform t_set(hb, 'TNG Bench Press', 55, 'kg', 5, wpg('2026-09-03 10:00'));
+  perform t_set(hb, 'Conventional Deadlift', 130, 'kg', 2, wpg('2026-09-04 10:00'));
+  perform t_set(hb, 'Romanian Deadlift', 150, 'kg', 8, wpg('2026-09-05 10:00'));
+
+  select * into r from get_strength_board(t_uid(hb)) where client_id = hb and lift = 'deadlift';
+  perform t_assert(r.kg = 130 and r.reps = 2, 'conventional deadlift counts; the heavier RDL does not');
+  select * into r from get_strength_board(t_uid(hb)) where client_id = hb and lift = 'squat';
+  perform t_assert(r.kg = 100 and r.reps = 3, 'high bar squat counts, with its reps');
+  select * into r from get_strength_board(t_uid(hb)) where client_id = hb and lift = 'total';
+  perform t_assert(r.kg = 285 and r.all_rank is not null and r.p4p_rank is not null and r.abs_rank is null,
+    'variation total ranks on All and pound for pound without a division');
+
+  perform t_bw(old_bw, 200, '2026-05-01');
+  perform t_set(old_bw, 'Competition Squat', 180, 'kg', 1, wpg('2026-09-15 10:00'));
+  select * into r from get_strength_board(t_uid(old_bw)) where client_id = old_bw and lift = 'squat';
+  perform t_assert(r.bw_kg = 90.7 and r.p4p_rank is not null, 'a months-old weigh-in still unlocks pound for pound');
+
+  perform t_assert(not exists (
+      select 1 from (
+        select bw_multiple, lag(bw_multiple) over (order by p4p_rank) prev
+        from get_strength_board(t_uid(old_bw)) where lift = 'total' and p4p_rank is not null
+      ) x where x.prev < x.bw_multiple),
+    'pound for pound is ordered by x bodyweight');
+
+  perform t_assert(strength_board_lift('Close-Grip Bench Press', null) = 'bench'
+    and strength_board_lift('2-Second Pause-at-Knee Sumo Deadlift', null) = 'deadlift'
+    and strength_board_lift('Barbell Full Squat(Back)', null) = 'squat'
+    and strength_board_lift('Safety Squat Bar Squat', null) is null
+    and strength_board_lift('Pin Squat', null) is null
+    and strength_board_lift('Belt Squat', null) is null
+    and strength_board_lift('Barbell Incline Bench Press', null) is null
+    and strength_board_lift('Flat Bench Press - Dumbbell', null) is null
+    and strength_board_lift('Landmine Romanian Deadlift', null) is null
+    and strength_board_lift('Bench Hamstring Curl Attachment', null) is null
+    and strength_board_lift('Anything', 'bench') = 'bench',
+    'exercise classifier: full-range barbell SBD variations in, partials / machines / dumbbells / RDLs out');
 end $$;
