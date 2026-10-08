@@ -501,7 +501,15 @@ export function useSetBio(userId: string | null) {
 
 /* ---- coach notes + the weekly series ---------------------------------- */
 
-export type SeriesItem = { id: string; mentor: string; body: string; quote: string | null; quote_source: string | null };
+export type SeriesItem = {
+  id: string;
+  /** Mon/Fri: who the quote is from. Tue: the kind of tip. Thu: the feature. Sat: the scene. */
+  mentor: string;
+  body: string;
+  quote: string | null;
+  quote_source: string | null;
+  data?: Record<string, any> | null;
+};
 export type SeriesOverview = {
   paused: boolean;
   author: CommunityAuthor | null;
@@ -522,6 +530,24 @@ export function useSeriesOverview(enabled: boolean) {
       const { data, error } = await db.rpc("community_series_overview");
       if (error) throw error;
       return data as SeriesOverview;
+    },
+  });
+}
+
+/**
+ * What a data day would say right now: Sunday's report card so far,
+ * Tuesday's observation (null = a tip from the library goes out), Thursday's
+ * stat for the next feature (null = it posts without a number).
+ */
+export function useSeriesPreview(series: "sunday_recap" | "tuesday_tips" | "try_it_thursday", enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-series", "preview", series],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Record<string, any> | null> => {
+      const { data, error } = await db.rpc("community_series_preview", { _series: series });
+      if (error) throw error;
+      return (data ?? null) as Record<string, any> | null;
     },
   });
 }

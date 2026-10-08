@@ -6,7 +6,11 @@ import {
   REACTION,
   SCOPE_WORD,
   SERIES_LABEL,
+  extraScene,
+  extraTipKind,
   featuredLift,
+  isRecapStats,
+  isWinsStats,
   formatTopSet,
   isTrainingNow,
   lockInTimeLabel,
@@ -23,6 +27,8 @@ import {
 } from "@/lib/community";
 import { useFullMediaUrl } from "@/lib/community.queries";
 import { WinsStatsCard } from "@/components/community/wins-stats";
+import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-cards";
+import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
@@ -91,14 +97,17 @@ export function CoachBadge({ className }: { className?: string }) {
  */
 export function NoteBody({ post, clamp = false }: { post: CommunityPost; clamp?: boolean }) {
   const series = post.series ? SERIES_LABEL[post.series] ?? null : null;
+  // Saturday: the picture says it, the words just sit under it
+  const scene = post.series === "saturday_spirit" ? extraScene(post.series_extra) : null;
   return (
     <div className="px-4 pb-1 pt-1">
       {series && (
         <div className="mb-2.5 flex min-w-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em]">
           <span className="shrink-0 whitespace-nowrap text-primary">{series.name}</span>
-          <span className="truncate text-muted-foreground/70">· {series.tagline}</span>
+          <span className="truncate text-muted-foreground/70">· {extraTipKind(post.series_extra) ?? series.tagline}</span>
         </div>
       )}
+      {scene && isSpiritScene(scene) && <SpiritScene scene={scene} className="mb-3 rounded-2xl" />}
       {post.quote && (
         <figure className="mb-3 border-l-[3px] border-primary pl-3.5">
           <blockquote className="whitespace-pre-line text-[18px] font-semibold leading-[1.32] tracking-[-0.01em]">“{post.quote}”</blockquote>
@@ -110,9 +119,18 @@ export function NoteBody({ post, clamp = false }: { post: CommunityPost; clamp?:
           )}
         </figure>
       )}
-      {post.caption && <p className={cn("whitespace-pre-line text-[15px] leading-[1.45]", clamp && "line-clamp-[8]")}>{post.caption}</p>}
+      {post.caption && (
+        <p className={cn("whitespace-pre-line leading-[1.45]", scene ? "text-[17px] font-semibold" : "text-[15px]", clamp && "line-clamp-[8]")}>{post.caption}</p>
+      )}
     </div>
   );
+}
+
+/** Whatever a series post carries under its words: Sunday's report card, Wednesday's numbers, Tuesday's / Thursday's card. */
+export function NoteExtras({ post, unit, className }: { post: CommunityPost; unit: "kg" | "lb"; className?: string }) {
+  if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return <SundayRecapCard stats={post.series_data} unit={unit} className={className} />;
+  if (isWinsStats(post.series_data)) return <WinsStatsCard stats={post.series_data} unit={unit} className={className} />;
+  return <SeriesExtraCard post={post} className={className} />;
 }
 
 export function AuthorLine({ author, sub, onOpen, size = 40 }: { author: CommunityAuthor; sub?: string; onOpen?: () => void; size?: number }) {
@@ -272,7 +290,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         {isNote ? (
           <>
             <NoteBody post={post} clamp />
-            {post.series_data && <WinsStatsCard stats={post.series_data} unit={unit} className="mx-4 mb-1 mt-2" />}
+            <NoteExtras post={post} unit={unit} className="mx-4 mb-1 mt-2" />
           </>
         ) : post.media_type ? (
           <PostMedia post={post} thumbUrl={thumbUrl} />

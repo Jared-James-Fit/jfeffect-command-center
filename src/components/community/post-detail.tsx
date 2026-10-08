@@ -4,10 +4,9 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AuthorLine, LockInHero, NoteBody, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote } from "@/components/community/post-card";
+import { AuthorLine, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote } from "@/components/community/post-card";
 import { CommentThread } from "@/components/community/comments-sheet";
 import { PostActions } from "@/components/community/post-actions";
-import { WinsStatsCard } from "@/components/community/wins-stats";
 import { ReactionBurst, useDoubleTap } from "@/components/community/reaction-button";
 import {
   REACTION,
@@ -142,7 +141,7 @@ function Detail({
       {post.kind === "note" ? (
         <>
           <NoteBody post={post} />
-          {post.series_data && <WinsStatsCard stats={post.series_data} unit={unit} className="mx-4 mb-2 mt-2" />}
+          <NoteExtras post={post} unit={unit} className="mx-4 mb-2 mt-2" />
         </>
       ) : post.media_type || s || post.locked_in_at ? (
         <div className="relative select-none" onClick={onHeroTap}>

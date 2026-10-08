@@ -604,7 +604,8 @@ describe("Wednesday Wins reads like the coach wrote it, with the crew's numbers"
     expect(sql).toContain("'series_data', n.series_data,");
     expect(sql).toContain("WHERE a.action = 'signed_in'");
     expect(card).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
-    expect(detail).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
+    // the detail shows the same card through NoteExtras (Wins, Sunday Recap, Tuesday/Thursday cards)
+    expect(detail).toContain("<NoteExtras post={post} unit={unit}");
   });
   const s: WinsStats = {
     week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,
