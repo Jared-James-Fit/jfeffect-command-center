@@ -1,10 +1,11 @@
-import { ChevronLeft } from "lucide-react";
+import { Archive, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { AuthorLine, LockInHero, NoteBody, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote } from "@/components/community/post-card";
 import { CommentThread } from "@/components/community/comments-sheet";
+import { PostActions } from "@/components/community/post-actions";
 import { WinsStatsCard } from "@/components/community/wins-stats";
 import {
   SCOPE_WORD,
@@ -63,7 +64,8 @@ function Body({ postId, unit, viewerIsStaff, onClose, onOpenAuthor }: { postId: 
         <button type="button" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-full hover:bg-muted" aria-label="Back">
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="text-[15px] font-black">Workout</div>
+        <div className="text-[15px] font-black">{post?.kind === "note" ? "Post" : "Workout"}</div>
+        {post && <PostActions post={post} viewerIsStaff={viewerIsStaff} onGone={onClose} className="ml-auto grid h-11 w-11 place-items-center rounded-full text-muted-foreground hover:bg-muted" />}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(env(safe-area-inset-bottom),1rem)]">
@@ -112,6 +114,11 @@ function Detail({
 
   return (
     <div>
+      {post.archived_at && (
+        <div className="mx-4 mt-3 flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-[12px] font-semibold text-muted-foreground">
+          <Archive className="h-4 w-4 shrink-0" /> Archived. Only you can see this. Use ••• to show it on your profile again.
+        </div>
+      )}
       <div className="px-4 py-3">
         <AuthorLine
           author={post.author}

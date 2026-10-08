@@ -267,8 +267,8 @@ export function useDeletePost() {
       if (post.is_mine) await removeCommunityFiles([post.media_path, post.media_thumb_path]);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["community-feed"] });
-      qc.invalidateQueries({ queryKey: ["community-my-post"] });
+      invalidateCommunity(qc);
+      qc.invalidateQueries({ queryKey: ["community-archived"] });
     },
   });
 }
@@ -383,6 +383,52 @@ export function useUpdateNote() {
     onSuccess: (_d, a) => {
       invalidateCommunity(qc);
       qc.invalidateQueries({ queryKey: communityKeys.post(a.postId) });
+    },
+  });
+}
+
+/** The author edits a workout post: caption, who it's for, hide weights. */
+export function useEditPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { postId: string; caption: string; visibility: CommunityVisibility; hideLoads: boolean }) => {
+      const { error } = await db.rpc("community_edit_post", { _post_id: a.postId, _caption: a.caption, _visibility: a.visibility, _hide_loads: a.hideLoads });
+      if (error) throw error;
+    },
+    onSuccess: (_d, a) => {
+      invalidateCommunity(qc);
+      qc.invalidateQueries({ queryKey: communityKeys.post(a.postId) });
+    },
+  });
+}
+
+/** Archive (only you can see it, in Archived) or restore it to who it was for. */
+export function useArchivePost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { postId: string; archive: boolean }) => {
+      const { error } = await db.rpc("community_archive_post", { _post_id: a.postId, _archive: a.archive });
+      if (error) throw error;
+    },
+    onSuccess: (_d, a) => {
+      invalidateCommunity(qc);
+      qc.invalidateQueries({ queryKey: communityKeys.post(a.postId) });
+      qc.invalidateQueries({ queryKey: ["community-archived"] });
+      qc.invalidateQueries({ queryKey: ["community-activity"] });
+    },
+  });
+}
+
+/** Your archived posts, newest archived first. */
+export function useMyArchived(enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-archived"],
+    enabled,
+    staleTime: 15_000,
+    queryFn: async (): Promise<CommunityPost[]> => {
+      const { data, error } = await db.rpc("community_my_archived");
+      if (error) throw error;
+      return (data ?? []) as CommunityPost[];
     },
   });
 }

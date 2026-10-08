@@ -11,8 +11,7 @@ import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { CrewList } from "@/components/community/crew-list";
-import { NoteEditor } from "@/components/community/note-editor";
-import { markCommunitySeen, useCommunityFeed, useDeletePost, usePostMediaUrls, useReact, useUpdateNote, useViewerUnit } from "@/lib/community.queries";
+import { markCommunitySeen, useCommunityFeed, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
 
@@ -53,9 +52,6 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
   const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? posts : []);
-  const del = useDeletePost();
-  const updateNote = useUpdateNote();
-  const [editing, setEditing] = useState<CommunityPost | null>(null);
 
   // Opening the community clears the "new posts" badge (server-side, every device).
   const markedRef = useRef(false);
@@ -169,13 +165,6 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
               onOpen={(post) => setDetailId(post.id)}
               onOpenComments={setCommentsFor}
               onOpenAuthor={openAuthor}
-              onEdit={setEditing}
-              onDelete={(post) =>
-                del.mutate(post, {
-                  onSuccess: () => toast.success("Post removed"),
-                  onError: (e: any) => toast.error(e?.message ?? "Couldn't remove that post"),
-                })
-              }
             />
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
@@ -183,19 +172,6 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
           {!hasNextPage && posts.length > 3 && <p className="py-4 text-center text-[12px] text-muted-foreground">You're all caught up 💪</p>}
         </>
       )}
-
-      <NoteEditor
-        open={!!editing}
-        title="Edit post"
-        initial={editing?.caption ?? ""}
-        quote={editing?.quote ? { text: editing.quote, author: editing.quote_author ?? null } : null}
-        saving={updateNote.isPending}
-        onClose={() => setEditing(null)}
-        onSave={async (body) => {
-          if (editing) await updateNote.mutateAsync({ postId: editing.id, body });
-          toast.success("Post updated");
-        }}
-      />
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} />
       <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} />
     </div>
@@ -211,8 +187,6 @@ function PostRow(props: {
   onOpen: (p: CommunityPost) => void;
   onOpenComments: (p: CommunityPost) => void;
   onOpenAuthor: (a: CommunityAuthor) => void;
-  onDelete: (p: CommunityPost) => void;
-  onEdit?: (p: CommunityPost) => void;
 }) {
   const react = useReact(props.post, props.viewerIsStaff);
   return (
