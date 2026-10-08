@@ -135,7 +135,8 @@ export function LockInBar({
               visibility: existing?.visibility,
               onPost: async (a) => {
                 if (!user?.id) throw new Error("Sign in again to post");
-                const id = completionId ?? (await ensureStarted());
+                // Always through the start path: the row can exist without being started.
+                const id = await ensureStarted();
                 if (!id) throw new Error("Couldn't start your session. Try again.");
                 await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing });
                 toast.success(
