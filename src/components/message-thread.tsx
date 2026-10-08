@@ -804,8 +804,11 @@ export function MessageThread({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
-  // Long-press timer — fires after ~450ms hold without movement.
-  const longPressRef = useRef<{ id: string; t: any; x: number; y: number } | null>(null);
+  // Long-press: the bubble sinks a little while held (so it's clear the hold
+  // registered) and the actions open after ~450ms without movement.
+  const longPressRef = useRef<{
+    id: string; t: any; press: any; x: number; y: number; el: HTMLElement | null; fired: boolean;
+  } | null>(null);
   const suppressClickRef = useRef(false);
   // iMessage-style swipe-left to reveal exact per-message timestamps.
   const [swipeX, setSwipeX] = useState(0);
@@ -1423,19 +1426,38 @@ export function MessageThread({
     !(e.currentTarget as Node).contains(e.target as Node);
 
   // ---------- Long-press + selection helpers ----------
-  const startLongPress = (id: string, x: number, y: number, clip: number | null = null) => {
-    if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
+  const releasePress = (el: HTMLElement | null) => {
+    if (!el) return;
+    el.style.transform = "";
+  };
+  const startLongPress = (
+    id: string, x: number, y: number, clip: number | null = null, el: HTMLElement | null = null,
+  ) => {
+    cancelLongPress();
+    // Direct style change, not state, so a hold never re-renders the whole thread.
+    const press = setTimeout(() => {
+      if (!el) return;
+      el.style.transition = "transform 280ms cubic-bezier(.2,.8,.2,1)";
+      el.style.transform = "scale(0.96)";
+    }, 140);
     const t = setTimeout(() => {
+      const lp = longPressRef.current;
+      if (lp) lp.fired = true;
+      releasePress(el);
+      // The finger is still down: its release must not also tap whatever is under it (e.g. play a video).
       suppressClickRef.current = true;
-      // Haptic feedback when available.
-      try { (navigator as any).vibrate?.(10); } catch {}
+      haptic("medium");
       if (selectionMode) toggleSelected(id);
       else { setSheetClip(clip); setSheetForId(id); }
     }, 450);
-    longPressRef.current = { id, t, x, y };
+    longPressRef.current = { id, t, press, x, y, el, fired: false };
   };
   const cancelLongPress = () => {
-    if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
+    const lp = longPressRef.current;
+    if (!lp) return;
+    clearTimeout(lp.t);
+    clearTimeout(lp.press);
+    releasePress(lp.el);
     longPressRef.current = null;
   };
   const onPointerMoveDuringHold = (e: React.PointerEvent) => {
@@ -1470,6 +1492,8 @@ export function MessageThread({
     const dy = t.clientY - s.y;
     if (!s.decided) {
       if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      // The hold already opened the actions: a drift of the finger isn't a swipe.
+      if (longPressRef.current?.fired) { swipeRef.current = null; return; }
       // Only activate for a clear leftward horizontal drag.
       s.horizontal = dx < -6 && Math.abs(dx) > Math.abs(dy) * 1.4;
       s.decided = true;
@@ -1923,16 +1947,20 @@ export function MessageThread({
                   // never produced a click must not eat this tap (e.g. play).
                   if (!fromPortal(e)) suppressClickRef.current = false;
                   if (isEditing || (isDeleted && !isAdmin) || fromPortal(e)) return;
+                  if (e.pointerType === "mouse" && e.button !== 0) return;
                   const target = e.target as HTMLElement;
-                  // Photos/videos are buttons (tap = open), but holding one opens
-                  // the actions for that clip; the release tap is swallowed below.
+                  // Holding works on every part of a message, the same way: text,
+                  // photos, videos, links, the reply quote. Tapping them still does
+                  // their normal thing; the tap that ends a hold is swallowed below.
+                  // Only fields and native player controls keep the press.
+                  if (target.closest("textarea,input,select,audio,video[controls],[data-clip-reply]")) return;
+                  // Several photos/videos: the actions are about the one that was held.
                   const tile = target.closest<HTMLElement>("[data-media-index]");
-                  if (tile && !target.closest("[data-clip-reply]")) {
-                    startLongPress(m.id, e.clientX, e.clientY, Number(tile.dataset.mediaIndex));
-                    return;
-                  }
-                  if (target.closest("a,button,textarea,input,audio,video")) return;
-                  startLongPress(m.id, e.clientX, e.clientY);
+                  startLongPress(
+                    m.id, e.clientX, e.clientY,
+                    tile ? Number(tile.dataset.mediaIndex) : null,
+                    e.currentTarget as HTMLElement,
+                  );
                 }}
                 onPointerMove={onPointerMoveDuringHold}
                 onPointerUp={cancelLongPress}
@@ -2731,7 +2759,11 @@ export function MessageThread({
       <Sheet open={!!sheetForId} onOpenChange={(o) => { if (!o) { setSheetForId(null); setSheetClip(null); } }}>
         <SheetContent
           side="bottom"
-          className="rounded-t-2xl pb-[calc(max(env(safe-area-inset-bottom),0.75rem))]"
+          hideCloseButton
+          // Don't hand focus back to the composer on close: that popped the keyboard up.
+          // (Reply focuses it on purpose.)
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          className="rounded-t-2xl pb-[calc(max(env(safe-area-inset-bottom),0.75rem))] pt-5"
         >
           {(() => {
             const m = visibleMessages.find((x) => x.id === sheetForId);
@@ -2741,7 +2773,8 @@ export function MessageThread({
             const canReact = !m.deleted_at;
             const canReply = !m.deleted_at && !m.is_internal_note && !m.id.startsWith("optimistic-");
             // Several photos/videos at once: reply to one clip, not the batch.
-            const media = canReply ? mediaAttachments(m) : [];
+            const allMedia = m.deleted_at ? [] : mediaAttachments(m);
+            const media = canReply ? allMedia : [];
             const clipPick = media.length > 1;
             const held = clipPick && sheetClip != null ? media.findIndex((x) => x.index === sheetClip) : -1;
             const nounOf = (a: MessageAttachment) => (a.type === "video" ? "video" : "photo");
@@ -2750,12 +2783,66 @@ export function MessageThread({
               : media.every((x) => x.att.type === "image") ? "photo" : "photo or video";
             return (
               <>
-                <SheetHeader className="text-left">
-                  <SheetTitle>Message actions</SheetTitle>
-                  <SheetDescription className="line-clamp-2">
-                    {m.deleted_at ? "This message was deleted." : m.body || (m.attachments?.length ? "Attachment" : "")}
-                  </SheetDescription>
-                </SheetHeader>
+                {(() => {
+                  // What was held, so it's obvious which message the actions are for.
+                  const heldAt = sheetClip == null ? -1 : allMedia.findIndex((x) => x.index === sheetClip);
+                  const shown = heldAt >= 0 ? allMedia[heldAt] : allMedia[0];
+                  const thumb = shown
+                    ? {
+                        type: shown.att.type as "image" | "video",
+                        path: shown.att.storage_path || undefined,
+                        url: shown.att.storage_path ? undefined : shown.att.url,
+                        posterPath: shown.att.type === "video" ? shown.att.thumbnail_storage_path || undefined : undefined,
+                      }
+                    : null;
+                  const kind = (a: MessageAttachment) => (a.type === "video" ? "Video" : "Photo");
+                  const mediaLabel = !shown
+                    ? null
+                    : allMedia.length > 1
+                      ? heldAt >= 0
+                        ? `${kind(shown.att)} ${heldAt + 1} of ${allMedia.length}`
+                        : allMedia.every((x) => x.att.type === "video")
+                          ? `${allMedia.length} videos`
+                          : allMedia.every((x) => x.att.type === "image")
+                            ? `${allMedia.length} photos`
+                            : `${allMedia.length} photos & videos`
+                      : shown.att.type === "video" && shown.att.duration
+                        ? `Video · ${fmtDuration(shown.att.duration)}`
+                        : kind(shown.att);
+                  const other = m.attachments?.find((a) => a && a.type !== "image" && a.type !== "video");
+                  const text = m.deleted_at
+                    ? "This message was deleted."
+                    : m.body?.trim() || mediaLabel || other?.title || other?.name || "Attachment";
+                  const who = m.sender_role === role
+                    ? "You"
+                    : role === "admin" ? peerName ?? "Client" : "Coach Jared";
+                  return (
+                    <SheetHeader className="min-h-0 space-y-0 pl-0 text-left">
+                      <SheetTitle className="sr-only">Message actions</SheetTitle>
+                      <div className="flex items-center gap-3">
+                        {thumb && (
+                          <ReplyThumb
+                            media={thumb}
+                            signedUrl={thumb.path ? signedUrlMap[thumb.path] : undefined}
+                            posterUrl={thumb.posterPath ? signedUrlMap[thumb.posterPath] : undefined}
+                            className="h-14 w-14 rounded-xl"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-semibold text-muted-foreground">
+                            {who} · {fmtTime(m.created_at)}
+                          </div>
+                          <SheetDescription className="mt-0.5 line-clamp-2 text-sm text-foreground">
+                            {text}
+                          </SheetDescription>
+                          {m.body?.trim() && mediaLabel && (
+                            <div className="mt-0.5 text-xs text-muted-foreground">{mediaLabel}</div>
+                          )}
+                        </div>
+                      </div>
+                    </SheetHeader>
+                  );
+                })()}
                 {canReact && (
                   <div className="mt-3 flex items-center justify-around rounded-full border border-border bg-secondary/40 px-2 py-2">
                     {REACTION_EMOJIS.map((emoji) => {
