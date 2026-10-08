@@ -330,6 +330,8 @@ export function ChatImageAttachment({
           alt={att.name ?? ""}
           loading="lazy"
           decoding="async"
+          // Holding a photo opens its reply actions; don't let iOS lift it into a drag instead.
+          draggable={false}
           className={cn(
             "absolute inset-0 h-full w-full object-cover transition-opacity",
             loaded ? "opacity-100" : "opacity-0",
