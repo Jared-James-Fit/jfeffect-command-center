@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Camera, Lock, Pencil, Play } from "lucide-react";
+import { Archive, Camera, Lock, Pencil, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge, LockInHero, WorkoutHero } from "@/components/community/post-card";
 import { BIO_MAX, SERIES_LABEL, trainingSinceLabel, type CommunityPost } from "@/lib/community";
-import { useCommunityFeed, useCommunityProfile, usePostMediaUrls, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
+import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
 
 /**
  * A person's corner of the community: photo, name, a short bio and a grid of
@@ -18,7 +18,11 @@ import { useCommunityFeed, useCommunityProfile, usePostMediaUrls, useSetBio, use
 export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit: "kg" | "lb"; onOpenPost: (post: CommunityPost) => void }) {
   const { data: profile, isLoading } = useCommunityProfile(userId);
   const feed = useCommunityFeed(userId);
-  const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
+  const shown = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
+  // Your own profile: Posts | Archived (Instagram-style, only you see Archived)
+  const [showArchived, setShowArchived] = useState(false);
+  const archivedQ = useMyArchived(showArchived);
+  const posts = showArchived ? archivedQ.data ?? [] : shown;
   const { data: urls } = usePostMediaUrls(posts);
   const [editing, setEditing] = useState(false);
   const [bio, setBio] = useState("");
@@ -134,6 +138,27 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
         ) : null}
       </div>
 
+      {profile.is_me && ((profile.archived ?? 0) > 0 || showArchived) && (
+        <div className="mt-4 flex items-center gap-1.5" role="tablist" aria-label="Your posts">
+          {([[false, "Posts"], [true, `Archived${profile.archived ? ` · ${profile.archived}` : ""}`]] as const).map(([arch, label]) => (
+            <button
+              key={label}
+              type="button"
+              role="tab"
+              aria-selected={showArchived === arch}
+              onClick={() => setShowArchived(arch)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold",
+                showArchived === arch ? "bg-foreground text-background" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {arch && <Archive className="h-3.5 w-3.5" />} {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {showArchived && <p className="mt-2 text-[11px] text-muted-foreground">Only you can see these. Open one and use ••• to show it on your profile again.</p>}
+
       <div className="mt-4 grid grid-cols-3 gap-1 overflow-hidden rounded-2xl">
         {posts.map((p) => {
           const thumb = urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null;
@@ -159,12 +184,12 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
           );
         })}
       </div>
-      {posts.length === 0 && !feed.isLoading && (
+      {posts.length === 0 && !(showArchived ? archivedQ.isLoading : feed.isLoading) && (
         <div className="mt-2 rounded-2xl border border-dashed border-border px-6 py-10 text-center text-[13px] text-muted-foreground">
-          {profile.is_me ? "Lock in at your next session, or share a finished workout. It shows up here." : "Nothing shared yet."}
+          {showArchived ? "Nothing archived." : profile.is_me ? "Lock in at your next session, or share a finished workout. It shows up here." : "Nothing shared yet."}
         </div>
       )}
-      {feed.hasNextPage && (
+      {!showArchived && feed.hasNextPage && (
         <Button type="button" variant="ghost" className="mt-2 w-full" disabled={feed.isFetchingNextPage} onClick={() => void feed.fetchNextPage()}>
           {feed.isFetchingNextPage ? "Loading…" : "Show more"}
         </Button>

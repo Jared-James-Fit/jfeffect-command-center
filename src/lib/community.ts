@@ -125,6 +125,10 @@ export type CommunityPost = {
   stats: WorkoutShareStats | null;
   reactions: Partial<Record<ReactionKey, number>>;
   my_reaction: ReactionKey | null;
+  /** Set while the author has it archived (only they can see it, in Archived). */
+  archived_at?: string | null;
+  /** Who an archived post goes back to when restored. */
+  archived_from?: CommunityVisibility | null;
   /** Everyone who reacted (any key). Missing on older cached posts. */
   reaction_count?: number;
   /** The first few people who gave it 🔥: coaches first, then newest. */
@@ -175,6 +179,8 @@ export type CommunityProfile = {
   bio: string | null;
   is_me: boolean;
   posts: number;
+  /** Your own profile only: how many posts you have archived. */
+  archived?: number | null;
   training_since: string | null;
 };
 

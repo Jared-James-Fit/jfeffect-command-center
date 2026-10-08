@@ -778,3 +778,35 @@ describe("Wednesday Wins stays short and still reaches everyone each month", () 
     expect(sql).toContain("' of you got after it last week. proud of this crew 🔥'");
   });
 });
+
+describe("Instagram-style post controls: edit, archive, delete", () => {
+  const sql = read("supabase/migrations/20261009090000_community_edit_archive.sql");
+  const actions = read("src/components/community/post-actions.tsx");
+  const card = read("src/components/community/post-card.tsx");
+  const detail = read("src/components/community/post-detail.tsx");
+  const profile = read("src/components/community/profile-view.tsx");
+  it("only the author (either linked account) can edit or archive", () => {
+    expect(sql).toContain("p.author_user_id = auth.uid() OR p.author_user_id = public.community_main_account(auth.uid())");
+    expect(sql).toMatch(/community_edit_post[\s\S]*IF NOT public\.community_is_post_author\(_post_id\)/);
+    expect(sql).toMatch(/community_archive_post[\s\S]*IF NOT public\.community_is_post_author\(_post_id\)/);
+  });
+  it("a caption change shows Edited, from the edit sheet and the share editor", () => {
+    expect(sql).toContain("edited_at = CASE WHEN p.caption IS DISTINCT FROM v_cap THEN now() ELSE edited_at END");
+    expect(sql).toContain("edited_at = CASE WHEN p.caption IS DISTINCT FROM EXCLUDED.caption THEN now() ELSE p.edited_at END");
+  });
+  it("archive hides it from everyone (and your feed), keeps fire and comments, restores to who it was for", () => {
+    expect(sql).toContain("SET archived_from = visibility, visibility = 'private', archived_at = now()");
+    expect(sql).toContain("SET visibility = coalesce(archived_from, 'community'), archived_from = NULL, archived_at = NULL");
+    expect(sql).toContain("       AND p.archived_at IS NULL\n       AND (_author_user_id IS NULL");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.community_my_archived()");
+    // sharing the same workout again brings it back
+    expect(sql).toContain("    archived_at = NULL,\n    archived_from = NULL,\n    updated_at = now()");
+  });
+  it("the same menu lives on the feed card and the post detail, with Archived on your profile", () => {
+    expect(card).toContain("<PostActions post={post} viewerIsStaff={viewerIsStaff} />");
+    expect(detail).toContain("<PostActions post={post} viewerIsStaff={viewerIsStaff} onGone={onClose}");
+    expect(actions).toContain('{archived ? "Show on profile" : "Archive"}');
+    expect(actions).toContain("Archive instead");
+    expect(profile).toContain("useMyArchived(showArchived)");
+  });
+});

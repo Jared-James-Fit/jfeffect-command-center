@@ -1,8 +1,6 @@
 import { memo, useRef, useState } from "react";
-import { BadgeCheck, Lock, MessageCircle, MoreHorizontal, Pencil, Play, Trash2 } from "lucide-react";
+import { BadgeCheck, Lock, MessageCircle, Play } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
   REACTION,
@@ -26,6 +24,7 @@ import {
 import { useFullMediaUrl } from "@/lib/community.queries";
 import { WinsStatsCard } from "@/components/community/wins-stats";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
+import { PostActions } from "@/components/community/post-actions";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -215,22 +214,16 @@ type Props = {
   onOpenComments: (post: CommunityPost) => void;
   onOpenAuthor?: (author: CommunityAuthor) => void;
   onReact: (post: CommunityPost, next: ReactionKey | null) => void;
-  onDelete: (post: CommunityPost) => void;
-  /** Notes only: edit the text (author or staff). */
-  onEdit?: (post: CommunityPost) => void;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, onDelete, onEdit }: Props) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
   const singleTimer = useRef<number | null>(null);
   const s = post.stats;
   const lift = s ? featuredLift(s) : null;
   const stats = s ? pickCardStats(s, unit) : [];
-  const canDelete = post.is_mine || viewerIsStaff;
   const isNote = post.kind === "note";
-  const canEdit = isNote && !!onEdit && canDelete;
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
   const sub = [postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
 
@@ -258,26 +251,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         <AuthorLine author={post.author} sub={sub} onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined} />
         <div className="flex shrink-0 items-center gap-1">
           {post.visibility !== "community" && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : "Only visible to you"} />}
-          {canDelete && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted" aria-label="Post options">
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canEdit && (
-                  <DropdownMenuItem onSelect={() => onEdit!(post)}>
-                    <Pencil className="mr-2 h-4 w-4" /> Edit post
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setConfirmDelete(true)}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {post.is_mine ? "Delete post" : "Remove post"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <PostActions post={post} viewerIsStaff={viewerIsStaff} />
         </div>
       </header>
 
@@ -360,23 +334,6 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       )}
 
       <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} />
-
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{post.is_mine ? "Delete this post?" : "Remove this post?"}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {post.is_mine
-                ? isNote ? "It disappears from the community and your profile." : "It disappears from the community. Your workout itself isn't touched."
-                : isNote ? "It disappears from the community for everyone." : "It disappears from the community for everyone. The athlete's workout isn't touched."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep</AlertDialogCancel>
-            <AlertDialogAction onClick={() => onDelete(post)}>{post.is_mine ? "Delete" : "Remove"}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </article>
   );
 }
