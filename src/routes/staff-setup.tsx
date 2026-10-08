@@ -33,7 +33,7 @@ function StaffSetupPage() {
     <div className="min-h-screen grid place-items-center bg-background p-4">
       <Card className="w-full max-w-md p-6 space-y-4">
         <h1 className="text-xl font-black">Set up your account</h1>
-        <p className="text-sm text-muted-foreground">Create a password to activate your JF Effect staff account.</p>
+        <p className="text-sm text-muted-foreground">Create a password to activate your JF Effect team account. This is a separate login from any client account you have.</p>
         {!token && <p className="text-sm text-destructive">Missing or invalid setup link.</p>}
         {token && (
           <>

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import { markRead } from "@/lib/messages";
 import { markClientViewed, markAdminViewed } from "@/lib/lift-videos";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -50,6 +51,11 @@ export type BellItem = {
   videoId?: string;
   agreementId?: string;
   noteId?: string;
+  /** exercise_note: the workout day and exercise row the note was left on. */
+  dayId?: string;
+  rowId?: string | null;
+  /** exercise_note: the client's auth user id, needed to open their workout in Client POV. */
+  clientUserId?: string | null;
   reviewId?: string;
   appointmentId?: string;
   meetLink?: string | null;
@@ -267,14 +273,15 @@ export function useNotificationFeed() {
             .order("updated_at", { ascending: false })
             .limit(20),
           (supabase.from("pl_exercise_notes") as any)
-            .select("id, client_id, day_id, exercise_name, content, status, created_at, updated_at, coach_seen_at")
+            .select("id, client_id, day_id, row_id, exercise_name, content, status, created_at, updated_at, coach_seen_at")
             .is("coach_seen_at", null)
             .order("updated_at", { ascending: false })
             .limit(30),
         ]);
         const stateMap = new Map<string, ConversationState>((states ?? []).map((s: any) => [s.client_id, s]));
-        const { data: clients } = await supabase.from("clients").select("id, full_name");
+        const { data: clients } = await supabase.from("clients").select("id, full_name, user_id");
         const cMap = new Map((clients ?? []).map((c) => [c.id, c.full_name]));
+        const userIdMap = new Map((clients ?? []).map((c: any) => [c.id, c.user_id as string | null]));
         const seen = new Set<string>();
         for (const m of (msgs ?? []) as Message[]) {
           if (seen.has(m.client_id)) continue;
@@ -330,6 +337,7 @@ export function useNotificationFeed() {
           raw.push({
             id: makeId("exercise_note", n.id),
             kind: "exercise_note", sourceId: n.id, clientId: n.client_id, noteId: n.id, name,
+            dayId: n.day_id, rowId: n.row_id ?? null, clientUserId: userIdMap.get(n.client_id) ?? null,
             title: `${name} ${verb} ${n.exercise_name}`,
             body: n.content, created_at: n.updated_at,
           });
@@ -753,6 +761,7 @@ export function NotificationPanel({
 }) {
   const { query, role, user, qc, items } = useNotificationFeed();
   const navigate = useNavigate();
+  const impersonation = useClientImpersonation();
   const [view, setView] = useState<View>(() => initialNotificationView(fullPage));
   const [archiveAllOpen, setArchiveAllOpen] = useState(false);
   const [clearReadOpen, setClearReadOpen] = useState(false);
@@ -956,11 +965,28 @@ export function NotificationPanel({
         // should only be marked viewed when the user actually opens that item.
         void markSourceRead(it, role);
       }
+      // A client's exercise note: open that workout, scrolled to the exercise,
+      // the same way the coach's workout history does (Client POV).
+      if (it.kind === "exercise_note" && role === "admin" && it.dayId && it.clientUserId) {
+        impersonation.start(
+          { id: it.clientId, user_id: it.clientUserId, full_name: it.name },
+          typeof window !== "undefined" ? window.location.pathname + window.location.search : null,
+        );
+        try {
+          navigate({
+            to: "/portal/workouts/$dayId",
+            params: { dayId: it.dayId },
+            search: it.rowId ? { focus: it.rowId } : {},
+          } as any);
+        } catch { /* ignore */ }
+        onNavigate?.();
+        return;
+      }
       const dest = destinationFor(it, role);
       try { navigate(dest as any); } catch { /* ignore */ }
       onNavigate?.();
     },
-    [markReadMut, navigate, onNavigate, role],
+    [markReadMut, navigate, onNavigate, role, impersonation],
   );
 
   const readCount = items.filter((i) => i.isRead && !i.isArchived).length;

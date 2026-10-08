@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, Apple, DollarSign, LayoutDashboard, IdCard, Target, Phone, Calendar } from "lucide-react";
+import { ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, DollarSign, LayoutDashboard, IdCard, Target, Phone, Calendar } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
@@ -86,6 +86,7 @@ const LiftVideosPanel = lazyDefault(() => import("@/components/lift-videos-panel
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
+const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-file-notes"), "ClientFileNotes");
 const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-exercise-notes-card"), "ClientExerciseNotesCard");
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
@@ -503,26 +504,15 @@ export function ClientProfileWorkspace({
         subtitle={form.coaching_type ?? "Coaching client"}
         actions={
           <>
-            <Link to="/admin/clients"><Button variant="ghost" size="sm"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button></Link>
+            {/* Back lives in the page header; Nutrition and Training are the tabs
+                below; Save appears in the sticky bar as soon as something changes.
+                The header keeps only what you reach for from anywhere on the page. */}
             <Button
               variant="outline"
               size="sm"
               onClick={openMessages}
             >
               <MessageSquare className="mr-2 h-4 w-4" />Message
-            </Button>
-            <Link to="/admin/client-programs/$clientId" params={{ clientId: id }}>
-              <Button variant="outline" size="sm"><Dumbbell className="mr-2 h-4 w-4" />Training Program</Button>
-            </Link>
-            <Link to="/admin/client-programs/$clientId/history" params={{ clientId: id }}>
-              <Button variant="outline" size="sm"><Calendar className="mr-2 h-4 w-4" />Program History</Button>
-            </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setTab("nutrition")}
-            >
-              <Apple className="mr-2 h-4 w-4" />Nutrition
             </Button>
             {canPov && (
               <Button
@@ -545,9 +535,17 @@ export function ClientProfileWorkspace({
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm"><MoreHorizontal className="mr-2 h-4 w-4" />More Actions</Button>
+                <Button variant="outline" size="sm" aria-label="More actions"><MoreHorizontal className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">More</span></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>Training</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId", params: { clientId: id } })}>
+                  <Dumbbell className="mr-2 h-4 w-4" />Training program
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId/history", params: { clientId: id } })}>
+                  <Calendar className="mr-2 h-4 w-4" />Program history
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
                 <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
@@ -570,7 +568,6 @@ export function ClientProfileWorkspace({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={save}><Save className="mr-2 h-4 w-4" />Save</Button>
           </>
         }
       />}
@@ -930,6 +927,9 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         <TabsContent value="notes" className={WORKSPACE_GRID_CLASS}>
+          <Suspense fallback={<TabFallback />}>
+            <ClientFileNotes clientId={id} className="md:col-span-3" />
+          </Suspense>
           <Card className="border-border bg-card p-6 md:col-span-2 space-y-3">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Coaching Notes</h3>
             <div><Label>Goals</Label><Textarea rows={2} value={form.goals ?? ""} onChange={(e) => set("goals", e.target.value)} /></div>
