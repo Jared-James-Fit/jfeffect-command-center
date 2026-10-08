@@ -89,6 +89,12 @@ describe("resolveLifecycle — grace-window contract", () => {
     expect(r.subscription_ended).toBe(true);
   });
 
+  it("canceled with cancel_at_period_end and time left on the period is still Cancelled (immediate cancel)", () => {
+    const r = resolveLifecycle({ member: {}, sub: sub("canceled", { cancel_at_period_end: true }), holdPriceId: null, graceDays: 5, now: t0 });
+    expect(r.status).toBe("Cancelled");
+    expect(r.grants_access).toBe(false);
+  });
+
   it("no sub + member previously cancelled stays Expired (does not silently re-grant access)", () => {
     const r = resolveLifecycle({
       member: { subscription_ended_at: t0.toISOString(), subscription_status: "Cancelled" },
