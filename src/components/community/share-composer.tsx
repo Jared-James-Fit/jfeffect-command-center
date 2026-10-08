@@ -36,6 +36,8 @@ type Props = {
   athleteName?: string | null;
   workoutTitle?: string | null;
   unit: "kg" | "lb";
+  /** A photo already taken in the camera step: lands on the Photo card. */
+  initialFile?: File | null;
 };
 
 const firstName = (full?: string | null) => (full ?? "").trim().split(/\s+/)[0] || null;
@@ -52,7 +54,7 @@ const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134a
  * independent: nothing leaves the phone until a button is tapped. Every
  * number comes from the canonical completion via RPC.
  */
-export function ShareComposer({ open, onOpenChange, completionId, athleteName, workoutTitle, unit }: Props) {
+export function ShareComposer({ open, onOpenChange, completionId, athleteName, workoutTitle, unit, initialFile }: Props) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -220,6 +222,33 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
     });
   };
 
+  // The camera step's photo: attach it once, then show the Photo card.
+  const usedInitial = useRef<File | null>(null);
+  const jumpToPhoto = useRef(false);
+  useEffect(() => {
+    if (!open || !initialFile || usedInitial.current === initialFile) return;
+    usedInitial.current = initialFile;
+    void pickMedia(initialFile).then((res) => {
+      if (!res.ok) return void toast.error(res.reason);
+      setMedia((prev) => {
+        releasePicked(prev);
+        return res.media;
+      });
+      setRemovedExisting(false);
+      jumpToPhoto.current = true;
+    });
+  }, [open, initialFile]);
+  useEffect(() => {
+    if (!open) usedInitial.current = null;
+  }, [open]);
+  useEffect(() => {
+    if (!jumpToPhoto.current || !railRef.current) return;
+    const i = templates.indexOf("photo");
+    if (i < 0) return;
+    jumpToPhoto.current = false;
+    requestAnimationFrame(() => goTo(i, false));
+  });
+
   const removeMedia = () => {
     setMedia((m) => {
       releasePicked(m);
@@ -337,7 +366,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="fixed inset-0 left-0 top-0 flex h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none focus:outline-none focus-visible:outline-none [&>button]:hidden"
+        className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none focus:outline-none focus-visible:outline-none [&>button]:hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">Share workout</DialogTitle>

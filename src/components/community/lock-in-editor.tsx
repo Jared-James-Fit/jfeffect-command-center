@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { CAPTION_MAX, LOCK_IN_CAPTIONS, lockInTimeLabel, type CommunityVisibility } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, type MyPostRow, type SavePostInput } from "@/lib/community.queries";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
-import { canvasToBlob, drawWorkoutShareCard, shareCardImage, type ShareCardData } from "@/lib/workout-share-card";
+import { TEMPLATE_LABEL, canvasToBlob, drawWorkoutShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
 import { InstagramGlyph } from "@/components/community/glyphs";
 import { AudiencePicker } from "@/components/community/audience-picker";
 import type { LockInPick } from "@/components/community/lock-in";
@@ -30,14 +30,20 @@ type Props = {
   pick: LockInPick | null;
   onCamera: () => void;
   onLibrary: () => void;
+  /** Today's exercises ("4 × 5"), for the Today's plan card. */
+  plan?: { name: string; detail: string }[];
 };
+
+type LockTemplate = Extract<ShareTemplate, "lockin" | "lockclock" | "lockplan">;
 
 /**
  * The lock-in editor: the LOCKED IN card with their photo, a one-tap caption,
  * then Post (JF community) and/or Share (Instagram story). Posting starts the
  * session if it hasn't been; sharing out never posts, posting never shares.
  */
-export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, workoutTitle, athleteName, existing, pick, onCamera, onLibrary }: Props) {
+export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, workoutTitle, athleteName, existing, pick, onCamera, onLibrary, plan = [] }: Props) {
+  const [template, setTemplate] = useState<LockTemplate>("lockin");
+  const templates: LockTemplate[] = plan.length ? ["lockin", "lockclock", "lockplan"] : ["lockin", "lockclock"];
   const { user } = useAuth();
   const qc = useQueryClient();
   const [media, setMedia] = useState<PickedMedia | null>(null);
@@ -112,20 +118,20 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
   const card = useMemo<ShareCardData>(
     () => ({
       format: "story",
-      template: "lockin",
+      template,
       athleteName: firstName(athleteName),
       workoutTitle: workoutTitle || "Workout",
       dateLabel: format(existing?.locked_in_at ? new Date(existing.locked_in_at) : openedAt, "EEE, MMM d"),
       lift: null,
       stats: [],
       isPr: false,
-      exercises: [],
+      exercises: plan.map((p) => ({ name: p.name, detail: p.detail, pr: false })),
       volume: null,
       sessionLine: null,
       media: drawable,
       lockedIn: { time, live: live && !!media },
     }),
-    [athleteName, workoutTitle, existing?.locked_in_at, openedAt, drawable, time, live, media],
+    [athleteName, workoutTitle, existing?.locked_in_at, openedAt, drawable, time, live, media, template, plan],
   );
 
   useEffect(() => {
@@ -202,7 +208,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="fixed inset-0 left-0 top-0 flex h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none focus:outline-none focus-visible:outline-none [&>button]:hidden"
+        className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none focus:outline-none focus-visible:outline-none [&>button]:hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">Lock in</DialogTitle>
@@ -248,6 +254,21 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
               )}
             </div>
           </div>
+        </div>
+
+        {/* Which card: Locked in · Clock · Today's plan */}
+        <div className="flex shrink-0 justify-center gap-1.5 px-4 pt-2" role="group" aria-label="Card style">
+          {templates.map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={template === t}
+              onClick={() => setTemplate(t)}
+              className={cn("h-8 rounded-full px-3.5 text-[12px] font-black transition-colors", template === t ? "bg-white text-black" : "bg-white/10 text-white/75")}
+            >
+              {TEMPLATE_LABEL[t]}
+            </button>
+          ))}
         </div>
 
         {/* Caption: one tap, or type your own */}

@@ -521,3 +521,25 @@ export function winsChallenge(s: WinsStats): string {
   if (s.sessions_rank === 1 && (s.weeks_tracked ?? 0) >= 6) return "Most workouts the crew has ever done in a week. Run it back";
   return `This week's goal: beat ${s.sessions} workouts`;
 }
+
+/* ---- Lock in: today's plan on the card ---------------------------------- */
+
+export type PlanRow = { sets: number | null; reps_text: string | null; duration_seconds: number | null; name: string };
+
+function fmtSeconds(s: number): string {
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r ? `${m}:${String(r).padStart(2, "0")}` : `${m} min`;
+}
+
+/** "4 × 5" · "3 × 8-10" · "3 × 45s" · "AMRAP" — how the plan reads on a card. */
+export function planDetail(r: Pick<PlanRow, "sets" | "reps_text" | "duration_seconds">): string {
+  const reps = r.reps_text?.trim() || null;
+  const sets = r.sets && r.sets > 0 ? r.sets : null;
+  if (sets && reps) return `${sets} × ${reps}`;
+  if (sets && r.duration_seconds) return `${sets} × ${fmtSeconds(r.duration_seconds)}`;
+  if (reps) return reps;
+  if (r.duration_seconds) return fmtSeconds(r.duration_seconds);
+  return sets ? `${sets} sets` : "";
+}
