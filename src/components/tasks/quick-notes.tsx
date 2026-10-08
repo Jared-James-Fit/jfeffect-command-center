@@ -711,6 +711,7 @@ export function QuickNotesPanel({
       )}
 
       {/* Compose — floats bottom-right above the mobile nav, like Apple Notes. */}
+      {mounted && !openNote && !selectMode && !hideComposeButton && <PageFabFlag />}
       {mounted && !openNote && !selectMode && !hideComposeButton && createPortal(
         <button
           type="button"
@@ -1007,4 +1008,15 @@ function NoteEditor({
     </div>,
     document.body,
   );
+}
+
+/** Tells other floating buttons (Summer) that this page has its own, so they move up. */
+function PageFabFlag() {
+  useEffect(() => {
+    document.documentElement.dataset.pageFab = "1";
+    return () => {
+      delete document.documentElement.dataset.pageFab;
+    };
+  }, []);
+  return null;
 }

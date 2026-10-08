@@ -7,6 +7,7 @@ import { buildInternalNav, buildInternalNavCollapsed, buildMembershipAdminNav, r
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
+import { SummerAssistant } from "@/components/summer/summer-assistant";
 import { ClipboardList, LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
@@ -141,6 +142,7 @@ function AdminLayout() {
       <AdminTopBar showDashboardMode={!isCoach} />
       <Outlet />
       <TaskPopupGate />
+      {role === "admin" && <SummerAssistant />}
     </AppShell>
   );
 }

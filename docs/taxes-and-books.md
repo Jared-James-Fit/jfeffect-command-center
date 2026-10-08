@@ -58,3 +58,38 @@ placed after the facts rules and can't override them.
 (`src/lib/summer-context.ts`) and sends it with the last 16 messages. Summer
 reads; she cannot write. Messages are saved per admin in `summer_messages`
 only after a reply comes back.
+
+## Summer as the admin assistant
+
+She is available on every admin page, admin role only (`SummerAssistant`,
+mounted in the admin layout):
+
+- Floating button: tap to open or close her chat, press and hold to start a
+  voice call. It sits above the mobile tab bar, moves up when a page has its
+  own floating button (`html[data-page-fab]`), and hides on chat screens so
+  it never covers the composer. There she is pinned at the top of the
+  Messages inbox instead (row plus a call button).
+- Top bar "Summer" button and ⌘/Ctrl+Shift+S.
+- Other screens open her with `openSummer({ year?, call? })`
+  (`window` events `summer:open`, `summer:toggle`, `summer:close`).
+
+What she sees (read-only, `src/lib/summer.server.ts` + `src/lib/summer-app.ts`):
+the books plus clients (with ids), the next 14 days of calendar, check-ins
+waiting, unread client messages, latest applications, open tasks and open
+support alerts, the page the owner is on, and the admin pages she can link.
+Links are markdown `[label](/admin/...)`; the chat only opens `/admin` paths
+(and https in a new tab), so a made-up or unsafe link is shown as plain text.
+
+Voice:
+- Talking: the browser records (`useSummerMic`), stops by itself after a
+  pause, and `askSummerVoice` transcribes through the AI gateway and answers
+  in voice mode (short spoken answers). In a call she listens again after
+  each answer; two silent turns end the call.
+- Her voice: `summerSpeech` tries text-to-speech providers in order
+  (gateway `openai/gpt-4o-mini-tts`, gateway Gemini TTS, then `OPENAI_API_KEY`
+  if set) with a French-accented English style. If none answers, the
+  browser speaks with a device English voice. Voice, auto-play and speed are
+  per device (Customize Summer).
+- Health check: `POST /api/public/hooks/summer-voice-check` with
+  `x-hook-secret` reports which provider works.
+
