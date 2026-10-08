@@ -170,7 +170,8 @@ export function GroupMessageThread({
   });
   const messages = Array.isArray(rawMessages) ? rawMessages : [];
   const reactions = Array.isArray(rawReactions) ? rawReactions : [];
-  const members = Array.isArray(rawMembers) ? rawMembers : [];
+  // Invitees haven't joined yet: they aren't "not seen" (and their read time is private anyway).
+  const members = (Array.isArray(rawMembers) ? rawMembers : []).filter((m: any) => m.status !== "invited");
   const memberProfiles = Array.isArray(rawMemberProfiles) ? rawMemberProfiles : [];
 
   const { data: chatSettings } = useQuery({

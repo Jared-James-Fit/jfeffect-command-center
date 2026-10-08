@@ -460,7 +460,7 @@ function AdminDashboard() {
         <DriveSetupBanner />
         <NotificationSetupPrompt problemsOnly />
 
-        {/* ---------------- BIRTHDAY POSTS: drafts to review (only when there are some) ---------------- */}
+        {/* ---------------- BIRTHDAY POSTS: drafts to review, and who's next ---------------- */}
         <SectionErrorBoundary label="Birthday posts">
           <BirthdayPostsCard />
         </SectionErrorBoundary>
