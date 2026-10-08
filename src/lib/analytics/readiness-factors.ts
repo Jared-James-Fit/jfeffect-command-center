@@ -113,7 +113,7 @@ function buildSleep(samples: SleepSample[]): FactorDetail {
     };
   }
   const map: Record<SleepBucket, number> = {
-    lt5: 20, "5_6": 45, "6_7": 65, "7_8": 90, "8_9": 95, gte9: 82, gte7: 90,
+    lt5: 20, "5_6": 45, "6_7": 65, "7_8": 90, "8_9": 95, gte9: 82, gte7: 90, gte8: 95,
   };
   const score = map[latest.bucket];
   const last7 = samples.slice(-7).map((s) => sleepBucketHours(s.bucket) ?? 0);
@@ -698,7 +698,8 @@ export function buildPersonalInsights(
   }
   if (sleepSamples.length >= 6) {
     const sweet = sleepSamples.filter(
-      (s) => s.bucket === "7_8" || s.bucket === "8_9" || s.bucket === "gte7",
+      (s) =>
+        s.bucket === "7_8" || s.bucket === "8_9" || s.bucket === "gte7" || s.bucket === "gte8",
     ).length;
     const pct = Math.round((sweet / sleepSamples.length) * 100);
     if (pct >= 60) out.push("🏆 Your best sessions usually occur after 7+ hours of sleep.");
