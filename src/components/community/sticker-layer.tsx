@@ -68,21 +68,76 @@ function readable(bg: string) {
   return bg === "#ffffff" || bg === "#facc15" || bg === "#22c55e" ? "#0a0a0a" : "#ffffff";
 }
 
-/** Text in one of the styles, rendered to a bitmap. */
-export function renderText(text: string, style: number, color: string): Bitmap {
-  const lines = (text.trim() || " ").split(/\n/).slice(0, 6);
+/** Longest text a text item takes (it wraps, so long notes are fine). */
+export const TEXT_MAX = 400;
+/** Text wraps at this width on the 1080px card, in the editor and on the card alike. */
+const WRAP = 900;
+
+/**
+ * One set of metrics (card px) for each text style, used by both the canvas
+ * bitmap and the live editor, so what you type is exactly what lands on the
+ * card: same font, size, line height, padding and wrapping.
+ */
+export function textMetrics(style: number) {
   const display = style === 2;
-  const size = (display ? 104 : 68) * PX;
+  return {
+    display,
+    size: display ? 104 : 68,
+    lineH: display ? 1.0 : 1.18,
+    padX: style === 1 ? 34 : 18,
+    padY: style === 1 ? 20 : 14,
+    radius: 26,
+    family: display ? DISPLAY : SANS,
+    weight: display ? 400 : 800,
+  };
+}
+
+/** Word-wrap like the browser does: on spaces, breaking words longer than a line. */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, max: number): string[] {
+  const out: string[] = [];
+  for (const para of text.split(/\n/)) {
+    if (!para) {
+      out.push("");
+      continue;
+    }
+    let line = "";
+    for (const word of para.split(/ +/)) {
+      const tryLine = line ? `${line} ${word}` : word;
+      if (ctx.measureText(tryLine).width <= max) {
+        line = tryLine;
+        continue;
+      }
+      if (line) out.push(line);
+      // a single word wider than the line: break it by characters
+      let w = word;
+      while (ctx.measureText(w).width > max && w.length > 1) {
+        let n = w.length - 1;
+        while (n > 1 && ctx.measureText(w.slice(0, n)).width > max) n--;
+        out.push(w.slice(0, n));
+        w = w.slice(n);
+      }
+      line = w;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+/** Text in one of the styles, rendered to a bitmap (2x), wrapped like the editor. */
+export function renderText(text: string, style: number, color: string): Bitmap {
+  const m = textMetrics(style);
+  const size = m.size * PX;
   const c = document.createElement("canvas");
   const ctx = c.getContext("2d")!;
-  const f = display ? `400 ${size}px ${DISPLAY}` : `800 ${size}px ${SANS}`;
+  const f = `${m.weight} ${size}px ${m.family}`;
   ctx.font = f;
-  const shown = display ? lines.map((l) => l.toUpperCase()) : lines;
-  const lineH = size * (display ? 1.0 : 1.18);
-  const padX = (style === 1 ? 34 : 18) * PX;
-  const padY = (style === 1 ? 20 : 14) * PX;
-  const w = Math.ceil(Math.max(...shown.map((l) => ctx.measureText(l).width)) + padX * 2);
-  const h = Math.ceil(lineH * shown.length + padY * 2);
+  const raw = (text.replace(/\s+$/g, "") || " ").slice(0, TEXT_MAX);
+  const lines = wrapText(ctx, m.display ? raw.toUpperCase() : raw, WRAP * PX).slice(0, 40);
+  const lineH = size * m.lineH;
+  const padX = m.padX * PX;
+  const padY = m.padY * PX;
+  const w = Math.ceil(Math.max(...lines.map((l) => ctx.measureText(l).width)) + padX * 2);
+  const h = Math.ceil(lineH * lines.length + padY * 2);
   c.width = Math.max(w, 2);
   c.height = Math.max(h, 2);
   ctx.font = f;
@@ -90,10 +145,10 @@ export function renderText(text: string, style: number, color: string): Bitmap {
   ctx.textBaseline = "middle";
   if (style === 1) {
     ctx.fillStyle = color;
-    roundRect(ctx, 0, 0, c.width, c.height, 26 * PX);
+    roundRect(ctx, 0, 0, c.width, c.height, m.radius * PX);
     ctx.fill();
   }
-  shown.forEach((l, i) => {
+  lines.forEach((l, i) => {
     const y = padY + lineH * (i + 0.5);
     if (style === 3) {
       ctx.lineJoin = "round";
@@ -444,7 +499,6 @@ export function StickerLayer({
     }
   };
 
-  const fieldText = editing?.style === 2 ? "font-display text-[44px] uppercase leading-none" : "text-[30px] font-extrabold leading-tight";
   const k = width / REF;
 
   return (
@@ -481,6 +535,9 @@ export function StickerLayer({
           <div className="flex items-center justify-between px-3">
             <button
               type="button"
+              // keep the keyboard up: don't take focus from the text
+              onPointerDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => setEditing({ ...editing, style: (editing.style + 1) % TEXT_STYLES.length })}
               className="h-10 rounded-full bg-white/15 px-4 text-[13px] font-black"
               aria-label="Text style"
@@ -491,33 +548,48 @@ export function StickerLayer({
               <Check className="h-4 w-4" /> Done
             </button>
           </div>
-          <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-            <div
-              className={cn("inline-grid max-w-full", editing.style === 1 && "rounded-2xl px-4 py-2")}
-              style={editing.style === 1 ? { background: editing.color, color: readable(editing.color) } : { color: editing.color, WebkitTextStroke: editing.style === 3 ? "1.5px #000" : undefined }}
-            >
-              <span aria-hidden className={cn("invisible col-start-1 row-start-1 whitespace-pre-wrap break-words text-center", fieldText)}>
-                {(editing.text || "Type something") + " "}
-              </span>
-              <textarea
-                autoFocus
-                value={editing.text}
-                onChange={(e) => setEditing({ ...editing, text: e.target.value.slice(0, 120) })}
-                rows={1}
-                cols={1}
-                placeholder="Type something"
-                aria-label="Text"
-                // beats the global 16px input rule (iOS zoom guard); it's well over 16 anyway
-                style={{ fontSize: editing.style === 2 ? 44 : 30 }}
-                className={cn("col-start-1 row-start-1 h-full min-h-0 w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 text-center outline-none placeholder:text-current placeholder:opacity-40", fieldText)}
-              />
-            </div>
+          {/* True size: the card's scale, font, padding and wrap width, so it looks
+              exactly like it will on the card while you type. */}
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-3 py-4">
+            {(() => {
+              const m = textMetrics(editing.style);
+              const font = { fontFamily: m.family, fontWeight: m.weight, fontSize: m.size * k, lineHeight: m.lineH, textTransform: m.display ? ("uppercase" as const) : undefined };
+              const look =
+                editing.style === 1
+                  ? { background: editing.color, color: readable(editing.color), borderRadius: m.radius * k }
+                  : editing.style === 3
+                    ? { color: editing.color, WebkitTextStroke: `${9 * k}px ${editing.color === "#000000" ? "#fff" : "#000"}`, paintOrder: "stroke fill" as const }
+                    : { color: editing.color, textShadow: `0 ${3 * k}px ${14 * k}px rgba(0,0,0,0.45)` };
+              return (
+                <div className="inline-grid" style={{ ...look, maxWidth: (WRAP + m.padX * 2) * k, padding: `${m.padY * k}px ${m.padX * k}px` }}>
+                  <span aria-hidden className="invisible col-start-1 row-start-1 whitespace-pre-wrap text-center [overflow-wrap:anywhere]" style={font}>
+                    {(editing.text || "Type something") + " "}
+                  </span>
+                  <textarea
+                    autoFocus
+                    value={editing.text}
+                    onChange={(e) => setEditing({ ...editing, text: e.target.value.slice(0, TEXT_MAX) })}
+                    maxLength={TEXT_MAX}
+                    rows={1}
+                    cols={1}
+                    placeholder="Type something"
+                    aria-label="Text"
+                    // inline font beats the global 16px input rule (iOS zoom guard)
+                    style={{ ...font, color: "inherit" }}
+                    className="col-start-1 row-start-1 h-full min-h-0 w-full min-w-0 resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 text-center outline-none [overflow-wrap:anywhere] placeholder:text-current placeholder:opacity-40"
+                  />
+                </div>
+              );
+            })()}
           </div>
+          {editing.text.length > TEXT_MAX - 60 && <div className="pb-2 text-center text-[11px] tabular-nums text-white/55">{editing.text.length}/{TEXT_MAX}</div>}
           <div className="flex justify-center gap-3 pb-6" role="group" aria-label="Text colour">
             {TEXT_COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setEditing({ ...editing, color: c })}
                 className={cn("h-9 w-9 rounded-full border-2", editing.color === c ? "scale-110 border-white" : "border-white/40")}
                 style={{ background: c }}

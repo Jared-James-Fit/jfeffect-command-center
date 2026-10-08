@@ -11,7 +11,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { PostDetailDialog } from "@/components/community/post-detail";
 
-const NEW_GRADIENT = "bg-[linear-gradient(135deg,#f58529,#dd2a7b)]";
+const NEW_GRADIENT = "bg-primary";
 
 /**
  * Header nudge, only when there is something new ("🔥 3 new"). With nothing
@@ -105,7 +105,7 @@ export function CommunityHomeStrip() {
         <ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />
         {people.map((p) => (
           <button key={p.userId} type="button" onClick={() => setOpenPost(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={p.live ? `${p.name} is training now` : `${p.name}'s latest workout`}>
-            <span className={cn("relative rounded-full p-[2.5px]", p.live ? "bg-red-500" : p.fresh ? "bg-[linear-gradient(135deg,#f58529,#dd2a7b,#8134af)]" : "bg-border")}>
+            <span className={cn("relative rounded-full p-[2.5px]", p.live ? "bg-red-500" : p.fresh ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-border")}>
               <span className="block rounded-full bg-card p-[2px]">
                 <UserAvatar src={p.avatar} name={p.name} size={52} expandable={false} />
               </span>

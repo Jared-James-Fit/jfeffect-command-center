@@ -11,7 +11,6 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { CAPTION_MAX, buildShareCardFields, lockInTimeLabel, type CommunityVisibility } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, type SavePostInput } from "@/lib/community.queries";
-import { InstagramGlyph } from "@/components/community/glyphs";
 import { AudiencePicker } from "@/components/community/audience-picker";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import {
@@ -44,8 +43,8 @@ type Props = {
 
 const firstName = (full?: string | null) => (full ?? "").trim().split(/\s+/)[0] || null;
 
-/** Instagram-ish gradient for the one action we want people to take. */
-const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)]";
+/** The app's own red for the one action we want people to take. */
+const SHARE_GRADIENT = "bg-primary";
 
 /**
  * Full-screen share editor, opened from the workout recap.
@@ -491,8 +490,8 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
           ) : (
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <Button type="button" disabled={!!busy || !base} onClick={() => void shareOut()} className={cn("h-14 rounded-2xl text-[16px] font-black text-white shadow-lg", SHARE_GRADIENT)}>
-                <InstagramGlyph className="mr-2 h-5 w-5" />
-                {busy === "share" ? "Preparing…" : "Share to Instagram & more"}
+                <Share2 className="mr-2 h-5 w-5" />
+                {busy === "share" ? "Preparing…" : "Share"}
               </Button>
               <Button type="button" variant="secondary" disabled={!!busy || !base} onClick={() => void saveImage()} className="h-14 w-14 rounded-2xl bg-white/10 text-white hover:bg-white/20" aria-label="Save image">
                 <Download className="h-5 w-5" />
@@ -523,7 +522,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
               <li><b className="text-white">3.</b> Tap the screen and choose <b className="text-white">Paste</b> (or the sticker pop-up)</li>
             </ol>
             <a href="instagram://story-camera" className={cn("mt-5 flex h-12 w-full items-center justify-center rounded-2xl text-[15px] font-black text-white", SHARE_GRADIENT)}>
-              <InstagramGlyph className="mr-2 h-5 w-5" /> Open Instagram
+              Open Instagram
             </a>
             <button type="button" onClick={() => setStickerHelp(false)} className="mt-2 h-11 w-full rounded-2xl text-[14px] font-bold text-white/70">Done</button>
           </Overlay>

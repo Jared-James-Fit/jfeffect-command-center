@@ -61,7 +61,7 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
             type="button"
             disabled={!profile.is_me || setAvatar.isPending}
             onClick={() => photoRef.current?.click()}
-            className="relative rounded-full bg-[linear-gradient(135deg,#f58529,#dd2a7b,#8134af)] p-[3px] disabled:cursor-default"
+            className="relative rounded-full bg-[linear-gradient(135deg,#ffb054,#ef3340)] p-[3px] disabled:cursor-default"
             aria-label={profile.is_me ? (profile.author.avatar_url ? "Change your community photo" : "Add a community photo") : undefined}
           >
             <span className={cn("block rounded-full bg-background p-[2px]", setAvatar.isPending && "animate-pulse")}>

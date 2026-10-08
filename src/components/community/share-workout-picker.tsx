@@ -23,7 +23,8 @@ const ShareStudio = lazyWithRetry(() => import("@/components/community/share-stu
 type Mode = "lockin" | "workout";
 type LockLook = Extract<ShareTemplate, "lockin" | "lockclock" | "lockplan">;
 
-export const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)]";
+/** The app's own red for the one action we want people to take. */
+export const SHARE_GRADIENT = "bg-primary";
 
 /**
  * "+ Share" — the whole thing on one screen (ShareStudio). Opens straight to
@@ -126,7 +127,7 @@ export function ShareWorkoutButton({
       {variant === "bubble" ? (
         // Instagram "your story" bubble: first item in the Home strip.
         <button type="button" onClick={begin} className={cn("flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95", className)} aria-label={label}>
-          <span className={cn("grid h-[61px] w-[61px] place-items-center rounded-full text-white shadow-md shadow-fuchsia-500/20", SHARE_GRADIENT)}>
+          <span className={cn("grid h-[61px] w-[61px] place-items-center rounded-full text-white shadow-md shadow-primary/25", SHARE_GRADIENT)}>
             <Plus className="h-6 w-6" strokeWidth={3} />
           </span>
           <span className="w-full truncate text-center text-[11px] font-bold">{label}</span>
@@ -136,7 +137,7 @@ export function ShareWorkoutButton({
           type="button"
           onClick={begin}
           className={cn(
-            "inline-flex items-center justify-center gap-1.5 font-black text-white shadow-md shadow-fuchsia-500/20 transition active:scale-[0.97]",
+            "inline-flex items-center justify-center gap-1.5 font-black text-white shadow-md shadow-primary/25 transition active:scale-[0.97]",
             SHARE_GRADIENT,
             variant === "pill" ? "h-9 rounded-full px-4 text-[13px]" : "h-12 w-full rounded-2xl text-[15px]",
             className,

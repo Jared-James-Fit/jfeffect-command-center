@@ -1047,3 +1047,29 @@ describe("lock in on a session row that was never started", () => {
     expect(read("src/components/community/share-workout-picker.tsx")).toContain('sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Posting it starts your session"}');
   });
 });
+
+describe("feels like our app, not Instagram", () => {
+  const read = (f: string) => readFileSync(f, "utf8");
+  const files = ["share-studio", "share-composer", "lock-in-editor", "share-workout-picker", "lock-in", "community-entry", "profile-view"].map((f) => read(`src/components/community/${f}.tsx`));
+  it("no Instagram logo or Instagram gradient anywhere in sharing", () => {
+    for (const f of files) {
+      expect(f).not.toContain("<InstagramGlyph");
+      expect(f).not.toMatch(/#f58529|#dd2a7b|#8134af/);
+    }
+  });
+  it("Post is the app's own red button; save is a download icon", () => {
+    const studio = read("src/components/community/share-studio.tsx");
+    expect(studio).toContain('posted ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground"');
+    expect(studio).toContain('aria-label="Save image"');
+    expect(studio).toContain("<Download className=");
+  });
+  it("the text editor previews at the card's real size, wrap and font; long text is fine", () => {
+    const layer = read("src/components/community/sticker-layer.tsx");
+    expect(layer).toContain("export const TEXT_MAX = 400;");
+    expect(layer).toContain("const lines = wrapText(ctx, m.display ? raw.toUpperCase() : raw, WRAP * PX)");
+    expect(layer).toContain("maxWidth: (WRAP + m.padX * 2) * k");
+    expect(layer).toContain("fontSize: m.size * k");
+    // style / colour taps keep the keyboard up
+    expect(layer).toContain("onPointerDown={(e) => e.preventDefault()}");
+  });
+});
