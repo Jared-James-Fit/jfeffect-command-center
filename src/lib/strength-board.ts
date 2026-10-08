@@ -1,7 +1,7 @@
 /**
  * All-Time Strength Board: shapes the get_strength_board() rows into the
  * boards clients see, plus the copy and math that make it easy to read.
- * Ranking itself happens in the database (20261015090000_all_time_strength_board.sql).
+ * Ranking itself happens in the database (20261016090000_all_time_strength_board.sql).
  */
 import type { WeightUnit } from "@/lib/weight-lifted";
 

@@ -1,4 +1,4 @@
--- Stand-ins for the tables 20261015090000_all_time_strength_board.sql reads.
+-- Stand-ins for the tables 20261016090000_all_time_strength_board.sql reads.
 -- Plain Postgres 16; the supabase roles must exist (see README).
 create schema auth;
 create table auth_ctx (uid uuid);
