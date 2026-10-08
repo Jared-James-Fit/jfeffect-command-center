@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
-const { WarmupRows } = await import("@/components/workout-day/final-warmup-input");
+const { WarmupRows, WARMUP_RPE_SCALE, warmupRpeStep } = await import("@/components/workout-day/final-warmup-input");
 
 const base = {
   unit: "kg" as const,
@@ -37,7 +37,7 @@ describe("warm-up rows in the set table", () => {
     const html = render({ sets: [set], prompt: { suggested: null }, tunedId: "a" });
     expect(html).not.toContain("warmup-prompt");
     expect(html).toContain("140 kg × 2");
-    expect(html).toContain("· Solid");
+    expect(html).toContain("@ RPE 7");
     expect(html).toContain("✓ set your weight");
     expect(html).toContain('aria-label="Edit warm-up 140 kg × 2 · RPE 7"');
   });
@@ -70,5 +70,30 @@ describe("warm-up rows in the set table", () => {
     expect(rows).toBeGreaterThan(wdv.indexOf("<EffortScaleHeader rir={showRir} />"));
     expect(rows).toBeLessThan(wdv.indexOf("<SetRow\n"));
     expect(wdv).not.toContain("WarmupSection");
+  });
+});
+
+describe("warm-up RPE scale", () => {
+  it("covers easy through grindy on the set table's RPE scale, whole numbers only", () => {
+    expect(WARMUP_RPE_SCALE.map((x) => x.label)).toEqual(["≤6", "7", "8", "9+"]);
+    expect(WARMUP_RPE_SCALE.map((x) => x.rpe)).toEqual([6, 7, 8, 9]);
+    expect(WARMUP_RPE_SCALE.map((x) => x.left)).toEqual(["4+ left", "3 left", "2 left", "1 left"]);
+  });
+  it("super easy counts as ≤6 and anything past 9 as 9+ (matches the engine's floor)", () => {
+    expect(warmupRpeStep(4)?.label).toBe("≤6");
+    expect(warmupRpeStep(6)?.label).toBe("≤6");
+    expect(warmupRpeStep(7.5)?.label).toBe("8");
+    expect(warmupRpeStep(10)?.label).toBe("9+");
+    expect(warmupRpeStep(null)).toBeNull();
+    const engine = readFileSync("src/lib/load-suggestion.ts", "utf8");
+    expect(engine).toContain("export const WARMUP_RPE_FLOOR = 6;");
+  });
+  it("explains the pick in one line, and prompts by reps left before a pick", () => {
+    const blank = renderToStaticMarkup(createElement(WarmupRows, { ...base, sets: [], form: "new" } as any));
+    expect(blank).toContain("Rate it by reps you had left in the tank");
+    expect(blank).toContain('aria-label="RPE 9+, 1 left"');
+    const editing = renderToStaticMarkup(createElement(WarmupRows, { ...base, sets: [{ ...set, rpe: 9 }], form: "a" } as any));
+    expect(editing).toContain("Grindy — 1 rep left at most");
+    expect(editing).toContain('aria-pressed="true"');
   });
 });
