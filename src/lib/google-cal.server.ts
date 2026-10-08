@@ -258,6 +258,28 @@ export async function gcalFreeBusy(coachId: string, timeMinISO: string, timeMaxI
 }
 
 // Returns Google Calendar events for a range (read-only view).
+/**
+ * Which coach's calendar the caller may read. Admins: any (default: their
+ * own row, or the workspace calendar). Coaches: only their own, and only once
+ * they've picked a calendar (otherwise the workspace's primary calendar,
+ * which is the owner's, would come back). Everyone else: none.
+ */
+export async function calendarCoachForCaller(
+  supabase: any, userId: string, requested: string | null,
+): Promise<{ ok: true; coachId: string | null } | { ok: false }> {
+  const [{ data: roles }, { data: own }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", userId),
+    supabase.from("coaches").select("id").eq("user_id", userId).eq("archived", false).maybeSingle(),
+  ]);
+  const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
+  if (isAdmin) return { ok: true, coachId: requested ?? own?.id ?? null };
+  if (!own?.id || (requested && requested !== own.id)) return { ok: false };
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: conn } = await supabaseAdmin
+    .from("google_calendar_connections").select("selected_calendar_id").eq("coach_id", own.id).maybeSingle();
+  return conn?.selected_calendar_id ? { ok: true, coachId: own.id } : { ok: false };
+}
+
 export async function gcalListEvents(
   coachId: string | null,
   timeMinISO: string,

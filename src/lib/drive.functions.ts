@@ -138,6 +138,41 @@ export const setShareUploads = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Admin, the client's assigned (active) coach, or the client themselves.
+ * Everything below runs Drive and DB writes with the service role, so this
+ * check is the only thing standing between a caller and another client's
+ * folder.
+ */
+async function assertClientMediaAccess(context: { supabase: any; userId: string }, clientId: string) {
+  const supabaseAdmin = await getAdminClient();
+  const isAdmin = await context.supabase
+    .from("user_roles" as any)
+    .select("role")
+    .eq("user_id", context.userId)
+    .then(({ data: roles }: any) => roles?.some((r: any) => r.role === "admin"));
+  if (isAdmin) return;
+  const { data: client, error: clientError } = await (supabaseAdmin as any)
+    .from("clients")
+    .select("id,user_id,assigned_coach_id")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (clientError) throw clientError;
+  if (client && client.user_id === context.userId) return;
+  const isAssignedCoach = client?.assigned_coach_id
+    ? await (supabaseAdmin as any)
+      .from("coaches")
+      .select("id")
+      .eq("id", client.assigned_coach_id)
+      .eq("user_id", context.userId)
+      .eq("archived", false)
+      .eq("status", "Active")
+      .maybeSingle()
+      .then(({ data: coach }: any) => !!coach)
+    : false;
+  if (!isAssignedCoach) throw new Error("You can only upload to your own client profile.");
+}
+
 async function ensureClientFolder(supabase: any, clientId: string) {
   const settings = await loadSettings(supabase);
   if (!settings?.root_folder_id) {
@@ -187,6 +222,7 @@ export const provisionClientFolder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId: string }) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    await assertClientMediaAccess(context, data.clientId);
     return ensureClientFolder(context.supabase, data.clientId);
   });
 
@@ -203,6 +239,7 @@ export const initMediaUpload = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    await assertClientMediaAccess(context, data.clientId);
     const { driveInitResumableUpload } = await getDriveHelpers();
     // Hard-block uploads if Drive isn't Ready so clients never hit a broken pipeline.
     const s = await loadSettings(context.supabase);
@@ -232,8 +269,23 @@ export const finalizeMediaUpload = createServerFn({ method: "POST" })
     clipNote?: string | null; clipOrder?: number; urgent?: boolean; painNote?: string | null;
     uploadedByRole: "admin" | "client";
     driveFolderId?: string | null; fileName?: string | null; mimeType?: string | null; sizeBytes?: number | null;
-  }) => d)
+  }) => z.object({
+    clientId: z.string().uuid(),
+    submissionId: z.string().uuid().nullish(),
+    mediaType: z.string().min(1).max(100),
+    driveFileId: z.string().regex(/^[A-Za-z0-9_-]{10,200}$/),
+    clipNote: z.string().max(2000).nullish(),
+    clipOrder: z.number().int().min(0).max(1000).optional(),
+    urgent: z.boolean().optional(),
+    painNote: z.string().max(2000).nullish(),
+    uploadedByRole: z.enum(["admin", "client"]),
+    driveFolderId: z.string().max(200).nullish(),
+    fileName: z.string().max(500).nullish(),
+    mimeType: z.string().max(200).nullish(),
+    sizeBytes: z.number().int().min(0).nullish(),
+  }).parse(d))
   .handler(async ({ data, context }) => {
+    await assertClientMediaAccess(context, data.clientId);
     const supabaseAdmin = await getAdminClient();
     const { driveGetFile, driveShareAnyoneReader, driveEmbedUrl, driveViewUrl } = await getDriveHelpers();
     let meta: any = null;
@@ -241,6 +293,16 @@ export const finalizeMediaUpload = createServerFn({ method: "POST" })
       meta = await driveGetFile(data.driveFileId);
     } catch (err) {
       console.warn(`[drive] uploaded file ${data.driveFileId} could not be read back; saving fallback metadata`, err);
+    }
+    // The file must sit in this client's Drive folder; otherwise a caller
+    // could attach (and, with link sharing on, publish) any file in the Drive.
+    const { data: folder } = await (supabaseAdmin as any)
+      .from("client_drive_folders").select("folder_id, subfolders").eq("client_id", data.clientId).maybeSingle();
+    const allowedParents = new Set<string>(
+      [folder?.folder_id, ...Object.values((folder?.subfolders ?? {}) as Record<string, string>)].filter(Boolean) as string[],
+    );
+    if (!meta || !(meta.parents ?? []).some((p: string) => allowedParents.has(p))) {
+      throw new Error("That file isn't in this client's Drive folder.");
     }
     const settings = await loadSettings(context.supabase);
     if (settings?.share_uploads_with_link) {
@@ -279,33 +341,8 @@ export const createSubmission = createServerFn({ method: "POST" })
     urgent?: boolean; painNote?: string | null; clipCount: number; role: "admin" | "client";
   }) => d)
   .handler(async ({ data, context }) => {
+    await assertClientMediaAccess(context, data.clientId);
     const supabaseAdmin = await getAdminClient();
-    const isAdmin = await context.supabase
-      .from("user_roles" as any)
-      .select("role")
-      .eq("user_id", context.userId)
-      .then(({ data: roles }: any) => roles?.some((r: any) => r.role === "admin"));
-    const { data: client, error: clientError } = await (supabaseAdmin as any)
-      .from("clients")
-      .select("id,user_id,assigned_coach_id")
-      .eq("id", data.clientId)
-      .maybeSingle();
-    const isAssignedCoach = client?.assigned_coach_id
-      ? await (supabaseAdmin as any)
-        .from("coaches")
-        .select("id")
-        .eq("id", client.assigned_coach_id)
-        .eq("user_id", context.userId)
-        .eq("archived", false)
-        .eq("status", "Active")
-        .maybeSingle()
-        .then(({ data: coach }: any) => !!coach)
-      : false;
-
-    if (clientError) throw clientError;
-    if (!isAdmin && !isAssignedCoach && (!client || client.user_id !== context.userId)) {
-      throw new Error("You can only create submissions for your own client profile.");
-    }
 
     const { data: row, error } = await ((supabaseAdmin as any).from("media_submissions") as any).insert({
       client_id: data.clientId,
