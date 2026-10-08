@@ -42,7 +42,7 @@ export function PostDetailDialog({
   return (
     <Dialog open={!!postId} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="fixed inset-0 left-0 top-0 flex h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-background p-0 sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[520px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none focus:outline-none focus-visible:outline-none [&>button]:hidden"
+        className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-background p-0 sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[520px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none focus:outline-none focus-visible:outline-none [&>button]:hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">Shared workout</DialogTitle>

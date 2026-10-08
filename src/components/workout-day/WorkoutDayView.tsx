@@ -2283,6 +2283,7 @@ function WorkoutDay({
               {isClientWorkout && !completion?.completed_at && rowsLoaded && (rows as any[]).length > 0 && (
                 <LockInBar
                   previewOnly={isImpersonating}
+                  dayId={dayId}
                   completionId={completion?.id ?? null}
                   ensureStarted={ensureStartedForLockIn}
                   workoutTitle={cleanDayTitle(day.title, day.day_index)}
