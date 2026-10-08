@@ -1,4 +1,4 @@
-# Taxes & Books and Summer Ledger
+# Taxes & Books and Cleo
 
 Business owner only. Sales hub > Taxes & Books (`/admin/sales?tab=taxes`).
 Owners are listed in `business_owners` (`is_business_owner()`); RLS on the
@@ -16,7 +16,7 @@ owner.
 | Province, GST number, filing frequency, other income | `business_tax_settings` (one row) |
 
 Revenue is counted when received. All figures run through one pure engine,
-`src/lib/business-tax.ts`, so the dashboard, the PDFs and Summer agree.
+`src/lib/business-tax.ts`, so the dashboard, the PDFs and Cleo agree.
 
 ## Rules baked in
 
@@ -49,21 +49,21 @@ per month and currency (`external_key = stripe-fees:YYYY-MM:cur`). The page
 syncs automatically when the last sync is older than 12 hours. Re-syncing
 updates amounts and keeps any category change.
 
-## Summer Ledger
+## Cleo
 
-Summer is she/her. Her voice is a preset the owner picks (Girly pop by
+Cleo is she/her. Her voice is a preset the owner picks (Girly pop by
 default, Chill, Straight business) plus optional custom instructions, both
-set in Customize Summer (chat header or Settings tab) and stored on
+set in Customize Cleo (chat header or Settings tab) and stored on
 `business_tax_settings` (`assistant_tone`, `assistant_instructions`). The
 voice text lives in `src/lib/summer-persona.ts`. Custom instructions are
 placed after the facts rules and can't override them.
 
 `askSummer` builds a plain-text copy of the books for the selected year
-(`src/lib/summer-context.ts`) and sends it with the last 16 messages. Summer
+(`src/lib/summer-context.ts`) and sends it with the last 16 messages. Cleo
 reads; she cannot write. Messages are saved per admin in `summer_messages`
 only after a reply comes back.
 
-## Summer as the admin assistant
+## Cleo as the admin assistant
 
 She is available on every admin page, admin role only (`SummerAssistant`,
 mounted in the admin layout):
@@ -73,7 +73,7 @@ mounted in the admin layout):
   own floating button (`html[data-page-fab]`), and hides on chat screens so
   it never covers the composer. There she is pinned at the top of the
   Messages inbox instead (row plus a call button).
-- Top bar "Summer" button and ⌘/Ctrl+Shift+S.
+- Top bar "Cleo" button and ⌘/Ctrl+Shift+S.
 - Other screens open her with `openSummer({ year?, call? })`
   (`window` events `summer:open`, `summer:toggle`, `summer:close`).
 
@@ -93,12 +93,12 @@ Voice:
   (gateway `openai/gpt-4o-mini-tts`, gateway Gemini TTS, then `OPENAI_API_KEY`
   if set) with a French-accented English style. If none answers, the
   browser speaks with a device English voice. Voice, auto-play and speed are
-  per device (Customize Summer).
+  per device (Customize Cleo).
 - Health check: `POST /api/public/hooks/summer-voice-check` with
   `x-hook-secret` reports which provider works.
 
-Every admin gets their own Summer: chat history (`summer_messages`) and
-vibe/instructions (`summer_profiles`) are per person. Only the owner's Summer
+Every admin gets their own Cleo: chat history (`summer_messages`) and
+vibe/instructions (`summer_profiles`) are per person. Only the owner's Cleo
 gets the BOOKS section; other admins get the app data plus unpaid sales, and
 she tells them the books are private to the owner.
 

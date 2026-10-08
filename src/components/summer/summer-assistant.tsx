@@ -1,5 +1,5 @@
 /**
- * Summer, everywhere in admin: a floating button (tap to open or close her
+ * Cleo, everywhere in admin: a floating button (tap to open or close her
  * chat, press and hold to start a voice call), ⌘/Ctrl+Shift+S, and window
  * events other screens use to open her ("summer:open", "summer:toggle",
  * "summer:close"; detail { year?, call? }).
@@ -130,8 +130,8 @@ export function SummerAssistant() {
           onPointerLeave={pressEnd}
           onPointerCancel={pressEnd}
           onContextMenu={(e) => e.preventDefault()}
-          aria-label="Summer: tap to chat, hold to talk"
-          title="Summer · tap to chat, hold to talk (⌘⇧S)"
+          aria-label="Cleo: tap to chat, hold to talk"
+          title="Cleo · tap to chat, hold to talk (⌘⇧S)"
           className={cn(
             "summer-fab fixed right-4 z-50 flex h-12 w-12 select-none items-center justify-center rounded-full text-white md:right-6",
             "bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] ring-1 ring-black/10",

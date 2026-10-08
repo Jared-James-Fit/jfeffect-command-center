@@ -1,5 +1,5 @@
 /**
- * Summer's voice in the browser. Plays the server voice (French-accented
+ * Cleo's voice in the browser. Plays the server voice (French-accented
  * English) when a provider is available, otherwise a device voice. Browser
  * only; every storage and speech call is guarded.
  *

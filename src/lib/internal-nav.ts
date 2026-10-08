@@ -125,7 +125,7 @@ const REGISTRY: Entry[] = [
     keywords: ["transactions", "payments", "purchases", "invoices", "receipts", "refunds", "history", "stripe", "product sales"] },
   { to: "/admin/sales?tab=taxes", label: "Taxes & Books", icon: Landmark, group: "Payments",
     visibleTo: ["admin"],
-    keywords: ["taxes", "tax", "gst", "hst", "cra", "books", "bookkeeping", "expenses", "receipts", "accountant", "t2125", "year end", "summer", "assistant"] },
+    keywords: ["taxes", "tax", "gst", "hst", "cra", "books", "bookkeeping", "expenses", "receipts", "accountant", "t2125", "year end", "cleo", "assistant"] },
   { to: "/admin/payment-links", label: "Products", icon: ShoppingBag, group: "Payments",
     visibleTo: ["admin", "sales"],
     keywords: ["products", "offers", "memberships", "coaching", "programs", "digital products", "merchandise", "checkout links", "payment links", "stripe"] },

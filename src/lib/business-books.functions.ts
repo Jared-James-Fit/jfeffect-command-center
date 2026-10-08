@@ -1,7 +1,7 @@
 /**
  * business-books.functions.ts
  *
- * Admin-only server functions for Taxes & Books (Sales hub) and Summer Ledger.
+ * Admin-only server functions for Taxes & Books (Sales hub) and Cleo.
  * Reads and writes go through the caller's RLS-scoped client; the tables and
  * the receipts bucket only admit admins.
  */
@@ -110,7 +110,7 @@ export const markExpensesReviewed = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
-// Receipts: the owner uploads the photo/PDF to the private bucket, then Summer
+// Receipts: the owner uploads the photo/PDF to the private bucket, then Cleo
 // reads it and files an expense. The expense is created even if reading
 // fails, so a receipt is never lost; it is just flagged for review.
 
@@ -347,7 +347,7 @@ export const syncStripeFees = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
-// Summer Ledger
+// Cleo
 
 export const getSummerMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -391,7 +391,7 @@ const VoiceInput = z.object({
   route: z.string().max(300).optional(),
 });
 
-/** Talk to Summer: hear the question, answer it in voice mode. */
+/** Talk to Cleo: hear the question, answer it in voice mode. */
 export const askSummerVoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => VoiceInput.parse(d))
@@ -406,7 +406,7 @@ export const askSummerVoice = createServerFn({ method: "POST" })
     return { transcript, ...res };
   });
 
-/** Summer's voice for a reply. ok:false means the browser should use a device voice. */
+/** Cleo's voice for a reply. ok:false means the browser should use a device voice. */
 export const summerSpeech = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ text: z.string().trim().min(1).max(1500) }).parse(d))
@@ -418,7 +418,7 @@ export const summerSpeech = createServerFn({ method: "POST" })
     return synthesizeSpeech(data.text);
   });
 
-/** Light read for the global Summer button: this admin's Summer settings and whether they own the books. */
+/** Light read for the global Cleo button: this admin's Cleo settings and whether they own the books. */
 export const getSummerProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -437,7 +437,7 @@ const SummerSettingsInput = z.object({
   instructions: z.string().trim().max(2000).nullable(),
 });
 
-/** Customize Summer: her vibe and this admin's own instructions. */
+/** Customize Cleo: her vibe and this admin's own instructions. */
 export const saveSummerSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SummerSettingsInput.parse(d))
