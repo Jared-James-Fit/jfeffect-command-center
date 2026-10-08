@@ -55,7 +55,9 @@ describe("phone-first logger card", () => {
     expect(logger).not.toContain("Fill All Sets (enter Set 1 weight first)");
     expect(logger).toContain("if (!needsFill) return null;");
   });
-  it("hides the calibrating card while the warm-up form is open", () => {
-    expect(logger).toContain('!(warmupForm && (loadModel.status === "calibrating" || !loadHint))');
+  it("never shows a second warm-up prompt above the table (the W row owns it)", () => {
+    const card = readFileSync("src/components/workout-day/load-suggestion-card.tsx", "utf8");
+    expect(card).toContain("if (warmup) return null;");
+    expect(card).not.toContain("Log your last warm-up for a first suggestion");
   });
 });

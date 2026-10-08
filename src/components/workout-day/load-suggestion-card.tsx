@@ -1,4 +1,4 @@
-import { ChevronRight, Flame, Info, Target } from "lucide-react";
+import { Info, Target } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { audibleStep, type LoadModel, type LoadSuggestion } from "@/lib/load-suggestion";
 
@@ -14,12 +14,7 @@ function fmtNum(n: number): string {
 export interface WarmupGauge {
   /** What the last warm-up should be (display unit), when a top-set target exists. */
   suggested: { load: number; reps: number } | null;
-  /** The logged final warm-up (display unit), if any. */
-  logged: { load: number; reps: number; rpe: number | null } | null;
-  onOpen: () => void;
 }
-
-const FEEL: Record<number, string> = { 6: "Easy", 7: "Solid", 8: "Heavy" };
 
 export function LoadSuggestionCard({
   hint,
@@ -30,25 +25,13 @@ export function LoadSuggestionCard({
   hint: LoadSuggestion | null;
   model: LoadModel;
   plan: { reps: number; rpe: number };
-  /** Optional "last warm-up" gauge — offered only before the first working set. */
+  /** Last-warm-up tip — offered only before the first working set (the set table holds the warm-up row). */
   warmup?: WarmupGauge | null;
 }) {
   if (model.status === "calibrating" || !hint) {
-    // No usable history yet: the last warm-up is the one thing that can give a
-    // first (conservative) number, so offer it instead of a dead end.
-    if (warmup) {
-      return (
-        <button
-          type="button"
-          onClick={warmup.onOpen}
-          data-testid="warmup-gauge"
-          className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-muted active:scale-[0.98]"
-        >
-          <Flame className="h-3 w-3 text-orange-500" aria-hidden="true" />
-          Log your last warm-up for a first suggestion
-        </button>
-      );
-    }
+    // No usable history yet: the set table's warm-up row is the way to a first
+    // number, so don't add a dead-end note above it.
+    if (warmup) return null;
     if (model.historySessions === 0) return null;
     return (
       <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
@@ -73,28 +56,8 @@ export function LoadSuggestionCard({
           : `your last ${Math.min(model.historySessions, 8)} sessions`
       : "the sets you've logged today";
   const audible = audibleStep(hint.target, hint.unit);
-  const gaugeLine = warmup && (warmup.logged || warmup.suggested) ? (
-    <button
-      type="button"
-      onClick={warmup.onOpen}
-      data-testid="warmup-gauge"
-      className="flex w-full items-center gap-1.5 border-t border-primary/15 px-2.5 py-1 text-left text-[11px] text-muted-foreground transition hover:bg-primary/5"
-    >
-      <Flame className="h-3 w-3 shrink-0 text-orange-500" aria-hidden="true" />
-      {warmup.logged ? (
-        <span className="min-w-0 flex-1 truncate">
-          Warm-up <span className="font-semibold tabular-nums text-foreground">{fmtNum(warmup.logged.load)} × {warmup.logged.reps}</span>
-          {warmup.logged.rpe != null && ` · ${FEEL[warmup.logged.rpe] ?? `RPE ${fmtNum(warmup.logged.rpe)}`}`}
-          <span className="font-semibold text-emerald-600 dark:text-emerald-400"> ✓ tuned</span>
-        </span>
-      ) : (
-        <span className="min-w-0 flex-1 truncate">
-          Last warm-up <span className="font-semibold tabular-nums text-foreground">~{fmtNum(warmup.suggested!.load)} × {warmup.suggested!.reps}</span> · log how it felt
-        </span>
-      )}
-      <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-    </button>
-  ) : null;
+  const label =
+    model.source === "warmup" ? "From warm-up" : model.source === "history_warmup" ? "Warm-up tuned" : "Suggested";
   return (
     <div className="mt-1.5 overflow-hidden rounded-lg border border-primary/25 bg-primary/5" data-testid="load-suggestion">
     <div className="flex items-center gap-2 px-2.5 py-1.5">
@@ -107,7 +70,7 @@ export function LoadSuggestionCard({
           </span>
         </div>
         <div className="truncate text-[11px] text-muted-foreground" data-testid="load-audible">
-          Suggested<span aria-hidden="true"> · </span>
+          {label}<span aria-hidden="true"> · </span>
           <span className="font-semibold text-emerald-600 dark:text-emerald-400">▲ Fast +{fmtNum(audible)}</span>
           <span aria-hidden="true"> · </span>
           <span className="font-semibold text-amber-600 dark:text-amber-400">▼ Slow −{fmtNum(audible)} {hint.unit}</span>
@@ -145,7 +108,6 @@ export function LoadSuggestionCard({
         </PopoverContent>
       </Popover>
     </div>
-    {gaugeLine}
     </div>
   );
 }
