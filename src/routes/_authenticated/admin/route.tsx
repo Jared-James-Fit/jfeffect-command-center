@@ -12,6 +12,7 @@ import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
 import { ClipboardList, LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
+import { StaffMfaGate } from "@/components/staff-mfa-gate";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
@@ -142,11 +143,13 @@ function AdminLayout() {
   }
 
   return (
-    <AppShell items={nav} bottomItems={bottomItems} title={title}>
-      <AdminTopBar showDashboardMode={!isCoach} />
-      <Outlet />
-      <TaskPopupGate />
-      {role === "admin" && <SummerAssistant />}
-    </AppShell>
+    <StaffMfaGate>
+      <AppShell items={nav} bottomItems={bottomItems} title={title}>
+        <AdminTopBar showDashboardMode={!isCoach} />
+        <Outlet />
+        <TaskPopupGate />
+        {role === "admin" && <SummerAssistant />}
+      </AppShell>
+    </StaffMfaGate>
   );
 }
