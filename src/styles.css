@@ -863,14 +863,20 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
 .community-tap2 { animation: community-tap2 2.4s ease-in-out infinite; }
 .community-ripple { animation: community-ripple 2.4s ease-out infinite; opacity: 0; }
 .community-ripple-late { animation-delay: 0.3s; }
-.community-hint { animation: community-picker 0.25s ease-out; }
+/* in, two demo taps (~5s), then out by itself */
+@keyframes community-hint-life {
+  0% { opacity: 0; transform: translateY(6px); }
+  5%, 88% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(4px); }
+}
+.community-hint { animation: community-hint-life 5.2s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) {
   .community-pop,
   .community-picker,
   .community-picker-item,
   .community-tap2,
-  .community-ripple,
-  .community-hint { animation: none; }
+  .community-ripple { animation: none; }
+  .community-hint { animation: community-hint-life 5.2s linear forwards; }
 }
 
 /* Charts are touched to inspect them: never select their text, raise the iOS
