@@ -8,7 +8,7 @@ import { AuthorLine, LockInHero, NoteBody, PostMedia, ReactionBar, TrainingNowPi
 import { CommentThread } from "@/components/community/comments-sheet";
 import { PostActions } from "@/components/community/post-actions";
 import { WinsStatsCard } from "@/components/community/wins-stats";
-import { DoubleTapHint, ReactionBurst, useDoubleTap } from "@/components/community/reaction-button";
+import { ReactionBurst, useDoubleTap } from "@/components/community/reaction-button";
 import {
   REACTION,
   SCOPE_WORD,
@@ -22,7 +22,7 @@ import {
   type CommunityPost,
   type ReactionKey,
 } from "@/lib/community";
-import { useHintsSeen, useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
+import { useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { formatTonnage } from "@/lib/training-records";
 
 /**
@@ -106,14 +106,12 @@ function Detail({
   const onReact = (_p: CommunityPost, next: ReactionKey | null) => react.mutate(next, { onError: () => toast.error("Couldn't save that reaction") });
   // Double-tap the photo / card for ❤️, same as in the feed.
   const [burst, setBurst] = useState(0);
-  const hints = useHintsSeen();
   const markHint = useMarkHintSeen();
   const onHeroTap = useDoubleTap(() => {
     setBurst((b) => b + 1);
     if (!post.my_reaction) onReact(post, REACTION.key);
     markHint("double_tap");
   });
-  const showHint = !!hints.data && !hints.data.includes("double_tap") && burst === 0;
 
   const tiles = s
     ? [
@@ -155,7 +153,6 @@ function Detail({
           ) : (
             <div className="px-4"><div className="overflow-hidden rounded-3xl"><LockInHero post={post} size="detail" /></div></div>
           )}
-          {showHint && <DoubleTapHint />}
           <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
         </div>
       ) : null}

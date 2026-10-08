@@ -246,6 +246,7 @@ import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './rou
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
+import { Route as ApiPublicHooksSummerVoiceCheckRouteImport } from './routes/api/public/hooks/summer-voice-check'
 import { Route as ApiPublicHooksWearablesSyncRouteImport } from './routes/api/public/hooks/wearables-sync'
 import { Route as ApiPublicPushSubscriptionChangeRouteImport } from './routes/api/public/push/subscription-change'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -1626,6 +1627,12 @@ const ApiPublicHooksPaymentReminderSmsRoute =
     path: '/api/public/hooks/payment-reminder-sms',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksSummerVoiceCheckRoute =
+  ApiPublicHooksSummerVoiceCheckRouteImport.update({
+    id: '/api/public/hooks/summer-voice-check',
+    path: '/api/public/hooks/summer-voice-check',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksWearablesSyncRoute =
   ApiPublicHooksWearablesSyncRouteImport.update({
     id: '/api/public/hooks/wearables-sync',
@@ -1962,6 +1969,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -2215,6 +2223,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -2474,6 +2483,7 @@ export interface FileRoutesById {
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -2733,6 +2743,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
@@ -2986,6 +2997,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
@@ -3244,6 +3256,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
@@ -3333,6 +3346,7 @@ export interface RootRouteChildren {
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
+  ApiPublicHooksSummerVoiceCheckRoute: typeof ApiPublicHooksSummerVoiceCheckRoute
   ApiPublicHooksWearablesSyncRoute: typeof ApiPublicHooksWearablesSyncRoute
   ApiPublicPushSubscriptionChangeRoute: typeof ApiPublicPushSubscriptionChangeRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
@@ -5005,6 +5019,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksPaymentReminderSmsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/summer-voice-check': {
+      id: '/api/public/hooks/summer-voice-check'
+      path: '/api/public/hooks/summer-voice-check'
+      fullPath: '/api/public/hooks/summer-voice-check'
+      preLoaderRoute: typeof ApiPublicHooksSummerVoiceCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/wearables-sync': {
       id: '/api/public/hooks/wearables-sync'
       path: '/api/public/hooks/wearables-sync'
@@ -5885,6 +5906,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksScheduledSendWorkerRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
+  ApiPublicHooksSummerVoiceCheckRoute: ApiPublicHooksSummerVoiceCheckRoute,
   ApiPublicHooksWearablesSyncRoute: ApiPublicHooksWearablesSyncRoute,
   ApiPublicPushSubscriptionChangeRoute: ApiPublicPushSubscriptionChangeRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,

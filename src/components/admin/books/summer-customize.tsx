@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, Loader2, Plus } from "lucide-react";
+import { Check, Loader2, Plus, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { saveSummerSettings } from "@/lib/business-books.functions";
+import { saveSummerSettings, summerSpeech } from "@/lib/business-books.functions";
+import { deviceVoices, hasDeviceSpeech, loadVoicePrefs, rankVoices, saveVoicePrefs, summerSpeaker, type SummerVoicePrefs } from "@/lib/summer-speaker";
 import {
   DEFAULT_SUMMER_TONE, SUMMER_INSTRUCTION_IDEAS, SUMMER_INSTRUCTIONS_MAX, SUMMER_TONES, summerTone, type SummerTone,
 } from "@/lib/summer-persona";
@@ -27,6 +30,41 @@ export function SummerCustomizeDialog({
   onSaved: () => void;
 }) {
   const save = useServerFn(saveSummerSettings);
+  const speechFn = useServerFn(summerSpeech);
+  const [voicePrefs, setVoicePrefs] = useState<SummerVoicePrefs>(() => loadVoicePrefs());
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    if (!open || !hasDeviceSpeech()) return;
+    const refresh = () => setVoices(rankVoices(deviceVoices().filter((v) => /^(fr|en)/i.test(v.lang))));
+    refresh();
+    window.speechSynthesis.addEventListener?.("voiceschanged", refresh);
+    return () => window.speechSynthesis.removeEventListener?.("voiceschanged", refresh);
+  }, [open]);
+
+  const updateVoice = (patch: Partial<SummerVoicePrefs>) => {
+    setVoicePrefs((cur) => {
+      const next = { ...cur, ...patch };
+      saveVoicePrefs(next);
+      return next;
+    });
+  };
+
+  const testVoice = async () => {
+    const speaker = summerSpeaker();
+    speaker.unlock();
+    setTesting(true);
+    try {
+      await speaker.speak(
+        "Bonjour! It's Summer. You've got $1,104.25 to set aside right now, and two check-ins waiting on you.",
+        voicePrefs,
+        (text) => speechFn({ data: { text } }) as any,
+      );
+    } finally {
+      setTesting(false);
+    }
+  };
   const [tone, setTone] = useState<SummerTone>(summerTone(persona.tone).value);
   const [instructions, setInstructions] = useState(persona.instructions ?? "");
   const [busy, setBusy] = useState(false);
@@ -120,6 +158,55 @@ export function SummerCustomizeDialog({
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="space-y-3 rounded-lg border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label htmlFor="summer-autoplay">Speak her answers out loud</Label>
+              <p className="text-xs text-muted-foreground">When you talk to her, she answers back by voice right away.</p>
+            </div>
+            <Switch id="summer-autoplay" checked={voicePrefs.autoplay} onCheckedChange={(v) => updateVoice({ autoplay: v })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Her voice</Label>
+            <Select value={voicePrefs.voice} onValueChange={(v) => updateVoice({ voice: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                <SelectItem value="summer">Summer · French accent</SelectItem>
+                {voices.map((v) => (
+                  <SelectItem key={v.voiceURI} value={v.voiceURI}>{v.name} · {v.lang}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              "Summer" is her own voice, English with a French accent. If it isn't available, this device's English voice reads for her. Device French voices sound French but read numbers in French.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-1" role="radiogroup" aria-label="Speaking speed">
+              {[
+                { v: 0.9, l: "Relaxed" },
+                { v: 1, l: "Normal" },
+                { v: 1.15, l: "Quick" },
+              ].map((o) => (
+                <button
+                  key={o.v}
+                  type="button"
+                  role="radio"
+                  aria-checked={voicePrefs.rate === o.v}
+                  onClick={() => updateVoice({ rate: o.v })}
+                  className={cn("rounded-full border px-2.5 py-1 text-xs", voicePrefs.rate === o.v ? "border-primary bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:bg-accent")}
+                >
+                  {o.l}
+                </button>
+              ))}
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => void testVoice()} disabled={testing}>
+              {testing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Volume2 className="mr-1.5 h-4 w-4" />} Test her voice
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Voice settings are saved on this device.</p>
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">

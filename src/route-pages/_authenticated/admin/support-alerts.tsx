@@ -1,10 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -17,27 +15,81 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { UserAvatar } from "@/components/user-avatar";
 import { formatDistanceToNow } from "date-fns";
 import { ActionButton } from "@/components/action-button";
 import { Textarea } from "@/components/ui/textarea";
-import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { AlertCircle, Clock, CheckCircle2, Hammer, ExternalLink, Loader2 } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  ExternalLink,
+  ListChecks,
+  Loader2,
+  MoreHorizontal,
+  ServerCog,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
 const Route = __getRouteApi("/_authenticated/admin/support-alerts");
 
-
 const ERROR_TYPE_LABELS: Record<string, string> = {
-  workout_load_failure: "Workout Logger",
-  progress_submission: "Progress Check-In",
-  missing_maxes: "Missing Maxes",
-  workout_sync_failure: "Workout Sync",
+  workout_load_failure: "Workout logger failed to load",
+  workout_sync_failure: "Workout didn't sync",
+  workout_sync_stuck: "Workout sync stuck",
+  empty_workout: "Empty workout",
+  progress_submission: "Progress check-in problem",
+  missing_maxes: "Missing maxes",
+  missing_client_maxes: "Missing maxes",
   scheduled_jobs_failing: "Scheduled jobs failing",
 };
+
+type Status = "open" | "in_progress" | "resolved";
+type Filter = Status | "all";
+
+const STATUS_META: Record<Status, { label: string; dot: string; text: string }> = {
+  open: { label: "Open", dot: "bg-destructive", text: "text-destructive" },
+  in_progress: { label: "In progress", dot: "bg-warning", text: "text-warning" },
+  resolved: { label: "Resolved", dot: "bg-success", text: "text-success" },
+};
+
+const STATUS_BREAKDOWN_LABELS: Record<string, string> = {
+  "404": "not found",
+  "401": "unauthorized",
+  "403": "forbidden",
+  "500": "server error",
+  "502": "bad gateway",
+  "503": "unavailable",
+  "no response": "no response",
+};
+
+function titleFor(alert: any): string {
+  return ERROR_TYPE_LABELS[alert.error_type] ?? String(alert.error_type ?? "Alert").replace(/_/g, " ");
+}
+
+/** One plain-English line for the list; the raw message lives under Details. */
+function summaryFor(alert: any): string {
+  const d = (alert.details ?? {}) as any;
+  if (alert.error_type === "scheduled_jobs_failing" && typeof d.http_failed === "number") {
+    const parts = Object.entries((d.status_breakdown ?? {}) as Record<string, number>)
+      .map(([code, n]) => `${n} ${STATUS_BREAKDOWN_LABELS[code] ?? `HTTP ${code}`}`);
+    const cron = Number(d.cron_failed_runs) > 0 ? `${d.cron_failed_runs} cron run(s) errored` : null;
+    return [
+      `${d.http_failed} of ${d.http_total} calls failed in the last hour`,
+      parts.length ? parts.join(", ") : null,
+      cron,
+    ].filter(Boolean).join(" · ");
+  }
+  const msg = String(alert.error_message ?? "").split("\n")[0].trim();
+  return msg.length > 140 ? `${msg.slice(0, 140)}…` : msg || "No details provided";
+}
 
 export function SupportAlertsRedirect() {
   const nav = useNavigate();
@@ -67,159 +119,160 @@ const alertsQueryOptions = {
 export function SupportAlertsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { data: alerts } = useSuspenseQuery(alertsQueryOptions);
   const qc = useQueryClient();
+  const [filter, setFilter] = useState<Filter>("open");
 
-  const updateStatus = async (id: string, status: string) => {
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["support_alerts"] });
+    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+  };
+
+  const updateStatus = async (id: string, status: Status) => {
     const update: any = { status, updated_at: new Date().toISOString() };
     if (status === "resolved") {
       const { data: { user } } = await supabase.auth.getUser();
       update.resolved_by = user?.id;
       update.resolved_at = new Date().toISOString();
+    } else {
+      update.resolved_by = null;
+      update.resolved_at = null;
     }
-
-    const { error } = await supabase
-      .from("support_alerts")
-      .update(update)
-      .eq("id", id);
-
+    const { error } = await supabase.from("support_alerts").update(update).eq("id", id);
     if (error) throw error;
-    qc.invalidateQueries({ queryKey: ["support_alerts"] });
-    qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+    refresh();
   };
 
   const addNote = async (alert: any, note: string) => {
     if (!note.trim()) return;
-    
     const details = (alert.details as any) || {};
     const notes = details.notes || [];
-    const newNotes = [...notes, { note: note.trim(), at: new Date().toISOString() }];
-    
     const { error } = await supabase
       .from("support_alerts")
-      .update({ details: { ...details, notes: newNotes } })
+      .update({ details: { ...details, notes: [...notes, { note: note.trim(), at: new Date().toISOString() }] } })
       .eq("id", alert.id);
-
     if (error) throw error;
     qc.invalidateQueries({ queryKey: ["support_alerts"] });
   };
 
-  const openAlerts = alerts.filter(a => a.status === "open");
-  const inProgressAlerts = alerts.filter(a => a.status === "in_progress");
-  const resolvedAlerts = alerts.filter(a => a.status === "resolved");
+  const counts = useMemo(() => {
+    const c = { open: 0, in_progress: 0, resolved: 0, all: alerts.length };
+    for (const a of alerts) if (a.status in c) c[a.status as Status] += 1;
+    return c;
+  }, [alerts]);
+  const visible = filter === "all" ? alerts : alerts.filter((a) => a.status === filter);
+
+  const FILTERS: { value: Filter; label: string }[] = [
+    { value: "open", label: "Open" },
+    { value: "in_progress", label: "In progress" },
+    { value: "resolved", label: "Resolved" },
+    { value: "all", label: "All" },
+  ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       {!embedded && (
         <PageHeader
           title="Support Alerts"
-          subtitle="Technical issues and workout logger failures reported by clients."
+          subtitle="Problems clients hit in the app, plus system checks."
         />
       )}
-      
-      <div className="p-4 md:p-6 space-y-6">
-        <Tabs defaultValue="open" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-4">
-            <TabsTrigger value="open" className="relative">
-              Open
-              {openAlerts.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground">
-                  {openAlerts.length}
+
+      <div className="mx-auto w-full max-w-4xl space-y-4 p-4 md:p-6">
+        <div role="tablist" aria-label="Filter alerts" className="flex gap-1 overflow-x-auto rounded-xl bg-muted/40 p-1">
+          {FILTERS.map((f) => {
+            const active = filter === f.value;
+            const n = counts[f.value];
+            return (
+              <button
+                key={f.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setFilter(f.value)}
+                className={cn(
+                  "flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {f.label}
+                <span
+                  className={cn(
+                    "min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold tabular-nums",
+                    f.value === "open" && n > 0
+                      ? "bg-destructive text-destructive-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {n}
                 </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="in_progress">In Progress</TabsTrigger>
-            <TabsTrigger value="resolved">Resolved</TabsTrigger>
-            <TabsTrigger value="all">All</TabsTrigger>
-          </TabsList>
+              </button>
+            );
+          })}
+        </div>
 
-          <TabsContent value="open" className="mt-6 space-y-4">
-            <AlertList 
-              alerts={openAlerts} 
-              onUpdateStatus={updateStatus} 
-              onAddNote={addNote}
-              emptyMessage="No open alerts. All systems go!" 
-            />
-          </TabsContent>
-
-          <TabsContent value="in_progress" className="mt-6 space-y-4">
-            <AlertList 
-              alerts={inProgressAlerts} 
-              onUpdateStatus={updateStatus} 
-              onAddNote={addNote}
-              emptyMessage="No alerts currently in progress." 
-            />
-          </TabsContent>
-
-          <TabsContent value="resolved" className="mt-6 space-y-4">
-            <AlertList 
-              alerts={resolvedAlerts} 
-              onUpdateStatus={updateStatus} 
-              onAddNote={addNote}
-              emptyMessage="No resolved alerts yet." 
-            />
-          </TabsContent>
-
-          <TabsContent value="all" className="mt-6 space-y-4">
-            <AlertList 
-              alerts={alerts} 
-              onUpdateStatus={updateStatus} 
-              onAddNote={addNote}
-              emptyMessage="No support alerts found." 
-            />
-          </TabsContent>
-        </Tabs>
+        <AlertList
+          alerts={visible}
+          filter={filter}
+          onUpdateStatus={updateStatus}
+          onAddNote={addNote}
+          onBulkDone={refresh}
+        />
       </div>
     </div>
   );
 }
 
-function AlertList({ alerts, onUpdateStatus, onAddNote, emptyMessage }: { 
-  alerts: any[], 
-  onUpdateStatus: (id: string, status: string) => Promise<void>,
-  onAddNote: (alert: any, note: string) => Promise<void>,
-  emptyMessage: string 
+const EMPTY_COPY: Record<Filter, string> = {
+  open: "No open alerts. All systems go.",
+  in_progress: "Nothing in progress.",
+  resolved: "No resolved alerts yet.",
+  all: "No support alerts.",
+};
+
+function AlertList({ alerts, filter, onUpdateStatus, onAddNote, onBulkDone }: {
+  alerts: any[];
+  filter: Filter;
+  onUpdateStatus: (id: string, status: Status) => Promise<void>;
+  onAddNote: (alert: any, note: string) => Promise<void>;
+  onBulkDone: () => void;
 }) {
-  const qc = useQueryClient();
+  const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [confirm, setConfirm] = useState<{ status: "resolved" | "in_progress"; ids: string[] } | null>(null);
+  const [confirm, setConfirm] = useState<{ status: Status; ids: string[] } | null>(null);
 
-  // Prune selection to alerts still visible in this filtered view (e.g. after
-  // an alert moves to another tab via a status change).
+  // Keep the selection to alerts still in this view; leave select mode when the view changes.
   useEffect(() => {
     setSelected((prev) => {
-      const visible = new Set(alerts.map((a) => a.id));
-      const next = new Set([...prev].filter((id) => visible.has(id)));
+      const ids = new Set(alerts.map((a) => a.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
       return next.size === prev.size ? prev : next;
     });
   }, [alerts]);
+  useEffect(() => {
+    setSelecting(false);
+    setSelected(new Set());
+  }, [filter]);
 
   if (alerts.length === 0) {
     return (
-      <Card className="flex flex-col items-center justify-center p-12 text-center opacity-60">
-        <CheckCircle2 className="h-12 w-12 text-success mb-4" />
-        <h3 className="text-lg font-semibold">{emptyMessage}</h3>
-      </Card>
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border px-6 py-14 text-center">
+        <CheckCircle2 className="mb-3 h-10 w-10 text-success" />
+        <p className="text-sm font-medium text-muted-foreground">{EMPTY_COPY[filter]}</p>
+      </div>
     );
   }
 
-  const visibleIds = alerts.map((a) => a.id as string);
-  const selectedCount = selected.size;
-  const allSelected = visibleIds.every((id) => selected.has(id));
-  const someSelected = !allSelected && visibleIds.some((id) => selected.has(id));
-
-  const toggleSelectAll = () => {
-    setSelected(allSelected ? new Set() : new Set(visibleIds));
-  };
-  const toggleOne = (id: string) => {
+  const ids = alerts.map((a) => a.id as string);
+  const allSelected = ids.every((id) => selected.has(id));
+  const toggleOne = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
 
-  const bulkUpdateStatus = async (status: "resolved" | "in_progress", ids: string[]) => {
+  const bulkUpdate = async (status: Status, targetIds: string[]) => {
     setBulkBusy(true);
     const update: any = { status, updated_at: new Date().toISOString() };
     if (status === "resolved") {
@@ -228,102 +281,95 @@ function AlertList({ alerts, onUpdateStatus, onAddNote, emptyMessage }: {
       update.resolved_at = new Date().toISOString();
     }
     try {
-      // Preferred path: one safe batch update by selected IDs (RLS-scoped).
-      const { error } = await supabase.from("support_alerts").update(update).in("id", ids);
-      let okCount = ids.length;
-      let failedIds: string[] = [];
+      const { error } = await supabase.from("support_alerts").update(update).in("id", targetIds);
+      let ok = targetIds.length;
+      const failed: string[] = [];
       if (error) {
-        // Fallback: per-row updates so partial failures are reported honestly.
-        okCount = 0;
-        for (const id of ids) {
+        // Per-row fallback so a partial failure is reported honestly.
+        ok = 0;
+        for (const id of targetIds) {
           const { error: rowErr } = await supabase.from("support_alerts").update(update).eq("id", id);
-          if (rowErr) failedIds.push(id);
-          else okCount++;
+          if (rowErr) failed.push(id);
+          else ok++;
         }
       }
-      qc.invalidateQueries({ queryKey: ["support_alerts"] });
-      qc.invalidateQueries({ queryKey: ["admin-nav-badges"] });
+      onBulkDone();
       const label = status === "resolved" ? "resolved" : "in progress";
-      if (failedIds.length === 0) {
-        toast.success(`${okCount} alert${okCount === 1 ? "" : "s"} marked ${label}`);
+      if (failed.length === 0) {
+        toast.success(`${ok} alert${ok === 1 ? "" : "s"} marked ${label}`);
         setSelected(new Set());
+        setSelecting(false);
       } else {
-        toast.error(`${okCount} alert${okCount === 1 ? "" : "s"} updated. ${failedIds.length} failed. Try again.`);
-        // Leave failed alerts selected so the admin can retry them.
-        setSelected(new Set(failedIds));
+        toast.error(`${ok} updated, ${failed.length} failed. Try again.`);
+        setSelected(new Set(failed));
       }
     } finally {
       setBulkBusy(false);
     }
   };
 
-  const requestBulk = (status: "resolved" | "in_progress") => {
-    const ids = visibleIds.filter((id) => selected.has(id));
-    if (ids.length === 0 || bulkBusy) return;
-    if (ids.length > 5) setConfirm({ status, ids });
-    else void bulkUpdateStatus(status, ids);
+  const requestBulk = (status: Status) => {
+    const target = ids.filter((id) => selected.has(id));
+    if (target.length === 0 || bulkBusy) return;
+    if (target.length > 5) setConfirm({ status, ids: target });
+    else void bulkUpdate(status, target);
   };
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-          <Checkbox
-            checked={allSelected ? true : someSelected ? "indeterminate" : false}
-            onCheckedChange={toggleSelectAll}
-            disabled={bulkBusy}
-            aria-label="Select all visible alerts"
-            className="h-5 w-5"
-          />
-          Select All
-        </label>
-        <span className="text-xs text-muted-foreground">
-          {selectedCount} selected
-        </span>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {bulkBusy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8"
-            disabled={selectedCount === 0 || bulkBusy}
-            onClick={() => requestBulk("in_progress")}
-          >
-            Mark In Progress
-          </Button>
-          <Button
-            size="sm"
-            className="h-8"
-            disabled={selectedCount === 0 || bulkBusy}
-            onClick={() => requestBulk("resolved")}
-          >
-            Mark Resolved
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8"
-            disabled={selectedCount === 0 || bulkBusy}
-            onClick={() => setSelected(new Set())}
-          >
-            Clear
-          </Button>
+      {alerts.length > 1 && (
+        <div className="flex min-h-9 items-center gap-2">
+          {selecting ? (
+            <>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  checked={allSelected ? true : selected.size > 0 ? "indeterminate" : false}
+                  onCheckedChange={() => setSelected(allSelected ? new Set() : new Set(ids))}
+                  disabled={bulkBusy}
+                  aria-label="Select all alerts in this view"
+                />
+                {selected.size > 0 ? `${selected.size} selected` : "Select all"}
+              </label>
+              <div className="ml-auto flex items-center gap-2">
+                {bulkBusy && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                {filter !== "in_progress" && filter !== "resolved" && (
+                  <Button size="sm" variant="outline" disabled={!selected.size || bulkBusy} onClick={() => requestBulk("in_progress")}>
+                    In progress
+                  </Button>
+                )}
+                {filter !== "resolved" && (
+                  <Button size="sm" disabled={!selected.size || bulkBusy} onClick={() => requestBulk("resolved")}>
+                    Resolve
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" disabled={bulkBusy} onClick={() => { setSelecting(false); setSelected(new Set()); }}>
+                  Done
+                </Button>
+              </div>
+            </>
+          ) : (
+            <Button size="sm" variant="ghost" className="ml-auto text-muted-foreground" onClick={() => setSelecting(true)}>
+              <ListChecks className="mr-1.5 h-4 w-4" /> Select
+            </Button>
+          )}
         </div>
-      </div>
+      )}
 
-      <div className="grid gap-4">
+      <ul className="space-y-2">
         {alerts.map((alert) => (
-          <AlertCard
-            key={alert.id}
-            alert={alert}
-            onUpdateStatus={onUpdateStatus}
-            onAddNote={onAddNote}
-            selected={selected.has(alert.id)}
-            onToggleSelected={toggleOne}
-            selectionDisabled={bulkBusy}
-          />
+          <li key={alert.id}>
+            <AlertRow
+              alert={alert}
+              onUpdateStatus={onUpdateStatus}
+              onAddNote={onAddNote}
+              selecting={selecting}
+              selected={selected.has(alert.id)}
+              onToggleSelected={toggleOne}
+              selectionDisabled={bulkBusy}
+            />
+          </li>
         ))}
-      </div>
+      </ul>
 
       <AlertDialog open={!!confirm} onOpenChange={(o) => { if (!o && !bulkBusy) setConfirm(null); }}>
         <AlertDialogContent>
@@ -331,9 +377,7 @@ function AlertList({ alerts, onUpdateStatus, onAddNote, emptyMessage }: {
             <AlertDialogTitle>
               Mark {confirm?.ids.length} alerts as {confirm?.status === "resolved" ? "resolved" : "in progress"}?
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              This will update the status of all {confirm?.ids.length} selected alerts.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This updates all {confirm?.ids.length} selected alerts.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={bulkBusy}>Cancel</AlertDialogCancel>
@@ -343,7 +387,7 @@ function AlertList({ alerts, onUpdateStatus, onAddNote, emptyMessage }: {
                 e.preventDefault();
                 const c = confirm;
                 setConfirm(null);
-                if (c) void bulkUpdateStatus(c.status, c.ids);
+                if (c) void bulkUpdate(c.status, c.ids);
               }}
             >
               Confirm
@@ -355,155 +399,197 @@ function AlertList({ alerts, onUpdateStatus, onAddNote, emptyMessage }: {
   );
 }
 
-function AlertCard({ alert, onUpdateStatus, onAddNote, selected, onToggleSelected, selectionDisabled }: {
-  alert: any,
-  onUpdateStatus: (id: string, status: string) => Promise<void>,
-  onAddNote: (alert: any, note: string) => Promise<void>,
-  selected: boolean,
-  onToggleSelected: (id: string) => void,
-  selectionDisabled: boolean,
+function AlertRow({ alert, onUpdateStatus, onAddNote, selecting, selected, onToggleSelected, selectionDisabled }: {
+  alert: any;
+  onUpdateStatus: (id: string, status: Status) => Promise<void>;
+  onAddNote: (alert: any, note: string) => Promise<void>;
+  selecting: boolean;
+  selected: boolean;
+  onToggleSelected: (id: string) => void;
+  selectionDisabled: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
   const client = alert.clients;
   const coach = alert.coaches;
-  // System alerts (e.g. scheduled jobs failing) have no client.
-  const subjectName = client?.full_name || (alert.client_id ? "Unknown Client" : "System");
-  const isWorkoutFailure = alert.error_type === 'workout_load_failure';
-  const isProgress = alert.error_type === 'progress_submission';
-  const friendlyType = ERROR_TYPE_LABELS[alert.error_type] ?? alert.error_type;
+  const isSystem = !alert.client_id;
+  const status = (alert.status in STATUS_META ? alert.status : "open") as Status;
+  const meta = STATUS_META[status];
+  const notes: { note: string; at: string }[] = (alert.details as any)?.notes ?? [];
+  const subject = isSystem ? "System check" : client?.full_name || "Unknown client";
+
+  const saveNote = async () => {
+    if (!draft.trim() || savingNote) return;
+    setSavingNote(true);
+    try {
+      await onAddNote(alert, draft);
+      setDraft("");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't save the note");
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   return (
-    <Card className={cn(
-      "overflow-hidden border-l-4",
-      alert.status === 'open' ? "border-l-destructive" : 
-      alert.status === 'in_progress' ? "border-l-warning" : "border-l-success"
-    )}>
-      <div className="p-4 md:p-5">
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-          <div className="flex items-start gap-3 min-w-0">
-            <Checkbox
-              checked={selected}
-              onCheckedChange={() => onToggleSelected(alert.id)}
-              disabled={selectionDisabled}
-              aria-label={`Select alert for ${subjectName}`}
-              className="mt-2.5 h-5 w-5 shrink-0"
-            />
-            <UserAvatar 
-              src={client?.profile_picture_url} 
-              name={subjectName} 
-              size={40} 
-            />
-            <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-sm md:text-base truncate">
-                  {subjectName}
-                </span>
-                <Badge variant="outline" className="text-[10px] py-0 h-4 uppercase tracking-wider">
-                  {alert.status.replace('_', ' ')}
-                </Badge>
-                {alert.notified_via?.map((via: string) => (
-                  <Badge key={via} variant="secondary" className="text-[10px] py-0 h-4 opacity-70">
-                    {via}
-                  </Badge>
-                ))}
-              </div>
-              <div className="text-xs text-muted-foreground flex items-center gap-2">
-                <span className="flex items-center gap-1">
-                  <Hammer className="h-3 w-3" />
-                  Coach: {coach?.full_name || "Unassigned"}
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}
-                </span>
-              </div>
-            </div>
-          </div>
+    <div
+      className={cn(
+        "rounded-xl border bg-card transition-colors",
+        selected ? "border-primary/60 bg-primary/5" : "border-border",
+      )}
+    >
+      <div className="flex items-start gap-3 p-3 md:p-4">
+        {selecting && (
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggleSelected(alert.id)}
+            disabled={selectionDisabled}
+            aria-label={`Select alert: ${titleFor(alert)}`}
+            className="mt-2.5 shrink-0"
+          />
+        )}
 
-          <div className="flex gap-2 shrink-0 self-end md:self-start">
-            {alert.status === 'open' && (
-              <ActionButton
-                size="sm"
-                variant="outline"
-                onAction={() => onUpdateStatus(alert.id, 'in_progress')}
-                jobLabel="Updating alert status"
-                loadingLabel="Processing..."
-              >
-                Mark in progress
-              </ActionButton>
-            )}
-            {alert.status !== 'resolved' && (
-              <ActionButton
-                size="sm"
-                onAction={() => onUpdateStatus(alert.id, 'resolved')}
-                jobLabel="Resolving support alert"
-                loadingLabel="Resolving..."
-                successLabel="Resolved"
-              >
-                Resolve
-              </ActionButton>
-            )}
+        {isSystem ? (
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+            <ServerCog className="h-5 w-5" />
           </div>
-        </div>
+        ) : (
+          <UserAvatar src={client?.profile_picture_url} name={subject} size={40} />
+        )}
 
-        <div className="mt-4 grid md:grid-cols-2 gap-4">
-          <div className="space-y-3">
-            <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Issue Details</div>
-              <div className="text-sm font-semibold flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-destructive" />
-                {friendlyType}
-              </div>
-              <div className="text-xs font-mono bg-background/50 p-2 rounded border border-border/50 break-all">
-                {alert.error_message || "No error message provided"}
-              </div>
-              {isProgress && client?.id && (
-                <Link
-                  to="/admin/clients/$id/progress"
-                  params={{ id: client.id }}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
-                >
-                  Open submission <ExternalLink className="h-3 w-3" />
-                </Link>
-              )}
-              {alert.page_route && (
-                <div className="text-[10px] text-muted-foreground truncate">
-                  Route: {alert.page_route}
-                </div>
-              )}
-            </div>
-          </div>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="min-w-0 flex-1 text-left"
+        >
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="font-semibold leading-tight">{titleFor(alert)}</span>
+            <span className={cn("inline-flex items-center gap-1 text-xs font-medium", meta.text)}>
+              <span className={cn("h-1.5 w-1.5 rounded-full", meta.dot)} />
+              {meta.label}
+            </span>
+          </span>
+          <span className="mt-0.5 line-clamp-2 block text-sm text-muted-foreground">{summaryFor(alert)}</span>
+          <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground/80">
+            <span>{subject}</span>
+            {!isSystem && <><span aria-hidden>·</span><span>Coach: {coach?.full_name || "Unassigned"}</span></>}
+            <span aria-hidden>·</span>
+            <span>{formatDistanceToNow(new Date(alert.updated_at ?? alert.created_at), { addSuffix: true })}</span>
+            {notes.length > 0 && <><span aria-hidden>·</span><span>{notes.length} note{notes.length === 1 ? "" : "s"}</span></>}
+          </span>
+        </button>
 
-          <div className="space-y-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Notes</div>
-            <div className="space-y-2 max-h-[120px] overflow-y-auto">
-              {(alert.details as any)?.notes?.map((note: any, i: number) => (
-                <div key={i} className="text-[11px] bg-accent/30 p-2 rounded">
-                  <div className="flex justify-between items-start gap-2 mb-1">
-                    <span className="font-semibold">Note</span>
-                    <span className="text-[9px] opacity-60">
-                      {formatDistanceToNow(new Date(note.at), { addSuffix: true })}
-                    </span>
-                  </div>
-                  {note.note}
-                </div>
-              )) || (
-                <div className="text-[11px] text-muted-foreground italic">No notes yet</div>
+        <div className="flex shrink-0 items-center gap-1">
+          {status !== "resolved" ? (
+            <ActionButton
+              size="sm"
+              onAction={() => onUpdateStatus(alert.id, "resolved")}
+              jobLabel="Resolving support alert"
+              loadingLabel="Resolving…"
+              successLabel="Resolved"
+            >
+              Resolve
+            </ActionButton>
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="More actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {status === "open" && (
+                <DropdownMenuItem onSelect={() => void onUpdateStatus(alert.id, "in_progress").catch((e) => toast.error(e?.message ?? "Couldn't update"))}>
+                  Mark in progress
+                </DropdownMenuItem>
               )}
-            </div>
-            {alert.status !== 'resolved' && (
-              <Textarea 
-                placeholder="Add a note..." 
-                className="text-xs min-h-[60px] resize-none"
-                onBlur={(e) => {
-                  onAddNote(alert, e.target.value);
-                  e.target.value = '';
-                }}
-              />
-            )}
-          </div>
+              {status !== "open" && (
+                <DropdownMenuItem onSelect={() => void onUpdateStatus(alert.id, "open").catch((e) => toast.error(e?.message ?? "Couldn't update"))}>
+                  Reopen
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onSelect={() => setExpanded((v) => !v)}>
+                {expanded ? "Hide details" : "Show details"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? "Hide details" : "Show details"}
+            className="hidden h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-muted sm:grid"
+          >
+            <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+          </button>
         </div>
       </div>
-    </Card>
+
+      {expanded && (
+        <div className="space-y-4 border-t border-border px-3 py-3 md:px-4">
+          <section className="space-y-1.5">
+            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Details</h4>
+            <pre className="whitespace-pre-wrap break-words rounded-lg bg-muted/50 p-2.5 font-mono text-xs leading-relaxed">
+              {alert.error_message || "No error message provided"}
+            </pre>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              {alert.page_route && alert.page_route !== "/admin" && <span>Page: {alert.page_route}</span>}
+              {alert.notified_via?.length > 0 && <span>Notified via {alert.notified_via.join(", ")}</span>}
+              <span>Opened {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}</span>
+              {!isSystem && client?.id && (
+                <Link
+                  to={alert.error_type === "progress_submission" ? "/admin/clients/$id/progress" : "/admin/clients/$id"}
+                  params={{ id: client.id }}
+                  className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                >
+                  {alert.error_type === "progress_submission" ? "Open submission" : "Open client"}
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Notes</h4>
+            {notes.length > 0 ? (
+              <ul className="space-y-1.5">
+                {notes.map((n, i) => (
+                  <li key={i} className="rounded-lg bg-muted/40 px-2.5 py-2 text-sm">
+                    <p className="whitespace-pre-wrap">{n.note}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {formatDistanceToNow(new Date(n.at), { addSuffix: true })}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground">No notes yet.</p>
+            )}
+            {status !== "resolved" && (
+              <div className="flex items-end gap-2">
+                <Textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      void saveNote();
+                    }
+                  }}
+                  placeholder="Add a note…"
+                  rows={1}
+                  className="min-h-9 resize-none text-sm"
+                />
+                <Button size="sm" variant="outline" disabled={!draft.trim() || savingNote} onClick={() => void saveNote()}>
+                  {savingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                </Button>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
   );
 }

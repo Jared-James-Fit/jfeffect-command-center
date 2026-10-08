@@ -9,6 +9,7 @@ import { DiscountCodesPage } from "@/route-pages/_authenticated/admin/discount-c
 import { AdminTransactionsPage } from "@/route-pages/_authenticated/admin/transactions";
 import { BillingSourcesPage } from "@/route-pages/_authenticated/admin/billing-sources";
 import { TaxesBooksPage } from "@/components/admin/books/taxes-books-page";
+import { useIsBusinessOwner } from "@/lib/business-owner";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -88,10 +89,12 @@ function SalesWorkspace() {
     if (tab === "pipeline") navigate({ to: "/admin/crm", replace: true });
   }, [tab, navigate]);
 
+  // Taxes & Books is the business owner's, not every admin's.
+  const isOwner = useIsBusinessOwner();
   const visible = useMemo(() => {
     const r = (role ?? "admin") as "admin" | "coach" | "media_manager";
-    return SECTIONS.filter((s) => s.roles.includes(r));
-  }, [role]);
+    return SECTIONS.filter((s) => s.roles.includes(r) && (s.value !== "taxes" || isOwner === true));
+  }, [role, isOwner]);
 
   const primary = visible.filter((s) => s.primary);
   const active: SectionKey =
