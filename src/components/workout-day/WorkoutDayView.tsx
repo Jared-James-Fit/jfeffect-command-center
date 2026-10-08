@@ -38,6 +38,7 @@ import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { formatClientDayNotes, formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import { format, parseISO, startOfDay } from "date-fns";
 import { useServerFn } from "@tanstack/react-start";
+import { SessionTimeRow } from "@/components/workout-day/SessionTimeRow";
 import { notifyCoachOfWorkoutFailure } from "@/lib/support-alerts.functions";
 import { getRowBlockSummariesFn } from "@/lib/exercise-blocks.functions";
 import {
@@ -104,7 +105,6 @@ import { trustedSessionRpe } from "@/lib/workout-review";
 import {
   buildLoadModel,
   parseRpe,
-  suggestedSessionRpe as computeSuggestedSessionRpe,
   planningTarget,
   predictReadiness,
   suggestFinalWarmup,
@@ -946,13 +946,6 @@ function WorkoutDay({
     () => selectPreviousLifts(previousLiftIdentities, previousLiftLogs, currentHistorySessionKey),
     [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey],
   );
-  // Pre-fill for the review's effort question: today's logged working-set RPEs.
-  const reviewSessionRpe = useMemo(
-    () => computeSuggestedSessionRpe(
-      (results as any[]).filter((r) => r.completed_at).map((r) => r.actual_rpe_num ?? r.actual_rpe),
-    ),
-    [results],
-  );
 
   // Bodyweight (smoothed) — strength scales with it, so past sets are adjusted
   // for any change since they were lifted. See load-suggestion.ts.
@@ -1573,6 +1566,14 @@ function WorkoutDay({
     }
     setCompletionHydrated(true);
   }, [draftHydrated, completionHydrated, completion]);
+
+  // The Session time sheet edits a finished workout's length server-side.
+  // Mirror it here, or the next notes autosave writes the old length back.
+  const serverDurationMin = completion?.completed_at ? completion?.actual_duration_min ?? null : null;
+  useEffect(() => {
+    if (!completionHydrated || serverDurationMin == null) return;
+    setActualMin(String(serverDurationMin));
+  }, [completionHydrated, serverDurationMin]);
 
   // Autosave workout-level notes + actual minutes into pl_day_completions (draft state — does NOT set completed_at).
   const metaSave = useAutosave({
@@ -2279,8 +2280,9 @@ function WorkoutDay({
                   ])}
                 />
               ) : null}
-              {isClientWorkout && !isImpersonating && !completion?.completed_at && rowsLoaded && (rows as any[]).length > 0 && (
+              {isClientWorkout && !completion?.completed_at && rowsLoaded && (rows as any[]).length > 0 && (
                 <LockInBar
+                  previewOnly={isImpersonating}
                   completionId={completion?.id ?? null}
                   ensureStarted={ensureStartedForLockIn}
                   workoutTitle={cleanDayTitle(day.title, day.day_index)}
@@ -2383,7 +2385,6 @@ function WorkoutDay({
             {completion?.completed_at && client?.id && (
               <div className="mx-auto max-w-3xl px-4 pb-4">
                 <CompletedWorkoutActions
-                  suggestedSessionRpe={reviewSessionRpe}
                   ctx={{ kind: "client", dayId, scheduledWorkoutId }}
                   hasCoach
                   actAsClientId={isImpersonating ? client.id : null}
@@ -2499,7 +2500,8 @@ function WorkoutDay({
             >
               <CheckCircle2 className="mr-1 h-3 w-3" />
               {reviewSubmitted ? "Completed" : "Completed · Review pending"}
-              {completion.actual_duration_min != null && completion.actual_duration_min > 0
+              {/* Client workouts show length on the Session time row below. */}
+              {!isClientWorkout && completion.actual_duration_min != null && completion.actual_duration_min > 0
                 ? ` · ${formatDurationMin(completion.actual_duration_min)}`
                 : ""}
             </Badge>
@@ -2514,6 +2516,9 @@ function WorkoutDay({
               </Button>
             )}
           </div>
+        )}
+        {completion?.completed_at && completion?.id && isClientWorkout && client?.id && (
+          <SessionTimeRow completion={completion as any} clientId={client.id} workoutTitle={day?.title ?? null} />
         )}
         {/* Compact Warm-Up launcher. Rescheduling lives on the outside
             workout card / Schedule Manager, not inside the logger. */}
@@ -2679,7 +2684,6 @@ function WorkoutDay({
 
         {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
-                  suggestedSessionRpe={reviewSessionRpe}
             ctx={{ kind: "client", dayId, scheduledWorkoutId }}
             hasCoach
             actAsClientId={isImpersonating ? client.id : null}
@@ -2725,7 +2729,6 @@ function WorkoutDay({
 
       {!completion?.completed_at && client?.id && autoFinishReady && (
         <WorkoutReviewEditor
-          suggestedSessionRpe={reviewSessionRpe}
           open={quickFinishReviewOpen}
           onOpenChange={setQuickFinishReviewOpen}
           ctx={

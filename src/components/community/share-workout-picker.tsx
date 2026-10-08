@@ -1,10 +1,11 @@
 import { Suspense, useState } from "react";
 import { Check, ChevronRight, Plus, X } from "lucide-react";
+import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
-import { formatWorkoutDuration, postTimeLabel } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, postTimeLabel } from "@/lib/community";
 import { useRecentCompletions, type RecentCompletion } from "@/lib/community.queries";
 import { audienceDoneLabel } from "@/components/community/audience-picker";
 
@@ -17,8 +18,29 @@ export const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%
  * share editor for it. Means nobody has to wait for their next workout to
  * post, and an empty feed always has a one-tap way to fill it.
  */
-export function ShareWorkoutButton({ unit, className, label = "Share a workout", variant = "pill" }: { unit: "kg" | "lb"; className?: string; label?: string; variant?: "pill" | "block" | "bubble" }) {
-  const [open, setOpen] = useState(false);
+export function ShareWorkoutButton({
+  unit,
+  className,
+  label = "Share a workout",
+  variant = "pill",
+  previewOnly = false,
+}: {
+  unit: "kg" | "lb";
+  className?: string;
+  label?: string;
+  variant?: "pill" | "block" | "bubble";
+  /** Coach viewing as a client: looks the same, but never posts as them. */
+  previewOnly?: boolean;
+}) {
+  const [rawOpen, setRawOpen] = useState(false);
+  const open = rawOpen && !previewOnly;
+  const setOpen = (v: boolean) => {
+    if (v && previewOnly) {
+      toast.message(PREVIEW_ONLY_MESSAGE);
+      return;
+    }
+    setRawOpen(v);
+  };
   const [picked, setPicked] = useState<RecentCompletion | null>(null);
   const { data: sessions, isLoading } = useRecentCompletions(open);
 

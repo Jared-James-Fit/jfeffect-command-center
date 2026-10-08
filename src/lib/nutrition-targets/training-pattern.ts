@@ -1,6 +1,7 @@
 /**
  * When does this client actually train? Built from logged workout start times
- * (pl_day_completions.started_at) in the client's time zone. Used by the
+ * (confirmed training_started_at, else started_at; after-the-fact logs are
+ * dropped by the loader) in the client's time zone. Used by the
  * nutrition AI to place Pre-/Post-Workout meals when the form answer is
  * "It varies" or blank, and shown to the coach on the Nutrition panel.
  * Pure + deterministic so it can be tested.

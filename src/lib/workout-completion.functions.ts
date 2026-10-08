@@ -806,7 +806,7 @@ const ReviewInput = z.intersection(
     hitTarget: z.string().nullable().optional(),
     recoveryToday: z.number().int().min(1).max(5).nullable().optional(),
     sleepBucket: z
-      .enum(["lt5", "5_6", "6_7", "7_8", "8_9", "gte9"])
+      .enum(["lt5", "5_6", "6_7", "7_8", "8_9", "gte9", "gte7"])
       .nullable()
       .optional(),
     sleepNotes: z.string().nullable().optional(),
@@ -1109,5 +1109,68 @@ export const setWorkoutStatus = createServerFn({ method: "POST" })
       const { error } = await writer.from("pl_day_completions").insert(insertRow);
       if (error) throw error;
     }
+    return { ok: true };
+  });
+
+/* -------------------------------------------------------------------------- */
+/*  setTrainingTime — athlete/coach confirms when a session really happened    */
+/* -------------------------------------------------------------------------- */
+
+const SetTrainingTimeInput = z.object({
+  completionId: z.string().uuid(),
+  trainingStartedAt: z.string().datetime({ offset: true }),
+  durationMin: z.number().int().min(5).max(300),
+});
+
+/**
+ * Writes the confirmed start (training_started_at) and the session length
+ * (actual_duration_min) on a completed workout. started_at / completed_at are
+ * left alone: status, XP keys and version history are keyed to them.
+ */
+export const setTrainingTime = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SetTrainingTimeInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error: readErr } = await supabaseAdmin
+      .from("pl_day_completions")
+      .select("id, client_id, completed_at")
+      .eq("id", data.completionId)
+      .maybeSingle();
+    if (readErr) throw readErr;
+    if (!row) throw new Error("Workout not found");
+    if (!row.completed_at) throw new Error("Finish the workout before setting its time");
+
+    const { data: owner } = await supabaseAdmin
+      .from("clients")
+      .select("user_id")
+      .eq("id", row.client_id)
+      .maybeSingle();
+    if (owner?.user_id !== userId) {
+      const [{ data: isAdmin }, { data: isAssigned }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+        supabase.rpc("is_assigned_coach_for_client", { _client_id: row.client_id }),
+      ]);
+      if (!isAdmin && !isAssigned) throw new Error("You can only edit your own workouts");
+    }
+
+    const start = new Date(data.trainingStartedAt).getTime();
+    const now = Date.now();
+    if (start + data.durationMin * 60_000 > now + 10 * 60_000) {
+      throw new Error("That session would end in the future");
+    }
+    if (start < new Date(row.completed_at).getTime() - 30 * 86_400_000) {
+      throw new Error("Start time is more than 30 days before the workout was logged");
+    }
+
+    const { error } = await supabaseAdmin
+      .from("pl_day_completions")
+      .update({
+        training_started_at: new Date(start).toISOString(),
+        actual_duration_min: data.durationMin,
+      })
+      .eq("id", row.id);
+    if (error) throw error;
     return { ok: true };
   });

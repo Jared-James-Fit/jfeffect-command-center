@@ -36,6 +36,7 @@ const ERROR_TYPE_LABELS: Record<string, string> = {
   progress_submission: "Progress Check-In",
   missing_maxes: "Missing Maxes",
   workout_sync_failure: "Workout Sync",
+  scheduled_jobs_failing: "Scheduled jobs failing",
 };
 
 export function SupportAlertsRedirect() {
@@ -364,6 +365,8 @@ function AlertCard({ alert, onUpdateStatus, onAddNote, selected, onToggleSelecte
 }) {
   const client = alert.clients;
   const coach = alert.coaches;
+  // System alerts (e.g. scheduled jobs failing) have no client.
+  const subjectName = client?.full_name || (alert.client_id ? "Unknown Client" : "System");
   const isWorkoutFailure = alert.error_type === 'workout_load_failure';
   const isProgress = alert.error_type === 'progress_submission';
   const friendlyType = ERROR_TYPE_LABELS[alert.error_type] ?? alert.error_type;
@@ -381,18 +384,18 @@ function AlertCard({ alert, onUpdateStatus, onAddNote, selected, onToggleSelecte
               checked={selected}
               onCheckedChange={() => onToggleSelected(alert.id)}
               disabled={selectionDisabled}
-              aria-label={`Select alert for ${client?.full_name || "client"}`}
+              aria-label={`Select alert for ${subjectName}`}
               className="mt-2.5 h-5 w-5 shrink-0"
             />
             <UserAvatar 
               src={client?.profile_picture_url} 
-              name={client?.full_name || "Unknown Client"} 
+              name={subjectName} 
               size={40} 
             />
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold text-sm md:text-base truncate">
-                  {client?.full_name || "Unknown Client"}
+                  {subjectName}
                 </span>
                 <Badge variant="outline" className="text-[10px] py-0 h-4 uppercase tracking-wider">
                   {alert.status.replace('_', ' ')}
