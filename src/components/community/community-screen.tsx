@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { CrewList } from "@/components/community/crew-list";
-import { markCommunitySeen, useCommunityFeed, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
+import { markCommunitySeen, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +51,12 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
 
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
+  // "Double-tap to like" shows on the first post (a workout before a note)
+  // until the first double-tap; it's remembered on the account.
+  const hints = useHintsSeen();
+  const markHint = useMarkHintSeen();
+  const onDoubleTap = useCallback(() => markHint("double_tap"), [markHint]);
+  const hintId = hints.data && !hints.data.includes("double_tap") ? (posts.find((p) => p.kind !== "note") ?? posts[0])?.id ?? null : null;
   const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? posts : []);
 
   // Opening the community clears the "new posts" badge (server-side, every device).
@@ -165,6 +171,8 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
               onOpen={(post) => setDetailId(post.id)}
               onOpenComments={setCommentsFor}
               onOpenAuthor={openAuthor}
+              doubleTapHint={p.id === hintId}
+              onDoubleTap={onDoubleTap}
             />
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
@@ -187,6 +195,8 @@ function PostRow(props: {
   onOpen: (p: CommunityPost) => void;
   onOpenComments: (p: CommunityPost) => void;
   onOpenAuthor: (a: CommunityAuthor) => void;
+  doubleTapHint?: boolean;
+  onDoubleTap?: () => void;
 }) {
   const react = useReact(props.post, props.viewerIsStaff);
   return (

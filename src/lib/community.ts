@@ -15,16 +15,17 @@ export const COMMENT_MAX = 300;
 export const FEED_PAGE_SIZE = 10;
 
 /**
- * The reaction is 🔥, one tap, one per person per post. A crew this size
- * reads better as one number with faces than four split counts. The other
- * three stay here only so anything saved under the old set still renders.
+ * Reactions: ❤️ is the one-tap default (tap the heart, or double-tap the
+ * post); hold the heart for the other four. One per person per post, and a
+ * post shows one number with faces, not split counts.
  */
-export const REACTION = { key: "fire", emoji: "🔥", label: "Fire" } as const;
+export const REACTION = { key: "heart", emoji: "❤️", label: "Love it" } as const;
 export const REACTIONS = [
-  { key: "fire", emoji: "🔥", label: "Fire" },
-  { key: "muscle", emoji: "💪", label: "Strong" },
-  { key: "clap", emoji: "👏", label: "Nice work" },
   { key: "heart", emoji: "❤️", label: "Love it" },
+  { key: "thumbs", emoji: "👍", label: "Like" },
+  { key: "bang", emoji: "‼️", label: "Big" },
+  { key: "fire", emoji: "🔥", label: "Fire" },
+  { key: "laugh", emoji: "😂", label: "Haha" },
 ] as const;
 export type ReactionKey = (typeof REACTIONS)[number]["key"];
 
@@ -154,6 +155,16 @@ export type CommunityPost = {
 };
 
 export type Reactor = CommunityAuthor & { is_me?: boolean };
+
+/** The kinds a post got, most given first (for the little ❤️🔥😂 beside the names). */
+export function reactionKinds(post: Pick<CommunityPost, "reactions">, max = 3): string[] {
+  return Object.entries(post.reactions ?? {})
+    .filter(([, n]) => (n ?? 0) > 0)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .map(([k]) => reactionEmoji(k))
+    .filter((e): e is string => !!e)
+    .slice(0, max);
+}
 
 export function reactionTotal(post: Pick<CommunityPost, "reaction_count" | "reactions">): number {
   if (typeof post.reaction_count === "number") return post.reaction_count;
