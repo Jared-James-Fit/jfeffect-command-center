@@ -18,6 +18,7 @@ import {
   type CommunityPostDetail,
   type CommunityProfile,
   type CommunityVisibility,
+  type PostPointsStatus,
   type ReactionKey,
   type WorkoutShareStats,
   type WinsStats,
@@ -301,8 +302,24 @@ export async function shareToCommunity(
   invalidateCommunity(qc);
 }
 
+/** What a Community post earns right now (today banked? weekly cap?). */
+export function usePostPointsStatus(enabled = true) {
+  return useQuery({
+    queryKey: ["community-post-points"],
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<PostPointsStatus | null> => {
+      const { data, error } = await db.rpc("community_post_points_status");
+      if (error) throw error;
+      return (data ?? null) as PostPointsStatus | null;
+    },
+  });
+}
+
 export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-feed"] });
+  qc.invalidateQueries({ queryKey: ["community-post-points"] });
+  qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly-view"] });
   qc.invalidateQueries({ queryKey: ["community-my-post"] });
   qc.invalidateQueries({ queryKey: ["community-recent-completions"] });
   qc.invalidateQueries({ queryKey: ["community-profile"] });

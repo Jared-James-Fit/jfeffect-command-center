@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { LEAGUE_RECORD_CAP, LEAGUE_RECORDS_START, LEAGUE_RULES, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
+import { LEAGUE_COMMUNITY_POINTS, LEAGUE_COMMUNITY_WEEKLY_CAP, LEAGUE_RECORD_CAP, LEAGUE_RECORDS_START, LEAGUE_RULES, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 
 describe("league point display", () => {
   it.each([
@@ -40,7 +40,7 @@ describe("league rules stay in sync", () => {
   const ui = readFileSync("src/components/portal/athlete-level-card.tsx", "utf8");
 
   it("uses the simple point values everywhere", () => {
-    expect(LEAGUE_RULES.map((r) => r.points)).toEqual([10, 5, 5, 10, 5, 3]);
+    expect(LEAGUE_RULES.map((r) => r.points)).toEqual([10, 5, 5, 10, 5, 3, 15]);
     expect(sql).toContain("a.workouts_completed*10 workout_points");
     expect(sql).toContain("a.fully_logged*5 logging_points");
     expect(sql).toContain("a.bw_logs*5 bodyweight_points");
@@ -85,5 +85,33 @@ describe("training-record points (from Oct 2026)", () => {
 
   it("returns record counts for the leaderboard badges", () => {
     expect(sql).toMatch(/atpr_lifts integer, program_pr_lifts integer, block_pr_lifts integer, last_record_at timestamptz/);
+  });
+});
+
+describe("community post points (from Oct 2026)", () => {
+  const sql = readFileSync("supabase/migrations/20261012110000_league_community_post_points.sql", "utf8");
+  const rules = Object.fromEntries(LEAGUE_RULES.map((r) => [r.key, r.points]));
+
+  it("UI rule matches the database: +15 a post, capped per week", () => {
+    expect(rules.community).toBe(LEAGUE_COMMUNITY_POINTS);
+    expect(sql).toContain(`x.community_posts * ${LEAGUE_COMMUNITY_POINTS} community_points`);
+    expect(sql).toContain(`sum(least(${LEAGUE_COMMUNITY_WEEKLY_CAP}, w.n))::int community_posts`);
+    expect(sql).toContain(`'points', ${LEAGUE_COMMUNITY_POINTS}`);
+    expect(sql).toContain(`'week_cap', ${LEAGUE_COMMUNITY_WEEKLY_CAP}`);
+  });
+
+  it("adds community points to the total and keeps the league columns additive", () => {
+    expect(sql).toContain("bo.improvement_points + bo.community_points base_total");
+    expect(sql).toMatch(/is_coach boolean, community_posts integer, community_points integer\)/);
+  });
+
+  it("only pays for visible posts of finished, recent workouts, once per day", () => {
+    expect(sql).toContain("'community_post:' || _day::text");
+    expect(sql).toContain("cp.visibility = 'community'");
+    expect(sql).toContain("cp.archived_at is null");
+    expect(sql).toContain("pc.completed_at is not null");
+    expect(sql).toContain("pc.completed_at >= cp.created_at - interval '7 days'");
+    // deleting / archiving / hiding takes the event back
+    expect(sql).toContain("delete from public.athlete_xp_events where client_id = _client and source_key = k");
   });
 });

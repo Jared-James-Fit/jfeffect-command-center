@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { CAPTION_MAX, buildShareCardFields, lockInTimeLabel, type CommunityVisibility } from "@/lib/community";
-import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, type SavePostInput } from "@/lib/community.queries";
+import { CAPTION_MAX, buildShareCardFields, lockInTimeLabel, postPointsHint, type CommunityVisibility } from "@/lib/community";
+import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, usePostPointsStatus, type SavePostInput } from "@/lib/community.queries";
 import { AudiencePicker } from "@/components/community/audience-picker";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import {
@@ -148,6 +148,8 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
 
   const drawable = media?.drawable ?? existingDrawable ?? null;
   const hasMedia = !!media || (!!existing?.media_path && !removedExisting);
+  const { data: pointsStatus } = usePostPointsStatus(postOpen);
+  const pointsHint = postPointsHint(pointsStatus, visibility, existing?.visibility === "community", stats?.completed_at);
 
   const base = useMemo(() => {
     if (!stats) return null;
@@ -340,7 +342,8 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         return null;
       });
       if (visibility === "community") {
-        toast.success(existing ? "Post updated 🔥" : "You're in the feed 🔥", {
+        const earned = pointsHint?.tone === "earn" ? ` +${pointsStatus?.points} league points` : "";
+        toast.success(existing ? "Post updated 🔥" : `You're in the feed 🔥${earned}`, {
           action: { label: "View", onClick: () => navigate({ to: "/portal/community" }) },
         });
       } else if (visibility === "coach") {
@@ -547,6 +550,11 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
             <div className="mt-3">
               <AudiencePicker value={visibility} onChange={setVisibility} hideLoads={hideLoads} onHideLoads={setHideLoads} />
             </div>
+            {pointsHint && (
+              <p className={cn("mt-3 rounded-xl px-3 py-2 text-[13px]", pointsHint.tone === "earn" ? "bg-primary/10 font-black text-primary" : "bg-muted text-muted-foreground")}>
+                {pointsHint.text}
+              </p>
+            )}
             <Button type="button" className="mt-4 h-13 w-full rounded-2xl py-3.5 text-[16px] font-black" disabled={posting} onClick={() => void post()}>
               <Send className="mr-2 h-5 w-5" />
               {posting
