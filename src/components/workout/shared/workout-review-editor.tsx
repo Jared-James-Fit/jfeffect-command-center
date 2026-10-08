@@ -35,6 +35,11 @@ import {
   EFFORT_OPTIONS,
   PAIN_AREAS,
   PAIN_SEVERITY,
+  PAIN_SIDES,
+  SIDED_PAIN_AREAS,
+  composePainArea,
+  parsePainArea,
+  type PainSide,
   REVIEW_VERSION,
   SLEEP_OPTIONS,
   deriveOverallRating,
@@ -152,7 +157,16 @@ export function WorkoutReviewEditor({
   const [recoveryToday, setRecoveryToday] = useState<number | null>(initial?.recoveryToday ?? null);
   // null = not answered. Edits show the stored value; new reviews start blank.
   const [pain, setPain] = useState<boolean | null>(initial?.submittedAt ? !!initial.pain : null);
-  const [painArea, setPainArea] = useState<string | null>(initial?.pain ? initial?.painArea ?? null : null);
+  // A stored area splits into chip + optional side ("Shoulder (R)"); a value
+  // no chip matches (older reviews: "General") is kept as written until changed.
+  const initialPain = () => {
+    const stored = initial?.pain ? initial?.painArea ?? null : null;
+    const parsed = parsePainArea(stored);
+    return { ...parsed, legacy: parsed.area ? null : stored };
+  };
+  const [painArea, setPainArea] = useState<string | null>(() => initialPain().area);
+  const [painSide, setPainSide] = useState<PainSide | null>(() => initialPain().side);
+  const [legacyArea, setLegacyArea] = useState<string | null>(() => initialPain().legacy);
   const [painLevel, setPainLevel] = useState<number>(initial?.painLevel ?? 5);
   const [note, setNote] = useState<string>(initial?.clientNote ?? "");
   const [noteOpen, setNoteOpen] = useState<boolean>(!!(initial?.clientNote ?? "").trim());
@@ -163,18 +177,22 @@ export function WorkoutReviewEditor({
     setSleepBucket(initial?.sleepBucket ?? null);
     setRecoveryToday(initial?.recoveryToday ?? null);
     setPain(initial?.submittedAt ? !!initial.pain : null);
-    setPainArea(initial?.pain ? initial?.painArea ?? null : null);
+    const p = initialPain();
+    setPainArea(p.area);
+    setPainSide(p.side);
+    setLegacyArea(p.legacy);
     setPainLevel(initial?.painLevel ?? 5);
     setNote(initial?.clientNote ?? "");
     setNoteOpen(!!(initial?.clientNote ?? "").trim());
   }, [open, initial?.submittedAt]);
 
-  const cta = checkoutCta({ isEdit, effort, pain, painArea, sleepBucket, recoveryToday });
+  const storedArea = painArea ? composePainArea(painArea, painSide) : legacyArea;
+  const cta = checkoutCta({ isEdit, effort, pain, painArea: storedArea, sleepBucket, recoveryToday });
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (effort == null) throw new Error("Pick how hard it was");
-      if (pain && !painArea) throw new Error("Pick where it hurts");
+      if (pain && !storedArea) throw new Error("Pick where it hurts");
       const overallRating = deriveOverallRating({
         pain: !!pain,
         sessionRpe: effort,
@@ -190,7 +208,7 @@ export function WorkoutReviewEditor({
           // Constraint pl_workout_feedback_pain_consistency requires:
           // pain=true → pain_level IS NOT NULL AND pain_area IS NOT NULL
           painLevel: pain ? painLevel : null,
-          painArea: pain ? painArea : null,
+          painArea: pain ? storedArea : null,
           painNote: null,
           clientNote: note.trim() ? note.trim() : null,
           // Legacy optional fields: preserved in DB, no longer asked.
@@ -308,24 +326,51 @@ export function WorkoutReviewEditor({
             </div>
             {pain && (
               <div className="space-y-2">
+                <p
+                  className={cn(
+                    "text-xs font-semibold",
+                    storedArea ? "text-muted-foreground" : "text-red-600 dark:text-red-400",
+                  )}
+                  data-testid="pain-where"
+                >
+                  {storedArea ? "Where" : "Where does it hurt? Tap one"}
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {PAIN_AREAS.map((a) => (
                     <button
                       key={a}
                       type="button"
-                      onClick={() => setPainArea(a)}
+                      onClick={() => {
+                        if (a !== painArea) setPainSide(null);
+                        setPainArea(a);
+                        setLegacyArea(null);
+                      }}
                       aria-pressed={painArea === a}
-                      className={cn(
-                        "h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
-                        painArea === a
-                          ? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-300"
-                          : "border-border bg-card text-foreground hover:bg-secondary/30",
-                      )}
+                      className={pill(painArea === a)}
                     >
                       {a}
                     </button>
                   ))}
                 </div>
+                {!painArea && legacyArea && (
+                  <p className="text-[11px] text-muted-foreground">Saved as “{legacyArea}”</p>
+                )}
+                {painArea && SIDED_PAIN_AREAS.includes(painArea) && (
+                  <div className="flex items-center gap-1.5" role="group" aria-label="Which side">
+                    <span className="w-9 text-xs font-semibold text-muted-foreground">Side</span>
+                    {PAIN_SIDES.map((o) => (
+                      <button
+                        key={o.v}
+                        type="button"
+                        onClick={() => setPainSide(painSide === o.v ? null : o.v)}
+                        aria-pressed={painSide === o.v}
+                        className={pill(painSide === o.v)}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-1.5">
                   {PAIN_SEVERITY.map((o) => (
                     <Chip
@@ -423,5 +468,15 @@ export function WorkoutReviewEditor({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** Small pill for pain area / side picks. */
+function pill(active: boolean) {
+  return cn(
+    "h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
+    active
+      ? "border-red-500 bg-red-500/10 text-red-700 dark:text-red-300"
+      : "border-border bg-card text-foreground hover:bg-secondary/30",
   );
 }

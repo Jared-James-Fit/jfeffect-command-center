@@ -45,6 +45,40 @@ export function effortChip(v: number | null | undefined): number | null {
 
 export const PAIN_AREAS = ["Shoulder", "Elbow", "Wrist", "Low back", "Hip", "Knee", "Other"] as const;
 
+/** Areas that come in pairs; these get an optional Left / Right / Both pick. */
+export const SIDED_PAIN_AREAS: readonly string[] = ["Shoulder", "Elbow", "Wrist", "Hip", "Knee"];
+export type PainSide = "L" | "R" | "both";
+export const PAIN_SIDES: { v: PainSide; label: string }[] = [
+  { v: "L", label: "Left" },
+  { v: "R", label: "Right" },
+  { v: "both", label: "Both" },
+];
+
+/**
+ * pain_area is free text shown to the coach as-is, so the side is written into
+ * it in the format the earlier review sheet used: "Shoulder (R)", and both
+ * sides as "Shoulder (L), Shoulder (R)". No side → just "Shoulder".
+ */
+export function composePainArea(area: string, side: PainSide | null): string {
+  if (!side || !SIDED_PAIN_AREAS.includes(area)) return area;
+  return side === "both" ? `${area} (L), ${area} (R)` : `${area} (${side})`;
+}
+
+/** Read a stored pain_area back into chip + side; anything else stays as written. */
+export function parsePainArea(stored: string | null | undefined): {
+  area: string | null;
+  side: PainSide | null;
+} {
+  const s = (stored ?? "").trim();
+  if (!s) return { area: null, side: null };
+  if ((PAIN_AREAS as readonly string[]).includes(s)) return { area: s, side: null };
+  const one = /^(.+) \((L|R)\)$/.exec(s);
+  if (one && SIDED_PAIN_AREAS.includes(one[1])) return { area: one[1], side: one[2] as PainSide };
+  const both = /^(.+) \(L\), (.+) \(R\)$/.exec(s);
+  if (both && both[1] === both[2] && SIDED_PAIN_AREAS.includes(both[1])) return { area: both[1], side: "both" };
+  return { area: null, side: null };
+}
+
 export const PAIN_SEVERITY: { v: number; label: string }[] = [
   { v: 3, label: "Mild" },
   { v: 5, label: "Moderate" },
