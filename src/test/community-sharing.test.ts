@@ -15,6 +15,10 @@ import {
   pickCardStats,
   postTimeLabel,
   buildShareCardFields,
+  planDetail,
+  groupSessions,
+  sessionDisplayTitle,
+  sessionWhen,
   formatExerciseBest,
   sessionLine,
   trainingSinceLabel,
@@ -410,10 +414,10 @@ describe("lock in (I showed up)", () => {
     expect(day).toContain('await startWorkoutSrv({ data: { kind: "client" as const, dayId, scheduledWorkoutId } });');
     expect(editor).toContain("const id = completionId ?? (await ensureStarted());");
   });
-  it("opens the camera inside the tap and keeps the logger light", () => {
-    expect(bar).toContain('capture="environment"');
-    expect(bar).toContain("camRef.current?.click();");
+  it("opens the in-app camera and keeps the logger light", () => {
+    expect(bar).toContain("else setCapturing(true);");
     expect(bar).toContain('lazyWithRetry(() => import("@/components/community/lock-in-editor")');
+    expect(bar).toContain('lazyWithRetry(() => import("@/components/community/capture-flow")');
     expect(bar).not.toContain("workout-share-card");
   });
   it("draws a LOCKED IN card and carries the time onto the finished photo card", () => {
@@ -809,5 +813,82 @@ describe("Instagram-style post controls: edit, archive, delete", () => {
     expect(actions).toContain('{archived ? "Show on profile" : "Archive"}');
     expect(actions).toContain("Archive instead");
     expect(profile).toContain("useMyArchived(showArchived)");
+  });
+});
+
+describe("share studio: lock in cards, camera first, text + stickers", () => {
+  const read = (f: string) => readFileSync(f, "utf8");
+  it("today's plan reads like a program", () => {
+    expect(planDetail({ sets: 4, reps_text: "5", duration_seconds: null })).toBe("4 × 5");
+    expect(planDetail({ sets: 3, reps_text: " 8-10 ", duration_seconds: null })).toBe("3 × 8-10");
+    expect(planDetail({ sets: 3, reps_text: null, duration_seconds: 45 })).toBe("3 × 45s");
+    expect(planDetail({ sets: 2, reps_text: "", duration_seconds: 90 })).toBe("2 × 1:30");
+    expect(planDetail({ sets: null, reps_text: null, duration_seconds: 120 })).toBe("2 min");
+    expect(planDetail({ sets: null, reps_text: "AMRAP", duration_seconds: null })).toBe("AMRAP");
+    expect(planDetail({ sets: 3, reps_text: null, duration_seconds: null })).toBe("3 sets");
+    expect(planDetail({ sets: 0, reps_text: null, duration_seconds: null })).toBe("");
+  });
+  it("lock in offers Locked in, Clock and (with a plan) Today's plan", () => {
+    const card = read("src/lib/workout-share-card.ts");
+    const editor = read("src/components/community/lock-in-editor.tsx");
+    expect(card).toContain('lockclock: "Clock"');
+    expect(card).toContain(`lockplan: "Today's plan"`);
+    expect(editor).toContain('plan.length ? ["lockin", "lockclock", "lockplan"] : ["lockin", "lockclock"]');
+  });
+  it("Share and Lock in open the camera first, then text + stickers", () => {
+    const picker = read("src/components/community/share-workout-picker.tsx");
+    const bar = read("src/components/community/lock-in.tsx");
+    const flow = read("src/components/community/capture-flow.tsx");
+    expect(picker).toContain("<CaptureFlow");
+    expect(picker).toContain('const activeMode: Mode = today ? mode ?? "lockin" : "workout";');
+    expect(picker).toContain("initialFile={photo}");
+    expect(bar).toContain("<CaptureFlow");
+    expect(bar).not.toContain('capture="environment"');
+    expect(flow).toContain("<PhotoDecorator");
+    // videos can't be decorated, so they skip the editor
+    expect(flow).toContain('if (file.type.startsWith("video/")) onDone(file, live);');
+  });
+  it("the camera falls back to the phone's own camera and picker", () => {
+    const cam = read("src/components/community/share-camera.tsx");
+    expect(cam).toContain("navigator.mediaDevices?.getUserMedia");
+    expect(cam).toContain('.catch(() => !cancelled && setStatus("fallback"))');
+    expect(cam).toContain('capture="environment"');
+    expect(cam).toContain("stop();");
+  });
+  it("stickers and text are baked into the photo at full size", () => {
+    const deco = read("src/components/community/photo-decorator.tsx");
+    expect(deco).toContain("const k = Math.min(1, 2048 / Math.max(nw, nh));");
+    expect(deco).toContain('"image/jpeg", 0.9');
+    // nothing added → the original photo, untouched
+    expect(deco).toContain("if (!items.length) return onDone(file);");
+  });
+  it("full-screen editors really fill the screen", () => {
+    for (const f of ["share-composer", "lock-in-editor", "share-camera", "photo-decorator", "post-detail"]) {
+      expect(read(`src/components/community/${f}.tsx`)).toContain("h-[100dvh] max-h-none");
+    }
+  });
+});
+
+describe("share picker: which workout was today", () => {
+  const now = new Date(2026, 9, 7, 21, 28); // Wed Oct 7, 9:28 PM local
+  const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).toISOString();
+  it("drops the program's weekday so it can't clash with the real date", () => {
+    expect(sessionDisplayTitle("Tuesday — Secondary Deadlift + Secondary Bench")).toBe("Secondary Deadlift + Secondary Bench");
+    expect(sessionDisplayTitle("Saturday - Tertiary Squat")).toBe("Tertiary Squat");
+    expect(sessionDisplayTitle("Workout")).toBe("Workout");
+    expect(sessionDisplayTitle("Sunday Funday")).toBe("Sunday Funday");
+  });
+  it("says when, in plain words", () => {
+    expect(sessionWhen(at(7, 21, 17), now)).toEqual({ group: "today", when: "Finished 11 min ago" });
+    expect(sessionWhen(at(7, 21, 28), now).when).toBe("Finished just now");
+    expect(sessionWhen(at(7, 9, 5), now).when).toMatch(/^Finished at 9:05/);
+    expect(sessionWhen(at(6, 19, 0), now).when).toMatch(/^Yesterday, 7:00/);
+    expect(sessionWhen(at(3, 10), now).group).toBe("week");
+    expect(sessionWhen(new Date(2026, 8, 21, 10).toISOString(), now)).toEqual({ group: "earlier", when: expect.stringMatching(/Sep 21/) });
+  });
+  it("buckets newest first and skips empty buckets", () => {
+    const g = groupSessions([{ completed_at: at(3, 10) }, { completed_at: at(7, 21, 17) }, { completed_at: at(7, 8) }], now);
+    expect(g.map((x) => x.label)).toEqual(["Today", "This week"]);
+    expect(g[0].items.map((i) => i.when)[0]).toBe("Finished 11 min ago");
   });
 });

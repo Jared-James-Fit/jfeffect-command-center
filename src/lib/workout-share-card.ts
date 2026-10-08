@@ -29,7 +29,7 @@ import { ellipsize, fitFont as fitSystemFont, font, loadImage, roundRect } from 
 import type { CardStat } from "@/lib/community";
 
 export type ShareFormat = "feed" | "story";
-export type ShareTemplate = "pr" | "photo" | "stats" | "sticker" | "volume" | "lockin";
+export type ShareTemplate = "pr" | "photo" | "stats" | "sticker" | "volume" | "lockin" | "lockclock" | "lockplan";
 
 export const SHARE_SIZES: Record<ShareFormat, { w: number; h: number; safeTop: number; safeBottom: number }> = {
   feed: { w: 1080, h: 1350, safeTop: 80, safeBottom: 80 },
@@ -42,7 +42,9 @@ export const TEMPLATE_LABEL: Record<ShareTemplate, string> = {
   stats: "Stats",
   sticker: "Sticker",
   volume: "Volume",
-  lockin: "Lock in",
+  lockin: "Locked in",
+  lockclock: "Clock",
+  lockplan: "Today's plan",
 };
 
 export type ShareCardMedia = CanvasImageSource & { width?: number; height?: number };
@@ -297,6 +299,8 @@ export async function drawWorkoutShareCard(canvas: HTMLCanvasElement, d: ShareCa
   else if (d.template === "photo") drawPhoto(ctx, d, logo, L);
   else if (d.template === "stats") drawStats(ctx, d, logo, L);
   else if (d.template === "lockin") drawLockIn(ctx, d, logo, L);
+  else if (d.template === "lockclock") drawLockClock(ctx, d, logo, L);
+  else if (d.template === "lockplan") drawLockPlan(ctx, d, logo, L);
   else drawVolume(ctx, d, logo, L);
 }
 
@@ -474,6 +478,133 @@ function drawLockIn(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L
     ctx.fillText(d.athleteName.toUpperCase(), PAD, y);
     setSpacing(ctx, 0);
   }
+}
+
+/** Photo (or the brand glow) with a scrim from `from` (0-1 of height) down. */
+function photoWithScrim(ctx: Ctx, d: ShareCardData, L: Layout, from: number, strength = 0.94) {
+  const { W, H } = L;
+  if (d.media) drawCover(ctx, d.media, W, H);
+  else darkGlow(ctx, W, H, "red");
+  const top = H * from;
+  const g = ctx.createLinearGradient(0, top, 0, H);
+  g.addColorStop(0, "rgba(8,8,11,0)");
+  g.addColorStop(0.5, `rgba(8,8,11,${(strength * 0.66).toFixed(2)})`);
+  g.addColorStop(1, `rgba(8,8,11,${strength})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, top, W, H - top);
+  const tg = ctx.createLinearGradient(0, 0, 0, L.top + 160);
+  tg.addColorStop(0, "rgba(8,8,11,0.5)");
+  tg.addColorStop(1, "rgba(8,8,11,0)");
+  ctx.fillStyle = tg;
+  ctx.fillRect(0, 0, W, L.top + 160);
+}
+
+/* ------------------------------------------------------------------ */
+/*  LOCK IN · CLOCK  (the time is the flex: "5:42 AM, already here")   */
+/* ------------------------------------------------------------------ */
+function drawLockClock(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
+  const { W, PAD, innerW } = L;
+  photoWithScrim(ctx, d, L, 0.34, 0.95);
+  brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
+
+  const raw = (d.lockedIn?.time ?? "").toUpperCase();
+  const m = raw.match(/^(\d{1,2}:\d{2})\s*([AP]M)?$/);
+  const clock = m ? m[1] : raw;
+  const ampm = m?.[2] ?? "";
+
+  let y = L.bottom - 10;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = font(800, 40);
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.fillText(ellipsize(ctx, d.workoutTitle, innerW), PAD, y);
+  y -= 40 + 40;
+
+  pill(ctx, d.lockedIn?.live ? "●  LOCKED IN" : "LOCKED IN", PAD, y - 54, RED, INK);
+  y -= 54 + 44;
+
+  // The clock, as big as the width allows; AM/PM rides beside it.
+  ctx.fillStyle = INK;
+  const ampmW = ampm ? 150 : 0;
+  const size = fitDisplay(ctx, clock, innerW - ampmW, L.story ? 400 : 330, 140);
+  ctx.fillText(clock, PAD - 6, y);
+  const clockW = ctx.measureText(clock).width;
+  if (ampm) {
+    ctx.font = display(Math.round(size * 0.34));
+    ctx.fillStyle = RED;
+    ctx.fillText(ampm, PAD + clockW + 18, y);
+  }
+  y -= size * 0.9 + 26;
+  if (d.athleteName) {
+    ctx.font = font(800, 28);
+    setSpacing(ctx, 6);
+    ctx.fillStyle = MUTED;
+    ctx.fillText(d.athleteName.toUpperCase(), PAD, y);
+    setSpacing(ctx, 0);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  LOCK IN · TODAY'S PLAN  (what's about to get done)                  */
+/* ------------------------------------------------------------------ */
+function drawLockPlan(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
+  const { W, H, PAD, innerW } = L;
+  photoWithScrim(ctx, d, L, 0.22, 0.96);
+  brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
+
+  const rows = d.exercises.slice(0, L.story ? 6 : 4);
+  const more = d.exercises.length - rows.length;
+  const rowH = 92;
+  const listH = rows.length * rowH + (more > 0 ? 56 : 0);
+  let y = L.bottom - 10 - listH;
+
+  // Header block above the list
+  const headTop = y - 40;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = INK;
+  const size = fitDisplay(ctx, "LOCKED IN", innerW, L.story ? 200 : 170, 100);
+  ctx.fillText("LOCKED IN", PAD - 4, headTop - 80);
+  ctx.fillStyle = RED;
+  ctx.fillRect(PAD, headTop - 80 + 16, Math.min(innerW, size * 1.1), 9);
+  ctx.font = font(800, 30);
+  setSpacing(ctx, 5);
+  ctx.fillStyle = MUTED;
+  const label = `TODAY'S PLAN${d.lockedIn?.time ? `  ·  ${d.lockedIn.time.toUpperCase()}` : ""}`;
+  ctx.fillText(ellipsize(ctx, label, innerW), PAD, headTop);
+  setSpacing(ctx, 0);
+  // session title above the stamp
+  ctx.font = font(800, 38);
+  ctx.fillStyle = "rgba(255,255,255,0.88)";
+  ctx.fillText(ellipsize(ctx, d.workoutTitle, innerW), PAD, headTop - 80 - size * 0.92 - 26);
+
+  // The list
+  y += 6;
+  for (const r of rows) {
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(PAD, y);
+    ctx.lineTo(W - PAD, y);
+    ctx.stroke();
+    ctx.font = display(48);
+    ctx.textAlign = "right";
+    ctx.fillStyle = INK;
+    const dw = r.detail ? ctx.measureText(r.detail).width : 0;
+    if (r.detail) ctx.fillText(r.detail, W - PAD, y + 62);
+    ctx.textAlign = "left";
+    ctx.font = font(800, 36);
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.fillText(ellipsize(ctx, r.name, innerW - dw - 30), PAD, y + 60);
+    y += rowH;
+  }
+  if (more > 0) {
+    ctx.font = font(700, 28);
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = "left";
+    ctx.fillText(`+ ${more} more`, PAD, y + 40);
+  }
+  void H;
 }
 
 /* ------------------------------------------------------------------ */
