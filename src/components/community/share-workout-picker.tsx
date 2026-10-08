@@ -7,11 +7,12 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { Skeleton } from "@/components/ui/skeleton";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, sessionDisplayTitle } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, sessionDisplayTitle, sessionWhen } from "@/lib/community";
 import { invalidateCommunity, useDayPlan, useMyPostForCompletion, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
 import { startWorkout as startWorkoutFn } from "@/lib/workout-completion.functions";
 import type { LockInPick } from "@/components/community/lock-in";
 import { audienceDoneLabel } from "@/components/community/audience-picker";
+import { CameraChip, LockInStampPreview, WorkoutStampPreview } from "@/components/community/camera-overlays";
 
 const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
 const CaptureFlow = lazyWithRetry(() => import("@/components/community/capture-flow").then((m) => ({ default: m.CaptureFlow })));
@@ -25,8 +26,10 @@ export const SHARE_GRADIENT = "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%
  * "+ Share" — opens straight to the camera, Instagram-style. Two modes:
  * LOCK IN (before today's session: the photo becomes a Locked in / Clock /
  * Today's plan card and starts the session) and WORKOUT (a finished session
- * from the last 30 days). Text and stickers go on the photo before either.
- * No photo is fine too: "No photo" skips straight to the cards.
+ * from the last 30 days). The workout is picked for you (today's, else the
+ * latest) and shown in a chip above the shutter: tap it to change, otherwise
+ * snap and go, no list in the way. Text and stickers go on the photo first.
+ * "No photo" skips straight to the cards.
  */
 export function ShareWorkoutButton({
   unit,
@@ -52,10 +55,14 @@ export function ShareWorkoutButton({
     setRawOpen(v);
   };
   const [picked, setPicked] = useState<RecentCompletion | null>(null);
-  const { data: sessions, isLoading } = useRecentCompletions(open);
-
   // Camera first
   const [capturing, setCapturing] = useState(false);
+  const { data: sessions, isLoading } = useRecentCompletions(open || capturing);
+  // The workout the shot is for: their pick, else the newest finished one.
+  const [chosen, setChosen] = useState<RecentCompletion | null>(null);
+  const target = chosen ?? sessions?.[0] ?? null;
+  // The list opened from the camera's chip just changes `chosen`.
+  const [choosing, setChoosing] = useState(false);
   const [photo, setPhoto] = useState<File | null>(null);
   // Fetched up front so the camera opens on the right mode.
   const { data: today } = useTodaySession(!previewOnly);
@@ -78,6 +85,7 @@ export function ShareWorkoutButton({
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
     setMode(null);
     setPhoto(null);
+    setChosen(null);
     setCapturing(true);
   };
 
@@ -88,8 +96,14 @@ export function ShareWorkoutButton({
       setLockOpen(true);
     } else {
       setPhoto(file);
-      setRawOpen(true);
+      if (target) setPicked(target);
+      else setRawOpen(true);
     }
+  };
+
+  const changeTarget = () => {
+    setChoosing(true);
+    setRawOpen(true);
   };
 
   const ensureStarted = async (): Promise<string | null> => {
@@ -130,13 +144,19 @@ export function ShareWorkoutButton({
         </button>
       )}
 
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) setChoosing(false);
+        }}
+      >
         <SheetContent side="bottom" hideCloseButton className="max-h-[80dvh] rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
           <SheetHeader className="border-b border-border/70 px-4 py-3 text-left">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
             <SheetTitle className="text-base font-black">Share a workout</SheetTitle>
-            <SheetDescription className="text-xs">{photo ? "Which workout is this photo from?" : "Which workout are you sharing?"}</SheetDescription>
+            <SheetDescription className="text-xs">{photo || choosing ? "Which workout is this photo from?" : "Which workout are you sharing?"}</SheetDescription>
           </div>
                 <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
                   <X className="h-4 w-4" />
@@ -164,12 +184,15 @@ export function ShareWorkoutButton({
                         key={s.completion_id}
                         type="button"
                         onClick={() => {
-                          setPicked(s);
+                          if (choosing) setChosen(s);
+                          else setPicked(s);
+                          setChoosing(false);
                           setOpen(false);
                         }}
                         className={cn(
                           "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left active:bg-muted",
                           today ? "mb-1 border border-primary/30 bg-primary/[0.06] hover:bg-primary/10" : "hover:bg-muted",
+                          choosing && target?.completion_id === s.completion_id && "ring-2 ring-foreground",
                         )}
                       >
                         {today && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" aria-hidden />}
@@ -219,11 +242,34 @@ export function ShareWorkoutButton({
             onSkip={() => afterCapture(null, false)}
             skipLabel="No photo"
             accept={activeMode === "lockin" ? "image/*" : "image/*,video/*"}
-            workoutTitle={activeMode === "lockin" ? today?.title : null}
+            workoutTitle={activeMode === "lockin" ? today?.title : target ? sessionDisplayTitle(target.title) : null}
             modes={today && !lockOpen ? [{ key: "lockin", label: "Lock in" }, { key: "workout", label: "Workout" }] : undefined}
             mode={activeMode}
             onMode={(k) => setMode(k as Mode)}
-            hint={activeMode === "lockin" && today ? `🔒 Lock in · ${today.title}` : "Share a finished workout"}
+            canShoot={activeMode === "lockin" || isLoading || !!target}
+            chip={
+              activeMode === "lockin" && today ? (
+                <CameraChip icon="🔒" title={today.title} sub={today.completionId ? "In progress · update your lock in" : "Posting it starts your session"} />
+              ) : target ? (
+                <CameraChip
+                  icon={sessionWhen(target.completed_at).group === "today" ? "🔥" : "🏋️"}
+                  title={sessionDisplayTitle(target.title)}
+                  sub={[sessionWhen(target.completed_at).when, (sessions?.length ?? 0) > 1 ? "tap to change" : null].filter(Boolean).join(" · ")}
+                  onPress={(sessions?.length ?? 0) > 1 ? changeTarget : undefined}
+                />
+              ) : isLoading ? (
+                <CameraChip icon="⏳" title="Finding your workout…" tone="muted" />
+              ) : (
+                <CameraChip icon="🏁" title="Finish a workout to share it" sub="Or lock in before your next one" tone="muted" />
+              )
+            }
+            overlay={
+              activeMode === "lockin" && today ? (
+                <LockInStampPreview title={today.title} />
+              ) : target ? (
+                <WorkoutStampPreview title={sessionDisplayTitle(target.title)} sub={formatWorkoutDuration(target.duration_min) ? `${formatWorkoutDuration(target.duration_min)} session` : null} />
+              ) : null
+            }
           />
         </Suspense>
       )}

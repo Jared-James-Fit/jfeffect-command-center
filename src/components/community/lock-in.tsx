@@ -5,6 +5,7 @@ import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
 import { PREVIEW_ONLY_MESSAGE, lockInTimeLabel } from "@/lib/community";
 import { useCommunityActivity, useDayPlan, useMyPostForCompletion } from "@/lib/community.queries";
+import { CameraChip, LockInStampPreview } from "@/components/community/camera-overlays";
 
 const LockInEditor = lazyWithRetry(() => import("@/components/community/lock-in-editor").then((m) => ({ default: m.LockInEditor })));
 const CaptureFlow = lazyWithRetry(() => import("@/components/community/capture-flow").then((m) => ({ default: m.CaptureFlow })));
@@ -125,7 +126,8 @@ export function LockInBar({
             }}
             skipLabel="No photo"
             workoutTitle={workoutTitle}
-            hint="🔒 Lock in. Snap your setup, the gym, the vibe"
+            chip={<CameraChip icon="🔒" title={workoutTitle} sub="Snap the gym, your setup, the vibe" />}
+            overlay={<LockInStampPreview title={workoutTitle} />}
           />
         </Suspense>
       )}

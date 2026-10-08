@@ -892,3 +892,24 @@ describe("share picker: which workout was today", () => {
     expect(g[0].items.map((i) => i.when)[0]).toBe("Finished 11 min ago");
   });
 });
+
+describe("share camera: options right away, no list in the way", () => {
+  const read = (f: string) => readFileSync(f, "utf8");
+  const picker = read("src/components/community/share-workout-picker.tsx");
+  const cam = read("src/components/community/share-camera.tsx");
+  it("picks the workout for you (yours, else the newest) and goes straight to the card", () => {
+    expect(picker).toContain("const target = chosen ?? sessions?.[0] ?? null;");
+    expect(picker).toContain("if (target) setPicked(target);");
+    expect(picker).toContain("if (choosing) setChosen(s);");
+  });
+  it("shows what the shot becomes, live on the viewfinder", () => {
+    expect(picker).toContain("<LockInStampPreview title={today.title} />");
+    expect(picker).toContain("<WorkoutStampPreview");
+    expect(read("src/components/community/lock-in.tsx")).toContain("overlay={<LockInStampPreview title={workoutTitle} />}");
+  });
+  it("self-timer, double-tap flip, and the camera light goes off", () => {
+    expect(cam).toContain("setTimer((t) => (t === 0 ? 3 : t === 3 ? 10 : 0))");
+    expect(cam).toContain("if (now - lastTap.current < 300) flip();");
+    expect(cam).toContain("if (video) video.srcObject = null;");
+  });
+});
