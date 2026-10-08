@@ -15,15 +15,19 @@ const COACHING_POPULATION_FUNCTIONS = [
   "admin_dashboard_overview",
   "seed_messenger_checkin_occurrences",
   "admin_clients_directory",
+  "get_athlete_rankings",
 ];
 
-const DIR = join(process.cwd(), "supabase/migrations");
+// drizzle/migrations holds the older XP schema; supabase/migrations is applied after it.
+const DIRS = [join(process.cwd(), "drizzle/migrations"), join(process.cwd(), "supabase/migrations")];
 
 function latestDefinition(name: string): { file: string; body: string } | null {
   const re = new RegExp(`create\\s+(?:or\\s+replace\\s+)?function\\s+public\\.${name}\\s*\\(`, "gi");
   let latest: { file: string; body: string } | null = null;
-  for (const file of readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort()) {
-    const sql = readFileSync(join(DIR, file), "utf8");
+  const files = DIRS.flatMap((dir) => readdirSync(dir).filter((f) => f.endsWith(".sql")).sort().map((f) => join(dir, f)));
+  for (const path of files) {
+    const file = path.slice(process.cwd().length + 1);
+    const sql = readFileSync(path, "utf8");
     for (const m of sql.matchAll(re)) {
       const rest = sql.slice(m.index!);
       const tag = /\bas\s+(\$\w*\$)/i.exec(rest);
