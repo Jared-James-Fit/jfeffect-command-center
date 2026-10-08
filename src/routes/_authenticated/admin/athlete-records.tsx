@@ -12,6 +12,7 @@ import { Trash2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { PowerliftingAthleteProfiles } from "@/components/admin/powerlifting-athlete-profiles";
 import { LeagueBoostAdmin } from "@/components/admin/league-boost-admin";
+import { StrengthBoardCoachTools } from "@/components/portal/strength-board";
 
 export const Route = createFileRoute("/_authenticated/admin/athlete-records")({ component: AthleteRecordsAdmin });
 
@@ -27,6 +28,7 @@ function AthleteRecordsAdmin(){
  const del=async(id:string)=>{const {error}=await (supabase as any).from("athlete_powerlifting_results").delete().eq("id",id);if(error)return toast.error(error.message);toast.success("Result deleted");qc.invalidateQueries({queryKey:["athlete-powerlifting-results-admin"]});};
  return <><PageHeader title="Athlete Records" subtitle="Permanent JF powerlifting records & competition résumé"/><div className="space-y-4 p-3 sm:p-4 md:p-6">
  <LeagueBoostAdmin/>
+ <div><div className="mb-2 px-1"><div className="font-black">Hall of Strength</div><div className="text-xs text-muted-foreground">Check lifts held back as possible typos, remove a wrong lift, and see who can't rank yet.</div></div><StrengthBoardCoachTools/></div>
  <PowerliftingAthleteProfiles clients={clients}/>
  <Card className="p-4"><div className="mb-4"><div className="font-black">Add powerlifting result</div><div className="text-xs text-muted-foreground">Add current or retired JF athletes. Results remain in the all-time records even if they are no longer active clients.</div></div>
  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
