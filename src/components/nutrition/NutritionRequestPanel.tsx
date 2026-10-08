@@ -236,7 +236,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
               : "Send the form → client fills it out → AI builds their targets and meal plan for you to review and apply."}
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Once sent, this repeats automatically on the Monday that starts the final week of each month (9am their time).
+            Sent automatically every month while they have an active nutrition plan: the Monday that starts the final week, 9am their time.
           </p>
           {data?.trainingPattern && (
             <p className="mt-1 flex items-start gap-1.5 text-[11px] text-muted-foreground" title="From their logged workouts in the last 8 weeks. Used to place Pre/Post-Workout meals when their form answer is 'It varies' or blank.">
