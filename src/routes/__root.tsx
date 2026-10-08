@@ -36,6 +36,7 @@ import { registerServiceWorker } from "@/lib/pwa/register-sw";
 import { initNativeShell } from "@/platform/native-init";
 import { initChunkRecovery } from "@/lib/chunk-recovery";
 import { PwaUpdateToast } from "@/components/pwa/pwa-update-toast";
+import { useAppFreshness } from "@/hooks/use-app-freshness";
 import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 // Side-effect import: registers durable-queue handlers for cross-feature
 // offline writes (bodyweight, water, …) so pending items can drain at boot.
@@ -377,6 +378,8 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  // Reopening the app picks up a newly published version (the iPhone shell has no service worker to do it).
+  useAppFreshness();
 
   useEffect(() => {
     // Dev-only: app shell is mounted and visible.

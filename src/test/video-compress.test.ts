@@ -51,21 +51,23 @@ describe("compressVideoForChat fallbacks", () => {
 
   it("refuses conversions that would drop a track, gives up when slow, and keeps only clearly smaller results", () => {
     const src = readFileSync("src/lib/video-compress.ts", "utf8");
-    expect(src).toContain("conv.discardedTracks.length > 0) return null");
+    expect(src).toContain("if (conv.discardedTracks.length > 0) {");
+    expect(src).toContain("return done(`dropped:");
     expect(src).toContain("projectedTooSlow(Date.now() - startedAt, clamped, limitMs)");
-    expect(src).toContain("buffer.byteLength > file.size * 0.8) return null");
-    expect(src).toContain('return compressVideoWith(file, "avc", opts);');
+    expect(src).toContain("if (buffer.byteLength > file.size * 0.8) return done(`not-smaller:");
+    expect(src).toContain('return (await compressVideoDetailed(file, "avc", opts)).file;');
     expect(src).toContain('fastStart: "in-memory"');
     expect(src).toContain('await import("mediabunny")'); // lazy: only loaded when a video is sent
   });
 });
 
 describe("chat uploads use it", () => {
-  it("compresses videos before uploading, starting the poster from the original right away", () => {
+  it("starts the poster, the original upload and the compressed copy together", () => {
     const shared = readFileSync("src/components/chat-shared.tsx", "utf8");
-    expect(shared).toContain("compressVideoForChat(file,");
     expect(shared).toContain("captureVideoPoster(file)");
-    expect(shared.indexOf("captureVideoPoster(file)")).toBeLessThan(shared.indexOf("compressVideoForChat(file,"));
+    expect(shared).toContain('compressVideoDetailed(file, "avc", { onProgress: p, signal: sig })');
+    expect(shared).toContain("raceVideoUpload(");
+    expect(shared.indexOf("captureVideoPoster(file)")).toBeLessThan(shared.indexOf("raceVideoUpload("));
   });
 
   it("warms the encoder while the picker is open, and lets big group videos through to be shrunk", () => {
