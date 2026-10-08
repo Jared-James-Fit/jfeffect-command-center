@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge, LockInHero, WorkoutHero } from "@/components/community/post-card";
 import { BIO_MAX, SERIES_LABEL, trainingSinceLabel, type CommunityPost } from "@/lib/community";
-import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
+import { useBlockUser, useCommunityFeed, useCommunityProfile, useMyArchived, useMyBlocks, usePostMediaUrls, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
 
 /**
  * A person's corner of the community: photo, name, a short bio and a grid of
@@ -193,6 +193,41 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
         <Button type="button" variant="ghost" className="mt-2 w-full" disabled={feed.isFetchingNextPage} onClick={() => void feed.fetchNextPage()}>
           {feed.isFetchingNextPage ? "Loading…" : "Show more"}
         </Button>
+      )}
+      {profile.is_me && <BlockedPeople />}
+    </div>
+  );
+}
+
+
+/** Your blocks, with Unblock. Only shown on your own profile. */
+function BlockedPeople() {
+  const [open, setOpen] = useState(false);
+  const { data: blocked = [], isLoading } = useMyBlocks(open);
+  const block = useBlockUser();
+  return (
+    <div className="mt-6 border-t border-border pt-3">
+      <button type="button" className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:underline" onClick={() => setOpen((o) => !o)}>
+        {open ? "Hide blocked people" : "Blocked people"}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          {isLoading && <div className="text-xs text-muted-foreground">Loading…</div>}
+          {!isLoading && blocked.length === 0 && <div className="text-xs text-muted-foreground">You haven't blocked anyone.</div>}
+          {blocked.map((a) => (
+            <div key={a.user_id} className="flex items-center justify-between gap-2 text-sm">
+              <span className="truncate">{a.name}</span>
+              <button
+                type="button"
+                className="text-xs font-semibold text-primary"
+                disabled={block.isPending}
+                onClick={() => block.mutate({ userId: a.user_id, block: false }, { onSuccess: () => toast.success(`${a.name} is unblocked`) })}
+              >
+                Unblock
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

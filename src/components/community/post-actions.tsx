@@ -1,23 +1,29 @@
 import { useState } from "react";
-import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, EyeOff, Flag, MoreHorizontal, Pencil, Trash2, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { NoteEditor } from "@/components/community/note-editor";
 import { EditPostSheet } from "@/components/community/edit-post-sheet";
 import type { CommunityPost } from "@/lib/community";
-import { useArchivePost, useDeletePost, useUpdateNote } from "@/lib/community.queries";
+import { useArchivePost, useBlockUser, useDeletePost, useHidePost, useUpdateNote } from "@/lib/community.queries";
+import { ReportSheet } from "@/components/community/report-sheet";
 
 /**
  * The "…" on a post, Instagram-style. Your own post: Edit, Archive (only you
  * see it, in Archived on your profile, until you restore it) or Delete.
- * Coaches can also remove anyone's post and edit coach notes.
+ * Coaches can also remove anyone's post and edit coach notes. Someone else's
+ * post: Report, Hide, or Block the person.
  * `onGone` runs after an archive or delete (e.g. to close the detail view).
  */
 export function PostActions({ post, viewerIsStaff, onGone, className }: { post: CommunityPost; viewerIsStaff: boolean; onGone?: () => void; className?: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [confirmBlock, setConfirmBlock] = useState(false);
   const del = useDeletePost();
+  const hide = useHidePost();
+  const block = useBlockUser();
   const archive = useArchivePost();
   const updateNote = useUpdateNote();
 
@@ -26,7 +32,7 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
   const archived = !!post.archived_at;
   const canEdit = mine || (isNote && viewerIsStaff);
   const canDelete = mine || viewerIsStaff;
-  if (!canEdit && !canDelete) return null;
+  const canReport = !mine;
 
   const setArchived = (on: boolean) =>
     archive.mutate(
@@ -63,6 +69,27 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[180px]">
+          {canReport && (
+            <>
+              <DropdownMenuItem onSelect={() => setReporting(true)}>
+                <Flag className="mr-2 h-4 w-4" /> Report
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  hide.mutate(post.id, {
+                    onSuccess: () => { toast.success("Hidden. You won't see this post again."); onGone?.(); },
+                    onError: (e: any) => toast.error(e?.message ?? "Couldn't hide that"),
+                  })
+                }
+              >
+                <EyeOff className="mr-2 h-4 w-4" /> Hide post
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setConfirmBlock(true)}>
+                <UserX className="mr-2 h-4 w-4" /> Block {post.author.name}
+              </DropdownMenuItem>
+              {(canEdit || canDelete) && <DropdownMenuSeparator />}
+            </>
+          )}
           {canEdit && (
             <DropdownMenuItem onSelect={() => setEditing(true)}>
               <Pencil className="mr-2 h-4 w-4" /> Edit
@@ -106,6 +133,36 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
             )}
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={remove}>
               {mine ? "Delete" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ReportSheet target={reporting ? { postId: post.id } : null} onClose={() => setReporting(false)} />
+
+      <AlertDialog open={confirmBlock} onOpenChange={setConfirmBlock}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Block {post.author.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You won't see their posts or comments, and they won't see yours. They aren't told. You can unblock them from your community profile.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() =>
+                block.mutate(
+                  { userId: post.author.user_id, block: true },
+                  {
+                    onSuccess: () => { toast.success(`${post.author.name} is blocked`); onGone?.(); },
+                    onError: (e: any) => toast.error(e?.message ?? "Couldn't block"),
+                  },
+                )
+              }
+            >
+              Block
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

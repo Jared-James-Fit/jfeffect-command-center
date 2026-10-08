@@ -196,6 +196,7 @@ export const memberNav: NavItem[] = [
   { to: "/m", label: "Home", icon: LayoutDashboard },
   { to: "/m/workouts", label: "Workouts", icon: Activity, keywords: ["plans","program","training","library"] },
   { to: "/m/nutrition", label: "Nutrition", icon: ChefHat, keywords: ["recipes","targets","meal"] },
+  { to: "/m/community", label: "Community", icon: Users, keywords: ["crew","share","posts","feed"] },
   { to: "/m/support", label: "Support", icon: MessageCircle, keywords: ["help","messages","contact"] },
   { to: "/m/more", label: "More", icon: UserCog, keywords: ["account","billing","profile","settings","manage","receipts","agreements","announcements","tools","progress","install"] },
 ];
