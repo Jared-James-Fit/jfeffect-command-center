@@ -68,7 +68,7 @@ import {
 import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
-import { WarmupSection, useWarmupSets } from "@/components/workout-day/final-warmup-input";
+import { WarmupRows, useWarmupSets } from "@/components/workout-day/final-warmup-input";
 import { LoadSuggestionCard } from "@/components/workout-day/load-suggestion-card";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
 import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
@@ -3430,9 +3430,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
   );
-  // "Last warm-up" gauge on the suggestion card (compound lifts, before the
-  // first working set): tells the athlete what to warm up to, then reads how
-  // it felt to tune the top-set number. Opens the warm-up form pre-filled.
+  // "Last warm-up" row at the top of the set table (compound lifts, before the
+  // first working set): says what to warm up to, then reads how it felt to set
+  // or tune the working weight. Opens the warm-up form pre-filled.
   const warmupGaugeSuggested = useMemo(
     () => (loadHint && loadPlan ? suggestFinalWarmup(loadHint.target, loadPlan.reps, activeUnit) : null),
     [loadHint?.target, loadPlan?.reps, activeUnit],
@@ -3445,13 +3445,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     }
     return best?.id ?? null;
   }, [warmupSets]);
-  const warmupGauge = warmupPromptable && loadModel
-    ? {
-        suggested: warmupGaugeSuggested,
-        logged: warmupForModel,
-        onOpen: () => setWarmupForm(heaviestWarmupId ?? "new"),
-      }
-    : null;
+  const warmupGauge = warmupPromptable && loadModel ? { suggested: warmupGaugeSuggested } : null;
+  const tunedWarmupId =
+    warmupGauge && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
 
   // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
   // into all later un-completed sets of this same exercise. Never overwrites
@@ -3783,24 +3779,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           )}
         </div>
       )}
-      {loadModel && loadPlan && !(warmupForm && (loadModel.status === "calibrating" || !loadHint)) && (
+      {loadModel && loadPlan && (
         <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} />
       )}
-      {(warmupSets.length > 0 && (!warmupGauge || warmupSets.length > 1)) || (warmupAllowed && !!warmupForm) ? (
-        <WarmupSection
-          sets={warmupSets}
-          unit={activeUnit}
-          form={warmupAllowed ? warmupForm : null}
-          canEdit={warmupAllowed}
-          onFormChange={setWarmupForm}
-          onSave={saveWarmup}
-          onRemove={removeWarmup}
-          showPrompt={false}
-          hasHistory={!!loadModel && loadModel.status === "ready" && loadModel.source !== "warmup"}
-          seed={warmupGauge?.suggested ?? null}
-          showList={!warmupGauge || warmupSets.length > 1}
-        />
-      ) : null}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge
           load={Number(
@@ -4066,6 +4047,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             </div>
           )}
         </div>
+        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupGauge))) && (
+          <WarmupRows
+            sets={warmupSets}
+            unit={activeUnit}
+            gridTemplate={gridTemplate}
+            form={warmupAllowed ? warmupForm : null}
+            canEdit={warmupAllowed}
+            onFormChange={setWarmupForm}
+            onSave={saveWarmup}
+            onRemove={removeWarmup}
+            prompt={warmupGauge}
+            seed={warmupGauge?.suggested ?? null}
+            tunedId={tunedWarmupId}
+          />
+        )}
         {Array.from({ length: setCount }).map((_, i) => {
           const existing = existingResults.find((x) => x.set_index === i + 1);
           const prevExisting = i > 0 ? existingResults.find((x) => x.set_index === i) : undefined;
