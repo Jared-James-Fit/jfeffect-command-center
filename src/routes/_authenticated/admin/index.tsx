@@ -34,6 +34,7 @@ import { getCoachIntel } from "@/lib/coach-intel";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 import { cn } from "@/lib/utils";
+import { onDashboardClickCapture } from "@/components/return-to-dashboard";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -88,7 +89,7 @@ function ActionsSheet({ actions, trigger }: { actions: { label: string; to: stri
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent side="bottom" className="rounded-t-2xl">
+      <SheetContent side="bottom" className="rounded-t-2xl" data-no-return>
         <SheetHeader>
           <SheetTitle>More actions</SheetTitle>
         </SheetHeader>
@@ -452,6 +453,7 @@ function AdminDashboard() {
       />
 
       <div
+        onClickCapture={onDashboardClickCapture}
         className="w-full max-w-full space-y-4 overflow-x-hidden p-4 md:p-6"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}
       >
@@ -472,8 +474,8 @@ function AdminDashboard() {
         {/* ---------------- WINS: records this week, one tap to send props ---------------- */}
         <WinsCard wins={overview?.wins ?? []} />
 
-        {/* ---------------- QUICK ACTIONS ---------------- */}
-        <div className="grid grid-cols-5 gap-2">
+        {/* ---------------- QUICK ACTIONS (deliberate moves: no "‹ Today" pill) ---------------- */}
+        <div className="grid grid-cols-5 gap-2" data-no-return>
           {primaryActions.map((a) => (
             <Link key={a.label} to={a.to as any} className="block">
               <div className="flex h-full min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
