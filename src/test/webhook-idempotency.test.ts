@@ -14,10 +14,16 @@ if (!(globalThis as any).crypto) (globalThis as any).crypto = webcrypto as any;
 let processedEventIds = new Set<string>();
 let trackedInserts: Array<{ table: string; row: any }> = [];
 let trackedUpdates: Array<{ table: string; patch: any }> = [];
+// When true, every table other than the dedupe store throws, simulating a
+// transient failure while the event is being processed.
+let failProcessing = false;
 
 vi.mock("@supabase/supabase-js", () => {
   const makeClient = () => ({
     from(table: string) {
+      if (failProcessing && table !== "processed_stripe_events") {
+        throw new Error("simulated transient failure");
+      }
       const builder: any = {
         _table: table,
         select() { return this; },
@@ -51,7 +57,13 @@ vi.mock("@supabase/supabase-js", () => {
           return Promise.resolve({ data: null, error: null });
         },
         delete() {
-          return { eq: async () => ({ data: null, error: null, count: 0 }), in: async () => ({ data: null, error: null, count: 0 }) };
+          return {
+            eq: async (col: string, val: any) => {
+              if (table === "processed_stripe_events" && col === "event_id") processedEventIds.delete(val);
+              return { data: null, error: null, count: 0 };
+            },
+            in: async () => ({ data: null, error: null, count: 0 }),
+          };
         },
       };
       // Chain "then" so `await sb.from(...).insert(...).then(...)` works
@@ -111,6 +123,7 @@ beforeEach(() => {
   processedEventIds = new Set<string>();
   trackedInserts = [];
   trackedUpdates = [];
+  failProcessing = false;
 });
 
 const EVENT_TYPES = [
@@ -156,6 +169,24 @@ describe("Stripe webhook idempotency", () => {
       expect(trackedUpdates.length).toBe(updatesAfterFirst);
     });
   }
+
+  it("processes Stripe's retry after a failed first attempt instead of dropping it", async () => {
+    const ev = syntheticEvent("customer.subscription.deleted", "evt_retry_after_failure", {
+      customer: "cus_retry", subscription: "sub_retry", status: "canceled", metadata: {},
+    });
+
+    failProcessing = true;
+    const r1 = await postEvent(ev);
+    expect(r1.status).toBe(500);
+    expect(processedEventIds.has(ev.id)).toBe(false);
+
+    failProcessing = false;
+    const r2 = await postEvent(ev);
+    expect(r2.status).toBe(200);
+    const body2 = await r2.json();
+    expect(body2.duplicate).not.toBe(true);
+    expect(processedEventIds.has(ev.id)).toBe(true);
+  });
 
   it("rejects an event with an invalid signature without touching state", async () => {
     const ev = syntheticEvent("checkout.session.completed", "evt_badsig");
