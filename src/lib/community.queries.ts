@@ -726,3 +726,101 @@ export function useViewerUnit(userId: string | null | undefined) {
     },
   });
 }
+
+/* ───────── Safety: report, hide, block (members-facing community) ───────── */
+
+export type ReportReason = "spam" | "harassment" | "hate" | "sexual" | "violence" | "self_harm" | "other";
+export const REPORT_REASONS: { key: ReportReason; label: string }[] = [
+  { key: "harassment", label: "Bullying or harassment" },
+  { key: "hate", label: "Hate speech" },
+  { key: "sexual", label: "Nudity or sexual content" },
+  { key: "violence", label: "Violence or threats" },
+  { key: "self_harm", label: "Self-harm" },
+  { key: "spam", label: "Spam or scam" },
+  { key: "other", label: "Something else" },
+];
+
+/** Report a post or a comment. Reporting a post also hides it for you. */
+export function useReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { postId?: string; commentId?: string; reason: ReportReason; details?: string }) => {
+      const { error } = await db.rpc("community_report", {
+        _post_id: a.postId ?? null, _comment_id: a.commentId ?? null, _reason: a.reason, _details: a.details ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateCommunity(qc),
+  });
+}
+
+export function useHidePost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      const { error } = await db.rpc("community_hide_post", { _post_id: postId });
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateCommunity(qc),
+  });
+}
+
+export function useBlockUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { userId: string; block: boolean }) => {
+      const { error } = await db.rpc(a.block ? "community_block_user" : "community_unblock_user", { _user_id: a.userId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateCommunity(qc);
+      qc.invalidateQueries({ queryKey: ["community-blocks"] });
+    },
+  });
+}
+
+export function useMyBlocks(enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-blocks"],
+    enabled,
+    queryFn: async (): Promise<CommunityAuthor[]> => {
+      const { data, error } = await db.rpc("community_my_blocks");
+      if (error) throw error;
+      return (data ?? []) as CommunityAuthor[];
+    },
+  });
+}
+
+export type CommunityReport = {
+  id: string; reason: ReportReason; details: string | null; created_at: string;
+  post_id: string | null; comment_id: string | null; comment_body: string | null; post_caption: string | null;
+  author: CommunityAuthor; reporter: CommunityAuthor; reports: number;
+};
+
+/** Staff: open reports, oldest first. */
+export function useOpenReports(enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-reports"],
+    enabled,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<CommunityReport[]> => {
+      const { data, error } = await db.rpc("community_open_reports");
+      if (error) throw error;
+      return (data ?? []) as CommunityReport[];
+    },
+  });
+}
+
+export function useResolveReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { reportId: string; action: "dismiss" | "remove" }) => {
+      const { error } = await db.rpc("community_resolve_report", { _report_id: a.reportId, _action: a.action });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["community-reports"] });
+      invalidateCommunity(qc);
+    },
+  });
+}

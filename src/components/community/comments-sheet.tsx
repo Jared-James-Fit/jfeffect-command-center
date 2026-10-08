@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, Trash2, X } from "lucide-react";
+import { Flag, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge } from "@/components/community/post-card";
 import { COMMENT_MAX, postTimeLabel, type CommunityPost } from "@/lib/community";
 import { useAddComment, useComments, useDeleteComment } from "@/lib/community.queries";
+import { ReportSheet } from "@/components/community/report-sheet";
+import { useAuth } from "@/lib/auth";
 
 /**
  * Light chatter on a shared workout. Coaching conversations stay in Messages —
@@ -44,6 +46,8 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
   const { data: comments = [], isLoading } = useComments(post.id, true);
   const add = useAddComment(post.id, viewerIsStaff, post.is_mine);
   const del = useDeleteComment(post.id);
+  const { user } = useAuth();
+  const [reportId, setReportId] = useState<string | null>(null);
   const body = text.trim();
 
   const send = () => {
@@ -73,6 +77,16 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
                 </div>
                 <p className="whitespace-pre-line break-words text-[14px] leading-snug">{c.body}</p>
               </div>
+              {c.author.user_id !== user?.id && (
+                <button
+                  type="button"
+                  onClick={() => setReportId(c.id)}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+                  aria-label="Report comment"
+                >
+                  <Flag className="h-3.5 w-3.5" />
+                </button>
+              )}
               {c.can_delete && (
                 <button
                   type="button"
@@ -109,6 +123,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
           </Button>
         </div>
       </div>
+      <ReportSheet target={reportId ? { commentId: reportId } : null} onClose={() => setReportId(null)} />
     </>
   );
 }
