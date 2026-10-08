@@ -29,6 +29,15 @@ async function isStaff(sb: any, userId: string): Promise<boolean> {
   return !!a || !!c;
 }
 
+/** Admin, or the coach assigned to this client. */
+async function isStaffFor(sb: any, userId: string, clientId: string): Promise<boolean> {
+  const [{ data: a }, { data: c }] = await Promise.all([
+    sb.rpc("has_role", { _user_id: userId, _role: "admin" }),
+    sb.rpc("is_assigned_coach", { _client_id: clientId }),
+  ]);
+  return !!a || !!c;
+}
+
 /** Server helper: the saved voice profile (defaults when none is saved). */
 export async function loadCoachVoice(sb: any): Promise<VoiceProfile> {
   try {
@@ -125,7 +134,7 @@ export const saveClientVoiceFn = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await isStaffFor(context.supabase, context.userId, data.clientId))) throw new Error("Coach access required");
     const sb = await adminClient();
     const patch: Record<string, unknown> = {};
     if (data.sex !== undefined) patch.sex = data.sex;
@@ -159,6 +168,9 @@ export const tryCoachVoiceFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (data.clientId && !(await isStaffFor(context.supabase, context.userId, data.clientId))) {
+      throw new Error("Coach access required");
+    }
     const sb = await adminClient();
     const profile = normalizeVoiceProfile(data.profile);
     const audience = await loadVoiceAudience(sb, data.clientId ?? null);

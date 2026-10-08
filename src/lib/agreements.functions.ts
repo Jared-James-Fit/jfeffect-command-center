@@ -1195,6 +1195,11 @@ export const refreshAgreementStatus = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await assertAdminOrCoach(supabase, userId);
+    // The pull below runs with the service role: only staff with access to
+    // this agreement's client may trigger it.
+    const { data: agreement } = await supabase.from("agreements").select("client_id").eq("id", data.id).maybeSingle();
+    if (!agreement?.client_id) throw new Error("Agreement not found");
+    if ((await assertClientAccess(supabase, userId, agreement.client_id)) === "owner") throw new Error("Forbidden");
     if (!hasSignNowCredentials()) {
       return { ok: false, reason: "SignNow API not configured." };
     }

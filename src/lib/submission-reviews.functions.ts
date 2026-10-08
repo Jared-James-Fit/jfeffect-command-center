@@ -1099,7 +1099,7 @@ export const reassignReviewCoach = createServerFn({ method: "POST" })
     // If a user id is provided, verify they are an authorized admin/coach.
     if (data.assignedCoachUserId) {
       const { data: ok } = await sb.rpc("is_coach_or_admin", {
-        _uid: data.assignedCoachUserId,
+        _user_id: data.assignedCoachUserId,
       });
       if (!ok) throw new Error("Selected user is not an authorized coach or admin.");
     }
