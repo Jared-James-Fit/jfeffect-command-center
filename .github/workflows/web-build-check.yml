@@ -36,3 +36,10 @@ jobs:
 
       - name: Build production app
         run: npm run build
+
+      # Verification branch only: does the committed route tree match the generator?
+      - name: Route tree diff
+        if: always()
+        run: |
+          git diff --stat src/routeTree.gen.ts
+          git diff -U0 --no-color src/routeTree.gen.ts | head -60
