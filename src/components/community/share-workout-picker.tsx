@@ -88,9 +88,13 @@ export function ShareWorkoutButton({
     setCapturing(true);
   };
 
+  // Locking in IS starting the session (same server path as the first logged
+  // set). A row can exist without being started (a placeholder made ahead of
+  // time); posting needs it started, so only skip this when it really is.
   const ensureStarted = async (): Promise<string | null> => {
     if (!today) return null;
-    if (lockCompletionId) return lockCompletionId;
+    if (startedId) return startedId;
+    if (today.completionId && today.started) return today.completionId;
     const res = await startSrv({ data: { kind: "client" as const, dayId: today.dayId, scheduledWorkoutId: today.scheduledWorkoutId } });
     const id = (res as any)?.id ?? null;
     setStartedId(id);
@@ -247,7 +251,7 @@ export function ShareWorkoutButton({
             post={activeMode === "lockin" ? lockPost : workout.post}
             chip={
               activeMode === "lockin" && today ? (
-                <CameraChip icon="🔒" title={today.title} sub={today.completionId ? "In progress · update your lock in" : "Posting it starts your session"} />
+                <CameraChip icon="🔒" title={sessionDisplayTitle(today.title)} sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Posting it starts your session"} />
               ) : target ? (
                 <CameraChip
                   icon={sessionWhen(target.completed_at).group === "today" ? "🔥" : "🏋️"}

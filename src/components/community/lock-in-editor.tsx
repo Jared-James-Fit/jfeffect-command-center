@@ -187,7 +187,8 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
     if (!user?.id || posting) return;
     setPosting(true);
     try {
-      const id = completionId ?? (await ensureStarted());
+      // Always through the start path: the row can exist without being started.
+      const id = await ensureStarted();
       if (!id) throw new Error("Couldn't start your session. Try again.");
       let mediaArg: SavePostInput["media"] = { action: "keep" };
       if (media) mediaArg = { action: "set", ...(await uploadPicked(media, user.id, () => {})) };

@@ -481,7 +481,16 @@ export function useDayPlan(dayId: string | null | undefined) {
   });
 }
 
-export type TodaySession = { dayId: string; scheduledWorkoutId: string | null; title: string; completionId: string | null; athleteName: string | null };
+export type TodaySession = {
+  dayId: string;
+  scheduledWorkoutId: string | null;
+  title: string;
+  /** The session's row, if one exists. It can be a placeholder that was never started. */
+  completionId: string | null;
+  /** Really started (started_at / in_progress_at), so posting to it is allowed. */
+  started: boolean;
+  athleteName: string | null;
+};
 
 /**
  * Today's workout for the signed-in client, so Lock In works from the
@@ -504,7 +513,7 @@ export function useTodaySession(enabled: boolean) {
       if (computeTodayState(items, client as any).kind === "rest_day") return null;
       const it = pickLockInSession(items);
       if (!it) return null;
-      return { dayId: it.day.id, scheduledWorkoutId: it.scheduledWorkoutId ?? null, title: cleanDayTitle(it.day.title, it.day.day_index), completionId: it.completion?.id ?? null, athleteName: (client as any).full_name ?? null };
+      return { dayId: it.day.id, scheduledWorkoutId: it.scheduledWorkoutId ?? null, title: cleanDayTitle(it.day.title, it.day.day_index), completionId: it.completion?.id ?? null, started: !!(it.completion?.started_at || it.completion?.in_progress_at), athleteName: (client as any).full_name ?? null };
     },
   });
 }

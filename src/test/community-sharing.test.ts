@@ -418,7 +418,7 @@ describe("lock in (I showed up)", () => {
   });
   it("starts the session through the normal start path, never on its own", () => {
     expect(day).toContain('await startWorkoutSrv({ data: { kind: "client" as const, dayId, scheduledWorkoutId } });');
-    expect(editor).toContain("const id = completionId ?? (await ensureStarted());");
+    expect(editor).toContain("const id = await ensureStarted();");
   });
   it("opens the in-app camera and keeps the logger light", () => {
     expect(bar).toContain("else setCapturing(true);");
@@ -1030,5 +1030,20 @@ describe("every Share is the same one-screen studio", () => {
     expect(read("src/components/community/workout-share-studio.tsx")).toContain("const w = useWorkoutStudio(target, unit, open);");
     expect(hook).toContain("return { data, looks: cameraLooks(data) };");
     expect(hook).toContain("await shareToCommunity(qc, {");
+  });
+});
+
+describe("lock in on a session row that was never started", () => {
+  const read = (f: string) => readFileSync(f, "utf8");
+  it("always goes through the start path (a placeholder row can't be posted to)", () => {
+    const picker = read("src/components/community/share-workout-picker.tsx");
+    expect(picker).toContain("if (today.completionId && today.started) return today.completionId;");
+    expect(read("src/components/community/lock-in.tsx")).toContain("const id = await ensureStarted();");
+    expect(read("src/components/community/lock-in-editor.tsx")).toContain("const id = await ensureStarted();");
+    expect(read("src/lib/community.queries.ts")).toContain("started: !!(it.completion?.started_at || it.completion?.in_progress_at)");
+    expect(read("src/components/workout-day/WorkoutDayView.tsx")).toContain("if (completion?.id && (completion.started_at || completion.in_progress_at)) return completion.id;");
+  });
+  it("only says In progress when it really is", () => {
+    expect(read("src/components/community/share-workout-picker.tsx")).toContain('sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Posting it starts your session"}');
   });
 });
