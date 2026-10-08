@@ -7,9 +7,8 @@ import { DEFAULT_TAX_SETTINGS } from "@/lib/business-tax";
 
 export const RECEIPTS_BUCKET = "business-receipts";
 
-/** Cleo: the bookkeeping assistant. */
+/** The assistant's name, shown on its own everywhere. */
 export const ASSISTANT_NAME = "Cleo";
-export const ASSISTANT_SHORT = "Cleo";
 
 export type ExpenseRow = {
   id: string;

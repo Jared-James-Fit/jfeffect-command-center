@@ -131,7 +131,7 @@ export function SummerAssistant() {
           onPointerCancel={pressEnd}
           onContextMenu={(e) => e.preventDefault()}
           aria-label="Cleo: tap to chat, hold to talk"
-          title="Cleo · tap to chat, hold to talk (⌘⇧S)"
+          title="Cleo (⌘⇧S)"
           className={cn(
             "summer-fab fixed right-4 z-50 flex h-12 w-12 select-none items-center justify-center rounded-full text-white md:right-6",
             "bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] ring-1 ring-black/10",

@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { ASSISTANT_NAME, ASSISTANT_SHORT } from "@/lib/business-books";
+import { ASSISTANT_NAME } from "@/lib/business-books";
 import { askSummer, askSummerVoice, clearSummer, getSummerMessages, summerSpeech } from "@/lib/business-books.functions";
 import { summerTone } from "@/lib/summer-persona";
 import { extractLinks, tokenizeInline } from "@/lib/summer-voice-text";
@@ -134,7 +134,7 @@ function SummerText({ text, onLink, hideLinkOnlyLines = true }: { text: string; 
 function VoiceOrb({ state, level, onTap }: { state: VoiceState; level: number; onTap: () => void }) {
   const scale = state === "listening" ? 1 + Math.min(0.35, level * 0.6) : 1;
   const label =
-    state === "listening" ? "Listening… tap when you're done" : state === "thinking" ? `${ASSISTANT_SHORT} is thinking…` : state === "speaking" ? "Speaking… tap to cut in" : "";
+    state === "listening" ? "Listening… tap when you're done" : state === "thinking" ? `${ASSISTANT_NAME} is thinking…` : state === "speaking" ? "Speaking… tap to cut in" : "";
   return (
     <button type="button" onClick={onTap} className="flex flex-col items-center gap-3 focus:outline-none" aria-label={label}>
       <span className="relative flex h-24 w-24 items-center justify-center">
@@ -259,7 +259,7 @@ export function SummerChat({
       try {
         res = await askVoice({ data: { audio: await blobToBase64(take.blob), mime: take.mime, year, route } });
       } catch (e: any) {
-        toast.error(e?.message ?? `${ASSISTANT_SHORT} couldn't answer that`);
+        toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
         endCall();
         return;
       }
@@ -326,7 +326,7 @@ export function SummerChat({
       append([res.user, res.assistant]);
     } catch (e: any) {
       setDraft(message);
-      toast.error(e?.message ?? `${ASSISTANT_SHORT} couldn't answer that`);
+      toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
     } finally {
       setPending(null);
     }
@@ -373,9 +373,7 @@ export function SummerChat({
               </div>
               <div className="min-w-0">
                 <SheetTitle className="text-base">{ASSISTANT_NAME}</SheetTitle>
-                <SheetDescription className="text-xs">
-                  {tone.value === "girly_pop" ? "Your assistant bestie" : "Your assistant"} · she/her
-                </SheetDescription>
+                <SheetDescription className="sr-only">Chat with {ASSISTANT_NAME}</SheetDescription>
               </div>
             </div>
             <div className="flex shrink-0 items-center">
@@ -469,7 +467,7 @@ export function SummerChat({
                 <div className="max-w-[88%] whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-primary-foreground">{pending}</div>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {ASSISTANT_SHORT} is on it{tone.value === "girly_pop" ? " 💅" : "…"}
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {ASSISTANT_NAME} is on it{tone.value === "girly_pop" ? " 💅" : "…"}
               </div>
             </>
           )}
@@ -513,7 +511,7 @@ export function SummerChat({
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(draft); }
                 }}
                 rows={1}
-                placeholder={`Ask ${ASSISTANT_SHORT} anything…`}
+                placeholder={`Ask ${ASSISTANT_NAME} anything…`}
                 className="max-h-32 min-h-10 resize-none"
                 disabled={!!pending}
               />
@@ -521,7 +519,7 @@ export function SummerChat({
                 <ArrowUp className="h-4 w-4" />
               </Button>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Mic to talk, phone for a hands-free call. {ASSISTANT_SHORT} can look things up and link you, but she can't change anything.</p>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Mic to talk, phone for a hands-free call. {ASSISTANT_NAME} can look things up and link you, but she can't change anything.</p>
           </form>
         )}
         <SummerCustomizeDialog open={customizing} onClose={() => setCustomizing(false)} persona={persona} onSaved={onPersonaSaved} />

@@ -173,7 +173,7 @@ export function SummerCustomizeDialog({
             <Select value={voicePrefs.voice} onValueChange={(v) => updateVoice({ voice: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
-                <SelectItem value="summer">Cleo · French accent</SelectItem>
+                <SelectItem value="summer">Cleo</SelectItem>
                 {voices.map((v) => (
                   <SelectItem key={v.voiceURI} value={v.voiceURI}>{v.name} · {v.lang}</SelectItem>
                 ))}
