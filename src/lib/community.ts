@@ -9,21 +9,23 @@ import { formatLoad, formatTonnage } from "@/lib/training-records";
 import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
 import { dayScheduledDate, type WorkoutItem } from "@/lib/workout-today";
 
-export const CAPTION_MAX = 280;
+/** Longest workout caption (Instagram's limit). Matches community_posts_caption_check. */
+export const CAPTION_MAX = 2200;
 export const COMMENT_MAX = 300;
 export const FEED_PAGE_SIZE = 10;
 
 /**
- * The reaction is 🔥, one tap, one per person per post. A crew this size
- * reads better as one number with faces than four split counts. The other
- * three stay here only so anything saved under the old set still renders.
+ * Reactions: ❤️ is the one-tap default (tap the heart, or double-tap the
+ * post); hold the heart for the other four. One per person per post, and a
+ * post shows one number with faces, not split counts.
  */
-export const REACTION = { key: "fire", emoji: "🔥", label: "Fire" } as const;
+export const REACTION = { key: "heart", emoji: "❤️", label: "Love it" } as const;
 export const REACTIONS = [
-  { key: "fire", emoji: "🔥", label: "Fire" },
-  { key: "muscle", emoji: "💪", label: "Strong" },
-  { key: "clap", emoji: "👏", label: "Nice work" },
   { key: "heart", emoji: "❤️", label: "Love it" },
+  { key: "thumbs", emoji: "👍", label: "Like" },
+  { key: "bang", emoji: "‼️", label: "Big" },
+  { key: "fire", emoji: "🔥", label: "Fire" },
+  { key: "laugh", emoji: "😂", label: "Haha" },
 ] as const;
 export type ReactionKey = (typeof REACTIONS)[number]["key"];
 
@@ -153,6 +155,16 @@ export type CommunityPost = {
 };
 
 export type Reactor = CommunityAuthor & { is_me?: boolean };
+
+/** The kinds a post got, most given first (for the little ❤️🔥😂 beside the names). */
+export function reactionKinds(post: Pick<CommunityPost, "reactions">, max = 3): string[] {
+  return Object.entries(post.reactions ?? {})
+    .filter(([, n]) => (n ?? 0) > 0)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .map(([k]) => reactionEmoji(k))
+    .filter((e): e is string => !!e)
+    .slice(0, max);
+}
 
 export function reactionTotal(post: Pick<CommunityPost, "reaction_count" | "reactions">): number {
   if (typeof post.reaction_count === "number") return post.reaction_count;
@@ -768,4 +780,35 @@ export function pickLockInSession(items: WorkoutItem[], now: Date = new Date()):
       return !!sd && sd.getFullYear() === y && sd.getMonth() === m && sd.getDate() === d;
     }) ?? null
   );
+}
+
+/* ---- league points for posting -------------------------------------- */
+
+/** community_post_points_status(): null when the account isn't an athlete. */
+export type PostPointsStatus = { points: number; week_cap: number; today_earned: boolean; week_count: number };
+
+/** Only workouts completed within this many days of the post earn (DB: community_post_xp_sync). */
+export const POST_POINTS_RECENT_DAYS = 7;
+
+/**
+ * The line under the audience picker that tells an athlete what posting earns.
+ * Mirrors the DB rule: +15 for a Community post of a recent workout, 1 a day, 2 a week.
+ * A lock-in post earns once the session is finished, so it says so.
+ */
+export function postPointsHint(
+  status: PostPointsStatus | null | undefined,
+  visibility: CommunityVisibility,
+  alreadyInFeed: boolean,
+  opts: { completedAt?: string | null; lockIn?: boolean; now?: Date } = {},
+): { tone: "earn" | "muted"; text: string } | null {
+  if (!status || alreadyInFeed) return null;
+  const now = opts.now ?? new Date();
+  const done = opts.completedAt ? new Date(opts.completedAt).getTime() : NaN;
+  if (Number.isFinite(done) && now.getTime() - done > POST_POINTS_RECENT_DAYS * 86_400_000)
+    return { tone: "muted", text: `Post points are for workouts from the last ${POST_POINTS_RECENT_DAYS} days.` };
+  if (visibility !== "community") return { tone: "muted", text: `Post to Community to earn +${status.points} league points.` };
+  if (status.today_earned) return { tone: "muted", text: "Today's post points are banked. Post anyway, the crew wants to see it." };
+  if (status.week_count >= status.week_cap)
+    return { tone: "muted", text: `Post points maxed this week (${status.week_cap}/${status.week_cap}). They reset Monday.` };
+  return { tone: "earn", text: opts.lockIn ? `+${status.points} league points when you finish 🔥` : `+${status.points} league points for posting 🔥` };
 }

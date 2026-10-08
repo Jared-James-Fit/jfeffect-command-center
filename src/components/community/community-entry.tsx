@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { featuredLift, formatTopSet, isTrainingNow, postTimeLabel, SCOPE_WORD, type CommunityPost } from "@/lib/community";
+import { featuredLift, formatTopSet, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
 import { useCommunityActivity, useCommunityFeed, useReact, useViewerUnit } from "@/lib/community.queries";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
@@ -200,7 +200,8 @@ export function CommunityCoachCard() {
 function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
   const react = useReact(post, true);
   const lift = post.stats ? featuredLift(post.stats) : null;
-  const given = post.my_reaction === "fire";
+  // any reaction counts as props given (a ❤️ from the feed too); props itself is 🔥
+  const given = !!post.my_reaction;
   return (
     <div className="flex items-center gap-3 py-2.5">
       <UserAvatar src={post.author.avatar_url} name={post.author.name} size={38} expandable={false} />
@@ -224,7 +225,7 @@ function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }
           given ? "bg-orange-500/15 text-orange-600 dark:text-orange-400" : "border border-border text-foreground",
         )}
       >
-        🔥 {given ? "Sent" : "Props"}
+        {given ? `${reactionEmoji(post.my_reaction) ?? "🔥"} Sent` : "🔥 Props"}
       </button>
     </div>
   );
