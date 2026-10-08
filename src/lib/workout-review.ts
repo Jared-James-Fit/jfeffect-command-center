@@ -23,13 +23,25 @@ import type { SleepBucket } from "@/lib/analytics/recovery-score";
 
 export const REVIEW_VERSION = 2;
 
+/**
+ * Session effort, shown as words: "6 7 8 9 10" read to clients like a 1–10
+ * scale with half of it missing. `v` is the session_rpe stored, picked so each
+ * word lands in the matching recovery-score bucket (easy <6, moderate 6–7,
+ * hard 8, very hard 9+).
+ */
 export const EFFORT_OPTIONS: { v: number; label: string }[] = [
-  { v: 6, label: "Easy" },
+  { v: 5, label: "Easy" },
   { v: 7, label: "Moderate" },
   { v: 8, label: "Hard" },
   { v: 9, label: "Very hard" },
   { v: 10, label: "Max" },
 ];
+
+/** The chip a stored session RPE lights up (earlier reviews stored "Easy" as 6). */
+export function effortChip(v: number | null | undefined): number | null {
+  if (v == null) return null;
+  return v <= 6 ? 5 : v;
+}
 
 export const PAIN_AREAS = ["Shoulder", "Elbow", "Wrist", "Low back", "Hip", "Knee", "Other"] as const;
 
@@ -85,7 +97,7 @@ export function initialEffort(
     (initial.reviewVersion ?? 0) >= REVIEW_VERSION &&
     initial.sessionRpe != null
   ) {
-    return Math.min(10, Math.max(6, initial.sessionRpe));
+    return Math.min(10, Math.max(1, initial.sessionRpe));
   }
   return null;
 }

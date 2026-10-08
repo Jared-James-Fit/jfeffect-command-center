@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import {
   checkoutCta,
   deriveOverallRating,
+  effortChip,
+  EFFORT_OPTIONS,
   initialEffort,
   sleepChip,
   trustedSessionRpe,
@@ -26,6 +28,18 @@ describe("quick check-out (review v2)", () => {
     expect(initialEffort({ submittedAt: "x", sessionRpe: 7, reviewVersion: 2 })).toBe(7);
     expect(trustedSessionRpe({ session_rpe: 7, review_version: null })).toBeNull();
     expect(trustedSessionRpe({ session_rpe: 9, review_version: REVIEW_VERSION })).toBe(9);
+  });
+
+  it("shows effort as words and stores values that match the recovery buckets", () => {
+    expect(EFFORT_OPTIONS.map((o) => o.label)).toEqual(["Easy", "Moderate", "Hard", "Very hard", "Max"]);
+    // recovery-score: <6 easy, 6–7 moderate, 8 hard, 9+ very hard
+    expect(EFFORT_OPTIONS.map((o) => o.v)).toEqual([5, 7, 8, 9, 10]);
+    expect(effortChip(6)).toBe(5); // earlier reviews stored "Easy" as 6
+    expect(effortChip(8)).toBe(8);
+    expect(effortChip(null)).toBeNull();
+    expect(initialEffort({ submittedAt: "x", sessionRpe: 6, reviewVersion: 2 })).toBe(6);
+    const editor = readFileSync("src/components/workout/shared/workout-review-editor.tsx", "utf8");
+    expect(editor).not.toContain('tabular-nums">{o.v}');
   });
 
   it("asks sleep anchored on 8h and still shows older answers", () => {
