@@ -268,19 +268,21 @@ function WarmupForm({
           <X className="h-4 w-4" />
         </button>
       </div>
+      {/* Keyboard Done just closes the keyboard so "How hard?" is in view —
+          saving is always the explicit Add / Save button. */}
       <form
         className="flex items-center gap-2"
-        onSubmit={(e) => { e.preventDefault(); save(); }}
+        onSubmit={(e) => { e.preventDefault(); (document.activeElement as HTMLElement | null)?.blur(); }}
       >
         <label className="relative min-w-0 flex-[1.4]">
           <span className="sr-only">Warm-up weight in {unit}</span>
-          <input
+          <ReplaceInput
             inputMode="decimal"
             enterKeyHint="next"
             value={load}
-            ref={loadRef}
-            placeholder="0"
-            onChange={(e) => setLoad(e.target.value.replace(/[^0-9.,]/g, ""))}
+            inputRef={loadRef}
+            clean={(v) => v.replace(/[^0-9.,]/g, "").slice(0, 6)}
+            onValue={setLoad}
             onKeyDown={(e) => {
               if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.form?.elements.namedItem("warmup-reps") as HTMLInputElement | null)?.focus(); }
             }}
@@ -292,13 +294,16 @@ function WarmupForm({
         <span className="text-base font-bold text-muted-foreground" aria-hidden>×</span>
         <label className="relative min-w-0 flex-1">
           <span className="sr-only">Warm-up reps</span>
-          <input
+          <ReplaceInput
             name="warmup-reps"
             inputMode="numeric"
             enterKeyHint="done"
             value={reps}
-            placeholder="0"
-            onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
+            clean={(v) => v.replace(/[^0-9]/g, "").slice(0, 2)}
+            onValue={setReps}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+            }}
             className="h-11 w-full rounded-lg border border-input bg-background pl-3 pr-11 text-center text-lg font-bold tabular-nums text-foreground placeholder:text-muted-foreground/40"
             aria-label="Warm-up reps"
           />
@@ -355,6 +360,46 @@ function WarmupForm({
       </div>
       <p className="text-center text-[11px] leading-snug text-muted-foreground">Not counted in volume, records or points.</p>
     </div>
+  );
+}
+
+/**
+ * Number box that types like the set table's cells: tapping it turns the
+ * current value into the placeholder so the first digit replaces it, and
+ * leaving it blank keeps the old value (a blank never wipes a number).
+ */
+function ReplaceInput({
+  value,
+  onValue,
+  clean,
+  inputRef,
+  ...rest
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "onFocus" | "onBlur" | "placeholder"> & {
+  value: string;
+  onValue: (v: string) => void;
+  clean: (raw: string) => string;
+  inputRef?: React.Ref<HTMLInputElement>;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const before = useRef("");
+  return (
+    <input
+      {...rest}
+      ref={inputRef}
+      type="text"
+      value={draft ?? value}
+      placeholder={draft != null && before.current ? before.current : "0"}
+      onFocus={() => {
+        before.current = value;
+        setDraft("");
+      }}
+      onChange={(e) => {
+        const v = clean(e.target.value);
+        setDraft(v);
+        onValue(v || before.current);
+      }}
+      onBlur={() => setDraft(null)}
+    />
   );
 }
 
