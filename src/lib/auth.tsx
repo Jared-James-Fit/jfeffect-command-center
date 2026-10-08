@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { markClientSignedIn } from "@/lib/activity";
 import { logPerf } from "@/lib/perf-timing";
 import { clearLastRoute } from "@/lib/route-persistence";
+import { isCoachingClientRow } from "@/lib/account-kind";
 
 export type AppRole = "admin" | "coach" | "media_manager" | "client" | "member";
 
@@ -365,38 +366,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (roleResult.error) throw roleResult.error;
 
         const roles = (roleResult.data ?? []).map((r: any) => r.role as AppRole);
-        const explicitRole: AppRole | null =
+        const staffRole: AppRole | null =
           roles.includes("admin") ? "admin"
           : roles.includes("coach") ? "coach"
           : roles.includes("media_manager") ? "media_manager"
-          : roles.includes("client") ? "client"
           : null;
 
-        if (explicitRole) {
-          commitRole(explicitRole);
+        if (staffRole) {
+          commitRole(staffRole);
           return;
         }
 
-        // Only accounts without an explicit role need the membership/client
-        // fallback. Keep this bounded too so a single slow RLS query can never
-        // strand the login splash.
+        // A bare "client" role doesn't prove a coaching client: every signup
+        // gets it (handle_new_user), members included, and a member who builds
+        // workouts has a clients row of athlete_kind 'member'. Decide from the
+        // rows. Bounded so a slow RLS query can never strand the login splash.
         const fallback = await withTimeout(Promise.all([
           supabase.from("app_members").select("id").eq("user_id", uid).maybeSingle(),
-          supabase.from("clients").select("id").eq("user_id", uid).maybeSingle(),
+          // "*" rather than naming athlete_kind, so this keeps working on a
+          // database where that column hasn't been added yet.
+          supabase.from("clients").select("*").eq("user_id", uid).limit(5),
         ]));
         if (cancelled) return;
         if (!fallback) throw new Error("account_kind_lookup_timeout");
 
         const [
           { data: memberRow, error: memberErr },
-          { data: clientRow, error: clientErr },
+          { data: clientRows, error: clientErr },
         ] = fallback;
 
         if (memberErr && clientErr) throw memberErr;
 
+        const coachingClient = isCoachingClientRow(clientRows);
         const resolvedRole: AppRole =
-          memberRow && !clientRow ? "member"
-          : clientRow ? "client"
+          coachingClient ? "client"
           : memberRow ? "member"
           : "client";
 
@@ -427,10 +430,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // admin/coach to client just because user_roles was temporarily slow.
         try {
           const clientResult = await withTimeout(
-            supabase.from("clients").select("id").eq("user_id", uid).maybeSingle(),
+            supabase.from("clients").select("*").eq("user_id", uid).limit(5),
           );
           if (cancelled) return;
-          if (clientResult && !clientResult.error && clientResult.data) {
+          if (clientResult && !clientResult.error && isCoachingClientRow(clientResult.data)) {
             commitRole("client");
             return;
           }
