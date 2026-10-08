@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { decideCoachInviteAcceptance, isAssignableCoach } from "@/lib/coach-onboarding";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data, error } = await supabase
@@ -46,6 +47,10 @@ export const inviteCoach = createServerFn({ method: "POST" })
       if (resetErr) throw new Error(resetErr.message);
     } else if (invited.user) {
       userIdAssigned = invited.user.id;
+      // Mark the new login as staff-only, like staff invites do.
+      await supabaseAdmin.auth.admin.updateUserById(invited.user.id, {
+        app_metadata: { account_kind: "staff" },
+      });
     }
 
     const patch: any = { status: "Pending Invite" };
@@ -102,9 +107,16 @@ export const acceptCoachInvite = createServerFn({ method: "POST" })
     if (!email) throw new Error("Missing email on auth user");
 
     const { data: coach, error: cErr } = await supabaseAdmin
-      .from("coaches").select("id, email, user_id").eq("id", coachId).single();
+      .from("coaches").select("id, email, user_id, status, archived").eq("id", coachId).single();
     if (cErr) throw new Error(cErr.message);
-    if (coach.email.toLowerCase() !== email) throw new Error("Coach email mismatch");
+    // Only a pending invite for this person activates; a deactivated coach
+    // can't sign in through /setup and switch themselves back on.
+    const decision = decideCoachInviteAcceptance(coach, { id: userId, email });
+    if (decision.action === "refuse") {
+      if (decision.reason === "email_mismatch") throw new Error("Coach email mismatch");
+      return { ok: false, reason: decision.reason };
+    }
+    if (decision.action === "noop") return { ok: true };
 
     // A coach login must be staff-only: refuse before changing anything.
     const { assertNoPersonalAccount } = await import("@/lib/setup-link-guard.server");
@@ -139,6 +151,12 @@ export const assignClientToCoach = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await assertAdmin(supabase, userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (data.coachId) {
+      const { data: coach, error: coachErr } = await supabaseAdmin
+        .from("coaches").select("status, archived").eq("id", data.coachId).maybeSingle();
+      if (coachErr) throw new Error(coachErr.message);
+      if (!coach || !isAssignableCoach(coach)) throw new Error("That coach is archived or switched off");
+    }
     const { error } = await supabaseAdmin.from("clients")
       .update({ assigned_coach_id: data.coachId })
       .eq("id", data.clientId);
