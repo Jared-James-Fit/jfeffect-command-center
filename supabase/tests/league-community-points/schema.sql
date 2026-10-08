@@ -1,5 +1,5 @@
 -- Stand-ins for the community + Logging Level tables used by
--- 20261012110000_league_community_post_points.sql. Load AFTER
+-- 20261013110000_league_community_post_points.sql. Load AFTER
 -- supabase/tests/league-boost/schema.sql (see README).
 
 -- Ledger columns the real athlete_xp_events has.

@@ -53,3 +53,36 @@ export function useVisualViewportHeight(): number | null {
   }, []);
   return height;
 }
+
+/**
+ * The visible part of the screen (top offset + height). When the on-screen
+ * keyboard opens it shrinks, and on iOS the page also slides up under it, so
+ * a full-screen overlay pinned to this box keeps its controls in view, right
+ * above the keyboard. `keyboard` is true while the keyboard is up (the
+ * visible height is well below the tallest seen; that also holds in an
+ * installed PWA, where window.innerHeight shrinks too).
+ */
+export function useVisualViewportBox(active: boolean) {
+  const [box, setBox] = useState<{ top: number; height: number; keyboard: boolean } | null>(null);
+  useEffect(() => {
+    if (!active || typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    let tallest = 0;
+    const update = () => {
+      const height = vv ? vv.height : window.innerHeight;
+      tallest = Math.max(tallest, height, window.innerHeight);
+      setBox({ top: vv ? vv.offsetTop : 0, height, keyboard: tallest - height > 120 });
+    };
+    update();
+    vv?.addEventListener("resize", update);
+    vv?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      vv?.removeEventListener("resize", update);
+      vv?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      setBox(null); // next time starts fresh, not from a stale keyboard position
+    };
+  }, [active]);
+  return active ? box : null;
+}

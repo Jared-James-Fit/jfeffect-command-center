@@ -89,7 +89,7 @@ describe("training-record points (from Oct 2026)", () => {
 });
 
 describe("community post points (from Oct 2026)", () => {
-  const sql = readFileSync("supabase/migrations/20261012110000_league_community_post_points.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20261013110000_league_community_post_points.sql", "utf8");
   const rules = Object.fromEntries(LEAGUE_RULES.map((r) => [r.key, r.points]));
 
   it("UI rule matches the database: +15 a post, capped per week", () => {

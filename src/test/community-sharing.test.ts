@@ -47,7 +47,7 @@ import {
   type WorkoutShareStats,
 } from "@/lib/community";
 import { availableTemplates, cameraLooks, exportType, wrapLines } from "@/lib/workout-share-card";
-import { densityFor, highlightShape, nextTextStyle, remapStickers, snapAngle, TEXT_STYLES } from "@/components/community/sticker-layer";
+import { densityFor, highlightShape, nextTextAlign, nextTextStyle, remapStickers, snapAngle, TEXT_SIZE, TEXT_STYLES, textMetrics } from "@/components/community/sticker-layer";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const migration = read("supabase/migrations/20261006090000_community_sharing.sql");
@@ -162,8 +162,10 @@ describe("card text wrapping", () => {
   it("never drops a single very long word", () => {
     expect(wrapLines(ctx, "supercalifragilistic", 50, 2)[0]).toContain("supercal");
   });
-  it("caption limit matches the database check", () => {
-    expect(migration).toContain(`char_length(caption) <= ${CAPTION_MAX}`);
+  it("caption limit matches the database check (and both save / edit functions)", () => {
+    const longer = readFileSync("supabase/migrations/20261013090000_community_caption_longer.sql", "utf8");
+    expect(longer).toContain(`CASE WHEN kind = 'note' THEN 1200 ELSE ${CAPTION_MAX} END`);
+    expect(longer.match(new RegExp(`char_length\\(v_cap\\) > ${CAPTION_MAX} THEN RAISE EXCEPTION 'Caption too long'`, "g"))).toHaveLength(2);
   });
 });
 
@@ -1068,8 +1070,8 @@ describe("feels like our app, not Instagram", () => {
     const layer = read("src/components/community/sticker-layer.tsx");
     expect(layer).toContain("export const TEXT_MAX = 400;");
     expect(layer).toContain("const lines = wrapText(ctx, m.display ? raw.toUpperCase() : raw, WRAP * PX)");
-    expect(layer).toContain("maxWidth: (WRAP + m.padX * 2) * k");
-    expect(layer).toContain("fontSize: m.size * k");
+    expect(layer).toContain("maxWidth: (WRAP + m.padX * 2) * ke");
+    expect(layer).toContain("fontSize: m.size * ke");
     // style / colour taps keep the keyboard up
     expect(layer).toContain("onPointerDown={(e) => e.preventDefault()}");
   });
@@ -1122,7 +1124,8 @@ describe("Highlight text: a box carved round each line", () => {
   });
   it("each line gets its own width; lines touch with no gap", () => {
     const { boxes } = highlightShape([600, 300, 500], o);
-    expect(boxes.map((b) => b.half)).toEqual([324, 174, 274]);
+    expect(boxes.map((b) => b.right - b.left)).toEqual([648, 348, 548]);
+    expect(boxes.map((b) => (b.left + b.right) / 2)).toEqual([324, 324, 324]); // centred
     expect(boxes[0].top).toBe(0);
     for (let i = 1; i < boxes.length; i++) expect(boxes[i].top).toBe(boxes[i - 1].bottom);
     expect(boxes[2].bottom).toBe(8 * 2 + 80 * 3);
@@ -1131,19 +1134,100 @@ describe("Highlight text: a box carved round each line", () => {
     const { boxes, fillets } = highlightShape([600, 300], o);
     expect(boxes[0].radii).toEqual([20, 20, 20, 20]); // wider line: all four show
     expect(boxes[1].radii).toEqual([0, 0, 20, 20]); // narrow line tucks under it
-    expect(fillets).toEqual([{ x: 174, y: 88, r: 20, down: true }]);
+    expect(fillets).toEqual([
+      { x: 498, y: 88, r: 20, down: true, side: 1 },
+      { x: 150, y: 88, r: 20, down: true, side: -1 },
+    ]);
     // narrow on top of wide: the curve sits above the seam
     expect(highlightShape([300, 600], o).fillets[0].down).toBe(false);
   });
   it("near-equal lines share a width so the edge doesn't stair-step", () => {
     const { boxes, fillets } = highlightShape([500, 480, 300], o);
-    expect(boxes[0].half).toBe(boxes[1].half);
+    expect([boxes[0].left, boxes[0].right]).toEqual([boxes[1].left, boxes[1].right]);
     expect(boxes[0].radii.slice(2)).toEqual([0, 0]);
     expect(boxes[1].radii.slice(0, 2)).toEqual([0, 0]);
-    expect(fillets).toHaveLength(1);
+    expect(fillets).toHaveLength(2); // one seam, both sides
   });
   it("the editor shows the card's own render of it while you type", () => {
-    expect(layer).toContain("renderText(hlText, 4, hlColor)");
+    expect(layer).toContain("renderText(hlText, 4, hlColor, { size: hlSize, align: hlAlign })");
     expect(layer).toContain('caretColor: readable(editing.color)');
+  });
+});
+
+describe("text size slider, alignment, and the editor above the keyboard", () => {
+  const layer = readFileSync("src/components/community/sticker-layer.tsx", "utf8");
+  const o = { lineH: 80, padX: 24, padY: 8, r: 20 };
+  it("size scales the font and its padding, but not the wrap width (so it re-wraps)", () => {
+    const a = textMetrics(4, 1);
+    const b = textMetrics(4, 2);
+    expect(b.size).toBe(a.size * 2);
+    expect(b.padX).toBe(a.padX * 2);
+    expect(b.radius).toBe(a.radius * 2);
+    expect(textMetrics(3, 1.5).stroke).toBeCloseTo(13.5);
+    expect(TEXT_SIZE.min).toBeLessThan(1);
+    expect(TEXT_SIZE.max).toBeGreaterThan(2);
+    expect(layer).toContain("wrapText(ctx, m.display ? raw.toUpperCase() : raw, WRAP * PX)");
+    expect(layer).toContain('aria-label="Text size"');
+  });
+  it("alignment cycles centre, left, right", () => {
+    expect(nextTextAlign("center")).toBe("left");
+    expect(nextTextAlign("left")).toBe("right");
+    expect(nextTextAlign("right")).toBe("center");
+  });
+  it("left-aligned highlight has a straight left edge and curves only on the right", () => {
+    const { boxes, fillets } = highlightShape([600, 300, 500], { ...o, align: "left" });
+    expect(boxes.map((b) => b.left)).toEqual([0, 0, 0]);
+    expect(boxes[1].radii[0]).toBe(0); // top-left: flush with the line above
+    expect(boxes[1].radii[3]).toBe(0);
+    expect(boxes[0].radii[0]).toBe(20); // very first corner is round
+    expect(fillets.every((f) => f.side === 1)).toBe(true);
+  });
+  it("right-aligned highlight mirrors it", () => {
+    const { boxes, fillets } = highlightShape([600, 300], { ...o, align: "right", width: 648 });
+    expect(boxes.map((b) => b.right)).toEqual([648, 648]);
+    expect(fillets).toEqual([{ x: 300, y: 88, r: 20, down: true, side: -1 }]);
+  });
+  it("a blank line is a clean gap: no box, and both sides round off", () => {
+    const { boxes, fillets } = highlightShape([600, 0, 300], o);
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0].radii).toEqual([20, 20, 20, 20]);
+    expect(boxes[1].radii).toEqual([20, 20, 20, 20]);
+    expect(boxes[0].bottom).toBe(8 + 80 + 8); // padding reaches into the gap
+    expect(boxes[1].top).toBe(8 + 160 - 8);
+    expect(fillets).toEqual([]);
+  });
+  it("huge text draws less dense instead of blowing the canvas limit", () => {
+    expect(layer).toContain("if (w * h > MAX_AREA) return atDensity(");
+  });
+  it("the editor fills the studio, which fits above the iOS keyboard, so the top bar and colours stay in view", () => {
+    expect(layer).toContain("const view = useVisualViewportBox(!!editing);");
+    expect(layer).toContain('className="fixed inset-0 z-[70] flex flex-col bg-black/70');
+    expect(readFileSync("src/components/community/share-studio.tsx", "utf8")).toContain("style={fitView}");
+  });
+});
+
+describe("captions: longer, and a box that grows like a text", () => {
+  const read = (f: string) => readFileSync(f, "utf8");
+  it("allows Instagram-length captions", () => {
+    expect(CAPTION_MAX).toBe(2200);
+  });
+  it("the studio and lock-in editor use the growing caption box, worded as a caption", () => {
+    const box = read("src/components/community/caption-input.tsx");
+    expect(box).toContain('placeholder="Write a caption…"');
+    expect(box).toContain("t.style.height = `${Math.min(t.scrollHeight,");
+    expect(read("src/components/community/share-studio.tsx")).toContain("<CaptionInput");
+    expect(read("src/components/community/lock-in-editor.tsx")).toContain("<CaptionInput");
+    expect(read("src/components/community/share-studio.tsx")).not.toContain("Say something");
+  });
+  it("the studio fits above the keyboard while you type", () => {
+    const studio = read("src/components/community/share-studio.tsx");
+    expect(studio).toContain('const view = useVisualViewportBox(open && phase === "edit");');
+    expect(studio).toContain("style={fitView}");
+    // the text editor keeps the full card's scale, not the shrunken one
+    expect(studio).toContain("editorWidth={fullW || box.w}");
+  });
+  it("long captions fold to three lines in the feed with 'more'", () => {
+    expect(read("src/components/community/feed-caption.tsx")).toContain('!open && "line-clamp-3"');
+    expect(read("src/components/community/post-card.tsx")).toContain("<FeedCaption name={post.author.name} caption={post.caption} />");
   });
 });

@@ -9,7 +9,8 @@ import { formatLoad, formatTonnage } from "@/lib/training-records";
 import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
 import { dayScheduledDate, type WorkoutItem } from "@/lib/workout-today";
 
-export const CAPTION_MAX = 280;
+/** Longest workout caption (Instagram's limit). Matches community_posts_caption_check. */
+export const CAPTION_MAX = 2200;
 export const COMMENT_MAX = 300;
 export const FEED_PAGE_SIZE = 10;
 

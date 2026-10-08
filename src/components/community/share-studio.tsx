@@ -5,6 +5,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { cn } from "@/lib/utils";
 import type { CommunityVisibility } from "@/lib/community";
 import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
+import { CaptionInput } from "@/components/community/caption-input";
+import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 
 export type CameraMode = { key: string; label: string };
@@ -98,6 +100,12 @@ export function ShareStudio({
   const [busy, setBusy] = useState<null | "post" | "save">(null);
   const [posted, setPosted] = useState(false);
   const [area, setArea] = useState<HTMLDivElement | null>(null);
+  // While the keyboard is up (caption or text), fit the whole studio into
+  // the part of the screen you can see: iOS otherwise slides the page up and
+  // cuts off the top. The card shrinks to fit; the text editor (fixed inside
+  // this dialog) fills it too. Phones only: the desktop dialog is centred.
+  const view = useVisualViewportBox(open && phase === "edit");
+  const fitView = view?.keyboard && typeof window !== "undefined" && window.innerWidth < 640 ? { top: view.top, height: view.height } : undefined;
   const [areaSize, setAreaSize] = useState({ w: 0, h: 0 });
   const [cardEl, setCardEl] = useState<HTMLCanvasElement | null>(null);
   const [logo, setLogo] = useState<HTMLImageElement | null>(null);
@@ -147,6 +155,13 @@ export function ShareStudio({
     const w = Math.min(areaSize.w, (areaSize.h * CARD_W) / CARD_H);
     return { w: Math.floor(w), h: Math.floor((w * CARD_H) / CARD_W) };
   }, [areaSize]);
+  // The card's full size (not the shrunken one while the keyboard is up), so
+  // the text editor previews text at its real size.
+  const [fullW, setFullW] = useState(0);
+  const fitted = !!fitView;
+  useEffect(() => {
+    if (!fitted && box.w) setFullW(box.w);
+  }, [fitted, box.w]);
 
   /* ---- camera ------------------------------------------------------- */
   const cancelCount = () => {
@@ -435,6 +450,7 @@ export function ShareStudio({
       <DialogContent
         className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        style={fitView}
       >
         <DialogTitle className="sr-only">Share</DialogTitle>
         <DialogDescription className="sr-only">Take a photo, add text or stickers, then post it to the community or share it to your story.</DialogDescription>
@@ -471,7 +487,7 @@ export function ShareStudio({
               </div>
             )}
 
-            {phase === "edit" && <StickerLayer items={items} setItems={setItems} width={box.w} height={box.h} context={stickerContext} request={request} />}
+            {phase === "edit" && <StickerLayer items={items} setItems={setItems} width={box.w} height={box.h} editorWidth={fullW || box.w} context={stickerContext} request={request} />}
 
             {count != null && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -571,24 +587,31 @@ export function ShareStudio({
             </>
           ) : (
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  value={caption}
-                  onChange={(e) => {
-                    setCaption(e.target.value.slice(0, 280));
-                    setPosted(false);
-                  }}
-                  placeholder="Say something… (optional)"
-                  className="h-11 min-w-0 flex-1 rounded-full border-0 bg-white/10 px-4 text-[16px] text-white placeholder:text-white/45 focus:outline-none focus:ring-2 focus:ring-white/30"
-                  aria-label="Caption"
-                />
+              {/* full width, and it grows as you write, so you can read it back like a text */}
+              <CaptionInput
+                value={caption}
+                onChange={(v) => {
+                  setCaption(v);
+                  setPosted(false);
+                }}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={!!busy || !card}
+                  onClick={() => void doSave()}
+                  className="grid h-14 w-12 shrink-0 place-items-center rounded-2xl bg-white/10 active:scale-[0.97] disabled:opacity-60"
+                  aria-label="Save image"
+                >
+                  {busy === "save" ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Download className="h-6 w-6" />}
+                </button>
                 <button
                   type="button"
                   onClick={() => {
                     setVisibility(AUDIENCE[(AUDIENCE.indexOf(aud) + 1) % AUDIENCE.length].key);
                     setPosted(false);
                   }}
-                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-3.5 text-[13px] font-black active:scale-95"
+                  className="inline-flex h-14 shrink-0 items-center gap-1.5 rounded-2xl bg-white/10 px-3 text-[13px] font-black active:scale-95"
                   aria-label={`Who sees it: ${aud.label}. Tap to change`}
                 >
                   <AudIcon className="h-4 w-4" /> {aud.label}
@@ -601,31 +624,20 @@ export function ShareStudio({
                       setHideLoads(!hideLoads);
                       setPosted(false);
                     }}
-                    className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-full active:scale-95", hideLoads ? "bg-white text-black" : "bg-white/10")}
+                    className={cn("grid h-14 w-12 shrink-0 place-items-center rounded-2xl active:scale-95", hideLoads ? "bg-white text-black" : "bg-white/10")}
                     aria-label={hideLoads ? "Weights hidden. Tap to show" : "Hide my weights"}
                     aria-pressed={hideLoads}
                   >
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOff className="h-5 w-5" />
                   </button>
                 )}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={!!busy || !card}
-                  onClick={() => void doSave()}
-                  className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/10 active:scale-[0.97] disabled:opacity-60"
-                  aria-label="Save image"
-                >
-                  {busy === "save" ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Download className="h-6 w-6" />}
-                </button>
                 <button
                   type="button"
                   disabled={!!busy || posted || !post || !card}
                   onClick={() => void doPost()}
                   className={cn(
                     // the app's own primary button: JF red, solid
-                    "inline-flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl text-[16px] font-black shadow-lg shadow-primary/25 active:scale-[0.98] disabled:opacity-100",
+                    "inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl text-[16px] font-black shadow-lg shadow-primary/25 active:scale-[0.98] disabled:opacity-100",
                     posted ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground",
                     !post && "opacity-60",
                   )}
