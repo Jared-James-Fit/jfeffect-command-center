@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, Target, SlidersHorizontal, Repeat } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -5553,6 +5553,9 @@ function SetRow({
             ? Number(displayLoadInUnit(prevExisting, unit))
             : null) ?? loadHint?.target ?? lastTimeWeight ?? suggestedWeight ?? null
         }
+        // Today's suggestion sits faded in the next set's empty weight cell —
+        // where the athlete types — instead of a second box under the row.
+        suggested={!readonly && !isConfirmed && isNextSet && loadHint && loadType === "external" ? loadHint.target : null}
         disabled={readonly}
         focusMode={focusMode}
         onPick={({ load: nextLoad, bodyweight, loadType: nextType }: { load: string; bodyweight: boolean; loadType: LoadType }) => {
@@ -5680,27 +5683,11 @@ function SetRow({
       </div>
     )}
 
-    {/* Next-set helpers — one row, only on the set the athlete is about to log:
-        the suggested load (one tap fills it, never auto-confirms) and "Repeat
-        set N", which copies the last logged set into every open set below. */}
-    {!readonly && !isConfirmed && isNextSet && ((!hideWeight && loadHint && loadType === "external") || repeat) && (
+    {/* Next-set helper — only on the set the athlete is about to log:
+        "Same as set N" copies the last logged set into every open set below.
+        (The suggested load lives in the weight cell itself.) */}
+    {!readonly && !isConfirmed && isNextSet && repeat && (
       <div className="flex flex-wrap gap-1.5 px-2 pb-2">
-        {!hideWeight && loadHint && loadType === "external" && (
-          <button
-            type="button"
-            onClick={() => setLoad(fmtNum(loadHint.target))}
-            aria-label={`Use suggested ${fmtNum(loadHint.target)} ${loadHint.unit}`}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 active:scale-[0.98]"
-          >
-            <Target className="h-3.5 w-3.5" aria-hidden="true" />
-            {loadHint.low === loadHint.high
-              ? `${fmtNum(loadHint.target)} ${loadHint.unit}`
-              : `${fmtNum(loadHint.low)}–${fmtNum(loadHint.high)} ${loadHint.unit}`}
-            {Number(load) !== loadHint.target && loadHint.low !== loadHint.high && (
-              <span className="font-normal text-primary/80">· use {fmtNum(loadHint.target)}</span>
-            )}
-          </button>
-        )}
         {repeat && onApplyToRemaining && (
           <button
             type="button"
