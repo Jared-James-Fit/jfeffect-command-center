@@ -1,7 +1,7 @@
 /**
  * Quick post-workout review. One compact screen, session questions first:
  *
- *   How hard was it?  — session RPE 6–10 (the one required tap)
+ *   How hard was it?  — Easy … Max, stored as session RPE (the one required tap)
  *   Anything hurt?    — No/Yes; Yes asks where + how bad (feeds coach flags)
  *   Sleep last night  — <5h / 5–6h / 6–7h / 7–8h / 8h+ (optional)
  *   Energy going in   — 1–5 (optional)
@@ -39,6 +39,7 @@ import {
   SLEEP_OPTIONS,
   deriveOverallRating,
   checkoutCta,
+  effortChip,
   initialEffort,
   sleepChip,
 } from "@/lib/workout-review";
@@ -262,15 +263,25 @@ export function WorkoutReviewEditor({
         <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-5 pt-4">
           <Row title="How hard was it?" hint={effort == null ? "Required" : undefined}>
             <div className="grid grid-cols-5 gap-1.5">
-              {EFFORT_OPTIONS.map((o) => (
+              {EFFORT_OPTIONS.map((o, i) => (
                 <Chip
                   key={o.v}
-                  active={effort === o.v}
+                  active={effortChip(effort) === o.v}
                   onClick={() => setEffort(o.v)}
-                  label={`Effort ${o.v} ${o.label}`}
+                  label={`Effort: ${o.label}`}
+                  className="gap-1"
                 >
-                  <span className="text-base tabular-nums">{o.v}</span>
-                  <span className="text-[10px] font-semibold opacity-80">{o.label}</span>
+                  {/* Rising bars show the order without numbers. */}
+                  <span className="flex h-3.5 items-end gap-[2px]" aria-hidden="true">
+                    {[0, 1, 2, 3, 4].map((b) => (
+                      <span
+                        key={b}
+                        className={cn("w-1 rounded-sm bg-current", b > i && "opacity-20")}
+                        style={{ height: 6 + b * 2 }}
+                      />
+                    ))}
+                  </span>
+                  <span className="text-[11px] font-bold">{o.label}</span>
                 </Chip>
               ))}
             </div>
