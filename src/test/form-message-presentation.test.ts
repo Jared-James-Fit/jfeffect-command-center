@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { planFormMessages } from "@/lib/form-message-presentation";
 
 let n = 0;
-const req = (id: string, type: "weekly_checkin" | "nutrition_review", at: string, read: string | null = null) => ({
+const req = (id: string, type: "weekly_checkin", at: string, read: string | null = null) => ({
   id: `req-${id}-${n++}`, created_at: at, read_by_client_at: read, deleted_at: null,
   attachments: [{ type: "file", url: "", kind: "checkin_request", checkin_submission_id: id, checkin_task_type: type }] as any,
 });
-const sub = (id: string, type: "weekly_checkin" | "nutrition_review", at: string) => ({
+const sub = (id: string, type: "weekly_checkin", at: string) => ({
   id: `sub-${id}-${n++}`, created_at: at, read_by_client_at: null, deleted_at: null,
   attachments: [{ type: "file", url: "", kind: "checkin_submission", checkin_submission_id: id, checkin_task_type: type }] as any,
 });
@@ -50,19 +50,41 @@ describe("planFormMessages", () => {
     }
   });
 
-  it("form types are independent: a new weekly check-in does not collapse a current nutrition review", () => {
-    const nr = req("n1", "nutrition_review", "2026-09-30T14:00:00Z");
-    const w = req("w9", "weekly_checkin", "2026-10-02T15:00:00Z");
-    const plan = planFormMessages([nr, w], "client");
-    expect(plan.get(nr.id)).toMatchObject({ mode: "expanded", state: "pending" });
-    expect(plan.get(w.id)).toMatchObject({ mode: "expanded", state: "pending" });
-  });
-
   it("ignores deleted messages and tolerates overlapping pages", () => {
     const r1 = req("w1", "weekly_checkin", "2026-09-18T15:00:00Z");
     const r2 = { ...req("w2", "weekly_checkin", "2026-09-25T15:00:00Z"), deleted_at: "2026-09-25T16:00:00Z" };
     const plan = planFormMessages([r1, r1, r2], "client");
     expect(plan.get(r1.id)?.mode).toBe("expanded");
     expect(plan.has(r2.id)).toBe(false);
+  });
+});
+
+import { groupFormHistory } from "@/lib/form-message-presentation";
+
+describe("groupFormHistory", () => {
+  it("collapses 2+ older units of a type into one summary with filled / missed counts", () => {
+    const r1 = req("w1", "weekly_checkin", "2026-09-04T15:00:00Z"); // never answered -> missed
+    const r2 = req("w2", "weekly_checkin", "2026-09-11T15:00:00Z");
+    const s2 = sub("w2", "weekly_checkin", "2026-09-12T10:00:00Z"); // answered -> filled
+    const r3 = req("w3", "weekly_checkin", "2026-09-18T15:00:00Z"); // newest, pending (stays expanded)
+    const all = [r1, r2, s2, r3];
+    const plan = planFormMessages(all, "admin");
+    // thread hides a request once it's answered, so the visible order is r1, s2, r3
+    const { leaders, hidden } = groupFormHistory(plan, [r1.id, s2.id, r3.id]);
+    expect(leaders.size).toBe(1);
+    const g = leaders.get(r1.id)!;
+    expect(g).toMatchObject({ taskType: "weekly_checkin", filled: 1, missed: 1 });
+    expect(g.units.map((u) => u.submissionId)).toEqual(["w2", "w1"]); // newest first
+    expect(hidden.has(s2.id)).toBe(true);
+    expect(hidden.has(r3.id)).toBe(false); // current request is never grouped
+  });
+
+  it("a single older unit keeps its own row", () => {
+    const r1 = req("w1", "weekly_checkin", "2026-09-11T15:00:00Z");
+    const r2 = req("w2", "weekly_checkin", "2026-09-18T15:00:00Z");
+    const plan = planFormMessages([r1, r2], "client");
+    const { leaders, hidden } = groupFormHistory(plan, [r1.id, r2.id]);
+    expect(leaders.size).toBe(0);
+    expect(hidden.size).toBe(0);
   });
 });

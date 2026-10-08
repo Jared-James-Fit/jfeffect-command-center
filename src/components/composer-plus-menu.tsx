@@ -4,10 +4,11 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
-  Plus, Camera, Image as ImageIcon, File as FileIcon, Sparkles,
-  ClipboardList, FileSignature, UtensilsCrossed, ZapIcon, Video,
+  Plus, Camera, Image as ImageIcon, FileText, Sparkles,
+  ClipboardList, FileSignature, UtensilsCrossed, Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { preloadVideoCompressor } from "@/lib/video-compress";
 import { ChatSendMenu, type ChatSendAttachment } from "@/components/chat-send-menu";
 import { GifPicker } from "@/components/gif-picker";
 import { useServerFn } from "@tanstack/react-start";
@@ -19,6 +20,8 @@ import { MessengerCheckinRequestDialog } from "@/components/messages/messenger-c
 
 type Tile = {
   key: string;
+  /** "attach" = media/files from the device; "send" = coach tools that create something for the client. */
+  section: "attach" | "send";
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
@@ -65,7 +68,6 @@ export function ComposerPlusMenu({
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);
   const [recipeOpen, setRecipeOpen] = useState(false);
-  const [actionOpen, setActionOpen] = useState(false);
   const [creatingMeet, setCreatingMeet] = useState(false);
   const createMeet = useServerFn(createMeetLink);
 
@@ -75,24 +77,28 @@ export function ComposerPlusMenu({
   const tiles: Tile[] = [
     {
       key: "camera",
+      section: "attach",
       label: "Camera",
       icon: <Camera className="h-6 w-6" />,
-      onClick: () => { setOpen(false); onPickCamera(); },
+      onClick: () => { setOpen(false); preloadVideoCompressor(); onPickCamera(); },
     },
     {
       key: "photo",
-      label: "Photo / Video",
+      section: "attach",
+      label: "Photos & Videos",
       icon: <ImageIcon className="h-6 w-6" />,
-      onClick: () => { setOpen(false); onPickPhotos(); },
+      onClick: () => { setOpen(false); preloadVideoCompressor(); onPickPhotos(); },
     },
     {
       key: "file",
-      label: "File",
-      icon: <FileIcon className="h-6 w-6" />,
+      section: "attach",
+      label: "Document",
+      icon: <FileText className="h-6 w-6" />,
       onClick: () => { setOpen(false); onPickFiles(); },
     },
     {
       key: "gif",
+      section: "attach",
       label: "GIFs & Sounds",
       icon: <Sparkles className="h-6 w-6" />,
       onClick: () => { setOpen(false); setGifOpen(true); },
@@ -101,7 +107,8 @@ export function ComposerPlusMenu({
     },
     {
       key: "checkin",
-      label: "Check-In",
+      section: "send",
+      label: "Request Check-In",
       icon: <ClipboardList className="h-6 w-6" />,
       onClick: () => { setOpen(false); setCheckinOpen(true); },
       hidden: !isAdmin || surface !== "dm" || !defaultClientId,
@@ -110,7 +117,8 @@ export function ComposerPlusMenu({
     },
     {
       key: "sig",
-      label: "Signature",
+      section: "send",
+      label: "Request Signature",
       icon: <FileSignature className="h-6 w-6" />,
       onClick: () => { setOpen(false); setSigOpen(true); },
       hidden: !canSendRequests,
@@ -119,7 +127,8 @@ export function ComposerPlusMenu({
     },
     {
       key: "recipe",
-      label: "Recipe",
+      section: "send",
+      label: "Share Recipe",
       icon: <UtensilsCrossed className="h-6 w-6" />,
       onClick: () => { setOpen(false); setRecipeOpen(true); },
       hidden: !canSendRequests,
@@ -127,16 +136,9 @@ export function ComposerPlusMenu({
       disabled: clientIds.length === 0,
     },
     {
-      key: "action",
-      label: "Action Request",
-      icon: <ZapIcon className="h-6 w-6" />,
-      onClick: () => { setOpen(false); setActionOpen(true); },
-      hidden: !canSendRequests || surface !== "dm" || !defaultClientId,
-      tone: "warning",
-    },
-    {
       key: "meet",
-      label: creatingMeet ? "Creating…" : "Google Meet",
+      section: "send",
+      label: creatingMeet ? "Creating…" : "Meet Link",
       icon: <Video className="h-6 w-6" />,
       onClick: async () => {
         if (!onInsertText || creatingMeet) return;
@@ -159,6 +161,14 @@ export function ComposerPlusMenu({
   ];
 
   const visible = tiles.filter((t) => !t.hidden);
+  const sections = [
+    { key: "attach", label: "Attach", tiles: visible.filter((t) => t.section === "attach") },
+    {
+      key: "send",
+      label: surface === "group" ? "Send to group" : "Send to client",
+      tiles: visible.filter((t) => t.section === "send"),
+    },
+  ].filter((s) => s.tiles.length > 0);
 
   return (
     <>
@@ -181,31 +191,35 @@ export function ComposerPlusMenu({
           sideOffset={10}
           className="w-[min(94vw,360px)] p-3"
         >
-          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {surface === "group" ? "Send to group" : isAdmin ? "Send to client" : "Send"}
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {visible.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={t.onClick}
-                disabled={t.disabled}
-                className={cn(
-                  "flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/40 px-2 py-3 text-center text-[11px] font-medium leading-tight transition active:scale-95",
-                  "hover:bg-secondary disabled:opacity-50 disabled:pointer-events-none",
-                  t.tone === "primary" && "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
-                  t.tone === "warning" && "border-warning/30 bg-warning/5 text-warning hover:bg-warning/10",
-                  t.tone === "accent" && "border-accent/30 bg-accent/30 hover:bg-accent/50",
-                )}
-              >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-background shadow-sm">
-                  {t.icon}
-                </span>
-                <span className="line-clamp-2">{t.label}</span>
-              </button>
-            ))}
-          </div>
+          {sections.map((section, i) => (
+            <div key={section.key} className={cn(i > 0 && "mt-3")}>
+              <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {section.label}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {section.tiles.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={t.onClick}
+                    disabled={t.disabled}
+                    className={cn(
+                      "flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/40 px-2 py-3 text-center text-[11px] font-medium leading-tight transition active:scale-95",
+                      "hover:bg-secondary disabled:opacity-50 disabled:pointer-events-none",
+                      t.tone === "primary" && "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
+                      t.tone === "warning" && "border-warning/30 bg-warning/5 text-warning hover:bg-warning/10",
+                      t.tone === "accent" && "border-accent/30 bg-accent/30 hover:bg-accent/50",
+                    )}
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-background shadow-sm">
+                      {t.icon}
+                    </span>
+                    <span className="line-clamp-2">{t.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </PopoverContent>
       </Popover>
 
@@ -230,21 +244,18 @@ export function ComposerPlusMenu({
         />
       )}
 
-      {/* Forms / Signature / Recipe / Action — controlled */}
+      {/* Signature / Recipe — controlled */}
       {canSendRequests && onAttach && (
         <ChatSendMenu
           hideTrigger
           surface={surface}
           clientIds={clientIds}
-          defaultClientId={defaultClientId}
           disabled={disabled}
           onAttach={onAttach}
-          externalOpen={{ form: false, sig: sigOpen, recipe: recipeOpen, action: actionOpen }}
+          externalOpen={{ form: false, sig: sigOpen, recipe: recipeOpen }}
           onExternalOpenChange={(key, v) => {
-            if (key === "form") return;
-            else if (key === "sig") setSigOpen(v);
+            if (key === "sig") setSigOpen(v);
             else if (key === "recipe") setRecipeOpen(v);
-            else if (key === "action") setActionOpen(v);
           }}
         />
       )}

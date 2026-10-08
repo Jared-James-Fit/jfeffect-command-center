@@ -21,6 +21,7 @@ export const MUSCLE_GROUPS = [
   "Quads",
   "Hamstrings",
   "Glutes",
+  "Adductors",
   "Calves",
   "Core",
 ] as const;
@@ -38,6 +39,7 @@ export const MUSCLE_EMOJI: Record<MuscleGroup, string> = {
   Quads: "🦵",
   Hamstrings: "🐎",
   Glutes: "🍑",
+  Adductors: "🦵",
   Calves: "🐇",
   Core: "🔥",
 };
@@ -65,9 +67,10 @@ export function normalizeMuscle(input: string | null | undefined): MuscleGroup |
   if (s.includes("quad")) return "Quads";
   if (s.includes("hamstring") || s === "hams") return "Hamstrings";
   if (s.includes("glute")) return "Glutes";
-  // "Adductors" / "Abductors" are real production values (13 rows). They are
-  // hip/thigh work — grouped under Glutes rather than dropped into "Other".
-  if (s.includes("adductor") || s.includes("abductor") || s.includes("inner thigh") || s.includes("groin")) return "Glutes";
+  // Adductors (inner thigh) are their own group: Copenhagens, adductor machine,
+  // lateral lunges. Abductors (glute med/min) are glute work.
+  if (s.includes("adductor") || s.includes("inner thigh") || s.includes("groin")) return "Adductors";
+  if (s.includes("abductor")) return "Glutes";
   if (s.includes("calf") || s.includes("calves")) return "Calves";
   if (s.includes("core") || s.includes("abs") || s.includes("oblique") || s.includes("abdom")) return "Core";
   return null;

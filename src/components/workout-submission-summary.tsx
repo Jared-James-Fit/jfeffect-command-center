@@ -1,5 +1,6 @@
 import { NewAchievementReveal } from "@/components/portal/new-achievement-reveal";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download } from "lucide-react";
@@ -17,6 +18,10 @@ import { WorkoutPointsCard } from "@/components/records/workout-points-card";
 import { SCOPE_LABEL, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel } from "@/lib/training-records";
 import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
+
+// The share studio (camera, cards, upload) is only fetched the first time
+// someone taps Share workout, so the recap itself stays light.
+const WorkoutShareStudio = lazyWithRetry(() => import("@/components/community/workout-share-studio").then((m) => ({ default: m.WorkoutShareStudio })));
 
 type Props = {
   open: boolean;
@@ -45,10 +50,17 @@ type Props = {
   displayUnit?: "kg" | "lb";
   /** Prescribed cardio status for the same day, when there is one. */
   cardio?: CardioTakeawayInput;
+  /**
+   * pl_day_completions.id of this finished workout. When present, the footer
+   * offers the optional "Share workout" studio (camera → card → community
+   * post and/or Instagram story, one screen). Omit it where sharing isn't supported (memberships, coach
+   * "View as client"); the legacy story Share/Save buttons remain there.
+   */
+  completionId?: string | null;
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", cardio, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", cardio, completionId, onClose }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
@@ -58,6 +70,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const [revealStage, setRevealStage] = useState(0);
   const [displayScore, setDisplayScore] = useState(0);
   const [sharing, setSharing] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareMounted, setShareMounted] = useState(false);
   const shareCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -198,6 +212,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) onClose?.(); }}>
       <DialogContent
         className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[24px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[520px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
@@ -376,16 +391,48 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           className="shrink-0 border-t border-border/70 bg-background/95 px-3 pt-2 backdrop-blur sm:px-5"
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}
         >
-          <div className="grid w-full grid-cols-2 gap-2">
-            <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" disabled={sharing} onClick={()=>void shareWorkout()}><Share2 className="mr-1.5 h-4 w-4"/>Share</Button>
-            <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" onClick={()=>void saveWorkoutImage()}><Download className="mr-1.5 h-4 w-4"/>Save photo</Button>
-          </div>
-          <Button className="mt-2 h-10 w-full rounded-xl text-sm font-bold" onClick={() => { onOpenChange(false); onClose?.(); }}>
-            <ChevronLeft className="mr-1.5 h-4 w-4" />Back to workout
-          </Button>
+          {completionId ? (
+            // Done is the main action after training; sharing stays one tap away.
+            <div className="grid w-full grid-cols-[1fr_1.35fr] gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 rounded-xl text-sm font-bold"
+                onClick={() => { setShareMounted(true); setShareOpen(true); }}
+              >
+                <Share2 className="mr-1.5 h-4 w-4" />Share
+              </Button>
+              <Button type="button" className="h-12 rounded-xl text-sm font-black" onClick={() => { onOpenChange(false); onClose?.(); }}>
+                Done
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="grid w-full grid-cols-2 gap-2">
+                <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" disabled={sharing} onClick={()=>void shareWorkout()}><Share2 className="mr-1.5 h-4 w-4"/>Share</Button>
+                <Button type="button" variant="outline" className="h-10 rounded-xl text-xs font-bold" onClick={()=>void saveWorkoutImage()}><Download className="mr-1.5 h-4 w-4"/>Save photo</Button>
+              </div>
+              <Button className="mt-2 h-10 w-full rounded-xl text-sm font-bold" onClick={() => { onOpenChange(false); onClose?.(); }}>
+                <ChevronLeft className="mr-1.5 h-4 w-4" />Back to workout
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {completionId && shareMounted && (
+      <Suspense fallback={null}>
+        <WorkoutShareStudio
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          completionId={completionId}
+          athleteName={athleteName}
+          workoutTitle={workoutTitle}
+          unit={displayUnit}
+        />
+      </Suspense>
+    )}
+    </>
   );
 }
 

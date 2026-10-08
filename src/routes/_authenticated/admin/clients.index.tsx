@@ -3,7 +3,7 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -19,16 +19,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, Users, ShieldAlert } from "lucide-react";
+import { UserPlus, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
+import { filtersFromSearch, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
+import { STATUS_META } from "@/components/clients/clients-status";
 import { ClientToolbar } from "@/components/clients/client-toolbar";
 import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
 import { AddClientDialog } from "@/components/clients/add-client-dialog";
-import { ComplianceDashboard } from "@/components/clients/compliance-dashboard";
 import { cn } from "@/lib/utils";
 
 function LifecycleTabs({ value }: { value: "active" | "archived" | "deactivated" }) {
@@ -52,6 +53,7 @@ function LifecycleTabs({ value }: { value: "active" | "archived" | "deactivated"
                   ...prev,
                   lifecycle: o.key === "active" ? undefined : o.key,
                   status: "all",
+                  flags: undefined,
                   page: 1,
                 }),
                 resetScroll: false,
@@ -74,13 +76,15 @@ function LifecycleTabs({ value }: { value: "active" | "archived" | "deactivated"
 
 const searchSchema = z.object({
   search:        fallback(z.string(),                                                       "").default(""),
-  status:        fallback(z.enum(["all","needs_setup","needs_review","program_ending","payment_issues","new_clients","missed_workouts","inactive"]), "all").default("all"),
+  // Older single-filter spelling; still read so a bookmarked link works. The filters now live in `flags`.
+  status:        fallback(z.enum(["all","needs_setup","needs_review","program_ending","payment_issues","no_payment","new_clients","missed_workouts","inactive"]), "all").default("all"),
+  // Comma-separated filter keys, e.g. "no_contract,no_nutrition". A client must match all of them.
+  flags:         fallback(z.string(),                                                       "").default(""),
   coachingType:  fallback(z.string(),                                                       "all").default("all"),
   coachId:       fallback(z.string().uuid().optional(),                                     undefined as any),
   sort:          fallback(z.enum(["attention","recent","name","ending","activity"]),       "name").default("name"),
   page:          fallback(z.number().int().min(1),                                          1).default(1),
   size:          fallback(z.union([z.literal(15), z.literal(25), z.literal(50)]),           15).default(15),
-  view:          fallback(z.enum(["clients", "compliance"]),                                "clients").default("clients"),
   lifecycle:     fallback(z.enum(["active","archived","deactivated"]),                      "active").default("active"),
 });
 
@@ -115,9 +119,12 @@ function ClientsDirectoryPage() {
   const [archiveTarget, setArchiveTarget] = useState<DirectoryRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
-  const activeView = search.view ?? "clients";
   const lifecycle = search.lifecycle ?? "active";
   const isActiveLifecycle = lifecycle === "active";
+  const flags = useMemo(
+    () => filtersFromSearch({ status: search.status, flags: search.flags }),
+    [search.status, search.flags],
+  );
 
   const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["clients-directory", search],
@@ -125,7 +132,7 @@ function ClientsDirectoryPage() {
       listFn({
         data: {
           search: search.search || "",
-          status: search.status,
+          flags,
           coachingType: search.coachingType,
           coachId: search.coachId ?? null,
           sort: search.sort,
@@ -136,7 +143,6 @@ function ClientsDirectoryPage() {
       }),
     placeholderData: (prev) => prev,
     staleTime: 10_000,
-    enabled: activeView === "clients",
   });
 
   const { data: coaches = [] } = useQuery({
@@ -153,7 +159,7 @@ function ClientsDirectoryPage() {
   // narrowed — the page heading already shows the active-client total.
   const hasActiveFilters = !!(
     search.search ||
-    search.status !== "all" ||
+    flags.length > 0 ||
     search.coachingType !== "all" ||
     search.coachId
   );
@@ -165,18 +171,13 @@ function ClientsDirectoryPage() {
         ? "No matches"
         : `${total} result${total === 1 ? "" : "s"}`;
 
-  const TABS = [
-    { key: "clients" as const, label: "Clients", icon: Users },
-    { key: "compliance" as const, label: "Compliance", icon: ShieldAlert },
-  ];
-
   return (
     <>
       <PageHeader
         title="Clients"
         subtitle={counts ? `${counts.all} active` : undefined}
         actions={
-          isAdmin && activeView === "clients" && (
+          isAdmin && (
             <Button size="sm" className="h-9" onClick={() => setAddOpen(true)}>
               <UserPlus className="mr-1.5 h-4 w-4" />
               <span className="hidden sm:inline">Add Client</span>
@@ -187,70 +188,51 @@ function ClientsDirectoryPage() {
       />
 
       <div className="space-y-3 p-3 sm:p-4 md:p-6">
-        {/* Tab switcher */}
-        <div className="flex gap-1 rounded-xl border border-border bg-card/60 p-1 w-fit">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, view: tab.key }), resetScroll: false })}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors",
-                  activeView === tab.key
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        <LifecycleTabs value={lifecycle} />
 
-        {activeView === "compliance" ? (
-          <ComplianceDashboard />
+        {/* Toolbar (search + filters + sort) — pinned near the top for
+            fast lookups. Rendered BEFORE the analytics overview so the
+            client list stays the primary focus on every viewport. */}
+        <ClientToolbar
+          search={search.search}
+          coachingType={search.coachingType}
+          coachId={(search.coachId as string | undefined) ?? null}
+          coaches={coaches as { id: string; full_name: string | null }[]}
+          sort={search.sort}
+          isAdmin={isAdmin}
+          resultLabel={resultLabel}
+          flags={flags}
+          counts={counts}
+          total={total}
+          loading={isFetching && !data}
+        />
+
+        {isError ? (
+          <Card className="p-8 text-center">
+            <div className="mb-2 text-sm font-semibold text-destructive">Couldn't load clients</div>
+            <Button onClick={() => refetch()} variant="outline" size="sm">Try again</Button>
+          </Card>
+        ) : !data && isFetching ? (
+          <ul className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => <ClientRowSkeleton key={i} />)}
+          </ul>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            hasFilters={hasActiveFilters}
+            flags={flags}
+            lifecycle={lifecycle}
+            // Back to the default view, but stay on the same tab (Active / Archived / Deactivated).
+            onClear={() => navigate({ search: (prev: any) => ({ lifecycle: prev.lifecycle }), resetScroll: false })}
+          />
         ) : (
-          <>
-            <LifecycleTabs value={lifecycle} />
-
-            {/* Toolbar (search + filters + sort) — pinned near the top for
-                fast lookups. Rendered BEFORE the analytics overview so the
-                client list stays the primary focus on every viewport. */}
-            <ClientToolbar
-              search={search.search}
-              coachingType={search.coachingType}
-              coachId={(search.coachId as string | undefined) ?? null}
-              coaches={coaches as { id: string; full_name: string | null }[]}
-              sort={search.sort}
-              isAdmin={isAdmin}
-              resultLabel={resultLabel}
-            />
-
-            {isError ? (
-              <Card className="p-8 text-center">
-                <div className="mb-2 text-sm font-semibold text-destructive">Couldn't load clients</div>
-                <Button onClick={() => refetch()} variant="outline" size="sm">Try again</Button>
-              </Card>
-            ) : !data && isFetching ? (
-              <ul className="space-y-2">
-                {Array.from({ length: 6 }).map((_, i) => <ClientRowSkeleton key={i} />)}
-              </ul>
-            ) : rows.length === 0 ? (
-              <EmptyState hasFilters={hasActiveFilters} lifecycle={lifecycle} onClear={() => navigate({ search: () => ({}), resetScroll: false })} />
-            ) : (
-              <ul className="space-y-2">
-                {rows.map((r) => (
-                  <ClientRow key={r.id} r={r} onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined} />
-                ))}
-              </ul>
-            )}
-
-            {total > 0 && <Pager page={search.page} size={search.size} total={total} />}
-          </>
+          <ul className="space-y-2">
+            {rows.map((r) => (
+              <ClientRow key={r.id} r={r} onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined} />
+            ))}
+          </ul>
         )}
+
+        {total > 0 && <Pager page={search.page} size={search.size} total={total} />}
       </div>
 
       <AddClientDialog
@@ -293,7 +275,18 @@ function ClientsDirectoryPage() {
   );
 }
 
-function EmptyState({ hasFilters, lifecycle, onClear }: { hasFilters: boolean; lifecycle: string; onClear: () => void }) {
+function EmptyState({
+  hasFilters,
+  flags,
+  lifecycle,
+  onClear,
+}: {
+  hasFilters: boolean;
+  flags: DirectoryFilterKey[];
+  lifecycle: string;
+  onClear: () => void;
+}) {
+  const labels = flags.map((k) => STATUS_META[k].label);
   const emptyTitle =
     lifecycle === "archived"
       ? "No archived clients"
@@ -311,7 +304,11 @@ function EmptyState({ hasFilters, lifecycle, onClear }: { hasFilters: boolean; l
         </div>
         <div className="mt-1 text-sm text-muted-foreground">
           {hasFilters
-            ? "Try clearing filters or adjusting your search."
+            ? labels.length === 1
+              ? `Nobody matches “${labels[0]}” right now. Try clearing it or adjusting your search.`
+              : labels.length > 1
+                ? `Nobody matches all of: ${labels.join(", ")}. Remove one to widen the list.`
+                : "Try clearing filters or adjusting your search."
             : lifecycle === "active"
               ? "Add your first client to get started."
               : "Nothing here right now."}

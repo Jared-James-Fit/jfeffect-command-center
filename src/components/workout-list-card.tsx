@@ -180,6 +180,7 @@ export function WorkoutListCard({
         clientId={previewClientId}
         completion={item.completion ?? null}
         scheduledWorkoutId={item.scheduledWorkoutId ?? null}
+        loggedSets={item.logged_sets_count ?? null}
         invalidateKeys={[["my-workouts", previewClientId]]}
       />
     )}

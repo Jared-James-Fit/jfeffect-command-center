@@ -9,7 +9,7 @@ import { ActionTaskSheet } from "./action-task-sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { isExternalForm, useExternalFormOpener } from "@/lib/external-form-open";
-import { listFormsForClient, pickWeeklyCheckInForm, pickNutritionUpdateForm } from "@/lib/native-forms";
+import { listFormsForClient, pickWeeklyCheckInForm } from "@/lib/native-forms";
 
 export type ActionTone = "warning" | "primary" | "success";
 
@@ -58,7 +58,6 @@ function writeSeen(keys: Set<string>) {
 
 const TASK_ICONS: Record<string, any> = {
   weekly_checkin: ClipboardCheck,
-  nutrition_review: FileText,
   progress_photos: Camera,
   monthly_assessment: Ruler,
   bodyweight: Scale,
@@ -98,7 +97,6 @@ function occurrenceTarget(occ: ActionCentreItem): { to: string; params?: Record<
   const meta = (occ.metadata ?? {}) as Record<string, any>;
   switch (occ.task_type) {
     case "weekly_checkin":
-    case "nutrition_review":
     case "custom_form": {
       const formId = meta.form_id as string | undefined;
       return formId
@@ -123,10 +121,9 @@ function occurrenceTarget(occ: ActionCentreItem): { to: string; params?: Record<
 /** Canonical client-facing labels — used everywhere, no synonyms. */
 const TASK_LABELS: Record<string, string> = {
   weekly_checkin: "Weekly Check-In",
-  nutrition_review: "Nutrition Review",
 };
 
-const FORM_TASK_TYPES = new Set(["weekly_checkin", "nutrition_review", "custom_form"]);
+const FORM_TASK_TYPES = new Set(["weekly_checkin", "custom_form"]);
 
 function occurrenceToItem(
   occ: ActionCentreItem,
@@ -232,10 +229,7 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
     let id = metaId ?? null;
     if (!id) {
       const forms = clientForms as any[];
-      const picked =
-        occ.task_type === "nutrition_review"
-          ? pickNutritionUpdateForm(forms)
-          : pickWeeklyCheckInForm(forms);
+      const picked = pickWeeklyCheckInForm(forms);
       id = picked?.id ?? null;
     }
     if (!id) {
@@ -260,10 +254,10 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
   const merged = useMemo<ActionItem[]>(() => {
     const occItems = (occurrences as ActionCentreItem[])
       .filter((o) => !locallyCompleted.has(o.id))
-      // Home "Forms" section: only surface Weekly Check-In and Nutrition
+      // Home "Forms" section: only surface Weekly Check-In
       // form tasks. Other task types (progress photos, bodyweight, etc.)
       // live on their own dedicated home cards and would double up here.
-      .filter((o) => o.task_type === "weekly_checkin" || o.task_type === "nutrition_review")
+      .filter((o) => o.task_type === "weekly_checkin")
       .map((o) => occurrenceToItem(o, openSheet, openForm));
     const dedupKeys = new Set(occItems.map((i) => i.key));
     // Legacy items (billing, agreements, coach replies, etc.) are surfaced

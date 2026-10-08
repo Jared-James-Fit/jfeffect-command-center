@@ -12,10 +12,15 @@ import {
   cleanAiText,
   mealPlanUserPrompt,
   targetsUserPrompt,
+  type ClientBasics,
   type QA,
   type WorkoutMealsMode,
 } from "@/lib/nutrition-ai-prompts";
 import { NUTRITION_PHASES, phaseFromText } from "@/lib/nutrition-cardio";
+import { calcAge, formatHeight, type HeightUnit } from "@/lib/basic-info";
+import { sexLabel } from "@/lib/athlete-sex";
+import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
+import { resolveTiming } from "@/lib/analytics/training-time";
 
 const phaseSchema = z.enum(NUTRITION_PHASES.filter((p) => p !== "Custom") as [string, ...string[]]);
 const workoutMealsSchema = z.enum(["auto", "pre_post", "post_only", "pre_only", "none"]);
@@ -61,6 +66,56 @@ async function loadQAs(sb: any, submissionId: string): Promise<{ sub: any; qas: 
   return { sub, qas };
 }
 
+/** Name, sex, age and height from the client profile, for the AI and the coach's copy. */
+async function loadClientBasics(
+  sb: Awaited<ReturnType<typeof admin>>,
+  clientId: string,
+): Promise<ClientBasics> {
+  const { data: c } = await sb
+    .from("clients")
+    .select("full_name, sex, date_of_birth, height_cm, preferred_height_unit")
+    .eq("id", clientId)
+    .maybeSingle();
+  const sex = c?.sex === "male" || c?.sex === "female" ? sexLabel(c.sex) : null;
+  return {
+    name: c?.full_name ?? "Client",
+    sex,
+    age: calcAge(c?.date_of_birth ?? null),
+    height:
+      c?.height_cm != null
+        ? formatHeight(Number(c.height_cm), (c.preferred_height_unit as HeightUnit) ?? "imperial")
+        : null,
+  };
+}
+
+/** When the client actually trains, from their logged workouts (last 8 weeks). */
+async function loadTrainingPattern(sb: any, clientId: string): Promise<TrainingPattern | null> {
+  const since = new Date(Date.now() - 56 * 86_400_000).toISOString();
+  const [{ data: client }, { data: rows }] = await Promise.all([
+    sb.from("clients").select("timezone").eq("id", clientId).maybeSingle(),
+    sb
+      .from("pl_day_completions")
+      .select("started_at, training_started_at, completed_at, actual_duration_min, logged_sets_count")
+      .eq("client_id", clientId)
+      .gte("completed_at", since)
+      .order("completed_at", { ascending: false })
+      .limit(200),
+  ]);
+  // Same rules as Analytics → Training Time: a confirmed start wins, and a
+  // workout typed in after the gym says nothing about when they train.
+  const starts = (rows ?? []).map((r: any) => {
+    const t = resolveTiming({
+      startedAt: r.started_at,
+      trainingStartedAt: r.training_started_at ?? null,
+      completedAt: r.completed_at,
+      durationMin: r.actual_duration_min,
+      loggedSets: r.logged_sets_count,
+    });
+    return t && t.source !== "suspect" ? t.start : null;
+  });
+  return summarizeTrainingTimes(starts, client?.timezone || "UTC");
+}
+
 async function coachSettings(sb: any, clientId: string): Promise<{ phase: string | null; workoutMeals: WorkoutMealsMode | null }> {
   const { data } = await sb
     .from("nf_assignments")
@@ -80,7 +135,12 @@ async function runPlan(
   workoutMealsOverride?: WorkoutMealsMode | null,
 ) {
   const { sub, qas } = await loadQAs(sb, submissionId);
-  const coach = await coachSettings(sb, sub.client_id);
+  const [coach, basics, history] = await Promise.all([
+    coachSettings(sb, sub.client_id),
+    loadClientBasics(sb, sub.client_id),
+    // Never let a history lookup block the plan.
+    loadTrainingPattern(sb, sub.client_id).catch(() => null),
+  ]);
   const selected = phaseOverride ?? coach.phase;
   const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
   const goalAnswer = qas.find((q) => /^goal$/i.test(q.label.trim()))?.value ?? "";
@@ -100,14 +160,14 @@ async function runPlan(
     const t = await generateText({
       model: gateway(modelId),
       system: TARGETS_PROMPT,
-      prompt: targetsUserPrompt(sub.client?.full_name ?? "Client", qas, selected),
+      prompt: targetsUserPrompt(basics, qas, selected),
     });
     const targetsText = cleanAiText(t.text);
 
     const m = await generateText({
       model: gateway(modelId),
       system: MEAL_PLAN_PROMPT,
-      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals),
+      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals, history),
     });
     const mealPlanText = cleanAiText(m.text);
 
@@ -247,7 +307,7 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
     const { data: plans } = ids.length
       ? await sb.from("nutrition_ai_plans").select("*").in("submission_id", ids)
       : { data: [] };
-    const { data: client } = await sb.from("clients").select("full_name").eq("id", data.clientId).maybeSingle();
+    const client = await loadClientBasics(sb, data.clientId);
     const { data: assignment } = await sb
       .from("nf_assignments")
       .select("created_at, settings")
@@ -265,8 +325,19 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
       requestedAt: assignment?.created_at ?? null,
       requestedPhase: ((assignment?.settings as any)?.phase as string | null) ?? null,
       requestedWorkoutMeals: ((assignment?.settings as any)?.workout_meals as WorkoutMealsMode | null) ?? null,
-      clientName: client?.full_name ?? "Client",
+      clientName: client.name,
+      client,
+      trainingPattern: await loadTrainingPattern(sb, data.clientId).catch(() => null),
     };
+  });
+
+/** Coach view: when this client actually trains, from their logged workouts. */
+export const getClientTrainingPatternFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    return loadTrainingPattern(await admin(), data.clientId);
   });
 
 /** Mark a plan as applied to the client's targets (for the coach's history). */

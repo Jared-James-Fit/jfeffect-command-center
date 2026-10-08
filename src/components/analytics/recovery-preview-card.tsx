@@ -149,7 +149,7 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       // Feedback for sleep buckets (keyed via completion→client_id already scoped)
       const { data: feedback } = await (supabase as any)
         .from("pl_workout_feedback")
-        .select("created_at, sleep_bucket, recovery_today, client_id")
+        .select("created_at, sleep_bucket, recovery_today, pain, client_id")
         .eq("client_id", clientId)
         .gte("created_at", since180.toISOString());
 
@@ -436,9 +436,14 @@ export function RecoveryPreviewCard({ clientId }: Props) {
         (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime(),
       );
 
-      const painDays7d = ((reviews ?? []) as any[])
-        .filter((r) => r.pain === true && new Date(r.review_submitted_at).getTime() >= since7.getTime())
-        .length;
+      // Pain flags from both member reviews and coaching-client feedback.
+      const painDays7d =
+        ((reviews ?? []) as any[])
+          .filter((r) => r.pain === true && new Date(r.review_submitted_at).getTime() >= since7.getTime())
+          .length +
+        ((feedback ?? []) as any[])
+          .filter((f) => f.pain === true && new Date(f.created_at).getTime() >= since7.getTime())
+          .length;
 
       const allScores = series.map((r) => r.score);
       const latest = allScores.length ? allScores[allScores.length - 1] : null;

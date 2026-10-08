@@ -9,7 +9,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 
-const adminLibrary = readFileSync("src/routes/_authenticated/admin/exercises.tsx", "utf8");
+const adminLibrary = readFileSync("src/route-pages/_authenticated/admin/exercises.tsx", "utf8");
 const quickAddDialog = readFileSync("src/components/quick-add-exercise-dialog.tsx", "utf8");
 const quickCreateForm = readFileSync("src/components/exercises/exercise-quick-create-form.tsx", "utf8");
 const programBuilder = readFileSync("src/components/program-builder.tsx", "utf8");

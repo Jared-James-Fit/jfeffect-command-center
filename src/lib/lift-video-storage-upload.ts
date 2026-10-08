@@ -15,6 +15,9 @@ const SUPABASE_ANON =
   (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ??
   (typeof process !== "undefined" ? process.env.SUPABASE_PUBLISHABLE_KEY : undefined);
 
+// Uploaded files are immutable (unique path, never overwritten): one year.
+const CACHE_SECONDS = 365 * 24 * 3600;
+
 export type LiftStorageUploadResult = {
   path: string;
   mimeType: string;
@@ -25,7 +28,7 @@ export type LiftStorageUploadArgs = {
   file: File;
   userId: string;
   /** Defaults to the existing lift-videos bucket; message attachments opt in explicitly. */
-  bucket?: "lift-videos" | "message-attachments" | "progress-media";
+  bucket?: "lift-videos" | "message-attachments" | "progress-media" | "community-media";
   /** Preserve callers' established storage paths when they already own path generation. */
   path?: string;
   onProgress?: (pct: number) => void;
@@ -97,7 +100,7 @@ export async function uploadLiftFileToStorage(
         bucketName: bucket,
         objectName: path,
         contentType,
-        cacheControl: "3600",
+        cacheControl: String(CACHE_SECONDS),
       },
       onError: (err) => reject(err instanceof Error ? err : new Error(String(err))),
       onProgress: (bytesSent, bytesTotal) => {
@@ -146,7 +149,11 @@ async function uploadDirectWithProgress(args: {
     xhr.setRequestHeader("apikey", args.anonKey);
     xhr.setRequestHeader("x-upsert", "false");
     xhr.setRequestHeader("Content-Type", args.contentType);
-    xhr.setRequestHeader("cache-control", "3600");
+    // Must be a real Cache-Control value: Storage serves this header back as-is,
+    // and the bare "3600" it used to send meant phones were never told they could
+    // keep the file. Every upload gets a new path and is never overwritten, so it
+    // can be cached for good.
+    xhr.setRequestHeader("cache-control", `max-age=${CACHE_SECONDS}`);
 
     xhr.upload.onprogress = (e) => {
       if (!args.onProgress) return;

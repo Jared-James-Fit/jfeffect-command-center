@@ -2,8 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { ensureNextOccurrence } from "@/lib/action-centre.functions";
+import { casualize } from "@/lib/coach-voice";
+import { voicePromptForClient } from "@/lib/coach-voice.functions";
 
-export type MessengerCheckinTaskType = "weekly_checkin" | "nutrition_review";
+export type MessengerCheckinTaskType = "weekly_checkin";
 
 export type MessengerCheckinAnalysis = {
   summary: string;
@@ -16,7 +18,7 @@ export type MessengerCheckinAnalysis = {
   urgency: "low" | "normal" | "high" | "urgent";
 };
 
-const taskSchema = z.enum(["weekly_checkin", "nutrition_review"]);
+const taskSchema = z.enum(["weekly_checkin"]);
 
 const ANSWER_LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
   weekly_checkin: {
@@ -29,25 +31,12 @@ const ANSWER_LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = 
     help: "Help or changes needed",
     next_week_goal: "Main goal for next week",
   },
-  nutrition_review: {
-    nutrition_rating: "Nutrition consistency rating (1–5)",
-    hunger: "Hunger / appetite",
-    digestion: "Digestion",
-    training_energy: "Energy around training rating (1–5)",
-    hardest: "Hardest nutrition issue",
-    food_changes: "Foods / meals to change",
-    goal: "Nutrition goal until next review",
-  },
 };
 
 const TASK_META: Record<MessengerCheckinTaskType, { title: string; body: string }> = {
   weekly_checkin: {
     title: "Weekly Check-In",
     body: "Quick 60-second weekly check-in 👇",
-  },
-  nutrition_review: {
-    title: "Nutrition Review",
-    body: "Quick monthly nutrition check-in 👇",
   },
 };
 
@@ -69,8 +58,7 @@ function localDateInTimeZone(tz: string): string {
 
 /**
  * Duplicate-send guard for automated requests (manual coach requests have no
- * occurrence and are never blocked). Nutrition: at most one per local calendar
- * month. Weekly: at most one per 4 days. Keep in sync with the SQL guard in
+ * occurrence and are never blocked). Weekly: at most one per 4 days. Keep in sync with the SQL guard in
  * enqueue_due_messenger_checkins().
  */
 export function automatedRequestAlreadySent(
@@ -78,27 +66,10 @@ export function automatedRequestAlreadySent(
   today: string,
   priorRequestLocalDates: string[],
 ): boolean {
-  if (taskType === "nutrition_review") {
-    const month = today.slice(0, 7);
-    return priorRequestLocalDates.some((d) => d.slice(0, 7) === month);
-  }
   return priorRequestLocalDates.some((d) => {
     const diff = dayDiff(d, today);
     return diff >= 0 && diff < 4;
   });
-}
-
-function localHourInTimeZone(tz: string): number {
-  try {
-    const h = new Intl.DateTimeFormat("en-GB", {
-      timeZone: tz || "UTC",
-      hour: "2-digit",
-      hourCycle: "h23",
-    }).format(new Date());
-    return Number(h);
-  } catch {
-    return new Date().getUTCHours();
-  }
 }
 
 function localDateOf(iso: string, tz: string): string {
@@ -264,6 +235,9 @@ async function createRequest(
   return { ...checkin, request_message_id: message.id };
 }
 
+/** Server-only: used by the admin Requests tracker to re-send a check-in. */
+export { createRequest as createMessengerCheckinRequest };
+
 export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId?: string }) =>
@@ -291,7 +265,7 @@ export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
       .from("client_task_occurrences")
       .select("id,task_type,due_local_date,client_tz,status")
       .eq("client_id", clientId)
-      .in("task_type", ["weekly_checkin", "nutrition_review"])
+      .in("task_type", ["weekly_checkin"])
       .not("status", "in", "(completed,skipped)")
       .order("due_at_utc", { ascending: true })
       .limit(8);
@@ -303,11 +277,7 @@ export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
       const daysUntil = dayDiff(today, occ.due_local_date);
       // Never backfill old/overdue requests. Weekly check-ins are due Sunday
       // night but surface on Friday so clients have the full weekend to submit.
-      // Nutrition reviews surface on their due date (last Friday), from 9am local.
-      const dueNow =
-        taskType === "weekly_checkin"
-          ? daysUntil >= 0 && daysUntil <= 2
-          : daysUntil === 0 && localHourInTimeZone(occ.client_tz || "UTC") >= 9;
+      const dueNow = daysUntil >= 0 && daysUntil <= 2;
       if (!dueNow) continue;
 
       const { data: existing } = await sb
@@ -656,11 +626,14 @@ async function generateAnalysis(
   taskType: MessengerCheckinTaskType,
   answers: Record<string, unknown>,
   contextSnapshot: Record<string, unknown>,
+  clientId?: string | null,
 ): Promise<MessengerCheckinAnalysis> {
   const fallback = fallbackAnalysis(taskType, answers as any);
   try {
-    const [{ data: globalCfg }] = await Promise.all([
+    const [{ data: globalCfg }, voice] = await Promise.all([
       sb.from("global_ai_config").select("*").limit(1).maybeSingle(),
+      // Jared's voice for this client (Admin → My Voice).
+      voicePromptForClient(sb, clientId),
     ]);
     const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
     const { generateText } = await import("ai");
@@ -678,9 +651,10 @@ async function generateAnalysis(
       "Be concise and practical. Do not diagnose medical conditions.",
       "A red flag means something the coach should notice or ask about, not a medical diagnosis.",
       "Pain/injury, unusually poor recovery, very low sleep/energy, major adherence problems, or a direct request for help should be surfaced clearly.",
-      "The suggested response must sound human, direct and short. It should acknowledge a win, name the main focus, give 1-3 concrete goals for the new week, and address any red flag or request for help.",
+      "The suggested response acknowledges a real win, names the main focus, gives 1-3 concrete goals for the new week, and addresses any red flag or request for help.",
       globalCfg?.brand_voice ? `BRAND VOICE: ${globalCfg.brand_voice}` : "",
       globalCfg?.tone ? `TONE: ${globalCfg.tone}` : "",
+      voice,
       "Return ONLY JSON matching:",
       '{"summary":string,"wins":string[],"focus":string[],"goals":string[],"red_flags":string[],"coach_notes":string[],"suggested_response":string,"urgency":"low"|"normal"|"high"|"urgent"}',
     ].filter(Boolean).join("\n\n");
@@ -723,7 +697,7 @@ async function generateAnalysis(
       goals: Array.isArray(parsed.goals) ? parsed.goals.map(String).slice(0, 5) : fallback.goals,
       red_flags: Array.isArray(parsed.red_flags) ? parsed.red_flags.map(String).slice(0, 5) : fallback.red_flags,
       coach_notes: Array.isArray(parsed.coach_notes) ? parsed.coach_notes.map(String).slice(0, 5) : [],
-      suggested_response: String(parsed.suggested_response ?? fallback.suggested_response),
+      suggested_response: casualize(String(parsed.suggested_response ?? fallback.suggested_response)),
       urgency: ["low", "normal", "high", "urgent"].includes(parsed.urgency)
         ? parsed.urgency
         : fallback.urgency,
@@ -877,8 +851,8 @@ export const submitMessengerCheckin = createServerFn({ method: "POST" })
  */
 export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { submissionId: string }) =>
-    z.object({ submissionId: z.string().uuid() }).parse(d),
+  .inputValidator((d: { submissionId: string; force?: boolean }) =>
+    z.object({ submissionId: z.string().uuid(), force: z.boolean().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const sb = await adminClient();
@@ -890,7 +864,9 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
     if (!row) throw new Error("Check-in not found.");
     const actor = await resolveClientAccess(context.supabase, context.userId, row.client_id);
     if (actor !== "client" && actor !== "admin" && actor !== "coach") throw new Error("Not allowed.");
-    if (row.status !== "completed" || row.ai_status === "ready") return { status: row.ai_status };
+    // Coaches can re-roll a finished recap ("Redo" on the suggested response).
+    const redo = !!data.force && (actor === "admin" || actor === "coach");
+    if (row.status !== "completed" || (row.ai_status === "ready" && !redo)) return { status: row.ai_status };
 
     const taskType = row.task_type as MessengerCheckinTaskType;
     const { data: occurrence } = row.occurrence_id
@@ -900,7 +876,7 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
       dueLocalDate: occurrence?.due_local_date ?? null,
       clientTz: occurrence?.client_tz ?? null,
     });
-    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, contextSnapshot);
+    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, contextSnapshot, row.client_id);
     await sb
       .from("messenger_checkins")
       .update({

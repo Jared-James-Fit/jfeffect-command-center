@@ -1,15 +1,28 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { MessagesInbox } from "./messages";
-import { AdminBroadcasts } from "./broadcasts";
-import { SupportInbox } from "./membership.support";
-import { SupportAlertsPage } from "./support-alerts";
-import { ChatGifsPage } from "./chat-gifs";
-import { ChatSoundsPage } from "./chat-sounds";
-import { PopupsManager } from "./popups";
+import { Loader2 } from "lucide-react";
+import { MessagesInbox } from "@/route-pages/_authenticated/admin/messages";
+
+// Only the Messages tab ships with this page. The rest load on first visit so
+// opening Messages doesn't download and parse five unrelated admin screens.
+const AdminBroadcasts = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/broadcasts").then((m) => ({ default: m.AdminBroadcasts })));
+const SupportInbox = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/membership.support").then((m) => ({ default: m.SupportInbox })));
+const SupportAlertsPage = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/support-alerts").then((m) => ({ default: m.SupportAlertsPage })));
+const ChatGifsPage = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/chat-gifs").then((m) => ({ default: m.ChatGifsPage })));
+const ChatSoundsPage = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/chat-sounds").then((m) => ({ default: m.ChatSoundsPage })));
+const PopupsManager = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/popups").then((m) => ({ default: m.PopupsManager })));
+
+function TabFallback() {
+  return (
+    <div className="grid h-40 place-items-center text-muted-foreground">
+      <Loader2 className="h-5 w-5 animate-spin" />
+    </div>
+  );
+}
 
 const TABS = [
   { value: "messages", label: "Messages" },
@@ -187,14 +200,16 @@ function CommunicationWorkspace() {
       {viewportLockedTab ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           {tab === "messages" && <MessagesInbox initialClient={client} embedded />}
-          {tab === "support-inbox" && <SupportInbox embedded />}
+          {tab === "support-inbox" && <Suspense fallback={<TabFallback />}><SupportInbox embedded /></Suspense>}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
-          {tab === "support-alerts" && <SupportAlertsPage embedded />}
-          {tab === "broadcasts" && <AdminBroadcasts embedded />}
-          {tab === "media-libraries" && <MediaLibrariesPanel sub={sub} />}
-          {tab === "popups" && <PopupsManager embedded />}
+          <Suspense fallback={<TabFallback />}>
+            {tab === "support-alerts" && <SupportAlertsPage embedded />}
+            {tab === "broadcasts" && <AdminBroadcasts embedded />}
+            {tab === "media-libraries" && <MediaLibrariesPanel sub={sub} />}
+            {tab === "popups" && <PopupsManager embedded />}
+          </Suspense>
         </div>
       )}
     </div>

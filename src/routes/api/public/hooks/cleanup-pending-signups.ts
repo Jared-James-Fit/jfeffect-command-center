@@ -11,7 +11,7 @@ export const Route = createFileRoute("/api/public/hooks/cleanup-pending-signups"
   server: {
     handlers: {
       POST: async ({ request }) => {
-        if (!authorizeWorker(request)) return new Response("Unauthorized", { status: 401 });
+        if (!(await authorizeWorker(request))) return new Response("Unauthorized", { status: 401 });
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -83,13 +83,8 @@ export const Route = createFileRoute("/api/public/hooks/cleanup-pending-signups"
   },
 });
 
-function authorizeWorker(request: Request): boolean {
-  const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
-  if (!expected) return false;
-  const provided =
-    request.headers.get("x-worker-secret") ?? "";
-  if (!provided || provided.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
-  return diff === 0;
+/** Shared hook auth: worker secret (env) or the Vault-held cron secret. */
+async function authorizeWorker(request: Request): Promise<boolean> {
+  const { authorizeHookRequest } = await import("@/lib/hook-auth.server");
+  return authorizeHookRequest(request);
 }

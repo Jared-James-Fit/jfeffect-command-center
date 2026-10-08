@@ -1,4 +1,4 @@
-import React, { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -6,11 +6,12 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   listMessages, sendMessage, markRead, setConversationStatus, setConversationPriority,
   detectAttachmentType, MESSAGE_TYPES, PRIORITIES, QUICK_REPLIES, priorityTone,
-  editMessage, deleteMessageForEveryone, adminDeleteMessages,
+  editMessage, deleteMessageForEveryone, adminDeleteMessages, replyMediaFor,
+  makeReplyPreview, replyPreviewText, mediaAttachments, keepReplyClip,
   listReactions, toggleReaction, REACTION_EMOJIS,
   listOlderMessages,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
-  type MessageReaction, type MessageReplyPreview,
+  type MessageReaction,
 } from "@/lib/messages";
 import type { SharedAttachment } from "@/components/chat-shared";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
@@ -47,7 +48,7 @@ import { ChatSoundCard } from "@/components/chat-sound-card";
 import { ScheduledStrip } from "@/components/messages/scheduled-strip";
 import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { ScheduleButton } from "@/components/messages/schedule-button";
-import { renderBodyWithMeet } from "@/components/chat-shared";
+import { renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
@@ -61,15 +62,23 @@ import { toast } from "sonner";
 import { playUiSound } from "@/lib/ui-sounds";
 import { haptic } from "@/platform/haptics";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
-import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
-import { compressImage } from "@/lib/image-compress";
+import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
+import { useChatSignedUrls } from "@/hooks/use-chat-signed-urls";
+import { useViewingAsClient } from "@/lib/client-impersonation";
+import { usePovSendGuard } from "@/components/pov/pov-send-guard";
+import { belongsInInbox, resolveOptimistic, upsertRow } from "@/lib/inbox-cache";
+import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
+import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
+import { ChatVideoTile } from "@/components/chat-video-tile";
+import { ReplyThumb } from "@/components/messages/reply-thumb";
 import {
+  FormHistoryGroup,
   FormHistoryRow,
   MessengerCheckinRequestCard,
   FormRequestChatCard,
   MessengerCheckinSubmissionCard,
 } from "@/components/messages/messenger-checkin-card";
-import { planFormMessages } from "@/lib/form-message-presentation";
+import { groupFormHistory, planFormMessages } from "@/lib/form-message-presentation";
 import { playAppSound, registerOpenThread } from "@/lib/app-sounds";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
 
@@ -89,25 +98,6 @@ function fmtTime(iso: string) {
   return format(d, "MMM d, h:mm a");
 }
 
-function makeReplyPreview(message: Message): MessageReplyPreview {
-  const first = message.attachments?.[0];
-  return {
-    sender_role: message.sender_role,
-    body: (message.body || "").trim().slice(0, 260),
-    attachment_type: first?.type ?? null,
-    attachment_name: first?.name ?? null,
-    is_internal_note: !!message.is_internal_note,
-  };
-}
-
-function replyPreviewText(preview?: MessageReplyPreview | null) {
-  if (!preview) return "Original message";
-  if (preview.body) return preview.body;
-  if (preview.attachment_name) return preview.attachment_name;
-  if (preview.attachment_type) return `${preview.attachment_type.charAt(0).toUpperCase()}${preview.attachment_type.slice(1)} attachment`;
-  return "Attachment";
-}
-
 const LINK_RE = /\bhttps?:\/\/[^\s)]+/gi;
 
 function fmtBytes(n?: number) {
@@ -124,120 +114,61 @@ function fmtDuration(s?: number) {
   return `${m}:${sec}`;
 }
 
-function fileToAttachmentType(file: File): MessageAttachment["type"] {
-  const m = file.type.toLowerCase();
-  if (m.startsWith("image/")) return "image";
-  if (m.startsWith("video/")) return "video";
-  if (m.startsWith("audio/")) return "audio";
-  if (m === "application/pdf") return "pdf";
-  return "file";
-}
-
-async function uploadAttachment(
+function uploadAttachment(
   clientId: string,
   file: File,
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
 ): Promise<MessageAttachment> {
-  onProgress?.(1);
-
-  // Phone photos are commonly several MB even though a chat preview only needs
-  // a fraction of that resolution. Compress before upload to cut transfer time.
-  let uploadFile = file;
-  if (file.type.startsWith("image/") && file.type !== "image/gif") {
-    try {
-      const compressed = await compressImage(file, {
-        maxDimension: 1600,
-        quality: 0.82,
-        skipUnder: 300 * 1024,
-      });
-      if (compressed instanceof File) uploadFile = compressed;
-      else if (compressed !== file) {
-        uploadFile = new File(
-          [compressed],
-          file.name.replace(/\.[^.]+$/, "") + ".jpg",
-          { type: "image/jpeg" },
-        );
-      }
-    } catch {
-      // Keep the original if compression isn't supported on this device.
-    }
-  }
-
-  onProgress?.(3);
-  const ext = uploadFile.name.includes(".") ? uploadFile.name.split(".").pop() : "";
-  const path = `${clientId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext ? "." + ext : ""}`;
-  await uploadLiftFileToStorage({
-    file: uploadFile,
-    userId: clientId,
-    bucket: "message-attachments",
-    path,
-    onProgress: (pct) => onProgress?.(Math.max(3, pct)),
-    signal,
-  });
-  return {
-    type: fileToAttachmentType(uploadFile),
-    url: "",
-    storage_path: path,
-    name: file.name,
-    size: uploadFile.size,
-    mime: uploadFile.type || file.type,
-  };
+  return uploadChatAttachment(clientId, file, onProgress, signal) as Promise<MessageAttachment>;
 }
 
 /* ------------------------------- Signed URLs ------------------------------- */
 
-// Batch signed-URL resolver. One createSignedUrls() call for all attachment
-// paths in the visible thread, cached shorter than the signed URL TTL. Prevents per-attachment
-// waterfalls that made media pop in slowly.
+// Signed URLs come from the shared cache (src/hooks/use-chat-signed-urls.ts):
+// signed once per path, one batched call for whatever is missing, and the same
+// URL string for the life of the path, so media never reloads when other
+// messages arrive.
 const EMPTY_URL_RECORD: Record<string, string> = {};
 
-function useSignedUrls(paths: string[]) {
-  const sorted = useMemo(() => {
-    const uniq = Array.from(new Set(paths.filter(Boolean)));
-    uniq.sort();
-    return uniq;
-  }, [paths]);
-  const key = sorted.join("|");
-  const q = useQuery<Record<string, string>>({
-    queryKey: ["msg-attach-batch", key],
-    enabled: sorted.length > 0,
-    staleTime: 1000 * 60 * 50,
-    gcTime: 1000 * 60 * 55,
-    queryFn: async () => {
-      const { data, error } = await supabase.storage
-        .from("message-attachments")
-        .createSignedUrls(sorted, 3600);
-      if (error) throw error;
-      const record: Record<string, string> = {};
-      for (const item of data ?? []) {
-        if (item?.path && item.signedUrl) record[item.path] = item.signedUrl;
-      }
-      return record;
-    },
-  });
-  return q.data ?? EMPTY_URL_RECORD;
-}
-
-const SignedUrlContext = createContext<Record<string, string>>(EMPTY_URL_RECORD);
+const SignedUrlContext = createContext<{ urls: Record<string, string>; pending: boolean }>({
+  urls: EMPTY_URL_RECORD,
+  pending: false,
+});
 
 function useSignedUrlFor(path?: string): string | undefined {
-  const record = useContext(SignedUrlContext);
-  return path ? record[path] : undefined;
+  return useContext(SignedUrlContext).urls[path ?? ""];
 }
 
 /* ------------------------------- Attachment Renderers ------------------------------- */
 
 function ImageAttachment({ att, messageId }: { att: MessageAttachment; messageId?: string }) {
   const signed = useSignedUrlFor(att.storage_path);
-  return <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} />;
+  const { pending } = useContext(SignedUrlContext);
+  // While the shared batch is in flight, don't let every image sign itself too.
+  return <ChatImageAttachment att={att} messageId={messageId} initialSignedUrl={signed} deferSign={!signed && pending} />;
 }
 
 function VideoAttachment({ att }: { att: MessageAttachment }) {
   const signed = useSignedUrlFor(att.storage_path);
+  const poster = useSignedUrlFor(att.thumbnail_storage_path);
   const src = att.storage_path ? signed : att.url;
-  if (!src) return null;
-  return <video src={src} controls playsInline preload="none" className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
+  // One tap plays it full screen. The tile shows (and reserves room for) the poster
+  // immediately, even while the video's own link is still being signed.
+  return (
+    <ChatVideoTile
+      src={src}
+      poster={poster}
+      expectPoster={!!att.thumbnail_storage_path}
+      width={att.width}
+      height={att.height}
+      duration={att.duration}
+      cacheKey={att.storage_path}
+      path={att.storage_path}
+      size={att.size}
+      name={att.name}
+    />
+  );
 }
 
 function fakePeaks(n = 40, seed = 1) {
@@ -770,6 +701,22 @@ function LiveWaveform({ levels }: { levels: number[] }) {
   );
 }
 
+/**
+ * Query options for a 1:1 thread's latest page. Shared with the inbox so a
+ * row can prefetch on press and the thread opens with history already there.
+ */
+export function threadMessagesQuery(clientId: string, role: SenderRole) {
+  return {
+    queryKey: ["messages", clientId, role] as const,
+    enabled: !!clientId,
+    staleTime: 0,              // Always fetch fresh on mount for latest messages
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 25 }),
+  };
+}
+
 export function MessageThread({
   clientId,
   role,
@@ -791,17 +738,31 @@ export function MessageThread({
   peerAvatarPath?: string | null;
 }) {
   const { user, role: appRole } = useAuth();
+  // A coach viewing as this client: look, but leave no trace (no read receipts,
+  // no "online", no typing, no auto-created check-ins).
+  const viewingAsClient = useViewingAsClient();
+  const povClient = role === "client" && viewingAsClient;
+  // Coach "View as client": confirm before anything goes out under the client's name.
+  const povGuard = usePovSendGuard();
   // Admins (not coaches) can silently delete any message in the chat.
   const isAdmin = role === "admin" && appRole === "admin";
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
-  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  // What the composer is replying to: a message, or one photo/video of it
+  // (`att` = index in its attachments) when several were sent at once.
+  const [reply, setReply] = useState<{ to: Message; att: number | null } | null>(null);
+  const replyingTo = reply?.to ?? null;
+  const replyAtt = reply?.att ?? null;
   const [flashMessageId, setFlashMessageId] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ name: string; pct: number } | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
+  // Picked photos/videos/files upload in the background; Send never waits on them.
+  const uploads = useDraftUploads<MessageAttachment>();
+  // Messages already sent from the composer but still waiting on their media.
+  const [queuedUploadSends, setQueuedUploadSends] = useState(0);
   const [sending, setSending] = useState(false);
   const [messageType, setMessageType] = useState("General");
   const [internalNote, setInternalNote] = useState(false);
@@ -824,7 +785,10 @@ export function MessageThread({
   const ensureCheckinsFn = useServerFn(ensureDueMessengerCheckins);
   // Defer PWA updates while there's an in-flight composer draft. No unload prompt
   // — chat threads navigate freely and the draft is short-lived.
-  useUnsavedWarning(body.trim().length > 0 || !!replyingTo || sending || uploading, { warnOnUnload: false });
+  useUnsavedWarning(
+    body.trim().length > 0 || !!replyingTo || sending || uploading || uploads.drafts.length > 0 || queuedUploadSends > 0,
+    { warnOnUnload: false },
+  );
   const [preview, setPreview] = useState<{
     blob: Blob; url: string; duration: number; peaks: number[];
   } | null>(null);
@@ -835,11 +799,16 @@ export function MessageThread({
   const [actionsForId, setActionsForId] = useState<string | null>(null);
   // Mobile/tablet long-press action sheet + iMessage-style selection mode.
   const [sheetForId, setSheetForId] = useState<string | null>(null);
+  // The photo/video that was long-pressed to open the sheet, if any.
+  const [sheetClip, setSheetClip] = useState<number | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<{ ids: string[]; label: string } | null>(null);
-  // Long-press timer — fires after ~450ms hold without movement.
-  const longPressRef = useRef<{ id: string; t: any; x: number; y: number } | null>(null);
+  // Long-press: the bubble sinks a little while held (so it's clear the hold
+  // registered) and the actions open after ~450ms without movement.
+  const longPressRef = useRef<{
+    id: string; t: any; press: any; x: number; y: number; el: HTMLElement | null; fired: boolean;
+  } | null>(null);
   const suppressClickRef = useRef(false);
   // iMessage-style swipe-left to reveal exact per-message timestamps.
   const [swipeX, setSwipeX] = useState(0);
@@ -868,7 +837,7 @@ export function MessageThread({
   // Recurring check-ins arrive as real chat requests instead of Home-page
   // form cards. Client opens are an idempotent safety trigger for due reminders.
   useEffect(() => {
-    if (role !== "client" || !clientId) return;
+    if (role !== "client" || !clientId || povClient) return;
     void ensureCheckinsFn({ data: { clientId } })
       .then((res) => {
         if (res?.created) {
@@ -876,26 +845,23 @@ export function MessageThread({
         }
       })
       .catch(() => {});
-  }, [role, clientId, ensureCheckinsFn, qc]);
+  }, [role, clientId, ensureCheckinsFn, qc, povClient]);
 
-  const { data: messages = [] } = useQuery({
-    queryKey: ["messages", clientId, role],
-    enabled: !!clientId,
-    staleTime: 0,              // Always fetch fresh on mount for latest messages
-    gcTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-    queryFn: () => listMessages(clientId, { includeInternal: role === "admin", limit: 25 }),
-  });
+  const { data: messages = [], isPending: messagesPending } = useQuery(threadMessagesQuery(clientId, role));
 
   const [olderMessages, setOlderMessages] = useState<Message[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
   // Reset the older-messages buffer when switching conversations or roles.
+  // Composer media also resets: an upload picked for one client must never
+  // ride along into the next conversation.
+  const resetUploads = uploads.reset;
   useEffect(() => {
     setOlderMessages([]);
-    setReplyingTo(null);
+    setReply(null);
     setFlashMessageId(null);
-  }, [clientId, role]);
+    setAttachments([]);
+    resetUploads();
+  }, [clientId, role, resetUploads]);
 
   const allMessages = useMemo(() => {
     const seen = new Set(messages.map((m) => m.id));
@@ -930,6 +896,37 @@ export function MessageThread({
 
   const canLoadOlder = messages.length >= 25;
 
+  const messageById = useMemo(() => new Map(allMessages.map((x) => [x.id, x])), [allMessages]);
+
+  // Replies to photos/videos sent before previews carried a storage path, whose
+  // original is older than the loaded window: fetch just those attachments once
+  // so the quote still gets a thumbnail.
+  const unresolvedReplyIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of allMessages) {
+      const rp = m.reply_preview;
+      if (!m.reply_to_message_id || !rp) continue;
+      if (rp.attachment_type !== "image" && rp.attachment_type !== "video") continue;
+      if (rp.attachment_path || rp.attachment_url || messageById.has(m.reply_to_message_id)) continue;
+      ids.add(m.reply_to_message_id);
+    }
+    return Array.from(ids).sort();
+  }, [allMessages, messageById]);
+  const { data: replySources } = useQuery({
+    queryKey: ["reply-sources", clientId, unresolvedReplyIds.join("|")],
+    enabled: unresolvedReplyIds.length > 0,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, attachments")
+        .in("id", unresolvedReplyIds);
+      if (error) throw error;
+      return new Map(((data ?? []) as unknown as Array<Pick<Message, "id" | "attachments">>).map((r) => [r.id, r]));
+    },
+  });
+  const replySourceFor = (id?: string | null) => (id ? messageById.get(id) ?? replySources?.get(id) ?? null : null);
+
   // Collect every attachment storage_path across visible messages so we can
   // resolve them in one batched createSignedUrls() call instead of N.
   const attachmentPaths = useMemo(() => {
@@ -939,11 +936,26 @@ export function MessageThread({
       if (!atts?.length) continue;
       for (const a of atts) {
         if (a?.storage_path) out.push(a.storage_path);
+        if (a?.thumbnail_storage_path) out.push(a.thumbnail_storage_path);
+      }
+    }
+    // Replies to media whose original isn't loaded still show a thumbnail.
+    for (const m of allMessages) {
+      const rp = m.reply_preview?.attachment_path;
+      if (rp) out.push(rp);
+      const poster = m.reply_preview?.attachment_poster_path;
+      if (poster) out.push(poster);
+    }
+    for (const r of replySources?.values() ?? []) {
+      for (const a of r.attachments ?? []) {
+        if (a?.storage_path) out.push(a.storage_path);
+        if (a?.thumbnail_storage_path) out.push(a.thumbnail_storage_path);
       }
     }
     return out;
-  }, [allMessages]);
-  const signedUrlMap = useSignedUrls(attachmentPaths);
+  }, [allMessages, replySources]);
+  const signedUrls = useChatSignedUrls(attachmentPaths);
+  const signedUrlMap = signedUrls.urls;
 
   const loadOlder = async () => {
     if (loadingOlder) return;
@@ -1078,6 +1090,14 @@ export function MessageThread({
   // This thread plays its own message sounds; keep the global listener quiet.
   useEffect(() => (clientId ? registerOpenThread(clientId) : undefined), [clientId]);
 
+  // Pull anything that arrived while the app was backgrounded / offline.
+  const resyncThread = useCallback(() => {
+    if (!clientId) return;
+    qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+    qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
+  }, [clientId, role, qc]);
+  useResyncOnResume(resyncThread, !!clientId);
+
   useEffect(() => {
     if (!clientId) return;
     const key = ["messages", clientId, role] as const;
@@ -1097,13 +1117,15 @@ export function MessageThread({
           // swap the temp row for the real one instead of appending a duplicate.
           const tempIdx = existing.findIndex((m) =>
             m.id.startsWith("optimistic-") &&
+            // Still uploading: can't be this row yet (two media-only sends share an empty body).
+            !(m as any).local_upload_ids &&
             m.sender_id === newMsg.sender_id &&
             m.sender_role === newMsg.sender_role &&
             m.body === newMsg.body,
           );
           if (tempIdx >= 0) {
             const copy = existing.slice();
-            copy[tempIdx] = newMsg;
+            copy[tempIdx] = keepReplyClip(newMsg, existing[tempIdx]);
             return copy;
           }
           return [...existing, newMsg];
@@ -1145,9 +1167,9 @@ export function MessageThread({
           qc.invalidateQueries({ queryKey: ["message-reactions", clientId] });
         }
       })
-      .subscribe();
+      .subscribe(onRealtimeRejoin(resyncThread));
     return () => { supabase.removeChannel(ch); };
-  }, [clientId, role, qc]);
+  }, [clientId, role, qc, resyncThread]);
 
   // ---------- Realtime typing indicator (iMessage-style) ----------
   // Uses Supabase Realtime broadcast (ephemeral, no DB writes). Peer typing
@@ -1177,6 +1199,7 @@ export function MessageThread({
   }, [clientId, user?.id, role]);
 
   const broadcastTyping = (stopped = false) => {
+    if (povClient) return;
     const ch = typingChannelRef.current;
     if (!ch || !user?.id) return;
     const now = Date.now();
@@ -1197,7 +1220,7 @@ export function MessageThread({
   // Read receipts must reflect a person actually looking at this thread, so
   // a thread mounted in a hidden/backgrounded tab waits until it is visible.
   useEffect(() => {
-    if (!clientId || !latestMessageId) return;
+    if (!clientId || !latestMessageId || povClient) return;
     let cancelled = false;
     const run = () => {
       void markRead(clientId, role).then(() => {
@@ -1220,60 +1243,52 @@ export function MessageThread({
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
-  }, [clientId, role, qc, latestMessageId]);
+  }, [clientId, role, qc, latestMessageId, povClient]);
 
-  // Track whether the initial scroll has fired for this clientId.
-  // On initial open: scroll instantly to bottom (no animation = no glitch).
-  // On new message: only scroll if already near the bottom (within 200px).
+  // Bottom-pinning, done without visible jumps:
+  //  - the first scroll to the latest message runs in a layout effect, i.e.
+  //    before the browser paints, so the thread never flashes at the top first;
+  //  - `pinnedRef` tracks whether the reader is at the bottom; while they are,
+  //    anything that makes the thread taller (an image or video poster loading,
+  //    a reaction appearing, the keyboard opening) keeps them there, and the
+  //    moment they scroll up we stop touching their position.
   const initialScrollDoneRef = React.useRef<string | null>(null);
+  const pinnedRef = useRef(true);
+  const onThreadScroll = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el || !messages.length) return;
-
-    const isInitialLoad = initialScrollDoneRef.current !== clientId;
-
-    if (isInitialLoad) {
-      // Initial open: scroll to bottom immediately and keep pinned for 1.5s
-      // so images loading in don't leave the user stuck mid-thread.
-      el.scrollTop = el.scrollHeight;
+    if (initialScrollDoneRef.current !== clientId) {
       initialScrollDoneRef.current = clientId ?? null;
-      // Keep pinning for 1.5s to catch late-loading images/attachments
-      const pin = () => { el.scrollTop = el.scrollHeight; };
-      const t1 = setTimeout(pin, 100);
-      const t2 = setTimeout(pin, 300);
-      const t3 = setTimeout(pin, 600);
-      const t4 = setTimeout(pin, 1000);
-      const t5 = setTimeout(pin, 1500);
-      return () => {
-        clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
-        clearTimeout(t4); clearTimeout(t5);
-      };
-    } else {
-      // New message arrived: only auto-scroll if user is near the bottom.
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distance < 200) {
-        let r1 = 0, r2 = 0;
-        r1 = requestAnimationFrame(() => {
-          r2 = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
-        });
-        return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
-      }
+      pinnedRef.current = true;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+    // New message: follow it only if the reader was already at the bottom.
+    if (pinnedRef.current || el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+      el.scrollTop = el.scrollHeight;
+      pinnedRef.current = true;
     }
   }, [messages.length, clientId]);
 
-  useEffect(() => {
+  // Watch the thread's content (not just the scroller's own box) so late-loading
+  // media can't push the latest message out of view.
+  const contentCount = allMessages.length;
+  useLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
-      // Only auto-pin when the user is already near the bottom so we don't
-      // yank them away while they're reading older messages.
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distance < 120) el.scrollTop = el.scrollHeight;
+      if (pinnedRef.current) el.scrollTop = el.scrollHeight;
     });
     ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
     return () => ro.disconnect();
-  }, [clientId]);
+  }, [clientId, contentCount]);
 
   const visibleMessages = useMemo(() => {
     const base = role === "admin"
@@ -1311,6 +1326,12 @@ export function MessageThread({
   const formPlan = useMemo(
     () => planFormMessages([...olderMessages, ...messages], role === "admin" ? "admin" : "client"),
     [olderMessages, messages, role],
+  );
+  // Older units of each form type collapse into one "history" row with
+  // filled / missed counts instead of one row per old request.
+  const formHistory = useMemo(
+    () => groupFormHistory(formPlan, visibleMessages.map((m) => m.id)),
+    [formPlan, visibleMessages],
   );
 
   // Id of the latest message I sent (for inline "Read/Sent" receipt).
@@ -1371,26 +1392,29 @@ export function MessageThread({
     focusComposerAtEnd(composerRef.current);
   }, []);
 
-  const startReply = (message: Message) => {
+  const startReply = (message: Message, att: number | null = null) => {
     if (message.deleted_at || message.is_internal_note || message.id.startsWith("optimistic-")) return;
-    setReplyingTo(message);
+    setReply({ to: message, att });
     setSheetForId(null);
     setActionsForId(null);
     // Wait for the mobile action sheet to release focus before opening the keyboard.
     window.setTimeout(() => composerRef.current?.focus(), 120);
   };
 
-  const jumpToReplySource = (messageId?: string | null) => {
+  const jumpToReplySource = (messageId?: string | null, att?: number | null) => {
     if (!messageId) return;
-    const node = document.getElementById(`message-${messageId}`);
+    // A reply about one clip lands on (and highlights) that clip.
+    const clipNode = att != null ? document.getElementById(`att-${messageId}-${att}`) : null;
+    const node = clipNode ?? document.getElementById(`message-${messageId}`);
     if (!node) {
       toast.message("Original message is outside the loaded history.");
       return;
     }
     node.scrollIntoView({ behavior: "smooth", block: "center" });
-    setFlashMessageId(messageId);
+    const flashKey = clipNode ? `${messageId}#${att}` : messageId;
+    setFlashMessageId(flashKey);
     window.setTimeout(() => {
-      setFlashMessageId((current) => current === messageId ? null : current);
+      setFlashMessageId((current) => current === flashKey ? null : current);
     }, 1400);
   };
 
@@ -1402,19 +1426,38 @@ export function MessageThread({
     !(e.currentTarget as Node).contains(e.target as Node);
 
   // ---------- Long-press + selection helpers ----------
-  const startLongPress = (id: string, x: number, y: number) => {
-    if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
+  const releasePress = (el: HTMLElement | null) => {
+    if (!el) return;
+    el.style.transform = "";
+  };
+  const startLongPress = (
+    id: string, x: number, y: number, clip: number | null = null, el: HTMLElement | null = null,
+  ) => {
+    cancelLongPress();
+    // Direct style change, not state, so a hold never re-renders the whole thread.
+    const press = setTimeout(() => {
+      if (!el) return;
+      el.style.transition = "transform 280ms cubic-bezier(.2,.8,.2,1)";
+      el.style.transform = "scale(0.96)";
+    }, 140);
     const t = setTimeout(() => {
+      const lp = longPressRef.current;
+      if (lp) lp.fired = true;
+      releasePress(el);
+      // The finger is still down: its release must not also tap whatever is under it (e.g. play a video).
       suppressClickRef.current = true;
-      // Haptic feedback when available.
-      try { (navigator as any).vibrate?.(10); } catch {}
+      haptic("medium");
       if (selectionMode) toggleSelected(id);
-      else setSheetForId(id);
+      else { setSheetClip(clip); setSheetForId(id); }
     }, 450);
-    longPressRef.current = { id, t, x, y };
+    longPressRef.current = { id, t, press, x, y, el, fired: false };
   };
   const cancelLongPress = () => {
-    if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
+    const lp = longPressRef.current;
+    if (!lp) return;
+    clearTimeout(lp.t);
+    clearTimeout(lp.press);
+    releasePress(lp.el);
     longPressRef.current = null;
   };
   const onPointerMoveDuringHold = (e: React.PointerEvent) => {
@@ -1449,6 +1492,8 @@ export function MessageThread({
     const dy = t.clientY - s.y;
     if (!s.decided) {
       if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      // The hold already opened the actions: a drift of the finger isn't a swipe.
+      if (longPressRef.current?.fired) { swipeRef.current = null; return; }
       // Only activate for a clear leftward horizontal drag.
       s.horizontal = dx < -6 && Math.abs(dx) > Math.abs(dy) * 1.4;
       s.decided = true;
@@ -1510,61 +1555,13 @@ export function MessageThread({
     exitSelection();
   };
 
-  const onPickFiles = async (files: FileList | null) => {
+  const onPickFiles = (files: FileList | null) => {
     if (!files || !files.length) return;
-    const selected = Array.from(files);
-    const valid = selected.filter((f) => {
-      return true;
-    });
-    if (!valid.length) return;
-
-    setUploading(true);
-    const controller = new AbortController();
-    uploadAbortRef.current = controller;
-    const progressByIndex = new Array(valid.length).fill(0);
-    const uploaded = new Array<MessageAttachment | null>(valid.length).fill(null);
-    const label = valid.length === 1 ? valid[0].name : `${valid.length} files`;
-    setUploadProgress({ name: label, pct: 1 });
-
-    const updateOverall = (index: number, pct: number) => {
-      progressByIndex[index] = Math.max(progressByIndex[index], pct);
-      const overall = Math.max(
-        1,
-        Math.round(progressByIndex.reduce((sum, p) => sum + p, 0) / valid.length),
-      );
-      setUploadProgress({ name: label, pct: overall });
-    };
-
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < valid.length) {
-        const i = cursor++;
-        const file = valid[i];
-        uploaded[i] = await uploadAttachment(
-          clientId,
-          file,
-          (pct) => updateOverall(i, pct),
-          controller.signal,
-        );
-      }
-    };
-
-    try {
-      await Promise.all(
-        Array.from({ length: Math.min(2, valid.length) }, () => worker()),
-      );
-      setAttachments((prev) => [
-        ...prev,
-        ...uploaded.filter(Boolean) as MessageAttachment[],
-      ]);
-      setUploadProgress({ name: label, pct: 100 });
-    } catch (e: any) {
-      if (!controller.signal.aborted) toast.error(e?.message ?? "Upload failed");
-    } finally {
-      uploadAbortRef.current = null;
-      window.setTimeout(() => setUploadProgress(null), 250);
-      setUploading(false);
-    }
+    uploads.add(
+      Array.from(files),
+      (file, onProgress, signal) => uploadAttachment(clientId, file, onProgress, signal),
+      (d, e: any) => toast.error(`${d.name}: ${e?.message ?? "upload failed"}`),
+    );
   };
 
   const stopForPreview = async () => {
@@ -1583,6 +1580,7 @@ export function MessageThread({
 
   const sendPreview = async () => {
     if (!preview) return;
+    if (!(await povGuard.confirm("Voice message"))) return;
     setUploading(true);
     try {
       const ext = preview.blob.type.includes("mp4") ? "m4a" : "webm";
@@ -1594,7 +1592,7 @@ export function MessageThread({
       att.type = "audio";
       att.duration = preview.duration;
       att.peaks = preview.peaks;
-      const sent = await doSend({ body: "", extraAttachments: [att], returnMessage: true });
+      const sent = await doSend({ body: "", extraAttachments: [att], returnMessage: true, povConfirmed: true });
       URL.revokeObjectURL(preview.url);
       setPreview(null);
       setPreviewPlaying(false);
@@ -1613,15 +1611,31 @@ export function MessageThread({
     }
   };
 
-  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[]; returnMessage?: boolean }) => {
+  const doSend = async (opts?: { body?: string; extraAttachments?: MessageAttachment[]; returnMessage?: boolean; withDrafts?: boolean; povConfirmed?: boolean }) => {
     if (!user) return null;
     const text = (opts?.body ?? body).trim();
     const atts = [...attachments, ...(opts?.extraAttachments ?? [])];
-    if (!text && atts.length === 0) return null;
+    if (!text && atts.length === 0 && !(opts?.withDrafts && uploads.drafts.length)) return null;
+    // View-as-client: ask first. Declining leaves the composer exactly as it was.
+    if (!opts?.povConfirmed) {
+      const mediaCount = atts.length + (opts?.withDrafts ? uploads.drafts.length : 0);
+      if (!(await povGuard.confirm(text || (mediaCount ? `${mediaCount} attachment${mediaCount === 1 ? "" : "s"}` : "")))) return null;
+    }
+    // Media still uploading goes out with this message: the bubble shows
+    // local previews + progress now, the insert happens once uploads land.
+    const drafts = opts?.withDrafts ? uploads.take() : [];
+    const draftPreviews: MessageAttachment[] = drafts.map((d) => ({
+      type: d.kind,
+      url: d.previewUrl ?? "",
+      name: d.name,
+      size: d.file.size,
+      mime: d.file.type,
+    }));
     const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.is_internal_note && !replyingTo.id.startsWith("optimistic-")
       ? replyingTo
       : null;
-    const replyPreview = replyTarget ? makeReplyPreview(replyTarget) : null;
+    const replyClip = replyTarget ? replyAtt : null;
+    const replyPreview = replyTarget ? makeReplyPreview(replyTarget, replyClip) : null;
     
     // Direct send — no ProgressDrawer popup for simple messages.
     // The button spinner (Loader2) provides sufficient feedback.
@@ -1637,7 +1651,6 @@ export function MessageThread({
     // Immediately append a temporary bubble so the composer clears and the
     // message appears with no server round-trip. Replace with the real row
     // when the insert resolves; mark failed on error.
-    const allAtts = [...atts, ...linkAtts];
     const tempId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const nowIso = new Date().toISOString();
     const key = ["messages", clientId, role] as const;
@@ -1647,7 +1660,7 @@ export function MessageThread({
       sender_id: user.id,
       sender_role: role,
       body: text,
-      attachments: allAtts,
+      attachments: [...atts, ...draftPreviews, ...linkAtts],
       message_type: messageType,
       priority: role === "admin" ? priority : null,
       is_internal_note: role === "admin" ? internalNote : false,
@@ -1658,20 +1671,55 @@ export function MessageThread({
       reply_to_message_id: replyTarget?.id ?? null,
       reply_preview: replyPreview,
       delivery_status: "sending",
-    };
+      ...(drafts.length ? { local_upload_ids: drafts.map((d) => d.id) } : {}),
+    } as Message;
     qc.setQueryData<Message[]>(key, (prev) => [...(prev ?? []), optimistic]);
+    // Coach side: the inbox row (preview, time, order) reflects this send at once.
+    const patchInbox = (fn: (prev: Message[] | undefined) => Message[] | undefined) => {
+      if (role === "admin") qc.setQueryData<Message[] | undefined>(["last-messages"], fn);
+    };
+    if (belongsInInbox(optimistic)) patchInbox((prev) => (prev ? upsertRow(prev, optimistic) : prev));
     setBody("");
     setAttachments([]);
-    setReplyingTo(null);
+    setReply(null);
     setInternalNote(false);
     broadcastTyping(true);
+    const releaseDrafts = () => {
+      // Give the swapped-in server row a moment to render before freeing blobs.
+      if (drafts.length) window.setTimeout(() => drafts.forEach(releaseDraft), 5000);
+    };
+    let uploaded: MessageAttachment[] = [];
+    if (drafts.length) {
+      setQueuedUploadSends((n) => n + 1);
+      try {
+        uploaded = await Promise.all(drafts.map((d) => d.done));
+      } catch (e: any) {
+        drafts.forEach((d) => d.abort());
+        qc.setQueryData<Message[]>(key, (prev) => (prev ?? []).filter((m) => m.id !== tempId));
+        patchInbox((prev) => resolveOptimistic(prev, tempId, null));
+        drafts.forEach(releaseDraft);
+        // Nothing was sent: put the caption back so the coach can re-attach and retry.
+        if (text) setBody((b) => b || text);
+        if (replyTarget) setReply((r) => r ?? { to: replyTarget, att: replyClip });
+        playUiSound("error");
+        haptic("error");
+        toast.error(`Upload failed: ${e?.message ?? "try again"}`);
+        return null;
+      } finally {
+        setQueuedUploadSends((n) => n - 1);
+      }
+      // Uploads done: from here it's a normal optimistic row the realtime INSERT may claim.
+      qc.setQueryData<Message[]>(key, (prev) =>
+        (prev ?? []).map((m) => (m.id === tempId ? ({ ...m, local_upload_ids: undefined } as Message) : m)),
+      );
+    }
     try {
       const sent = await sendMessage({
         clientId,
         senderId: user.id,
         senderRole: role,
         body: text,
-        attachments: allAtts,
+        attachments: [...atts, ...uploaded, ...linkAtts],
         messageType,
         isInternalNote: role === "admin" ? internalNote : false,
         priority: role === "admin" ? priority : undefined,
@@ -1679,33 +1727,41 @@ export function MessageThread({
         replyPreview,
       });
       playAppSound("sent");
+      patchInbox((prev) => resolveOptimistic(prev, tempId, sent));
       // Swap the optimistic row for the persisted row (dedupe if realtime
       // already delivered it via INSERT).
       qc.setQueryData<Message[]>(key, (prev) => {
         const list = prev ?? [];
         const withoutTemp = list.filter((m) => m.id !== tempId);
-        if (withoutTemp.some((m) => m.id === sent.id)) return withoutTemp;
+        // Realtime may have delivered the row first; the send's copy has the
+        // final quote (which clip was replied to).
+        if (withoutTemp.some((m) => m.id === sent.id)) {
+          return withoutTemp.map((m) => (m.id === sent.id ? { ...m, reply_preview: sent.reply_preview } : m));
+        }
         return [...withoutTemp, sent];
       });
       playUiSound("message");
       haptic("light");
+      releaseDrafts();
       return sent;
     } catch (e: any) {
+      patchInbox((prev) => resolveOptimistic(prev, tempId, null));
       // Mark the optimistic bubble as failed so the user can see it didn't send.
       qc.setQueryData<Message[]>(key, (prev) =>
         (prev ?? []).map((m) => m.id === tempId
           ? { ...m, delivery_status: "failed" as const, delivery_error: e?.message ?? "Failed to send" }
           : m),
       );
-      if (replyTarget) setReplyingTo(replyTarget);
+      if (replyTarget) setReply({ to: replyTarget, att: replyClip });
       playUiSound("error");
       haptic("error");
       toast.error(e?.message ?? "Failed to send");
+      releaseDrafts();
       return null;
     }
   };
 
-  const onSend = () => doSend();
+  const onSend = () => doSend({ withDrafts: true });
 
   const priorityIconTone =
     priority === "High Priority" ? "text-destructive"
@@ -1713,7 +1769,8 @@ export function MessageThread({
     : "text-muted-foreground";
 
   return (
-    <SignedUrlContext.Provider value={signedUrlMap}>
+    <SignedUrlContext.Provider value={signedUrls}>
+    {povGuard.dialog}
     <div className={cn(
       "flex flex-col",
       fullBleed
@@ -1729,6 +1786,7 @@ export function MessageThread({
           "flex-1 min-h-0 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch]",
           fullBleed ? "px-3 py-4 sm:px-6" : "p-3 sm:p-4",
         )}
+        onScroll={onThreadScroll}
         onTouchStart={onSwipeTouchStart}
         onTouchMove={onSwipeTouchMove}
         onTouchEnd={onSwipeTouchEnd}
@@ -1752,11 +1810,30 @@ export function MessageThread({
             </Button>
           </div>
         )}
-        {visibleMessages.length === 0 ? (
+        {visibleMessages.length === 0 && messagesPending ? (
+          // First open: hold the shape of a thread instead of flashing
+          // "No messages yet" before the real history pops in.
+          <div className="flex h-full flex-col justify-end gap-3" aria-busy="true" aria-label="Loading messages">
+            {[["w-2/3", "start"], ["w-1/2", "end"], ["w-3/5", "start"], ["w-2/5", "end"]].map(([w, side], i) => (
+              <div key={i} className={cn("flex", side === "end" ? "justify-end" : "justify-start")}>
+                <div className={cn("h-10 animate-pulse rounded-2xl", w, side === "end" ? "bg-primary/20" : "bg-secondary")} />
+              </div>
+            ))}
+          </div>
+        ) : visibleMessages.length === 0 ? (
           <div className="grid h-full place-items-center text-sm text-muted-foreground">
             {role === "client" ? "Send your coach a message to start the conversation." : "No messages yet."}
           </div>
         ) : visibleMessages.map((m) => {
+          if (formHistory.hidden.has(m.id)) return null;
+          const historyGroup = formHistory.leaders.get(m.id);
+          if (historyGroup) {
+            return (
+              <div key={m.id} id={`message-${m.id}`} className="w-full min-w-0">
+                <FormHistoryGroup group={historyGroup} role={role === "admin" ? "admin" : "client"} />
+              </div>
+            );
+          }
           const mine = m.sender_role === role;
           const isDeleted = !!m.deleted_at;
           const isEditing = editingId === m.id;
@@ -1866,9 +1943,24 @@ export function MessageThread({
                 }}
                 onContextMenu={(e) => { if (!isDeleted && !fromPortal(e)) e.preventDefault(); }}
                 onPointerDown={(e) => {
+                  // A new press is a new gesture: a long-press whose release
+                  // never produced a click must not eat this tap (e.g. play).
+                  if (!fromPortal(e)) suppressClickRef.current = false;
                   if (isEditing || (isDeleted && !isAdmin) || fromPortal(e)) return;
-                  if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video")) return;
-                  startLongPress(m.id, e.clientX, e.clientY);
+                  if (e.pointerType === "mouse" && e.button !== 0) return;
+                  const target = e.target as HTMLElement;
+                  // Holding works on every part of a message, the same way: text,
+                  // photos, videos, links, the reply quote. Tapping them still does
+                  // their normal thing; the tap that ends a hold is swallowed below.
+                  // Only fields and native player controls keep the press.
+                  if (target.closest("textarea,input,select,audio,video[controls],[data-clip-reply]")) return;
+                  // Several photos/videos: the actions are about the one that was held.
+                  const tile = target.closest<HTMLElement>("[data-media-index]");
+                  startLongPress(
+                    m.id, e.clientX, e.clientY,
+                    tile ? Number(tile.dataset.mediaIndex) : null,
+                    e.currentTarget as HTMLElement,
+                  );
                 }}
                 onPointerMove={onPointerMoveDuringHold}
                 onPointerUp={cancelLongPress}
@@ -1915,7 +2007,7 @@ export function MessageThread({
                     data-no-doubletap
                     onClick={(e) => {
                       e.stopPropagation();
-                      jumpToReplySource(m.reply_to_message_id);
+                      jumpToReplySource(m.reply_to_message_id, m.reply_preview?.attachment_index);
                     }}
                     className={cn(
                       "mb-2 block w-full rounded-xl border-l-2 px-2.5 py-2 text-left transition",
@@ -1937,12 +2029,20 @@ export function MessageThread({
                             ? peerName ?? "Client"
                             : "Coach Jared"}
                     </div>
-                    <div className={cn(
-                      "line-clamp-2 text-xs leading-snug",
-                      mine ? "text-primary-foreground/80" : "text-muted-foreground",
-                    )}>
-                      {replyPreviewText(m.reply_preview)}
-                    </div>
+                    {(() => {
+                      const media = replyMediaFor(m.reply_preview, replySourceFor(m.reply_to_message_id));
+                      return (
+                        <div className="flex items-center gap-2.5">
+                          <div className={cn(
+                            "line-clamp-2 min-w-0 flex-1 text-xs leading-snug",
+                            mine ? "text-primary-foreground/80" : "text-muted-foreground",
+                          )}>
+                            {replyPreviewText(m.reply_preview)}
+                          </div>
+                          {media && <ReplyThumb media={media} signedUrl={media.path ? signedUrlMap[media.path] : undefined} posterUrl={media.posterPath ? signedUrlMap[media.posterPath] : undefined} />}
+                        </div>
+                      );
+                    })()}
                   </button>
                 )}
                 {m.is_internal_note && (
@@ -1952,6 +2052,19 @@ export function MessageThread({
                   <div className="flex items-center gap-1.5 whitespace-pre-wrap break-words">
                     <Trash2 className="h-3 w-3 opacity-70" />
                     <span>This message was deleted</span>
+                    {role === "admin" && !m.id.startsWith("optimistic-") && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Same admin silent delete as Select → Delete: removes the row and keeps the audit copy.
+                          void performAdminDelete([m.id]);
+                        }}
+                        className="ml-1 rounded-full border border-current/30 px-2 py-0.5 text-[10px] font-semibold not-italic opacity-80 active:scale-95"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 ) : isEditing ? (
                   <div className="space-y-1.5">
@@ -2009,17 +2122,56 @@ export function MessageThread({
                 )}
                 {!isDeleted && !isEditing && m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
-                    {m.attachments.map((a, i) => (
-                      <AttachmentView
-                        key={i}
-                        att={a}
-                        mine={mine}
-                        message={m}
-                        role={role}
-                        clientId={clientId}
-                        onUseReply={useSuggestedReply}
-                      />
-                    ))}
+                    {(() => {
+                      // Several photos/videos sent at once: each one can be
+                      // replied to on its own (hold it, or the hover button).
+                      const media = mediaAttachments(m);
+                      const clipReplies = media.length > 1 && !m.is_internal_note && !m.id.startsWith("optimistic-");
+                      const clipAt = new Map(media.map((x, k) => [x.index, k]));
+                      return m.attachments.map((a, i) => {
+                        const view = (
+                          <AttachmentView
+                            key={i}
+                            att={a}
+                            mine={mine}
+                            message={m}
+                            role={role}
+                            clientId={clientId}
+                            onUseReply={useSuggestedReply}
+                          />
+                        );
+                        const k = clipAt.get(i);
+                        if (!clipReplies || k === undefined) return view;
+                        const noun = a.type === "video" ? "video" : "photo";
+                        return (
+                          <div
+                            key={i}
+                            id={`att-${m.id}-${i}`}
+                            data-media-index={i}
+                            className={cn(
+                              "group/clip relative w-fit max-w-full rounded-md transition-shadow duration-500",
+                              flashMessageId === `${m.id}#${i}` && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                            )}
+                          >
+                            {view}
+                            <button
+                              type="button"
+                              data-clip-reply
+                              data-no-doubletap
+                              onClick={(e) => { e.stopPropagation(); startReply(m, i); }}
+                              aria-label={`Reply to ${noun} ${k + 1} of ${media.length}`}
+                              title={`Reply to this ${noun}`}
+                              className="absolute right-1.5 top-1.5 hidden h-8 w-8 place-items-center rounded-full bg-black/60 text-white opacity-0 ring-1 ring-white/30 backdrop-blur-sm transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover/clip:opacity-100 [@media(hover:hover)]:grid"
+                            >
+                              <Reply className="h-4 w-4" />
+                            </button>
+                          </div>
+                        );
+                      });
+                    })()}
+                    {(m as any).local_upload_ids?.length > 0 && (
+                      <DraftUploadStatus store={uploads.store} ids={(m as any).local_upload_ids} />
+                    )}
                   </div>
                 )}
                 <div className={cn("mt-1 flex items-center gap-2 text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
@@ -2079,8 +2231,11 @@ export function MessageThread({
                     ? "Delivered · not read yet"
                     : "Sent";
                   return (
+                    // One line, anchored to the bubble's right edge. Without nowrap
+                    // the label is capped at the bubble's width, so on short
+                    // messages it wraps and the extra lines climb into the bubble.
                     <div className={cn(
-                      "absolute right-1 text-[10px] text-muted-foreground",
+                      "absolute right-1 whitespace-nowrap text-[10px] text-muted-foreground",
                       hasReactions ? "-bottom-8" : "-bottom-4",
                       status === "failed" && "text-destructive",
                     )}>
@@ -2272,15 +2427,19 @@ export function MessageThread({
                     : "Coach Jared"}
               </div>
               <div className="truncate text-xs text-muted-foreground">
-                {replyPreviewText(makeReplyPreview(replyingTo))}
+                {replyPreviewText(makeReplyPreview(replyingTo, replyAtt))}
               </div>
             </div>
+            {(() => {
+              const media = replyMediaFor(makeReplyPreview(replyingTo, replyAtt), replyingTo);
+              return media ? <ReplyThumb media={media} signedUrl={media.path ? signedUrlMap[media.path] : undefined} posterUrl={media.posterPath ? signedUrlMap[media.posterPath] : undefined} /> : null;
+            })()}
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="h-7 w-7 shrink-0 rounded-full"
-              onClick={() => setReplyingTo(null)}
+              onClick={() => setReply(null)}
               aria-label="Cancel reply"
             >
               <X className="h-4 w-4" />
@@ -2323,12 +2482,14 @@ export function MessageThread({
           </div>
         )}
 
+        <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
+
         {/* Hidden file inputs */}
         <input ref={fileInputRef} type="file" multiple className="hidden"
           onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
         <input ref={photoInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
           onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
-        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+        <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden"
           onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
 
         {recorder.recording ? (
@@ -2387,7 +2548,7 @@ export function MessageThread({
               surface="dm"
               clientIds={[clientId]}
               defaultClientId={clientId}
-              disabled={sending || uploading}
+              disabled={sending}
               canSendGifs={canSendGifs}
               canSendSounds={canSendSounds}
               onPickCamera={() => cameraInputRef.current?.click()}
@@ -2401,6 +2562,7 @@ export function MessageThread({
               } : undefined}
               onPickGif={async (g) => {
                 if (!user) return;
+                if (!(await povGuard.confirm(`GIF: ${g.title}`))) return;
                 setSending(true);
                 try {
                   await sendMessage({
@@ -2421,9 +2583,9 @@ export function MessageThread({
                     isInternalNote: role === "admin" ? internalNote : false,
                     priority: role === "admin" ? priority : undefined,
                     replyToMessageId: replyingTo?.id ?? null,
-                    replyPreview: replyingTo ? makeReplyPreview(replyingTo) : null,
+                    replyPreview: replyingTo ? makeReplyPreview(replyingTo, replyAtt) : null,
                   });
-                  setReplyingTo(null);
+                  setReply(null);
                   qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
                   try { await markRecent(user.id, g.id); } catch {}
                 } catch (e: any) {
@@ -2434,6 +2596,7 @@ export function MessageThread({
               }}
               onPickSound={!canSendSounds ? undefined : async (s) => {
                 if (!user) return;
+                if (!(await povGuard.confirm(`Sound: ${s.title}`))) return;
                 setSending(true);
                 try {
                   await sendMessage({
@@ -2453,9 +2616,9 @@ export function MessageThread({
                     isInternalNote: role === "admin" ? internalNote : false,
                     priority: role === "admin" ? priority : undefined,
                     replyToMessageId: replyingTo?.id ?? null,
-                    replyPreview: replyingTo ? makeReplyPreview(replyingTo) : null,
+                    replyPreview: replyingTo ? makeReplyPreview(replyingTo, replyAtt) : null,
                   });
-                  setReplyingTo(null);
+                  setReply(null);
                   qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
                   try { await markSoundRecent(user.id, s.id); } catch {}
                 } catch (e: any) {
@@ -2504,9 +2667,9 @@ export function MessageThread({
             />
 
             {/* Voice or Send */}
-            {body.trim() || attachments.length > 0 ? (
+            {body.trim() || attachments.length > 0 || uploads.drafts.length > 0 ? (
               <>
-              {role === "admin" && body.trim() && attachments.length === 0 && !replyingTo && (
+              {role === "admin" && body.trim() && attachments.length === 0 && uploads.drafts.length === 0 && !replyingTo && (
                 <ScheduleButton
                   clientId={clientId}
                   body={body}
@@ -2593,10 +2756,14 @@ export function MessageThread({
       )}
 
       {/* Mobile/tablet long-press action sheet. */}
-      <Sheet open={!!sheetForId} onOpenChange={(o) => { if (!o) setSheetForId(null); }}>
+      <Sheet open={!!sheetForId} onOpenChange={(o) => { if (!o) { setSheetForId(null); setSheetClip(null); } }}>
         <SheetContent
           side="bottom"
-          className="rounded-t-2xl pb-[calc(max(env(safe-area-inset-bottom),0.75rem))]"
+          hideCloseButton
+          // Don't hand focus back to the composer on close: that popped the keyboard up.
+          // (Reply focuses it on purpose.)
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          className="rounded-t-2xl pb-[calc(max(env(safe-area-inset-bottom),0.75rem))] pt-5"
         >
           {(() => {
             const m = visibleMessages.find((x) => x.id === sheetForId);
@@ -2605,14 +2772,77 @@ export function MessageThread({
             const canDelete = canDeleteMessage(m);
             const canReact = !m.deleted_at;
             const canReply = !m.deleted_at && !m.is_internal_note && !m.id.startsWith("optimistic-");
+            // Several photos/videos at once: reply to one clip, not the batch.
+            const allMedia = m.deleted_at ? [] : mediaAttachments(m);
+            const media = canReply ? allMedia : [];
+            const clipPick = media.length > 1;
+            const held = clipPick && sheetClip != null ? media.findIndex((x) => x.index === sheetClip) : -1;
+            const nounOf = (a: MessageAttachment) => (a.type === "video" ? "video" : "photo");
+            const pickNoun = media.every((x) => x.att.type === "video")
+              ? "video"
+              : media.every((x) => x.att.type === "image") ? "photo" : "photo or video";
             return (
               <>
-                <SheetHeader className="text-left">
-                  <SheetTitle>Message actions</SheetTitle>
-                  <SheetDescription className="line-clamp-2">
-                    {m.deleted_at ? "This message was deleted." : m.body || (m.attachments?.length ? "Attachment" : "")}
-                  </SheetDescription>
-                </SheetHeader>
+                {(() => {
+                  // What was held, so it's obvious which message the actions are for.
+                  const heldAt = sheetClip == null ? -1 : allMedia.findIndex((x) => x.index === sheetClip);
+                  const shown = heldAt >= 0 ? allMedia[heldAt] : allMedia[0];
+                  const thumb = shown
+                    ? {
+                        type: shown.att.type as "image" | "video",
+                        path: shown.att.storage_path || undefined,
+                        url: shown.att.storage_path ? undefined : shown.att.url,
+                        posterPath: shown.att.type === "video" ? shown.att.thumbnail_storage_path || undefined : undefined,
+                      }
+                    : null;
+                  const kind = (a: MessageAttachment) => (a.type === "video" ? "Video" : "Photo");
+                  const mediaLabel = !shown
+                    ? null
+                    : allMedia.length > 1
+                      ? heldAt >= 0
+                        ? `${kind(shown.att)} ${heldAt + 1} of ${allMedia.length}`
+                        : allMedia.every((x) => x.att.type === "video")
+                          ? `${allMedia.length} videos`
+                          : allMedia.every((x) => x.att.type === "image")
+                            ? `${allMedia.length} photos`
+                            : `${allMedia.length} photos & videos`
+                      : shown.att.type === "video" && shown.att.duration
+                        ? `Video · ${fmtDuration(shown.att.duration)}`
+                        : kind(shown.att);
+                  const other = m.attachments?.find((a) => a && a.type !== "image" && a.type !== "video");
+                  const text = m.deleted_at
+                    ? "This message was deleted."
+                    : m.body?.trim() || mediaLabel || other?.title || other?.name || "Attachment";
+                  const who = m.sender_role === role
+                    ? "You"
+                    : role === "admin" ? peerName ?? "Client" : "Coach Jared";
+                  return (
+                    <SheetHeader className="min-h-0 space-y-0 pl-0 text-left">
+                      <SheetTitle className="sr-only">Message actions</SheetTitle>
+                      <div className="flex items-center gap-3">
+                        {thumb && (
+                          <ReplyThumb
+                            media={thumb}
+                            signedUrl={thumb.path ? signedUrlMap[thumb.path] : undefined}
+                            posterUrl={thumb.posterPath ? signedUrlMap[thumb.posterPath] : undefined}
+                            className="h-14 w-14 rounded-xl"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-semibold text-muted-foreground">
+                            {who} · {fmtTime(m.created_at)}
+                          </div>
+                          <SheetDescription className="mt-0.5 line-clamp-2 text-sm text-foreground">
+                            {text}
+                          </SheetDescription>
+                          {m.body?.trim() && mediaLabel && (
+                            <div className="mt-0.5 text-xs text-muted-foreground">{mediaLabel}</div>
+                          )}
+                        </div>
+                      </div>
+                    </SheetHeader>
+                  );
+                })()}
                 {canReact && (
                   <div className="mt-3 flex items-center justify-around rounded-full border border-border bg-secondary/40 px-2 py-2">
                     {REACTION_EMOJIS.map((emoji) => {
@@ -2638,7 +2868,57 @@ export function MessageThread({
                     })}
                   </div>
                 )}
+                {clipPick && (
+                  <div className="mt-3">
+                    <div className="mb-1.5 px-1 text-xs font-semibold text-muted-foreground">
+                      Reply to one {pickNoun}
+                    </div>
+                    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 pt-1">
+                      {media.map(({ att, index }, k) => {
+                        const thumb = {
+                          type: att.type as "image" | "video",
+                          path: att.storage_path || undefined,
+                          url: att.storage_path ? undefined : att.url,
+                          posterPath: att.type === "video" ? att.thumbnail_storage_path || undefined : undefined,
+                        };
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => startReply(m, index)}
+                            aria-label={`Reply to ${nounOf(att)} ${k + 1} of ${media.length}`}
+                            className={cn(
+                              "relative shrink-0 rounded-xl transition active:scale-95",
+                              k === held && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                            )}
+                          >
+                            <ReplyThumb
+                              media={thumb}
+                              signedUrl={thumb.path ? signedUrlMap[thumb.path] : undefined}
+                              posterUrl={thumb.posterPath ? signedUrlMap[thumb.posterPath] : undefined}
+                              className="h-16 w-16 rounded-xl"
+                            />
+                            <span className="absolute bottom-1 left-1 rounded-full bg-black/65 px-1.5 text-[10px] font-semibold tabular-nums text-white">
+                              {k + 1}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3 grid gap-1">
+                  {held >= 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-12 justify-start text-base"
+                      onClick={() => startReply(m, media[held].index)}
+                    >
+                      <Reply className="mr-3 h-5 w-5" /> Reply to this {nounOf(media[held].att)}
+                      <span className="ml-auto text-sm text-muted-foreground">{held + 1} of {media.length}</span>
+                    </Button>
+                  )}
                   {canReply && (
                     <Button
                       type="button"
@@ -2646,7 +2926,7 @@ export function MessageThread({
                       className="h-12 justify-start text-base"
                       onClick={() => startReply(m)}
                     >
-                      <Reply className="mr-3 h-5 w-5" /> Reply
+                      <Reply className="mr-3 h-5 w-5" /> {clipPick ? "Reply to whole message" : "Reply"}
                     </Button>
                   )}
                   {canEdit && (

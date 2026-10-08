@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import type { ReactNode } from "react";
+import { SocialLinks } from "@/components/sales/apple";
 
 export function SalesPageShell({
   children,
@@ -20,8 +21,8 @@ export function SalesPageShell({
   const isCoaching = pathname === "/coaching" || pathname.startsWith("/coaching/");
   const isAbout = pathname === "/about" || pathname.startsWith("/about/");
   const isAuth = pathname === "/auth" || pathname.startsWith("/auth/");
-  const navButtonClass = "relative px-2 text-xs transition-colors sm:px-3 sm:text-sm";
-  const activeNavClass = "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary after:absolute after:inset-x-2 after:-bottom-[13px] after:h-0.5 after:rounded-full after:bg-primary sm:after:inset-x-3";
+  const navButtonClass = "px-2.5 text-[14px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:px-3 sm:text-[15px]";
+  const activeNavClass = "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary";
   return (
     <div
       className={`min-h-screen bg-background text-foreground ${themeClass}`}
@@ -29,14 +30,15 @@ export function SalesPageShell({
       data-theme={theme}
     >
       <header
-        className={`fixed left-0 right-0 top-0 z-40 bg-background/85 backdrop-blur-md ${
+        className={`fixed left-0 right-0 top-0 z-40 bg-background/80 backdrop-blur-xl backdrop-saturate-150 ${
           floatingHeader
-            ? "mx-3 mt-3 rounded-2xl border border-border shadow-lg"
-            : "border-b border-border"
+            ? "mx-3 mt-3 rounded-2xl ring-1 ring-border/70 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]"
+            : "border-b border-border/70"
         }`}
+        style={floatingHeader ? undefined : { paddingTop: "env(safe-area-inset-top)" }}
       >
-        <div className="container mx-auto flex items-center justify-between gap-2 px-4 py-3">
-          <Link to="/" className="text-base sm:text-lg font-black tracking-tight">JF Effect</Link>
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-2.5">
+          <Link to="/" className="text-[17px] font-semibold tracking-[-0.01em]">JF Effect</Link>
           <nav className="flex items-center gap-1 sm:gap-2">
             {!hideMarketingNav && (
               <>
@@ -64,7 +66,7 @@ export function SalesPageShell({
               <Button
                 size="sm"
                 variant={isAuth ? "default" : "outline"}
-                className={`px-2 text-xs transition-colors sm:px-3 sm:text-sm ${isAuth ? "shadow-sm" : ""}`}
+                className={`rounded-full px-3.5 text-[14px] font-medium transition-colors sm:text-[15px] ${isAuth ? "shadow-sm" : ""}`}
               >
                 Sign In
               </Button>
@@ -73,7 +75,13 @@ export function SalesPageShell({
         </div>
       </header>
       <main className={floatingHeader ? "pt-20" : "pt-16"}>{children}</main>
-      <footer className="border-t border-border mt-16 py-8 text-center text-xs text-muted-foreground">
+      <footer className="mt-8 border-t border-border/70 px-5 py-10 text-center text-[13px] text-muted-foreground">
+        <nav aria-label="Footer" className="mb-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+          <Link to="/coaching" className="hover:text-foreground">Coaching</Link>
+          <Link to="/about" className="hover:text-foreground">About</Link>
+          <Link to="/auth" className="hover:text-foreground">Sign in</Link>
+        </nav>
+        <SocialLinks variant="icons" className="mb-4" />
         © {new Date().getFullYear()} JF Effect. All rights reserved.
       </footer>
     </div>

@@ -19,6 +19,7 @@ import { ArrowDownRight, ArrowUpRight, Clapperboard, Dumbbell, Flame, Medal, Min
 import { recapStoryBlob, shareOrSaveImage } from "@/lib/recap-story-card";
 import { createRecapMusic, readRecapMuted, writeRecapMuted, type RecapMusic, type RecapSfx } from "@/lib/recap-music";
 import { UserAvatar } from "@/components/user-avatar";
+import { CoachTag } from "@/components/portal/coach-tag";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
@@ -258,7 +259,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
                   <div className="flex items-center gap-3">
                     <UserAvatar src={rv.avatar_url} name={rv.display_name} size={40} expandable={false} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-base font-black text-white">{rv.display_name}</div>
+                      <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-base font-black text-white">{rv.display_name}</span>{rv.is_coach && <CoachTag onDark />}</div>
                       <div className="text-xs text-white/60">
                         {rv.rank ? `#${rv.rank} · ` : ""}{rv.total_points} pts · {rv.workouts_completed} workouts
                         {rv.atpr_lifts ? ` · ${rv.atpr_lifts} ATPR` : ""}
@@ -310,6 +311,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
                   <Medal className={cn("h-6 w-6", p.rank === 1 ? "text-yellow-300" : p.rank === 2 ? "text-slate-300" : "text-amber-600")} />
                   <UserAvatar src={p.avatar_url} name={p.display_name} size={p.rank === 1 ? 56 : 46} expandable={false} className="mt-1" />
                   <div className={cn("mt-1 w-full truncate text-xs font-black", p.is_me ? "text-red-300" : "text-white")}>{p.display_name}{p.is_me ? " (You)" : ""}</div>
+                  {p.is_coach && <CoachTag onDark className="mt-0.5" />}
                   <div className="text-[11px] font-bold text-white/70">{p.total_points} pts</div>
                 </div>
                 <div
@@ -478,6 +480,61 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
     return () => window.removeEventListener("keydown", onKey);
   }, [open, next, prev]);
 
+  // ---- Swipe down to close (like Instagram stories) ----
+  // The whole story follows the finger, shrinks a little and fades the page
+  // behind it. Release past ~120px (or flick down) to dismiss; otherwise it
+  // snaps back. The story is paused while dragging.
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const drag = useRef<{ id: number; x: number; y: number; lastY: number; lastT: number; v: number; active: boolean } | null>(null);
+  useEffect(() => { if (open) { setDragY(0); setDragging(false); setLeaving(false); drag.current = null; } }, [open]);
+
+  const onDragStart = (e: React.PointerEvent) => {
+    if (leaving || (e.target as HTMLElement).closest("button, a, [role='button']")) { drag.current = null; return; }
+    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, lastY: e.clientY, lastT: performance.now(), v: 0, active: false };
+  };
+  const onDragMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId || leaving) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (!d.active) {
+      // Only a mostly-vertical, downward pull starts a dismiss drag.
+      if (dy > 12 && dy > Math.abs(dx) * 1.2) {
+        d.active = true;
+        if (holdTimer.current) window.clearTimeout(holdTimer.current);
+        held.current = false;
+        setPaused(true);
+        setDragging(true);
+        try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      } else {
+        return;
+      }
+    }
+    const now = performance.now();
+    d.v = (e.clientY - d.lastY) / Math.max(1, now - d.lastT);
+    d.lastY = e.clientY;
+    d.lastT = now;
+    setDragY(Math.max(0, dy));
+  };
+  const endDrag = (e: React.PointerEvent, cancelled: boolean) => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d?.active) return; // a plain tap — handled by the slide area
+    setDragging(false);
+    const dy = Math.max(0, e.clientY - d.y);
+    if (!cancelled && (dy > 120 || (dy > 40 && d.v > 0.5))) {
+      setLeaving(true);
+      setDragY(typeof window !== "undefined" ? window.innerHeight : 800);
+      window.setTimeout(onClose, 190);
+    } else {
+      setDragY(0);
+      setPaused(false);
+    }
+  };
+  const dragProgress = Math.min(dragY, 320) / 320;
+
   const onPointerDown = () => {
     ensureMusic();
     held.current = false;
@@ -494,12 +551,25 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[95] bg-black" />
+        <DialogPrimitive.Overlay
+          className="fixed inset-0 z-[95] bg-black"
+          style={{ opacity: 1 - dragProgress * 0.85, transition: dragging ? "none" : "opacity 190ms ease" }}
+        />
         <DialogPrimitive.Content
           className="fixed inset-0 z-[96] flex select-none flex-col overflow-hidden text-white outline-none md:inset-y-4 md:left-1/2 md:w-[420px] md:-translate-x-1/2 md:rounded-[2rem]"
-          style={{ background: slide.bg, transition: "background 600ms ease" }}
+          style={{
+            background: slide.bg,
+            transform: dragY > 0 ? `translateY(${dragY}px) scale(${1 - dragProgress * 0.08})` : undefined,
+            borderRadius: dragY > 0 ? Math.min(28, dragY / 4) : undefined,
+            transition: dragging ? "background 600ms ease" : "background 600ms ease, transform 190ms ease, border-radius 190ms ease",
+            touchAction: "none",
+          }}
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => e.preventDefault()}
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={(e) => endDrag(e, false)}
+          onPointerCancel={(e) => endDrag(e, true)}
         >
           <DialogPrimitive.Title className="sr-only">{monthName(recap.month_start)} League Recap</DialogPrimitive.Title>
 
@@ -594,7 +664,7 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
                 </button>
               </div>
             ) : (
-              <div className="text-center text-[11px] font-semibold text-white/45">Tap to continue · hold to pause</div>
+              <div className="text-center text-[11px] font-semibold text-white/45">Tap to continue · hold to pause · swipe down to close</div>
             )}
           </div>
         </DialogPrimitive.Content>

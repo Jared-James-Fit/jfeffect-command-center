@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { birthdayPushYear } from "@/lib/birthday-push";
 
 /**
  * Fires web push notifications for every active client whose birthday is
@@ -12,45 +13,33 @@ export const Route = createFileRoute("/api/public/hooks/birthday-notifications")
   server: {
     handlers: {
       POST: async ({ request }) => {
-        // ---------- Worker secret guard (matches sibling scheduled hooks) ----------
-        const expected = process.env.SCHEDULED_WORKER_SECRET ?? "";
-        const provided = request.headers.get("x-worker-secret") ?? "";
-        if (
-          !expected ||
-          !provided ||
-          provided.length !== expected.length ||
-          !timingSafeEqualStr(provided, expected)
-        ) {
-          return new Response("unauthorized", { status: 401 });
-        }
+        // ---------- Shared hook auth (worker secret or Vault cron secret) ----------
+        if (!(await authorizeWorker(request))) return new Response("unauthorized", { status: 401 });
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { sendWebPushToUser } = await import("@/lib/push/push.server");
 
         const now = new Date();
-        const month = now.getUTCMonth() + 1;
-        const day = now.getUTCDate();
-        const year = now.getUTCFullYear();
 
         const { data: clients, error } = await supabaseAdmin
           .from("clients")
-          .select("id, user_id, first_name, preferred_name, full_name, date_of_birth")
+          .select("id, user_id, first_name, preferred_name, full_name, date_of_birth, timezone")
           .eq("archived", false)
           .not("date_of_birth", "is", null)
           .not("user_id", "is", null);
         if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
-        const todays = (clients ?? []).filter((c) => {
-          if (!c.date_of_birth) return false;
-          const d = new Date(c.date_of_birth + "T00:00:00Z");
-          return d.getUTCMonth() + 1 === month && d.getUTCDate() === day;
-        });
+        // Due when it is the client's birthday in THEIR timezone and morning or
+        // later for them (not the UTC date, which fired the evening before).
+        const todays = (clients ?? [])
+          .map((c) => ({ c, year: birthdayPushYear(c.date_of_birth, (c as any).timezone, now) }))
+          .filter((x): x is { c: typeof x.c; year: number } => x.year !== null);
 
         let sent = 0;
         let skipped = 0;
         const results: any[] = [];
 
-        for (const c of todays) {
+        for (const { c, year } of todays) {
           if (!c.user_id) continue;
 
           // Respect enabled flag if a per-client card row exists.
@@ -87,16 +76,14 @@ export const Route = createFileRoute("/api/public/hooks/birthday-notifications")
           tick = { error: String(e?.message ?? e) };
         }
 
-        return Response.json({ ok: true, day: `${year}-${month}-${day}`, considered: todays.length, sent, skipped, results, tick });
+        return Response.json({ ok: true, day: now.toISOString().slice(0, 10), considered: todays.length, sent, skipped, results, tick });
       },
     },
   },
 });
 
-/** Constant-time string compare. Strings must already be the same length. */
-function timingSafeEqualStr(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+/** Shared hook auth: worker secret (env) or the Vault-held cron secret. */
+async function authorizeWorker(request: Request): Promise<boolean> {
+  const { authorizeHookRequest } = await import("@/lib/hook-auth.server");
+  return authorizeHookRequest(request);
 }

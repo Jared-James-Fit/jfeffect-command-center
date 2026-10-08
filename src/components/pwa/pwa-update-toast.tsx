@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { applyUpdate, subscribeSw, getSwStatus } from "@/lib/pwa/register-sw";
 import { getQueueSnapshot } from "@/lib/workout-offline-queue";
 
-function hasUnsavedWork(): boolean {
+export function hasUnsavedWork(): boolean {
   // 1. Offline write queue still has pending workout / completion items.
   try {
     if (getQueueSnapshot().length > 0) return true;

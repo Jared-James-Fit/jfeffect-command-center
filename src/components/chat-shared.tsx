@@ -16,6 +16,14 @@ import {
 import { ClipboardList, FileSignature, UtensilsCrossed, ChevronRight } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
+import { ChatVideoTile } from "@/components/chat-video-tile";
+import { captureVideoPoster } from "@/lib/video-poster";
+import { compressVideoDetailed } from "@/lib/video-compress";
+import { raceVideoUpload } from "@/lib/video-upload-race";
+import { chatUrlCache, useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
+import { keepChatVideo } from "@/lib/chat-video-store";
+import { compressImage } from "@/lib/image-compress";
+import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 
 /* ------------------------------- Attachment Types (shared shape) ------------------------------- */
 
@@ -27,6 +35,11 @@ export type SharedAttachment = {
   mime?: string;
   duration?: number;
   storage_path?: string;
+  thumbnail_storage_path?: string;
+  /** Videos: how the upload went on the sender's phone (compressed or not, why, timings). */
+  transfer?: Record<string, string | number | null>;
+  width?: number;
+  height?: number;
   peaks?: number[];
   kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share";
   fallback_emoji?: string;
@@ -184,38 +197,154 @@ export function fileToAttachmentType(file: File): SharedAttachment["type"] {
   return "file";
 }
 
-/** Upload a file to the message-attachments bucket at a caller-provided path. */
-export async function uploadAttachmentToPath(path: string, file: File): Promise<SharedAttachment> {
-  const { error } = await supabase.storage.from("message-attachments").upload(path, file, {
-    cacheControl: "3600",
-    upsert: false,
-    contentType: file.type || undefined,
+/**
+ * Upload one chat attachment into `message-attachments/<folder>/…`, shared by
+ * 1:1 and group threads. Photos are shrunk first (a chat bubble never needs a
+ * 12 MP original); everything goes through the progress/abort-aware uploader,
+ * which streams small files in one request and uses resumable TUS for big videos.
+ */
+export async function uploadChatAttachment(
+  folder: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
+): Promise<SharedAttachment> {
+  onProgress?.(1);
+  let uploadFile = file;
+  if (file.type.startsWith("image/") && file.type !== "image/gif") {
+    try {
+      const compressed = await compressImage(file, {
+        maxDimension: 1600,
+        quality: 0.82,
+        skipUnder: 300 * 1024,
+      });
+      if (compressed instanceof File) uploadFile = compressed;
+      else if (compressed !== file) {
+        uploadFile = new File(
+          [compressed],
+          file.name.replace(/\.[^.]+$/, "") + ".jpg",
+          { type: "image/jpeg" },
+        );
+      }
+    } catch {
+      // Keep the original if compression isn't supported on this device.
+    }
+  }
+  if (signal?.aborted) throw new Error("Upload cancelled.");
+
+  const isVideo = fileToAttachmentType(file) === "video";
+  const stem = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const extOf = (f: File) => (f.name.includes(".") ? f.name.split(".").pop() : "");
+  const pathFor = (f: File) => {
+    const ext = extOf(f);
+    return `${stem}${ext ? "." + ext : ""}`;
+  };
+  const put = (f: File, path: string, progress?: (pct: number) => void, sig?: AbortSignal) =>
+    uploadLiftFileToStorage({ file: f, userId: folder, bucket: "message-attachments", path, onProgress: progress, signal: sig });
+
+  if (!isVideo) {
+    onProgress?.(3);
+    const path = pathFor(uploadFile);
+    await put(uploadFile, path, (pct) => onProgress?.(Math.round(3 + (pct * 97) / 100)), signal);
+    const att: SharedAttachment = {
+      type: fileToAttachmentType(uploadFile),
+      url: "",
+      storage_path: path,
+      name: file.name,
+      size: uploadFile.size,
+      mime: uploadFile.type || file.type,
+    };
+    if (att.type === "image" && typeof URL !== "undefined") {
+      // The sender sees their picture without waiting for a signed URL.
+      chatUrlCache.seed(path, URL.createObjectURL(uploadFile));
+    }
+    return att;
+  }
+
+  // Videos. Everything starts at once:
+  //  - a still frame for the bubble, uploaded the moment it's ready;
+  //  - the original, uploading immediately;
+  //  - a 720p copy compressed on the phone, which takes over only if it would
+  //    land sooner (see raceVideoUpload).
+  const startedAt = Date.now();
+  const thumbPath = `${stem}-poster.jpg`;
+  const posterP = captureVideoPoster(file);
+  const posterUpload = posterP.then(async (poster) => {
+    if (!poster) return null;
+    try {
+      await put(new File([poster.blob], "poster.jpg", { type: "image/jpeg" }), thumbPath, undefined, signal);
+      // The sender's own bubble shows it instantly, no signing round trip.
+      chatUrlCache.seed(thumbPath, URL.createObjectURL(poster.blob));
+      return poster;
+    } catch {
+      return null; // no poster: the bubble falls back to loading the video frame
+    }
   });
-  if (error) throw error;
-  return {
-    type: fileToAttachmentType(file),
+
+  onProgress?.(3);
+  const originalPath = pathFor(file);
+  let compressedPath = `${stem}.mp4`;
+  if (compressedPath === originalPath) compressedPath = `${stem}-720p.mp4`;
+  let result;
+  try {
+    result = await raceVideoUpload(
+      {
+        originalBytes: file.size,
+        uploadOriginal: (p, sig) => put(file, originalPath, (pct) => p(pct / 100), sig).then(() => {}),
+        compress: (p, sig) => compressVideoDetailed(file, "avc", { onProgress: p, signal: sig }),
+        uploadCompressed: (f, p, sig) => put(f, compressedPath, (pct) => p(pct / 100), sig).then(() => {}),
+      },
+      { signal, onProgress: (f) => onProgress?.(Math.max(3, Math.round(f * 100))) },
+    );
+  } catch (e) {
+    if (signal?.aborted) throw new Error("Upload cancelled.");
+    throw e;
+  }
+  const sentFile = result.sent === "compressed" && result.compressed ? result.compressed : file;
+  const path = result.sent === "compressed" ? compressedPath : originalPath;
+
+  const att: SharedAttachment = {
+    type: "video",
     url: "",
     storage_path: path,
     name: file.name,
-    size: file.size,
-    mime: file.type,
+    size: sentFile.size,
+    mime: sentFile.type || file.type,
   };
+  // The sender already has the clip: keep it on the phone so it plays (and replays) without downloading.
+  keepChatVideo(path, sentFile);
+
+  // Don't wait long: the poster is a nicety, the message must go out.
+  const poster = await Promise.race([posterUpload, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+  if (poster) {
+    att.thumbnail_storage_path = thumbPath;
+    att.width = poster.width;
+    att.height = poster.height;
+    att.duration = poster.duration || undefined;
+  }
+  // What actually happened on this phone. Stored with the message so slow
+  // sends can be diagnosed from real devices (no message text involved).
+  const mb = (n: number) => Math.round((n / 1048576) * 10) / 10;
+  att.transfer = {
+    v: 1,
+    sent: result.sent,
+    why: result.why,
+    compress: result.compress?.reason ?? null,
+    compress_ms: result.compress?.ms ?? null,
+    dur: result.compress?.durationSec != null ? Math.round(result.compress.durationSec * 10) / 10 : null,
+    orig_mb: mb(file.size),
+    sent_mb: mb(sentFile.size),
+    total_ms: Date.now() - startedAt,
+    poster: poster ? "ok" : "none",
+    ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : null,
+  };
+  return att;
 }
 
 /* ------------------------------- Signed URLs ------------------------------- */
 
 export function useSignedUrl(path?: string) {
-  const q = useQuery({
-    queryKey: ["msg-attach", path],
-    enabled: !!path,
-    staleTime: 1000 * 60 * 50,
-    queryFn: async () => {
-      const { data, error } = await supabase.storage.from("message-attachments").createSignedUrl(path!, 60 * 60);
-      if (error) throw error;
-      return data.signedUrl;
-    },
-  });
-  return q.data;
+  return useChatSignedUrl(path);
 }
 
 /* ------------------------------- Waveforms ------------------------------- */
@@ -436,9 +565,22 @@ function ImageAttachment({ att, messageId }: { att: SharedAttachment; messageId?
 
 function VideoAttachment({ att }: { att: SharedAttachment }) {
   const signed = useSignedUrl(att.storage_path);
+  const poster = useSignedUrl(att.thumbnail_storage_path);
   const src = att.storage_path ? signed : att.url;
-  if (!src) return null;
-  return <video src={src} controls playsInline className="max-h-80 w-full max-w-[280px] rounded-md bg-black" />;
+  return (
+    <ChatVideoTile
+      src={src}
+      poster={poster}
+      expectPoster={!!att.thumbnail_storage_path}
+      width={att.width}
+      height={att.height}
+      duration={att.duration}
+      cacheKey={att.storage_path}
+      path={att.storage_path}
+      size={att.size}
+      name={att.name}
+    />
+  );
 }
 
 function AudioAttachment({

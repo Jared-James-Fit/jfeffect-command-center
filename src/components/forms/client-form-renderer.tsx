@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check, X, RotateCcw } from "lucide-react";
 import { ActionButton } from "@/components/action-button";
+import { QuestionReferenceImage, getQuestionReferenceImage } from "@/components/forms/question-reference-image";
 import {
   listFormsForClient,
   listQuestions,
@@ -38,6 +39,8 @@ import {
 import { buildFilloutUrl } from "@/lib/fillout";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
+import { prefillAnswer, questionPrefill } from "@/lib/form-prefill";
+import { sexFromAnswer } from "@/lib/athlete-sex";
 import { playAppSound } from "@/lib/app-sounds";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 
@@ -85,6 +88,21 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     queryKey: ["nf-questions", formId],
     queryFn: () => listQuestions(formId),
     enabled: !!form && form.kind !== "external",
+  });
+
+  // Questions that start from the client's profile (e.g. sex, height).
+  const prefillQs = useMemo(() => questions.filter((q) => questionPrefill(q)), [questions]);
+  const { data: prefillProfile } = useQuery({
+    queryKey: ["form-prefill-profile", client?.id],
+    enabled: !!client?.id && prefillQs.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("clients")
+        .select("sex, height_cm, preferred_height_unit")
+        .eq("id", client!.id)
+        .maybeSingle();
+      return data;
+    },
   });
 
   const { data: submission } = useQuery({
@@ -150,6 +168,24 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
       toast.error("Couldn't save: " + e.message);
     }
   }
+
+  // Save profile values as real answers the first time the form opens, so
+  // required checks, the coach and the AI all see them. Never overwrites an
+  // answer the client already gave.
+  const seeded = useRef(new Set<string>());
+  useEffect(() => {
+    if (!submission || submission.status !== "in_progress" || !answersData || !prefillProfile)
+      return;
+    for (const q of prefillQs) {
+      if (answersMap[q.id] || seeded.current.has(q.id)) continue;
+      const value = prefillAnswer(q, prefillProfile);
+      if (value == null) continue;
+      seeded.current.add(q.id);
+      void saveAnswer(q, value);
+    }
+    // saveAnswer is recreated each render; the inputs below decide when to seed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submission, answersData, prefillProfile, prefillQs, answersMap]);
 
   const [busyQ, setBusyQ] = useState<Record<string, "uploading" | "removing" | "replacing" | undefined>>({});
 
@@ -218,6 +254,19 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
       throw new Error(`Please answer required: ${missing.map((m) => m.label).join(", ")}`);
     }
     await submitSubmission(submission.id);
+    // A sex answer here is the athlete's answer everywhere: keep the profile in step.
+    const sexQ = prefillQs.find((q) => questionPrefill(q) === "sex");
+    const nextSex = sexQ ? sexFromAnswer(local[sexQ.id]) : null;
+    if (client?.id && nextSex && nextSex !== prefillProfile?.sex) {
+      void supabase
+        .from("clients")
+        .update({ sex: nextSex })
+        .eq("id", client.id)
+        .then(({ error }) => {
+          if (error) console.warn("Couldn't save sex to profile", error.message);
+          else qc.invalidateQueries({ queryKey: ["athlete-sex"] });
+        });
+    }
     playAppSound("success");
     fireAppEvent("form_submitted", submission.id);
     // Nutrition Update Request: start the AI targets + meal plan for the coach.
@@ -319,6 +368,9 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                 {q.required && <span className="ml-1 text-destructive">*</span>}
               </Label>
               {q.help_text && <p className="mt-1 text-xs text-muted-foreground">{q.help_text}</p>}
+              {getQuestionReferenceImage(q) && (
+                <QuestionReferenceImage src={getQuestionReferenceImage(q)!} label={q.label} />
+              )}
 
               <div className="mt-3">
                 <QuestionInput

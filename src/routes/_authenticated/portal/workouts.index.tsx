@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -9,6 +9,14 @@ import { WorkoutArchiveSection } from "@/components/workout-archive-section";
 
 
 export const Route = createFileRoute("/_authenticated/portal/workouts/")({
+  // Community used to be a tab here (`#community`, `#community&post=<id>`);
+  // links and notifications already sent forward to its own page.
+  beforeLoad: ({ location }) => {
+    const hash = typeof location.hash === "string" ? location.hash.replace(/^#/, "") : "";
+    if (hash.split("&")[0] !== "community") return;
+    const post = hash.match(/post=([0-9a-f-]{36})/i)?.[1];
+    throw redirect({ to: "/portal/community", hash: post ? `post=${post}` : undefined, replace: true });
+  },
   component: WorkoutsPage,
 });
 

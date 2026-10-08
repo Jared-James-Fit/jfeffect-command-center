@@ -22,7 +22,6 @@ import { assignEntitlementPreview } from "@/lib/product-sessions";
 import { useServerFn } from "@tanstack/react-start";
 import { autoSendPaymentRequestMessage } from "@/lib/sms-links.functions";
 import { autoMessageClientAboutPurchase } from "@/lib/payment-request-message";
-import { createAgreement } from "@/lib/agreements.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
 import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-button";
@@ -65,10 +64,6 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   const [clientId, setClientId] = useState<string>(fixedClientId ?? "");
   const [adminNotes, setAdminNotes] = useState("");
   const [mode, setMode] = useState<AssignMode>("payment_request");
-  const offerDefaultTemplateId: string | null = offer?.default_agreement_template_id ?? null;
-  const [agreementTemplateId, setAgreementTemplateId] = useState<string | null>(offerDefaultTemplateId);
-  const [createAgreementOnAssign, setCreateAgreementOnAssign] = useState<boolean>(!!offerDefaultTemplateId);
-  const createAgreementFn = useServerFn(createAgreement);
   const createCheckoutFn = useServerFn(createCheckoutSessionForAssignment);
   const shareLinkFn = useServerFn(createPaymentShareLink);
   const [stripeUrl, setStripeUrl] = useState<string | null>(null);
@@ -137,16 +132,6 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
   // What this assignment does to the client's session balance (canonical
   // ledger — nothing is granted here, this only describes what will happen).
   const entitlement = offer ? assignEntitlementPreview(offer, mode) : null;
-
-  const { data: templates = [] } = useQuery({
-    queryKey: ["agreement-templates-active-for-assign"],
-    queryFn: async () => (await supabase
-      .from("agreement_templates")
-      .select("id, name, is_active, archived")
-      .eq("archived", false).eq("is_active", true)
-      .order("name")).data ?? [],
-    enabled: !!offer,
-  });
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-assign-list"],
@@ -307,19 +292,6 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
       } else {
         job.completeStep(2);
         job.completeStep(4);
-      }
-
-      if (createAgreementOnAssign && agreementTemplateId && purchase?.id) {
-        await createAgreementFn({
-          data: {
-            client_id: clientId,
-            template_id: agreementTemplateId,
-            purchase_record_id: purchase.id,
-            offer_name: offer.name,
-            send_now: false,
-          },
-        });
-        qc.invalidateQueries({ queryKey: ["client-agreements", clientId] });
       }
 
       qc.invalidateQueries({ queryKey: ["purchase-records"] });
@@ -517,14 +489,18 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
               </div>
             )}
             {selectedClient && (
-              <div className={`rounded-md border p-3 text-sm ${selectedClient.agreement_signed ? "border-primary/40 bg-primary/5" : "border-destructive/40 bg-destructive/5"}`}>
+              <div className={`rounded-md border p-3 text-sm ${selectedClient.agreement_signed ? "border-primary/40 bg-primary/5" : "border-amber-500/40 bg-amber-500/5"}`}>
                 <div className="flex items-center gap-2 font-semibold">
-                  {selectedClient.agreement_signed ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <AlertTriangle className="h-4 w-4 text-destructive" />}
-                  Coaching Agreement: <Badge variant="outline">{selectedClient.agreement_status ?? "Not Sent"}</Badge>
+                  {selectedClient.agreement_signed ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                  Coaching Agreement: <Badge variant="outline">{selectedClient.agreement_signed ? (selectedClient.agreement_status ?? "Signed") : (!selectedClient.agreement_status || selectedClient.agreement_status === "Not Sent" ? "Not signed yet" : selectedClient.agreement_status)}</Badge>
                 </div>
-                {!selectedClient.agreement_signed && (
-                  <p className="mt-1 text-xs text-destructive">
-                    This client does not have a signed Coaching Agreement on file. You can still send the payment request, but access may require agreement completion first.
+                {selectedClient.agreement_signed ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This agreement covers this purchase too, so there's nothing extra to send with the payment.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    They'll be asked to sign it in the app, and it covers this purchase too. You can still send the payment request.
                   </p>
                 )}
               </div>
@@ -569,27 +545,6 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
                   </div>
                 )}
               </div>
-            </div>
-
-            <div className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
-              <div className="flex items-center gap-3">
-                <Switch checked={createAgreementOnAssign} onCheckedChange={setCreateAgreementOnAssign} />
-                <Label>Auto-create draft agreement for this purchase</Label>
-              </div>
-              {createAgreementOnAssign && (
-                <div>
-                  <Label className="text-xs">Agreement template{offerDefaultTemplateId ? " (offer default pre-selected)" : ""}</Label>
-                  <Select value={agreementTemplateId ?? ""} onValueChange={(v) => setAgreementTemplateId(v || null)}>
-                    <SelectTrigger><SelectValue placeholder="Pick a template" /></SelectTrigger>
-                    <SelectContent>
-                      {templates.map((t: any) => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="mt-1 text-xs text-muted-foreground">The draft is linked to this purchase. You'\''ll still send it manually from the client'\''s Agreements panel.</p>
-                </div>
-              )}
             </div>
           </div>
         )}

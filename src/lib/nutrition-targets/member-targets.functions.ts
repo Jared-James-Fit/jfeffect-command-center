@@ -351,8 +351,26 @@ export const getTargetsSetupPrefill = createServerFn({ method: "GET" })
       bodyweightKg = bw[0].weight_unit === "kg" ? v : v * 0.45359237;
     }
 
+    // Coached clients answer sex / DOB / height on their client profile;
+    // fill any gaps from there so they're never asked twice.
+    const { data: c } = await supabase
+      .from("clients")
+      .select("sex, date_of_birth, height_cm")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const member =
+      m || c
+        ? {
+            ...(m ?? {}),
+            biological_sex:
+              m?.biological_sex ?? (c?.sex === "male" || c?.sex === "female" ? c.sex : null),
+            date_of_birth: m?.date_of_birth ?? c?.date_of_birth ?? null,
+            height_cm: m?.height_cm ?? c?.height_cm ?? null,
+          }
+        : null;
+
     return {
-      member: m ?? null,
+      member,
       bodyweightKg,
     };
   });

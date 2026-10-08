@@ -23,15 +23,18 @@ import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SavedIndicator } from "@/components/saved-indicator";
 import { ClientLegalSafety } from "@/components/legal/client-legal-safety";
+import { AgreementAccountCard } from "@/components/coaching-agreement/agreement-account-card";
 import { InstallAppCard } from "@/components/portal/install-app-card";
+import { WearablesCard } from "@/components/portal/wearables-card";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { PushNotificationCard } from "@/components/push/push-notification-card";
+import { WeightUnitCard } from "@/components/portal/weight-unit-card";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
 });
 
-const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", "date_of_birth", "height_cm", "preferred_height_unit", "emergency_contact_name", "emergency_contact_phone", ...SOCIAL_FIELDS] as const;
+const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", "date_of_birth", "sex", "height_cm", "preferred_height_unit", "emergency_contact_name", "emergency_contact_phone", ...SOCIAL_FIELDS] as const;
 
 function AccountPage() {
   const portalUserId = usePortalUserId();
@@ -125,6 +128,8 @@ function AccountPage() {
       timezone_confirmed_at:
         current.timezone !== client?.timezone ? new Date().toISOString() : client?.timezone_confirmed_at,
     };
+    // Only write sex when it has an answer, so autosave never erases one.
+    if (current.sex) patch.sex = current.sex;
     return patch;
   };
 
@@ -204,11 +209,14 @@ function AccountPage() {
               {[
                 { id: "basic-information", label: "Basic Info" },
                 { id: "profile-picture", label: "Photo" },
+                { id: "units", label: "Units" },
                 { id: "training-schedule", label: "Schedule" },
                 { id: "goals-setup", label: "Goals" },
                 { id: "password", label: "Password" },
+                { id: "devices", label: "Devices" },
                 { id: "notifications", label: "Notifications" },
                 { id: "install-app", label: "Install App" },
+                { id: "coaching-agreement", label: "Agreement" },
                 { id: "legal-safety", label: "Legal" },
                 { id: "billing", label: "Billing" },
                 { id: "delete-account", label: "Delete" },
@@ -285,6 +293,12 @@ function AccountPage() {
           </Card>
         </SectionErrorBoundary>
 
+        <div id="units" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Weight units">
+            <WeightUnitCard key={form.id} clientId={form.id} value={client?.preferred_weight_unit} />
+          </SectionErrorBoundary>
+        </div>
+
         <SectionErrorBoundary label="Social Media" className="md:col-span-3">
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div>
@@ -338,6 +352,14 @@ function AccountPage() {
           </div>
         )}
 
+        {/* Coaching Agreement: status, sign if needed, and the signed copy to view any time.
+            Read-only for a coach in "View as client". */}
+        <div id="coaching-agreement" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Coaching Agreement">
+            <AgreementAccountCard />
+          </SectionErrorBoundary>
+        </div>
+
         {/* Legal status/consents come from the signed-in session, so in coach
             "View as client" they'd be the coach's, not the client's. */}
         {!isImpersonating && (
@@ -351,6 +373,12 @@ function AccountPage() {
         <div id="install-app" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Install App">
             <InstallAppCard />
+          </SectionErrorBoundary>
+        </div>
+
+        <div id="devices" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Devices">
+            <WearablesCard />
           </SectionErrorBoundary>
         </div>
 

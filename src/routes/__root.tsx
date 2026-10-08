@@ -11,7 +11,6 @@ import {
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
-import { TeamImpersonationProvider } from "@/lib/team-impersonation";
 import { ProgressDrawer } from "@/components/progress-drawer";
 import { GlobalHighlight } from "@/components/global-highlight";
 import { MediaViewerProvider, MediaViewerRoot } from "@/components/media-viewer";
@@ -37,6 +36,7 @@ import { registerServiceWorker } from "@/lib/pwa/register-sw";
 import { initNativeShell } from "@/platform/native-init";
 import { initChunkRecovery } from "@/lib/chunk-recovery";
 import { PwaUpdateToast } from "@/components/pwa/pwa-update-toast";
+import { useAppFreshness } from "@/hooks/use-app-freshness";
 import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 // Side-effect import: registers durable-queue handlers for cross-feature
 // offline writes (bodyweight, water, …) so pending items can drain at boot.
@@ -306,7 +306,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           ],
           serviceType: ["Personal Training", "Online Fitness Coaching", "Powerlifting Coaching", "Nutrition Coaching"],
           founder: { "@type": "Person", name: "Jared James McIntyre", jobTitle: "Personal Trainer & Online Fitness Coach", sameAs: ["https://jaredjamesfit.com"] },
-          sameAs: ["https://jaredjamesfit.com"],
+          sameAs: ["https://jaredjamesfit.com", "https://www.instagram.com/jaredmcintyre_/", "https://www.youtube.com/@jared.mcintyre"],
           openingHoursSpecification: [
             { "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday","Tuesday","Wednesday","Thursday","Friday"], opens: "06:00", closes: "21:00" },
             { "@type": "OpeningHoursSpecification", dayOfWeek: ["Saturday","Sunday"], opens: "08:00", closes: "18:00" },
@@ -378,6 +378,8 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  // Reopening the app picks up a newly published version (the iPhone shell has no service worker to do it).
+  useAppFreshness();
 
   useEffect(() => {
     // Dev-only: app shell is mounted and visible.
@@ -397,7 +399,6 @@ function RootComponent() {
   const inner = (
     <AuthProvider>
       <ClientImpersonationProvider>
-        <TeamImpersonationProvider>
           <MediaViewerProvider>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
@@ -410,7 +411,6 @@ function RootComponent() {
             {/* Single global media viewer — portalled above every overlay. */}
             <MediaViewerRoot />
           </MediaViewerProvider>
-        </TeamImpersonationProvider>
       </ClientImpersonationProvider>
     </AuthProvider>
   );

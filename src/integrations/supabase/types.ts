@@ -3394,6 +3394,8 @@ export type Database = {
           schedule_updated_at: string | null
           sessions_purchased: number
           sessions_used: number
+          sex: string | null
+          sex_updated_at: string | null
           sms_opt_out: boolean
           source: string | null
           start_date: string | null
@@ -3577,6 +3579,8 @@ export type Database = {
           schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
+          sex?: string | null
+          sex_updated_at?: string | null
           sms_opt_out?: boolean
           source?: string | null
           start_date?: string | null
@@ -3760,6 +3764,8 @@ export type Database = {
           schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
+          sex?: string | null
+          sex_updated_at?: string | null
           sms_opt_out?: boolean
           source?: string | null
           start_date?: string | null
@@ -5447,6 +5453,7 @@ export type Database = {
           is_powerlifting: boolean
           legacy_youtube_url: string | null
           lift_family: string | null
+          movement_family: string | null
           muscle_group: string | null
           muscle_groups: string[]
           name: string
@@ -5457,6 +5464,7 @@ export type Database = {
           quality_warning: string | null
           safe_to_publish: boolean
           secondary_vimeo_embed_url: string | null
+          secondary_muscle_groups: string[]
           secondary_vimeo_id: string | null
           source_quality: string | null
           source_type: string | null
@@ -5501,6 +5509,7 @@ export type Database = {
           is_powerlifting?: boolean
           legacy_youtube_url?: string | null
           lift_family?: string | null
+          movement_family?: string | null
           muscle_group?: string | null
           muscle_groups?: string[]
           name: string
@@ -5511,6 +5520,7 @@ export type Database = {
           quality_warning?: string | null
           safe_to_publish?: boolean
           secondary_vimeo_embed_url?: string | null
+          secondary_muscle_groups?: string[]
           secondary_vimeo_id?: string | null
           source_quality?: string | null
           source_type?: string | null
@@ -5555,6 +5565,7 @@ export type Database = {
           is_powerlifting?: boolean
           legacy_youtube_url?: string | null
           lift_family?: string | null
+          movement_family?: string | null
           muscle_group?: string | null
           muscle_groups?: string[]
           name?: string
@@ -5565,6 +5576,7 @@ export type Database = {
           quality_warning?: string | null
           safe_to_publish?: boolean
           secondary_vimeo_embed_url?: string | null
+          secondary_muscle_groups?: string[]
           secondary_vimeo_id?: string | null
           source_quality?: string | null
           source_type?: string | null
@@ -14184,6 +14196,7 @@ export type Database = {
           session_weight_unit: string | null
           skipped_exercises_count: number | null
           started_at: string | null
+          training_started_at: string | null
           updated_at: string
         }
         Insert: {
@@ -14213,6 +14226,7 @@ export type Database = {
           session_weight_unit?: string | null
           skipped_exercises_count?: number | null
           started_at?: string | null
+          training_started_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -14242,6 +14256,7 @@ export type Database = {
           session_weight_unit?: string | null
           skipped_exercises_count?: number | null
           started_at?: string | null
+          training_started_at?: string | null
           updated_at?: string
         }
         Relationships: [

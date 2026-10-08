@@ -92,6 +92,9 @@ export const Route = createFileRoute("/api/public/bulk-exercise-import")({
 
         let inserted = 0;
         let updated = 0;
+        // Names that already exist under another name (alias / canonical /
+        // word-order variant). Reused as-is — never duplicated, never overwritten.
+        const reused: Array<{ name: string; matched_id: string }> = [];
         const errors: Array<{ name: string; message: string }> = [];
 
         for (const row of rows) {
@@ -119,6 +122,11 @@ export const Route = createFileRoute("/api/public/bulk-exercise-import")({
               updated++;
             }
           } else {
+            const { data: resolvedId } = await (supabaseAdmin as any).rpc("resolve_exercise_id", { _name: row.name });
+            if (typeof resolvedId === "string" && resolvedId) {
+              reused.push({ name: row.name, matched_id: resolvedId });
+              continue;
+            }
             const { error: insErr } = await supabaseAdmin
               .from("exercises")
               .insert(row);
@@ -136,6 +144,7 @@ export const Route = createFileRoute("/api/public/bulk-exercise-import")({
           inserted,
           updated,
           count: inserted + updated,
+          reused,
           errors,
         });
       },

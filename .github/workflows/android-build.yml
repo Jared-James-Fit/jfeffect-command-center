@@ -38,6 +38,18 @@ jobs:
       - name: Install Capacitor CLI
         run: npm install -g @capacitor/cli
 
+      # ── Health Connect ──────────────────────────────────────────────────────
+      # OFF unless the repo variable ENABLE_HEALTH_CONNECT is "true". Off = the health
+      # plugin is removed before the Android project is generated, so this build is
+      # identical to before. Turn it on only after completing the Health Connect
+      # declaration in Play Console (Google rejects undeclared health permissions).
+      - name: Leave Health Connect out of this build
+        if: ${{ vars.ENABLE_HEALTH_CONNECT != 'true' }}
+        run: |
+          npm pkg delete "dependencies.@capgo/capacitor-health"
+          rm -rf node_modules/@capgo/capacitor-health
+          echo "Health Connect disabled for this build"
+
       - name: Add Android platform
         run: |
           rm -rf android
@@ -51,6 +63,35 @@ jobs:
         run: >
           echo '{"appId":"com.jfeffect.app","appName":"JF Effect","webDir":"dist","server":{"url":"https://jfeffect.com","cleartext":false},"plugins":{"Keyboard":{"resize":"native","resizeOnFullScreen":true},"StatusBar":{"style":"DARK","backgroundColor":"#0B0B0F"},"SplashScreen":{"launchShowDuration":2000,"backgroundColor":"#0B0B0F","showSpinner":false}}}'
           > android/app/src/main/assets/capacitor.config.json
+
+      - name: Enable Health Connect (minSdk 26, read-only permissions)
+        if: ${{ vars.ENABLE_HEALTH_CONNECT == 'true' }}
+        run: |
+          python3 << 'PYEOF'
+          import re
+          # Health Connect requires Android 8.0+ (API 26).
+          vg = "android/variables.gradle"
+          s = open(vg).read()
+          s = re.sub(r"minSdkVersion\s*=\s*(\d+)", lambda m: f"minSdkVersion = {max(26, int(m.group(1)))}", s)
+          open(vg, "w").write(s)
+
+          # Keep only the READ permissions JF Effect uses; strip every other health
+          # permission the plugin declares (Play reviews each one).
+          keep = {"READ_STEPS", "READ_ACTIVE_CALORIES_BURNED", "READ_SLEEP", "READ_HEART_RATE",
+                  "READ_RESTING_HEART_RATE", "READ_HEART_RATE_VARIABILITY"}
+          plugin_manifest = open("node_modules/@capgo/capacitor-health/android/src/main/AndroidManifest.xml").read()
+          perms = sorted(set(re.findall(r'android\.permission\.health\.([A-Z_]+)', plugin_manifest)))
+          remove = [p for p in perms if p not in keep]
+          app = "android/app/src/main/AndroidManifest.xml"
+          m = open(app).read()
+          if 'xmlns:tools=' not in m:
+              m = m.replace("<manifest ", '<manifest xmlns:tools="http://schemas.android.com/tools" ', 1)
+          lines = "".join(f'    <uses-permission android:name="android.permission.health.{p}" tools:node="remove" />\n' for p in remove)
+          m = m.replace("</manifest>", lines + "</manifest>", 1)
+          open(app, "w").write(m)
+          print(f"✅ Health Connect on: minSdk>=26, kept {sorted(keep)}, removed {len(remove)} permissions")
+          PYEOF
+          grep -n "minSdkVersion" android/variables.gradle
 
       - name: Run cap sync
         run: |

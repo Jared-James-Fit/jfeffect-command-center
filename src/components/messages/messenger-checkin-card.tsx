@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { FormPresentation } from "@/lib/form-message-presentation";
+import type { FormPresentation, FormHistoryGroup as FormHistoryGroupData } from "@/lib/form-message-presentation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,13 @@ import {
   Flag,
   Loader2,
   MessageSquareText,
+  RotateCcw,
   Sparkles,
   Target,
   Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { markCheckinReviewed, refreshReviewQueries, reopenCheckinReview, reviewedViaLabel } from "@/lib/checkin-review";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { playAppSound } from "@/lib/app-sounds";
 import {
@@ -114,55 +116,9 @@ const WEEKLY: Q[] = [
   },
 ];
 
-const NUTRITION: Q[] = [
-  {
-    key: "nutrition_rating",
-    prompt: "How well did you stick to your meal plan?",
-    helper: "1 = mostly off plan · 5 = on plan almost every day.",
-    type: "rating",
-    scale: ["Off plan", "Some days", "Half", "Most days", "Every day"],
-  },
-  {
-    key: "hunger",
-    prompt: "How hungry have you been?",
-    type: "single",
-    options: ["Not very hungry", "Just right", "Hungry a lot"],
-  },
-  {
-    key: "digestion",
-    prompt: "How has your stomach / digestion felt?",
-    type: "single",
-    options: ["Good — no issues", "A few issues (bloating, etc.)", "Bad most days"],
-  },
-  {
-    key: "training_energy",
-    prompt: "How’s your energy for workouts?",
-    helper: "1 = drained · 5 = full of energy.",
-    type: "rating",
-    scale: ["Drained", "Low", "Okay", "Good", "Full"],
-  },
-  {
-    key: "hardest",
-    prompt: "What’s been the hardest part of your nutrition?",
-    helper: "e.g. weekends, cravings, eating out, meal prep. Optional.",
-    type: "text",
-    optional: true,
-  },
-  {
-    key: "food_changes",
-    prompt: "Any foods or meals you want swapped?",
-    helper: "Tell me what you’re sick of or can’t get. Optional.",
-    type: "text",
-    optional: true,
-  },
-  {
-    key: "goal",
-    prompt: "What’s your #1 nutrition goal until your next review?",
-    helper: "e.g. “Hit my protein every day.” Optional.",
-    type: "text",
-    optional: true,
-  },
-];
+/** The exact Weekly Check-In questions, for the admin Requests preview. */
+export const WEEKLY_CHECKIN_QUESTIONS = WEEKLY;
+export type CheckinQuestion = Q;
 
 const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
   weekly_checkin: {
@@ -175,15 +131,6 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
     help: "Help / changes",
     next_week_goal: "Next-week goal",
   },
-  nutrition_review: {
-    nutrition_rating: "Nutrition",
-    hunger: "Hunger",
-    digestion: "Digestion",
-    training_energy: "Training energy",
-    hardest: "Hardest part",
-    food_changes: "Foods / meals to change",
-    goal: "Nutrition goal",
-  },
 };
 
 // Form / check-in cards are always blue so "action required" reads differently
@@ -193,16 +140,16 @@ const FORM_CARD =
 const FORM_ICON = "bg-blue-600/10 text-blue-600 dark:bg-blue-400/15 dark:text-blue-300";
 const FORM_MUTED = "text-blue-900/70 dark:text-blue-100/70";
 
-function taskQuestions(taskType: MessengerCheckinTaskType) {
-  return taskType === "nutrition_review" ? NUTRITION : WEEKLY;
+function taskQuestions(_taskType: MessengerCheckinTaskType) {
+  return WEEKLY;
 }
 
-function titleFor(taskType: MessengerCheckinTaskType) {
-  return taskType === "nutrition_review" ? "Nutrition Review" : "Weekly Check-In";
+function titleFor(_taskType: MessengerCheckinTaskType) {
+  return "Weekly Check-In";
 }
 
-export function durationFor(taskType: MessengerCheckinTaskType) {
-  return taskType === "nutrition_review" ? "About 2–3 minutes" : "About 60–90 seconds";
+export function durationFor(_taskType: MessengerCheckinTaskType) {
+  return "About 60–90 seconds";
 }
 
 function displayAnswer(v: unknown) {
@@ -256,7 +203,7 @@ export function MessengerCheckinRequestCard({
             className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
             onClick={() => setOpen(true)}
           >
-            {taskType === "nutrition_review" ? "Start review" : "Start check-in"} <ChevronRight className="ml-1 h-4 w-4" />
+            Start check-in <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         )}
         {!isLoading && !done && !superseded && role === "admin" && (
@@ -272,7 +219,7 @@ export function MessengerCheckinRequestCard({
             onClick={() => setOpen(true)}
           >
             <CheckCircle2 className="mr-2 h-4 w-4" />
-            View {taskType === "nutrition_review" ? "Nutrition Review" : "Check-In"}
+            View Check-In
           </Button>
         )}
         {done && role === "client" && (
@@ -641,6 +588,52 @@ export function MessengerCheckinSubmissionCard({
       .catch(() => {});
   }, [role, data, analyze, submissionId, qc]);
 
+  // Coach re-roll of the recap + suggested reply (e.g. after the voice changed).
+  const [redoing, setRedoing] = useState(false);
+  const redoSuggestion = async () => {
+    setRedoing(true);
+    try {
+      await analyze({ data: { submissionId, force: true } });
+      await qc.invalidateQueries({ queryKey: ["messenger-checkin", submissionId] });
+    } catch {
+      toast.error("Couldn't write a new suggestion. Try again.");
+    } finally {
+      setRedoing(false);
+    }
+  };
+
+  // Reviewed state. A staff reply in the chat closes it automatically (database trigger);
+  // these are the one-tap paths: "Mark reviewed" and "Use reply".
+  const reviewedAt = ((data as any)?.reviewed_at ?? null) as string | null;
+  const reviewedVia = (data as any)?.reviewed_via as string | null | undefined;
+  const setReviewedLocally = (iso: string | null, via: string | null) =>
+    qc.setQueryData(["messenger-checkin", submissionId], (prev: any) =>
+      prev ? { ...prev, reviewed_at: iso, reviewed_via: via } : prev);
+  const markReviewed = async (via: "manual" | "use_reply" = "manual") => {
+    if (reviewedAt) return;
+    setReviewedLocally(new Date().toISOString(), via);
+    try {
+      await markCheckinReviewed(submissionId, via);
+      refreshReviewQueries(qc, submissionId);
+      if (via === "manual") toast.success("Marked reviewed");
+    } catch (e: any) {
+      setReviewedLocally(null, null);
+      toast.error(e?.message ?? "Couldn't mark this reviewed");
+    }
+  };
+  const reopen = async () => {
+    const prevAt = reviewedAt; const prevVia = reviewedVia ?? null;
+    setReviewedLocally(null, null);
+    try {
+      await reopenCheckinReview(submissionId);
+      refreshReviewQueries(qc, submissionId);
+      toast.success("Back in your to-review list");
+    } catch (e: any) {
+      setReviewedLocally(prevAt, prevVia);
+      toast.error(e?.message ?? "Couldn't reopen this");
+    }
+  };
+
   if (isLoading || !data) {
     return (
       <div className={cn(FORM_CARD, "flex items-center gap-2 text-xs")}>
@@ -672,8 +665,11 @@ export function MessengerCheckinSubmissionCard({
         <span className={cn("grid h-9 w-9 place-items-center rounded-full", FORM_ICON)}>
           <Sparkles className="h-5 w-5" />
         </span>
-        <div className="min-w-0">
-          <div className="text-sm font-bold">{titleFor(taskType)} recap</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 text-sm font-bold">
+            {titleFor(taskType)} recap
+            {reviewedAt ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-label="Reviewed" /> : null}
+          </div>
           <div className={cn("text-xs", FORM_MUTED)}>AI-assisted coach summary</div>
         </div>
       </div>
@@ -710,6 +706,17 @@ export function MessengerCheckinSubmissionCard({
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
               <MessageSquareText className="h-3.5 w-3.5" /> Suggested response
+              {role === "admin" && (
+                <button
+                  type="button"
+                  onClick={() => void redoSuggestion()}
+                  disabled={redoing}
+                  className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-primary hover:bg-primary/10 disabled:opacity-60"
+                  title="Write a new suggestion"
+                >
+                  <RotateCcw className={cn("h-3 w-3", redoing && "animate-spin")} /> {redoing ? "Writing…" : "Redo"}
+                </button>
+              )}
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
               {analysis.suggested_response}
@@ -719,7 +726,7 @@ export function MessengerCheckinSubmissionCard({
                 type="button"
                 size="sm"
                 className="mt-3 w-full"
-                onClick={() => onUseReply(String(analysis.suggested_response))}
+                onClick={() => { void markReviewed("use_reply"); onUseReply(String(analysis.suggested_response)); }}
               >
                 Use reply
               </Button>
@@ -743,6 +750,22 @@ export function MessengerCheckinSubmissionCard({
             </div>
           </details>
         </div>
+      )}
+
+      {/* One-tap close. Replying in the chat also closes it by itself. */}
+      {reviewedAt ? (
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+          <span className="text-emerald-600">
+            Reviewed {fmtDateTime(reviewedAt)} · {reviewedViaLabel(reviewedVia as any)}
+          </span>
+          <button type="button" onClick={() => void reopen()} className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            Undo
+          </button>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" size="sm" className="mt-3 w-full" onClick={() => void markReviewed("manual")}>
+          <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden /> Mark reviewed
+        </Button>
       )}
     </div>
   );
@@ -851,7 +874,7 @@ export function FormHistoryRow({ p, role }: { p: FormPresentation; role: Role })
               className="mt-1.5 h-8 rounded-full px-3 text-xs font-semibold"
               onClick={() => setSheetOpen(true)}
             >
-              View {p.taskType === "nutrition_review" ? "review" : "check-in"}
+              View check-in
             </Button>
           )}
         </div>
@@ -866,6 +889,55 @@ export function FormHistoryRow({ p, role }: { p: FormPresentation; role: Role })
           role={role}
           submittedAt={p.submittedAt}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * One row for ALL older requests of a form type: "Weekly Check-In history ·
+ * 6 filled · 2 missed". Tap to open the individual rows. The point is tracking
+ * (anything missed?), not a log of every old request.
+ */
+export function FormHistoryGroup({ group, role }: { group: FormHistoryGroupData; role: Role }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mx-auto w-full max-w-sm" data-form-history-group>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition hover:bg-secondary/60 active:bg-secondary"
+      >
+        <span
+          className={cn(
+            "grid h-6 w-6 shrink-0 place-items-center rounded-full",
+            group.missed > 0 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
+          )}
+        >
+          {group.missed > 0 ? <CircleDashed className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold leading-tight text-foreground">
+            Earlier {titleFor(group.taskType).toLowerCase()}s
+          </span>
+          <span className="block truncate text-[11px] leading-tight text-muted-foreground">
+            {group.filled} filled
+            {group.missed > 0 && (
+              <span className="font-semibold text-amber-600 dark:text-amber-400"> · {group.missed} missed</span>
+            )}
+          </span>
+        </span>
+        <ChevronDown
+          className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", open ? "rotate-0" : "-rotate-90")}
+        />
+      </button>
+      {open && (
+        <div className="mt-0.5 space-y-0.5">
+          {group.units.map((p) => (
+            <FormHistoryRow key={p.submissionId} p={p} role={role} />
+          ))}
+        </div>
       )}
     </div>
   );

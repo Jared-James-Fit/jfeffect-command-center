@@ -1,48 +1,27 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { CheckCircle2, ClipboardCheck, Heart, MessageCircle, MessageSquare, Quote, Repeat, Target, Users, Utensils, XCircle, Eye } from "lucide-react";
 import { getPublicSalesPage } from "@/lib/sales-pages.functions";
-import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
-import { HeroCta } from "@/components/sales/sales-hero";
+import { SalesPageShell } from "@/components/sales/sales-page-shell";
 import { CoachingHero } from "@/components/sales/coaching-hero";
-import { HowItWorks } from "@/components/sales/how-it-works";
-import { ProofWall } from "@/components/sales/proof-wall";
-import { FaqAccordion } from "@/components/sales/faq-accordion";
-import { FinalCta } from "@/components/sales/final-cta";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  CheckCircle2, XCircle, TrendingUp, Sparkles, Repeat as RepeatIcon, ShieldCheck,
-  Target, ClipboardCheck, Utensils, MessageCircle,
-} from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
-import { TransformationsStrip } from "@/components/sales/transformations-strip";
-import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
-
-function HeroSkeleton() {
-  return (
-    <section className="container mx-auto grid gap-10 px-4 py-14 md:py-20 lg:grid-cols-2 lg:items-center">
-      <div className="space-y-4">
-        <div className="h-6 w-48 rounded-full bg-muted/50 animate-pulse" />
-        <div className="h-12 w-full max-w-xl rounded-md bg-muted/50 animate-pulse" />
-        <div className="h-12 w-3/4 rounded-md bg-muted/50 animate-pulse" />
-        <div className="h-5 w-full max-w-md rounded-md bg-muted/40 animate-pulse" />
-        <div className="h-12 w-48 rounded-md bg-muted/50 animate-pulse" />
-      </div>
-      <div className="aspect-[4/3] rounded-2xl bg-muted/40 animate-pulse" />
-    </section>
-  );
-}
+import { TRANSFORMATION_PHOTOS } from "@/components/sales/transformations-strip";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Block, Group, Heading, IconTile, PrimaryCta, Rail, SocialLinks, Stat, Surface, TextLink } from "@/components/sales/apple";
+import { CLIENT_QUOTES } from "@/components/sales/client-quotes";
+import { COACH_NAME, INQUIRY_DM_URL } from "@/lib/social-links";
+import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
 
 export const Route = createFileRoute("/coaching/")({
   component: CoachingPage,
   head: () => ({
     meta: [
       { title: "Online Fitness Coaching Selkirk & Winnipeg MB | Private 1:1 Coaching | JF Effect" },
-      { name: "description", content: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared James Fit. Weekly check-ins, custom programming, and nutrition coaching. By application." },
+      { name: "description", content: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared McIntyre. Weekly check-ins, custom programming, and nutrition coaching. By application." },
       { property: "og:title", content: "Online Fitness Coaching Selkirk & Winnipeg MB | Private 1:1 Coaching | JF Effect" },
-      { property: "og:description", content: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared James Fit. By application." },
+      { property: "og:description", content: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared McIntyre. By application." },
       { name: "geo.region", content: "CA-MB" },
       { name: "geo.placename", content: "Selkirk, Manitoba" },
       { property: "og:type", content: "website" },
@@ -74,7 +53,7 @@ export const Route = createFileRoute("/coaching/")({
             { "@type": "Country", name: "Canada" },
           ],
           url: "https://jfeffect.com/coaching",
-          description: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared James Fit.",
+          description: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared McIntyre.",
         }),
       },
       {
@@ -92,248 +71,355 @@ export const Route = createFileRoute("/coaching/")({
   }),
 });
 
+const APPLY_TO = "/coaching/apply";
+
+// The questions people quietly ask themselves before they apply. Answered up front,
+// in plain words, so nobody has to guess or feel talked into anything.
+const OBJECTIONS: Array<{ q: string; a: string }> = [
+  {
+    q: "I've tried before and it didn't stick. Why would this be different?",
+    a: "Most plans fail for two reasons: they're generic, and nobody is watching. Here your plan is built around your schedule and your life, a real coach reviews your check-ins every week, and the plan gets adjusted when life happens. That mix of structure and accountability is usually what's missing.",
+  },
+  {
+    q: "I'm busy. Can I make this work?",
+    a: "That's who it's built for. Your plan is designed around your real schedule, and when a week goes sideways we adjust it instead of letting one rough week turn into a lost month.",
+  },
+  {
+    q: "I'm a beginner, or I'm out of shape. Is that okay?",
+    a: "Yes, as long as you'll commit to the plan. You don't need to be fit to start. The plan begins where you are right now.",
+  },
+  {
+    q: "Do I need a gym?",
+    a: "No. The plan is built around your setup, whether that's a full gym or training at home.",
+  },
+  {
+    q: "How is this different from an app or a PDF program?",
+    a: "An app or a PDF gives you a plan. Coaching gives you a person: someone who looks at your numbers and check-ins, changes the plan when it needs changing, and holds the standard when motivation dips.",
+  },
+  {
+    q: "What does it cost, and do I have to pay to apply?",
+    a: "Applying is free and takes about a minute. There's no payment and no card. Coaching itself is a paid, application-only service, and we go over the options and pricing with you on your call, before you commit to anything.",
+  },
+  {
+    q: "What if it isn't a good fit?",
+    a: "Then we'll tell you honestly. We only take on people we're confident we can help. The call is to see if it's a fit, not a pressure pitch.",
+  },
+];
+// Questions already covered by the list above (so editing the FAQ in admin never shows duplicates).
+const COVERED = new Set(["can i start if i am busy?", "is coaching customized?"]);
+
 function CoachingPage() {
   const fetchPage = useServerFn(getPublicSalesPage);
   const { data: p } = useQuery({
     queryKey: ["public-sales-page", "coaching"],
     queryFn: () => fetchPage({ data: { page_key: "coaching" } }),
+    staleTime: 5 * 60_000,
   });
-
-  const handleApply = () => {
-    window.location.href = "/coaching/apply";
-  };
 
   const s = (p?.sections ?? {}) as Record<string, any>;
 
   const whoFor: string[] = Array.isArray(s.who_for) && s.who_for.length > 0 ? s.who_for : [
-    "For driven people who want structure and will do the work.",
+    "You want structure and will do the work",
+    "You want accountability",
+    "You are tired of guessing",
   ];
   const notFor: string[] = Array.isArray(s.not_for) && s.not_for.length > 0 ? s.not_for : [
-    "Not for shortcuts, or anyone who won't follow a plan.",
+    "You want a shortcut or a quick fix",
+    "You won't follow a plan or check in",
+    "You just want a generic PDF program",
   ];
-  const howItWorks = Array.isArray(s.how_it_works) && s.how_it_works.length > 0 ? s.how_it_works : [
-    { step: 1, title: "Apply", body: "A few minutes." },
-    { step: 2, title: "Strategy call", body: "We map the plan together." },
-    { step: 3, title: "Onboarding", body: "Training and nutrition, dialed in." },
-    { step: 4, title: "Your plan", body: "Clear, every step." },
-    { step: 5, title: "Coaching", body: "Weekly check-ins and adjustments." },
-    { step: 6, title: "Results", body: "Built to last." },
-  ];
-  const faqItems = Array.isArray(s.faq) && s.faq.length > 0 ? s.faq : [
-    { q: "Beginner?", a: "Yes — if you'll commit to the plan." },
-    { q: "Need a gym?", a: "No. Built around your setup." },
-    { q: "Home training?", a: "Yes." },
-    { q: "Strength focus?", a: "Yes — it's where we come from." },
-    { q: "Track calories?", a: "Targets that fit you." },
-    { q: "Travel often?", a: "The plan adapts." },
-    { q: "Failed before?", a: "You've never had a real plan and real accountability together. That changes here." },
-  ];
-  const authority: Array<{ label: string }> = Array.isArray(s.authority) && s.authority.length > 0 ? s.authority : [
-    { label: "100+ clients coached" },
-    { label: "Coaching since 2019" },
-    { label: "A team built on competitive strength" },
-  ];
+  const steps: Array<{ step: number; title: string; body: string }> =
+    Array.isArray(s.how_it_works) && s.how_it_works.length > 0
+      ? s.how_it_works
+      : [
+          { step: 1, title: "Apply", body: "Tell us your goal. Takes about a minute." },
+          { step: 2, title: "We read it ourselves", body: "A real person reviews every application." },
+          { step: 3, title: "Strategy call", body: "We map the plan together and make sure it's a fit." },
+          { step: 4, title: "Get set up in the app", body: "Training, nutrition, check-ins and messaging in one place." },
+          { step: 5, title: "Start coaching", body: "Train, check in, adjust, repeat." },
+        ];
+  const cmsFaq: Array<{ q: string; a: string }> = Array.isArray(s.faq) ? s.faq : [];
+  const faqItems = [...OBJECTIONS, ...cmsFaq.filter((f) => f?.q && !COVERED.has(String(f.q).trim().toLowerCase()))];
+  const ctaLabel = p?.primary_cta_label || "Apply for Coaching";
 
   return (
     <SalesPageShell pageId="coaching" floatingHeader>
-      {p === undefined ? (
-        <HeroSkeleton />
-      ) : (
       <CoachingHero
-        eyebrow="Private Coaching · By Application"
-        headline={"Coaching for people who are done settling."}
-        sub={"A plan built around your life. A coaching team that knows your numbers. Real progress, held to a standard."}
-        primary={<HeroCta onClick={handleApply}>Apply for Coaching</HeroCta>}
+        eyebrow="Private coaching · By application"
+        headline="Coaching for people who are done settling."
+        sub="A plan built around your life. A coach who actually reads your check-ins. Real progress, held to a standard."
+        primary={<PrimaryCta to={APPLY_TO}>{ctaLabel}</PrimaryCta>}
+        secondary={<TextLink href="#how">See how it works</TextLink>}
+        note="Takes about a minute · No payment to apply · A real person reads every application"
       />
-      )}
 
-      {/* 2. Authority bar */}
-      <Reveal stagger={0}><AuthorityBar items={authority} /></Reveal>
+      {/* 1 — Credibility, fast: who is this person and why listen */}
+      <div className="mx-auto max-w-5xl px-5">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4">
+          {[
+            ["100+", "Clients coached", "Fat loss to powerlifting"],
+            ["8", "International medals", "Team Canada · 7 gold, 1 silver"],
+            ["2×", "International champion", "NAPF + Commonwealth · 2026"],
+            ["Top 50", "All-time world ranking", "66 kg powerlifting"],
+          ].map(([value, label, detail]) => (
+            <div key={label} className="bg-card">
+              <Stat value={value} label={label} detail={detail} />
+            </div>
+          ))}
+        </div>
+      </div>
 
-      {/* Early social proof — transformations above the fold */}
-      <Reveal stagger={1}>
-        <TransformationsStrip
-          eyebrow="REAL RESULTS"
-          headline="100+ clients coached. Real transformations."
-          sub="Members and 1:1 clients who showed up and did the work."
-          ctaLabel="Apply for Coaching"
-          onCta={handleApply}
-        />
+      {/* 2 — Name the problem: empathy before the pitch */}
+      <Reveal>
+        <Block narrow>
+          <Heading eyebrow="Sound familiar?" title="It's rarely a motivation problem." sub="Most people who come to me have tried hard, more than once. What was missing wasn't effort." />
+          <Group>
+            {[
+              { Icon: Repeat, title: "You start strong, then it fades", body: "No plan survives a busy month without someone adjusting it with you." },
+              { Icon: Eye, title: "You're guessing", body: "What to lift, what to eat, whether it's working. Guessing is exhausting." },
+              { Icon: Users, title: "Nobody is watching the details", body: "Apps hand you numbers. They don't notice when things drift." },
+              { Icon: Heart, title: "Life keeps getting in the way", body: "Work, family, travel, stress. A good plan bends without breaking." },
+            ].map(({ Icon, title, body }) => (
+              <div key={title} className="flex items-start gap-4 px-5 py-4">
+                <IconTile><Icon className="h-5 w-5" aria-hidden /></IconTile>
+                <div className="min-w-0">
+                  <div className="text-[17px] font-semibold leading-snug">{title}</div>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{body}</p>
+                </div>
+              </div>
+            ))}
+          </Group>
+          <p className="mt-5 text-center text-[17px] font-medium leading-relaxed">
+            That's a structure problem, and structure is exactly what coaching fixes.
+          </p>
+        </Block>
       </Reveal>
 
-      {/* 3. Why most people fail */}
-      <Reveal stagger={1}><WhyMostFail /></Reveal>
+      {/* 3 — The solution */}
+      <Reveal>
+        <Block tint narrow>
+          <Heading eyebrow="What you get" title="Built for you. Run with you." />
+          <Group>
+            {[
+              { Icon: Target, title: "A plan built for you", body: "Your body, your schedule, your equipment. Not pulled from a library." },
+              { Icon: ClipboardCheck, title: "Weekly check-ins", body: "Reviewed by your coach and adjusted around your real progress." },
+              { Icon: Utensils, title: "Nutrition that fits your life", body: "Clear targets made to last, not a crash diet." },
+              { Icon: MessageCircle, title: "A coach in your corner", body: "Direct messaging with your dedicated coach inside the app." },
+            ].map(({ Icon, title, body }) => (
+              <div key={title} className="flex items-start gap-4 px-5 py-4">
+                <IconTile><Icon className="h-5 w-5" aria-hidden /></IconTile>
+                <div className="min-w-0">
+                  <div className="text-[17px] font-semibold leading-snug">{title}</div>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{body}</p>
+                </div>
+              </div>
+            ))}
+          </Group>
+        </Block>
+      </Reveal>
 
-      {/* 4. Who this is for / not for */}
-      <Reveal stagger={2}><WhoForNotFor whoFor={whoFor} notFor={notFor} /></Reveal>
+      {/* 4 — Proof: photos, then real words */}
+      <Reveal>
+        <Block>
+          <Heading eyebrow="Real results" title="100+ clients coached." sub="Members and 1:1 clients who showed up and did the work. Swipe to see more." />
+          <Rail label="Client transformations">
+            {TRANSFORMATION_PHOTOS.slice(0, 12).map((photo, i) => (
+              <div key={i} className="w-[68vw] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-2xl bg-muted ring-1 ring-border/70">
+                <img
+                  src={photo.url}
+                  alt="Client transformation — before and after"
+                  loading="lazy"
+                  decoding="async"
+                  width={400}
+                  height={400}
+                  className="aspect-square w-full scale-[1.18] object-cover object-top"
+                />
+              </div>
+            ))}
+          </Rail>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {CLIENT_QUOTES.map((c) => (
+              <Surface key={c.name} className="flex flex-col p-5">
+                <Quote className="h-5 w-5 text-primary" aria-hidden />
+                <p className="mt-3 flex-1 text-[15px] leading-relaxed">“{c.quote}”</p>
+                <div className="mt-4 border-t border-border/70 pt-3">
+                  <div className="text-[15px] font-semibold">{c.name}</div>
+                  <div className="text-[13px] text-muted-foreground">{c.result} · {c.role}</div>
+                </div>
+              </Surface>
+            ))}
+          </div>
+          <p className="mt-4 text-center text-[12px] leading-relaxed text-muted-foreground">
+            Results vary with starting point, consistency and effort and are not guaranteed.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <PrimaryCta to={APPLY_TO}>{ctaLabel}</PrimaryCta>
+          </div>
+        </Block>
+      </Reveal>
 
-      {/* 5. What coaching includes */}
-      <Reveal stagger={3}><WhatCoachingIncludes /></Reveal>
+      {/* 5 — The person behind it */}
+      <Reveal>
+        <Block tint narrow>
+          <Surface className="overflow-hidden">
+            <img
+              src={jaredAsset.url}
+              alt={`${COACH_NAME} representing Canada in international powerlifting`}
+              loading="lazy"
+              decoding="async"
+              className="aspect-[4/3] w-full object-cover object-[center_20%]"
+            />
+            <div className="p-6">
+              <div className="text-[13px] font-semibold text-primary">Your coach</div>
+              <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">{COACH_NAME}</h2>
+              <p className="mt-1 text-[15px] text-muted-foreground">Team Canada powerlifter · 2× International Champion</p>
+              <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
+                I coach from both sides of the bar: responsible for other people's progress, and still competing under pressure myself. JF Effect is built on one belief: structure and standards outlast motivation.
+              </p>
+              <ul className="mt-4 space-y-2 text-[15px]">
+                {[
+                  "Personal trainer since 2017, full-time coaching since 2021",
+                  "Certified: GLPTI, DTS Level 1, ISSA CPT",
+                  "Drug-tested athlete. I hold myself to what I ask of clients",
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
+                    <span>{t}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
+                <TextLink to="/about">Read my full story</TextLink>
+              </div>
+              <div className="mt-4">
+                <div className="mb-2 text-[13px] text-muted-foreground">See the work and how I coach:</div>
+                <SocialLinks />
+              </div>
+            </div>
+          </Surface>
+        </Block>
+      </Reveal>
 
-      {/* 6. How it works */}
-      <Reveal stagger={4}><HowItWorks items={howItWorks} /></Reveal>
+      {/* 6 — Remove uncertainty: exactly what happens */}
+      <Reveal>
+        <Block id="how" narrow>
+          <Heading eyebrow="How it works" title="Here's exactly what happens." sub="No pressure and no payment to apply. A real person reads every application." />
+          <Group>
+            {steps.map((st, i) => (
+              <div key={st.step ?? i} className="flex items-start gap-4 px-5 py-4">
+                <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-[14px] font-semibold text-primary-foreground">
+                  {st.step ?? i + 1}
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[17px] font-semibold leading-snug">{st.title}</div>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{st.body}</p>
+                </div>
+              </div>
+            ))}
+          </Group>
+        </Block>
+      </Reveal>
 
-      {/* 7. Proof wall */}
-      <Reveal stagger={4}><ProofWall
-        testimonials={p?.testimonials ?? []}
-        images={(p?.visuals ?? []).filter((v) => v.slot === "proof")}
-      /></Reveal>
+      {/* 7 — Objections, answered honestly */}
+      <Reveal>
+        <Block tint narrow>
+          <Heading eyebrow="Still thinking it over?" title="Fair. Straight answers." sub="What people ask before they apply." />
+          <Group>
+            <Accordion type="single" collapsible>
+              {faqItems.map((it, i) => (
+                <AccordionItem key={i} value={`faq-${i}`} className="border-0 px-5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70">
+                  <AccordionTrigger className="py-4 text-left text-[17px] font-medium hover:no-underline">{it.q}</AccordionTrigger>
+                  <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">{it.a}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </Group>
+        </Block>
+      </Reveal>
 
-      <Reveal stagger={4}><CoachTimelineSection /></Reveal>
+      {/* 8 — Honest fit check */}
+      <Reveal>
+        <Block>
+          <Heading eyebrow="Is it for you?" title="Selective by design." sub="Coaching works when both sides take it seriously. Better to know now." />
+          <div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-2">
+            <Surface className="p-5">
+              <div className="text-[13px] font-semibold text-emerald-600 dark:text-emerald-400">This is for you if</div>
+              <ul className="mt-3 space-y-3">
+                {whoFor.map((line) => (
+                  <li key={line} className="flex items-start gap-3 text-[15px]">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </Surface>
+            <Surface className="p-5">
+              <div className="text-[13px] font-semibold text-muted-foreground">This is not for you if</div>
+              <ul className="mt-3 space-y-3">
+                {notFor.map((line) => (
+                  <li key={line} className="flex items-start gap-3 text-[15px] text-muted-foreground">
+                    <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground/60" aria-hidden />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </Surface>
+          </div>
+        </Block>
+      </Reveal>
 
-      {/* 9. The Jared story */}
-      <Reveal stagger={4}><JaredStory /></Reveal>
+      {/* 9 — Low-risk final ask, with a softer path for people who aren't ready */}
+      <Reveal>
+        <Block narrow>
+          <div id="cta" className="text-center">
+            <h2 className="text-balance text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] md:text-[40px]">
+              {s.final_cta?.headline ?? "If you already know you need coaching, stop waiting."}
+            </h2>
+            <p className="mx-auto mt-3 max-w-md text-[17px] leading-relaxed text-muted-foreground">
+              Your first step costs nothing and commits you to nothing.
+            </p>
+            <ul className="mx-auto mt-5 max-w-sm space-y-2.5 text-left text-[15px]">
+              {[
+                "Free to apply: no payment, no card",
+                "A real person reads it, not an auto-reply",
+                "A no-pressure call, and we only move forward if it's a fit",
+              ].map((t) => (
+                <li key={t} className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-7 flex flex-col items-stretch gap-4 sm:items-center">
+              <PrimaryCta to={APPLY_TO} className="sm:min-w-[280px]">{s.final_cta?.primary_label ?? ctaLabel}</PrimaryCta>
+              <p className="text-[13px] text-muted-foreground">By application · Limited spots</p>
+            </div>
 
-      {/* 10. FAQ */}
-      <Reveal stagger={4}><FaqAccordion items={faqItems} /></Reveal>
-
-      <div id="cta" />
-      {/* 11. Final CTA */}
-      <Reveal stagger={4}><FinalCta
-        headline={s.final_cta?.headline ?? "Raise the standard."}
-        primary={
-          <div className="flex flex-col items-center gap-2">
-            <Button size="lg" onClick={handleApply} className="h-12 px-6 text-base font-bold hover:scale-[1.02] active:scale-[0.98] transition-transform duration-150">
-              {s.final_cta?.primary_label ?? "Apply for Coaching"}
-            </Button>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-              By application · Limited spots
+            <Surface className="mt-10 p-5 text-left">
+              <div className="flex items-start gap-4">
+                <IconTile><MessageSquare className="h-5 w-5" aria-hidden /></IconTile>
+                <div className="min-w-0">
+                  <div className="text-[17px] font-semibold leading-snug">Not ready to apply? Ask me first.</div>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">
+                    Got a question before you decide? Send me a message on Instagram, or take a look at how I train and coach on YouTube.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-3">
+                    <TextLink href={INQUIRY_DM_URL}>Message me on Instagram</TextLink>
+                  </div>
+                  <div className="mt-3"><SocialLinks /></div>
+                </div>
+              </div>
+            </Surface>
+            <p className="mt-6 text-[15px] text-muted-foreground">
+              Prefer to go self-guided?{" "}
+              <Link to="/membership" className="font-medium text-primary hover:underline underline-offset-4">See JF Membership</Link>
             </p>
           </div>
-        }
-      /></Reveal>
+        </Block>
+      </Reveal>
 
       <div className="pb-24 md:pb-0" />
-      {/* 12. Sticky mobile CTA */}
-      <StickyMobileCta label={p?.primary_cta_label ?? "Apply for Coaching"} onClick={handleApply} />
+      <StickyMobileCta label={ctaLabel} href={APPLY_TO} />
     </SalesPageShell>
-  );
-}
-
-/* -------- Authority bar -------- */
-function AuthorityBar({ items }: { items: Array<{ label: string; value?: string }> }) {
-  return (
-    <section className="border-b border-white/10 bg-[#0a0a0a] text-white">
-      <div className="container mx-auto px-4 py-4 md:py-5">
-        <ul className="grid grid-cols-2 gap-x-6 gap-y-3 text-center sm:grid-cols-3 md:grid-cols-5">
-          {items.map((it, i) => (
-            <li key={i} className="min-w-0">
-              {it.value && (
-                <div className="truncate text-base font-black text-white md:text-lg">{it.value}</div>
-              )}
-              <div className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-white/60 md:text-[11px]">
-                {it.label}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-/* -------- Why most people fail -------- */
-function WhyMostFail() {
-  const cards = [
-    { Icon: TrendingUp, title: "Strength that compounds", body: "One plan, run long enough to actually add up." },
-    { Icon: Sparkles, title: "A body you've worked for", body: "Built deliberately — not chased in week-long sprints." },
-    { Icon: RepeatIcon, title: "Habits that hold", body: "Routines that survive the busy weeks, not just the easy ones." },
-    { Icon: ShieldCheck, title: "Accountability that's real", body: "Someone watching the numbers and holding the standard." },
-  ];
-  return (
-    <Section>
-      <SectionTitle eyebrow="The standard" title="Built for a higher standard." />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map(({ Icon, title, body }) => (
-          <Card key={title} className="p-5">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/15 text-primary">
-              <Icon className="h-5 w-5" />
-            </div>
-            <div className="mt-3 text-base font-bold">{title}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-          </Card>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-/* -------- Who this is for / not for -------- */
-function WhoForNotFor({ whoFor, notFor }: { whoFor: string[]; notFor: string[] }) {
-  return (
-    <Section>
-      <SectionTitle eyebrow="Who it's for" title="Selective by design." />
-      <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
-        <Card className="p-6">
-          <div className="text-[11px] font-bold uppercase tracking-widest text-emerald-400">This is for you if</div>
-          <ul className="mt-4 space-y-3">
-            {whoFor.map((line) => (
-              <li key={line} className="flex items-start gap-3 text-sm">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-        <Card className="p-6">
-          <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">This is NOT for you if</div>
-          <ul className="mt-4 space-y-3">
-            {notFor.map((line) => (
-              <li key={line} className="flex items-start gap-3 text-sm text-muted-foreground">
-                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/70" />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-    </Section>
-  );
-}
-
-/* -------- What coaching includes -------- */
-function WhatCoachingIncludes() {
-  const items = [
-    { Icon: Target, title: "A plan built for you", body: "Your body, your schedule, your training." },
-    { Icon: ClipboardCheck, title: "Weekly check-ins", body: "Reviewed and adjusted around your progress." },
-    { Icon: Utensils, title: "Nutrition that fits your life", body: "Clear targets, made to last." },
-    { Icon: MessageCircle, title: "A coach in your corner", body: "Your dedicated coach, direct access, always." },
-  ];
-  return (
-    <Section>
-      <SectionTitle eyebrow="What you get" title="Built for you. Run with you." />
-      <div className="mx-auto grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {items.map(({ Icon, title, body }) => (
-          <Card key={title} className="p-5">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/15 text-primary">
-              <Icon className="h-5 w-5" />
-            </div>
-            <div className="mt-3 text-sm font-bold">{title}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-          </Card>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-/* -------- Jared story -------- */
-function JaredStory() {
-  return (
-    <Section>
-      <div className="mx-auto max-w-3xl">
-        <div className="text-center">
-          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">The story</div>
-          <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
-            How JF Effect started.
-          </h2>
-        </div>
-        <div className="mt-8 space-y-5 text-sm leading-relaxed text-muted-foreground md:text-base">
-          <p>
-            JF Effect was built from the ground up, under real pressure — founded by Jared James out of a simple belief: structure and standards outlast motivation. The same discipline that took his own strength training to the competitive level now runs through how the whole team coaches. After nearly a decade and 100+ clients, that belief hasn't changed. We build the plan, and we hold the line.
-          </p>
-        </div>
-      </div>
-    </Section>
   );
 }

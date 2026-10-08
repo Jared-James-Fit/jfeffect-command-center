@@ -22,10 +22,11 @@ import { formatWeightLifted, type WeightUnit } from "@/lib/weight-lifted";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
+import { CoachTag } from "@/components/portal/coach-tag";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
-type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean };
-type LeagueRow = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean };
+type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean; is_coach?: boolean };
+type LeagueRow = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean; is_coach?:boolean };
 const leagueScore=(r?:LeagueRow|null)=>leaguePointsFromEncoded(r?.monthly_xp);
 
 function useXpEvents(clientId: string) {
@@ -114,6 +115,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
                   <div className="text-lg leading-none">{medal}</div>
                   <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{ordinal}</div>
                   <div className="mt-1 truncate text-xs font-semibold">{r.display_name}</div>
+                  {r.is_coach && <div className="mt-0.5 flex justify-center"><CoachTag /></div>}
                   <div className="mt-0.5 text-[11px] font-bold text-primary">{formatLeaguePoints(leagueScore(r))} pts</div>
                 </button>
               );
@@ -380,7 +382,7 @@ function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague,
           <div className="flex items-center gap-3 rounded-2xl border bg-card p-4">
             <RankAvatar row={{ client_id: p.client_id, display_name: p.display_name, avatar_url: p.avatar_url, xp: theirXp, rank: 0, is_me: isMe }} size="h-14 w-14" />
             <div className="min-w-0">
-              <div className="truncate text-lg font-black">{p.display_name}</div>
+              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-lg font-black">{p.display_name}</span>{p.is_coach && <CoachTag />}</div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Logging level</div><div className="text-sm font-black uppercase tracking-wide text-primary">{levelForXp(theirXp).current.name}</div>
               <div className="mt-0.5 text-[11px] text-muted-foreground">{Number(theirXp ?? 0).toLocaleString()} lifetime points · {publicBadges.length} milestones</div>
             </div>
@@ -549,6 +551,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
                 <div className="mb-1 flex flex-col items-center gap-0.5"><Medal className={cn("h-5 w-5", r.rank === 1 ? "text-yellow-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700")} /><span className="text-[11px] font-black">{r.rank === 1 ? "1ST" : r.rank === 2 ? "2ND" : "3RD"}</span></div>
                 <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
                 <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
+                {r.is_coach && <CoachTag className="mt-0.5" />}
                 <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
                 <div className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</div>
                 <RecordBadges row={r} size="xs" center className="mt-1" />
@@ -561,7 +564,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
               <li key={r.client_id} onClick={() => onSelectedChange(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
                 <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
                 <RankAvatar row={r} size="h-9 w-9" />
-                <div className="min-w-0 flex-1"><div className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div><RecordBadges row={r} size="xs" className="mt-1" />{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
+                <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</span>{r.is_coach && <CoachTag />}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div><RecordBadges row={r} size="xs" className="mt-1" />{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
                 <span className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</span>
               </li>
             ))}

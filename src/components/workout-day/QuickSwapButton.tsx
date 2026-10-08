@@ -29,6 +29,15 @@ import { applySwap, getSwapImpact } from "@/lib/quick-swap.functions";
 import { searchEligibleExercises } from "@/lib/exercise-search";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
 import {
+  classifyExercise,
+  COMPATIBLE_PATTERNS,
+  isDifferentTarget,
+  NON_VOLUME_PATTERNS,
+  swapScore,
+  type MovementPattern,
+  type SwapCandidateMeta,
+} from "@/lib/exercise-classifier";
+import {
   applyMemberSwap,
   getMemberSwapImpact,
 } from "@/lib/member-swap.functions";
@@ -47,7 +56,41 @@ type ExerciseLite = {
   common_mistakes?: string | null;
   default_measurement_type?: string | null;
   primary_movement_pattern?: string | null;
+  muscle_groups?: string[] | null;
+  secondary_muscle_groups?: string[] | null;
+  counts_toward_volume?: boolean | null;
 };
+
+const MUSCLE_LABEL: Record<string, string> = {
+  chest: "Chest", lats: "Lats", upper_back: "Upper Back", traps: "Traps", front_delts: "Front Delts",
+  side_delts: "Side Delts", rear_delts: "Rear Delts", biceps: "Biceps", triceps: "Triceps", forearms: "Forearms",
+  quads: "Quads", hamstrings: "Hamstrings", glutes: "Glutes", adductors: "Adductors", calves: "Calves",
+  core: "Core", lower_back: "Lower Back",
+};
+
+/**
+ * Swap metadata: the library's tagged primary/secondary muscles and movement
+ * pattern, falling back to the name classifier for anything untagged. This is
+ * what decides "same target" — never the legacy free-text muscle_group.
+ */
+function metaOf(e: ExerciseLite): SwapCandidateMeta {
+  const cls = classifyExercise(e.name ?? "", e.category);
+  const primary = e.muscle_groups?.length ? e.muscle_groups : cls.primary;
+  return {
+    // The classifier's fine pattern (hip_abduction vs hip_adduction, chest_fly vs
+    // press) beats the DB's coarse one; "other" is no pattern at all.
+    pattern: cls.matched ? cls.pattern : (e.primary_movement_pattern && e.primary_movement_pattern !== "other" ? e.primary_movement_pattern : null),
+    primary,
+    secondary: e.secondary_muscle_groups?.length ? e.secondary_muscle_groups : cls.secondary,
+    equipment: e.equipment,
+  };
+}
+
+function muscleLabel(e: ExerciseLite): string | null {
+  const keys = (e.muscle_groups?.length ? e.muscle_groups : metaOf(e).primary).filter((k) => k !== "other");
+  const labels = keys.map((k) => MUSCLE_LABEL[k] ?? k).slice(0, 2);
+  return labels.length ? labels.join(", ") : e.muscle_group;
+}
 
 type RankedSuggestion = { ex: ExerciseLite; reason: string };
 
@@ -120,11 +163,11 @@ const MOVEMENT_GROUPS: { label: string; keywords: string[]; synonyms: string[] }
     keywords: ["calf raise","standing calf","seated calf","donkey calf"],
     synonyms: ["calf"] },
   { label: "Adductor / Copenhagen",
-    keywords: ["copenhagen","adductor","hip adduction"],
-    synonyms: ["copenhagen","adductor","hip adduction","side plank"] },
+    keywords: ["copenhagen","adductor","adduction","groin"],
+    synonyms: ["copenhagen","adductor","adduction","groin","side plank"] },
   { label: "Abductor",
-    keywords: ["abductor","hip abduction","banded walk","monster walk"],
-    synonyms: ["abductor","hip abduction","banded walk","monster walk","clam"] },
+    keywords: ["abductor","abduction","banded walk","monster walk","clamshell","fire hydrant"],
+    synonyms: ["abductor","abduction","banded walk","monster walk","clam","fire hydrant"] },
   { label: "Side plank / oblique",
     keywords: ["side plank","oblique","copenhagen","windshield wiper","russian twist"],
     synonyms: ["side plank","oblique","copenhagen","windshield wiper","russian twist"] },
@@ -158,17 +201,12 @@ function equipmentFamily(equipment: string | null | undefined): string {
   return "other";
 }
 
-function rankSuggestions(src: ExerciseLite, pool: ExerciseLite[]): RankedSuggestion[] {
+// eslint-disable-next-line react-refresh/only-export-components -- exported for tests
+export function rankSuggestions(src: ExerciseLite, pool: ExerciseLite[]): RankedSuggestion[] {
   const cand = pool.filter((e) => e.id !== src.id);
   const byName = (a: ExerciseLite, b: ExerciseLite) =>
     (a.name ?? "").toLowerCase().localeCompare((b.name ?? "").toLowerCase());
-  const srcTokens = new Set(tokenize(src.muscle_group));
-  const kw = distinctiveKeyword(src.name);
-  const sameCat = (e: ExerciseLite) => !!src.category && e.category === src.category;
-  const sharedMuscles = (e: ExerciseLite) => {
-    if (srcTokens.size === 0) return false;
-    return tokenize(e.muscle_group).some((t) => srcTokens.has(t));
-  };
+  const srcMeta = metaOf(src);
   const srcGroups = matchMovementGroups(src);
   const srcGroupKey = new Set(srcGroups.map((g) => g.label));
   const inSameGroup = (e: ExerciseLite) => {
@@ -182,40 +220,50 @@ function rankSuggestions(src: ExerciseLite, pool: ExerciseLite[]): RankedSuggest
     !!src.default_measurement_type &&
     e.default_measurement_type === src.default_measurement_type;
 
-  const buckets: Array<[ExerciseLite[], string]> = [
-    // Movement-group matches come first — these are the curated synonyms
-    // (Leg Press ↔ Hack/Pendulum/Belt Squat, Copenhagen ↔ side plank, etc.)
-    [cand.filter((e) => inSameGroup(e) && sameFamily(e) && sameTracking(e)).sort(byName), "Same pattern · same equipment"],
-    [cand.filter((e) => inSameGroup(e) && sameFamily(e)).sort(byName), "Same pattern · similar equipment"],
-    [cand.filter((e) => inSameGroup(e) && sameTracking(e)).sort(byName), "Same pattern"],
-    [cand.filter(inSameGroup).sort(byName), "Same pattern"],
-    [cand.filter((e) => sameCat(e) && e.equipment === src.equipment).sort(byName), "Closest match"],
-    [cand.filter((e) => sameCat(e) && sameFamily(e)).sort(byName), "Same category · similar equipment"],
-    [cand.filter(sameCat).sort(byName), "Same movement"],
-    [cand.filter((e) => sharedMuscles(e) && sameTracking(e)).sort(byName), "Same muscles"],
-    [cand.filter(sharedMuscles).sort(byName), "Same muscles"],
-    [
-      kw
-        ? cand
-            .filter((e) => (e.name ?? "").toLowerCase().includes(kw))
-            .sort(byName)
-        : [],
-      "Similar",
-    ],
-  ];
+  // Stretches / cardio are never a substitute for a training exercise.
+  const isTraining = (e: ExerciseLite, m: SwapCandidateMeta) =>
+    e.counts_toward_volume !== false && !NON_VOLUME_PATTERNS.includes(m.pattern as MovementPattern);
+  const srcTraining = isTraining(src, srcMeta);
+  const srcKeyword = distinctiveKeyword(src.name);
+  const srcPrimary = srcMeta.primary.filter((m) => m !== "other");
+  const compatiblePattern = (p: string | null) =>
+    !!srcMeta.pattern &&
+    !!p &&
+    (p === srcMeta.pattern || !!COMPATIBLE_PATTERNS[srcMeta.pattern as MovementPattern]?.includes(p as MovementPattern));
 
-  const out: RankedSuggestion[] = [];
-  const seen = new Set<string>();
-  for (const [bucket, reason] of buckets) {
-    for (const e of bucket) {
-      if (out.length >= 16) break;
-      if (seen.has(e.id)) continue;
-      seen.add(e.id);
-      out.push({ ex: e, reason });
-    }
-    if (out.length >= 16) break;
-  }
-  return out;
+  // Score every candidate on what actually makes a substitute: same movement
+  // pattern + same primary muscles (swapScore), then curated synonyms, the
+  // same equipment family and the same tracking type as tie-breakers.
+  const scored = cand.flatMap((e) => {
+    const m = metaOf(e);
+    if (srcTraining && !isTraining(e, m)) return [];
+    const base = swapScore(srcMeta, m);
+    const samePattern = !!srcMeta.pattern && m.pattern === srcMeta.pattern;
+    // Shares the source's key movement word ("plank", "pushdown"): breaks ties
+    // so Side Plank variants beat oblique crunches for a Side Plank.
+    const sameWord = !!srcKeyword && (e.name ?? "").toLowerCase().includes(srcKeyword);
+    const score = base + (inSameGroup(e) ? 15 : 0) + (sameFamily(e) ? 8 : 0) + (sameTracking(e) ? 4 : 0) + (sameWord ? 5 : 0);
+    const reason = samePattern && sameFamily(e)
+      ? "Same pattern · same equipment"
+      : samePattern
+        ? "Same pattern"
+        : inSameGroup(e)
+          ? "Same movement"
+          : base >= 40
+            ? "Same muscles"
+            : "Similar";
+    // Its main muscle is one of the source's main muscles (Cossack squat for a
+    // Copenhagen) — unlike a back squat, which only lists adductors third.
+    const dominant = srcPrimary.includes(m.primary[0]);
+    return [{ e, score, base, different: isDifferentTarget(srcMeta, m), reason, related: dominant || compatiblePattern(m.pattern) }];
+  });
+  scored.sort((a, b) => b.score - a.score || byName(a.e, b.e));
+  // Real substitutes first, then close relatives. An untagged source has no
+  // muscles to compare, so it falls back to curated / equipment matches.
+  const known = srcPrimary.length > 0 || !!srcMeta.pattern;
+  const good = scored.filter((x) => !x.different && x.base >= 25);
+  const rest = scored.filter((x) => !good.includes(x) && (known ? x.related : x.score >= 20));
+  return [...good, ...rest].slice(0, 16).map((x) => ({ ex: x.e, reason: x.reason }));
 }
 
 /** Map equipment chip → predicate over an exercise's free-text equipment field. */
@@ -249,7 +297,7 @@ function matchesChip(chip: EquipmentChip, equipment: string | null): boolean {
   }
 }
 
-const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes,default_measurement_type,primary_movement_pattern";
+const SELECT_COLS = "id,name,muscle_group,category,equipment,difficulty,vimeo_embed_url,youtube_url,thumbnail_url,cues,common_mistakes,default_measurement_type,primary_movement_pattern,muscle_groups,secondary_muscle_groups,counts_toward_volume";
 const PAGE_SIZE = 20;
 const LIBRARY_FETCH_PAGE_SIZE = 1000;
 
@@ -309,7 +357,7 @@ function ExerciseRowCard({
   highlightTokens?: readonly string[];
 }) {
   const [playing, setPlaying] = useState(false);
-  const meta = [ex.muscle_group, ex.equipment].filter(Boolean).join(" · ");
+  const meta = [muscleLabel(ex), ex.equipment].filter(Boolean).join(" · ");
   const vimeoSrc = vimeoAutoplay(ex.vimeo_embed_url);
   const ytSrc = !vimeoSrc ? youtubeEmbed(ex.youtube_url) : null;
   const hasVideo = !!(vimeoSrc || ytSrc);
@@ -472,6 +520,7 @@ export function QuickSwapButton({
   }, [open, mode]);
 
 
+  const srcMetaRef = useRef<SwapCandidateMeta | null>(null);
   const {
     data: suggestions = [],
     isLoading,
@@ -549,6 +598,21 @@ export function QuickSwapButton({
         ingest(data as ExerciseLite[]);
       }
 
+      // Tier 1b: same primary muscles (tagged library), so a good substitute is
+      // found even when names and categories share nothing.
+      const srcPrimary = metaOf(src).primary.filter((m) => m !== "other");
+      if (srcPrimary.length) {
+        const { data } = await supabase
+          .from("exercises")
+          .select(SELECT_COLS)
+          .eq("archived", false)
+          .overlaps("muscle_groups", srcPrimary)
+          .neq("id", exerciseId)
+          .limit(200);
+        ingest((data ?? []) as ExerciseLite[]);
+      }
+      srcMetaRef.current = metaOf(src);
+
       // Tier 2: keyword fallback on the distinctive movement noun
       const kw = distinctiveKeyword(src.name);
       if (kw && pool.size < 24) {
@@ -618,9 +682,12 @@ export function QuickSwapButton({
   const startSelect = (ex: ExerciseLite) => {
     setPending(ex);
     setScope("today");
-    const diff =
-      (muscleGroup && ex.muscle_group && ex.muscle_group !== muscleGroup) ||
-      (category && ex.category && ex.category !== category);
+    // Warn only when the pick trains a genuinely different target (no shared
+    // primary muscle, or opposite hip action like abduction vs adduction).
+    const srcMeta = srcMetaRef.current;
+    const diff = srcMeta
+      ? isDifferentTarget(srcMeta, metaOf(ex))
+      : !!(category && ex.category && ex.category !== category);
     setMode(diff ? "warning" : "scope");
   };
 

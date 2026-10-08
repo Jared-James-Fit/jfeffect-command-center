@@ -98,6 +98,17 @@ export function useClientImpersonation() {
 }
 
 /**
+ * True while a coach/admin is viewing as a client. Anything that records what
+ * the client has seen or done (read receipts, unread dots, "viewed" stamps,
+ * presence, typing) must stay off while this is true.
+ */
+export function useViewingAsClient(): boolean {
+  const { user } = useAuth();
+  const { client } = useClientImpersonation();
+  return !!client && !!user && user.id !== client.user_id;
+}
+
+/**
  * Returns the user id whose data the portal should display.
  * When admin is impersonating a client, returns that client's user_id.
  * Otherwise returns the authenticated user's id.

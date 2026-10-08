@@ -18,6 +18,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const serverEnv = loadEnv(process.env.NODE_ENV ?? "development", process.cwd(), "");
 Object.assign(process.env, serverEnv);
 
+// One id per build, compiled into both the client and the server bundle. A
+// running app compares its own id with the server's to notice a new publish
+// (see src/lib/app-freshness.ts).
+const APP_BUILD_ID = process.env.APP_BUILD_ID || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
 export default defineConfig({
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
@@ -25,6 +30,9 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    define: {
+      __APP_BUILD_ID__: JSON.stringify(APP_BUILD_ID),
+    },
     build: {
       sourcemap: false,
       // Raise the warning threshold — large admin pages are expected.

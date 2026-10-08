@@ -202,6 +202,48 @@ jobs:
           PYEOF
           echo "✅ AppIcon set: $(ls $ICONSET | wc -l) files"
 
+      # ── Apple Health (HealthKit) ────────────────────────────────────────────
+      # OFF unless the repo variable ENABLE_HEALTHKIT is "true". Turn it on only after
+      # the App ID has the HealthKit capability AND the "JF Effect App Store Distribution"
+      # profile was regenerated and re-uploaded to PROVISIONING_PROFILE_BASE64; otherwise
+      # signing fails. With it off, this build is identical to before.
+      - name: Enable HealthKit (Apple Health sync)
+        if: ${{ vars.ENABLE_HEALTHKIT == 'true' }}
+        run: |
+          python3 << 'PYEOF'
+          import re, plistlib
+          # 1. Link the health plugin. This workflow's Podfile lists pods explicitly,
+          #    so plugins are only linked when added here.
+          podfile = "ios/App/Podfile"
+          s = open(podfile).read()
+          line = "pod 'CapgoCapacitorHealth', :path => '../../node_modules/@capgo/capacitor-health'"
+          if line not in s:
+              s, n = re.subn(r"^(\s*)(pod 'CapacitorCordova'.*)$", lambda m: f"{m.group(1)}{m.group(2)}\n{m.group(1)}{line}", s, count=1, flags=re.M)
+              assert n == 1, "CapacitorCordova pod line not found"
+          open(podfile, "w").write(s)
+
+          # 2. Purpose strings Apple requires for HealthKit.
+          info = "ios/App/App/Info.plist"
+          with open(info, "rb") as f:
+              pl = plistlib.load(f)
+          pl["NSHealthShareUsageDescription"] = "JF Effect reads your sleep, heart rate, HRV, steps and active energy so your coach can program around your recovery."
+          pl["NSHealthUpdateUsageDescription"] = "JF Effect does not write to Apple Health. This permission is listed because the health library supports it."
+          with open(info, "wb") as f:
+              plistlib.dump(pl, f)
+
+          # 3. HealthKit entitlement on the App target only.
+          ent = {"com.apple.developer.healthkit": True, "com.apple.developer.healthkit.access": []}
+          with open("ios/App/App/App.entitlements", "wb") as f:
+              plistlib.dump(ent, f)
+          pbx = "ios/App/App.xcodeproj/project.pbxproj"
+          c = open(pbx).read()
+          c, n = re.subn(r"(INFOPLIST_FILE = App/Info\.plist;)", r"CODE_SIGN_ENTITLEMENTS = App/App.entitlements;\n\t\t\t\t\1", c)
+          assert n >= 1, "App target build settings not found"
+          open(pbx, "w").write(c)
+          print(f"✅ HealthKit enabled (pod linked, purpose strings, entitlement on {n} configs)")
+          PYEOF
+          grep -n "CapgoCapacitorHealth" ios/App/Podfile
+
       - name: Run pod install
         run: cd ios/App && pod install
 
@@ -258,6 +300,21 @@ jobs:
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           
           echo "✅ Certificate and profile installed"
+
+      - name: Check provisioning profile allows HealthKit
+        if: ${{ vars.ENABLE_HEALTHKIT == 'true' }}
+        run: |
+          python3 << 'PYEOF'
+          import subprocess, plistlib, sys
+          raw = subprocess.run(["security", "cms", "-D", "-i", "/tmp/JFEffect_AppStore.mobileprovision"], capture_output=True).stdout
+          ent = plistlib.loads(raw).get("Entitlements", {})
+          if not ent.get("com.apple.developer.healthkit"):
+              print("::error::ENABLE_HEALTHKIT is on, but the provisioning profile has no HealthKit entitlement. "
+                    "Enable HealthKit on the com.jfeffect.app App ID, regenerate 'JF Effect App Store Distribution', "
+                    "and update the PROVISIONING_PROFILE_BASE64 secret (or set ENABLE_HEALTHKIT to false).")
+              sys.exit(1)
+          print("✅ Provisioning profile includes HealthKit")
+          PYEOF
 
       - name: Set up App Store Connect API key
         run: |

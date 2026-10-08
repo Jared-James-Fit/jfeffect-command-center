@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, lazy, Suspense } from "react";
+import { useState, Suspense } from "react";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,7 +13,7 @@ import {
   Tabs, TabsList, TabsTrigger, TabsContent,
 } from "@/components/ui/tabs";
 import { Plus, Search, Share2, Copy, Pencil, BookOpen, Inbox } from "lucide-react";
-const ShareProgramSheet = lazy(() =>
+const ShareProgramSheet = lazyWithRetry(() =>
   import("@/components/programs/share-program-sheet").then((m) => ({ default: m.ShareProgramSheet })),
 );
 import { DestinationBadges } from "@/components/programs/destination-badges";

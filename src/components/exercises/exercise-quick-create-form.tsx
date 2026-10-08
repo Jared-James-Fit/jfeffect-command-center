@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { searchLibrary, type ExerciseAlias, type LibraryExercise } from "@/lib/exercise-library";
 import { MuscleTagPicker } from "@/components/exercises/muscle-tag-picker";
+import { classifyExercise, NON_VOLUME_PATTERNS } from "@/lib/exercise-classifier";
 import { useIsCoarsePointer } from "@/hooks/use-touch-viewport";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { findCanonicalExerciseMatch } from "@/lib/exercise-search";
+import { MOVEMENT_FAMILIES, MOVEMENT_FAMILY_COLOR_NAME, MOVEMENT_FAMILY_LABEL } from "@/lib/exercise-family";
 import {
   invalidateExerciseLibrary,
   upsertExerciseInLibraryCaches,
@@ -77,8 +79,10 @@ export function ExerciseQuickCreateForm({
   const [commonMistakes, setCommonMistakes] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [family, setFamily] = useState("");
+  const [movementFamily, setMovementFamily] = useState<string>(AUTO);
   const [aliasText, setAliasText] = useState("");
   const [muscles, setMuscles] = useState<{ primary: string[]; secondary: string[] }>({ primary: [], secondary: [] });
+  const [musclesTouched, setMusclesTouched] = useState(false);
 
   // Live duplicate guard: canonical names AND aliases, as the coach types.
   const { data: lookup = [] } = useQuery({
@@ -115,6 +119,15 @@ export function ExerciseQuickCreateForm({
 
   useEffect(() => { setName(defaultName ?? ""); }, [defaultName]);
 
+  // Suggest muscles from the name (same rules the database applies to a blank
+  // tag) until the coach edits the picker; stretches/cardio suggest nothing.
+  useEffect(() => {
+    if (!librarySetup || musclesTouched) return;
+    const c = classifyExercise(name, category === AUTO ? null : category);
+    const usable = c.matched && !NON_VOLUME_PATTERNS.includes(c.pattern);
+    setMuscles(usable ? { primary: c.primary, secondary: c.secondary } : { primary: [], secondary: [] });
+  }, [name, category, librarySetup, musclesTouched]);
+
   const focusNameFromTouchGesture = () => {
     if (!coarsePointer || busy) return;
     window.requestAnimationFrame(() => {
@@ -144,6 +157,8 @@ export function ExerciseQuickCreateForm({
     if (cues.trim()) payload.cues = cues.trim();
     if (commonMistakes.trim()) payload.common_mistakes = commonMistakes.trim();
     if (family.trim()) payload.exercise_family = family.trim();
+    // Left on Auto → the database classifies squat / bench / deadlift / accessory from the name.
+    if (movementFamily !== AUTO) payload.movement_family = movementFamily;
     if (muscles.primary.length) {
       payload.muscle_groups = muscles.primary;
       payload.secondary_muscle_groups = muscles.secondary;
@@ -161,7 +176,7 @@ export function ExerciseQuickCreateForm({
         toast.error(lookupError.message);
         return;
       }
-      const existing = findCanonicalExerciseMatch((existingRows ?? []) as any[], trimmed);
+      const existing = findCanonicalExerciseMatch((existingRows ?? []) as any[], trimmed, aliases);
       if (existing) {
         upsertExerciseInLibraryCaches(qc, existing as never);
         toast.success(`Using existing "${existing.name}" from library`);
@@ -174,6 +189,20 @@ export function ExerciseQuickCreateForm({
         .insert(payload as never)
         .select("*")
         .single();
+      if (error && (error as { code?: string }).code === "23505") {
+        // The database's duplicate guard recognised an alias / equivalent name the
+        // lookup above couldn't (e.g. another coach just added it). Reuse it.
+        const canonicalId = /canonical id ([0-9a-f-]{36})/i.exec(error.message)?.[1];
+        if (canonicalId) {
+          const { data: found } = await supabase.from("exercises").select("*").eq("id", canonicalId).maybeSingle();
+          if (found) {
+            upsertExerciseInLibraryCaches(qc, found as never);
+            toast.success(`Using existing "${(found as any).name}" from library`);
+            onCreated?.((found as any).id, (found as any).name);
+            return;
+          }
+        }
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not save exercise");
         return;
@@ -252,8 +281,30 @@ export function ExerciseQuickCreateForm({
             <datalist id="exercise-family-options">{families.map((f) => <option key={f} value={f} />)}</datalist>
           </div>
           <div>
+            <Label>Movement (card colour)</Label>
+            <Select value={movementFamily} onValueChange={setMovementFamily}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={AUTO}>Auto-detect from name</SelectItem>
+                {MOVEMENT_FAMILIES.map((f) => (
+                  <SelectItem key={f} value={f}>{MOVEMENT_FAMILY_LABEL[f]} · {MOVEMENT_FAMILY_COLOR_NAME[f]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="mt-1 text-[11px] text-muted-foreground">Only an actual squat, bench or deadlift variation. Leg Curl, Row, Pulldown… are Accessory.</div>
+          </div>
+          <div>
             <Label>Primary &amp; secondary muscles *</Label>
-            <div className="mt-1.5"><MuscleTagPicker primary={muscles.primary} secondary={muscles.secondary} onChange={setMuscles} /></div>
+            <div className="mt-1.5">
+              <MuscleTagPicker
+                primary={muscles.primary}
+                secondary={muscles.secondary}
+                onChange={(next) => { setMusclesTouched(true); setMuscles(next); }}
+              />
+            </div>
+            {!musclesTouched && muscles.primary.length > 0 && (
+              <div className="mt-1 text-[11px] text-muted-foreground">Suggested from the name. Tap a muscle to change it.</div>
+            )}
           </div>
           <div>
             <Label>Aliases <span className="font-normal text-muted-foreground">(other names for this exact exercise)</span></Label>

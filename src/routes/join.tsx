@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { isNative } from "@/platform";
-import { SignupJf } from "./membership";
+import { SignupJf } from "@/route-pages/membership";
 
 // /join is a web-only public funnel entry.
 // Hide it on native (App Store / Play Store builds) — in-app web checkout

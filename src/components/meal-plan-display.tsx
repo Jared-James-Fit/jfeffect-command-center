@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, Dumbbell, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WorkoutMealInfo } from "@/components/nutrition/WorkoutMealInfo";
 import {
   MEAL_TIMING_HINT,
   MEAL_TIMING_LABEL,
@@ -203,7 +204,10 @@ export function MealPlanDisplay({ text, className, collapsibleMeals = false }: P
                 )}
               </div>
               {s.timing && (
-                <div className="mt-0.5 text-[11px] text-muted-foreground">{MEAL_TIMING_HINT[s.timing]}</div>
+                <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <span>{MEAL_TIMING_HINT[s.timing]}</span>
+                  <WorkoutMealInfo />
+                </div>
               )}
               {s.items.length > 0 && (
                 <ul className="mt-1.5 space-y-0.5">

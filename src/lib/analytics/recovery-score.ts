@@ -1,3 +1,5 @@
+import { trustedSessionRpe } from "@/lib/workout-review";
+
 /**
  * Estimated Recovery Score (0–100).
  *
@@ -39,7 +41,9 @@ export interface RecoveryInputs {
   sleepBucket?: SleepBucket | null;
 }
 
-export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9";
+// The check-out asks lt5 / 5_6 / 6_7 / 7_8 / gte8 ("8h+"). 8_9 and gte9 are
+// older reviews; gte7 ("7h+") was asked briefly and is kept so any such rows read.
+export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9" | "gte7" | "gte8";
 
 /** Midpoint hours for a sleep bucket. */
 export function sleepBucketHours(b: SleepBucket | null | undefined): number | null {
@@ -51,12 +55,14 @@ export function sleepBucketHours(b: SleepBucket | null | undefined): number | nu
     case "7_8": return 7.5;
     case "8_9": return 8.5;
     case "gte9": return 9.5;
+    case "gte7": return 8;
+    case "gte8": return 8.5;
   }
 }
 
 export function sleepBucketLabel(b: SleepBucket | null | undefined): string {
   if (!b) return "—";
-  return { lt5: "<5h", "5_6": "5–6h", "6_7": "6–7h", "7_8": "7–8h", "8_9": "8–9h", gte9: "9h+" }[b];
+  return { lt5: "<5h", "5_6": "5–6h", "6_7": "6–7h", "7_8": "7–8h", "8_9": "8–9h", gte9: "9h+", gte7: "7h+", gte8: "8h+" }[b];
 }
 
 /** Contribution of sleep to readiness score, bounded so one night can't dominate. */
@@ -69,6 +75,8 @@ function sleepDelta(b: SleepBucket | null | undefined): { delta: number; label: 
     "7_8": { delta: 4, label: "7–8h" },
     "8_9": { delta: 5, label: "8–9h" },
     gte9: { delta: 3, label: "9h+" },
+    gte7: { delta: 4, label: "7h+" },
+    gte8: { delta: 5, label: "8h+" },
   };
   return map[b];
 }
@@ -272,18 +280,25 @@ export async function fetchRecoveryScoreSeries(
   if (untilIso) compQ = compQ.lte("completed_at", untilIso);
   const { data: comps } = await compQ;
 
-  // Sleep buckets from pl_workout_feedback, keyed by completion_id.
+  // Review answers from pl_workout_feedback, keyed by completion_id. The
+  // self-reported session RPE is only trusted on v2 reviews (legacy ones
+  // derived it from a status card); pain is a genuine flag in both.
   let fbQ = supabase
     .from("pl_workout_feedback")
-    .select("completion_id, sleep_bucket, recovery_today")
+    .select("completion_id, sleep_bucket, recovery_today, session_rpe, pain, review_version")
     .eq("client_id", clientId);
   const { data: feedbacks } = await fbQ;
   const sleepByCompletion = new Map<string, SleepBucket>();
   const recoveryByCompletion = new Map<string, number>();
+  const sessionRpeByCompletion = new Map<string, number>();
+  const painByCompletion = new Set<string>();
   for (const f of (feedbacks ?? []) as any[]) {
     if (!f.completion_id) continue;
     if (f.sleep_bucket) sleepByCompletion.set(f.completion_id, f.sleep_bucket);
     if (f.recovery_today != null) recoveryByCompletion.set(f.completion_id, Number(f.recovery_today));
+    const srpe = trustedSessionRpe(f);
+    if (srpe != null) sessionRpeByCompletion.set(f.completion_id, srpe);
+    if (f.pain) painByCompletion.add(f.completion_id);
   }
 
   // 3) Row results (for avg RPE/RIR per session)
@@ -356,7 +371,10 @@ export async function fetchRecoveryScoreSeries(
     const s = computeRecoveryScore({
       completionPct: c.logging_percentage != null ? Number(c.logging_percentage) : null,
       overallRating: c.session_rating ?? null,
-      sessionRpe: effRpe,
+      // The athlete's own session RPE beats the average logged set RPE
+      // (which misses accumulated fatigue and is often a pre-filled value).
+      sessionRpe: sessionRpeByCompletion.get(c.id) ?? effRpe,
+      pain: painByCompletion.has(c.id),
       sleepBucket: sleepByCompletion.get(c.id) ?? null,
       recoveryToday: recoveryByCompletion.get(c.id) ?? null,
     });

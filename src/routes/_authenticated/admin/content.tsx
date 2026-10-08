@@ -2,19 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
-import { AdminMediaReview } from "./media-review";
-import { ApprovalsPage } from "./approvals";
-import { AdminTasksPanel } from "./tasks";
-import { MemberResourcesAdmin } from "./member-resources.index";
-import { ResourceLibrary } from "./resources";
-import { MediaArchivesPage } from "./media-archives";
+import { AdminTasksPanel } from "@/route-pages/_authenticated/admin/tasks";
+import { ResourceLibrary } from "@/route-pages/_authenticated/admin/resources";
+import { MediaArchivesPage } from "@/route-pages/_authenticated/admin/media-archives";
 
-type TabKey = "inbox" | "approvals" | "tasks" | "member-resources" | "library" | "archive";
+type TabKey = "tasks" | "library" | "archive";
 const TABS: { value: TabKey; label: string }[] = [
-  { value: "inbox", label: "Inbox" },
-  { value: "approvals", label: "Approvals" },
   { value: "tasks", label: "Tasks" },
-  { value: "member-resources", label: "Member Resources" },
   { value: "library", label: "Library" },
   { value: "archive", label: "Archive" },
 ];
@@ -28,7 +22,7 @@ export const Route = createFileRoute("/_authenticated/admin/content")({
     if (typeof t === "undefined" && typeof window !== "undefined") {
       try { const s = window.localStorage.getItem(LAST_TAB_KEY); if (isTab(s)) return { tab: s }; } catch {}
     }
-    return { tab: "inbox" };
+    return { tab: "tasks" };
   },
   component: ContentWorkspace,
 });
@@ -40,7 +34,7 @@ function ContentWorkspace() {
   const setTab = (n: TabKey) => navigate({ to: "/admin/content", search: { tab: n } as any });
   return (
     <>
-      <PageHeader title="Content" subtitle="Media inbox, approvals, tasks, resources, and archive." />
+      <PageHeader title="Content" subtitle="Tasks, resource library, and archive." />
       <div className="border-b border-border bg-background/50">
         <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
           {TABS.map((t) => {
@@ -54,10 +48,7 @@ function ContentWorkspace() {
         </div>
       </div>
       <div>
-        {tab === "inbox" && <AdminMediaReview embedded />}
-        {tab === "approvals" && <ApprovalsPage embedded />}
         {tab === "tasks" && <AdminTasksPanel />}
-        {tab === "member-resources" && <div className="p-4 md:p-6"><MemberResourcesAdmin embedded /></div>}
         {tab === "library" && <div className="p-4 md:p-6"><ResourceLibrary embedded /></div>}
         {tab === "archive" && <MediaArchivesPage embedded />}
       </div>

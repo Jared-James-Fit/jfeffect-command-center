@@ -16,7 +16,6 @@ function targetForTask(item: ActionCentreItem): TaskTarget {
   const meta = (item.metadata ?? {}) as Record<string, any>;
   switch (item.task_type) {
     case "weekly_checkin":
-    case "nutrition_review":
     case "custom_form": {
       const formId = meta.form_id as string | undefined;
       return formId

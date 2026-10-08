@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isViewingAsClient } from "@/lib/pov-guard";
 
 export type SenderRole = "admin" | "client";
 
@@ -10,6 +11,12 @@ export type MessageAttachment = {
   mime?: string;
   duration?: number;
   storage_path?: string;
+  /** Videos: a small still frame uploaded next to the file, so bubbles don't have to load the video itself. */
+  thumbnail_storage_path?: string;
+  /** Videos: how the upload went on the sender's phone (compressed or not, why, timings). */
+  transfer?: Record<string, string | number | null>;
+  width?: number;
+  height?: number;
   peaks?: number[];
   kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "checkin_request" | "checkin_submission";
   fallback_emoji?: string;
@@ -32,7 +39,7 @@ export type MessageAttachment = {
   request_note?: string;
   checkin_submission_id?: string;
   checkin_occurrence_id?: string | null;
-  checkin_task_type?: "weekly_checkin" | "nutrition_review";
+  checkin_task_type?: "weekly_checkin";
 };
 
 export type MessageReplyPreview = {
@@ -40,8 +47,150 @@ export type MessageReplyPreview = {
   body: string;
   attachment_type?: MessageAttachment["type"] | null;
   attachment_name?: string | null;
+  /** Storage path of the first photo/video (signed at render time), so replies can show a thumbnail. */
+  attachment_path?: string | null;
+  /** Public URL fallback for media with no storage path (e.g. GIFs). */
+  attachment_url?: string | null;
+  /** Video poster frame, so the quote doesn't have to load the video. */
+  attachment_poster_path?: string | null;
+  /**
+   * Set when the reply is about ONE photo/video of a multi-media message:
+   * its index in the original's `attachments`, and where it sits among the
+   * photos/videos (1-based) out of how many, for "Video 2 of 4".
+   */
+  attachment_index?: number | null;
+  attachment_position?: number | null;
+  attachment_count?: number | null;
   is_internal_note?: boolean;
 };
+
+export type ReplyMedia = { type: "image" | "video"; path?: string; url?: string; posterPath?: string };
+
+/** The photos and videos of a message, in order, with their index in `attachments`. */
+export function mediaAttachments(
+  message: Pick<Message, "attachments"> | null | undefined,
+): Array<{ att: MessageAttachment; index: number }> {
+  const out: Array<{ att: MessageAttachment; index: number }> = [];
+  (message?.attachments ?? []).forEach((att, index) => {
+    if (att && (att.type === "image" || att.type === "video") && (att.storage_path || att.url)) out.push({ att, index });
+  });
+  return out;
+}
+
+/**
+ * Compact quote of `message` for a reply. With `attachmentIndex`, the reply
+ * is about that one photo/video (a single clip out of several sent at once).
+ */
+export function makeReplyPreview(
+  message: Pick<Message, "sender_role" | "body" | "attachments" | "is_internal_note">,
+  attachmentIndex?: number | null,
+): MessageReplyPreview {
+  const media = mediaAttachments(message);
+  // Only meaningful with 2+ photos/videos; with one, the message IS the clip.
+  const pickedAt = attachmentIndex == null || media.length < 2 ? -1 : media.findIndex((x) => x.index === attachmentIndex);
+  const picked = pickedAt >= 0 ? media[pickedAt].att : null;
+  const first = picked ?? message.attachments?.[0];
+  const isMedia = first?.type === "image" || first?.type === "video";
+  return {
+    sender_role: message.sender_role,
+    body: (message.body || "").trim().slice(0, 260),
+    attachment_type: first?.type ?? null,
+    attachment_name: first?.name ?? null,
+    // Lets the quote show a thumbnail without loading the original message.
+    attachment_path: isMedia ? first?.storage_path ?? null : null,
+    attachment_url: isMedia && !first?.storage_path ? first?.url || null : null,
+    ...(isMedia && first?.thumbnail_storage_path ? { attachment_poster_path: first.thumbnail_storage_path } : {}),
+    ...(picked
+      ? { attachment_index: attachmentIndex, attachment_position: pickedAt + 1, attachment_count: media.length }
+      : {}),
+    is_internal_note: !!message.is_internal_note,
+  };
+}
+
+/** "Video 2 of 4" when the reply is about one of several clips, else null. */
+export function replyClipLabel(preview: MessageReplyPreview | null | undefined): string | null {
+  if (preview?.attachment_index == null) return null;
+  const kind = preview.attachment_type === "video" ? "Video" : preview.attachment_type === "image" ? "Photo" : null;
+  if (!kind) return null;
+  const pos = preview.attachment_position ?? 0;
+  const count = preview.attachment_count ?? 0;
+  return count > 1 && pos >= 1 ? `${kind} ${pos} of ${count}` : kind;
+}
+
+/** What the quote says: the clip ("Video 2 of 4"), else the text, else what was attached. */
+export function replyPreviewText(preview?: MessageReplyPreview | null) {
+  if (!preview) return "Original message";
+  const clip = replyClipLabel(preview);
+  if (clip) return clip;
+  if (preview.body) return preview.body;
+  // "IMG_5678.mov" means nothing in a quote; say what it is, like iMessage.
+  if (preview.attachment_type === "video") return "Video";
+  if (preview.attachment_type === "image") return "Photo";
+  if (preview.attachment_name) return preview.attachment_name;
+  if (preview.attachment_type) return `${preview.attachment_type.charAt(0).toUpperCase()}${preview.attachment_type.slice(1)} attachment`;
+  return "Attachment";
+}
+
+// The fields that say which clip a reply is about. The database rebuilds
+// reply_preview from the original's FIRST attachment on insert, so these are
+// written back right after (see sendMessage).
+const CLIP_KEYS = [
+  "attachment_index", "attachment_position", "attachment_count", "attachment_type",
+  "attachment_name", "attachment_path", "attachment_url", "attachment_poster_path",
+] as const;
+
+function clipFields(preview: MessageReplyPreview): Partial<MessageReplyPreview> {
+  const out: Record<string, unknown> = {};
+  for (const k of CLIP_KEYS) if (preview[k] !== undefined) out[k] = preview[k];
+  return out as Partial<MessageReplyPreview>;
+}
+
+/**
+ * A server row for a clip reply can arrive (realtime INSERT) before the clip
+ * is written back. Keep the clip we already know locally so the quote
+ * doesn't flip to the first video and back.
+ */
+export function keepReplyClip<T extends Pick<Message, "reply_to_message_id" | "reply_preview">>(
+  server: T,
+  local: Pick<Message, "reply_to_message_id" | "reply_preview"> | null | undefined,
+): T {
+  const lp = local?.reply_preview;
+  if (!lp || lp.attachment_index == null || server.reply_preview?.attachment_index != null) return server;
+  if (!server.reply_to_message_id || server.reply_to_message_id !== local?.reply_to_message_id) return server;
+  return { ...server, reply_preview: { ...(server.reply_preview ?? lp), ...clipFields(lp) } };
+}
+
+/**
+ * The photo/video to show as a reply thumbnail. Prefers the original message
+ * when it's loaded (covers replies sent before previews carried a path), else
+ * what the preview stored.
+ */
+export function replyMediaFor(
+  preview: MessageReplyPreview | null | undefined,
+  source?: Pick<Message, "attachments"> | null,
+): ReplyMedia | null {
+  // A reply about one clip shows that clip, not the first one.
+  const idx = preview?.attachment_index;
+  const first = source?.attachments?.[idx ?? 0];
+  if (first && (first.type === "image" || first.type === "video") && (first.storage_path || first.url)) {
+    return {
+      type: first.type,
+      path: first.storage_path || undefined,
+      url: first.storage_path ? undefined : first.url,
+      posterPath: first.type === "video" ? first.thumbnail_storage_path || undefined : undefined,
+    };
+  }
+  if (preview && (preview.attachment_type === "image" || preview.attachment_type === "video")
+    && (preview.attachment_path || preview.attachment_url)) {
+    return {
+      type: preview.attachment_type,
+      path: preview.attachment_path || undefined,
+      url: preview.attachment_url || undefined,
+      posterPath: preview.attachment_type === "video" ? preview.attachment_poster_path || undefined : undefined,
+    };
+  }
+  return null;
+}
 
 export type Message = {
   id: string;
@@ -218,15 +367,16 @@ export async function sendMessage(input: {
   }
   const { data, error } = await db.from("messages").insert(row).select().single();
   if (error) throw error;
+  let saved = data as Message;
   // If the admin replies, the conversation no longer "needs response".
+  // Bookkeeping, not part of delivery: don't make the send wait on it.
   if (input.senderRole === "admin") {
-    try {
-      await db
-        .from("conversation_state")
-        .update({ status: "open" })
-        .eq("client_id", input.clientId)
-        .eq("status", "needs_response");
-    } catch {}
+    void db
+      .from("conversation_state")
+      .update({ status: "open" })
+      .eq("client_id", input.clientId)
+      .eq("status", "needs_response")
+      .then(() => {}, () => {});
   }
   // Fire-and-forget push notification. Never block the send on push failures.
   if (data?.id) {
@@ -239,10 +389,30 @@ export async function sendMessage(input: {
       }
     })();
   }
-  return data as Message;
+  // Reply to one clip of several: the insert trigger rebuilt the quote from
+  // the first attachment, so write the chosen clip back. Updating only
+  // reply_preview doesn't re-run that trigger. If this fails the reply still
+  // went out; it just quotes the message as a whole.
+  const clip = input.replyPreview;
+  if (clip?.attachment_index != null && saved.reply_to_message_id && saved.reply_preview?.attachment_index == null) {
+    try {
+      const { data: patched, error: patchError } = await db
+        .from("messages")
+        .update({ reply_preview: { ...(saved.reply_preview ?? clip), ...clipFields(clip) } })
+        .eq("id", saved.id)
+        .select()
+        .single();
+      if (!patchError && patched) saved = patched as Message;
+    } catch (e) {
+      console.warn("[messages] reply clip not saved", e);
+    }
+  }
+  return saved;
 }
 
 export async function markRead(clientId: string, role: SenderRole) {
+  // A coach viewing as this client must not mark the client's messages as read.
+  if (role === "client" && (await isViewingAsClient(clientId))) return;
   const now = new Date().toISOString();
   // Staff unread is per coach/admin: this only clears MY blue dot. It never
   // changes the conversation's workflow status (Needs Response stays).

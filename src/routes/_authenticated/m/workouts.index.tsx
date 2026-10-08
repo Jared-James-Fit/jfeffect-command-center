@@ -18,7 +18,7 @@ import {
 import {
   Play, LayoutGrid, CalendarDays, LineChart, Plus, BookOpen, Loader2, Activity,
 } from "lucide-react";
-import { PlanLibrary } from "./plans";
+import { PlanLibrary } from "@/route-pages/_authenticated/m/plans";
 import { ClientAnalyticsDashboard } from "@/components/analytics/client-analytics-dashboard";
 import { RecoveryPreviewCard } from "@/components/analytics/recovery-preview-card";
 import { MemberBlockWeekColumns } from "@/components/member/member-block-week-columns";

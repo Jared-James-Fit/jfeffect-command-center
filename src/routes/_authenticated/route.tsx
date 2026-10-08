@@ -7,6 +7,7 @@ import { ClientProfileOverlayMount } from "@/components/clients/profile/client-p
 import { MemberProfileOverlayMount } from "@/components/members/member-profile-overlay";
 import { ThemeAnnouncementGate } from "@/components/whats-new/theme-announcement";
 import { ThemeAccountSync } from "@/lib/theme-account-sync";
+import { CoachingAgreementProvider } from "@/components/coaching-agreement/agreement-provider";
 
 // Module-level warm session: once the guard has validated a user this app
 // lifetime, in-app revalidations (router.invalidate after mutations, error
@@ -137,13 +138,15 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedLayout() {
   return (
-    <>
+    // Coaching Agreement: status, the launch popup and the signing flow. It sits above every
+    // signed-in page so the popup shows once per app open wherever the client lands.
+    <CoachingAgreementProvider>
       <NavigationProgress />
       <Outlet />
       <ClientProfileOverlayMount />
       <MemberProfileOverlayMount />
       <ThemeAnnouncementGate />
       <ThemeAccountSync />
-    </>
+    </CoachingAgreementProvider>
   );
 }

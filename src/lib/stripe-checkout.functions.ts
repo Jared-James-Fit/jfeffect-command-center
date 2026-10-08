@@ -16,6 +16,7 @@ import {
   assertFirst50Assignment,
   assertFirst50CanonicalStripeSnapshot,
 } from "@/lib/first50-policy";
+import { AGREEMENT_CHECKOUT_PARAMS } from "@/lib/coaching-agreement/checkout-notice";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -192,6 +193,8 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
       "automatic_tax[enabled]": "true",
       // Require billing address so Stripe Tax can determine the correct rate
       billing_address_collection: "required",
+      // The in-app Coaching Agreement covers every purchase; point at it here.
+      ...AGREEMENT_CHECKOUT_PARAMS,
     };
 
     // Enable invoice creation for one-time payments so customers receive a tax receipt
@@ -306,266 +309,285 @@ export const createCheckoutSessionForAssignment = createServerFn({ method: "POST
       throw new Error("Only admins or coaches can generate assignment checkout links.");
     }
 
-    // Load the purchase record
-    const { data: purchase, error: pErr } = await supabase
-      .from("purchase_records")
-      .select(
-        "id, client_id, offer_id, stripe_price_id, stripe_product_id, payment_structure, full_payable_amount, currency, offer_name, first_payment_date",
-      )
-      .eq("id", data.purchaseRecordId)
+    return createAssignmentCheckout(supabase, userId, data);
+  });
+
+/**
+ * Core of the assignment checkout: loads the purchase, validates the price and
+ * any selected discount, creates the Stripe Checkout Session and persists the
+ * session id + URL on the purchase row.
+ *
+ * Callers are responsible for authorisation. The admin/coach server function
+ * above gates on role; the public /pay/<token> link calls this with the
+ * service-role client to mint a fresh session once the previous one expired,
+ * which is what keeps a shared payment link alive until it is paid.
+ */
+export async function createAssignmentCheckout(
+  supabase: any,
+  userId: string | null,
+  data: z.infer<typeof CreateAssignmentCheckoutInput>,
+  opts: { updateSource?: string } = {},
+) {
+  // Load the purchase record
+  const { data: purchase, error: pErr } = await supabase
+    .from("purchase_records")
+    .select(
+      "id, client_id, offer_id, stripe_price_id, stripe_product_id, payment_structure, full_payable_amount, currency, offer_name, first_payment_date",
+    )
+    .eq("id", data.purchaseRecordId)
+    .single();
+  if (pErr || !purchase) throw new Error("Purchase record not found");
+
+  // Resolve price id + checkout mode (snapshot row may not include them)
+  let priceId: string | null = purchase.stripe_price_id ?? null;
+  let productMode: string | null = null;
+  let paymentStructure: string | null = purchase.payment_structure ?? null;
+  let product: any = null;
+  if (purchase.offer_id) {
+    const { data: prod } = await supabase
+      .from("coaching_products")
+      .select("id, name, stripe_product_id, stripe_price_id, mode, payment_structure, price_cents, currency")
+      .eq("id", purchase.offer_id)
+      .maybeSingle();
+    product = prod;
+    if (prod) {
+      priceId = priceId || prod.stripe_price_id;
+      productMode = prod.mode ?? null;
+      paymentStructure = paymentStructure || prod.payment_structure;
+    }
+  }
+  if (!priceId) {
+    throw new Error(
+      `"${purchase.offer_name}" has no Stripe Price ID. Open Admin → Stripe Payment Links, edit this product, and add a Stripe Price ID before generating a checkout link.`,
+    );
+  }
+
+  // FIRST50 can only be attached by a coach/admin through this existing
+  // assignment flow. Validate a server-read discount record before any
+  // Stripe customer/session write, then attach exactly one per-mode coupon.
+  let appliedDiscount: { id: string; publicCode: string; promotionCodeId: string } | null = null;
+  if (data.discountCodeId) {
+    const { data: discount, error: discountError } = await supabase
+      .from("discount_codes")
+      .select("id, public_code, category, discount_type, discount_value, subscription_duration, status, eligible_product_ids, applies_to_all_products, pairing_allowed, stripe_test_mode_synced, stripe_live_mode_synced, stripe_test_promotion_code_id, stripe_live_promotion_code_id")
+      .eq("id", data.discountCodeId)
       .single();
-    if (pErr || !purchase) throw new Error("Purchase record not found");
+    if (discountError || !discount) throw new Error("Selected discount code was not found.");
 
-    // Resolve price id + checkout mode (snapshot row may not include them)
-    let priceId: string | null = purchase.stripe_price_id ?? null;
-    let productMode: string | null = null;
-    let paymentStructure: string | null = purchase.payment_structure ?? null;
-    let product: any = null;
-    if (purchase.offer_id) {
-      const { data: prod } = await supabase
-        .from("coaching_products")
-        .select("id, name, stripe_product_id, stripe_price_id, mode, payment_structure, price_cents, currency")
-        .eq("id", purchase.offer_id)
-        .maybeSingle();
-      product = prod;
-      if (prod) {
-        priceId = priceId || prod.stripe_price_id;
-        productMode = prod.mode ?? null;
-        paymentStructure = paymentStructure || prod.payment_structure;
-      }
+    const stripeMode = getStripeKey().includes("_test_") ? "test" : "live";
+    if (!product?.id || !product.stripe_product_id || !product.stripe_price_id) {
+      throw new Error("Canonical Online Coaching Stripe synchronization is required. Checkout was not created.");
     }
-    if (!priceId) {
-      throw new Error(
-        `"${purchase.offer_name}" has no Stripe Price ID. Open Admin → Stripe Payment Links, edit this product, and add a Stripe Price ID before generating a checkout link.`,
-      );
+    if (purchase.stripe_price_id && purchase.stripe_price_id !== product.stripe_price_id) {
+      throw new Error("Purchase record Stripe Price does not match canonical Online Coaching. Checkout was not created.");
     }
+    if (priceId !== product.stripe_price_id) {
+      throw new Error("Canonical Online Coaching Stripe Price is required. Checkout was not created.");
+    }
+    assertFirst50Assignment(discount, {
+      offer_id: product.id,
+      currency: product.currency ?? null,
+      price_cents: product.price_cents ?? null,
+      payment_structure: paymentStructure,
+    });
+    const promotionCodeId =
+      stripeMode === "test"
+        ? discount.stripe_test_promotion_code_id
+        : discount.stripe_live_promotion_code_id;
+    const modeSynced =
+      stripeMode === "test" ? discount.stripe_test_mode_synced : discount.stripe_live_mode_synced;
+    if (!modeSynced || !promotionCodeId) {
+      throw new Error("FIRST50 is not synchronized for the current Stripe mode. Checkout was not created.");
+    }
+    await assertFirst50CanonicalStripePrice(product.stripe_product_id, product.stripe_price_id);
+    appliedDiscount = { id: discount.id, publicCode: discount.public_code, promotionCodeId };
+  }
 
-    // FIRST50 can only be attached by a coach/admin through this existing
-    // assignment flow. Validate a server-read discount record before any
-    // Stripe customer/session write, then attach exactly one per-mode coupon.
-    let appliedDiscount: { id: string; publicCode: string; promotionCodeId: string } | null = null;
-    if (data.discountCodeId) {
-      const { data: discount, error: discountError } = await supabase
-        .from("discount_codes")
-        .select("id, public_code, category, discount_type, discount_value, subscription_duration, status, eligible_product_ids, applies_to_all_products, pairing_allowed, stripe_test_mode_synced, stripe_live_mode_synced, stripe_test_promotion_code_id, stripe_live_promotion_code_id")
-        .eq("id", data.discountCodeId)
-        .single();
-      if (discountError || !discount) throw new Error("Selected discount code was not found.");
+  // Load client
+  const { data: client, error: cErr } = await supabase
+    .from("clients")
+    .select("id, full_name, email, stripe_customer_id")
+    .eq("id", purchase.client_id)
+    .single();
+  if (cErr || !client) throw new Error("Client not found");
 
-      const stripeMode = getStripeKey().includes("_test_") ? "test" : "live";
-      if (!product?.id || !product.stripe_product_id || !product.stripe_price_id) {
-        throw new Error("Canonical Online Coaching Stripe synchronization is required. Checkout was not created.");
-      }
-      if (purchase.stripe_price_id && purchase.stripe_price_id !== product.stripe_price_id) {
-        throw new Error("Purchase record Stripe Price does not match canonical Online Coaching. Checkout was not created.");
-      }
-      if (priceId !== product.stripe_price_id) {
-        throw new Error("Canonical Online Coaching Stripe Price is required. Checkout was not created.");
-      }
-      assertFirst50Assignment(discount, {
-        offer_id: product.id,
-        currency: product.currency ?? null,
-        price_cents: product.price_cents ?? null,
-        payment_structure: paymentStructure,
+  // Resolve / create Stripe customer
+  let stripeCustomerId: string | null = client.stripe_customer_id ?? null;
+  if (!stripeCustomerId && client.email) {
+    const existing = await stripeFetch(
+      `/customers/search?query=${encodeURIComponent(`email:"${client.email}"`)}`,
+    );
+    if (existing?.data?.[0]?.id) {
+      stripeCustomerId = existing.data[0].id;
+    } else {
+      const newCustomer = await stripeFetch("/customers", {
+        method: "POST",
+        body: formEncode({
+          email: client.email,
+          name: client.full_name ?? undefined,
+          "metadata[client_id]": client.id,
+        }),
       });
-      const promotionCodeId =
-        stripeMode === "test"
-          ? discount.stripe_test_promotion_code_id
-          : discount.stripe_live_promotion_code_id;
-      const modeSynced =
-        stripeMode === "test" ? discount.stripe_test_mode_synced : discount.stripe_live_mode_synced;
-      if (!modeSynced || !promotionCodeId) {
-        throw new Error("FIRST50 is not synchronized for the current Stripe mode. Checkout was not created.");
-      }
-      await assertFirst50CanonicalStripePrice(product.stripe_product_id, product.stripe_price_id);
-      appliedDiscount = { id: discount.id, publicCode: discount.public_code, promotionCodeId };
-    }
-
-    // Load client
-    const { data: client, error: cErr } = await supabase
-      .from("clients")
-      .select("id, full_name, email, stripe_customer_id")
-      .eq("id", purchase.client_id)
-      .single();
-    if (cErr || !client) throw new Error("Client not found");
-
-    // Resolve / create Stripe customer
-    let stripeCustomerId: string | null = client.stripe_customer_id ?? null;
-    if (!stripeCustomerId && client.email) {
-      const existing = await stripeFetch(
-        `/customers/search?query=${encodeURIComponent(`email:"${client.email}"`)}`,
-      );
-      if (existing?.data?.[0]?.id) {
-        stripeCustomerId = existing.data[0].id;
-      } else {
-        const newCustomer = await stripeFetch("/customers", {
-          method: "POST",
-          body: formEncode({
-            email: client.email,
-            name: client.full_name ?? undefined,
-            "metadata[client_id]": client.id,
-          }),
-        });
-        stripeCustomerId = newCustomer.id;
-      }
-      if (stripeCustomerId) {
-        await supabase
-          .from("clients")
-          .update({ stripe_customer_id: stripeCustomerId })
-          .eq("id", client.id);
-      }
-    }
-
-    const isSubscription =
-      productMode === "subscription" ||
-      ((productMode === "auto" || !productMode) &&
-        !!paymentStructure &&
-        /monthly|weekly|bi-weekly|quarterly|annual|recurring/i.test(paymentStructure));
-    const checkoutMode = isSubscription ? "subscription" : "payment";
-
-    const sessionParams: Record<string, string> = {
-      "line_items[0][price]": priceId,
-      "line_items[0][quantity]": "1",
-      mode: checkoutMode,
-      success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${data.origin}/portal/purchases`,
-      ...(appliedDiscount
-        ? {
-            "discounts[0][promotion_code]": appliedDiscount.promotionCodeId,
-            "metadata[applied_code_id]": appliedDiscount.id,
-            "metadata[applied_code]": appliedDiscount.publicCode,
-            "subscription_data[metadata][applied_code_id]": appliedDiscount.id,
-            "subscription_data[metadata][applied_code]": appliedDiscount.publicCode,
-          }
-        : { allow_promotion_codes: "true" }),
-      "metadata[purchase_record_id]": purchase.id,
-      "metadata[client_id]": client.id,
-      "metadata[offer_id]": purchase.offer_id ?? "",
-      "metadata[assigned_by]": userId,
-      // Mapping metadata — lets the webhook and the Stripe backfill resolve
-      // this payment back to the exact app record without fuzzy matching.
-      // Deliberately excludes health data and coaching notes.
-      "metadata[product_id]": purchase.offer_id ?? "",
-      "metadata[payment_request_id]": purchase.id,
-      "metadata[workspace]": "jfeffect",
-      "metadata[environment]": priceId.startsWith("price_") && getStripeKey().includes("_test_") ? "test" : "live",
-      // Stripe Tax: calculate GST/HST automatically from billing address
-      "automatic_tax[enabled]": "true",
-      // Require billing address so Stripe Tax can determine the correct rate
-      billing_address_collection: "required",
-    };
-    // Link the client's auth user when one exists (never required).
-    const { data: clientUser } = await supabase
-      .from("clients").select("user_id").eq("id", client.id).maybeSingle();
-    if (clientUser?.user_id) sessionParams["metadata[user_id]"] = clientUser.user_id;
-    // Enable invoice creation for one-time payments so customers receive a tax receipt
-    if (checkoutMode === "payment") {
-      sessionParams["invoice_creation[enabled]"] = "true";
-    }
-    // Recurring: copy the mapping metadata onto the SUBSCRIPTION itself.
-    // Without this, every future invoice / subscription event arrives with no
-    // purchase_record_id and the webhook has to guess which sale it belongs to
-    // (which breaks for repeat buyers). Stripe copies subscription metadata
-    // onto its invoices, so renewals stay linked forever.
-    if (checkoutMode === "subscription") {
-      sessionParams["subscription_data[metadata][purchase_record_id]"] = purchase.id;
-      sessionParams["subscription_data[metadata][client_id]"] = client.id;
-      sessionParams["subscription_data[metadata][offer_id]"] = purchase.offer_id ?? "";
-      sessionParams["subscription_data[metadata][workspace]"] = "jfeffect";
-
-      // Agreed future first payment: Stripe collects the payment method now and
-      // charges NOTHING until this date (trial_end), then anchors every later
-      // invoice to it. A bare future billing_cycle_anchor is deliberately NOT
-      // used — it can bill a prorated amount immediately.
-      Object.assign(
-        sessionParams,
-        stripeFirstPaymentParams((purchase as any).first_payment_date ?? null),
-      );
+      stripeCustomerId = newCustomer.id;
     }
     if (stripeCustomerId) {
-      sessionParams["customer"] = stripeCustomerId;
-      // Auto-update customer address from checkout so future sessions use it
-      sessionParams["customer_update[address]"] = "auto";
-    } else if (client.email) {
-      sessionParams["customer_email"] = client.email;
+      await supabase
+        .from("clients")
+        .update({ stripe_customer_id: stripeCustomerId })
+        .eq("id", client.id);
     }
+  }
 
-    await assertPriceBelongsToAccount(priceId);
+  const isSubscription =
+    productMode === "subscription" ||
+    ((productMode === "auto" || !productMode) &&
+      !!paymentStructure &&
+      /monthly|weekly|bi-weekly|quarterly|annual|recurring/i.test(paymentStructure));
+  const checkoutMode = isSubscription ? "subscription" : "payment";
 
-    const session = await stripeFetch("/checkout/sessions", {
-      method: "POST",
-      // Canonical guard: proration_behavior may only travel with a billing
-      // cycle anchor, otherwise Stripe rejects the whole session.
-      body: formEncode(sanitizeSubscriptionParams(sessionParams)),
-    });
+  const sessionParams: Record<string, string> = {
+    "line_items[0][price]": priceId,
+    "line_items[0][quantity]": "1",
+    mode: checkoutMode,
+    success_url: `${data.origin}/portal/purchases?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${data.origin}/portal/purchases`,
+    ...(appliedDiscount
+      ? {
+          "discounts[0][promotion_code]": appliedDiscount.promotionCodeId,
+          "metadata[applied_code_id]": appliedDiscount.id,
+          "metadata[applied_code]": appliedDiscount.publicCode,
+          "subscription_data[metadata][applied_code_id]": appliedDiscount.id,
+          "subscription_data[metadata][applied_code]": appliedDiscount.publicCode,
+        }
+      : { allow_promotion_codes: "true" }),
+    "metadata[purchase_record_id]": purchase.id,
+    "metadata[client_id]": client.id,
+    "metadata[offer_id]": purchase.offer_id ?? "",
+    "metadata[assigned_by]": userId ?? "",
+    // Mapping metadata — lets the webhook and the Stripe backfill resolve
+    // this payment back to the exact app record without fuzzy matching.
+    // Deliberately excludes health data and coaching notes.
+    "metadata[product_id]": purchase.offer_id ?? "",
+    "metadata[payment_request_id]": purchase.id,
+    "metadata[workspace]": "jfeffect",
+    "metadata[environment]": priceId.startsWith("price_") && getStripeKey().includes("_test_") ? "test" : "live",
+    // Stripe Tax: calculate GST/HST automatically from billing address
+    "automatic_tax[enabled]": "true",
+    // Require billing address so Stripe Tax can determine the correct rate
+    billing_address_collection: "required",
+    // The in-app Coaching Agreement covers every purchase; point at it here.
+    ...AGREEMENT_CHECKOUT_PARAMS,
+  };
+  // Link the client's auth user when one exists (never required).
+  const { data: clientUser } = await supabase
+    .from("clients").select("user_id").eq("id", client.id).maybeSingle();
+  if (clientUser?.user_id) sessionParams["metadata[user_id]"] = clientUser.user_id;
+  // Enable invoice creation for one-time payments so customers receive a tax receipt
+  if (checkoutMode === "payment") {
+    sessionParams["invoice_creation[enabled]"] = "true";
+  }
+  // Recurring: copy the mapping metadata onto the SUBSCRIPTION itself.
+  // Without this, every future invoice / subscription event arrives with no
+  // purchase_record_id and the webhook has to guess which sale it belongs to
+  // (which breaks for repeat buyers). Stripe copies subscription metadata
+  // onto its invoices, so renewals stay linked forever.
+  if (checkoutMode === "subscription") {
+    sessionParams["subscription_data[metadata][purchase_record_id]"] = purchase.id;
+    sessionParams["subscription_data[metadata][client_id]"] = client.id;
+    sessionParams["subscription_data[metadata][offer_id]"] = purchase.offer_id ?? "";
+    sessionParams["subscription_data[metadata][workspace]"] = "jfeffect";
 
-    const checkoutPatch = {
-      stripe_payment_link: session.url,
-      stripe_checkout_session_id: session.id,
-      stripe_price_id: priceId,
-      stripe_customer_id: stripeCustomerId ?? null,
-      stripe_mode: getStripeKey().includes("_test_") ? "test" : "live",
-      payment_status: "Pending Payment",
-      last_payment_update_source: "admin_assignment",
-      last_payment_update_at: new Date().toISOString(),
-    };
+    // Agreed future first payment: Stripe collects the payment method now and
+    // charges NOTHING until this date (trial_end), then anchors every later
+    // invoice to it. A bare future billing_cycle_anchor is deliberately NOT
+    // used — it can bill a prorated amount immediately.
+    Object.assign(
+      sessionParams,
+      stripeFirstPaymentParams((purchase as any).first_payment_date ?? null),
+    );
+  }
+  if (stripeCustomerId) {
+    sessionParams["customer"] = stripeCustomerId;
+    // Auto-update customer address from checkout so future sessions use it
+    sessionParams["customer_update[address]"] = "auto";
+  } else if (client.email) {
+    sessionParams["customer_email"] = client.email;
+  }
 
-    // A Stripe Checkout Session is not useful unless THIS purchase row keeps
-    // the session id + URL. The old path ignored PostgREST update errors, so
-    // Stripe could successfully create checkout while the app immediately
-    // resolved the sale as "needsFreshCheckout" again. That is the exact
-    // half-linked state that makes Copy/Share fail after Stripe succeeds.
-    //
-    // First use the authenticated admin/coach client. If the write is blocked
-    // or returns no row, fall back to the server-only service client. This
-    // function has already passed the admin/coach gate and loaded the exact
-    // purchase before any Stripe side effect, so the fallback cannot target an
-    // arbitrary client sale.
-    let { data: linkedPurchase, error: linkError } = await supabase
+  await assertPriceBelongsToAccount(priceId);
+
+  const session = await stripeFetch("/checkout/sessions", {
+    method: "POST",
+    // Canonical guard: proration_behavior may only travel with a billing
+    // cycle anchor, otherwise Stripe rejects the whole session.
+    body: formEncode(sanitizeSubscriptionParams(sessionParams)),
+  });
+
+  const checkoutPatch = {
+    stripe_payment_link: session.url,
+    stripe_checkout_session_id: session.id,
+    stripe_price_id: priceId,
+    stripe_customer_id: stripeCustomerId ?? null,
+    stripe_mode: getStripeKey().includes("_test_") ? "test" : "live",
+    payment_status: "Pending Payment",
+    last_payment_update_source: opts.updateSource ?? "admin_assignment",
+    last_payment_update_at: new Date().toISOString(),
+  };
+
+  // A Stripe Checkout Session is not useful unless THIS purchase row keeps
+  // the session id + URL. The old path ignored PostgREST update errors, so
+  // Stripe could successfully create checkout while the app immediately
+  // resolved the sale as "needsFreshCheckout" again. That is the exact
+  // half-linked state that makes Copy/Share fail after Stripe succeeds.
+  //
+  // First use the authenticated admin/coach client. If the write is blocked
+  // or returns no row, fall back to the server-only service client. This
+  // function has already passed the admin/coach gate and loaded the exact
+  // purchase before any Stripe side effect, so the fallback cannot target an
+  // arbitrary client sale.
+  let { data: linkedPurchase, error: linkError } = await supabase
+    .from("purchase_records")
+    .update(checkoutPatch)
+    .eq("id", purchase.id)
+    .select("id, stripe_checkout_session_id, stripe_payment_link")
+    .maybeSingle();
+
+  if (
+    linkError ||
+    !linkedPurchase ||
+    linkedPurchase.stripe_checkout_session_id !== session.id ||
+    linkedPurchase.stripe_payment_link !== session.url
+  ) {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const adminResult = await supabaseAdmin
       .from("purchase_records")
       .update(checkoutPatch)
       .eq("id", purchase.id)
       .select("id, stripe_checkout_session_id, stripe_payment_link")
       .maybeSingle();
 
-    if (
-      linkError ||
-      !linkedPurchase ||
-      linkedPurchase.stripe_checkout_session_id !== session.id ||
-      linkedPurchase.stripe_payment_link !== session.url
-    ) {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const adminResult = await supabaseAdmin
-        .from("purchase_records")
-        .update(checkoutPatch)
-        .eq("id", purchase.id)
-        .select("id, stripe_checkout_session_id, stripe_payment_link")
-        .maybeSingle();
+    linkedPurchase = adminResult.data;
+    linkError = adminResult.error;
+  }
 
-      linkedPurchase = adminResult.data;
-      linkError = adminResult.error;
-    }
-
-    if (
-      linkError ||
-      !linkedPurchase ||
-      linkedPurchase.stripe_checkout_session_id !== session.id ||
-      linkedPurchase.stripe_payment_link !== session.url
-    ) {
-      // Do not leave a newly-created, untracked checkout live. Expiration is
-      // best-effort; the original persistence error remains the useful error.
-      try {
-        await stripeFetch(`/checkout/sessions/${encodeURIComponent(session.id)}/expire`, {
-          method: "POST",
-        });
-      } catch { /* best effort only */ }
-      throw new Error(
-        "Stripe created checkout, but the app could not save it to this sale. No payment link was shared. Retry once.",
-      );
-    }
-
-    return { url: session.url as string, sessionId: session.id as string };
-  });
+  if (
+    linkError ||
+    !linkedPurchase ||
+    linkedPurchase.stripe_checkout_session_id !== session.id ||
+    linkedPurchase.stripe_payment_link !== session.url
+  ) {
+    // Do not leave a newly-created, untracked checkout live. Expiration is
+    // best-effort; the original persistence error remains the useful error.
+    try {
+      await stripeFetch(`/checkout/sessions/${encodeURIComponent(session.id)}/expire`, {
+        method: "POST",
+      });
+    } catch { /* best effort only */ }
+    throw new Error(
+      "Stripe created checkout, but the app could not save it to this sale. No payment link was shared. Retry once.",
+    );
+  }
+}
 
 // ─── Admin Preview Checkout Session ──────────────────────────────────────────
 

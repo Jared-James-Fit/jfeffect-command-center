@@ -4,24 +4,25 @@ import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { SalesPageEditor } from "@/components/admin/sales-page-editor";
-import { PaymentLinksPage } from "./payment-links";
-import { DiscountCodesPage } from "./discount-codes";
-import { AdminTransactionsPage } from "./transactions";
-import { BillingSourcesPage } from "./billing-sources";
+import { PaymentLinksPage } from "@/route-pages/_authenticated/admin/payment-links";
+import { DiscountCodesPage } from "@/route-pages/_authenticated/admin/discount-codes";
+import { AdminTransactionsPage } from "@/route-pages/_authenticated/admin/transactions";
+import { BillingSourcesPage } from "@/route-pages/_authenticated/admin/billing-sources";
+import { TaxesBooksPage } from "@/components/admin/books/taxes-books-page";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Package, Receipt, Ticket, Settings2, LayoutTemplate } from "lucide-react";
+import { Package, Receipt, Ticket, Settings2, LayoutTemplate, Landmark } from "lucide-react";
 
 /**
  * Canonical Sales information architecture.
  *
- * One navigation layer only: Products / Transactions / Discount Codes /
- * Settings. Pipeline moved to CRM, Promotions folded into Discount Codes,
+ * One navigation layer only: Products / Transactions / Taxes & Books /
+ * Discount Codes / Settings. Pipeline moved to CRM, Promotions folded into Discount Codes,
  * Overview folded into Transactions. Sales Pages stays reachable by deep
  * link (media managers) but is no longer a primary Sales section.
  */
-type SectionKey = "products" | "transactions" | "discount-codes" | "settings" | "sales-pages";
+type SectionKey = "products" | "transactions" | "taxes" | "discount-codes" | "settings" | "sales-pages";
 
 const SECTIONS: {
   value: SectionKey;
@@ -32,6 +33,7 @@ const SECTIONS: {
 }[] = [
   { value: "products", label: "Products", icon: Package, roles: ["admin"], primary: true },
   { value: "transactions", label: "Transactions", icon: Receipt, roles: ["admin"], primary: true },
+  { value: "taxes", label: "Taxes & Books", icon: Landmark, roles: ["admin"], primary: true },
   { value: "discount-codes", label: "Discount Codes", icon: Ticket, roles: ["admin"], primary: true },
   { value: "settings", label: "Settings", icon: Settings2, roles: ["admin"], primary: true },
   { value: "sales-pages", label: "Sales Pages", icon: LayoutTemplate, roles: ["admin", "media_manager"], primary: false },
@@ -46,6 +48,7 @@ function normalizeSection(tab: unknown, sub: unknown): SectionKey | "redirect:cr
   if (SECTIONS.some((x) => x.value === t)) return t as SectionKey;
   if (t === "pipeline") return "redirect:crm";
   if (t === "promotions") return "discount-codes";
+  if (t === "books" || t === "tax") return "taxes";
   if (t === "sales-pages") return "sales-pages";
   if (t === "products-payments") {
     if (s === "transactions" || s === "payments" || s === "purchases" || s === "overview") return "transactions";
@@ -109,7 +112,7 @@ function SalesWorkspace() {
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         title="Sales"
-        subtitle="Products, transactions, discount codes and checkout settings."
+        subtitle="Products, transactions, taxes and books, discount codes and checkout settings."
       />
 
       {/* Mobile / tablet portrait: single section picker, full-width workspace */}
@@ -162,6 +165,7 @@ function SalesWorkspace() {
         <div className="min-w-0 flex-1 lg:overflow-y-auto">
           {active === "products" && <PaymentLinksPage embedded />}
           {active === "transactions" && <AdminTransactionsPage embedded />}
+          {active === "taxes" && <TaxesBooksPage />}
           {active === "discount-codes" && <DiscountCodesPage embedded />}
           {active === "settings" && <BillingSourcesPage />}
           {active === "sales-pages" && (

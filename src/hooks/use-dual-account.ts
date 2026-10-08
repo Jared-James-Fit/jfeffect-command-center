@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
-export type StaffDestination = "/admin" | "/media";
+export type StaffDestination = "/admin";
 
 export interface DualAccountInfo {
   hasDual: boolean;
@@ -33,12 +33,8 @@ export function useDualAccount(): DualAccountInfo {
       const roles = (roleRows ?? []).map((r: { role: string }) => r.role);
       const isAdmin = roles.includes("admin");
       const isCoach = roles.includes("coach");
-      const isMedia = roles.includes("media_manager");
-      const isStaff = isAdmin || isCoach || isMedia;
-      const dest: StaffDestination | null =
-        isAdmin || isCoach ? "/admin"
-        : isMedia ? "/media"
-        : null;
+      const isStaff = isAdmin || isCoach;
+      const dest: StaffDestination | null = isStaff ? "/admin" : null;
       return { hasClient: !!clientRow, isStaff, staffDestination: dest };
     },
   });
@@ -50,7 +46,7 @@ export function useDualAccount(): DualAccountInfo {
   return {
     hasDual,
     hasClient: !!data?.hasClient,
-    staffDestination: data?.staffDestination ?? (role === "media_manager" ? "/media" : "/admin"),
+    staffDestination: data?.staffDestination ?? "/admin",
     loading: authLoading || isLoading,
   };
 }

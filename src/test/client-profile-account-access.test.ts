@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { describeAccountAccess } from "@/lib/client-account-access";
 
-const SHELL = readFileSync("src/routes/_authenticated/admin/clients.$id.tsx", "utf8");
+const SHELL = readFileSync("src/route-pages/_authenticated/admin/clients.$id.tsx", "utf8");
 
 describe("client profile shell cleanup", () => {
   it("no longer renders the duplicate Actions grid", () => {

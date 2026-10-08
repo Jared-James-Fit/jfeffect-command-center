@@ -1,19 +1,12 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  BadgeCheck,
-  CheckCircle2,
-  ChevronDown,
-  MapPin,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
-import { SalesPageShell, Section, SectionTitle } from "@/components/sales/sales-page-shell";
-import { CoachTimelineSection } from "@/components/sales/coach-timeline-section";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { createFileRoute } from "@tanstack/react-router";
+import { BadgeCheck, CheckCircle2, ChevronDown, MapPin, ShieldCheck, Users } from "lucide-react";
+import { SalesPageShell } from "@/components/sales/sales-page-shell";
+import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
+import { INQUIRY_DM_URL, SOCIAL_URLS } from "@/lib/social-links";
 import { Reveal } from "@/components/sales/reveal";
+import { Block, Group, Heading, IconTile, PrimaryCta, Rail, SocialLinks, Stat, Surface, TextLink } from "@/components/sales/apple";
 import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
 import phillipAsset from "@/assets/athletes/phillip.png.asset.json";
 import dwayneAsset from "@/assets/athletes/dwayne.png.asset.json";
@@ -26,9 +19,9 @@ const dwayneAthleteImage = dwayneAsset.url;
 const frederickAthleteImage = frederickAsset.url;
 const elisaAthleteImage = elisaAsset.url;
 
-const TITLE = "About Jared James | Team Canada Powerlifter & JF Effect Founder";
+const TITLE = "About Jared McIntyre | Team Canada Powerlifter & JF Effect Founder";
 const DESCRIPTION =
-  "Meet Jared James, founder of JF Effect: Team Canada powerlifter, 2× international champion, Top 50 all-time 66 kg lifter, certified personal trainer, and coach to 100+ clients.";
+  "Meet Jared McIntyre, founder of JF Effect: Team Canada powerlifter, 2× international champion, Top 50 all-time 66 kg lifter, certified personal trainer, and coach to 100+ clients.";
 const URL = "https://jfeffect.com/about";
 
 type ResultRow = { primary: string; secondary: string };
@@ -354,14 +347,15 @@ function ResultList({ rows }: { rows: ResultRow[] }) {
     <div className="divide-y divide-border/70">
       {rows.map((row, index) => (
         <div key={`${row.primary}-${index}`} className="py-3 first:pt-0 last:pb-0">
-          <div className="text-sm font-bold leading-snug">{row.primary}</div>
-          <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{row.secondary}</div>
+          <div className="text-[15px] font-semibold leading-snug">{row.primary}</div>
+          <div className="mt-0.5 text-[14px] leading-relaxed text-muted-foreground">{row.secondary}</div>
         </div>
       ))}
     </div>
   );
 }
 
+/** iOS-style disclosure row. Native <details> so it works without JS. */
 function CredentialAccordion({
   title,
   summary,
@@ -374,15 +368,15 @@ function CredentialAccordion({
   defaultOpen?: boolean;
 }) {
   return (
-    <details open={defaultOpen} className="group rounded-2xl border border-border bg-card">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 [&::-webkit-details-marker]:hidden">
+    <details open={defaultOpen} className="group overflow-hidden rounded-2xl bg-card ring-1 ring-border/70">
+      <summary className="flex min-h-[64px] cursor-pointer list-none items-center justify-between gap-4 px-5 py-3.5 transition active:bg-muted/60 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
-          <div className="font-black">{title}</div>
-          <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{summary}</div>
+          <div className="text-[17px] font-semibold leading-snug">{title}</div>
+          <div className="mt-0.5 text-[14px] leading-snug text-muted-foreground">{summary}</div>
         </div>
-        <ChevronDown className="h-5 w-5 shrink-0 text-primary transition-transform duration-200 group-open:rotate-180" />
+        <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" aria-hidden />
       </summary>
-      <div className="border-t border-border px-5 py-4">{children}</div>
+      <div className="border-t border-border/70 px-5 py-4">{children}</div>
     </details>
   );
 }
@@ -409,11 +403,12 @@ export const Route = createFileRoute("/about")({
         children: JSON.stringify({
           "@context": "https://schema.org",
           "@type": "Person",
-          "@id": URL + "#jared-james",
-          name: "Jared James",
+          "@id": URL + "#jared-mcintyre",
+          name: "Jared McIntyre",
           jobTitle: "Personal Trainer, Online Fitness Coach & Strength Coach",
           url: URL,
           worksFor: { "@type": "Organization", name: "JF Effect", url: "https://jfeffect.com" },
+          sameAs: SOCIAL_URLS,
           address: { "@type": "PostalAddress", addressLocality: "Selkirk", addressRegion: "MB", addressCountry: "CA" },
           knowsAbout: ["Personal Training", "Strength Training", "Powerlifting", "Bodybuilding", "Fat Loss Coaching", "Online Fitness Coaching", "Nutrition Coaching"],
           award: ["2026 NAPF North American Champion", "2026 Commonwealth Champion", "2022 MPA Male Athlete of the Year", "2018 MABBA Men's Physique Champion"],
@@ -423,74 +418,266 @@ export const Route = createFileRoute("/about")({
   }),
 });
 
+const JUMP_LINKS = [
+  ["#story", "Story"],
+  ["#results", "Client results"],
+  ["#athletes", "Athletes"],
+  ["#record", "My record"],
+  ["#credentials", "Credentials"],
+] as const;
+
 function AboutJaredPage() {
   return (
     <SalesPageShell pageId="about-jared" floatingHeader>
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/20 via-background to-background" />
-        <div className="container mx-auto grid gap-8 px-4 py-12 md:py-20 lg:grid-cols-[1.05fr_.95fr] lg:items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
-              About Jared James
-            </div>
-            <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight md:text-6xl">Coach. Team Canada athlete. 2× International Champion.</h1>
-            <p className="mt-4 max-w-2xl text-base font-bold text-primary md:text-lg">Top 50 all-time in the world · 66 kg powerlifting</p>
-            <p className="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl">
-              I built JF Effect from both sides of the bar — as a coach responsible for other people's progress and as an athlete who still has to execute under pressure.
+      {/* Hero */}
+      <section className="relative isolate overflow-hidden">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px]"
+          style={{ background: "radial-gradient(60% 100% at 50% 0%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 100%)" }}
+        />
+        <div className="mx-auto grid max-w-5xl gap-10 px-5 pb-12 pt-24 md:pt-32 lg:grid-cols-[1.1fr_.9fr] lg:items-center">
+          <div className="jf-auth-rise text-center lg:text-left">
+            <div className="inline-flex items-center rounded-full bg-primary/10 px-3.5 py-1.5 text-[13px] font-semibold text-primary">About Jared McIntyre</div>
+            <h1 className="mx-auto mt-5 max-w-[18ch] text-balance text-[38px] font-semibold leading-[1.05] tracking-[-0.03em] md:text-[56px] lg:mx-0">
+              Coach. Team Canada athlete. 2× International Champion.
+            </h1>
+            <p className="mt-4 text-[17px] font-semibold text-primary">Top 50 all-time in the world · 66 kg powerlifting</p>
+            <p className="mx-auto mt-4 max-w-xl text-[19px] leading-relaxed text-muted-foreground lg:mx-0">
+              I built JF Effect from both sides of the bar: as a coach responsible for other people's progress, and as an athlete who still has to execute under pressure.
             </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="h-12 px-6 font-bold"><Link to="/coaching/apply">Apply for Coaching</Link></Button>
-              <Button asChild size="lg" variant="outline" className="h-12 px-6 font-bold"><Link to="/personal-trainer-selkirk">Train With Me In Person</Link></Button>
+            <div className="mt-8 flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-center lg:justify-start">
+              <PrimaryCta to="/coaching/apply">Apply for Coaching</PrimaryCta>
+              <TextLink to="/personal-trainer-selkirk">Train with me in person</TextLink>
+            </div>
+            <div className="mt-6 flex flex-col items-center gap-2 lg:items-start">
+              <div className="text-[13px] text-muted-foreground">Follow along</div>
+              <SocialLinks />
             </div>
           </div>
-          <div className="relative mx-auto w-full max-w-lg">
-            <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-primary/10 blur-2xl" />
+          <div className="relative mx-auto w-full max-w-sm">
             <ScrollImage
               src={jaredHeroImage}
-              alt="Jared James representing Canada in international powerlifting competition"
-              className="aspect-[4/5] w-full rounded-3xl object-cover object-center shadow-2xl ring-1 ring-border"
+              alt="Jared McIntyre representing Canada in international powerlifting competition"
+              className="aspect-[4/5] w-full rounded-[28px] object-cover object-center shadow-[0_24px_60px_-24px_rgba(0,0,0,0.45)] ring-1 ring-border/70"
               eager
             />
           </div>
         </div>
       </section>
 
-      <Reveal stagger={0}>
-        <Section className="!pt-4">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-            {headlineStats.map(([value, label, detail]) => (
-              <Card key={label} className="flex min-h-[132px] flex-col justify-center p-4 text-center sm:p-5">
-                <div className="text-2xl font-black text-primary sm:text-3xl">{value}</div>
-                <div className="mt-1 text-[11px] font-bold uppercase tracking-wider sm:text-xs">{label}</div>
-                <div className="mt-2 text-[11px] leading-snug text-muted-foreground sm:text-xs">{detail}</div>
-              </Card>
+      {/* Headline numbers */}
+      <div className="mx-auto max-w-5xl px-5">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 lg:grid-cols-3">
+          {headlineStats.map(([value, label, detail]) => (
+            <div key={label} className="bg-card">
+              <Stat value={value} label={label} detail={detail} />
+            </div>
+          ))}
+        </div>
+        {/* Jump links — long page, one tap to the part you care about */}
+        <nav aria-label="On this page" className="-mx-5 mt-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:justify-center">
+          {JUMP_LINKS.map(([href, label]) => (
+            <a key={href} href={href} className="shrink-0 rounded-full bg-muted px-4 py-2 text-[14px] font-medium transition active:scale-[0.97] hover:bg-muted/70">
+              {label}
+            </a>
+          ))}
+        </nav>
+      </div>
+
+      {/* Story */}
+      <Reveal>
+        <Block id="story" narrow>
+          <Heading align="left" eyebrow="The short version" title="I don't coach from theory alone." />
+          <div className="space-y-4 text-[17px] leading-relaxed text-muted-foreground">
+            <p>My own training started in 2014. Since then I've competed in bodybuilding and powerlifting, represented Canada internationally, and coached more than 100 people across fat loss, muscle building, strength, bodybuilding, and powerlifting.</p>
+            <p>I still compete because it keeps me accountable to the same standards I ask from clients: preparation, execution, honest feedback, and adjustment.</p>
+          </div>
+        </Block>
+      </Reveal>
+
+      {/* How I coach */}
+      <Reveal>
+        <Block tint narrow>
+          <Heading eyebrow="How I coach" title="Simple enough to execute. Detailed enough to work." />
+          <Group>
+            {[
+              { title: "Build around the person", body: "Your schedule, equipment, training age, recovery, goals, and real life come first." },
+              { title: "Track the right data", body: "Training performance, bodyweight, photos, recovery, adherence, and honest feedback tell us what to change." },
+              { title: "Adjust before things break", body: "One rough week should not become a lost month. Coaching keeps the plan working as life changes." },
+            ].map((item) => (
+              <div key={item.title} className="flex items-start gap-4 px-5 py-4">
+                <IconTile><CheckCircle2 className="h-5 w-5" aria-hidden /></IconTile>
+                <div className="min-w-0">
+                  <div className="text-[17px] font-semibold leading-snug">{item.title}</div>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{item.body}</p>
+                </div>
+              </div>
+            ))}
+          </Group>
+        </Block>
+      </Reveal>
+
+      {/* Straight talk: honesty builds the trust that gets people to apply */}
+      <Reveal>
+        <Block narrow>
+          <Heading eyebrow="What to expect" title="Straight talk, up front." sub="So you know exactly who you'd be working with." />
+          <Group>
+            {[
+              { title: "Honest about what's realistic", body: "Results depend on your starting point, consistency and effort. I don't promise overnight changes, and I won't sell you a shortcut." },
+              { title: "Standards, not hype", body: "I hold clients to the same standards I hold myself to: preparation, execution, honest feedback and adjustment." },
+              { title: "A real person, every time", body: "Your check-ins are read and your plan is adjusted by a coach who knows your numbers, not an auto-reply." },
+              { title: "If I'm not the right fit, I'll say so", body: "I only take on people I'm confident I can help. A no-pressure call comes before any commitment." },
+            ].map((item) => (
+              <div key={item.title} className="flex items-start gap-4 px-5 py-4">
+                <IconTile><CheckCircle2 className="h-5 w-5" aria-hidden /></IconTile>
+                <div className="min-w-0">
+                  <div className="text-[17px] font-semibold leading-snug">{item.title}</div>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{item.body}</p>
+                </div>
+              </div>
+            ))}
+          </Group>
+        </Block>
+      </Reveal>
+
+      {/* Client results */}
+      <Reveal>
+        <Block id="results">
+          <Heading eyebrow="Client transformations" title="Real coaching. Visible proof." sub="Fat loss, muscle gain and body recomposition from JF Effect clients. Swipe to see more." />
+          <Rail label="Client transformations">
+            {transformationProof.map((item) => (
+              <Surface key={item.name} className="w-[72vw] max-w-[300px] shrink-0 snap-start overflow-hidden">
+                <div className="aspect-square overflow-hidden bg-muted">
+                  <ScrollImage
+                    src={item.image}
+                    alt={`${item.name} JF Effect client transformation`}
+                    className={`h-full w-full object-cover object-top ${item.crop ?? "scale-[1.18]"}`}
+                  />
+                </div>
+                <div className="p-4">
+                  <div className="text-[17px] font-semibold">{item.name}</div>
+                  <div className="mt-0.5 text-[14px] leading-snug text-muted-foreground">{item.result}</div>
+                </div>
+              </Surface>
+            ))}
+          </Rail>
+          <div className="mt-4 space-y-3">
+            <CredentialAccordion title="More transformation angles" summary="Front · side · back progress comparisons">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                {multiAngleProof.map(([label, image]) => (
+                  <figure key={label} className="overflow-hidden rounded-xl bg-background ring-1 ring-border/70">
+                    <div className="aspect-square overflow-hidden bg-muted">
+                      <ScrollImage src={image} alt={`${label} transformation comparison`} className="h-full w-full scale-[1.18] object-cover object-top" />
+                    </div>
+                    <figcaption className="p-3 text-[13px] font-medium">{label}</figcaption>
+                  </figure>
+                ))}
+              </div>
+            </CredentialAccordion>
+          </div>
+          <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground">
+            Client transformations reflect individual experiences. Results vary based on starting point, consistency, effort, adherence, lifestyle and other individual factors; results are not guaranteed.
+          </p>
+        </Block>
+      </Reveal>
+
+      {/* Natural moment to ask: they just saw proof */}
+      <Reveal>
+        <Block narrow className="!py-2 md:!py-4">
+          <div className="text-center">
+            <p className="text-[17px] text-muted-foreground">Like what you see? Your result could be next.</p>
+            <div className="mt-4 flex flex-col items-stretch gap-3 sm:items-center">
+              <PrimaryCta to="/coaching/apply" className="sm:min-w-[280px]">Apply for Coaching</PrimaryCta>
+              <p className="text-[13px] text-muted-foreground">Takes about a minute · No payment to apply</p>
+            </div>
+          </div>
+        </Block>
+      </Reveal>
+
+      {/* Client stories */}
+      <Reveal>
+        <Block tint>
+          <Heading eyebrow="Client stories" title="The people behind the results." sub="Swipe through each client's photos." />
+          <div className="mx-auto max-w-4xl space-y-5">
+            {clientSnapshots.map((client) => (
+              <Surface key={client.name} className="overflow-hidden">
+                <div className="overflow-x-auto snap-x snap-mandatory [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <div className="flex w-max gap-2 p-3">
+                    {client.photos.map((photo, index) => (
+                      <ScrollImage
+                        key={photo}
+                        src={photo}
+                        alt={`${client.name} client snapshot ${index + 1}`}
+                        className="h-[300px] w-[225px] shrink-0 snap-start rounded-xl object-cover sm:h-[380px] sm:w-[285px]"
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="border-t border-border/70 p-5">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                    <h3 className="text-[20px] font-semibold tracking-[-0.01em]">{client.name}</h3>
+                    <span className="text-[14px] font-semibold text-primary">{client.result}</span>
+                    <span className="text-[13px] text-muted-foreground">{client.role}</span>
+                  </div>
+                  <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">“{client.quote}”</p>
+                </div>
+              </Surface>
             ))}
           </div>
-        </Section>
+        </Block>
       </Reveal>
 
-      <Reveal stagger={1}>
-        <Section>
-          <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[.8fr_1.2fr] lg:items-start">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-[0.18em] text-primary">The short version</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">I don't coach from theory alone.</h2>
-            </div>
-            <div className="space-y-4 text-base leading-relaxed text-muted-foreground md:text-lg">
-              <p>My own training started in 2014. Since then I've competed in bodybuilding and powerlifting, represented Canada internationally, and coached more than 100 people across fat loss, muscle building, strength, bodybuilding, and powerlifting.</p>
-              <p>I still compete because it keeps me accountable to the same standards I ask from clients: preparation, execution, honest feedback, and adjustment.</p>
-            </div>
+      {/* Coached athletes */}
+      <Reveal>
+        <Block id="athletes">
+          <Heading eyebrow="Coached athletes" title="Athlete results under JF Effect." sub="Competitive achievements earned by athletes I coach, separate from my own résumé." />
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 lg:grid-cols-5">
+            {[
+              ["1", "IPF Worlds athlete", "Costa Rica · 2025"],
+              ["3", "National champions", "Canadian Nationals gold"],
+              ["11+", "Provincial golds", "MB + ON"],
+              ["14+", "Provincial records", "Set + held by coached athletes"],
+              ["1+", "Athlete of the Year", "Federation athlete recognition"],
+            ].map(([value, label, detail]) => (
+              <div key={label} className="bg-card last:col-span-2 lg:last:col-span-1">
+                <Stat value={value} label={label} detail={detail} />
+              </div>
+            ))}
           </div>
-        </Section>
+          <div className="mt-6">
+            <Rail label="Coached athletes">
+              {coachedAthletePhotos.map((athlete) => (
+                <Surface key={athlete.name} className="w-[72vw] max-w-[280px] shrink-0 snap-start overflow-hidden">
+                  <ScrollImage
+                    src={athlete.image}
+                    alt={`${athlete.name} JF Effect coached powerlifting athlete`}
+                    className="aspect-square w-full bg-black object-contain"
+                  />
+                  <div className="p-4">
+                    <div className="text-[17px] font-semibold">{athlete.name}</div>
+                    <div className="mt-0.5 text-[14px] leading-snug text-muted-foreground">{athlete.achievement}</div>
+                  </div>
+                </Surface>
+              ))}
+            </Rail>
+          </div>
+          <div className="mt-3">
+            <CredentialAccordion title="All coached athlete results" summary="Worlds · Nationals · Regionals · provincial titles · records · awards">
+              <ResultList rows={athleteResults} />
+            </CredentialAccordion>
+          </div>
+        </Block>
       </Reveal>
 
-      <Reveal stagger={2}>
-        <Section className="bg-card/30">
-          <SectionTitle eyebrow="Jared · Athlete achievements" title="My competitive record." sub="My own championships, records, rankings and federation recognition. Kept separate from the athletes I coach." />
-          <div className="mx-auto max-w-5xl space-y-3">
+      {/* My competitive record */}
+      <Reveal>
+        <Block id="record" tint narrow>
+          <Heading eyebrow="My competitive record" title="Championships, records and rankings." sub="My own results, kept separate from the athletes I coach." />
+          <div className="space-y-3">
             <CredentialAccordion title="International Championships" summary="2 overall international titles · NAPF + Commonwealth · 2026" defaultOpen>
               <ResultList rows={internationalResults} />
-              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">“2× International Champion” refers to the two overall-total championship wins. Individual lift medals are listed as results, not counted as additional championship titles.</p>
+              <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground">“2× International Champion” refers to the two overall-total championship wins. Individual lift medals are listed as results, not counted as additional championship titles.</p>
             </CredentialAccordion>
             <CredentialAccordion title="Canadian Nationals" summary="2024–2026 · 5th → 4th → 2nd"><ResultList rows={nationalResults} /></CredentialAccordion>
             <CredentialAccordion title="Regional Championships" summary="2 wins + 1 silver"><ResultList rows={regionalResults} /></CredentialAccordion>
@@ -502,142 +689,14 @@ function AboutJaredPage() {
             </CredentialAccordion>
             <CredentialAccordion title="Bodybuilding" summary="Men's Physique · champion + natural podium"><ResultList rows={bodybuildingResults} /></CredentialAccordion>
           </div>
-        </Section>
+        </Block>
       </Reveal>
 
-      <Reveal stagger={3}>
-        <Section>
-          <SectionTitle eyebrow="Coached athlete achievements" title="Athlete results under JF Effect." sub="Competitive achievements earned by athletes I coach — separate from my own athlete résumé." />
-          <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 lg:grid-cols-5">
-            {[
-              ["1", "IPF Worlds athlete", "Costa Rica · 2025"],
-              ["3", "National champions", "Canadian Nationals gold"],
-              ["11+", "Provincial golds", "MB + ON"],
-              ["14+", "Provincial records", "Set + held by coached athletes"],
-              ["1+", "Athlete of the Year", "Federation athlete recognition"],
-            ].map(([value, label, detail]) => (
-              <Card key={label} className="p-4 text-center">
-                <div className="text-2xl font-black text-primary">{value}</div>
-                <div className="mt-1 text-xs font-bold uppercase tracking-wide">{label}</div>
-                <div className="mt-2 text-[11px] text-muted-foreground">{detail}</div>
-              </Card>
-            ))}
-          </div>
-          <div className="mx-auto mt-6 max-w-5xl overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch]">
-            <div className="flex w-max gap-4">
-              {coachedAthletePhotos.map((athlete) => (
-                <Card key={athlete.name} className="w-[76vw] max-w-[300px] shrink-0 overflow-hidden">
-                  <ScrollImage
-                    src={athlete.image}
-                    alt={`${athlete.name} JF Effect coached powerlifting athlete`}
-                    className="aspect-square w-full bg-black object-contain"
-                  />
-                  <div className="p-4">
-                    <div className="font-black">{athlete.name}</div>
-                    <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{athlete.achievement}</div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-          <div className="mx-auto mt-4 max-w-5xl">
-            <CredentialAccordion title="View coached athlete achievements" summary="Worlds · Nationals · Regionals · provincial titles · records · awards">
-              <ResultList rows={athleteResults} />
-            </CredentialAccordion>
-          </div>
-        </Section>
-      </Reveal>
-
-      <Reveal stagger={4}>
-        <Section>
-          <SectionTitle
-            eyebrow="Client snapshots"
-            title="The people behind the results."
-            sub="The same live client photo sets featured on Jared James Fit. Swipe each client and each photo row on mobile."
-          />
-          <div className="mx-auto max-w-6xl space-y-5">
-            {clientSnapshots.map((client) => (
-              <Card key={client.name} className="overflow-hidden">
-                <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
-                  <div className="flex w-max gap-2 p-3">
-                    {client.photos.map((photo, index) => (
-                      <ScrollImage
-                        key={photo}
-                        src={photo}
-                        alt={`${client.name} client snapshot ${index + 1}`}
-                        className="h-[320px] w-[240px] shrink-0 rounded-xl object-cover sm:h-[380px] sm:w-[285px]"
-                      />
-                    ))}
-                  </div>
-                </div>
-                <div className="border-t border-border p-5">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <h3 className="text-xl font-black">{client.name}</h3>
-                    <span className="text-sm font-bold text-primary">{client.result}</span>
-                    <span className="text-xs text-muted-foreground">{client.role}</span>
-                  </div>
-                  <p className="mt-3 text-sm italic leading-relaxed text-muted-foreground">“{client.quote}”</p>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </Section>
-      </Reveal>
-
-      <Reveal stagger={5}>
-        <Section className="bg-card/30">
-          <SectionTitle
-            eyebrow="Client transformations"
-            title="Real coaching. Visible proof."
-            sub="Fat loss, muscle gain and body recomposition results from JF Effect clients. Swipe horizontally on mobile."
-          />
-          <div className="mx-auto max-w-6xl overflow-x-auto pb-4 [-webkit-overflow-scrolling:touch]">
-            <div className="flex w-max gap-4">
-              {transformationProof.map((item) => (
-                <Card key={item.name} className="w-[78vw] max-w-[340px] shrink-0 overflow-hidden">
-                  <div className="aspect-square overflow-hidden bg-muted">
-                    <ScrollImage
-                      src={item.image}
-                      alt={`${item.name} JF Effect client transformation`}
-                      className={`h-full w-full object-cover object-top ${item.crop ?? "scale-[1.18]"}`}
-                    />
-                  </div>
-                  <div className="p-4">
-                    <div className="font-black">{item.name}</div>
-                    <div className="mt-1 text-sm leading-relaxed text-muted-foreground">{item.result}</div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-          <div className="mx-auto mt-4 max-w-5xl">
-            <CredentialAccordion title="View additional transformation angles" summary="Front · side · back progress comparisons">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {multiAngleProof.map(([label, image]) => (
-                  <figure key={label} className="overflow-hidden rounded-xl border border-border bg-background">
-                    <div className="aspect-square overflow-hidden bg-muted">
-                      <ScrollImage
-                        src={image}
-                        alt={`${label} transformation comparison`}
-                        className="h-full w-full scale-[1.18] object-cover object-top"
-                      />
-                    </div>
-                    <figcaption className="p-3 text-xs font-bold">{label}</figcaption>
-                  </figure>
-                ))}
-              </div>
-            </CredentialAccordion>
-          </div>
-          <p className="mx-auto mt-5 max-w-4xl text-xs leading-relaxed text-muted-foreground">
-            Client transformations reflect individual experiences. Results vary based on starting point, consistency, effort, adherence, lifestyle and other individual factors; results are not guaranteed.
-          </p>
-        </Section>
-      </Reveal>
-
-      <Reveal stagger={6}>
-        <Section className="bg-card/30">
-          <SectionTitle eyebrow="Education + experience" title="Coaching credentials" sub="Formal education backed by years of hands-on coaching and competition." />
-          <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
+      {/* Credentials */}
+      <Reveal>
+        <Block id="credentials" narrow>
+          <Heading eyebrow="Education + experience" title="Coaching credentials" sub="Formal education backed by years of hands-on coaching and competition." />
+          <Group>
             {[
               ["GoodLife Personal Training Institute (GLPTI)", "Professional personal training certification", BadgeCheck],
               ["DTS Level 1 Certification", "Darby Training Systems · 2018", ShieldCheck],
@@ -646,14 +705,17 @@ function AboutJaredPage() {
             ].map(([title, detail, Icon]) => {
               const IconComponent = Icon as typeof BadgeCheck;
               return (
-                <Card key={title as string} className="flex items-start gap-4 p-5">
-                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><IconComponent className="h-5 w-5" /></div>
-                  <div><div className="font-black">{title as string}</div><div className="mt-1 text-sm leading-relaxed text-muted-foreground">{detail as string}</div></div>
-                </Card>
+                <div key={title as string} className="flex items-start gap-4 px-5 py-4">
+                  <IconTile><IconComponent className="h-5 w-5" aria-hidden /></IconTile>
+                  <div className="min-w-0">
+                    <div className="text-[17px] font-semibold leading-snug">{title as string}</div>
+                    <div className="mt-0.5 text-[14px] leading-relaxed text-muted-foreground">{detail as string}</div>
+                  </div>
+                </div>
               );
             })}
-          </div>
-          <div className="mx-auto mt-4 max-w-5xl space-y-3">
+          </Group>
+          <div className="mt-4 space-y-3">
             <CredentialAccordion title="Coaching career" summary="Personal training → full-time JF Effect">
               <ResultList rows={[
                 { primary: "May 2017 – July 2018 · Professional Personal Trainer", secondary: "Commercial fitness facility · coached clients through programming, technique, progression and accountability" },
@@ -664,71 +726,81 @@ function AboutJaredPage() {
               ]} />
             </CredentialAccordion>
             <CredentialAccordion title="Federation service & volunteering" summary="Giving back to sanctioned powerlifting">
-              <p className="text-sm leading-relaxed text-muted-foreground">Volunteer support at sanctioned powerlifting meets from local events through provincial, regional, national and international-level competition.</p>
+              <p className="text-[15px] leading-relaxed text-muted-foreground">Volunteer support at sanctioned powerlifting meets from local events through provincial, regional, national and international-level competition.</p>
             </CredentialAccordion>
           </div>
-        </Section>
+        </Block>
       </Reveal>
 
-      <Reveal stagger={7}>
-        <Section>
-          <SectionTitle eyebrow="Timeline" title="How it got here" />
-          <div className="mx-auto max-w-4xl space-y-3">
+      {/* Timeline */}
+      <Reveal>
+        <Block tint narrow>
+          <Heading eyebrow="Timeline" title="How it got here." />
+          <Group>
             {timeline.map((item) => (
-              <Card key={item.year} className="grid gap-3 p-5 sm:grid-cols-[90px_1fr] sm:items-start">
-                <div className="text-2xl font-black text-primary">{item.year}</div>
-                <div><div className="font-black">{item.title}</div><p className="mt-1 text-sm leading-relaxed text-muted-foreground md:text-base">{item.body}</p></div>
-              </Card>
+              <div key={item.year} className="grid gap-1 px-5 py-4 sm:grid-cols-[72px_1fr] sm:gap-4">
+                <div className="text-[20px] font-semibold tracking-[-0.01em] text-primary">{item.year}</div>
+                <div>
+                  <div className="text-[17px] font-semibold leading-snug">{item.title}</div>
+                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{item.body}</p>
+                </div>
+              </div>
             ))}
-          </div>
-        </Section>
+          </Group>
+        </Block>
       </Reveal>
 
-      <Reveal stagger={8}><CoachTimelineSection /></Reveal>
-
-      <Reveal stagger={9}>
-        <Section>
-          <SectionTitle eyebrow="How I coach" title="Simple enough to execute. Detailed enough to work." />
-          <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-3">
-            {[
-              { title: "Build around the person", body: "Your schedule, equipment, training age, recovery, goals, and real life come first." },
-              { title: "Track the right data", body: "Training performance, bodyweight, photos, recovery, adherence, and honest feedback tell us what to change." },
-              { title: "Adjust before things break", body: "One rough week should not become a lost month. Coaching keeps the plan working as life changes." },
-            ].map((item) => (
-              <Card key={item.title} className="p-6"><CheckCircle2 className="h-6 w-6 text-primary" /><h3 className="mt-4 text-lg font-black">{item.title}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p></Card>
-            ))}
-          </div>
-        </Section>
-      </Reveal>
-
-      <Reveal stagger={10}>
-        <Section className="bg-card/30">
-          <div className="mx-auto max-w-4xl rounded-3xl border border-primary/20 bg-background p-7 md:p-10">
+      {/* Online or in person */}
+      <Reveal>
+        <Block narrow>
+          <Surface className="p-6 md:p-8">
             <div className="flex items-start gap-4">
-              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><MapPin className="h-6 w-6" /></div>
+              <IconTile><MapPin className="h-5 w-5" aria-hidden /></IconTile>
               <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-primary">Selkirk, Manitoba</div>
-                <h2 className="mt-2 text-2xl font-black md:text-4xl">Online or in person.</h2>
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">I coach online through JF Effect and offer in-person personal training in Selkirk. Whether you're starting from zero or competing at a high level, the goal is the same: make the next step obvious and measurable.</p>
+                <div className="text-[13px] font-semibold text-primary">Selkirk, Manitoba</div>
+                <h2 className="mt-1 text-[24px] font-semibold leading-tight tracking-[-0.02em]">Online or in person.</h2>
+                <p className="mt-2 text-[16px] leading-relaxed text-muted-foreground">
+                  I coach online through JF Effect and offer in-person personal training in Selkirk. Whether you're starting from zero or competing at a high level, the goal is the same: make the next step obvious and measurable.
+                </p>
+                <div className="mt-3">
+                  <TextLink to="/personal-trainer-selkirk">In-person training in Selkirk</TextLink>
+                </div>
               </div>
             </div>
-          </div>
-        </Section>
+          </Surface>
+        </Block>
       </Reveal>
 
-      <Reveal stagger={11}>
-        <Section className="!pt-8">
-          <div className="mx-auto max-w-3xl rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 text-center md:p-12">
-            <div className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Work with me</div>
-            <h2 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">The credentials matter. The coaching has to prove itself.</h2>
-            <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground md:text-lg">If you want a plan built around your actual life and a coach who will keep adjusting it with you, apply for private coaching.</p>
-            <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg" className="h-12 px-7 font-bold"><Link to="/coaching/apply">Apply for Coaching</Link></Button>
-              <Button asChild size="lg" variant="outline" className="h-12 px-7 font-bold"><Link to="/coaching">See How Coaching Works</Link></Button>
+      {/* Final ask */}
+      <Reveal>
+        <Block narrow className="pt-0 md:pt-0">
+          <div className="text-center">
+            <div className="text-[13px] font-semibold text-primary">Work with me</div>
+            <h2 className="mt-1.5 text-balance text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] md:text-[40px]">
+              The credentials matter. The coaching has to prove itself.
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-[17px] leading-relaxed text-muted-foreground">
+              Want a plan built around your actual life, and a coach who keeps adjusting it with you? Apply for private coaching.
+            </p>
+            <div className="mt-7 flex flex-col items-stretch gap-4 sm:items-center">
+              <PrimaryCta to="/coaching/apply" className="sm:min-w-[280px]">Apply for Coaching</PrimaryCta>
+              <p className="text-[13px] text-muted-foreground">Takes about a minute · No payment to apply</p>
+              <TextLink to="/coaching">See how coaching works</TextLink>
+            </div>
+            <div className="mx-auto mt-10 max-w-md rounded-2xl bg-card p-5 text-center ring-1 ring-border/70">
+              <div className="text-[17px] font-semibold">Not ready to apply? Ask me first.</div>
+              <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">
+                Questions before you decide are welcome. Send me a message, or follow along to see how I train and coach.
+              </p>
+              <div className="mt-3 flex justify-center"><TextLink href={INQUIRY_DM_URL}>Message me on Instagram</TextLink></div>
+              <div className="mt-3 flex justify-center"><SocialLinks /></div>
             </div>
           </div>
-        </Section>
+        </Block>
       </Reveal>
+
+      <div className="pb-24 md:pb-0" />
+      <StickyMobileCta label="Apply for Coaching" href="/coaching/apply" />
     </SalesPageShell>
   );
 }

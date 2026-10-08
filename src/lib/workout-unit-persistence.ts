@@ -26,6 +26,9 @@ export type PersistedLoad = {
 export const LB_PER_KG = 2.2046226218;
 
 function finite(value: unknown): number | null {
+  // Number(null) and Number("") are 0 — a missing load must stay missing, or a
+  // set saved with only reps/RPE shows a weight of "0" instead of a blank cell.
+  if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }

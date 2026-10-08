@@ -33,7 +33,6 @@ export const membershipNav: NavItem[] = [
   { to: "/admin/membership/welcome-messages", label: "Welcome Messages", icon: Megaphone, group: "Setup Tools" },
   // CONTENT
   { to: "/admin/member-plans", label: "Member Programs", icon: BookOpen, group: "Content" },
-  { to: "/admin/member-resources", label: "Member Resources", icon: FolderOpen, group: "Content" },
   { to: "/admin/recipes", label: "Member Recipes", icon: ChefHat, group: "Content" },
   { to: "/admin/events", label: "Member Events", icon: Calendar, group: "Content" },
   { to: "/admin/broadcasts", label: "Member Announcements", icon: Megaphone, group: "Content" },

@@ -5,23 +5,25 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, Target } from "lucide-react";
+import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, Target, FileSignature } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import { SetupStepSheet, type SetupStepKey } from "@/components/portal/setup-step-sheet";
+import { useCoachingAgreement } from "@/components/coaching-agreement/agreement-context";
 
 type Props = { clientId: string; userId: string };
-type ItemKey = "profile_picture" | "basic_info" | "training_schedule" | "goals_setup";
-type Item = { key: ItemKey; label: string; description: string; to?: string; sheet?: SetupStepKey; icon: typeof Camera; done: boolean };
+type ItemKey = "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup";
+type Item = { key: ItemKey; label: string; description: string; to?: string; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean };
 
 export function SetupChecklistBanner({ clientId, userId }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
+  const agreement = useCoachingAgreement();
   const { data: client, isPending: clientPending, isFetched: clientFetched } = useQuery({
     queryKey: ["setup-banner-client", userId], enabled: !!userId, staleTime: 60_000,
     queryFn: async () => {
       const { data } = await supabase.from("clients")
-        .select("id, profile_picture_url, profile_picture_needs_update, full_name, first_name, last_name, preferred_name, phone, date_of_birth, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, training_schedule_completed, committed_training_frequency, committed_training_days")
+        .select("id, profile_picture_url, profile_picture_needs_update, full_name, first_name, last_name, preferred_name, phone, date_of_birth, sex, height_cm, preferred_height_unit, address, city, province, postal_code, country, timezone, emergency_contact_name, emergency_contact_phone, basic_info_completed_at, training_schedule_completed, committed_training_frequency, committed_training_days")
         .eq("user_id", userId).maybeSingle();
       return data;
     },
@@ -36,13 +38,26 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
 
   const items = useMemo<Item[]>(() => {
     const c = client as any;
-    return [
+    const base: Item[] = [
       { key: "profile_picture", label: "Add a profile photo", description: "A clear headshot helps your coach personalise feedback.", sheet: "profile_picture", icon: Camera, done: !!c?.profile_picture_url && !c?.profile_picture_needs_update },
       { key: "basic_info", label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard, done: !!c && isBasicInfoComplete(c) },
       { key: "training_schedule", label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock, done: !!c?.training_schedule_completed },
       { key: "goals_setup", label: "Finish Goals & Setup", description: "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null) },
     ];
-  }, [client, goals]);
+    // The Coaching Agreement is the one mandatory step, so it leads the list. It only
+    // appears once its status has loaded and applies to this account.
+    if (agreement.state?.applicable && agreement.state.state) {
+      base.unshift({
+        key: "agreement",
+        label: "Sign your Coaching Agreement",
+        description: "One quick signature covers everything you buy from your coach.",
+        onClick: agreement.canSign ? agreement.openSignFlow : undefined,
+        icon: FileSignature,
+        done: agreement.state.state.state !== "needs_signature",
+      });
+    }
+    return base;
+  }, [client, goals, agreement.state, agreement.canSign, agreement.openSignFlow]);
 
   const done = items.filter((i) => i.done).length;
   if (!clientId || !userId || clientPending || goalsPending || !clientFetched || !goalsFetched || done === items.length) return null;
@@ -63,10 +78,10 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
             const Icon = it.icon;
             const rowClass = "flex w-full items-center gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2.5 text-left text-sm transition hover:bg-background " + (it.done ? "opacity-60" : "");
             const inner = <><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>{it.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground" />}</div><div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div></div>{!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}</>;
-            return <li key={it.key}>{it.sheet ? <button type="button" className={rowClass} onClick={() => setOpenStep(it.sheet!)} disabled={it.done}>{inner}</button> : <Link to={it.to!} className={rowClass}>{inner}</Link>}</li>;
+            return <li key={it.key}>{it.onClick || it.key === "agreement" ? <button type="button" className={rowClass} onClick={it.onClick} disabled={it.done || !it.onClick}>{inner}</button> : it.sheet ? <button type="button" className={rowClass} onClick={() => setOpenStep(it.sheet!)} disabled={it.done}>{inner}</button> : <Link to={it.to!} className={rowClass}>{inner}</Link>}</li>;
           })}
         </ul>
-        <div className="mt-4 flex flex-wrap gap-2">{nextItem.sheet ? <Button size="sm" onClick={() => setOpenStep(nextItem.sheet!)}>Continue setup</Button> : <Button asChild size="sm"><Link to={nextItem.to!}>Continue setup</Link></Button>}</div>
+        <div className="mt-4 flex flex-wrap gap-2">{nextItem.key === "agreement" ? <Button size="sm" onClick={nextItem.onClick} disabled={!nextItem.onClick}>Continue setup</Button> : nextItem.sheet ? <Button size="sm" onClick={() => setOpenStep(nextItem.sheet!)}>Continue setup</Button> : <Button asChild size="sm"><Link to={nextItem.to!}>Continue setup</Link></Button>}</div>
       </Card>
       <SetupStepSheet step={openStep} clientId={clientId} userId={userId} client={client} onOpenChange={(o) => { if (!o) setOpenStep(null); }} />
     </>

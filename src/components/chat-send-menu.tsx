@@ -14,9 +14,8 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Plus, ClipboardList, FileSignature, UtensilsCrossed, ZapIcon, Loader2, Search } from "lucide-react";
+import { Plus, ClipboardList, FileSignature, UtensilsCrossed, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
-import { ClientActionRequestComposer } from "@/components/client-action-request-composer";
 import { bulkAssignNativeFormToClients } from "@/lib/native-forms.functions";
 import { createAgreement } from "@/lib/agreements.functions";
 import { shareRecipeWithClients } from "@/lib/chat-requests.functions";
@@ -37,7 +36,6 @@ export type ChatSendAttachment = {
 
 export function ChatSendMenu({
   clientIds,
-  defaultClientId,
   disabled,
   onAttach,
   surface,
@@ -47,26 +45,21 @@ export function ChatSendMenu({
 }: {
   /** Clients the request will target. For group chats: all client members. */
   clientIds: string[];
-  /** Best-guess single client for Action Request composer prefill. */
-  defaultClientId?: string;
   disabled?: boolean;
   onAttach: (att: ChatSendAttachment, body: string) => void | Promise<void>;
   surface: "dm" | "group";
   /** When true, render only the dialogs (no Plus trigger) — caller drives them. */
   hideTrigger?: boolean;
-  externalOpen?: { form?: boolean; sig?: boolean; recipe?: boolean; action?: boolean };
-  onExternalOpenChange?: (key: "form" | "sig" | "recipe" | "action", v: boolean) => void;
+  externalOpen?: { form?: boolean; sig?: boolean; recipe?: boolean };
+  onExternalOpenChange?: (key: "form" | "sig" | "recipe", v: boolean) => void;
 }) {
-  const [actionOpenInt, setActionOpenInt] = useState(false);
   const [formOpenInt, setFormOpenInt] = useState(false);
   const [sigOpenInt, setSigOpenInt] = useState(false);
   const [recipeOpenInt, setRecipeOpenInt] = useState(false);
 
-  const actionOpen = externalOpen?.action ?? actionOpenInt;
   const formOpen = externalOpen?.form ?? formOpenInt;
   const sigOpen = externalOpen?.sig ?? sigOpenInt;
   const recipeOpen = externalOpen?.recipe ?? recipeOpenInt;
-  const setActionOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("action", v) : setActionOpenInt(v);
   const setFormOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("form", v) : setFormOpenInt(v);
   const setSigOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("sig", v) : setSigOpenInt(v);
   const setRecipeOpen = (v: boolean) => onExternalOpenChange ? onExternalOpenChange("recipe", v) : setRecipeOpenInt(v);
@@ -110,13 +103,6 @@ export function ChatSendMenu({
           >
             <UtensilsCrossed className="mr-2 h-4 w-4" /> Share recipe
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={surface !== "dm" || !defaultClientId}
-            onClick={() => setActionOpen(true)}
-          >
-            <ZapIcon className="mr-2 h-4 w-4" /> Action request
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       )}
@@ -136,13 +122,6 @@ export function ChatSendMenu({
         clientIds={clientIds}
         onAttach={onAttach}
       />
-      {surface === "dm" && defaultClientId && (
-        <ClientActionRequestComposer
-          open={actionOpen}
-          onOpenChange={setActionOpen}
-          defaultClientId={defaultClientId}
-        />
-      )}
     </>
   );
 }

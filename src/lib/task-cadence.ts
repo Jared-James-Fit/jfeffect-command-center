@@ -1,9 +1,10 @@
 /**
  * Single source of truth for task cadence labels + calendar date math.
  *
- * Nutrition Review runs on the last Friday of each month
- * (`monthly_last_friday`). `semi_monthly` (15th + 30th) is kept for any
- * custom schedules still using it.
+ * The monthly Nutrition Update Request goes out on the Monday that starts the
+ * final week of each month (`lastMondayOfMonth`, mirrored by
+ * fn_last_monday_of_month in SQL). `monthly_last_friday` and `semi_monthly`
+ * (15th + 30th) are kept for any custom schedules still using them.
  */
 
 export const SEMI_MONTHLY_LABEL = "15th + 30th of each month";
@@ -77,4 +78,29 @@ export function nextLastFridayDate(
   const y = month === 12 ? year + 1 : year;
   const m = month === 12 ? 1 : month + 1;
   return { y, m, d: lastFridayOfMonth(y, m) };
+}
+
+/**
+ * Day-of-month of the last Monday in the given month (month is 1-12): the
+ * start of the month's final Monday-to-Sunday week. Used for the monthly
+ * Nutrition Update Request. Keep in sync with fn_last_monday_of_month().
+ */
+export function lastMondayOfMonth(year: number, month: number): number {
+  const last = lastDayOfMonth(year, month);
+  const dow = new Date(Date.UTC(year, month - 1, last)).getUTCDay();
+  return last - ((dow - 1 + 7) % 7);
+}
+
+/** Next final-week start on/after the given local date (strictly after when `includeToday` is false). */
+export function nextFinalWeekStart(
+  year: number,
+  month: number,
+  day: number,
+  includeToday = true,
+): { y: number; m: number; d: number } {
+  const thisMonth = lastMondayOfMonth(year, month);
+  if (includeToday ? thisMonth >= day : thisMonth > day) return { y: year, m: month, d: thisMonth };
+  const y = month === 12 ? year + 1 : year;
+  const m = month === 12 ? 1 : month + 1;
+  return { y, m, d: lastMondayOfMonth(y, m) };
 }

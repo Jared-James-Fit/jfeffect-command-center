@@ -3,7 +3,13 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
-import { addDays, format, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
+import {
+  normalizeCommittedDays,
+  planCommittedRealign,
+  todayInTimeZone,
+  type RealignRole,
+} from "@/lib/committed-schedule-realign";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Phase 3-5 server fns: bulk reschedules, coach overrides, schedule lock.
@@ -32,7 +38,7 @@ async function resolveActorAccess(
   const { supabase, userId } = ctx;
   const { data: client } = await supabase
     .from("clients")
-    .select("id, user_id, schedule_locked, assigned_coach_id, full_name")
+    .select("id, user_id, schedule_locked, assigned_coach_id, full_name, timezone")
     .eq("id", clientId)
     .maybeSingle();
   if (!client) throw new Error("Client not found.");
@@ -317,6 +323,215 @@ export const setScheduleLock = createServerFn({ method: "POST" })
 // history never shifts the remaining workout order within a week.
 // ───────────────────────────────────────────────────────────────────────────
 
+export type RealignResult = {
+  ok: true;
+  applied: number;
+  batchId: string | null;
+  noop?: boolean;
+  pendingPinned: number;
+  unplaced: number;
+};
+
+/**
+ * Shared engine. Callers MUST have authorized the actor first
+ * (resolveActorAccess). Reads use the service role on purpose: a client's own
+ * RLS view hides unpublished/Draft blocks, which would otherwise never be
+ * re-dated when the client changes their schedule.
+ */
+export async function realignClientToCommittedDays(args: {
+  clientId: string;
+  userId: string;
+  role: Role;
+  includePinned: boolean;
+}): Promise<RealignResult> {
+  const { clientId, userId, role, includePinned } = args;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const empty: RealignResult = { ok: true, applied: 0, batchId: null, noop: true, pendingPinned: 0, unplaced: 0 };
+
+  const { data: clientRow } = await supabaseAdmin
+    .from("clients")
+    .select("committed_training_days, timezone")
+    .eq("id", clientId)
+    .maybeSingle();
+  const committed = normalizeCommittedDays(clientRow?.committed_training_days as string[] | null);
+  if (committed.length === 0) return empty;
+
+  const { data: blocks } = await supabaseAdmin
+    .from("pl_blocks")
+    .select("id, start_date, week_duration_days, status, archived, source_template_block_key")
+    .eq("client_id", clientId)
+    .neq("status", "Archived");
+  // Primary program blocks only (reserved At-Home Backup blocks are excluded),
+  // including Draft / hidden blocks that haven't started yet.
+  const blockList = filterPrimaryProgramBlocks(
+    (blocks ?? []).filter((b: any) => b.start_date && !b.archived),
+  );
+  if (blockList.length === 0) return empty;
+
+  const blockIds = blockList.map((b: any) => b.id);
+  const { data: weeks } = await supabaseAdmin
+    .from("pl_weeks")
+    .select("id, week_index, block_id")
+    .in("block_id", blockIds)
+    .is("deleted_at", null)
+    .order("week_index");
+  const weekList = weeks ?? [];
+  const weekIds = weekList.map((w: any) => w.id);
+  if (weekIds.length === 0) return empty;
+  const { data: days } = await supabaseAdmin
+    .from("pl_days")
+    .select("id, day_index, week_id, scheduled_date, schedule_source, schedule_locked, archived")
+    .in("week_id", weekIds)
+    .eq("archived", false)
+    .is("deleted_at", null)
+    .order("day_index");
+  const dayList = days ?? [];
+  const dayIds = dayList.map((d: any) => d.id);
+  const [completionsRes, instancesRes] = dayIds.length
+    ? await Promise.all([
+        supabaseAdmin
+          .from("pl_day_completions")
+          .select("day_id, completed_at, in_progress_at, started_at")
+          .in("day_id", dayIds),
+        // Canonical placement is the scheduled-workout instance whenever one
+        // exists; loaded BEFORE planning so a stale pl_days date can't hide a
+        // stale instance.
+        supabaseAdmin
+          .from("pl_scheduled_workouts")
+          .select("id, source_day_id, scheduled_date, schedule_source")
+          .eq("client_id", clientId)
+          .in("source_day_id", dayIds),
+      ])
+    : [{ data: [] as any[] }, { data: [] as any[] }];
+
+  const touchedDayIds = new Set<string>();
+  for (const c of (completionsRes.data ?? []) as any[]) {
+    if (c.completed_at || c.in_progress_at || c.started_at) touchedDayIds.add(c.day_id);
+  }
+  const instances = (instancesRes.data ?? []) as any[];
+  const instanceByDayId = new Map<string, any>();
+  for (const r of instances) {
+    const prev = instanceByDayId.get(r.source_day_id);
+    if (!prev || r.scheduled_date < prev.scheduled_date) instanceByDayId.set(r.source_day_id, r);
+  }
+  const dayById = new Map<string, any>(dayList.map((d: any) => [d.id, d]));
+
+  const plan = planCommittedRealign({
+    committed,
+    blocks: blockList as any[],
+    weeks: weekList as any[],
+    days: dayList as any[],
+    instances,
+    touchedDayIds,
+    // "Today" in the client's own timezone, not the server's.
+    todayISO: todayInTimeZone(clientRow?.timezone as string | null),
+    role: role as RealignRole,
+    includePinned,
+  });
+  const { moves, pendingPinned, unplaced } = plan;
+  if (moves.length === 0) {
+    return { ok: true, applied: 0, batchId: null, noop: true, pendingPinned, unplaced };
+  }
+
+  const batchId = crypto.randomUUID();
+
+  // A day with a pl_scheduled_workouts instance is instance-canonical: update
+  // the instance with the valid "moved" source AND mirror the new date onto
+  // pl_days, so every reader (calendar, week view, cardio placement, Calendar
+  // Issue badge) agrees. Legacy-only days update pl_days directly.
+  type AppliedRow = (typeof moves)[number] & {
+    target: "instance" | "day";
+    instanceId?: string;
+    prevDay: { scheduled_date: string | null; schedule_source: string | null; schedule_locked: boolean | null };
+  };
+  const applyOne = async (m: (typeof moves)[number]): Promise<AppliedRow> => {
+    const d = dayById.get(m.dayId);
+    const prevDay = {
+      scheduled_date: d?.scheduled_date ?? null,
+      schedule_source: d?.schedule_source ?? null,
+      schedule_locked: d?.schedule_locked ?? null,
+    };
+    const inst = instanceByDayId.get(m.dayId);
+    if (inst) {
+      const { error } = await supabaseAdmin
+        .from("pl_scheduled_workouts")
+        .update({ scheduled_date: m.next, schedule_source: "moved" })
+        .eq("id", inst.id);
+      if (error) throw new Error(error.message);
+      const { error: mirrorErr } = await supabaseAdmin
+        .from("pl_days")
+        .update({ scheduled_date: m.next, schedule_source: "auto", schedule_locked: false })
+        .eq("id", m.dayId);
+      if (mirrorErr) {
+        await supabaseAdmin
+          .from("pl_scheduled_workouts")
+          .update({ scheduled_date: inst.scheduled_date, schedule_source: inst.schedule_source ?? "manual" })
+          .eq("id", inst.id);
+        throw new Error(mirrorErr.message);
+      }
+      return { ...m, target: "instance", instanceId: inst.id, prev: inst.scheduled_date, prevDay };
+    }
+    const { error } = await supabaseAdmin
+      .from("pl_days")
+      // A realigned workout is back under automatic scheduling, so the
+      // pin is released — otherwise the next change would skip it again.
+      .update({ scheduled_date: m.next, schedule_source: "auto", schedule_locked: false })
+      .eq("id", m.dayId);
+    if (error) throw new Error(error.message);
+    return { ...m, target: "day", prevDay };
+  };
+
+  const applied: AppliedRow[] = [];
+  const BATCH = 8;
+  let failure: Error | null = null;
+  for (let i = 0; i < moves.length && !failure; i += BATCH) {
+    const results = await Promise.allSettled(moves.slice(i, i + BATCH).map(applyOne));
+    for (const r of results) {
+      if (r.status === "fulfilled") applied.push(r.value);
+      else failure = failure ?? (r.reason instanceof Error ? r.reason : new Error(String(r.reason)));
+    }
+  }
+  if (failure) {
+    // All-or-nothing: put every already-applied workout back.
+    for (const a of applied) {
+      if (a.target === "instance" && a.instanceId) {
+        await supabaseAdmin
+          .from("pl_scheduled_workouts")
+          .update({ scheduled_date: a.prev ?? undefined, schedule_source: a.prevSource ?? "manual" })
+          .eq("id", a.instanceId);
+      }
+      await supabaseAdmin
+        .from("pl_days")
+        .update({
+          scheduled_date: a.prevDay.scheduled_date,
+          schedule_source: a.prevDay.schedule_source ?? "auto",
+          schedule_locked: a.prevDay.schedule_locked ?? a.wasPinned,
+        })
+        .eq("id", a.dayId);
+    }
+    throw failure;
+  }
+
+  const { error: auditErr } = await supabaseAdmin.from("pl_schedule_audit").insert(
+    applied.map((a) => ({
+      batch_id: batchId,
+      day_id: a.dayId,
+      client_id: clientId,
+      previous_date: a.prev,
+      new_date: a.next,
+      previous_source: a.prevSource,
+      new_source: a.target === "instance" ? "moved" : "auto",
+      scope: "pattern",
+      changed_by: userId,
+      changed_by_role: role,
+      note: "Auto-realigned after committed training days change.",
+    })),
+  );
+  if (auditErr) console.error("[realign] audit insert failed", auditErr.message);
+
+  return { ok: true, applied: applied.length, batchId, pendingPinned, unplaced };
+}
+
 export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
@@ -333,284 +548,76 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { role } = await resolveActorAccess(
-      { supabase, userId }, data.clientId,
-    );
+    const { role } = await resolveActorAccess({ supabase, userId }, data.clientId);
+    return realignClientToCommittedDays({
+      clientId: data.clientId, userId, role, includePinned: data.includePinned,
+    });
+  });
 
-    const { data: clientRow } = await supabase
-      .from("clients")
-      .select("committed_training_days")
-      .eq("id", data.clientId)
-      .maybeSingle();
-    const committed: WeekDay[] = WEEK_DAYS.filter((d) =>
-      ((clientRow?.committed_training_days as string[] | null) ?? []).includes(d),
-    );
-    if (committed.length === 0) {
-      return { ok: true as const, applied: 0, batchId: null, noop: true };
+// ───────────────────────────────────────────────────────────────────────────
+// saveCommittedSchedule — ONE call that saves the committed training days and
+// re-dates every future, unstarted workout (all blocks, including Draft ones)
+// onto them. Replaces the old two-step "client updates row, then calls a
+// separate realign" flow, which could leave the calendar stale if the app was
+// closed or the network dropped between the steps. The save is durable first;
+// if only the realign fails the response says so and the same call can be
+// retried (the engine is idempotent).
+// ───────────────────────────────────────────────────────────────────────────
+
+export const saveCommittedSchedule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z
+      .object({
+        clientId: z.string().uuid(),
+        frequency: z.number().int().min(1).max(7),
+        days: z.array(z.string()).min(1).max(7),
+      })
+      .parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { role } = await resolveActorAccess({ supabase, userId }, data.clientId);
+
+    const days = normalizeCommittedDays(data.days);
+    if (days.length !== data.days.length || days.length !== data.frequency) {
+      throw new Error(`Select exactly ${data.frequency} valid training day${data.frequency === 1 ? "" : "s"}.`);
     }
-
-    const { data: blocks } = await supabase
-      .from("pl_blocks")
-      .select("id, start_date, week_duration_days, status")
-      .eq("client_id", data.clientId)
-      .neq("status", "Archived");
-    const blockList = (blocks ?? []).filter((b: any) => b.start_date);
-    if (blockList.length === 0) {
-      return { ok: true as const, applied: 0, batchId: null, noop: true };
-    }
-
-    const blockIds = blockList.map((b: any) => b.id);
-    const { data: weeks } = await supabase
-      .from("pl_weeks")
-      .select("id, week_index, block_id")
-      .in("block_id", blockIds)
-      .order("week_index");
-    const weekList = weeks ?? [];
-    const weekIds = weekList.map((w: any) => w.id);
-    if (weekIds.length === 0) {
-      return { ok: true as const, applied: 0, batchId: null, noop: true };
-    }
-    const { data: days } = await supabase
-      .from("pl_days")
-      .select("id, day_index, week_id, scheduled_date, schedule_source, schedule_locked, archived")
-      .in("week_id", weekIds)
-      .eq("archived", false)
-      .order("day_index");
-    const dayList = days ?? [];
-    const dayIds = dayList.map((d: any) => d.id);
-    const [completionsRes, instancesRes] = dayIds.length
-      ? await Promise.all([
-          supabase
-            .from("pl_day_completions")
-            .select("day_id, completed_at, in_progress_at, started_at")
-            .in("day_id", dayIds),
-          supabase
-            .from("pl_scheduled_workouts")
-            .select("id, source_day_id, scheduled_date, schedule_source")
-            .eq("client_id", data.clientId)
-            .in("source_day_id", dayIds),
-        ])
-      : [{ data: [] as any[] }, { data: [] as any[] }];
-
-    const completions = completionsRes.data ?? [];
-    const touchedDayIds = new Set<string>();
-    for (const c of completions as any[]) {
-      if (c.completed_at || c.in_progress_at || c.started_at) touchedDayIds.add(c.day_id);
-    }
-
-    // Canonical calendar placement is the scheduled-workout instance whenever
-    // one exists. The legacy pl_days date is only a fallback. This map MUST be
-    // available before we calculate moves, otherwise an already-correct
-    // pl_days fallback can hide a stale instance (the exact Nico Fri→Sat bug).
-    const instanceByDayId = new Map<
-      string,
-      { id: string; scheduled_date: string; schedule_source: string | null }
-    >();
-    for (const r of (instancesRes.data ?? []) as any[]) {
-      const prev = instanceByDayId.get(r.source_day_id);
-      if (!prev || r.scheduled_date < prev.scheduled_date) {
-        instanceByDayId.set(r.source_day_id, {
-          id: r.id,
-          scheduled_date: r.scheduled_date,
-          schedule_source: r.schedule_source ?? null,
-        });
-      }
-    }
-
-    const todayISO = format(new Date(), "yyyy-MM-dd");
-
-    const daysByWeek = new Map<string, any[]>();
-    for (const d of dayList) {
-      const list = daysByWeek.get(d.week_id) ?? [];
-      list.push(d);
-      daysByWeek.set(d.week_id, list);
-    }
-
-    const moves: Array<{
-      dayId: string;
-      prev: string | null;
-      next: string;
-      prevSource: string | null;
-      wasPinned: boolean;
-    }> = [];
-    // Upcoming workouts we left alone only because they are pinned
-    // (manually placed / locked) yet do not sit on a committed day.
-    let pendingPinned = 0;
-
-    for (const block of blockList) {
-      const dur = (block as any).week_duration_days ?? 7;
-      const startDate = parseISO(block.start_date as string);
-      const blockWeeks = weekList
-        .filter((w: any) => w.block_id === block.id)
-        .sort((a: any, b: any) => a.week_index - b.week_index);
-
-      for (const w of blockWeeks) {
-        const weekStart = addDays(startDate, Math.max(0, (w.week_index ?? 1) - 1) * dur);
-        const weekEndISO = format(addDays(weekStart, 6), "yyyy-MM-dd");
-        if (weekEndISO < todayISO) continue; // past week
-
-        const weekDays = (daysByWeek.get(w.id) ?? [])
-          .slice()
-          .sort((a: any, b: any) => a.day_index - b.day_index);
-
-        // Walk the 7 dates in this week window and keep the ones that fall on a
-        // committed weekday. Scanning (instead of offsetting from Monday) keeps
-        // this correct for blocks that start mid-week.
-        const committedSet = new Set<number>(committed.map((wd) => WEEKDAY_INDEX[wd]));
-        const committedDates: string[] = [];
-        for (let i = 0; i < 7; i++) {
-          const dt = addDays(weekStart, i);
-          if (committedSet.has(dt.getDay())) committedDates.push(format(dt, "yyyy-MM-dd"));
-        }
-
-        // Classify days using the CANONICAL date/source: instance first,
-        // pl_days fallback second. Day order still maps to committed-day order
-        // so a completed Day 1 keeps the Day 1 slot consumed even if it was
-        // completed on an older weekday.
-        const consumed = new Set<string>();
-        const movable: Array<{
-          row: any;
-          pinned: boolean;
-          effectiveDate: string | null;
-          effectiveSource: string | null;
-        }> = [];
-        for (let dayPos = 0; dayPos < weekDays.length; dayPos++) {
-          const d = weekDays[dayPos];
-          const inst = instanceByDayId.get(d.id);
-          const effectiveDate = inst?.scheduled_date ?? d.scheduled_date ?? null;
-          const effectiveSource = inst?.schedule_source ?? d.schedule_source ?? null;
-          const isCoachLocked = !!d.schedule_locked;
-          const isManual = effectiveSource === "manual";
-          const isPinned = isCoachLocked || isManual;
-          const canOverridePinned =
-            data.includePinned && (role === "coach" || role === "admin" || !isCoachLocked);
-          const isTouched = touchedDayIds.has(d.id);
-          const isPast = !!effectiveDate && effectiveDate < todayISO;
-          const ordinalTarget = committedDates[dayPos] ?? null;
-
-          // Started / completed / past workouts are never moved. Reserve their
-          // intended committed-day slot too, so a completed Friday Day 1 does
-          // not cause Day 2 to slide from Sunday onto Saturday.
-          if (isTouched || isPast) {
-            if (effectiveDate) consumed.add(effectiveDate);
-            if (ordinalTarget) consumed.add(ordinalTarget);
-            continue;
-          }
-
-          if (isPinned && !canOverridePinned) {
-            if (effectiveDate) consumed.add(effectiveDate);
-            if (ordinalTarget) consumed.add(ordinalTarget);
-            if (!effectiveDate || !committedDates.includes(effectiveDate)) {
-              pendingPinned++;
-            }
-            continue;
-          }
-
-          movable.push({
-            row: d,
-            pinned: isPinned,
-            effectiveDate,
-            effectiveSource,
-          });
-        }
-
-        const pool = committedDates.filter(
-          (dt) => !consumed.has(dt) && dt >= todayISO,
-        );
-        let cursor = 0;
-        for (const m of movable) {
-          if (cursor >= pool.length) break;
-          const next = pool[cursor++];
-          if (m.effectiveDate === next) continue;
-          moves.push({
-            dayId: m.row.id,
-            prev: m.effectiveDate,
-            next,
-            prevSource: m.effectiveSource,
-            wasPinned: m.pinned,
-          });
-        }
-      }
-    }
-
-    if (moves.length === 0) {
-      return { ok: true as const, applied: 0, batchId: null, noop: true, pendingPinned };
-    }
-
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const batchId = crypto.randomUUID();
+    const { error: saveErr } = await supabaseAdmin
+      .from("clients")
+      .update({
+        committed_training_frequency: data.frequency,
+        committed_training_days: days,
+        training_schedule_completed: true,
+        training_schedule_last_updated: new Date().toISOString(),
+        training_schedule_updated_by: userId,
+      })
+      .eq("id", data.clientId);
+    if (saveErr) throw new Error(saveErr.message);
 
-    // Any day with a pl_scheduled_workouts instance is instance-canonical.
-    // instanceByDayId was loaded BEFORE planning so both the move decision and
-    // the write target use the same source of truth. Instance realignments use
-    // the valid "moved" source; legacy-only days continue to update
-    // pl_days.scheduled_date with the legacy "auto" source.
+    await supabaseAdmin.from("client_activity_log").insert({
+      client_id: data.clientId,
+      actor_user_id: userId,
+      actor_role: role,
+      action: "training_schedule_updated",
+      details: { committed_training_frequency: data.frequency, committed_training_days: days },
+    });
 
-    type AppliedRow = (typeof moves)[number] & {
-      target: "instance" | "day";
-      instanceId?: string;
-    };
-    const applied: AppliedRow[] = [];
     try {
-      for (const m of moves) {
-        const inst = instanceByDayId.get(m.dayId);
-        if (inst) {
-          const { error } = await supabaseAdmin
-            .from("pl_scheduled_workouts")
-            .update({ scheduled_date: m.next, schedule_source: "moved" })
-            .eq("id", inst.id);
-          if (error) throw new Error(error.message);
-          applied.push({ ...m, target: "instance", instanceId: inst.id, prev: inst.scheduled_date });
-        } else {
-          const { error } = await supabaseAdmin
-            .from("pl_days")
-            // A realigned workout is back under automatic scheduling, so the
-            // pin is released — otherwise the next change would skip it again.
-            .update({ scheduled_date: m.next, schedule_source: "auto", schedule_locked: false })
-            .eq("id", m.dayId);
-
-          if (error) throw new Error(error.message);
-          applied.push({ ...m, target: "day" });
-        }
-      }
-    } catch (err) {
-      for (const a of applied) {
-        if (a.target === "instance" && a.instanceId) {
-          await supabaseAdmin
-            .from("pl_scheduled_workouts")
-            .update({ scheduled_date: a.prev ?? undefined, schedule_source: a.prevSource ?? "manual" })
-            .eq("id", a.instanceId);
-        } else {
-          await supabaseAdmin
-            .from("pl_days")
-            .update({
-              scheduled_date: a.prev,
-              schedule_source: a.prevSource ?? "auto",
-              schedule_locked: a.wasPinned,
-            })
-            .eq("id", a.dayId);
-        }
-      }
-
-      throw err;
+      // Changing the committed schedule is the explicit instruction to realign
+      // every FUTURE, unstarted workout. Coach-locked workouts stay protected
+      // for clients; coach/admin saves may override them.
+      const res = await realignClientToCommittedDays({
+        clientId: data.clientId, userId, role, includePinned: true,
+      });
+      return { ...res, saved: true as const, realignError: null as string | null };
+    } catch (e: any) {
+      return {
+        ok: true as const, saved: true as const, applied: 0, batchId: null,
+        pendingPinned: 0, unplaced: 0,
+        realignError: (e?.message as string) || "Could not update your workout calendar.",
+      };
     }
-
-    await supabaseAdmin.from("pl_schedule_audit").insert(
-      applied.map((a) => ({
-        batch_id: batchId,
-        day_id: a.dayId,
-        client_id: data.clientId,
-        previous_date: a.prev,
-        new_date: a.next,
-        previous_source: a.prevSource,
-        new_source: a.target === "instance" ? "moved" : "auto",
-        scope: "pattern",
-        changed_by: userId,
-        changed_by_role: role,
-        note: "Auto-realigned after committed training days change.",
-      })),
-    );
-
-    return { ok: true as const, applied: applied.length, batchId, pendingPinned };
   });

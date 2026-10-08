@@ -7,7 +7,8 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // Bumped to v4 to evict existing persisted exercise-library lists. Exercise
 // data is mutable operational data; rehydrating a disk snapshot can hide a
 // newly created exercise until the stale snapshot expires.
-export const QUERY_PERSIST_BUSTER = "v4";
+// v5 evicts persisted task lists (shared across devices, see below).
+export const QUERY_PERSIST_BUSTER = "v5";
 export const QUERY_PERSIST_KEY = "jfeffect-rq-cache";
 export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
@@ -20,6 +21,9 @@ const DO_NOT_PERSIST_PREFIXES = [
   "exercises",
   "exercises-min",
   "exercise-search-pool-lite",
+  // Tasks are edited from several devices at once. A 24h-old disk snapshot
+  // made the phone show an outdated (or empty) list after a desktop edit.
+  "tasks",
   "messages",
   "thread",
   "conversation",
@@ -28,6 +32,9 @@ const DO_NOT_PERSIST_PREFIXES = [
   "form-popup-",
   "setup-prompts-",
   "broadcasts-",
+  // Agreement status gates a mandatory popup: a stale "unsigned" snapshot must never
+  // flash on the phone after the client has signed.
+  "coaching-agreement",
   // One-time "What's new" popups: seen state must always come fresh from the
   // server, never from a stale on-device snapshot.
   "feature-announcement",

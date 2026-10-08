@@ -154,10 +154,13 @@ export function ChatImageAttachment({
   att,
   messageId,
   initialSignedUrl,
+  deferSign = false,
 }: {
   att: ChatImageLike;
   messageId?: string | null;
   initialSignedUrl?: string | null;
+  /** The parent is batch-signing this path right now: wait for it instead of signing separately. */
+  deferSign?: boolean;
 }) {
   const viewer = useMediaViewer();
   const candidates = useMemo(() => buildCandidates(att, initialSignedUrl), [att, initialSignedUrl]);
@@ -173,7 +176,7 @@ export function ChatImageAttachment({
   const needsFreshSign = current?.kind === "path" && (!current.initialSignedUrl || pathRefresh > 0);
   const signedQuery = useQuery({
     queryKey: ["chat-media-signed-url", current?.kind === "path" ? current.path : "", pathRefresh],
-    enabled: !!current && current.kind === "path" && needsFreshSign,
+    enabled: !!current && current.kind === "path" && needsFreshSign && !(deferSign && pathRefresh === 0),
     staleTime: 45 * 60_000,
     gcTime: 55 * 60_000,
     retry: 1,
@@ -232,7 +235,9 @@ export function ChatImageAttachment({
     setAttempt(0);
     setPathRefresh(0);
     handledSignErrorKey.current = null;
-  }, [stableKey, initialSignedUrl]);
+    // Only a different attachment resets the image. A new signed URL for the
+    // same one must not blank an already-loaded picture.
+  }, [stableKey]);
 
   useEffect(() => {
     if (!signedQuery.error || current?.kind !== "path") return;
@@ -325,6 +330,8 @@ export function ChatImageAttachment({
           alt={att.name ?? ""}
           loading="lazy"
           decoding="async"
+          // Holding a photo opens its reply actions; don't let iOS lift it into a drag instead.
+          draggable={false}
           className={cn(
             "absolute inset-0 h-full w-full object-cover transition-opacity",
             loaded ? "opacity-100" : "opacity-0",

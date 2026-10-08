@@ -1,4 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { displayExerciseName } from "@/lib/exercise-display-name";
+import { movementFamilyStyle, resolveMovementFamily } from "@/lib/exercise-family";
+import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { Check, Circle, CircleDot, Clock, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -41,6 +44,7 @@ type Row = {
         competition_lift_type?: string | null;
         is_competition_lift?: boolean | null;
         exercise_category?: string | null;
+        movement_family?: string | null;
       }
     | null;
 };
@@ -119,7 +123,7 @@ export function InlineWorkoutPreview({
       const rowsRes = await supabase
         .from("pl_exercise_rows")
         .select(
-          "id, sort_order, exercise_name_override, purpose_label, time_profile, sets, rest_seconds, estimated_seconds_override, reps_text, rpe, load_kg, load_lb, measurement_type, card_color, movement_family, exercise_id, exercises(name, competition_lift_type, is_competition_lift, exercise_category)",
+          "id, sort_order, exercise_name_override, purpose_label, time_profile, sets, rest_seconds, estimated_seconds_override, reps_text, rpe, load_kg, load_lb, measurement_type, card_color, movement_family, exercise_id, exercises(name, competition_lift_type, is_competition_lift, exercise_category, movement_family)",
         )
         .eq("day_id", dayId)
         .order("sort_order", { ascending: true });
@@ -256,13 +260,18 @@ export function InlineWorkoutPreview({
         const isPartial = loggedCount > 0 && !isComplete;
         const label = purposeLabels[i];
         const chip = label && label.trim() ? { label: label.toUpperCase(), tone: purposeLabelBadgeClass(label) } : null;
-        const name = row.exercise_name_override || row.exercises?.name || "Exercise";
+        const name = displayExerciseName(row);
+        const family = resolveMovementFamily(row.exercises, row.movement_family);
         const prescribed = prescribedLine(row);
         return (
           <div
             key={row.id}
-            className="flex gap-2.5 rounded-md border border-transparent px-1.5 py-1.5 hover:border-border/50"
+            className="relative flex gap-2.5 overflow-hidden rounded-md border border-transparent py-1.5 pl-3 pr-1.5 hover:border-border/50"
           >
+            <div
+              className={cn("absolute inset-y-1 left-0 w-1 rounded-full", movementFamilyStyle(family).stripe)}
+              aria-hidden
+            />
             <div className="mt-0.5 shrink-0" aria-hidden>
               {isComplete ? (
                 <Check className="h-4 w-4 text-emerald-500" />
@@ -284,9 +293,8 @@ export function InlineWorkoutPreview({
                     {chip.label}
                   </span>
                 )}
-                <span className="truncate text-[13px] font-semibold">
-                  <span className="text-muted-foreground">{i + 1}.</span> {name}
-                </span>
+                <ExerciseOrderBadge position={i + 1} family={family} size="sm" />
+                <span className="truncate text-[13px] font-semibold">{name}</span>
               </div>
               {prescribed && (
                 <div className="mt-0.5 text-[11px] text-muted-foreground">{prescribed}</div>
