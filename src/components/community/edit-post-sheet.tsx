@@ -57,7 +57,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
               value={caption}
               maxLength={CAPTION_MAX}
               onChange={(e) => setCaption(e.target.value)}
-              placeholder="Say something about it…"
+              placeholder="Write a caption…"
               className="min-h-[96px] resize-none text-[15px]"
               aria-label="Caption"
             />

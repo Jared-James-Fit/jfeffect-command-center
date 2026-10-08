@@ -25,6 +25,7 @@ import { useFullMediaUrl } from "@/lib/community.queries";
 import { WinsStatsCard } from "@/components/community/wins-stats";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { PostActions } from "@/components/community/post-actions";
+import { FeedCaption } from "@/components/community/feed-caption";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -315,11 +316,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </button>
       )}
 
-      {post.caption && !isNote && (
-        <p className="whitespace-pre-line px-3.5 pt-2.5 text-[14px] leading-snug">
-          <span className="font-bold">{post.author.name}</span> {post.caption}
-        </p>
-      )}
+      {post.caption && !isNote && <FeedCaption name={post.author.name} caption={post.caption} />}
 
       {(post.coach_reactions.length > 0 || post.coach_commented) && (
         <div className="px-3.5 pt-2.5">

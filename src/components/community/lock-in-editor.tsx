@@ -7,11 +7,12 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { CAPTION_MAX, LOCK_IN_CAPTIONS, lockInTimeLabel, type CommunityVisibility } from "@/lib/community";
+import { LOCK_IN_CAPTIONS, lockInTimeLabel, type CommunityVisibility } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, type MyPostRow, type SavePostInput } from "@/lib/community.queries";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import { TEMPLATE_LABEL, canvasToBlob, drawWorkoutShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
 import { AudiencePicker } from "@/components/community/audience-picker";
+import { CaptionInput } from "@/components/community/caption-input";
 import type { LockInPick } from "@/components/community/lock-in";
 
 const SHARE_GRADIENT = "bg-primary";
@@ -294,15 +295,12 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
             ))}
           </div>
           <div>
-            <input
+            <CaptionInput
               value={caption}
-              onChange={(e) => {
-                setCaption(e.target.value.slice(0, CAPTION_MAX));
+              onChange={(v) => {
+                setCaption(v);
                 setPosted(false);
               }}
-              placeholder="Say something (optional)"
-              className="h-11 w-full rounded-xl border-0 bg-white/10 px-3 text-[16px] text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30"
-              aria-label="Caption"
             />
           </div>
           <AudiencePicker

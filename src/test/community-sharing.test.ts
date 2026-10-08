@@ -162,8 +162,10 @@ describe("card text wrapping", () => {
   it("never drops a single very long word", () => {
     expect(wrapLines(ctx, "supercalifragilistic", 50, 2)[0]).toContain("supercal");
   });
-  it("caption limit matches the database check", () => {
-    expect(migration).toContain(`char_length(caption) <= ${CAPTION_MAX}`);
+  it("caption limit matches the database check (and both save / edit functions)", () => {
+    const longer = readFileSync("supabase/migrations/20261013090000_community_caption_longer.sql", "utf8");
+    expect(longer).toContain(`CASE WHEN kind = 'note' THEN 1200 ELSE ${CAPTION_MAX} END`);
+    expect(longer.match(new RegExp(`char_length\\(v_cap\\) > ${CAPTION_MAX} THEN RAISE EXCEPTION 'Caption too long'`, "g"))).toHaveLength(2);
   });
 });
 
@@ -1068,8 +1070,8 @@ describe("feels like our app, not Instagram", () => {
     const layer = read("src/components/community/sticker-layer.tsx");
     expect(layer).toContain("export const TEXT_MAX = 400;");
     expect(layer).toContain("const lines = wrapText(ctx, m.display ? raw.toUpperCase() : raw, WRAP * PX)");
-    expect(layer).toContain("maxWidth: (WRAP + m.padX * 2) * k");
-    expect(layer).toContain("fontSize: m.size * k");
+    expect(layer).toContain("maxWidth: (WRAP + m.padX * 2) * ke");
+    expect(layer).toContain("fontSize: m.size * ke");
     // style / colour taps keep the keyboard up
     expect(layer).toContain("onPointerDown={(e) => e.preventDefault()}");
   });
@@ -1197,8 +1199,35 @@ describe("text size slider, alignment, and the editor above the keyboard", () =>
   it("huge text draws less dense instead of blowing the canvas limit", () => {
     expect(layer).toContain("if (w * h > MAX_AREA) return atDensity(");
   });
-  it("the editor pins to the visible screen so the top bar and colours stay above the iOS keyboard", () => {
+  it("the editor fills the studio, which fits above the iOS keyboard, so the top bar and colours stay in view", () => {
     expect(layer).toContain("const view = useVisualViewportBox(!!editing);");
-    expect(layer).toContain("top: view?.top ?? 0, height: view?.height ?? \"100%\"");
+    expect(layer).toContain('className="fixed inset-0 z-[70] flex flex-col bg-black/70');
+    expect(readFileSync("src/components/community/share-studio.tsx", "utf8")).toContain("style={fitView}");
+  });
+});
+
+describe("captions: longer, and a box that grows like a text", () => {
+  const read = (f: string) => readFileSync(f, "utf8");
+  it("allows Instagram-length captions", () => {
+    expect(CAPTION_MAX).toBe(2200);
+  });
+  it("the studio and lock-in editor use the growing caption box, worded as a caption", () => {
+    const box = read("src/components/community/caption-input.tsx");
+    expect(box).toContain('placeholder="Write a caption…"');
+    expect(box).toContain("t.style.height = `${Math.min(t.scrollHeight,");
+    expect(read("src/components/community/share-studio.tsx")).toContain("<CaptionInput");
+    expect(read("src/components/community/lock-in-editor.tsx")).toContain("<CaptionInput");
+    expect(read("src/components/community/share-studio.tsx")).not.toContain("Say something");
+  });
+  it("the studio fits above the keyboard while you type", () => {
+    const studio = read("src/components/community/share-studio.tsx");
+    expect(studio).toContain('const view = useVisualViewportBox(open && phase === "edit");');
+    expect(studio).toContain("style={fitView}");
+    // the text editor keeps the full card's scale, not the shrunken one
+    expect(studio).toContain("editorWidth={fullW || box.w}");
+  });
+  it("long captions fold to three lines in the feed with 'more'", () => {
+    expect(read("src/components/community/feed-caption.tsx")).toContain('!open && "line-clamp-3"');
+    expect(read("src/components/community/post-card.tsx")).toContain("<FeedCaption name={post.author.name} caption={post.caption} />");
   });
 });
