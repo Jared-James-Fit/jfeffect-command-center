@@ -307,6 +307,11 @@ export type WorkoutDayViewSearch = {
    * reads/writes by scheduled_workout_id.
    */
   instance?: string;
+  /**
+   * pl_exercise_rows.id to scroll to and briefly highlight on open, e.g. when a
+   * coach taps a client's exercise-note notification.
+   */
+  focus?: string;
 };
 
 /**
@@ -442,6 +447,7 @@ function WorkoutDay({
   children?: ReactNode;
 }) {
   const portalUserId = usePortalUserId();
+  useFocusExerciseRow(search.focus);
   // Phase B turn 2: day/rows/results reads route through the adapter when
   // provided. Other reads/writes still on sb.* for now (turns 3/4).
   const qc = useQueryClient();
@@ -3732,7 +3738,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   };
 
   return (
-    <Card className="workout-card-surface relative overflow-hidden p-3.5 pl-4 transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6">
+    <Card
+      data-workout-exercise
+      data-workout-row={row?.id}
+      className="workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 pl-4 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5 sm:pl-6"
+    >
       {/* Left stripe: inset top/bottom so it doesn't visually connect between cards */}
       <div className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full opacity-90 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
@@ -5897,6 +5907,36 @@ function WorkoutTopMenu() {
       <TrainingHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </>
   );
+}
+
+/**
+ * Scroll to the exercise card for `rowId` once it renders (rows load async) and
+ * ring it for a moment so the coach lands on the exact exercise a note is about.
+ */
+function useFocusExerciseRow(rowId: string | undefined) {
+  useEffect(() => {
+    if (!rowId || typeof document === "undefined") return;
+    let tries = 0;
+    let ringTimer: number | undefined;
+    const selector = `[data-workout-row="${CSS.escape(rowId)}"]`;
+    const timer = window.setInterval(() => {
+      const el = document.querySelector<HTMLElement>(selector);
+      tries += 1;
+      if (!el && tries < 40) return; // ~6s for slow cold loads
+      window.clearInterval(timer);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background");
+      ringTimer = window.setTimeout(
+        () => el.classList.remove("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background"),
+        2400,
+      );
+    }, 150);
+    return () => {
+      window.clearInterval(timer);
+      if (ringTimer) window.clearTimeout(ringTimer);
+    };
+  }, [rowId]);
 }
 
 function scrollToFirstIncompleteExercise() {
