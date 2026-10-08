@@ -228,6 +228,8 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"] },
   { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Settings",
     visibleTo: ["admin", "coach"] },
+  { to: "/admin/voice", label: "My Voice", icon: Sparkles, group: "Settings",
+    visibleTo: ["admin", "coach"] },
   // Advanced / technical utilities — surfaced last inside the Settings flyout.
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ShieldCheck, group: "Settings",
     visibleTo: ["admin"], section: "Advanced" },

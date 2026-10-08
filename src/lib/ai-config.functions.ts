@@ -5,6 +5,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { buildVoicePrompt } from "@/lib/coach-voice";
+import { loadCoachVoice } from "@/lib/coach-voice.functions";
 
 async function admin(): Promise<any> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -154,6 +156,7 @@ export const runAiPlayground = createServerFn({ method: "POST" })
       "Reply ONLY in the structured JSON schema requested. Never fabricate medical advice.",
       globalCfg?.brand_voice && `BRAND VOICE: ${globalCfg.brand_voice}`,
       globalCfg?.tone && `TONE: ${globalCfg.tone}`,
+      `CLIENT_RESPONSE VOICE (applies to client_response only):\n${buildVoicePrompt(await loadCoachVoice(sb))}`,
       globalCfg?.safety_rules && `SAFETY RULES: ${globalCfg.safety_rules}`,
       formCfg?.instructions && `FORM INSTRUCTIONS: ${formCfg.instructions}`,
       data.submissionInstruction &&

@@ -73,6 +73,7 @@ import { Route as AuthenticatedAdminCoachingRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminCoachingAgreementsRouteImport } from './routes/_authenticated/admin/coaching-agreements'
 import { Route as AuthenticatedAdminCommunicationRouteImport } from './routes/_authenticated/admin/communication'
 import { Route as AuthenticatedAdminCommunityRouteImport } from './routes/_authenticated/admin/community'
+import { Route as AuthenticatedAdminVoiceRouteImport } from './routes/_authenticated/admin/voice'
 import { Route as AuthenticatedAdminContentRouteImport } from './routes/_authenticated/admin/content'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminDiscountCodesRouteImport } from './routes/_authenticated/admin/discount-codes'
@@ -607,6 +608,12 @@ const AuthenticatedAdminCommunityRoute =
   AuthenticatedAdminCommunityRouteImport.update({
     id: '/community',
     path: '/community',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminVoiceRoute =
+  AuthenticatedAdminVoiceRouteImport.update({
+    id: '/voice',
+    path: '/voice',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminContentRoute =
@@ -1797,6 +1804,7 @@ export interface FileRoutesByFullPath {
   '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/community': typeof AuthenticatedAdminCommunityRoute
+  '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
@@ -2050,6 +2058,7 @@ export interface FileRoutesByTo {
   '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/community': typeof AuthenticatedAdminCommunityRoute
+  '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
@@ -2307,6 +2316,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/_authenticated/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/_authenticated/admin/community': typeof AuthenticatedAdminCommunityRoute
+  '/_authenticated/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/_authenticated/admin/content': typeof AuthenticatedAdminContentRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
@@ -2565,6 +2575,7 @@ export interface FileRouteTypes {
     | '/admin/coaching-agreements'
     | '/admin/communication'
     | '/admin/community'
+    | '/admin/voice'
     | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/discount-codes'
@@ -2818,6 +2829,7 @@ export interface FileRouteTypes {
     | '/admin/coaching-agreements'
     | '/admin/communication'
     | '/admin/community'
+    | '/admin/voice'
     | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/discount-codes'
@@ -3074,6 +3086,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/coaching-agreements'
     | '/_authenticated/admin/communication'
     | '/_authenticated/admin/community'
+    | '/_authenticated/admin/voice'
     | '/_authenticated/admin/content'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/discount-codes'
@@ -3779,6 +3792,13 @@ declare module '@tanstack/react-router' {
       path: '/community'
       fullPath: '/admin/community'
       preLoaderRoute: typeof AuthenticatedAdminCommunityRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/voice': {
+      id: '/_authenticated/admin/voice'
+      path: '/voice'
+      fullPath: '/admin/voice'
+      preLoaderRoute: typeof AuthenticatedAdminVoiceRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/content': {
@@ -5303,6 +5323,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCoachingAgreementsRoute: typeof AuthenticatedAdminCoachingAgreementsRoute
   AuthenticatedAdminCommunicationRoute: typeof AuthenticatedAdminCommunicationRoute
   AuthenticatedAdminCommunityRoute: typeof AuthenticatedAdminCommunityRoute
+  AuthenticatedAdminVoiceRoute: typeof AuthenticatedAdminVoiceRoute
   AuthenticatedAdminContentRoute: typeof AuthenticatedAdminContentRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminDiscountCodesRoute: typeof AuthenticatedAdminDiscountCodesRoute
@@ -5420,6 +5441,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminCoachingAgreementsRoute,
     AuthenticatedAdminCommunicationRoute: AuthenticatedAdminCommunicationRoute,
     AuthenticatedAdminCommunityRoute: AuthenticatedAdminCommunityRoute,
+    AuthenticatedAdminVoiceRoute: AuthenticatedAdminVoiceRoute,
     AuthenticatedAdminContentRoute: AuthenticatedAdminContentRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminDiscountCodesRoute: AuthenticatedAdminDiscountCodesRoute,
