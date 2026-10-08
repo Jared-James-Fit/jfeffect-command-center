@@ -8,6 +8,7 @@
  * speech synthesis, so the reply can play by itself a few seconds later.
  */
 import { speechFromReply } from "@/lib/summer-voice-text";
+import { setAudioSessionType } from "@/lib/audio-session";
 
 export type SummerVoicePrefs = {
   /** Speak replies to voice questions automatically. */
@@ -157,6 +158,9 @@ class SummerSpeaker {
     const text = speechFromReply(reply);
     if (!text) return;
     this.set(true);
+    // iOS: speak through the loudspeaker like normal media, then go back to
+    // whatever the app had (ambient for UI sounds).
+    const prevSession = setAudioSessionType("playback");
     try {
       if (prefs.voice === "summer" && !this.serverVoiceOff) {
         const r = await serverVoice(text).catch(() => ({ ok: false as const }));
@@ -168,6 +172,7 @@ class SummerSpeaker {
       }
       await this.speakDevice(text, prefs);
     } finally {
+      if (prevSession && prevSession !== "playback") setAudioSessionType(prevSession);
       this.set(false);
     }
   }

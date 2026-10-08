@@ -16,6 +16,7 @@ import { summerTone } from "@/lib/summer-persona";
 import { extractLinks, tokenizeInline } from "@/lib/summer-voice-text";
 import { loadVoicePrefs, summerSpeaker, type SummerVoicePrefs } from "@/lib/summer-speaker";
 import { blobToBase64, micSupported, useSummerMic } from "@/hooks/use-summer-mic";
+import { isAudioSessionError } from "@/lib/audio-session";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string };
@@ -236,7 +237,13 @@ export function SummerChat({
       try {
         take = await micStart();
       } catch (e: any) {
-        toast.error(e?.name === "NotAllowedError" ? "Allow the microphone to talk to Summer." : e?.message ?? "Couldn't use the microphone");
+        toast.error(
+          e?.name === "NotAllowedError"
+            ? "Allow the microphone to talk to Summer."
+            : isAudioSessionError(e)
+              ? "Your phone's audio is busy (music or a call?). Pause it and tap the mic again."
+              : e?.message ?? "Couldn't use the microphone",
+        );
         endCall();
         return;
       }
