@@ -21,13 +21,22 @@ import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string };
 type VoiceState = "idle" | "listening" | "thinking" | "speaking";
 
-const STARTERS = [
+const OWNER_STARTERS = [
   "What's on my plate today?",
   "Who still owes me money?",
   "How much should I have set aside for taxes right now?",
   "Which check-ins are waiting on me?",
   "What am I probably forgetting to deduct?",
   "Open my Taxes & Books.",
+];
+
+const TEAM_STARTERS = [
+  "What's on the calendar today?",
+  "Which check-ins are waiting?",
+  "Who has unread messages?",
+  "Who still has an unpaid sale?",
+  "Any new coaching applications?",
+  "Open the client list.",
 ];
 
 /** Opens an in-app link from Summer: router navigation, query string kept. */
@@ -145,7 +154,7 @@ function VoiceOrb({ state, level, onTap }: { state: VoiceState; level: number; o
 }
 
 export function SummerChat({
-  open, onOpenChange, year, persona, onPersonaSaved, route, startCall, onCallStarted,
+  open, onOpenChange, year, persona, onPersonaSaved, route, isOwner = true, startCall, onCallStarted,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -154,6 +163,8 @@ export function SummerChat({
   onPersonaSaved: () => void;
   /** Current page, so "this client" makes sense to her. */
   route?: string;
+  /** Owner gets the books; other admins get team starters. */
+  isOwner?: boolean;
   /** Start a voice call as soon as the sheet opens (long-press on the button). */
   startCall?: boolean;
   onCallStarted?: () => void;
@@ -391,7 +402,7 @@ export function SummerChat({
             <div className="space-y-3">
               <p className="text-muted-foreground">{tone.greeting}</p>
               <div className="flex flex-wrap gap-2">
-                {STARTERS.map((s) => (
+                {(isOwner ? OWNER_STARTERS : TEAM_STARTERS).map((s) => (
                   <button key={s} type="button" onClick={() => void send(s)} className="rounded-full border px-3 py-1.5 text-left text-xs hover:bg-accent">
                     {s}
                   </button>

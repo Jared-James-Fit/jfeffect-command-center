@@ -1,6 +1,10 @@
 # Taxes & Books and Summer Ledger
 
-Admin only. Sales hub > Taxes & Books (`/admin/sales?tab=taxes`).
+Business owner only. Sales hub > Taxes & Books (`/admin/sales?tab=taxes`).
+Owners are listed in `business_owners` (`is_business_owner()`); RLS on the
+books tables and the receipts bucket uses it, and the section and its menu
+entry are hidden from other admins. Adding an admin does not make them an
+owner.
 
 ## Where the numbers come from
 
@@ -92,4 +96,13 @@ Voice:
   per device (Customize Summer).
 - Health check: `POST /api/public/hooks/summer-voice-check` with
   `x-hook-secret` reports which provider works.
+
+Every admin gets their own Summer: chat history (`summer_messages`) and
+vibe/instructions (`summer_profiles`) are per person. Only the owner's Summer
+gets the BOOKS section; other admins get the app data plus unpaid sales, and
+she tells them the books are private to the owner.
+
+Staff invites (`/staff-setup?token=…`) create a separate login. Use an email
+that isn't on a client account (for example a `+admin` Gmail alias), because
+redeeming an invite for an existing email adds the role to that account.
 

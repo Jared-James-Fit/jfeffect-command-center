@@ -104,6 +104,42 @@ describe("Summer's prompt", () => {
   });
 });
 
+describe("Summer for a team admin", () => {
+  it("keeps the owner's books private and says whose they are", () => {
+    const p = summerSystemPrompt({ owner: false, userName: "Fionna", ownerName: "Jared" });
+    expect(p).toContain("You are talking with Fionna, an admin on Jared's team (not the owner)");
+    expect(p).toMatch(/PRIVATE: .*private to Jared/);
+    expect(p).not.toMatch(/the business owner\. You know their books/);
+  });
+
+  it("greets the owner by name", () => {
+    expect(summerSystemPrompt({ owner: true, userName: "Jared" })).toContain("You are talking with Jared, the business owner");
+  });
+
+  it("lists unpaid sales for the team", async () => {
+    const { buildOpenSalesContext } = await import("@/lib/summer-app");
+    expect(buildOpenSalesContext([{ client: "Reece", offer: "Hybrid", status: "Unpaid", outstandingMinor: 40000, createdOn: "2026-10-01" }])).toBe(
+      "- Reece | Hybrid | Unpaid | outstanding $400.00 | since 2026-10-01",
+    );
+    expect(buildOpenSalesContext([])).toBe("- none");
+  });
+});
+
+describe("Owner-only menu items", () => {
+  it("drops Taxes & Books from nested nav for other admins", async () => {
+    const { withoutOwnerOnly } = await import("@/lib/business-owner");
+    const nav = [
+      { to: "/admin/transactions", label: "Transactions" },
+      { to: "/admin/sales?tab=taxes", label: "Taxes & Books" },
+      { to: "/admin/payments", label: "Payments", children: [{ to: "/admin/sales?tab=taxes", label: "Taxes" }, { to: "/admin/payment-links", label: "Products" }] },
+    ];
+    expect(withoutOwnerOnly(nav as any)).toEqual([
+      { to: "/admin/transactions", label: "Transactions" },
+      { to: "/admin/payments", label: "Payments", children: [{ to: "/admin/payment-links", label: "Products" }] },
+    ]);
+  });
+});
+
 describe("audioFormat", () => {
   it("maps recorder types to what the transcriber expects", () => {
     expect(audioFormat("audio/webm;codecs=opus")).toBe("webm");

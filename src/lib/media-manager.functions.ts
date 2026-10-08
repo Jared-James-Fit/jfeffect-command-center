@@ -221,6 +221,7 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
     }
 
     let userId: string | null = null;
+    let createdNow = false;
     const { data: list } = await supabaseAdmin.auth.admin.listUsers();
     const existing = list.users.find((u: any) => (u.email || "").toLowerCase() === invite.email.toLowerCase());
     if (existing) {
@@ -233,10 +234,16 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
       });
       if (cErr) throw new Error(cErr.message);
       userId = created.user.id;
+      createdNow = true;
     }
 
     await supabaseAdmin.from("user_roles")
       .upsert({ user_id: userId, role: invite.role }, { onConflict: "user_id,role" });
+    // A brand-new staff login is staff only: drop the "client" role the signup
+    // trigger adds to every new account. Existing accounts keep their roles.
+    if (createdNow && invite.role !== "client") {
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", userId).eq("role", "client");
+    }
 
     await supabaseAdmin.from("staff_invites").update({
       status: "redeemed", redeemed_user_id: userId, redeemed_at: new Date().toISOString(),
