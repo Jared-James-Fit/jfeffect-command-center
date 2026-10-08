@@ -770,3 +770,34 @@ export function pickLockInSession(items: WorkoutItem[], now: Date = new Date()):
     }) ?? null
   );
 }
+
+/* ---- league points for posting -------------------------------------- */
+
+/** community_post_points_status(): null when the account isn't an athlete. */
+export type PostPointsStatus = { points: number; week_cap: number; today_earned: boolean; week_count: number };
+
+/** Only workouts completed within this many days of the post earn (DB: community_post_xp_sync). */
+export const POST_POINTS_RECENT_DAYS = 7;
+
+/**
+ * The line under the audience picker that tells an athlete what posting earns.
+ * Mirrors the DB rule: +15 for a Community post of a recent workout, 1 a day, 2 a week.
+ * A lock-in post earns once the session is finished, so it says so.
+ */
+export function postPointsHint(
+  status: PostPointsStatus | null | undefined,
+  visibility: CommunityVisibility,
+  alreadyInFeed: boolean,
+  opts: { completedAt?: string | null; lockIn?: boolean; now?: Date } = {},
+): { tone: "earn" | "muted"; text: string } | null {
+  if (!status || alreadyInFeed) return null;
+  const now = opts.now ?? new Date();
+  const done = opts.completedAt ? new Date(opts.completedAt).getTime() : NaN;
+  if (Number.isFinite(done) && now.getTime() - done > POST_POINTS_RECENT_DAYS * 86_400_000)
+    return { tone: "muted", text: `Post points are for workouts from the last ${POST_POINTS_RECENT_DAYS} days.` };
+  if (visibility !== "community") return { tone: "muted", text: `Post to Community to earn +${status.points} league points.` };
+  if (status.today_earned) return { tone: "muted", text: "Today's post points are banked. Post anyway, the crew wants to see it." };
+  if (status.week_count >= status.week_cap)
+    return { tone: "muted", text: `Post points maxed this week (${status.week_cap}/${status.week_cap}). They reset Monday.` };
+  return { tone: "earn", text: opts.lockIn ? `+${status.points} league points when you finish 🔥` : `+${status.points} league points for posting 🔥` };
+}

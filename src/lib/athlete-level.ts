@@ -18,11 +18,13 @@ export const XP_RULES = [
   { label: "Weekly check-in", xp: 75, cap: "1 per week" },
   { label: "Progress video check-in", xp: 60, cap: "1 per week" },
   { label: "Progress photo check-in", xp: 50, cap: "1 per week" },
+  { label: "Share a workout to the Community", xp: 40, cap: "1 per day" },
   { label: "Send a lift video for review", xp: 25, cap: "1 per day" },
   { label: "Fully log every set in a workout", xp: 20, cap: null },
   { label: "Log body measurements", xp: 20, cap: "1 per week" },
   { label: "Submit a workout review", xp: 15, cap: "1 per workout" },
   { label: "Hit your water target", xp: 5, cap: "1 per day" },
+  { label: "Comment on a teammate's post", xp: 5, cap: "1 per post" },
   { label: "Log bodyweight", xp: 5, cap: "1 per day" },
   { label: "Log water", xp: 2, cap: "1 per day" },
 ];
