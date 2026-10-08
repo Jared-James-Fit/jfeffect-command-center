@@ -29,7 +29,7 @@ import { ellipsize, fitFont as fitSystemFont, font, loadImage, roundRect } from 
 import type { CardStat, ShareCardExtras } from "@/lib/community";
 
 export type ShareFormat = "feed" | "story";
-export type ShareTemplate = "pr" | "photo" | "stats" | "sticker" | "volume" | "receipt" | "streak" | "progress" | "lockin" | "lockclock" | "lockplan";
+export type ShareTemplate = "pr" | "photo" | "stats" | "sticker" | "volume" | "receipt" | "streak" | "progress" | "lockin" | "lockclock" | "lockplan" | "plain";
 
 export const SHARE_SIZES: Record<ShareFormat, { w: number; h: number; safeTop: number; safeBottom: number }> = {
   feed: { w: 1080, h: 1350, safeTop: 80, safeBottom: 80 },
@@ -48,6 +48,7 @@ export const TEMPLATE_LABEL: Record<ShareTemplate, string> = {
   lockin: "Locked in",
   lockclock: "Clock",
   lockplan: "Today's plan",
+  plain: "No filter",
 };
 
 export type ShareCardMedia = CanvasImageSource & { width?: number; height?: number };
@@ -96,7 +97,8 @@ export function availableTemplates(d: Pick<ShareCardData, "isPr" | "exercises" |
 
 /** The looks you can swipe through on the camera: every card that sits on a photo. */
 export function cameraLooks(d: Pick<ShareCardData, "isPr" | "exercises" | "volume"> & { extras?: ShareCardExtras | null }): ShareTemplate[] {
-  return availableTemplates({ ...d, media: {} as ShareCardMedia }).filter((t) => t !== "sticker");
+  // last: just the photo, nothing on it
+  return [...availableTemplates({ ...d, media: {} as ShareCardMedia }).filter((t) => t !== "sticker"), "plain"];
 }
 
 const INK = "#ffffff";
@@ -337,7 +339,14 @@ export function paintShareCard(canvas: HTMLCanvasElement, d: ShareCardData, logo
   else if (d.template === "receipt") drawReceipt(ctx, d, logo, L);
   else if (d.template === "streak") drawStreak(ctx, d, logo, L);
   else if (d.template === "progress") drawProgress(ctx, d, logo, L);
+  else if (d.template === "plain") drawPlain(ctx, d, L);
   else drawVolume(ctx, d, logo, L);
+}
+
+/** No filter: just the photo (the brand glow when there isn't one yet). */
+function drawPlain(ctx: Ctx, d: ShareCardData, L: Layout) {
+  if (d.media) drawCover(ctx, d.media, L.W, L.H);
+  else darkGlow(ctx, L.W, L.H, "red");
 }
 
 /** The photo, dimmed so data reads on it — or the brand glow without one. */
