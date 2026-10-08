@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface ImpersonatedClient {
   id: string;
@@ -58,6 +59,13 @@ export function ClientImpersonationProvider({ children }: { children: ReactNode 
 
   const start = useCallback((c: ImpersonatedClient, ret?: string | null) => {
     setClient(c);
+    // Audit trail (admin_audit_log). Doesn't hold POV up: if it's refused,
+    // RLS already keeps that client's data out of reach.
+    void (supabase as any).rpc("log_client_pov_start", { _client_id: c.id }).then(
+      ({ error }: { error: { message: string } | null }) => {
+        if (error) console.warn("[client-pov] audit log failed", error.message);
+      },
+    );
     try {
       const payload = JSON.stringify(c);
       sessionStorage.setItem(STORAGE_KEY, payload);
