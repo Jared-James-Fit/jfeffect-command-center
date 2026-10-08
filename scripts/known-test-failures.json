@@ -1,0 +1,4 @@
+{
+  "note": "Tests already failing on main when the CI gate was added. Fix a test, then delete its line. Never add a new failure here to get CI green.",
+  "failures": []
+}
