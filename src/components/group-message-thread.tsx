@@ -465,7 +465,8 @@ export function GroupMessageThread({
   const onPickFiles = (files: FileList | null) => {
     if (!files || !files.length) return;
     const ok = Array.from(files).filter((f) => {
-      if (f.size > 50 * 1024 * 1024) { toast.error(`${f.name} is over 50MB`); return false; }
+      // Videos are shrunk on the phone before upload, so only other files are capped.
+      if (f.size > 50 * 1024 * 1024 && !f.type.startsWith("video/")) { toast.error(`${f.name} is over 50MB`); return false; }
       return true;
     });
     uploads.add(

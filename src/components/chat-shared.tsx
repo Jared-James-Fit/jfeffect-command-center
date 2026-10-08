@@ -18,6 +18,7 @@ import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
 import { ChatVideoTile } from "@/components/chat-video-tile";
 import { captureVideoPoster } from "@/lib/video-poster";
+import { compressVideoForChat } from "@/lib/video-compress";
 import { chatUrlCache, useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
@@ -227,21 +228,38 @@ export async function uploadChatAttachment(
   }
   if (signal?.aborted) throw new Error("Upload cancelled.");
 
+  const isVideo = fileToAttachmentType(file) === "video";
+  // Grab a still frame from the original right away (alongside everything else, never blocking it).
+  const posterP = isVideo ? captureVideoPoster(file) : Promise.resolve(null);
+
+  // Videos: shrink on the phone first, iMessage-style (720p H.264). Short clips
+  // go from ~12-60 MB to ~4 MB. Falls back to the original on any problem.
+  let uploadFrom = 3;
   onProgress?.(3);
+  if (isVideo) {
+    const compressed = await compressVideoForChat(file, {
+      signal,
+      onProgress: (p) => onProgress?.(Math.round(3 + p * 37)),
+    });
+    if (signal?.aborted) throw new Error("Upload cancelled.");
+    if (compressed) {
+      uploadFile = compressed;
+      uploadFrom = 40;
+      onProgress?.(40);
+    }
+  }
+
   const ext = uploadFile.name.includes(".") ? uploadFile.name.split(".").pop() : "";
   const stem = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const path = `${stem}${ext ? "." + ext : ""}`;
-  const isVideo = fileToAttachmentType(uploadFile) === "video";
-
-  // Grab a still frame while the video uploads (runs alongside it, never blocks it).
-  const posterP = isVideo ? captureVideoPoster(uploadFile) : Promise.resolve(null);
 
   await uploadLiftFileToStorage({
     file: uploadFile,
     userId: folder,
     bucket: "message-attachments",
     path,
-    onProgress: (pct) => onProgress?.(Math.max(3, pct)),
+    // Upload fills the rest of the bar after compression.
+    onProgress: (pct) => onProgress?.(Math.round(uploadFrom + (pct * (100 - uploadFrom)) / 100)),
     signal,
   });
 
