@@ -3253,6 +3253,7 @@ export type Database = {
           archived_by: string | null
           assigned_check_in_link_id: string | null
           assigned_coach_id: string | null
+          athlete_kind: string
           available_training_days: string[] | null
           basic_info_completed_at: string | null
           basic_info_update_reason: string | null
@@ -3438,6 +3439,7 @@ export type Database = {
           archived_by?: string | null
           assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
+          athlete_kind?: string
           available_training_days?: string[] | null
           basic_info_completed_at?: string | null
           basic_info_update_reason?: string | null
@@ -3623,6 +3625,7 @@ export type Database = {
           archived_by?: string | null
           assigned_check_in_link_id?: string | null
           assigned_coach_id?: string | null
+          athlete_kind?: string
           available_training_days?: string[] | null
           basic_info_completed_at?: string | null
           basic_info_update_reason?: string | null
