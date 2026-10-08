@@ -102,13 +102,14 @@ export const listStaff = createServerFn({ method: "GET" })
     const { data: invites } = await supabaseAdmin
       .from("staff_invites").select("*").order("created_at", { ascending: false });
     const { data: mmRoles } = await supabaseAdmin
-      .from("user_roles").select("user_id, created_at").eq("role", "media_manager");
+      .from("user_roles").select("user_id, role, created_at").in("role", ["media_manager", "finance"]);
     const ids = (mmRoles ?? []).map((r: any) => r.user_id);
     const { data: profiles } = ids.length
       ? await supabaseAdmin.from("profiles").select("id, email, full_name").in("id", ids)
       : { data: [] as any[] };
     const members = (mmRoles ?? []).map((r: any) => ({
       user_id: r.user_id,
+      role: r.role as "media_manager" | "finance",
       created_at: r.created_at,
       profile: (profiles ?? []).find((p: any) => p.id === r.user_id) || null,
     }));
@@ -120,6 +121,8 @@ const InviteInput = z.object({
   first_name: z.string().min(1).max(100),
   last_name: z.string().min(1).max(100),
   phone: z.string().nullable().optional(),
+  // Never "admin": admin is granted inside the app by an existing admin.
+  role: z.enum(["media_manager", "finance"]).default("media_manager"),
 });
 
 export const inviteMediaManager = createServerFn({ method: "POST" })
@@ -128,12 +131,18 @@ export const inviteMediaManager = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // A finance login is a separate staff-only account: its email can't
+    // already belong to a user, client or member. Checked again on redeem.
+    if (data.role === "finance") {
+      const { assertEmailFreeForStaffOnly } = await import("@/lib/setup-link-guard.server");
+      await assertEmailFreeForStaffOnly(supabaseAdmin, data.email);
+    }
     // Multiple Media Managers are allowed — they all share the same admin workspace.
     // Guard only against an outstanding pending invite for the SAME email.
     const { data: pendingSame } = await supabaseAdmin
       .from("staff_invites")
       .select("id")
-      .eq("role", "media_manager")
+      .eq("role", data.role)
       .eq("status", "pending")
       .ilike("email", data.email)
       .limit(1);
@@ -148,7 +157,7 @@ export const inviteMediaManager = createServerFn({ method: "POST" })
         first_name: data.first_name,
         last_name: data.last_name,
         phone: data.phone ?? null,
-        role: "media_manager",
+        role: data.role,
         setup_token,
         setup_token_expires_at,
         created_by: context.userId,
@@ -191,12 +200,13 @@ export const revokeStaffInvite = createServerFn({ method: "POST" })
 
 export const deactivateMediaManager = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(i))
+  .inputValidator((i: { userId: string; role?: "media_manager" | "finance" }) =>
+    z.object({ userId: z.string().uuid(), role: z.enum(["media_manager", "finance"]).default("media_manager") }).parse(i))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("user_roles")
-      .delete().eq("user_id", data.userId).eq("role", "media_manager");
+      .delete().eq("user_id", data.userId).eq("role", data.role);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -212,7 +222,10 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => RedeemInput.parse(i))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { findAuthUserByEmail, assertNotPrivilegedUser, assertInviteRoleRedeemable } = await import("@/lib/setup-link-guard.server");
+    const {
+      findAuthUserByEmail, assertNotPrivilegedUser, assertInviteRoleRedeemable,
+      isStaffOnlyRole, assertEmailFreeForStaffOnly, finalizeStaffOnlyUser,
+    } = await import("@/lib/setup-link-guard.server");
     const { data: invite, error } = await supabaseAdmin
       .from("staff_invites").select("*").eq("setup_token", data.token).maybeSingle();
     if (error || !invite) throw new Error("Invalid setup link");
@@ -220,6 +233,23 @@ export const redeemStaffInvite = createServerFn({ method: "POST" })
     if (invite.status === "revoked") throw new Error("This invite has been revoked");
     if (invite.setup_token_expires_at && new Date(invite.setup_token_expires_at) < new Date()) {
       throw new Error("Setup link expired — ask the admin for a new one");
+    }
+
+    // Staff-only roles (finance) always get a brand-new login of their own.
+    if (isStaffOnlyRole(invite.role)) {
+      await assertEmailFreeForStaffOnly(supabaseAdmin, invite.email);
+      const { data: created, error: cErr } = await supabaseAdmin.auth.admin.createUser({
+        email: invite.email, password: data.password, email_confirm: true,
+        app_metadata: { account_kind: "staff" },
+        user_metadata: { full_name: `${invite.first_name ?? ""} ${invite.last_name ?? ""}`.trim() },
+      });
+      if (cErr) throw new Error(cErr.message);
+      await finalizeStaffOnlyUser(supabaseAdmin, created.user.id, invite.role);
+      await supabaseAdmin.from("staff_invites").update({
+        status: "redeemed", redeemed_user_id: created.user.id, redeemed_at: new Date().toISOString(),
+        setup_token: null,
+      }).eq("id", invite.id);
+      return { ok: true, email: invite.email, role: invite.role };
     }
 
     let userId: string | null = null;

@@ -20268,7 +20268,7 @@ export type Database = {
         | "complimentary"
         | "manual_admin"
       access_status_type: "active" | "paused" | "past_due" | "ending" | "ended"
-      app_role: "admin" | "client" | "coach" | "media_manager"
+      app_role: "admin" | "client" | "coach" | "media_manager" | "finance"
       appointment_source: "manual" | "booking_link" | "external"
       appointment_status: "Scheduled" | "Completed" | "Cancelled" | "NoShow"
       appointment_type:
@@ -20602,7 +20602,7 @@ export const Constants = {
         "manual_admin",
       ],
       access_status_type: ["active", "paused", "past_due", "ending", "ended"],
-      app_role: ["admin", "client", "coach", "media_manager"],
+      app_role: ["admin", "client", "coach", "media_manager", "finance"],
       appointment_source: ["manual", "booking_link", "external"],
       appointment_status: ["Scheduled", "Completed", "Cancelled", "NoShow"],
       appointment_type: [

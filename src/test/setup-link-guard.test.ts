@@ -57,8 +57,9 @@ describe("assertNotPrivilegedUser", () => {
 });
 
 describe("assertInviteRoleRedeemable", () => {
-  it("allows the media_manager invite role", () => {
+  it("allows the media_manager and finance invite roles", () => {
     expect(() => assertInviteRoleRedeemable("media_manager")).not.toThrow();
+    expect(() => assertInviteRoleRedeemable("finance")).not.toThrow();
   });
 
   it("refuses admin, coach and any role not meant for invite links", () => {

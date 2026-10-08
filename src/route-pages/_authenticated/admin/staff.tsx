@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   listStaff, inviteMediaManager, resendStaffInvite, revokeStaffInvite, deactivateMediaManager,
@@ -19,6 +20,9 @@ export function StaffRedirect() {
   return null;
 }
 
+type StaffRole = "media_manager" | "finance";
+const ROLE_LABEL: Record<StaffRole, string> = { media_manager: "Media Manager", finance: "Finance" };
+
 export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
   const list = useServerFn(listStaff);
   const invite = useServerFn(inviteMediaManager);
@@ -28,10 +32,10 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["staff"], queryFn: () => list() });
 
-  const [form, setForm] = useState({ email: "", first_name: "", last_name: "", phone: "" });
+  const [form, setForm] = useState({ email: "", first_name: "", last_name: "", phone: "", role: "media_manager" as StaffRole });
   const pendingEmails = new Set(
     (data?.invites ?? [])
-      .filter((i: any) => i.status === "pending")
+      .filter((i: any) => i.status === "pending" && i.role === form.role)
       .map((i: any) => (i.email || "").toLowerCase())
   );
   const inviteDisabled = pendingEmails.has(form.email.trim().toLowerCase());
@@ -55,7 +59,7 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
       const res = await invite({ data: { ...form, phone: form.phone || null } });
       await navigator.clipboard.writeText(res.link);
       toast.success(smsMessage(res.sms, "Invite"));
-      setForm({ email: "", first_name: "", last_name: "", phone: "" });
+      setForm({ email: "", first_name: "", last_name: "", phone: "", role: form.role });
       qc.invalidateQueries({ queryKey: ["staff"] });
     } catch (e: any) { toast.error(e.message); }
   }
@@ -70,12 +74,21 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
       )}
 
       <Card className="p-4 space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Invite Media Manager</h2>
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Invite staff</h2>
         <p className="text-xs text-muted-foreground">
-          Add as many Media Managers as you need — they all share the same admin workspace and see edits in real time.
+          {form.role === "finance"
+            ? "Finance gets a separate login for the books only: payments, Taxes & Books and Summer. Use an email that isn't already on a client or member account. They'll set up an authenticator app on first sign-in."
+            : "Add as many Media Managers as you need — they all share the same admin workspace and see edits in real time."}
           {inviteDisabled && " A pending invite already exists for that email — resend or revoke it below."}
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
+          <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as StaffRole })}>
+            <SelectTrigger className="sm:col-span-2"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="media_manager">Media Manager</SelectItem>
+              <SelectItem value="finance">Finance (bookkeeper)</SelectItem>
+            </SelectContent>
+          </Select>
           <Input placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
           <Input placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
           <Input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -85,18 +98,19 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
       </Card>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Active Media Managers</h2>
-        {(data?.members ?? []).length === 0 && <div className="text-sm text-muted-foreground">No media managers yet.</div>}
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Active staff</h2>
+        {(data?.members ?? []).length === 0 && <div className="text-sm text-muted-foreground">No staff yet.</div>}
         {data?.members?.map((m: any) => (
-          <Card key={m.user_id} className="p-3 flex items-center justify-between">
+          <Card key={`${m.user_id}:${m.role}`} className="p-3 flex items-center justify-between">
             <div>
               <div className="font-medium">{m.profile?.full_name || m.profile?.email || m.user_id}</div>
               <div className="text-xs text-muted-foreground">{m.profile?.email}</div>
             </div>
             <div className="flex items-center gap-2">
+              <Badge variant="outline">{ROLE_LABEL[m.role as StaffRole] ?? m.role}</Badge>
               <Button size="sm" variant="outline" onClick={async () => {
-              if (!confirm("Revoke this Media Manager's access?")) return;
-              try { await deactivate({ data: { userId: m.user_id } }); qc.invalidateQueries({ queryKey: ["staff"] }); toast.success("Access revoked"); }
+              if (!confirm(`Revoke this ${ROLE_LABEL[m.role as StaffRole] ?? "staff"} access?`)) return;
+              try { await deactivate({ data: { userId: m.user_id, role: m.role } }); qc.invalidateQueries({ queryKey: ["staff"] }); toast.success("Access revoked"); }
               catch (e: any) { toast.error(e.message); }
               }}>Revoke access</Button>
             </div>
@@ -114,6 +128,7 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
               <div className="text-xs text-muted-foreground">{i.email}</div>
             </div>
             <div className="flex items-center gap-2">
+              <Badge variant="outline">{ROLE_LABEL[i.role as StaffRole] ?? i.role}</Badge>
               <Badge variant="outline">{i.status}</Badge>
               <Button size="sm" variant="outline" onClick={async () => {
                 try {
