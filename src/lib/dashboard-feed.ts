@@ -1,12 +1,10 @@
 /**
- * Admin dashboard "Needs you" feed + snapshot numbers.
+ * Admin dashboard helpers. Pure, so they're easy to test.
  *
- * Pure: every input comes from a source another screen already trusts, so the dashboard can
- * never disagree with them:
- *   - replies     → staff_inbox_state (same rule as the Messages badge)
- *   - check-ins   → messenger_checkins / nf_submissions still unreviewed
- *   - payments, programs ending, setup, counts → admin_clients_directory (the Clients page)
- *   - pain flags  → coach intel; form checks → lift_videos awaiting review
+ * The dashboard is an overview, not another inbox: the Clients page and Messages already
+ * organise the to-do list. Here we only summarise (snapshot tiles that open those pages,
+ * already filtered) and show what those pages don't: today's training, this week's records,
+ * and the business numbers (admin_dashboard_overview).
  */
 
 export type InboxRow = {
@@ -18,206 +16,9 @@ export type InboxRow = {
   last_inbound_kind: string | null;
 };
 
-export type FeedClient = {
-  id: string;
-  full_name: string | null;
-  profile_picture_url: string | null;
-  account_status: string | null;
-  f_payment_issue: boolean;
-  f_program_ending: boolean;
-  block_end: string | null;
-};
-
-export type FeedKind = "pain" | "payment" | "reply" | "checkin" | "lift" | "program" | "setup";
-
-export type FeedAction =
-  | { kind: "messages"; clientId: string }
-  | { kind: "billing"; clientId: string }
-  | { kind: "program"; clientId: string }
-  | { kind: "profile"; clientId: string }
-  | { kind: "lift"; videoId: string }
-  | { kind: "intel" };
-
-export type FeedItem = {
-  id: string;
-  kind: FeedKind;
-  clientId: string;
-  name: string;
-  avatarUrl: string | null;
-  /** One plain line under the name: the message itself, the lift, what's missing. */
-  reason: string;
-  at: string | null;
-  urgent: boolean;
-  actionLabel: string;
-  action: FeedAction;
-  /** Open chat check-in this row can close in one tap. */
-  checkinId?: string;
-  /** Open pain flag this row can close in one tap. */
-  painFlagId?: string;
-  /** Other things also waiting for this client (shown as "+N more"). */
-  more: number;
-};
-
-export const FEED_ORDER: Record<FeedKind, number> = {
-  pain: 0, payment: 1, reply: 2, checkin: 3, lift: 4, program: 5, setup: 6,
-};
-
-export const FEED_GROUPS: { key: "all" | "messages" | "training" | "business"; label: string; kinds: FeedKind[] }[] = [
-  { key: "all", label: "All", kinds: ["pain", "payment", "reply", "checkin", "lift", "program", "setup"] },
-  { key: "messages", label: "Messages & check-ins", kinds: ["reply", "checkin"] },
-  { key: "training", label: "Training", kinds: ["pain", "lift", "program"] },
-  { key: "business", label: "Payments & setup", kinds: ["payment", "setup"] },
-];
-
-const INVITE_STATES = new Set(["Invite Not Sent", "Invite Sent", "Invite Expired", "Password Reset Sent"]);
-
 /** Conversations waiting on staff: same rule as the Messages tab badge. */
 export function waitingOnMe(inbox: InboxRow[]): InboxRow[] {
   return inbox.filter((r) => !r.archived && (r.workflow_status === "needs_response" || !!r.unread));
-}
-
-const TASK_LABEL: Record<string, string> = {
-  weekly_checkin: "Weekly check-in",
-  nutrition_review: "Nutrition check-in",
-};
-
-function snippet(text: string | null | undefined, max = 90): string | null {
-  const t = (text ?? "").replace(/\s+/g, " ").trim();
-  if (!t) return null;
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
-}
-
-function shortDate(iso: string | null): string {
-  if (!iso) return "soon";
-  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-export function buildNeedsYou(input: {
-  clients: FeedClient[];
-  inbox: InboxRow[];
-  lastClientMessage: Map<string, string>;
-  openCheckins: Array<{ id: string; client_id: string; task_type: string | null; submitted_at: string | null }>;
-  openForms: Array<{ id: string; client_id: string; submitted_at: string | null }>;
-  liftVideos: Array<{ id: string; client_id: string; exercise?: string | null; created_at: string; is_urgent?: boolean | null }>;
-  painFlags: Array<{ id: string; client_id: string; keyword?: string | null; created_at?: string | null }>;
-}): FeedItem[] {
-  const byId = new Map(input.clients.map((c) => [c.id, c]));
-  const base = (c: FeedClient) => ({
-    clientId: c.id,
-    name: c.full_name?.trim() || "Client",
-    avatarUrl: c.profile_picture_url ?? null,
-    more: 0,
-  });
-  const items: FeedItem[] = [];
-
-  for (const f of input.painFlags) {
-    const c = byId.get(f.client_id);
-    if (!c) continue;
-    items.push({
-      ...base(c), id: `pain-${f.id}`, kind: "pain", urgent: true,
-      reason: `Reported pain${f.keyword ? ` · ${f.keyword}` : ""}`, at: f.created_at ?? null,
-      actionLabel: "Review", action: { kind: "intel" }, painFlagId: f.id,
-    });
-  }
-
-  for (const c of input.clients) {
-    if (c.f_payment_issue) {
-      items.push({
-        ...base(c), id: `pay-${c.id}`, kind: "payment", urgent: true,
-        reason: "Payment failed or overdue", at: null,
-        actionLabel: "Billing", action: { kind: "billing", clientId: c.id },
-      });
-    }
-  }
-
-  const latestCheckin = new Map<string, (typeof input.openCheckins)[number]>();
-  for (const ck of input.openCheckins) {
-    const cur = latestCheckin.get(ck.client_id);
-    if (!cur || (ck.submitted_at ?? "") > (cur.submitted_at ?? "")) latestCheckin.set(ck.client_id, ck);
-  }
-
-  const replied = new Set<string>();
-  for (const r of waitingOnMe(input.inbox)) {
-    const c = byId.get(r.client_id);
-    if (!c) continue;
-    replied.add(c.id);
-    const ck = latestCheckin.get(c.id);
-    const isCheckin = r.last_inbound_kind === "checkin" && !!ck;
-    items.push({
-      ...base(c), id: `msg-${c.id}`, kind: "reply", urgent: false,
-      reason: isCheckin
-        ? `Sent their ${(TASK_LABEL[ck!.task_type ?? ""] ?? "check-in").toLowerCase()}`
-        : snippet(input.lastClientMessage.get(c.id)) ?? "New message",
-      at: r.last_inbound_at,
-      actionLabel: "Reply", action: { kind: "messages", clientId: c.id },
-      checkinId: ck?.id,
-    });
-  }
-
-  for (const [clientId, ck] of latestCheckin) {
-    const c = byId.get(clientId);
-    if (!c || replied.has(clientId)) continue;
-    items.push({
-      ...base(c), id: `ci-${ck.id}`, kind: "checkin", urgent: false,
-      reason: `${TASK_LABEL[ck.task_type ?? ""] ?? "Check-in"} to review`, at: ck.submitted_at,
-      actionLabel: "Review", action: { kind: "messages", clientId }, checkinId: ck.id,
-    });
-  }
-  for (const f of input.openForms) {
-    const c = byId.get(f.client_id);
-    if (!c || replied.has(f.client_id) || latestCheckin.has(f.client_id)) continue;
-    items.push({
-      ...base(c), id: `form-${f.id}`, kind: "checkin", urgent: false,
-      reason: "Form to review", at: f.submitted_at,
-      actionLabel: "Review", action: { kind: "messages", clientId: f.client_id },
-    });
-  }
-
-  for (const v of input.liftVideos) {
-    const c = byId.get(v.client_id);
-    if (!c) continue;
-    items.push({
-      ...base(c), id: `lift-${v.id}`, kind: "lift", urgent: !!v.is_urgent,
-      reason: `Form check${v.exercise ? ` · ${v.exercise}` : ""}`, at: v.created_at,
-      actionLabel: "Watch", action: { kind: "lift", videoId: v.id },
-    });
-  }
-
-  for (const c of input.clients) {
-    if (c.f_program_ending) {
-      items.push({
-        ...base(c), id: `prog-${c.id}`, kind: "program", urgent: false,
-        reason: `Program ends ${shortDate(c.block_end)} · nothing queued next`, at: null,
-        actionLabel: "Build", action: { kind: "program", clientId: c.id },
-      });
-    }
-    if (c.account_status && INVITE_STATES.has(c.account_status)) {
-      items.push({
-        ...base(c), id: `setup-${c.id}`, kind: "setup", urgent: c.account_status === "Invite Expired",
-        reason: c.account_status === "Invite Not Sent" ? "Invite not sent yet" : `Hasn't set up their account · ${c.account_status}`,
-        at: null, actionLabel: "Open", action: { kind: "profile", clientId: c.id },
-      });
-    }
-  }
-
-  // Most important first; newest first within the same kind.
-  items.sort((a, b) =>
-    (a.urgent === b.urgent ? 0 : a.urgent ? -1 : 1) ||
-    FEED_ORDER[a.kind] - FEED_ORDER[b.kind] ||
-    (b.at ?? "").localeCompare(a.at ?? ""));
-
-  // One row per client: their most important item, with a count of the rest.
-  const out: FeedItem[] = [];
-  const seen = new Map<string, FeedItem>();
-  for (const it of items) {
-    const first = seen.get(it.clientId);
-    if (first) { first.more += 1; continue; }
-    const row = { ...it };
-    seen.set(it.clientId, row);
-    out.push(row);
-  }
-  return out;
 }
 
 export type SnapshotTile = {
@@ -252,4 +53,81 @@ export function buildSnapshot(input: {
     { key: "ending", label: "Programs ending", value: n("program_ending"), hint: "Programs ending in 14 days with nothing next", flag: "program_ending", tone: "info" },
     { key: "missed", label: "Missed workouts", value: n("missed_workouts"), hint: "2+ missed workouts in 14 days", flag: "missed_workouts", tone: "warn" },
   ];
+}
+
+/* ------------------------------------------------------------------ */
+/* Overview (admin_dashboard_overview)                                 */
+/* ------------------------------------------------------------------ */
+
+export type OverviewSession = {
+  client_id: string; name: string | null; avatar: string | null; title: string | null;
+  status: "done" | "training" | "pending"; completed_at: string | null;
+};
+export type OverviewWin = {
+  client_id: string; name: string | null; avatar: string | null; exercise: string | null;
+  reps: number | null; load_kg: number | null; unit: string | null; tier: "atpr" | "program" | "block"; at: string;
+};
+export type OverviewMoney = { currency: string; this_month: number; last_month_to_date: number; last_month: number; payments: number };
+export type Overview = {
+  today: string;
+  is_admin: boolean;
+  training: { scheduled: OverviewSession[]; unscheduled: Array<Omit<OverviewSession, "status"> & { status?: never }> };
+  wins: OverviewWin[];
+  money: OverviewMoney[] | null;
+  leads: { new_7d: number; new_30d: number; latest: Array<{ id: string; name: string | null; submitted_at: string; temperature: string | null; status: string | null }> } | null;
+  roster: { active: number; new_this_month: number };
+};
+
+export const TIER_LABEL: Record<OverviewWin["tier"], string> = {
+  atpr: "All-time PR",
+  program: "Program PR",
+  block: "Block PR",
+};
+const TIER_RANK: Record<OverviewWin["tier"], number> = { atpr: 3, program: 2, block: 1 };
+
+/** 176.9 kg in lb → "390 lb"; kg shown to the nearest 0.5. */
+export function formatLoad(kg: number | null | undefined, unit: string | null | undefined): string | null {
+  if (kg == null || !(kg > 0)) return null;
+  if (unit === "kg") return `${Math.round(kg * 2) / 2} kg`;
+  return `${Math.round(kg * 2.2046226)} lb`;
+}
+
+/** One line per lift: "Leg Press 390 lb × 15". */
+export function winLine(w: OverviewWin): string {
+  const load = formatLoad(w.load_kg, w.unit);
+  return [w.exercise ?? "Lift", load && w.reps ? `${load} × ${w.reps}` : load].filter(Boolean).join(" ");
+}
+
+/** Records grouped by client: best tier first, then most recent. */
+export function groupWins(wins: OverviewWin[]): Array<{ client_id: string; name: string; avatar: string | null; best: OverviewWin["tier"]; lifts: OverviewWin[]; at: string }> {
+  const by = new Map<string, OverviewWin[]>();
+  for (const w of wins) by.set(w.client_id, [...(by.get(w.client_id) ?? []), w]);
+  return [...by.entries()]
+    .map(([client_id, lifts]) => {
+      const sorted = [...lifts].sort((a, b) => TIER_RANK[b.tier] - TIER_RANK[a.tier] || b.at.localeCompare(a.at));
+      return {
+        client_id,
+        name: sorted[0].name?.trim() || "Client",
+        avatar: sorted[0].avatar ?? null,
+        best: sorted[0].tier,
+        lifts: sorted,
+        at: lifts.reduce((m, l) => (l.at > m ? l.at : m), lifts[0].at),
+      };
+    })
+    .sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** "+117% vs this point last month" (null when last month had nothing to compare). */
+export function revenueDelta(m: OverviewMoney): { pct: number; up: boolean } | null {
+  if (!(m.last_month_to_date > 0)) return null;
+  const pct = Math.round(((m.this_month - m.last_month_to_date) / m.last_month_to_date) * 100);
+  return { pct: Math.abs(pct), up: pct >= 0 };
+}
+
+export function formatMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-CA", { style: "currency", currency, maximumFractionDigits: amount % 1 === 0 ? 0 : 2 }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
 }

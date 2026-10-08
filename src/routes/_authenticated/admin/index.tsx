@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { CommunityCoachCard } from "@/components/community/community-entry";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo, Suspense } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,19 +12,16 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Users, Calendar, DollarSign, Plus, Video, ShoppingCart,
-  HardDrive, ChefHat, FileText, Megaphone, Zap, ClipboardList,
-  MessageCircle, MoreHorizontal, CheckCircle2, Activity, Sparkles, Check, Loader2,
+  HardDrive, ChefHat, FileText, Megaphone, ClipboardList,
+  MessageCircle, MoreHorizontal, Activity, Sparkles, Check, Dumbbell, Trophy, TrendingUp,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { toast } from "sonner";
-import { listLiftVideos } from "@/lib/lift-videos";
 import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { ClientNameLink } from "@/components/clients/client-name-link";
-import { markCheckinReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 import {
-  buildNeedsYou, buildSnapshot, waitingOnMe, FEED_GROUPS,
-  type FeedItem, type FeedAction, type InboxRow, type SnapshotTile,
+  buildSnapshot, waitingOnMe, groupWins, winLine, revenueDelta, formatMoney, TIER_LABEL,
+  type InboxRow, type SnapshotTile, type Overview, type OverviewSession, type OverviewWin,
 } from "@/lib/dashboard-feed";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
@@ -32,7 +29,7 @@ const PriceCardPickerDialog = lazyWithRetry(() =>
   import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
 );
 import { UserAvatar } from "@/components/user-avatar";
-import { getCoachIntel, setPainFlagStatus } from "@/lib/coach-intel";
+import { getCoachIntel } from "@/lib/coach-intel";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
@@ -150,97 +147,206 @@ function SnapshotGrid({ tiles, loading }: { tiles: SnapshotTile[]; loading: bool
 }
 
 /* ------------------------------------------------------------------ */
-/* Needs you                                                           */
+/* Overview: what the Clients and Messages pages don't show            */
 /* ------------------------------------------------------------------ */
 
-function ActionLink({ action, className, children, ariaLabel }: { action: FeedAction; className?: string; children: React.ReactNode; ariaLabel?: string }) {
-  switch (action.kind) {
-    case "messages":
-      return <Link to="/admin/messages" search={{ client: action.clientId } as any} className={className} aria-label={ariaLabel}>{children}</Link>;
-    case "billing":
-      return <ClientNameLink clientId={action.clientId} tab="billing" className={className} ariaLabel={ariaLabel}>{children}</ClientNameLink>;
-    case "profile":
-      return <ClientNameLink clientId={action.clientId} className={className} ariaLabel={ariaLabel}>{children}</ClientNameLink>;
-    case "program":
-      return <Link to="/admin/program-assign/$clientId" params={{ clientId: action.clientId } as any} className={className} aria-label={ariaLabel}>{children}</Link>;
-    case "lift":
-      return <Link to="/admin/lift-videos" search={{ open: action.videoId } as any} className={className} aria-label={ariaLabel}>{children}</Link>;
-    case "intel":
-    default:
-      return <Link to="/admin/training-intelligence" className={className} aria-label={ariaLabel}>{children}</Link>;
-  }
-}
-
-function ago(iso: string | null) {
+function timeOf(iso: string | null) {
   if (!iso) return null;
-  try { return formatDistanceToNowStrict(parseISO(iso), { addSuffix: false }).replace(/ (seconds?|minutes?)/, "m").replace(/ hours?/, "h").replace(/ days?/, "d").replace(/ months?/, "mo"); }
-  catch { return null; }
+  try { return format(parseISO(iso), "h:mm a"); } catch { return null; }
 }
 
-function FeedRow({ item, onDone }: { item: FeedItem; onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const closeCheckin = async () => {
-    if (!item.checkinId || busy) return;
-    setBusy(true);
-    try {
-      await markCheckinReviewed(item.checkinId, "manual");
-      toast.success(`Marked ${item.name.split(" ")[0]}'s check-in reviewed`);
-      onDone();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't mark it reviewed");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const closePain = async () => {
-    if (!item.painFlagId || busy) return;
-    setBusy(true);
-    try {
-      await setPainFlagStatus(item.painFlagId, "reviewed");
-      toast.success("Pain flag marked reviewed");
-      onDone();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't update it");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const when = ago(item.at);
+const STATUS_CHIP: Record<OverviewSession["status"], { label: string; cls: string }> = {
+  done: { label: "Done", cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
+  training: { label: "Training now", cls: "bg-sky-500/15 text-sky-600 dark:text-sky-400" },
+  pending: { label: "Not yet", cls: "bg-secondary text-muted-foreground" },
+};
+
+function TrainingTodayCard({ overview, loading }: { overview: Overview | undefined; loading: boolean }) {
+  const scheduled = overview?.training.scheduled ?? [];
+  const extra = overview?.training.unscheduled ?? [];
+  const done = scheduled.filter((s) => s.status === "done").length;
+  const pct = scheduled.length ? Math.round((done / scheduled.length) * 100) : 0;
   return (
-    <li className="flex items-center gap-3 py-2.5">
-      <ClientNameLink clientId={item.clientId} className="shrink-0" ariaLabel={`Open ${item.name}`}>
-        <UserAvatar src={item.avatarUrl ?? undefined} name={item.name} size={40} />
-      </ClientNameLink>
-      <ActionLink action={item.action} className="min-w-0 flex-1" ariaLabel={`${item.actionLabel}: ${item.name}`}>
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-bold">{item.name}</span>
-          {item.urgent && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" aria-label="Urgent" />}
-        </div>
-        <div className={cn("mt-0.5 line-clamp-1 text-[12px]", item.urgent ? "text-destructive" : "text-muted-foreground")}>
-          {when && <span className="font-semibold text-foreground/70">{when} · </span>}
-          {item.reason}
-          {item.more > 0 && <span className="text-muted-foreground/70"> · +{item.more} more</span>}
-        </div>
-      </ActionLink>
-      {(item.checkinId || item.painFlagId) && (
+    <Card className="border-border bg-card p-4">
+      <SectionHeader title="Training today" icon={Dumbbell} viewAll={{ to: "/admin/training-intelligence", label: "Training intel" }} />
+      {loading ? (
+        <div className="h-16 animate-pulse rounded-lg bg-secondary/40" />
+      ) : scheduled.length === 0 && extra.length === 0 ? (
+        <p className="rounded-lg bg-secondary/30 px-3 py-3 text-sm text-muted-foreground">No sessions scheduled today.</p>
+      ) : (
+        <>
+          {scheduled.length > 0 && (
+            <div className="mb-1">
+              <div className="flex items-baseline justify-between text-[12px]">
+                <span className="font-semibold"><span className="text-base font-black tabular-nums">{done}</span> of {scheduled.length} done</span>
+                <span className="text-muted-foreground">{scheduled.length - done} to go</span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          )}
+          <ul className="divide-y divide-border">
+            {scheduled.map((s) => {
+              const chip = STATUS_CHIP[s.status];
+              const name = s.name?.trim() || "Client";
+              const at = s.status === "done" ? timeOf(s.completed_at) : null;
+              return (
+                <li key={`${s.client_id}-${s.title}`}>
+                  <ClientNameLink clientId={s.client_id} tab="training" className="flex items-center gap-2.5 py-2" ariaLabel={`Open ${name}'s training`}>
+                    <UserAvatar src={s.avatar ?? undefined} name={name} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-bold">{name}</div>
+                      <div className="truncate text-[11px] text-muted-foreground">{s.title ?? "Workout"}{at ? ` · ${at}` : ""}</div>
+                    </div>
+                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", chip.cls)}>{chip.label}</span>
+                  </ClientNameLink>
+                </li>
+              );
+            })}
+          </ul>
+          {extra.length > 0 && (
+            <div className="mt-2 border-t border-border pt-2">
+              <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Also trained today</div>
+              <ul className="divide-y divide-border">
+                {extra.map((s) => {
+                  const name = s.name?.trim() || "Client";
+                  const at = timeOf(s.completed_at);
+                  return (
+                    <li key={`${s.client_id}-${s.title}`}>
+                      <ClientNameLink clientId={s.client_id} tab="training" className="flex items-center gap-2.5 py-2" ariaLabel={`Open ${name}'s training`}>
+                        <UserAvatar src={s.avatar ?? undefined} name={name} size={32} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-bold">{name}</div>
+                          <div className="truncate text-[11px] text-muted-foreground">{s.title ?? "Workout"}{at ? ` · ${at}` : ""}</div>
+                        </div>
+                        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_CHIP.done.cls)}>Done</span>
+                      </ClientNameLink>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+const TIER_CHIP: Record<OverviewWin["tier"], string> = {
+  atpr: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  program: "bg-primary/15 text-primary",
+  block: "bg-secondary text-muted-foreground",
+};
+
+function WinsCard({ wins }: { wins: OverviewWin[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const groups = useMemo(() => groupWins(wins), [wins]);
+  if (groups.length === 0) return null;
+  const visible = showAll ? groups : groups.slice(0, 4);
+  return (
+    <Card className="border-border bg-card p-4">
+      <SectionHeader title="Wins this week" icon={Trophy} />
+      <ul className="divide-y divide-border">
+        {visible.map((g) => {
+          const first = g.name.split(" ")[0];
+          return (
+            <li key={g.client_id} className="flex items-center gap-2.5 py-2">
+              <ClientNameLink clientId={g.client_id} tab="training" className="flex min-w-0 flex-1 items-center gap-2.5" ariaLabel={`Open ${g.name}'s training`}>
+                <UserAvatar src={g.avatar ?? undefined} name={g.name} size={32} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-xs font-bold">{g.name}</span>
+                    <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold", TIER_CHIP[g.best])}>{TIER_LABEL[g.best]}</span>
+                  </div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {winLine(g.lifts[0])}
+                    {g.lifts.length > 1 && <span className="text-muted-foreground/70"> · +{g.lifts.length - 1} more</span>}
+                  </div>
+                </div>
+              </ClientNameLink>
+              <Link
+                to="/admin/messages"
+                search={{ client: g.client_id } as any}
+                className="inline-flex h-8 shrink-0 items-center rounded-full bg-primary/15 px-3 text-[11px] font-semibold text-primary transition hover:bg-primary/25 active:scale-95"
+                aria-label={`Message ${first}`}
+              >
+                Send props
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      {groups.length > 4 && (
         <button
           type="button"
-          onClick={item.checkinId ? closeCheckin : closePain}
-          disabled={busy}
-          title={item.checkinId ? "Mark check-in reviewed" : "Mark pain flag reviewed"}
-          aria-label={item.checkinId ? "Mark check-in reviewed" : "Mark pain flag reviewed"}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border text-muted-foreground transition hover:border-emerald-500/50 hover:text-emerald-500 active:scale-95 disabled:opacity-50"
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-2 w-full rounded-lg border border-border py-2 text-[12px] font-semibold text-primary hover:bg-secondary/50"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          {showAll ? "Show less" : `Show ${groups.length - 4} more`}
         </button>
       )}
-      <ActionLink
-        action={item.action}
-        className="inline-flex h-9 shrink-0 items-center rounded-full bg-primary/15 px-3.5 text-[12px] font-semibold text-primary transition hover:bg-primary/25 active:scale-95"
-      >
-        {item.actionLabel}
-      </ActionLink>
-    </li>
+    </Card>
+  );
+}
+
+function BusinessCard({ overview }: { overview: Overview }) {
+  const money = overview.money ?? [];
+  const primary = money.find((m) => m.currency === "CAD") ?? money[0];
+  const others = money.filter((m) => m !== primary && m.this_month > 0);
+  const delta = primary ? revenueDelta(primary) : null;
+  const leads = overview.leads;
+  return (
+    <Card className="border-border bg-card p-4">
+      <SectionHeader title={`Business · ${format(new Date(), "MMMM")}`} icon={TrendingUp} viewAll={{ to: "/admin/transactions", label: "Transactions" }} />
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+        <div>
+          <div className="text-[28px] font-black leading-none tabular-nums">{formatMoney(primary?.this_month ?? 0, primary?.currency ?? "CAD")}</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            Collected this month{primary ? ` · ${primary.payments} ${primary.payments === 1 ? "payment" : "payments"}` : ""}
+            {others.map((o) => ` · ${formatMoney(o.this_month, o.currency)}`).join("")}
+          </div>
+        </div>
+        {delta && primary && (
+          <div className="text-right">
+            <div className={cn("text-sm font-bold tabular-nums", delta.up ? "text-emerald-500" : "text-amber-500")}>
+              {delta.up ? "▲" : "▼"} {delta.pct}%
+            </div>
+            <div className="text-[10px] text-muted-foreground">vs {formatMoney(primary.last_month_to_date, primary.currency)} by this day last month</div>
+          </div>
+        )}
+      </div>
+      <div className="mt-3 grid grid-cols-3 divide-x divide-border rounded-lg bg-secondary/20 py-2.5">
+        <Link to="/admin/clients" className="text-center">
+          <div className="text-xl font-black tabular-nums">{overview.roster.active}</div>
+          <div className="text-[10px] font-semibold text-muted-foreground">Active clients</div>
+        </Link>
+        <Link to="/admin/clients" className="text-center">
+          <div className={cn("text-xl font-black tabular-nums", overview.roster.new_this_month > 0 && "text-emerald-500")}>
+            {overview.roster.new_this_month > 0 ? `+${overview.roster.new_this_month}` : 0}
+          </div>
+          <div className="text-[10px] font-semibold text-muted-foreground">New this month</div>
+        </Link>
+        <Link to="/admin/sales/coaching-applications" className="text-center">
+          <div className={cn("text-xl font-black tabular-nums", (leads?.new_7d ?? 0) > 0 && "text-primary")}>{leads?.new_7d ?? 0}</div>
+          <div className="text-[10px] font-semibold text-muted-foreground">New leads · 7d</div>
+        </Link>
+      </div>
+      {leads && leads.latest.length > 0 && (
+        <ul className="mt-2 divide-y divide-border">
+          {leads.latest.slice(0, 3).map((l) => (
+            <li key={l.id}>
+              <Link to="/admin/sales/coaching-applications" className="flex items-center gap-2 py-2 text-xs">
+                <span className="min-w-0 flex-1 truncate font-bold">{l.name?.trim() || "New applicant"}</span>
+                {l.temperature && <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold capitalize text-muted-foreground">{l.temperature}</span>}
+                <span className="shrink-0 text-[11px] text-muted-foreground">{formatDistanceToNowStrict(parseISO(l.submitted_at), { addSuffix: true })}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
@@ -248,10 +354,7 @@ function FeedRow({ item, onDone }: { item: FeedItem; onDone: () => void }) {
 
 function AdminDashboard() {
   const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
-  const [group, setGroup] = useState<(typeof FEED_GROUPS)[number]["key"]>("all");
-  const [showAll, setShowAll] = useState(false);
   const offlineNoCache = useIsOfflineWithoutCache();
-  const queryClient = useQueryClient();
   const listDirectory = useServerFn(listClientsDirectoryFn);
   const liveQueueQuery = {
     staleTime: 15_000,
@@ -280,46 +383,15 @@ function AdminDashboard() {
     ...liveQueueQuery,
   });
   const waiting = useMemo(() => waitingOnMe(inbox), [inbox]);
-  const waitingIds = useMemo(() => waiting.map((w) => w.client_id).sort(), [waiting]);
 
-  // The words they actually sent, only for the conversations that are waiting.
-  const { data: lastClientMessage = new Map<string, string>() } = useQuery({
-    queryKey: ["dashboard-last-client-message", waitingIds],
-    enabled: waitingIds.length > 0,
+  // Today's training, this week's records, money + leads: the things no other page summarises.
+  const { data: overview, isLoading: overviewLoading } = useQuery({
+    queryKey: ["admin-dashboard-overview"],
     queryFn: async () => {
-      const { data } = await (supabase.from("messages") as any)
-        .select("client_id, body, created_at")
-        .in("client_id", waitingIds)
-        .eq("sender_role", "client").eq("is_internal_note", false).is("deleted_at", null)
-        .order("created_at", { ascending: false }).limit(200);
-      const m = new Map<string, string>();
-      for (const r of (data ?? []) as any[]) if (!m.has(r.client_id) && r.body) m.set(r.client_id, r.body);
-      return m;
+      const { data, error } = await (supabase as any).rpc("admin_dashboard_overview");
+      if (error) throw error;
+      return data as Overview;
     },
-    staleTime: 15_000,
-  });
-
-  const { data: openReviews = { checkins: [], forms: [] } } = useQuery({
-    queryKey: ["message-form-checkin-inbox", "dashboard"],
-    queryFn: async () => {
-      const [checkins, forms] = await Promise.all([
-        (supabase.from("messenger_checkins") as any)
-          .select("id, client_id, task_type, submitted_at")
-          .eq("status", "completed").is("reviewed_at", null).is("superseded_at", null)
-          .limit(200),
-        (supabase.from("nf_submissions") as any)
-          .select("id, client_id, submitted_at")
-          .not("submitted_at", "is", null).is("reviewed_at", null).in("status", ["submitted", "pending_review"])
-          .limit(200),
-      ]);
-      return { checkins: (checkins.data ?? []) as any[], forms: (forms.data ?? []) as any[] };
-    },
-    ...liveQueueQuery,
-  });
-
-  const { data: liftVideos = [] } = useQuery({
-    queryKey: ["lift-videos-admin"],
-    queryFn: () => listLiftVideos(),
     ...liveQueueQuery,
   });
 
@@ -329,41 +401,10 @@ function AdminDashboard() {
     ...liveQueueQuery,
   });
 
-  const refreshNeedsYou = () => {
-    refreshReviewQueries(queryClient);
-    void Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["coach-intel"] }),
-      queryClient.invalidateQueries({ queryKey: ["lift-videos-admin"] }),
-    ]);
-  };
-
-  const feed = useMemo(() => buildNeedsYou({
-    clients: rows as any,
-    inbox,
-    lastClientMessage,
-    openCheckins: openReviews.checkins,
-    openForms: openReviews.forms,
-    liftVideos: (liftVideos as any[]).filter((v) => !v.reviewed_at && v.status !== "Archived" && v.status !== "Reviewed"),
-    painFlags: (intel as any[]).flatMap((c: any) =>
-      (c.pain_flags ?? [])
-        .filter((f: any) => f.status === "new" || f.status === "followup")
-        .slice(0, 1)
-        .map((f: any) => ({ id: f.id, client_id: c.client_id, keyword: f.matched_keywords?.[0] ?? null, created_at: f.created_at ?? null }))),
-  }), [rows, inbox, lastClientMessage, openReviews, liftVideos, intel]);
-
   const snapshot = useMemo(
     () => buildSnapshot({ waitingReplies: waiting.length, counts: directory?.counts ?? {} }),
     [waiting.length, directory?.counts],
   );
-
-  const groupCounts = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const g of FEED_GROUPS) out[g.key] = feed.filter((f) => g.kinds.includes(f.kind)).length;
-    return out;
-  }, [feed]);
-  const activeGroup = FEED_GROUPS.find((g) => g.key === group) ?? FEED_GROUPS[0];
-  const filtered = feed.filter((f) => activeGroup.kinds.includes(f.kind));
-  const visible = showAll ? filtered : filtered.slice(0, 6);
 
   /* ---------- Client pulse (training) ---------- */
   const rosterIds = useMemo(() => new Set(rows.map((r: any) => r.id)), [rows]);
@@ -401,13 +442,13 @@ function AdminDashboard() {
   if (offlineNoCache) return <DashboardOfflineEmpty />;
 
   const todayLabel = format(new Date(), "EEEE d MMM");
-  const openCount = feed.length;
+  const openCount = snapshot.reduce((n, t) => n + t.value, 0);
 
   return (
     <>
       <PageHeader
         title="Today"
-        subtitle={openCount === 0 ? `${todayLabel} · you're all caught up` : `${todayLabel} · ${openCount} ${openCount === 1 ? "client needs" : "clients need"} you`}
+        subtitle={directoryLoading ? todayLabel : openCount === 0 ? `${todayLabel} · you're all caught up` : `${todayLabel} · tap a number to work through it`}
       />
 
       <div
@@ -417,65 +458,15 @@ function AdminDashboard() {
         <DriveSetupBanner />
         <NotificationSetupPrompt problemsOnly />
 
-        {/* ---------------- SNAPSHOT: tap any number to see who ---------------- */}
+        {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
+        <div className="flex justify-end -mb-2"><DashboardRefreshIndicator /></div>
         <SnapshotGrid tiles={snapshot} loading={directoryLoading} />
 
-        {/* ---------------- NEEDS YOU: one row per client, act in one tap ---------------- */}
-        <Card className="border-border bg-card p-4">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="flex min-w-0 items-center gap-2 text-[13px] font-bold tracking-tight">
-              <Zap className="h-4 w-4 text-muted-foreground" /> Needs you
-            </h2>
-            <DashboardRefreshIndicator />
-          </div>
+        {/* ---------------- TODAY: who trains today and who already has ---------------- */}
+        <TrainingTodayCard overview={overview} loading={overviewLoading} />
 
-          {openCount > 0 && (
-            <div className="-mx-1 mb-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {FEED_GROUPS.map((g) => {
-                const n = groupCounts[g.key] ?? 0;
-                if (g.key !== "all" && n === 0) return null;
-                return (
-                  <button
-                    key={g.key}
-                    type="button"
-                    onClick={() => { setGroup(g.key); setShowAll(false); }}
-                    className={cn(
-                      "shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition",
-                      group === g.key
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-secondary/40 text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {g.label} {n}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {visible.length === 0 ? (
-            <div className="flex items-center gap-2 rounded-lg bg-emerald-500/5 px-3 py-3 text-sm">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-              <span className="font-semibold">{openCount === 0 ? "You're caught up." : "Nothing here."}</span>
-              <span className="ml-auto text-[11px] text-muted-foreground">{openCount === 0 ? "New things show up here by themselves." : "Try All."}</span>
-            </div>
-          ) : (
-            <>
-              <ul className="divide-y divide-border">
-                {visible.map((item) => <FeedRow key={item.id} item={item} onDone={refreshNeedsYou} />)}
-              </ul>
-              {filtered.length > 6 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAll((v) => !v)}
-                  className="mt-2 w-full rounded-lg border border-border py-2 text-[12px] font-semibold text-primary hover:bg-secondary/50"
-                >
-                  {showAll ? "Show less" : `Show ${filtered.length - visible.length} more`}
-                </button>
-              )}
-            </>
-          )}
-        </Card>
+        {/* ---------------- WINS: records this week, one tap to send props ---------------- */}
+        <WinsCard wins={overview?.wins ?? []} />
 
         {/* ---------------- QUICK ACTIONS ---------------- */}
         <div className="grid grid-cols-5 gap-2">
@@ -542,6 +533,9 @@ function AdminDashboard() {
             </ul>
           )}
         </Card>
+
+        {/* ---------------- BUSINESS (admins only: the RPC returns no money for coaches) ---------------- */}
+        {overview?.money && <BusinessCard overview={overview} />}
 
         {/* ---------------- COMMUNITY: one-tap coach props (hidden when nothing was shared this week) */}
         <SectionErrorBoundary label="Community">

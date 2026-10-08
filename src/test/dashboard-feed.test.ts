@@ -1,65 +1,75 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildNeedsYou, buildSnapshot, waitingOnMe, type FeedClient, type InboxRow } from "@/lib/dashboard-feed";
+import {
+  buildSnapshot, waitingOnMe, groupWins, winLine, formatLoad, revenueDelta, formatMoney,
+  type InboxRow, type OverviewWin,
+} from "@/lib/dashboard-feed";
 
-const client = (id: string, extra: Partial<FeedClient> = {}): FeedClient => ({
-  id, full_name: `Client ${id}`, profile_picture_url: null, account_status: "Account Created",
-  f_payment_issue: false, f_program_ending: false, block_end: null, ...extra,
-});
 const inbox = (client_id: string, extra: Partial<InboxRow> = {}): InboxRow => ({
   client_id, archived: false, unread: false, workflow_status: "waiting_on_client",
   last_inbound_at: "2026-10-08T10:00:00Z", last_inbound_kind: "message", ...extra,
 });
-const empty = { lastClientMessage: new Map<string, string>(), openCheckins: [], openForms: [], liftVideos: [], painFlags: [] };
+const win = (client_id: string, extra: Partial<OverviewWin> = {}): OverviewWin => ({
+  client_id, name: `Client ${client_id}`, avatar: null, exercise: "Squat", reps: 5, load_kg: 100, unit: "lb",
+  tier: "block", at: "2026-10-07T10:00:00Z", ...extra,
+});
 
-describe("dashboard Needs you feed", () => {
-  it("only lists conversations actually waiting on staff (the old dashboard listed everyone who had messaged)", () => {
+describe("dashboard replies count", () => {
+  it("matches the Messages badge: needs_response or unread, never archived", () => {
     const rows = [inbox("a", { workflow_status: "needs_response" }), inbox("b"), inbox("c", { unread: true }), inbox("d", { archived: true, unread: true })];
     expect(waitingOnMe(rows).map((r) => r.client_id)).toEqual(["a", "c"]);
-    const feed = buildNeedsYou({ ...empty, clients: [client("a"), client("b"), client("c"), client("d")], inbox: rows });
-    expect(feed.map((f) => f.clientId).sort()).toEqual(["a", "c"]);
+  });
+});
+
+describe("dashboard is an overview, not another inbox", () => {
+  it("no longer renders the Needs you list (Clients + Messages already organise that)", () => {
+    const src = readFileSync("src/routes/_authenticated/admin/index.tsx", "utf8");
+    expect(src).not.toMatch(/Needs you/);
+    expect(src).not.toMatch(/buildNeedsYou/);
+    expect(src).toMatch(/admin_dashboard_overview/);
+    expect(src).toMatch(/TrainingTodayCard/);
+    expect(src).toMatch(/WinsCard/);
+    // money is admin-only: rendered only when the RPC returns it
+    expect(src).toMatch(/overview\?\.money && <BusinessCard/);
   });
 
-  it("shows the client's actual words instead of 'Unread message'", () => {
-    const feed = buildNeedsYou({
-      ...empty, clients: [client("a")], inbox: [inbox("a", { workflow_status: "needs_response" })],
-      lastClientMessage: new Map([["a", "Hey coach   my knee felt off on squats today"]]),
-    });
-    expect(feed[0].reason).toBe("Hey coach my knee felt off on squats today");
-    expect(feed[0].actionLabel).toBe("Reply");
+  it("coaches never get money or leads from the RPC", () => {
+    const sql = readFileSync("supabase/migrations/20261010100000_admin_dashboard_overview.sql", "utf8");
+    expect(sql).toMatch(/security definer/i);
+    expect(sql).toMatch(/case when v_admin/i);
+  });
+});
+
+describe("wins this week", () => {
+  it("shows load in the client's unit", () => {
+    expect(formatLoad(176.9, "lb")).toBe("390 lb");
+    expect(formatLoad(102.3, "kg")).toBe("102.5 kg");
+    expect(formatLoad(0, "lb")).toBeNull();
+    expect(winLine(win("a", { exercise: "Leg Press", load_kg: 176.9, reps: 15 }))).toBe("Leg Press 390 lb × 15");
+    expect(winLine(win("a", { exercise: "Plank", load_kg: null }))).toBe("Plank");
   });
 
-  it("a check-in that came in shows as a check-in and can be closed in one tap", () => {
-    const feed = buildNeedsYou({
-      ...empty, clients: [client("a")],
-      inbox: [inbox("a", { workflow_status: "needs_response", last_inbound_kind: "checkin" })],
-      openCheckins: [{ id: "ck1", client_id: "a", task_type: "weekly_checkin", submitted_at: "2026-10-08T09:00:00Z" }],
-    });
-    expect(feed[0].reason).toBe("Sent their weekly check-in");
-    expect(feed[0].checkinId).toBe("ck1");
+  it("one row per client, best record first, most recent client on top", () => {
+    const g = groupWins([
+      win("a", { tier: "block", exercise: "Bench", at: "2026-10-05T10:00:00Z" }),
+      win("b", { tier: "program", at: "2026-10-06T10:00:00Z" }),
+      win("a", { tier: "atpr", exercise: "Deadlift", at: "2026-10-04T10:00:00Z" }),
+      win("a", { tier: "block", exercise: "Row", at: "2026-10-07T12:00:00Z" }),
+    ]);
+    expect(g.map((x) => x.client_id)).toEqual(["a", "b"]);
+    expect(g[0].best).toBe("atpr");
+    expect(g[0].lifts[0].exercise).toBe("Deadlift");
+    expect(g[0].lifts).toHaveLength(3);
   });
+});
 
-  it("one row per client: most important first, the rest counted", () => {
-    const feed = buildNeedsYou({
-      ...empty,
-      clients: [client("a", { f_payment_issue: true, f_program_ending: true, block_end: "2026-10-20" }), client("b")],
-      inbox: [inbox("a", { workflow_status: "needs_response" }), inbox("b", { unread: true })],
-      painFlags: [{ id: "p1", client_id: "b", keyword: "knee" }],
-    });
-    expect(feed.map((f) => [f.clientId, f.kind, f.more])).toEqual([["b", "pain", 1], ["a", "payment", 2]]);
-  });
-
-  it("ignores clients outside the active roster (archived / not mine)", () => {
-    const feed = buildNeedsYou({ ...empty, clients: [client("a")], inbox: [inbox("zzz", { unread: true })] });
-    expect(feed).toEqual([]);
-  });
-
-  it("flags programs ending with nothing queued and unfinished invites", () => {
-    const feed = buildNeedsYou({
-      ...empty, inbox: [],
-      clients: [client("a", { f_program_ending: true, block_end: "2026-10-20" }), client("b", { account_status: "Invite Expired" })],
-    });
-    expect(feed.find((f) => f.clientId === "a")?.reason).toMatch(/^Program ends Oct 20/);
-    expect(feed.find((f) => f.clientId === "b")?.urgent).toBe(true);
+describe("business", () => {
+  it("compares against the same point last month", () => {
+    expect(revenueDelta({ currency: "CAD", this_month: 682.5, last_month_to_date: 315, last_month: 735, payments: 6 })).toEqual({ pct: 117, up: true });
+    expect(revenueDelta({ currency: "CAD", this_month: 100, last_month_to_date: 200, last_month: 400, payments: 1 })).toEqual({ pct: 50, up: false });
+    expect(revenueDelta({ currency: "CAD", this_month: 100, last_month_to_date: 0, last_month: 0, payments: 1 })).toBeNull();
+    expect(formatMoney(682.5, "CAD")).toMatch(/682\.50/);
+    expect(formatMoney(735, "CAD")).toMatch(/735$/);
   });
 });
 
