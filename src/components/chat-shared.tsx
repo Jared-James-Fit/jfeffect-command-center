@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import { getMicStream } from "@/lib/audio-session";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -424,6 +425,7 @@ export function LiveWaveform({ levels }: { levels: number[] }) {
 
 export function useVoiceRecorder() {
   const mediaRef = useRef<MediaRecorder | null>(null);
+  const restoreSessionRef = useRef<(() => void) | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const startedAtRef = useRef<number>(0);
   const tickRef = useRef<number | null>(null);
@@ -450,7 +452,10 @@ export function useVoiceRecorder() {
 
   const start = async () => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Recording not supported on this device.");
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // iOS: app sounds leave the audio session unable to record; switch it for
+    // the capture and put it back afterwards.
+    const { stream, restore } = await getMicStream(true);
+    restoreSessionRef.current = restore;
     const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
       : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
     const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
@@ -516,6 +521,8 @@ export function useVoiceRecorder() {
     });
     mr.stop();
     mr.stream.getTracks().forEach((t) => t.stop());
+    restoreSessionRef.current?.();
+    restoreSessionRef.current = null;
     mediaRef.current = null;
     setRecording(false);
     const blob = await done;
@@ -543,6 +550,8 @@ export function useVoiceRecorder() {
       try { mr.stop(); } catch {}
       mr.stream.getTracks().forEach((t) => t.stop());
     }
+    restoreSessionRef.current?.();
+    restoreSessionRef.current = null;
     mediaRef.current = null;
     chunksRef.current = [];
     accumulatedPeaksRef.current = [];

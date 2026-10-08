@@ -6,6 +6,7 @@
  * room noise: good enough for "talk, pause, she answers", no extra library.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getMicStream } from "@/lib/audio-session";
 
 export type MicTake = { blob: Blob; mime: string; durationMs: number };
 
@@ -39,7 +40,9 @@ export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_
   const start = useCallback(async (): Promise<MicTake | null> => {
     if (!micSupported()) throw new Error("This device can't record audio here.");
     finishRef.current?.(false);
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    // iOS: the app's sound effects leave the audio session in a mode that
+    // can't record; getMicStream switches it for the capture and restores it.
+    const { stream, restore } = await getMicStream({ echoCancellation: true, noiseSuppression: true, autoGainControl: true });
     const mime = pickMime();
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     const chunks: BlobPart[] = [];
@@ -66,6 +69,7 @@ export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_
         window.clearTimeout(timer);
         const stopAll = () => {
           stream.getTracks().forEach((t) => t.stop());
+          restore();
           void ctx?.close().catch(() => {});
           setListening(false);
           setLevel(0);
