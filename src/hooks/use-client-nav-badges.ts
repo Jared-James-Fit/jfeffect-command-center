@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { isUnread, useDirectThreads } from "@/lib/direct-chats";
 import { isCrewUnread, useCrewThreads } from "@/lib/crew-chats";
+import { useCommunityActivity } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
 import { useAdminNavBadgeCounts, adminBadgeMap } from "@/hooks/use-admin-nav-badges";
 
@@ -115,6 +116,8 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   // 1:1 chats and message requests from other members: a dot, like lift feedback.
   const { data: directs } = useDirectThreads(enabled);
   const { data: crews } = useCrewThreads(enabled);
+  // New community posts since you last opened it (cleared server-side when you do).
+  const { data: community } = useCommunityActivity(enabled);
 
   // Admin/coach nav badges — shared single source of truth
   const { data: adminCounts } = useAdminNavBadgeCounts(adminEnabled);
@@ -175,6 +178,8 @@ export function useClientNavBadges(): Record<string, NavBadge> {
     )),
   );
   if (nutLatest > 0 && nutLatest > nutSeen) result["/portal/nutrition-targets"] = { dot: true };
+
+  if (community?.enabled && community.unseen > 0) result["/portal/community"] = { count: community.unseen };
 
   // Weekly check-in: dot for coach feedback, link updated, or weekly due reminder
   const ciSeen = getLastSeen(user?.id, "/portal/check-in");

@@ -361,7 +361,7 @@ describe("community is easy to find without taking over", () => {
   });
 });
 
-describe("community is its own page, reached from Home", () => {
+describe("community is its own tab, one tap from anywhere", () => {
   const workouts = read("src/routes/_authenticated/portal/workouts.index.tsx");
   const page = read("src/routes/_authenticated/portal/community.tsx");
   const entry = read("src/components/community/community-entry.tsx");
@@ -370,10 +370,16 @@ describe("community is its own page, reached from Home", () => {
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("has a Back to Home and keeps Home lit, so nobody is stranded in Workouts", () => {
-    expect(page).toContain('backTo="/portal" backLabel="Home"');
-    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} />");
-    expect(shellSrc).toContain('(item.to === "/portal" && pathname === "/portal/community")');
+  it("sits in the middle of the bottom bar, starts right under the app bar, and re-tapping goes to the top", () => {
+    const nav = read("src/lib/admin-nav.ts");
+    expect(nav).toContain('{ to: "/portal/community", label: "Community", icon: Flame },');
+    expect(page).toContain('<CommunityScreen canShare previewOnly={isImpersonating} bell retapPath="/portal/community" />');
+    expect(page).not.toContain("PageHeader");
+    expect(shellSrc).toContain('window.dispatchEvent(new CustomEvent("nav-retap", { detail: item.to }));');
+    expect(screen).toContain('if ((e as CustomEvent).detail !== retapPath) return;');
+    expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
+    // Nutrition is still a tap away in More
+    expect(nav).toContain('{ to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple');
   });
   it("leaves Workouts as pure training and forwards old #community links", () => {
     expect(workouts).not.toContain("CommunityScreen");
@@ -401,7 +407,7 @@ describe("community is its own page, reached from Home", () => {
     expect(screen).toContain('label="Share your last workout"');
   });
   it("never lets a coach in View-as-client share for the athlete", () => {
-    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} />");
+    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating}");
     expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />');
   });
 });
