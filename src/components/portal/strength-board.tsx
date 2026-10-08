@@ -280,7 +280,7 @@ function StrengthBoardView({ rows }: { rows: StrengthRow[] }) {
         </ul>
       </details>
 
-      {isStaff && <CoachTools />}
+      {isStaff && <StrengthBoardCoachTools />}
     </div>
   );
 }
@@ -396,7 +396,8 @@ type ReviewRow = {
   sets: number; lift_day: string; bw_kg: number | null; flag: string | null; review: string | null; counted_best_kg: number | null;
 };
 
-function CoachTools() {
+/** Coach review for the board; also shown on the admin Athlete Records page. */
+export function StrengthBoardCoachTools() {
   const qc = useQueryClient();
   const { unit } = useWeightUnit();
   const { data: review = [], isPending } = useQuery({
