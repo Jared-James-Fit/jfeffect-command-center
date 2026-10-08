@@ -24,6 +24,7 @@ import {
   progressVsLast,
   buildCardExtras,
   lockInCameraCard,
+  pickLockInSession,
   formatExerciseBest,
   sessionLine,
   trainingSinceLabel,
@@ -422,7 +423,7 @@ describe("lock in (I showed up)", () => {
   it("opens the in-app camera and keeps the logger light", () => {
     expect(bar).toContain("else setCapturing(true);");
     expect(bar).toContain('lazyWithRetry(() => import("@/components/community/lock-in-editor")');
-    expect(bar).toContain('lazyWithRetry(() => import("@/components/community/capture-flow")');
+    expect(bar).toContain('lazyWithRetry(() => import("@/components/community/share-studio")');
     expect(bar).not.toContain("workout-share-card");
   });
   it("draws a LOCKED IN card and carries the time onto the finished photo card", () => {
@@ -840,35 +841,44 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
     expect(card).toContain(`lockplan: "Today's plan"`);
     expect(editor).toContain('plan.length ? ["lockin", "lockclock", "lockplan"] : ["lockin", "lockclock"]');
   });
-  it("Share and Lock in open the camera first, then text + stickers", () => {
+  it("Share and Lock in are one screen: shoot, the frame freezes in the card, post", () => {
     const picker = read("src/components/community/share-workout-picker.tsx");
     const bar = read("src/components/community/lock-in.tsx");
-    const flow = read("src/components/community/capture-flow.tsx");
-    expect(picker).toContain("<CaptureFlow");
+    const studio = read("src/components/community/share-studio.tsx");
+    expect(picker).toContain("<ShareStudio");
+    expect(bar).toContain("<ShareStudio");
     expect(picker).toContain('const activeMode: Mode = today ? mode ?? "lockin" : "workout";');
-    expect(picker).toContain("initialFile={photo}");
-    expect(bar).toContain("<CaptureFlow");
-    expect(bar).not.toContain('capture="environment"');
-    expect(flow).toContain("<PhotoDecorator");
-    // videos can't be decorated, so they skip the editor
-    expect(flow).toContain('if (file.type.startsWith("video/")) onDone(file, live);');
+    // the shutter freezes the frame in place: same dialog, no second screen
+    expect(studio).toContain('freeze({ src: c, file: null, live: true, at: new Date() });');
+    expect(studio).toContain('setPhase("edit");');
+    expect(studio.match(/<Dialog /g)?.length).toBe(1);
+    // text + stickers sit on the card in the same screen
+    expect(studio).toContain("<StickerLayer items={items} setItems={setItems}");
+    // posting goes through the one shared path
+    expect(picker).toContain("await shareToCommunity(qc, {");
+    expect(bar).toContain("await shareToCommunity(qc, {");
+    // videos can't carry a card, so they go to the full editor
+    expect(picker).toContain("setVideoFor({ session: target, file });");
   });
   it("the camera falls back to the phone's own camera and picker", () => {
-    const cam = read("src/components/community/share-camera.tsx");
+    const cam = read("src/components/community/share-studio.tsx");
     expect(cam).toContain("navigator.mediaDevices?.getUserMedia");
     expect(cam).toContain('.catch(() => !cancelled && setStatus("fallback"))');
     expect(cam).toContain('capture="environment"');
-    expect(cam).toContain("stop();");
+    expect(cam).toContain("if (video) video.srcObject = null;");
   });
-  it("stickers and text are baked into the photo at full size", () => {
-    const deco = read("src/components/community/photo-decorator.tsx");
-    expect(deco).toContain("const k = Math.min(1, 2048 / Math.max(nw, nh));");
-    expect(deco).toContain('"image/jpeg", 0.9');
+  it("stickers: on top of the story card, baked into the community photo through the same crop", () => {
+    const layer = read("src/components/community/sticker-layer.tsx");
+    const studio = read("src/components/community/share-studio.tsx");
+    expect(layer).toContain("const k = Math.min(1, 2048 / Math.max(nw, nh));");
+    expect(layer).toContain("const s = Math.max(REF / W, CARD_H / H);");
+    expect(studio).toContain("drawStickers(c.getContext(\"2d\")!, items, CARD_W, CARD_H);");
+    expect(studio).toContain("const b = await bakeStickers(shot.src, items);");
     // nothing added → the original photo, untouched
-    expect(deco).toContain("if (!items.length) return onDone(file);");
+    expect(studio).toContain("if (shot.file) return shot.file;");
   });
   it("full-screen editors really fill the screen", () => {
-    for (const f of ["share-composer", "lock-in-editor", "share-camera", "photo-decorator", "post-detail"]) {
+    for (const f of ["share-composer", "lock-in-editor", "share-studio", "post-detail"]) {
       expect(read(`src/components/community/${f}.tsx`)).toContain("h-[100dvh] max-h-none");
     }
   });
@@ -901,21 +911,19 @@ describe("share picker: which workout was today", () => {
 describe("share camera: options right away, no list in the way", () => {
   const read = (f: string) => readFileSync(f, "utf8");
   const picker = read("src/components/community/share-workout-picker.tsx");
-  const cam = read("src/components/community/share-camera.tsx");
-  it("picks the workout for you (yours, else the newest) and goes straight to the card", () => {
+  const cam = read("src/components/community/share-studio.tsx");
+  it("picks the workout for you (yours, else the newest); the chip changes it in place", () => {
     expect(picker).toContain("const target = chosen ?? sessions?.[0] ?? null;");
-    expect(picker).toContain("if (target) setPicked(target);");
-    expect(picker).toContain("if (choosing) setChosen(s);");
+    expect(picker).toContain("setChosen(s);");
+    expect(picker).toContain("const changeTarget = () => setRawOpen(true);");
   });
-  it("the viewfinder is the real card, live, and the editor opens on the look you shot", () => {
+  it("the viewfinder is the real card, live; swipe changes the look, before and after the shot", () => {
     expect(picker).toContain("card={cameraCard}");
-    expect(picker).toContain("setPickedLook(currentWorkoutLook);");
-    expect(picker).toContain("initialTemplate={pickedLook}");
-    expect(picker).toContain("initialTemplate={lockLook}");
     expect(read("src/components/community/lock-in.tsx")).toContain("lockInCameraCard({ workoutTitle, athleteName, plan: plan ?? [] })");
-    expect(cam).toContain("paintShareCard(cardEl, { ...c.data, lockedIn, template: c.look, media }, logo, PREVIEW_SCALE);");
-    // swipe sideways = next look; small movement = tap
+    expect(cam).toContain("paintShareCard(cardEl, { ...c.data, lockedIn, template: c.look, media }, logo, LIVE_SCALE);");
     expect(cam).toContain("if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) changeLook(dx < 0 ? 1 : -1);");
+    // the card is exactly 9:16 on screen, so what you see is what you share
+    expect(cam).toContain("const w = Math.min(areaSize.w, (areaSize.h * CARD_W) / CARD_H);");
   });
   it("self-timer, double-tap flip, and the camera light goes off", () => {
     expect(cam).toContain("setTimer((t) => (t === 0 ? 3 : t === 3 ? 10 : 0))");
@@ -987,5 +995,23 @@ describe("stat cards anyone can read: receipt, streak, vs last time", () => {
     expect(c.data.athleteName).toBe("Marc");
     expect(c.data.lockedIn?.live).toBe(true);
     expect(lockInCameraCard({ workoutTitle: "Lower B", athleteName: null, plan: [] }).looks).toEqual(["lockin", "lockclock"]);
+  });
+});
+
+describe("lock in never attaches to an old unfinished session", () => {
+  const now = new Date(2026, 9, 7, 23, 18);
+  const item = (o: any) => ({ day: { id: o.id, scheduled_date: o.date ?? null, title: o.title ?? null, day_index: 4 }, week: {}, block: {}, completion: o.completion ?? null, scheduledDate: o.date ?? null }) as any;
+  it("skips a session started weeks ago and never finished", () => {
+    const stale = item({ id: "d-aug", date: "2026-08-31", completion: { started_at: "2026-08-30T22:29:54Z", completed_at: null } });
+    const tomorrow = item({ id: "d-thu", date: "2026-10-08" });
+    expect(pickLockInSession([stale, tomorrow], now)).toBeNull();
+  });
+  it("takes one really in progress (started in the last 12h), else today's", () => {
+    const live = item({ id: "d-now", completion: { started_at: new Date(+now - 40 * 60_000).toISOString(), completed_at: null } });
+    const todays = item({ id: "d-today", date: "2026-10-07" });
+    expect(pickLockInSession([todays, live], now)?.day.id).toBe("d-now");
+    expect(pickLockInSession([todays], now)?.day.id).toBe("d-today");
+    const done = item({ id: "d-done", date: "2026-10-07", completion: { started_at: new Date(+now - 3600_000).toISOString(), completed_at: new Date(+now - 600_000).toISOString() } });
+    expect(pickLockInSession([done], now)).toBeNull();
   });
 });

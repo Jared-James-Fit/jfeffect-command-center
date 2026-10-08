@@ -7,6 +7,7 @@
  */
 import { formatLoad, formatTonnage } from "@/lib/training-records";
 import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
+import { dayScheduledDate, type WorkoutItem } from "@/lib/workout-today";
 
 export const CAPTION_MAX = 280;
 export const COMMENT_MAX = 300;
@@ -744,4 +745,26 @@ export function lockInCameraCard(i: { workoutTitle: string; athleteName: string 
     },
     looks: i.plan.length ? ["lockin", "lockclock", "lockplan"] : ["lockin", "lockclock"],
   };
+}
+
+/**
+ * The session Lock in should attach to: one started in the last 12 hours
+ * (really in progress), else the unfinished one scheduled for today. Never an
+ * old session someone started weeks ago and didn't finish.
+ */
+export function pickLockInSession(items: WorkoutItem[], now: Date = new Date()): WorkoutItem | null {
+  const open = items.filter((it) => !it.completion?.completed_at && it.day?.id);
+  const fresh = open.find((it) => {
+    const t = it.completion?.started_at ?? it.completion?.in_progress_at;
+    const ms = t ? +now - Date.parse(t) : Infinity;
+    return ms >= -60_000 && ms < 12 * 3600_000;
+  });
+  if (fresh) return fresh;
+  const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+  return (
+    open.find((it) => {
+      const sd = dayScheduledDate(it);
+      return !!sd && sd.getFullYear() === y && sd.getMonth() === m && sd.getDate() === d;
+    }) ?? null
+  );
 }
