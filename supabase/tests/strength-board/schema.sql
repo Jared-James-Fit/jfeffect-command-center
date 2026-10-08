@@ -1,4 +1,4 @@
--- Stand-ins for the tables 20261016090000_all_time_strength_board.sql reads.
+-- Stand-ins for the tables the Hall of Strength migrations read.
 -- Plain Postgres 16; the supabase roles must exist (see README).
 create schema auth;
 create table auth_ctx (uid uuid);
@@ -25,7 +25,12 @@ create table pl_row_results (id uuid primary key default gen_random_uuid(), clie
   normalized_kg numeric, actual_load_kg numeric, actual_load numeric, actual_load_unit text,
   entered_value numeric, entered_unit text, actual_reps int, is_working_set boolean, load_type text,
   is_bodyweight boolean, completed_at timestamptz);
-create table powerlifting_athletes (id uuid primary key default gen_random_uuid(), client_id uuid, sex text, created_at timestamptz default now());
+create table powerlifting_athletes (id uuid primary key default gen_random_uuid(), client_id uuid, sex text, created_at timestamptz default now(),
+  athlete_name text, status text default 'active', country_filter text);
+create table powerlifting_coaching_periods (id uuid primary key default gen_random_uuid(), athlete_id uuid, start_date date, end_date date);
+create table athlete_powerlifting_results (id uuid primary key default gen_random_uuid(), athlete_id uuid, client_id uuid,
+  athlete_name text, sex text, bodyweight_kg numeric, squat_kg numeric, bench_kg numeric, deadlift_kg numeric, total_kg numeric,
+  gl_points numeric, meet_name text, meet_location text, meet_date date, federation text, weight_class_kg text);
 
 -- Real scoring function, copied from 20261004100000_powerlifting_points_autocalc.sql.
 CREATE OR REPLACE FUNCTION public.dots_points(_sex text, _bw numeric, _total numeric)
@@ -35,10 +40,12 @@ RETURNS numeric LANGUAGE sql IMMUTABLE SET search_path = public AS $$
     ELSE round(_total * 500 / (-307.75076 + 24.0900756 * _bw - 0.1918759221 * _bw^2 + 0.0007391293 * _bw^3 - 0.000001093 * _bw^4), 2) END
 $$;
 
--- Library: the three competition lifts and one assistance squat.
+-- Library: the three competition lifts plus variations (some count, some don't).
 insert into exercises (name, is_competition_lift, competition_lift_type) values
   ('Competition Squat', true, 'squat'), ('Competition Bench', true, 'bench'),
-  ('Competition Deadlift', true, 'deadlift'), ('High Bar Squat', false, null);
+  ('Competition Deadlift', true, 'deadlift'), ('High Bar Squat', false, null),
+  ('Hack Squat', false, null), ('Romanian Deadlift', false, null), ('TNG Bench Press', false, null),
+  ('Conventional Deadlift', false, null);
 insert into pl_exercise_rows (exercise_id) select id from exercises;
 
 -- Helpers.

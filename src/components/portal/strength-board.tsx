@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ChevronRight, Crown, Info, Loader2, Medal, ShieldCheck, Trophy } from "lucide-react";
+import { ChevronRight, Crown, Dumbbell, Info, Landmark, Loader2, Medal, ShieldCheck, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -19,17 +19,20 @@ import type { WeightUnit } from "@/lib/weight-lifted";
 import {
   BOARD_LIFTS,
   LIFT_NAME,
-  formatDots,
+  TOP,
   formatLoad,
   formatMultiple,
   gapToTop10,
   meStatus,
+  meetHistory,
+  normalizeMeetRow,
   normalizeRow,
   pickBoard,
   rankOf,
   totalClub,
   type BoardLift,
   type BoardMode,
+  type BoardSource,
   type Division,
   type StrengthRow,
 } from "@/lib/strength-board";
@@ -45,6 +48,19 @@ function useStrengthBoard() {
       const { data, error } = await db.rpc("get_strength_board", viewerId ? { _as_user: viewerId } : {});
       if (error) throw error;
       return ((data ?? []) as any[]).map(normalizeRow);
+    },
+  });
+}
+
+function useMeetBoard() {
+  const viewerId = usePortalUserId() ?? null;
+  return useQuery({
+    queryKey: ["strength-board", "meets", viewerId],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await db.rpc("get_strength_board_meets", viewerId ? { _as_user: viewerId } : {});
+      if (error) throw error;
+      return ((data ?? []) as any[]).map(normalizeMeetRow);
     },
   });
 }
@@ -65,9 +81,22 @@ function LifterAvatar({ row, size }: { row: StrengthRow; size: string }) {
   );
 }
 
-/** The number a row is ranked by, big; everything else is context. */
-function headline(row: StrengthRow, mode: BoardMode, unit: WeightUnit) {
-  return mode === "p4p" ? formatDots(row.dots) : formatLoad(row.kg, unit);
+/** The number a row is ranked by, big: x bodyweight for pound for pound, the weight (and its reps) for absolute. */
+function Headline({ row, mode, unit }: { row: StrengthRow; mode: BoardMode; unit: WeightUnit }) {
+  if (mode === "p4p") {
+    return (
+      <>
+        {formatMultiple(row.bw_multiple)}
+        <span className="ml-0.5 text-[0.6em] font-black text-muted-foreground">BW</span>
+      </>
+    );
+  }
+  return (
+    <>
+      {formatLoad(row.kg, unit)}
+      {row.reps && row.reps > 1 ? <span className="ml-1 text-[0.7em] font-black text-primary">×{row.reps}</span> : null}
+    </>
+  );
 }
 
 function XBadge({ row, className }: { row: StrengthRow; className?: string }) {
@@ -90,12 +119,27 @@ function ClubBadge({ row }: { row: StrengthRow }) {
   );
 }
 
+function AlumniTag({ row }: { row: StrengthRow }) {
+  if (!row.meet?.is_alumni) return null;
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[8px] font-black tracking-wider text-muted-foreground">
+      ALUMNI
+    </span>
+  );
+}
+
+/** Everything behind the headline number, smallest first. */
 function subline(row: StrengthRow, mode: BoardMode, unit: WeightUnit) {
   const parts: string[] = [];
-  if (mode === "p4p") parts.push(formatLoad(row.kg, unit));
-  if (row.reps && row.reps > 1) parts.push(`×${row.reps} reps`);
+  if (mode === "p4p") parts.push(`${formatLoad(row.kg, unit)}${row.reps && row.reps > 1 ? ` ×${row.reps}` : ""}`);
   if (row.bw_kg) parts.push(`@ ${formatLoad(row.bw_kg, unit)} BW`);
-  parts.push(format(new Date(row.lifted_at), "MMM d, yyyy"));
+  if (row.meet) {
+    parts.push([row.meet.name, row.meet.federation].filter(Boolean).join(" "));
+    parts.push(format(new Date(row.lifted_at), "yyyy"));
+    if (row.meet.gl_points) parts.push(`${row.meet.gl_points.toFixed(1)} GL`);
+  } else {
+    parts.push(format(new Date(row.lifted_at), "MMM yyyy"));
+  }
   return parts.join(" · ");
 }
 
@@ -104,16 +148,17 @@ function subline(row: StrengthRow, mode: BoardMode, unit: WeightUnit) {
 export function StrengthBoardCard() {
   const [open, setOpen] = useState(false);
   const { data = [], isPending } = useStrengthBoard();
+  const { data: meets = [] } = useMeetBoard();
   const { unit } = useWeightUnit();
   const myTotal = data.find((r) => r.is_me && r.lift === "total") ?? null;
-  const division: Division = data.find((r) => r.is_me)?.sex ?? "male";
-  const p4pKing = pickBoard(data, "p4p", "total", division).top[0] ?? null;
-  const absKing = pickBoard(data, "absolute", "total", division).top[0] ?? null;
+  const p4pKing = pickBoard(data, "p4p", "total", "all").top[0] ?? null;
+  const absKing = pickBoard(data, "absolute", "total", "all").top[0] ?? null;
+  const history = meetHistory(meets);
 
-  if (!isPending && data.length === 0) return null; // nobody has logged a competition lift yet
+  if (!isPending && data.length === 0 && meets.length === 0) return null;
 
-  const myLine = myTotal?.p4p_rank
-    ? `You: #${myTotal.p4p_rank} pound for pound${myTotal.abs_rank ? ` · #${myTotal.abs_rank} ${division === "female" ? "women's" : "men's"} total` : ""}`
+  const myLine = myTotal?.p4p_rank || myTotal?.all_rank
+    ? `You: ${[myTotal.p4p_rank && `#${myTotal.p4p_rank} pound for pound`, myTotal.all_rank && `#${myTotal.all_rank} total`].filter(Boolean).join(" · ")}`
     : data.some((r) => r.is_me)
       ? "See where you rank"
       : "Get on the board";
@@ -129,30 +174,38 @@ export function StrengthBoardCard() {
           <div className="min-w-0">
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">All-time strength board</div>
             <div className="mt-0.5 text-lg font-black leading-tight">Hall of Strength</div>
-            <div className="text-[11px] text-muted-foreground">Squat · Bench · Deadlift · since day one</div>
+            <div className="text-[11px] text-muted-foreground">Squat · Bench · Deadlift · Total</div>
           </div>
           <Trophy className="h-7 w-7 shrink-0 text-amber-400" />
         </div>
         <div className="grid grid-cols-2 border-t">
-          <KingTile label="Pound for pound #1" row={p4pKing} value={p4pKing ? formatMultiple(p4pKing.bw_multiple) ?? `${formatDots(p4pKing.dots)} DOTS` : null} suffix={p4pKing?.bw_multiple ? "BW" : undefined} loading={isPending} />
-          <KingTile label={`${division === "female" ? "Women's" : "Men's"} total #1`} row={absKing} value={absKing ? formatLoad(absKing.kg, unit) : null} loading={isPending} className="border-l" />
+          <KingTile label="Pound for pound #1" row={p4pKing} loading={isPending}
+            value={p4pKing ? <>{formatMultiple(p4pKing.bw_multiple)}<span className="ml-0.5 text-[10px] font-black text-muted-foreground">BW</span></> : null} />
+          <KingTile label="Heaviest total #1" row={absKing} loading={isPending} className="border-l"
+            value={absKing ? formatLoad(absKing.kg, unit) : null} />
         </div>
+        {history.athletes > 0 && (
+          <div className="flex items-center gap-2 border-t bg-muted/30 px-4 py-2 text-[11px] text-muted-foreground">
+            <Landmark className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <span className="truncate"><b className="text-foreground">Meet history:</b> {history.athletes} athletes · {history.meets} meets{history.since ? ` since ${history.since}` : ""}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between border-t px-4 py-2.5 text-xs font-bold">
-          <span className={cn(myTotal?.p4p_rank ? "text-foreground" : "text-primary")}>{myLine}</span>
+          <span className={cn(myTotal?.p4p_rank || myTotal?.all_rank ? "text-foreground" : "text-primary")}>{myLine}</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </div>
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">
-          <StrengthBoardView rows={data} />
+          <HallOfStrength />
         </SheetContent>
       </Sheet>
     </>
   );
 }
 
-function KingTile({ label, row, value, suffix, loading, className }: {
-  label: string; row: StrengthRow | null; value: string | null; suffix?: string; loading: boolean; className?: string;
+function KingTile({ label, row, value, loading, className }: {
+  label: string; row: StrengthRow | null; value: ReactNode; loading: boolean; className?: string;
 }) {
   return (
     <div className={cn("min-w-0 px-4 py-3", className)}>
@@ -166,10 +219,7 @@ function KingTile({ label, row, value, suffix, loading, className }: {
           <LifterAvatar row={row} size="h-8 w-8" />
           <div className="min-w-0">
             <div className="truncate text-xs font-bold">{row.display_name}</div>
-            <div className="text-base font-black tabular-nums leading-tight">
-              {value}
-              {suffix && <span className="ml-0.5 text-[10px] font-black text-muted-foreground">{suffix}</span>}
-            </div>
+            <div className="text-base font-black tabular-nums leading-tight">{value}</div>
           </div>
         </div>
       ) : (
@@ -181,31 +231,82 @@ function KingTile({ label, row, value, suffix, loading, className }: {
 
 // ── The board ──────────────────────────────────────────────────────────────
 
-function StrengthBoardView({ rows }: { rows: StrengthRow[] }) {
+/** The full Hall of Strength: training boards and JF Effect meet history. */
+export function HallOfStrength({ initialSource = "training" }: { initialSource?: BoardSource }) {
   const { unit, setUnit } = useWeightUnit();
   const isStaff = useIsStaff();
-  const mine = rows.find((r) => r.is_me);
+  const training = useStrengthBoard();
+  const meets = useMeetBoard();
+  const [source, setSource] = useState<BoardSource>(initialSource);
   const [mode, setMode] = useState<BoardMode>("p4p");
   const [lift, setLift] = useState<BoardLift>("total");
-  const [division, setDivision] = useState<Division>(mine?.sex ?? "male");
-  const { top, me } = pickBoard(rows, mode, lift, division);
+  const [division, setDivision] = useState<Division>("all");
+  const [showAll, setShowAll] = useState(false);
+  const active = source === "training" ? training : meets;
+  const rows = active.data ?? [];
+  const { top, me, count } = pickBoard(rows, mode, lift, division, showAll ? Infinity : TOP);
   const podium = top.slice(0, 3);
   const rest = top.slice(3);
   // The viewer only pins below the list when they're not already in it.
-  const meOnBoard = !!me && top.some((r) => r.client_id === me.client_id);
-  const myDivisionMismatch = mode === "absolute" && !!me?.sex && me.sex !== division;
+  const meOnBoard = !!me && top.some((r) => r.key === me.key);
+  const history = meetHistory(meets.data ?? []);
+  const what = lift === "total" ? "squat + bench + deadlift" : LIFT_NAME[lift];
+  const pick = <T,>(set: (v: T) => void) => (v: T) => { set(v); setShowAll(false); };
 
   return (
     <div className="space-y-4">
       <SheetHeader className="text-left">
         <SheetTitle className="flex items-center gap-2"><Trophy className="h-5 w-5 shrink-0 text-amber-400" /> Hall of Strength</SheetTitle>
-        <SheetDescription>The strongest lifts logged in JF Effect since day one.</SheetDescription>
+        <SheetDescription>
+          {source === "training"
+            ? "The heaviest squat, bench and deadlift ever logged in JF Effect."
+            : "Every JF Effect athlete who's stepped on the platform, past and present."}
+        </SheetDescription>
       </SheetHeader>
+
+      {/* Training or meets */}
+      <div className="grid grid-cols-2 gap-2">
+        {([
+          ["training", "Training", "Logged in the app", Dumbbell],
+          ["meets", "Meet history", "Judged on the platform", Landmark],
+        ] as const).map(([k, label, sub, Icon]) => (
+          <button key={k} type="button" onClick={() => pick(setSource)(k)}
+            className={cn("flex min-h-14 items-center gap-2 rounded-xl border px-3 text-left transition",
+              source === k ? "border-amber-400/70 bg-amber-400/10 shadow-sm" : "bg-card text-muted-foreground")}>
+            <Icon className={cn("h-4 w-4 shrink-0", source === k ? "text-amber-500" : "")} />
+            <span className="min-w-0">
+              <span className="block text-xs font-black text-foreground">{label}</span>
+              <span className="block truncate text-[10px]">{sub}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {source === "meets" && history.athletes > 0 && (
+        <div className="rounded-2xl border border-amber-400/40 bg-gradient-to-br from-amber-400/15 via-transparent to-transparent p-3">
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">The JF Effect record book</div>
+          <div className="mt-1 grid grid-cols-3 text-center">
+            {[
+              [history.athletes, "athletes"],
+              [history.meets, "meets"],
+              [history.since ?? "—", "since"],
+            ].map(([n, label]) => (
+              <div key={label as string}>
+                <div className="text-xl font-black tabular-nums leading-none">{n}</div>
+                <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+            Best judged lifts from meets while coached by JF Effect. Current athletes and alumni, one record book.
+          </p>
+        </div>
+      )}
 
       {/* Board picker */}
       <div className="grid grid-cols-2 rounded-xl bg-muted/50 p-1 text-xs font-bold">
         {([["p4p", "Pound for pound"], ["absolute", "Absolute"]] as const).map(([k, label]) => (
-          <button key={k} type="button" onClick={() => setMode(k)}
+          <button key={k} type="button" onClick={() => pick(setMode)(k)}
             className={cn("min-h-10 rounded-lg transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
             {label}
           </button>
@@ -213,7 +314,7 @@ function StrengthBoardView({ rows }: { rows: StrengthRow[] }) {
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         {BOARD_LIFTS.map((l) => (
-          <button key={l.key} type="button" onClick={() => setLift(l.key)}
+          <button key={l.key} type="button" onClick={() => pick(setLift)(l.key)}
             className={cn("min-h-10 rounded-xl border text-xs font-black transition",
               lift === l.key ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}>
             {l.label}
@@ -222,11 +323,11 @@ function StrengthBoardView({ rows }: { rows: StrengthRow[] }) {
       </div>
       {mode === "absolute" && (
         <div className="flex gap-1.5">
-          {(["male", "female"] as const).map((d) => (
-            <button key={d} type="button" onClick={() => setDivision(d)}
+          {([["all", "All"], ["male", "Men"], ["female", "Women"]] as const).map(([d, label]) => (
+            <button key={d} type="button" onClick={() => pick(setDivision)(d)}
               className={cn("min-h-9 flex-1 rounded-full border text-xs font-bold transition",
                 division === d ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>
-              {d === "male" ? "Men" : "Women"}
+              {label}
             </button>
           ))}
         </div>
@@ -236,8 +337,10 @@ function StrengthBoardView({ rows }: { rows: StrengthRow[] }) {
         <p className="flex flex-1 items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {mode === "p4p"
-            ? "Ranked by DOTS, powerlifting's score for any bodyweight, men and women. BW = times your bodyweight lifted."
-            : `Heaviest ${lift === "total" ? "squat + bench + deadlift" : `${LIFT_NAME[lift]}`} actually lifted. No estimates.`}
+            ? `Ranked by times bodyweight: ${what} ÷ bodyweight. Men and women on one board.`
+            : source === "meets"
+              ? `Heaviest ${what} made on the platform.`
+              : `Heaviest ${what} actually lifted, any reps. ×3 = it was a set of 3.`}
         </p>
         <ToggleGroup type="single" value={unit} onValueChange={(v) => v && setUnit(v as WeightUnit)} className="shrink-0 rounded-lg border bg-card p-0.5">
           {(["lb", "kg"] as const).map((u) => (
@@ -247,7 +350,14 @@ function StrengthBoardView({ rows }: { rows: StrengthRow[] }) {
       </div>
 
       {/* Podium */}
-      {top.length === 0 ? (
+      {active.isPending ? (
+        <div className="py-10 text-center text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
+      ) : active.error ? (
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <div className="font-bold text-destructive">The board couldn't load</div>
+          <div className="mt-1 text-xs text-muted-foreground">Pull down to refresh or try again in a minute.</div>
+        </div>
+      ) : top.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
           Nobody's on this board yet. Be the first.
         </div>
@@ -255,38 +365,61 @@ function StrengthBoardView({ rows }: { rows: StrengthRow[] }) {
         <>
           <div className="grid grid-cols-3 items-end gap-2">
             {[podium[1], podium[0], podium[2]].map((r, i) =>
-              r ? <PodiumSpot key={r.client_id} row={r} mode={mode} unit={unit} /> : <div key={i} />,
+              r ? <PodiumSpot key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} /> : <div key={i} />,
             )}
           </div>
           {rest.length > 0 && (
             <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
-              {rest.map((r) => <BoardLine key={r.client_id} row={r} mode={mode} unit={unit} />)}
+              {rest.map((r) => <BoardLine key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} />)}
             </ul>
+          )}
+          {source === "meets" && count > TOP && (
+            <button type="button" onClick={() => setShowAll((s) => !s)}
+              className="min-h-10 w-full rounded-xl border bg-card text-xs font-black text-primary">
+              {showAll ? "Show top 10" : `Show all ${count} athletes`}
+            </button>
           )}
         </>
       )}
 
       {/* You */}
-      {!meOnBoard && !myDivisionMismatch && <YouCard me={me} top={top} mode={mode} lift={lift} unit={unit} />}
+      {!active.isPending && !meOnBoard && (source === "training"
+        ? <YouCard me={me} top={top} mode={mode} lift={lift} division={division} unit={unit} />
+        : <MeetYouCard me={me} mode={mode} division={division} />)}
 
       <details className="rounded-2xl border bg-muted/20 p-3 text-xs">
         <summary className="cursor-pointer font-black">How the board works</summary>
-        <ul className="mt-2 space-y-1.5 text-muted-foreground">
-          <li><b className="text-foreground">What counts:</b> Competition Squat, Bench and Deadlift logged in the app since launch. Meet results live in Powerlifting Records.</li>
-          <li><b className="text-foreground">Your number:</b> the heaviest weight you've completed for at least one rep. No estimated maxes.</li>
-          <li><b className="text-foreground">Total:</b> your best squat + best bench + best deadlift.</li>
-          <li><b className="text-foreground">Bodyweight:</b> the bodyweight you logged closest to that lift (within 30 days). For a total, the heaviest of the three, so cutting after a PR doesn't help.</li>
-          <li><b className="text-foreground">Typos:</b> lifts that look impossible (heavier than world records, or a huge jump over every other session) wait for your coach to check them.</li>
-        </ul>
+        {source === "training" ? (
+          <ul className="mt-2 space-y-1.5 text-muted-foreground">
+            <li><b className="text-foreground">What counts:</b> barbell squat, bench and deadlift logged in the app, including paused, tempo, touch-and-go, close-grip, high-bar, sumo and deficit. Not partials (pins, boxes, boards), machines, dumbbells, specialty bars or RDLs.</li>
+            <li><b className="text-foreground">Your number:</b> the heaviest weight you've completed, any reps. A set of 3 shows as ×3.</li>
+            <li><b className="text-foreground">Total:</b> your best squat + best bench + best deadlift.</li>
+            <li><b className="text-foreground">Pound for pound:</b> your number ÷ the bodyweight you logged closest to that lift. For a total, the heaviest of the three bodyweights, so cutting after a PR doesn't help. No bodyweight logged, no pound for pound.</li>
+            <li><b className="text-foreground">Absolute:</b> heaviest wins. All, or Men / Women.</li>
+            <li><b className="text-foreground">Typos:</b> lifts that look impossible (heavier than world records, or a huge jump over every other session) wait for your coach to check them.</li>
+          </ul>
+        ) : (
+          <ul className="mt-2 space-y-1.5 text-muted-foreground">
+            <li><b className="text-foreground">What counts:</b> judged lifts from meets while coached by JF Effect. Totals only from full-power meets.</li>
+            <li><b className="text-foreground">Pound for pound:</b> the lift ÷ that meet's weigh-in bodyweight. Each board uses your best meet for that board.</li>
+            <li><b className="text-foreground">Alumni:</b> athletes JF Effect coached in the past. Their records stand.</li>
+            <li><b className="text-foreground">Missing a meet?</b> Tell your coach and it goes in the book.</li>
+          </ul>
+        )}
       </details>
 
-      {isStaff && <StrengthBoardCoachTools />}
+      {isStaff && source === "training" && <StrengthBoardCoachTools />}
     </div>
   );
 }
 
-function PodiumSpot({ row, mode, unit }: { row: StrengthRow; mode: BoardMode; unit: WeightUnit }) {
-  const rank = rankOf(row, mode)!;
+function NameLine({ row }: { row: StrengthRow }) {
+  return row.meet?.competed_as ? (
+    <div className="truncate text-[9px] text-muted-foreground">competed as {row.meet.competed_as}</div>
+  ) : null;
+}
+
+function PodiumSpot({ row, rank, mode, unit }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit }) {
   const first = rank === 1;
   return (
     <div className={cn(
@@ -297,47 +430,55 @@ function PodiumSpot({ row, mode, unit }: { row: StrengthRow; mode: BoardMode; un
       <Medal className={cn("h-5 w-5", MEDAL[rank - 1])} />
       <div className="text-[10px] font-black">{rank === 1 ? "1ST" : rank === 2 ? "2ND" : "3RD"}</div>
       <LifterAvatar row={row} size={first ? "mt-1 h-14 w-14" : "mt-1 h-11 w-11"} />
-      <div className="mt-1 w-full truncate text-xs font-bold">{row.display_name}</div>
+      <div className="mt-1 line-clamp-2 w-full break-words text-xs font-bold leading-tight">{row.display_name}</div>
+      <NameLine row={row} />
       {row.is_coach && <CoachTag className="mt-0.5" />}
       <div className={cn("mt-0.5 font-black tabular-nums leading-tight", first ? "text-lg" : "text-base")}>
-        {headline(row, mode, unit)}
-        {mode === "p4p" && <span className="ml-0.5 text-[9px] font-black text-muted-foreground">DOTS</span>}
+        <Headline row={row} mode={mode} unit={unit} />
       </div>
       <div className="mt-1 flex flex-wrap justify-center gap-1">
-        <XBadge row={row} />
+        {mode === "absolute" && <XBadge row={row} />}
         <ClubBadge row={row} />
+        <AlumniTag row={row} />
       </div>
-      {mode === "p4p" && <div className="mt-0.5 text-[10px] text-muted-foreground">{formatLoad(row.kg, unit)}</div>}
-      {row.reps && row.reps > 1 ? <div className="text-[10px] text-muted-foreground">×{row.reps} reps</div> : null}
+      {mode === "p4p" && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground">
+          {formatLoad(row.kg, unit)}{row.reps && row.reps > 1 ? ` ×${row.reps}` : ""}
+        </div>
+      )}
+      {row.meet && <div className="w-full truncate text-[9px] text-muted-foreground">{row.meet.name} · {format(new Date(row.lifted_at), "yyyy")}</div>}
     </div>
   );
 }
 
-function BoardLine({ row, mode, unit }: { row: StrengthRow; mode: BoardMode; unit: WeightUnit }) {
+function BoardLine({ row, rank, mode, unit }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit }) {
   return (
     <li className={cn("flex items-center gap-3 px-3 py-2.5", row.is_me && "bg-primary/5")}>
-      <span className="w-6 text-center text-sm font-black text-muted-foreground">#{rankOf(row, mode)}</span>
+      <span className="w-6 text-center text-sm font-black text-muted-foreground">#{rank}</span>
       <LifterAvatar row={row} size="h-9 w-9" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-bold">{row.display_name}{row.is_me ? " (You)" : ""}</span>
           {row.is_coach && <CoachTag />}
-          <XBadge row={row} />
+          <AlumniTag row={row} />
         </div>
+        <NameLine row={row} />
         <div className="truncate text-[10px] text-muted-foreground">{subline(row, mode, unit)}</div>
       </div>
-      <div className="text-right">
-        <div className="text-sm font-black tabular-nums">{headline(row, mode, unit)}</div>
-        {mode === "p4p" && <div className="text-[9px] font-black text-muted-foreground">DOTS</div>}
+      <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
+        <div className="text-sm font-black tabular-nums"><Headline row={row} mode={mode} unit={unit} /></div>
+        {mode === "absolute" && <XBadge row={row} />}
         <ClubBadge row={row} />
       </div>
     </li>
   );
 }
 
-function YouCard({ me, top, mode, lift, unit }: { me: StrengthRow | null; top: StrengthRow[]; mode: BoardMode; lift: BoardLift; unit: WeightUnit }) {
-  const status = meStatus(me, mode, lift);
-  const gap = gapToTop10(me, top, mode, unit);
+function YouCard({ me, top, mode, lift, division, unit }: {
+  me: StrengthRow | null; top: StrengthRow[]; mode: BoardMode; lift: BoardLift; division: Division; unit: WeightUnit;
+}) {
+  const status = meStatus(me, mode, lift, division);
+  const gap = gapToTop10(me, top, mode, division, unit);
   const qc = useQueryClient();
   const [pending, setPending] = useState<AthleteSex | null>(null);
   const save = useMutation({
@@ -351,6 +492,9 @@ function YouCard({ me, top, mode, lift, unit }: { me: StrengthRow | null; top: S
     onSettled: () => setPending(null),
   });
 
+  if (status.kind === "other-division") return null;
+  const liftName = LIFT_NAME[lift][0].toUpperCase() + LIFT_NAME[lift].slice(1);
+
   return (
     <div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-4">
       <div className="text-[10px] font-black uppercase tracking-widest text-primary">You</div>
@@ -358,9 +502,7 @@ function YouCard({ me, top, mode, lift, unit }: { me: StrengthRow | null; top: S
         <>
           <div className="mt-1 flex items-baseline justify-between gap-3">
             <div className="text-2xl font-black">#{status.rank}{status.count ? <span className="text-sm font-bold text-muted-foreground"> of {status.count}</span> : null}</div>
-            <div className="text-right text-base font-black tabular-nums">
-              {headline(me, mode, unit)}{mode === "p4p" && <span className="ml-0.5 text-[9px] text-muted-foreground">DOTS</span>}
-            </div>
+            <div className="text-right text-base font-black tabular-nums"><Headline row={me} mode={mode} unit={unit} /></div>
           </div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">{subline(me, mode, unit)}</div>
           {gap != null && (
@@ -371,19 +513,36 @@ function YouCard({ me, top, mode, lift, unit }: { me: StrengthRow | null; top: S
         </>
       )}
       {status.kind === "no-lift" && (
-        <p className="mt-1 text-sm font-bold">Log a Competition {LIFT_NAME[lift][0].toUpperCase() + LIFT_NAME[lift].slice(1)} to get on this board.</p>
+        <p className="mt-1 text-sm font-bold">Log a barbell {liftName} to get on this board. Any reps count.</p>
       )}
       {status.kind === "no-total" && (
-        <p className="mt-1 text-sm font-bold">Log a Competition Squat, Bench and Deadlift to post a total.</p>
+        <p className="mt-1 text-sm font-bold">Log a squat, bench and deadlift to post a total. Any reps count.</p>
       )}
       {status.kind === "no-bodyweight" && (
-        <p className="mt-1 text-sm font-bold">Log your bodyweight in the weeks you lift to unlock pound for pound.</p>
+        <p className="mt-1 text-sm font-bold">Log your bodyweight to unlock pound for pound.</p>
       )}
       {status.kind === "no-division" && (
         <div className="mt-1 space-y-2">
-          <p className="text-sm font-bold">Pick your division to get ranked.</p>
+          <p className="text-sm font-bold">You're on the All board. Pick your division to rank with the {division === "female" ? "women" : "men"} too.</p>
           <SexChoice value={null} onChange={(v) => save.mutate(v)} disabled={save.isPending} pending={pending} />
         </div>
+      )}
+    </div>
+  );
+}
+
+function MeetYouCard({ me, mode, division }: { me: StrengthRow | null; mode: BoardMode; division: Division }) {
+  if (me) {
+    const rank = rankOf(me, mode, division);
+    if (rank == null) return null;
+  }
+  return (
+    <div className="rounded-2xl border-2 border-dashed border-amber-400/50 bg-amber-400/5 p-4">
+      <div className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">You</div>
+      {me ? (
+        <p className="mt-1 text-sm font-bold">#{rankOf(me, mode, division)} in JF Effect history. Next meet, move up.</p>
+      ) : (
+        <p className="mt-1 text-sm font-bold">Your name isn't in the record book yet. Step on the platform with JF Effect and write it in.</p>
       )}
     </div>
   );
@@ -476,7 +635,7 @@ export function StrengthBoardCoachTools() {
             {unranked.map((u) => (
               <li key={u.client_id} className="flex justify-between gap-3">
                 <span className="font-bold">{u.display_name}</span>
-                <span className="text-muted-foreground">{u.missing === "division" ? "Set sex on their profile" : "Needs a bodyweight log (P4P)"}</span>
+                <span className="text-muted-foreground">{u.missing === "division" ? "No sex set · All board only" : "No bodyweight logged · not on P4P"}</span>
               </li>
             ))}
           </ul>

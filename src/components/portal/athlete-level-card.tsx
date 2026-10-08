@@ -23,6 +23,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 import { CoachTag } from "@/components/portal/coach-tag";
+import { HallOfStrength } from "@/components/portal/strength-board";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
 type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean; is_coach?: boolean };
@@ -142,7 +143,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
 
         <div className="grid grid-cols-2 border-t">
           <div className="min-w-0 px-3 py-2 [&>button]:mt-0 [&>button]:border-0 [&>button]:px-1 [&>button]:py-1"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
-          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-3 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Powerlifting Records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
+          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-3 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Meet History</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
         </div>
       </Card>
 
@@ -157,7 +158,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
       <Sheet open={open === "powerlifting"} onOpenChange={(o) => !o && setOpen(null)}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
           <div className="min-h-[320px]">
-            <PowerliftingRecordsView />
+            <HallOfStrength initialSource="meets" />
           </div>
         </SheetContent>
       </Sheet>
@@ -212,7 +213,7 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[11px] text-muted-foreground">Editing a record never earns extra points. Monthly Performance League and Powerlifting Records are scored separately.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">Editing a record never earns extra points. Monthly Performance League and the Hall of Strength are scored separately.</p>
       </div>
       <div>
         <div className="mb-2 text-sm font-semibold">Points history</div>
@@ -593,41 +594,4 @@ function RankLine({ row, onSelect }: { row: RankRow; onSelect: (id: string) => v
       <span className="text-xs text-muted-foreground">{Number(row?.xp ?? 0).toLocaleString()} XP</span>
     </li>
   );
-}
-
-
-function PowerliftingRecordsView() {
-  const [tab, setTab] = useState<"gl"|"dots"|"total"|"squat"|"bench"|"deadlift">("gl");
-  const [division, setDivision] = useState<"male"|"female">("male");
-  const [selectedAthlete, setSelectedAthlete] = useState<any|null>(null);
-  const { data = [], isPending, error } = useQuery({
-    queryKey: ["powerlifting-rankings"], staleTime: 5 * 60_000,
-    queryFn: async () => { const { data, error } = await (supabase as any).rpc("get_powerlifting_rankings"); if (error) throw error; return (data ?? []) as any[]; },
-  });
-  const { data: roster = [] } = useQuery({
-    queryKey: ["powerlifting-athlete-roster"], staleTime: 5 * 60_000,
-    queryFn: async () => { const { data, error } = await (supabase as any).rpc("get_powerlifting_athlete_roster"); if (error) throw error; return (data ?? []) as any[]; },
-  });
-  const pointSystem = (r:any) => String(r.points_system||"").toUpperCase();
-  const value = (r:any) => tab==="gl" ? Number(r.gl_points??0) : tab==="dots" ? Number(r.dots_points??0) : Number(r[tab==="total"?"total_kg":tab+"_kg"]??0);
-  const eligible = data.filter((r:any)=> String(r.sex).toLowerCase()===division);
-  const ordered=[...eligible].filter((r:any)=>value(r)>0).sort((a:any,b:any)=>value(b)-value(a));
-  const seen=new Set<string>();
-  const sorted=ordered.filter((r:any)=>{const key=r.athlete_id||r.client_id||String(r.athlete_name||"").toLowerCase();if(seen.has(key))return false;seen.add(key);return true}).slice(0,10);
-  const represented=new Set(data.map((r:any)=>r.athlete_id).filter(Boolean));
-  const awaiting=roster.filter((a:any)=>!represented.has(a.athlete_id));
-  const tabs=[["gl","GL Points"],["dots","DOTS"],["total","Total"],["squat","Squat"],["bench","Bench"],["deadlift","Deadlift"]] as const;
-  return <div className="space-y-4">
-    <SheetHeader className="text-left">
-      <SheetTitle>JF Powerlifting Records</SheetTitle>
-      <SheetDescription>Verified JF-coached meet records. One athlete, one spot. Tap a category for their best.</SheetDescription>
-    </SheetHeader>
-    <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">{([["male","Men"],["female","Women"]] as const).map(([k,label])=><button key={k} type="button" onClick={()=>setDivision(k)} className={cn("rounded-lg px-2 py-2 text-xs font-bold",division===k?"bg-background text-foreground shadow-sm":"text-muted-foreground")}>{label}</button>)}</div>
-    <div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Top 10</span><span className="text-[10px] font-semibold text-muted-foreground">{division==="male"?"Men":"Women"} · {tab==="gl"?"GL Points":tab==="dots"?"DOTS":tab[0].toUpperCase()+tab.slice(1)}</span></div>
-    <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1 sm:grid-cols-6">{tabs.map(([k,label])=><button key={k} type="button" onClick={()=>setTab(k)} className={cn("rounded-lg px-2 py-2 text-[11px] font-bold",tab===k?"bg-background shadow-sm":"text-muted-foreground")}>{label}</button>)}</div>
-    {(tab==="gl"||tab==="dots")&&<div className="rounded-xl border bg-muted/20 px-3 py-2 text-xs text-muted-foreground"><b className="text-foreground">{tab==="gl"?"GL Points":"DOTS"}:</b> a bodyweight-adjusted score used to compare powerlifting performances across different bodyweights. Higher is better.</div>}
-    {isPending?<div className="py-8 text-center text-sm text-muted-foreground">Loading records…</div>:error?<div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm"><div className="font-bold text-destructive">Records could not load</div><div className="mt-1 text-xs text-muted-foreground">Please try again. If this continues, staff can manage the saved athlete data from Athlete Records.</div></div>:sorted.length===0?<div className="rounded-xl border p-6 text-center text-sm text-muted-foreground">No saved {tab==="gl"?"GL Points":tab==="dots"?"DOTS":tab} results are available for qualifying JF meets yet.</div>:<div className="overflow-hidden rounded-2xl border bg-card">{sorted.map((r:any,i)=><div key={r.id} className="flex items-center gap-3 border-b p-3 last:border-0"><div className="w-6 text-center text-sm font-black text-muted-foreground">{i+1}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><button type="button" onClick={()=>setSelectedAthlete(r)} className="truncate text-left text-sm font-bold hover:text-primary hover:underline">{r.athlete_name}</button>{r.arenapl_url&&<a href={r.arenapl_url} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-black tracking-wide text-muted-foreground hover:text-primary" aria-label={`Open ${r.athlete_name} on ArenaPL`}>ARENA ↗</a>}</div><div className="text-[10px] font-bold uppercase text-primary">{r.weight_class_kg?`${r.weight_class_kg} KG · `:""}{r.sex} · {r.competition_level||"competitor"}</div><div className="truncate text-[10px] text-muted-foreground">{r.meet_location||r.meet_name||"Meet"}{r.meet_date?` · ${new Date(r.meet_date+"T00:00:00").getFullYear()}`:""}</div></div><div className="text-right"><div className="text-sm font-black">{tab==="gl"||tab==="dots"?`${value(r).toFixed(2)} ${tab==="gl"?"GL":"DOTS"}`:`${Number(r[tab==="total"?"total_kg":tab+"_kg"])} kg`}</div><div className="text-[10px] text-muted-foreground">S {r.squat_kg} · B {r.bench_kg} · D {r.deadlift_kg}</div></div></div>)}</div>}
-    <Sheet open={!!selectedAthlete} onOpenChange={(o)=>!o&&setSelectedAthlete(null)}><SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl pb-safe-bottom"><button type="button" onClick={()=>setSelectedAthlete(null)} className="mb-3 inline-flex min-h-11 items-center gap-2 rounded-xl border bg-card px-3 text-sm font-bold shadow-sm"><ArrowLeft className="h-4 w-4" /> Back to records</button>{selectedAthlete&&(()=>{const athleteRows=data.filter((x:any)=>(x.athlete_id||x.client_id)===(selectedAthlete.athlete_id||selectedAthlete.client_id));const classes=[...new Set(athleteRows.map((x:any)=>x.weight_class_kg).filter(Boolean))];return <div className="space-y-4"><SheetHeader className="text-left"><SheetTitle>{selectedAthlete.athlete_name}</SheetTitle><SheetDescription>JF-coached competition bests by weight class.</SheetDescription></SheetHeader>{selectedAthlete.arenapl_url&&<a href={selectedAthlete.arenapl_url} target="_blank" rel="noreferrer" className="inline-flex rounded-lg border px-3 py-2 text-xs font-black text-primary">Open Arena Powerlifting ↗</a>}{classes.map((wc:any)=>{const rows=athleteRows.filter((x:any)=>x.weight_class_kg===wc);const best=(key:string)=>rows.reduce((a:any,b:any)=>Number(b[key]||0)>Number(a?.[key]||0)?b:a,null);return <div key={wc} className="rounded-2xl border bg-card p-4"><div className="mb-3 text-sm font-black">{wc} kg class</div><div className="grid grid-cols-3 gap-2 text-center">{[["Squat","squat_kg"],["Bench","bench_kg"],["Deadlift","deadlift_kg"],["Total","total_kg"],["GL","gl_points"],["DOTS","dots_points"]].map(([label,key])=>{const r=best(key);return <div key={key} className="rounded-xl bg-muted/40 p-2"><div className="text-[9px] font-bold uppercase text-muted-foreground">{label}</div><div className="text-sm font-black">{r?Number(r[key]).toFixed(key.includes("points")?2:1):"—"}{r&&!key.includes("points")?" kg":""}</div><div className="truncate text-[8px] text-muted-foreground">{r?.meet_date?new Date(r.meet_date+"T00:00:00").getFullYear():""}</div></div>})}</div></div>})}</div>})()}</SheetContent></Sheet>
-    {!isPending&&roster.length>0&&<div className="rounded-2xl border bg-card p-4"><div className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">JF Powerlifting Roster</div><div className="mt-1 text-sm font-semibold">{roster.length} athletes tracked</div>{awaiting.length>0&&<div className="mt-3 border-t pt-3"><div className="mb-2 text-[11px] font-bold text-muted-foreground">Athletes still needing qualifying meet data</div><div className="flex flex-wrap gap-1.5">{awaiting.map((a:any)=><span key={a.athlete_id} className="rounded-full border bg-muted/30 px-2 py-1 text-[10px] font-semibold">{a.athlete_name}</span>)}</div></div>}</div>}
-  </div>;
 }
