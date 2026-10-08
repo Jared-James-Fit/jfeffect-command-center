@@ -35,7 +35,9 @@ import { formatReadReceipt } from "@/lib/read-receipt";
 import { applyMessageChange, INBOX_MESSAGE_COLUMNS } from "@/lib/inbox-cache";
 import { waitingState, type WaitingState } from "@/lib/inbox-waiting";
 import { deriveRequests, latestToReview, oldestPending, requestChip, type RequestChip } from "@/lib/inbox-requests";
-import { Check } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { openSummer } from "@/components/summer/summer-assistant";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 
 type StaffInboxRow = {
@@ -135,6 +137,7 @@ export function MessagesInbox({
   const [smsOpen, setSmsOpen] = useState(false);
   const [tab, setTab] = useState<"chats" | "groups">("chats");
   const [massOpen, setMassOpen] = useState(false);
+  const { role } = useAuth();
 
   useEffect(() => { if (selectedFromUrl) setSelectedId(selectedFromUrl); }, [selectedFromUrl]);
 
@@ -669,6 +672,31 @@ export function MessagesInbox({
               : "pb-[calc(var(--bottom-nav-clearance,0px)+max(env(safe-area-inset-bottom),1.5rem))]",
           )}
         >
+          {role === "admin" && !search && (
+            // Cleo is pinned here so she's one tap away in the inbox too
+            // (the floating button stays off chat screens so it never covers
+            // the composer). Not a client thread: nothing is ever sent.
+            <div className="flex items-stretch border-b border-border/60 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-pink-500/5">
+              <button type="button" onClick={() => openSummer()} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition hover:bg-secondary/40">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">Cleo <span className="font-normal text-muted-foreground">· your assistant</span></span>
+                  <span className="block truncate text-xs text-muted-foreground">Ask anything, or tap the phone to talk</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openSummer({ call: true })}
+                className="flex w-12 shrink-0 items-center justify-center text-muted-foreground transition hover:bg-secondary/40 hover:text-foreground"
+                aria-label="Call Cleo"
+                title="Call Cleo"
+              >
+                <Phone className="h-4 w-4" />
+              </button>
+            </div>
+          )}
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
           ) : conversations.map(({ client, state, last, unread, liftReview, workflow, waiting, chip }) => (

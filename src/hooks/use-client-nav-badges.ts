@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { isUnread, useDirectThreads } from "@/lib/direct-chats";
 import { useAuth } from "@/lib/auth";
 import { useAdminNavBadgeCounts, adminBadgeMap } from "@/hooks/use-admin-nav-badges";
 
@@ -110,6 +111,9 @@ export function useClientNavBadges(): Record<string, NavBadge> {
     };
   }, [data?.client?.id, enabled, user, qc]);
 
+  // 1:1 chats and message requests from other members: a dot, like lift feedback.
+  const { data: directs } = useDirectThreads(enabled);
+
   // Admin/coach nav badges — shared single source of truth
   const { data: adminCounts } = useAdminNavBadgeCounts(adminEnabled);
 
@@ -142,10 +146,11 @@ export function useClientNavBadges(): Record<string, NavBadge> {
       if (new Date(c.created_at).getTime() > seen) { liftDot = true; break; }
     }
   }
-  if (unread > 0 || liftDot) {
+  const directDot = (directs ?? []).some((t) => isUnread(t, user?.id));
+  if (unread > 0 || liftDot || directDot) {
     result["/portal/messages"] = {
       ...(unread > 0 ? { count: unread } : {}),
-      ...(liftDot ? { dot: true } : {}),
+      ...(liftDot || directDot ? { dot: true } : {}),
     };
   }
 

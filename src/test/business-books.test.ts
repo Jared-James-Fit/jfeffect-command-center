@@ -73,7 +73,7 @@ describe("sanitizeReceiptRead", () => {
   });
 });
 
-describe("Summer context", () => {
+describe("Cleo context", () => {
   const data: BooksData = {
     asOf: "2026-10-08",
     settings: null,
@@ -102,7 +102,7 @@ describe("Summer context", () => {
 
   it("names the assistant and forbids invented numbers", () => {
     const p = summerSystemPrompt();
-    expect(p).toContain("Summer Ledger");
+    expect(p).toContain("Cleo");
     expect(p).toMatch(/Never invent/);
     expect(p).toContain("she/her");
   });

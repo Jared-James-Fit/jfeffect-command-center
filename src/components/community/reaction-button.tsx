@@ -136,18 +136,26 @@ export function ReactionBurst({ n, emoji }: { n: number; emoji: string }) {
   );
 }
 
+/** How many visits the double-tap tip shows on before it retires by itself. */
+export const DOUBLE_TAP_TIP_VISITS = 3;
+export const doubleTapTipKeys = Array.from({ length: DOUBLE_TAP_TIP_VISITS }, (_, i) => `double_tap_shown_${i + 1}`);
+
 /**
- * The tip on a post until you've double-tapped one: a heart that taps twice
- * and pops, "Double-tap to like". Taps go straight through it.
+ * The tip, kept out of the way: a small pill low on the post (a heart that
+ * taps twice and pops, "Double-tap to like"). It plays for a few seconds and
+ * fades out by itself; taps go straight through it.
  */
-export function DoubleTapHint() {
+export function DoubleTapHint({ onDone }: { onDone?: () => void }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center" aria-hidden>
-      <div className="community-hint flex items-center gap-2.5 rounded-full bg-black/80 ring-1 ring-white/10 py-2 pl-2 pr-4 text-[13px] font-bold text-white shadow-lg backdrop-blur-md">
-        <span className="relative grid h-8 w-8 place-items-center">
+    <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center" aria-hidden>
+      <div
+        className="community-hint flex items-center gap-2 rounded-full bg-black/75 py-1.5 pl-1.5 pr-3.5 text-[12px] font-bold text-white shadow-lg ring-1 ring-white/10 backdrop-blur-md"
+        onAnimationEnd={(e) => e.animationName === "community-hint-life" && onDone?.()}
+      >
+        <span className="relative grid h-7 w-7 place-items-center">
           <span className="community-ripple absolute inset-0 rounded-full border-2 border-white/70" />
           <span className="community-ripple community-ripple-late absolute inset-0 rounded-full border-2 border-white/70" />
-          <Heart className="community-tap2 h-5 w-5 fill-[#ef3340] text-[#ef3340]" />
+          <Heart className="community-tap2 h-4 w-4 fill-[#ef3340] text-[#ef3340]" />
         </span>
         Double-tap to like
       </div>

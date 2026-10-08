@@ -1,4 +1,5 @@
 import React, { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { getMicStream } from "@/lib/audio-session";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -49,6 +50,7 @@ import { ScheduledStrip } from "@/components/messages/scheduled-strip";
 import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { ScheduleButton } from "@/components/messages/schedule-button";
 import { renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
+import { CommunityPostChatCard, type PostCardAttachment } from "@/components/community/post-chat-card";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
@@ -439,6 +441,10 @@ function LinkAttachment({ att, mine }: { att: MessageAttachment; mine: boolean }
   );
 }
 
+/**
+ * A community post shared in the chat (e.g. the coach's birthday post): one
+ * tap opens it in the community, right in the app.
+ */
 function AttachmentView({
   att,
   mine,
@@ -454,6 +460,9 @@ function AttachmentView({
   clientId: string;
   onUseReply?: (text: string) => void;
 }) {
+  if (att.kind === "community_post" && att.post_id) {
+    return <CommunityPostChatCard att={att as PostCardAttachment} mine={mine} staff={role !== "client"} />;
+  }
   if (att.kind === "checkin_request" && att.checkin_submission_id && att.checkin_task_type) {
     return (
       <MessengerCheckinRequestCard
@@ -529,6 +538,7 @@ function AttachmentView({
 
 function useVoiceRecorder() {
   const mediaRef = useRef<MediaRecorder | null>(null);
+  const restoreSessionRef = useRef<(() => void) | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const startedAtRef = useRef<number>(0);
   const tickRef = useRef<number | null>(null);
@@ -555,7 +565,10 @@ function useVoiceRecorder() {
 
   const start = async () => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Recording not supported on this device.");
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // iOS: app sounds leave the audio session unable to record; switch it for
+    // the capture and put it back afterwards.
+    const { stream, restore } = await getMicStream(true);
+    restoreSessionRef.current = restore;
     const isiOSWebKit = /iP(?:hone|ad|od)/.test(navigator.userAgent)
       || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     const mimeCandidates = isiOSWebKit
@@ -629,6 +642,8 @@ function useVoiceRecorder() {
     });
     mr.stop();
     mr.stream.getTracks().forEach((t) => t.stop());
+    restoreSessionRef.current?.();
+    restoreSessionRef.current = null;
     mediaRef.current = null;
     setRecording(false);
     const blob = await done;
@@ -662,6 +677,8 @@ function useVoiceRecorder() {
       try { mr.stop(); } catch {}
       mr.stream.getTracks().forEach((t) => t.stop());
     }
+    restoreSessionRef.current?.();
+    restoreSessionRef.current = null;
     mediaRef.current = null;
     chunksRef.current = [];
     accumulatedPeaksRef.current = [];
