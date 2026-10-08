@@ -392,17 +392,18 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}
         >
           {completionId ? (
-            // Sharing is optional but should be the most inviting thing on the screen.
+            // Done is the main action after training; sharing stays one tap away.
             <div className="grid w-full grid-cols-[1fr_1.35fr] gap-2">
-              <Button type="button" variant="outline" className="h-12 rounded-xl text-sm font-bold" onClick={() => { onOpenChange(false); onClose?.(); }}>
-                <ChevronLeft className="mr-1 h-4 w-4" />Back to workout
-              </Button>
               <Button
                 type="button"
-                className="h-12 rounded-xl bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)] text-sm font-black text-white shadow-lg shadow-fuchsia-500/20 hover:opacity-95"
+                variant="outline"
+                className="h-12 rounded-xl text-sm font-bold"
                 onClick={() => { setShareMounted(true); setShareOpen(true); }}
               >
-                <Share2 className="mr-1.5 h-4 w-4" />Share workout
+                <Share2 className="mr-1.5 h-4 w-4" />Share
+              </Button>
+              <Button type="button" className="h-12 rounded-xl text-sm font-black" onClick={() => { onOpenChange(false); onClose?.(); }}>
+                Done
               </Button>
             </div>
           ) : (

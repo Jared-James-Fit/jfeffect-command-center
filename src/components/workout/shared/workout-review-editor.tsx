@@ -14,7 +14,7 @@
  * These are the markers the recovery score and the load suggestions use.
  * See src/lib/workout-review.ts for the mapping and why v1 was replaced.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -83,7 +83,14 @@ type Props = {
   hasCoach?: boolean;
   initial?: ReviewInitial | null;
   onSaved?: () => Promise<void> | void;
+  /**
+   * Opens the workout recap. Called only after this sheet has fully closed,
+   * so two overlays never animate at once (that left the page frozen), and
+   * only for a first review: saving an edit just closes.
+   */
   onViewScore?: (rating: number | null) => void;
+  /** Show the recap even when the save was an edit (the finish-by-review flow). */
+  scoreAfterEdit?: boolean;
   actAsClientId?: string | null;
 };
 
@@ -141,11 +148,17 @@ export function WorkoutReviewEditor({
   initial,
   onSaved,
   onViewScore,
+  scoreAfterEdit,
   actAsClientId,
 }: Props) {
   const submit = useServerFn(submitOrEditReview);
   const qc = useQueryClient();
-  const isEdit = !!initial?.submittedAt;
+  // Fixed for the whole open → save → close cycle: saving writes the review,
+  // which flips `initial.submittedAt` before the sheet has finished closing.
+  const [isEdit, setIsEdit] = useState(!!initial?.submittedAt);
+  const savingRef = useRef(false);
+  // Runs once the sheet has fully closed (onCloseAutoFocus below).
+  const afterCloseRef = useRef<(() => void) | null>(null);
 
   const [effort, setEffort] = useState<number | null>(() => initialEffort(initial));
   const [sleepBucket, setSleepBucket] = useState<SleepBucket | null>(initial?.sleepBucket ?? null);
@@ -158,7 +171,8 @@ export function WorkoutReviewEditor({
   const [noteOpen, setNoteOpen] = useState<boolean>(!!(initial?.clientNote ?? "").trim());
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || savingRef.current) return;
+    setIsEdit(!!initial?.submittedAt);
     setEffort(initialEffort(initial));
     setSleepBucket(initial?.sleepBucket ?? null);
     setRecoveryToday(initial?.recoveryToday ?? null);
@@ -174,6 +188,8 @@ export function WorkoutReviewEditor({
   const mutation = useMutation({
     mutationFn: async () => {
       if (effort == null) throw new Error("Pick how hard it was");
+      savingRef.current = true;
+      const wasEdit = isEdit;
       if (pain && !painArea) throw new Error("Pick where it hurts");
       const overallRating = deriveOverallRating({
         pain: !!pain,
@@ -204,9 +220,9 @@ export function WorkoutReviewEditor({
           actAsClientId: actAsClientId ?? null,
         },
       });
-      return { res, overallRating };
+      return { res, overallRating, wasEdit };
     },
-    onSuccess: async ({ res, overallRating }: any) => {
+    onSuccess: async ({ res, overallRating, wasEdit }: any) => {
       // Some flows use the review itself as the final completion action.
       // Wait for that parent finalization before showing "Workout complete"
       // or closing the sheet, so the UI never claims success early.
@@ -230,10 +246,15 @@ export function WorkoutReviewEditor({
           return typeof k === "string" && (k.startsWith("recovery") || k === "readiness");
         },
       });
-      onViewScore?.(overallRating ?? null);
+      if (onViewScore && (!wasEdit || scoreAfterEdit)) {
+        afterCloseRef.current = () => onViewScore(overallRating ?? null);
+      }
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.message || "Couldn't save review"),
+    onSettled: () => {
+      savingRef.current = false;
+    },
   });
 
   return (
@@ -241,6 +262,13 @@ export function WorkoutReviewEditor({
       <SheetContent
         side="bottom"
         hideCloseButton
+        onCloseAutoFocus={(e) => {
+          const next = afterCloseRef.current;
+          if (!next) return;
+          afterCloseRef.current = null;
+          e.preventDefault();
+          next();
+        }}
         className="z-[70] flex max-h-[92svh] flex-col gap-0 rounded-t-3xl p-0"
       >
         <div
