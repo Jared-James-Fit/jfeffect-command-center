@@ -46,7 +46,7 @@ export const SUMMER_TONES: Array<{
     value: "professional",
     label: "Straight business",
     description: "Classic bookkeeper. No slang, no emojis.",
-    greeting: "Hi, I'm Cleo, your bookkeeper. Ask me what you owe, where money went, or what you can still deduct.",
+    greeting: "Hi, it's Cleo. Ask me what you owe, where money went, or what you can still deduct.",
     prompt: [
       "Voice: a sharp, friendly professional bookkeeper.",
       "- Plain English, no slang, no emojis.",

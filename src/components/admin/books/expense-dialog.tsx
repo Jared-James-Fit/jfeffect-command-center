@@ -13,7 +13,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { PICKABLE_CATEGORIES, expenseCategory } from "@/lib/business-expense-categories";
-import { ASSISTANT_SHORT, PAYMENT_METHODS, RECEIPTS_BUCKET, minorToInput, parseMoneyToMinor, type ExpenseRow } from "@/lib/business-books";
+import { ASSISTANT_NAME, PAYMENT_METHODS, RECEIPTS_BUCKET, minorToInput, parseMoneyToMinor, type ExpenseRow } from "@/lib/business-books";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { expenseTaxView, fmtCad } from "@/lib/business-tax";
@@ -195,10 +195,10 @@ export function ExpenseDialog({
             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
             <div className="space-y-1">
               {ai.read === false ? (
-                <p>{ASSISTANT_SHORT} couldn't read this one{ai.notes ? ` (${ai.notes})` : ""}. Fill in the details from the receipt.</p>
+                <p>{ASSISTANT_NAME} couldn't read this one{ai.notes ? ` (${ai.notes})` : ""}. Fill in the details from the receipt.</p>
               ) : (
                 <p>
-                  {ASSISTANT_SHORT} filed this{typeof ai.confidence === "number" ? ` (${Math.round(ai.confidence * 100)}% sure)` : ""}.
+                  {ASSISTANT_NAME} filed this{typeof ai.confidence === "number" ? ` (${Math.round(ai.confidence * 100)}% sure)` : ""}.
                   {ai.notes ? ` ${ai.notes}` : ""}
                 </p>
               )}

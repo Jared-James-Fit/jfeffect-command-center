@@ -682,7 +682,7 @@ export function MessagesInbox({
                   <Sparkles className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">Cleo <span className="font-normal text-muted-foreground">· your assistant</span></span>
+                  <span className="block truncate text-sm font-semibold">Cleo</span>
                   <span className="block truncate text-xs text-muted-foreground">Ask anything, or tap the phone to talk</span>
                 </span>
               </button>
