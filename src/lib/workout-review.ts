@@ -3,7 +3,7 @@
  * in as few taps as possible:
  *   • Effort  — session RPE (Foster sRPE), the one required tap
  *   • Pain    — no/yes; yes asks where + how bad
- *   • Sleep   — hours the night before: <5h / 5–6h / 6–7h / 7h+
+ *   • Sleep   — hours the night before: <5h / 5–6h / 6–7h / 7–8h / 8h+
  *   • Energy  — how recovered they felt going in (recovery_today, 1–5)
  *
  * Nothing is pre-selected. Effort used to be pre-filled from logged set RPEs,
@@ -54,18 +54,22 @@ export function deriveOverallRating(input: {
   return 4;
 }
 
-/** Sleep choices. Above 7h the old 7–8 / 8–9 / 9+ split never changed a decision. */
+/** Sleep choices, anchored on 8h. Above 8 the old 8–9 / 9+ split never changed a decision. */
 export const SLEEP_OPTIONS: { v: SleepBucket; label: string }[] = [
   { v: "lt5", label: "<5h" },
   { v: "5_6", label: "5–6h" },
   { v: "6_7", label: "6–7h" },
-  { v: "gte7", label: "7h+" },
+  { v: "7_8", label: "7–8h" },
+  { v: "gte8", label: "8h+" },
 ];
 
-/** The chip a stored bucket lights up (older 7h+ buckets show as "7h+"). */
+/**
+ * The chip a stored bucket lights up: older 8–9 / 9h+ answers show as "8h+".
+ * A "7h+" (gte7) answer spans two chips, so it lights neither.
+ */
 export function sleepChip(b: SleepBucket | null | undefined): SleepBucket | null {
-  if (!b) return null;
-  return b === "7_8" || b === "8_9" || b === "gte9" ? "gte7" : b;
+  if (!b || b === "gte7") return null;
+  return b === "8_9" || b === "gte9" ? "gte8" : b;
 }
 
 /** Session RPE to show when reopening a saved review. Never pre-filled. */

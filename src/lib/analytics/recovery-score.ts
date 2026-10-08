@@ -41,8 +41,9 @@ export interface RecoveryInputs {
   sleepBucket?: SleepBucket | null;
 }
 
-// gte7 ("7h+") is what the check-out asks since v3; 7_8 / 8_9 / gte9 are older reviews.
-export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9" | "gte7";
+// The check-out asks lt5 / 5_6 / 6_7 / 7_8 / gte8 ("8h+"). 8_9 and gte9 are
+// older reviews; gte7 ("7h+") was asked briefly and is kept so any such rows read.
+export type SleepBucket = "lt5" | "5_6" | "6_7" | "7_8" | "8_9" | "gte9" | "gte7" | "gte8";
 
 /** Midpoint hours for a sleep bucket. */
 export function sleepBucketHours(b: SleepBucket | null | undefined): number | null {
@@ -55,12 +56,13 @@ export function sleepBucketHours(b: SleepBucket | null | undefined): number | nu
     case "8_9": return 8.5;
     case "gte9": return 9.5;
     case "gte7": return 8;
+    case "gte8": return 8.5;
   }
 }
 
 export function sleepBucketLabel(b: SleepBucket | null | undefined): string {
   if (!b) return "—";
-  return { lt5: "<5h", "5_6": "5–6h", "6_7": "6–7h", "7_8": "7–8h", "8_9": "8–9h", gte9: "9h+", gte7: "7h+" }[b];
+  return { lt5: "<5h", "5_6": "5–6h", "6_7": "6–7h", "7_8": "7–8h", "8_9": "8–9h", gte9: "9h+", gte7: "7h+", gte8: "8h+" }[b];
 }
 
 /** Contribution of sleep to readiness score, bounded so one night can't dominate. */
@@ -74,6 +76,7 @@ function sleepDelta(b: SleepBucket | null | undefined): { delta: number; label: 
     "8_9": { delta: 5, label: "8–9h" },
     gte9: { delta: 3, label: "9h+" },
     gte7: { delta: 4, label: "7h+" },
+    gte8: { delta: 5, label: "8h+" },
   };
   return map[b];
 }

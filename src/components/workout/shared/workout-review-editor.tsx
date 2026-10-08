@@ -3,7 +3,7 @@
  *
  *   How hard was it?  — session RPE 6–10 (the one required tap)
  *   Anything hurt?    — No/Yes; Yes asks where + how bad (feeds coach flags)
- *   Sleep last night  — <5h / 5–6h / 6–7h / 7h+ (optional)
+ *   Sleep last night  — <5h / 5–6h / 6–7h / 7–8h / 8h+ (optional)
  *   Energy going in   — 1–5 (optional)
  *   Note              — behind "Add a note"
  *
@@ -68,7 +68,7 @@ export type ReviewInitial = {
 export type { SleepBucket };
 
 const RECOVERY_OPTIONS: { v: number; emoji: string; label: string }[] = [
-  { v: 1, emoji: "😫", label: "Wrecked" },
+  { v: 1, emoji: "😫", label: "Drained" },
   { v: 2, emoji: "🙁", label: "Low" },
   { v: 3, emoji: "😐", label: "Okay" },
   { v: 4, emoji: "🙂", label: "Good" },
@@ -332,10 +332,10 @@ export function WorkoutReviewEditor({
           </div>
 
           <Row title="Sleep last night">
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-5 gap-1.5">
               {SLEEP_OPTIONS.map((o) => {
-                // An older review may hold 7_8 / 8_9 / 9h+; it shows as "7h+"
-                // and keeps its stored value unless the athlete changes it.
+                // An older review may hold 8_9 / 9h+; it shows as "8h+" and
+                // keeps its stored value unless the athlete changes it.
                 const active = sleepChip(sleepBucket) === o.v;
                 return (
                   <Chip

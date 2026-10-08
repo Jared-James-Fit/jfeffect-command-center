@@ -806,7 +806,7 @@ const ReviewInput = z.intersection(
     hitTarget: z.string().nullable().optional(),
     recoveryToday: z.number().int().min(1).max(5).nullable().optional(),
     sleepBucket: z
-      .enum(["lt5", "5_6", "6_7", "7_8", "8_9", "gte9", "gte7"])
+      .enum(["lt5", "5_6", "6_7", "7_8", "8_9", "gte9", "gte7", "gte8"])
       .nullable()
       .optional(),
     sleepNotes: z.string().nullable().optional(),

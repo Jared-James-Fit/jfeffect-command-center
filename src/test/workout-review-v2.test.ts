@@ -28,16 +28,19 @@ describe("quick check-out (review v2)", () => {
     expect(trustedSessionRpe({ session_rpe: 9, review_version: REVIEW_VERSION })).toBe(9);
   });
 
-  it("asks sleep in four buckets and still shows older 7h+ answers", () => {
-    expect(SLEEP_OPTIONS.map((o) => o.label)).toEqual(["<5h", "5–6h", "6–7h", "7h+"]);
-    expect(sleepChip("8_9")).toBe("gte7");
-    expect(sleepChip("gte9")).toBe("gte7");
+  it("asks sleep anchored on 8h and still shows older answers", () => {
+    expect(SLEEP_OPTIONS.map((o) => o.label)).toEqual(["<5h", "5–6h", "6–7h", "7–8h", "8h+"]);
+    expect(sleepChip("8_9")).toBe("gte8");
+    expect(sleepChip("gte9")).toBe("gte8");
+    expect(sleepChip("7_8")).toBe("7_8");
+    expect(sleepChip("gte7")).toBeNull();
     expect(sleepChip("5_6")).toBe("5_6");
     expect(sleepChip(null)).toBeNull();
-    expect(sleepBucketHours("gte7")).toBe(8);
+    expect(sleepBucketHours("gte8")).toBe(8.5);
+    expect(sleepBucketLabel("gte8")).toBe("8h+");
     expect(sleepBucketLabel("gte7")).toBe("7h+");
     const server = readFileSync("src/lib/workout-completion.functions.ts", "utf8");
-    expect(server).toContain('"gte9", "gte7"]');
+    expect(server).toContain('"gte9", "gte7", "gte8"]');
   });
 
   it("never pre-selects sleep, energy or pain, and says what a quick finish skips", () => {
