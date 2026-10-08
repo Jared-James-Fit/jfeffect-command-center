@@ -6,7 +6,9 @@ import { birthdayPushYear } from "@/lib/birthday-push";
  * today. Deduped per (user_id, year) via push_notification_dedupe so it's
  * safe to run hourly from pg_cron across timezones.
  *
- * Also the hourly push tick: releases pushes held during quiet hours, the
+ * Also: birthday posts (drafts for the coach to review, approved ones going
+ * out at 8am their time; birthday-posts.server.ts), and the hourly push tick:
+ * releases pushes held during quiet hours, the
  * 8am-local daily game plan and the monthly recap-ready push.
  */
 export const Route = createFileRoute("/api/public/hooks/birthday-notifications")({
@@ -68,6 +70,16 @@ export const Route = createFileRoute("/api/public/hooks/birthday-notifications")
           results.push({ clientId: c.id, ...r });
         }
 
+        // Birthday posts: drafts for the coach to review, approved ones going out at 8am theirs.
+        let birthdayPosts: unknown = null;
+        try {
+          const { runBirthdayPosts } = await import("@/lib/birthday-posts.server");
+          const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+          birthdayPosts = await runBirthdayPosts(supabaseAdmin, { notifyAppEvent, sendWebPushToUser });
+        } catch (e: any) {
+          birthdayPosts = { error: String(e?.message ?? e) };
+        }
+
         let tick: unknown = null;
         try {
           const { runPushTick } = await import("@/lib/push/scheduled-pushes.server");
@@ -76,7 +88,7 @@ export const Route = createFileRoute("/api/public/hooks/birthday-notifications")
           tick = { error: String(e?.message ?? e) };
         }
 
-        return Response.json({ ok: true, day: now.toISOString().slice(0, 10), considered: todays.length, sent, skipped, results, tick });
+        return Response.json({ ok: true, day: now.toISOString().slice(0, 10), considered: todays.length, sent, skipped, results, birthdayPosts, tick });
       },
     },
   },

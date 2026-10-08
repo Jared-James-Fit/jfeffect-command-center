@@ -15,9 +15,55 @@ export async function assertAdmin(supabase: any, userId: string) {
   if (!roles.includes("admin")) throw new Error("Forbidden: admin only");
 }
 
+/**
+ * The books (Taxes & Books, expenses, receipts, tax settings) belong to the
+ * business owner, not every admin. Enforced by RLS too; this gives a clear
+ * error instead of empty results.
+ */
+export async function isBusinessOwner(supabase: any, userId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_business_owner", { _uid: userId });
+  return !error && data === true;
+}
+
+export async function assertBusinessOwner(supabase: any, userId: string) {
+  await assertAdmin(supabase, userId);
+  if (!(await isBusinessOwner(supabase, userId))) throw new Error("Taxes & Books is private to the business owner.");
+}
+
 function must<T>(res: { data: T; error: any }, what: string): T {
   if (res.error) throw new Error(`Could not load ${what}: ${res.error.message ?? res.error}`);
   return res.data;
+}
+
+/** Assigned sales that aren't fully paid (operational, not tax data). */
+export async function loadOpenSales(supabase: any): Promise<OpenSaleRow[]> {
+  const res = await supabase
+    .from("purchase_records")
+    .select("id, offer_name, payment_status, amount_outstanding_cents, full_payable_amount, amount_paid, created_at, clients(full_name)")
+    .in("payment_status", OPEN_SALE_STATUSES)
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  return toOpenSales(res.error ? [] : res.data ?? []);
+}
+
+function toOpenSales(rows: any[]): OpenSaleRow[] {
+  return rows
+    .map((p) => {
+      const outstanding =
+        p.amount_outstanding_cents != null
+          ? Number(p.amount_outstanding_cents)
+          : Math.max(0, Math.round((Number(p.full_payable_amount) || 0) * 100) - Math.round((Number(p.amount_paid) || 0) * 100));
+      return {
+        id: p.id,
+        client: p.clients?.full_name ?? null,
+        offer: p.offer_name ?? null,
+        status: p.payment_status ?? null,
+        outstandingMinor: outstanding,
+        createdOn: p.created_at ? String(p.created_at).slice(0, 10) : null,
+      };
+    })
+    .filter((o) => o.outstandingMinor > 0);
 }
 
 export async function loadBooksData(supabase: any): Promise<BooksData> {
@@ -56,22 +102,7 @@ export async function loadBooksData(supabase: any): Promise<BooksData> {
     business_use_pct: Number(e.business_use_pct),
   }));
   const taxPayments = ((must(payRes, "tax payments") ?? []) as TaxPaymentRow[]).map((p) => ({ ...p, amount_minor: Number(p.amount_minor) }));
-  const openSales: OpenSaleRow[] = ((openRes.error ? [] : openRes.data ?? []) as any[])
-    .map((p) => {
-      const outstanding =
-        p.amount_outstanding_cents != null
-          ? Number(p.amount_outstanding_cents)
-          : Math.max(0, Math.round((Number(p.full_payable_amount) || 0) * 100) - Math.round((Number(p.amount_paid) || 0) * 100));
-      return {
-        id: p.id,
-        client: p.clients?.full_name ?? null,
-        offer: p.offer_name ?? null,
-        status: p.payment_status ?? null,
-        outstandingMinor: outstanding,
-        createdOn: p.created_at ? String(p.created_at).slice(0, 10) : null,
-      };
-    })
-    .filter((o) => o.outstandingMinor > 0);
+  const openSales = toOpenSales((openRes.error ? [] : openRes.data ?? []) as any[]);
 
   const revenue = normalizeRevenue(ledger ?? [], members);
   const partial = { asOf, revenue, expenses, taxPayments };

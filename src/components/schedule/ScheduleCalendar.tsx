@@ -56,6 +56,30 @@ function statusBadge(s: Status) {
   }
 }
 
+/** Left-edge colour per status, so status reads at a glance even where the label is hidden. */
+function statusEdge(s: Status) {
+  switch (s) {
+    case "completed": return "border-l-success";
+    case "in-progress": return "border-l-warning";
+    case "overdue": return "border-l-destructive";
+    case "unscheduled": return "border-l-muted-foreground/40";
+    default: return "border-l-primary/70";
+  }
+}
+
+/** Icon-only status for narrow (phone) day cells, where a text badge can't fit. */
+function statusIcon(s: Status) {
+  const cls = "h-3 w-3 shrink-0";
+  switch (s) {
+    case "completed": return <CheckCircle2 className={cn(cls, "text-success")} aria-label="Done" />;
+    case "in-progress": return <Clock className={cn(cls, "text-warning")} aria-label="In progress" />;
+    case "overdue": return <AlertCircle className={cn(cls, "text-destructive")} aria-label="Overdue" />;
+    case "rescheduled": return <CalIcon className={cn(cls, "text-muted-foreground")} aria-label="Moved" />;
+    case "unscheduled": return <CalendarPlus className={cn(cls, "text-muted-foreground")} aria-label="Unscheduled" />;
+    default: return null;
+  }
+}
+
 function DayChip({ chipId, day, comp, week, blockName, draggable, canReorderUp, canReorderDown, onNudge }: {
   chipId: string;
   day: ScheduleDay; comp: ScheduleCompletion | null;
@@ -76,7 +100,8 @@ function DayChip({ chipId, day, comp, week, blockName, draggable, canReorderUp, 
     <div
       ref={(el) => { setNodeRef(el); setDropRef(el); }}
       className={cn(
-        "group rounded-md border border-border bg-card p-1.5 text-[11px] leading-tight space-y-0.5 select-none",
+        "group min-w-0 overflow-hidden rounded-md border border-l-2 border-border bg-card p-1 text-[11px] leading-tight space-y-0.5 select-none sm:p-1.5",
+        statusEdge(status),
         draggable && !isCompleted && "cursor-grab active:cursor-grabbing touch-none",
         isDragging && "opacity-50",
         isCompleted && "opacity-70",
@@ -86,8 +111,9 @@ function DayChip({ chipId, day, comp, week, blockName, draggable, canReorderUp, 
       {...attributes}
     >
       <div className="flex items-center gap-1">
-        {draggable && !isCompleted && <GripVertical className="h-3 w-3 text-muted-foreground" />}
-        <span className="font-medium truncate flex-1">
+        {draggable && !isCompleted && <GripVertical className="hidden h-3 w-3 shrink-0 text-muted-foreground sm:block" />}
+        <span className="sm:hidden">{statusIcon(status)}</span>
+        <span className="min-w-0 font-medium truncate flex-1">
           {day.title?.trim() || `Day ${day.day_index}`}
         </span>
         {onNudge && !isCompleted && (canReorderUp || canReorderDown) && (
@@ -115,10 +141,10 @@ function DayChip({ chipId, day, comp, week, blockName, draggable, canReorderUp, 
           </span>
         )}
       </div>
-      <div className="text-[10px] text-muted-foreground truncate">
+      <div className="hidden text-[10px] text-muted-foreground truncate sm:block">
         {blockName ? `${blockName} · ` : ""}W{week?.week_index ?? "?"} · D{day.day_index}
       </div>
-      <div>{statusBadge(status)}</div>
+      <div className="hidden sm:block">{statusBadge(status)}</div>
     </div>
   );
 }
@@ -132,7 +158,7 @@ function DroppableCell({ date, children, dim }: { date: Date; children: React.Re
       ref={setNodeRef}
       data-cell-date={id}
       className={cn(
-        "min-h-[110px] border border-border/60 p-1 space-y-1 transition-colors",
+        "min-h-[72px] min-w-0 border border-border/60 p-0.5 space-y-1 transition-colors sm:min-h-[110px] sm:p-1",
         dim && "bg-muted/40 text-muted-foreground",
         today && "bg-primary/5 ring-1 ring-primary/30",
         isOver && "bg-primary/15 ring-2 ring-primary",
@@ -140,7 +166,7 @@ function DroppableCell({ date, children, dim }: { date: Date; children: React.Re
     >
       <div className="text-[10px] font-semibold flex items-center justify-between">
         <span>{format(date, "d")}</span>
-        {today && <span className="text-primary uppercase tracking-wide text-[9px]">Today</span>}
+        {today && <span className="hidden text-primary uppercase tracking-wide text-[9px] sm:inline">Today</span>}
       </div>
       {children}
     </div>
