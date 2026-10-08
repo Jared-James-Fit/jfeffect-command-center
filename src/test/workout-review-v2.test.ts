@@ -86,6 +86,17 @@ describe("quick check-out (review v2)", () => {
     expect(editor).toContain("useState<number | null>(initial?.recoveryToday ?? null)");
   });
 
+  it("opens the recap only after the review sheet has closed, and never on an edit", () => {
+    const editor = readFileSync("src/components/workout/shared/workout-review-editor.tsx", "utf8");
+    const day = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    expect(editor).toContain("if (onViewScore && (!wasEdit || scoreAfterEdit))");
+    expect(editor).toContain("onCloseAutoFocus={(e) => {");
+    // The finish-by-review sheet stays mounted until it has closed.
+    expect(day).toContain("(quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && autoFinishReady))");
+    expect(day).not.toContain("requestAnimationFrame(() => requestAnimationFrame(() => setSummaryOpen(true)))");
+    expect(day).toContain("{!focusMode && completion?.completed_at && client?.id && (");
+  });
+
   it("is one screen, effort is never pre-filled, and it stores the version", () => {
     const editor = readFileSync("src/components/workout/shared/workout-review-editor.tsx", "utf8");
     const server = readFileSync("src/lib/workout-completion.functions.ts", "utf8");

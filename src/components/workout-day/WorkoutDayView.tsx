@@ -1719,6 +1719,13 @@ function WorkoutDay({
   // autoOpenReview prop.
   const [autoOpenReviewAfterFinish, setAutoOpenReviewAfterFinish] = useState(false);
   const [quickFinishReviewOpen, setQuickFinishReviewOpen] = useState(false);
+  // Keeps the finish-by-review sheet mounted through its close animation:
+  // saving finishes the workout, and unmounting an open sheet mid-save while
+  // the recap opened froze the page.
+  const [quickFinishMounted, setQuickFinishMounted] = useState(false);
+  useEffect(() => {
+    if (quickFinishReviewOpen) setQuickFinishMounted(true);
+  }, [quickFinishReviewOpen]);
   // Notifications can deep-link with ?review=1 to nudge the member to open
   // the shared review sheet on a completed workout.
   const reviewParam = search.review === 1;
@@ -2283,6 +2290,7 @@ function WorkoutDay({
               {isClientWorkout && !completion?.completed_at && rowsLoaded && (rows as any[]).length > 0 && (
                 <LockInBar
                   previewOnly={isImpersonating}
+                  dayId={dayId}
                   completionId={completion?.id ?? null}
                   ensureStarted={ensureStartedForLockIn}
                   workoutTitle={cleanDayTitle(day.title, day.day_index)}
@@ -2416,7 +2424,7 @@ function WorkoutDay({
                   }}
                   onViewScore={(rating) => {
                     setLastSessionRating(rating);
-                    requestAnimationFrame(() => requestAnimationFrame(openRecapSummary));
+                    openRecapSummary();
                   }}
                   autoOpenReview={autoOpenReviewAfterFinish}
                   onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
@@ -2682,7 +2690,8 @@ function WorkoutDay({
           </Card>
         )}
 
-        {completion?.completed_at && client?.id && (
+        {/* Focus mode renders its own copy; two would stack two review sheets. */}
+        {!focusMode && completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
             ctx={{ kind: "client", dayId, scheduledWorkoutId }}
             hasCoach
@@ -2718,7 +2727,7 @@ function WorkoutDay({
             }}
             onViewScore={(rating) => {
               setLastSessionRating(rating);
-              requestAnimationFrame(() => requestAnimationFrame(openRecapSummary));
+              openRecapSummary();
             }}
             autoOpenReview={autoOpenReviewAfterFinish}
             onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
@@ -2727,7 +2736,7 @@ function WorkoutDay({
         {children}
       </div>
 
-      {!completion?.completed_at && client?.id && autoFinishReady && (
+      {client?.id && (quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && autoFinishReady)) && (
         <WorkoutReviewEditor
           open={quickFinishReviewOpen}
           onOpenChange={setQuickFinishReviewOpen}
@@ -2791,8 +2800,13 @@ function WorkoutDay({
               hasNote: !!completion?.client_notes,
             }));
             recapFromSubmitRef.current = true;
-            requestAnimationFrame(() => requestAnimationFrame(() => setSummaryOpen(true)));
           }}
+          // The editor calls this only after its sheet has fully closed.
+          onViewScore={() => {
+            setQuickFinishMounted(false);
+            setSummaryOpen(true);
+          }}
+          scoreAfterEdit
         />
       )}
 
