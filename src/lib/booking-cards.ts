@@ -1,7 +1,7 @@
 /**
- * Booking Cards — Calendly-style reusable session templates for the PT
- * Calendar. Pure / browser-safe helpers; DB access stays in components via
- * the browser client (RLS: coaches + admins only).
+ * Booking types (stored as booking_cards): the shared row shape and display
+ * helpers. Online booking fields and the full type live in booking-types.ts.
+ * Pure / browser-safe; DB access stays in components (RLS: coaches + admins).
  */
 
 export type BookingCard = {
@@ -59,49 +59,3 @@ export function addMinutesToTime(hhmm: string, minutes: number): string {
   const mm = String(total % 60).padStart(2, "0");
   return `${hh}:${mm}`;
 }
-
-/** One-click starter cards shown when no booking cards exist yet. */
-export const SUGGESTED_CARDS: Array<Omit<BookingCard, "id" | "sort_order" | "is_active">> = [
-  {
-    name: "In-Person PT Session",
-    session_type: "Personal Training Session",
-    custom_type: null,
-    duration_minutes: 60,
-    location: "Iron Image Gym",
-    default_notes: null,
-    visible_to_client: true,
-    client_visible_notes: true,
-    reminders_enabled: true,
-    send_confirmation_email: true,
-    uses_credit: true,
-    color: "gold",
-  },
-  {
-    name: "Consultation Call",
-    session_type: "Consultation",
-    custom_type: null,
-    duration_minutes: 30,
-    location: "Phone / Video",
-    default_notes: null,
-    visible_to_client: true,
-    client_visible_notes: true,
-    reminders_enabled: true,
-    send_confirmation_email: true,
-    uses_credit: false,
-    color: "green",
-  },
-  {
-    name: "Technique Review",
-    session_type: "Personal Training Session",
-    custom_type: null,
-    duration_minutes: 45,
-    location: "Iron Image Gym",
-    default_notes: null,
-    visible_to_client: true,
-    client_visible_notes: true,
-    reminders_enabled: true,
-    send_confirmation_email: true,
-    uses_credit: true,
-    color: "amber",
-  },
-];

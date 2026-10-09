@@ -29,6 +29,19 @@ function markStarted() {
   }
 }
 
+type AppChoice = { id: string; label: string; hint: string; href: "googleUrl" | "webcalUrl" | "outlookUrl"; newTab: boolean };
+
+/** The calendar apps people actually use, the one this phone most likely has first. */
+function calendarApps(): AppChoice[] {
+  const apple: AppChoice = { id: "apple", label: "Apple Calendar", hint: "iPhone, iPad, Mac", href: "webcalUrl", newTab: false };
+  const google: AppChoice = { id: "google", label: "Google Calendar", hint: "Android, Gmail", href: "googleUrl", newTab: true };
+  const outlook: AppChoice = { id: "outlook", label: "Outlook", hint: "Outlook.com, Hotmail", href: "outlookUrl", newTab: true };
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  if (/iPhone|iPad|iPod|Macintosh/i.test(ua) && !/Android/i.test(ua)) return [apple, google, outlook];
+  if (/Windows/i.test(ua)) return [outlook, google, apple];
+  return [google, apple, outlook];
+}
+
 /**
  * Optional Setup step: put sessions and workouts in the client's own phone
  * calendar. Green only once Google / Apple / Outlook has actually pulled the
@@ -80,7 +93,7 @@ export function CalendarSyncCard({ className }: { className?: string }) {
     },
     off: {
       title: "Sync your calendar",
-      message: "Optional. See your sessions and workouts in Google or Apple Calendar.",
+      message: "Optional. See your sessions and workouts in Google, Apple or Outlook.",
       icon: <CalendarPlus className="h-4 w-4" />,
       tone: "bg-primary/10 text-primary",
       action: "Set up",
@@ -174,6 +187,7 @@ function CalendarSyncSheet({
   };
 
   const disabled = isPov || !feed;
+  const apps = calendarApps();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -201,34 +215,46 @@ function CalendarSyncSheet({
           )}
 
           <div className="grid gap-2">
-            <Button asChild variant={synced ? "outline" : "default"} className={cn("h-12 justify-start text-sm font-bold", !synced && "bg-gradient-primary")} disabled={disabled}>
+            {apps.map((a, i) => (
+              <Button
+                key={a.id}
+                asChild
+                variant={!synced && i === 0 ? "default" : "outline"}
+                className={cn("h-12 justify-between text-sm font-bold", !synced && i === 0 && "bg-gradient-primary")}
+                disabled={disabled}
+              >
+                <a
+                  href={disabled ? undefined : (feed as any)?.[a.href]}
+                  target={a.newTab ? "_blank" : undefined}
+                  rel="noreferrer"
+                  onClick={(e) => (disabled ? e.preventDefault() : onStarted())}
+                  aria-disabled={disabled}
+                >
+                  <span>{a.label}</span>
+                  <span className="text-[11px] font-medium opacity-70">{a.hint}</span>
+                </a>
+              </Button>
+            ))}
+            <Button variant="ghost" className="h-11 justify-start text-sm" disabled={disabled} onClick={copy}>
+              <Copy className="mr-2 h-4 w-4" /> Any other calendar app: copy the link
+            </Button>
+            {!disabled && (
               <a
-                href={disabled ? undefined : feed!.googleUrl}
+                href={(feed as any)?.office365Url}
                 target="_blank"
                 rel="noreferrer"
-                onClick={(e) => (disabled ? e.preventDefault() : onStarted())}
-                aria-disabled={disabled}
+                onClick={() => onStarted()}
+                className="px-1 text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:underline"
               >
-                Google Calendar
+                Outlook for work or school (Microsoft 365)
               </a>
-            </Button>
-            <Button asChild variant="outline" className="h-12 justify-start text-sm font-bold" disabled={disabled}>
-              <a
-                href={disabled ? undefined : feed!.webcalUrl}
-                onClick={(e) => (disabled ? e.preventDefault() : onStarted())}
-                aria-disabled={disabled}
-              >
-                iPhone / Apple Calendar
-              </a>
-            </Button>
-            <Button variant="ghost" className="h-11 justify-start text-sm" disabled={disabled} onClick={copy}>
-              <Copy className="mr-2 h-4 w-4" /> Copy link (Outlook and others)
-            </Button>
+            )}
           </div>
 
           <p className="text-[11px] leading-snug text-muted-foreground">
             Google on a phone: if it opens the app and nothing happens, copy the link and add it once at
             calendar.google.com on a computer (Other calendars → From URL). It then shows on your phone too.
+            Samsung, Fantastical, Proton and other apps take the copied link under "Add calendar from URL" (or "Subscribe").
           </p>
 
           {!isPov && (

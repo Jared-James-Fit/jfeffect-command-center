@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CheckCircle2, RefreshCw, AlertCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
-export function GoogleCalendarPage() {
+export function GoogleCalendarPage({ embedded = false }: { embedded?: boolean } = {}) {
   const search = useSearch({ strict: false }) as { connected?: string; error?: string };
   const qc = useQueryClient();
   const statusFn = useServerFn(getGoogleConnectionStatus);
@@ -85,8 +85,8 @@ export function GoogleCalendarPage() {
 
   return (
     <>
-      <PageHeader title="Google Calendar" subtitle="Sessions sync here automatically, and your Google events block double-booking." />
-      <div className="p-6 md:p-8 space-y-4 max-w-3xl">
+      {!embedded && <PageHeader title="Google Calendar" subtitle="Sessions sync here automatically, and your Google events block double-booking." />}
+      <div className={embedded ? "space-y-4" : "p-6 md:p-8 space-y-4 max-w-3xl"}>
         <Card className="border-border bg-card p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
