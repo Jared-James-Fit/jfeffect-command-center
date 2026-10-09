@@ -10,11 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CalendarDays, Plus, Ticket, SlidersHorizontal, CheckCircle2, Ban, CircleOff, Undo2, Pencil } from "lucide-react";
+import { CalendarDays, Plus, Ticket, SlidersHorizontal, ChevronRight } from "lucide-react";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SellSessionsDialog } from "@/components/sell-sessions-dialog";
 import { adjustSessionCredits } from "@/lib/session-credit-packages.functions";
-import { setPtSessionStatus } from "@/lib/pt-pack.functions";
 import { statusTone, fmtTimeRange, COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import {
   summarizeSessions,
@@ -26,12 +25,16 @@ import {
 } from "@/lib/sessions-inventory";
 
 import { WORKSPACE_FULL_SPAN_CLASS } from "@/components/workspace/workspace-container";
+import { SessionActionsSheet, whenLabel } from "@/components/schedule/session-actions-sheet";
+import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
+import { deviceTodayISO } from "@/lib/schedule-time";
 import { useAuth } from "@/lib/auth";
 
 const ADJUST_REASONS = ["Bonus session", "Complimentary", "Correction", "Refund / manual adjustment", "No-show deduction", "Other"];
 
+// Local date, not UTC: after 7 PM in Winnipeg the UTC date is already tomorrow.
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return deviceTodayISO();
 }
 
 function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "primary" | "warning" | "success" }) {
@@ -68,6 +71,7 @@ export function ClientSessionsPanel({
   const [addOpen, setAddOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [acting, setActing] = useState<any>(null);
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["pt-sessions", clientId] });
@@ -159,16 +163,9 @@ export function ClientSessionsPanel({
     .sort((a, b) => (a.session_date + a.start_time).localeCompare(b.session_date + b.start_time));
   const needsReview = sessions.filter((s) => s.status === "Scheduled" && s.session_date < today);
   const summary = summarizeSessions(balance, adhoc, upcoming.length + needsReview.length);
-
-  const changeStatus = async (s: any, status: string, deductOnMissed?: boolean) => {
-    try {
-      await setPtSessionStatus({ data: { sessionId: s.id, status: status as any, deductOnMissed } });
-      invalidateAll();
-      toast.success(`Marked ${status}`);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Update failed");
-    }
-  };
+  // Soonest upcoming first (what the coach acts on), then history newest first.
+  const upcomingIds = new Set(upcoming.map((s) => s.id));
+  const ordered = [...upcoming, ...sessions.filter((s) => !upcomingIds.has(s.id))];
 
   return (
     <>
@@ -181,6 +178,8 @@ export function ClientSessionsPanel({
             <Plus className="mr-2 h-4 w-4" /> Book Session
           </Button>
         </div>
+
+        <ChangeRequestsCard clientId={clientId} onEdit={(s) => { setEditing(sessions.find((x) => x.id === s.id) ?? s); setBookOpen(true); }} />
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Purchased" value={summary.purchased} />
@@ -253,30 +252,24 @@ export function ClientSessionsPanel({
             <p className="text-sm text-muted-foreground">No sessions booked yet.</p>
           ) : (
             <ul className="divide-y divide-border">
-              {sessions.map((s) => (
-                <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <Badge variant="outline" className={`${statusTone(s.status)} shrink-0`}>{s.status === "Missed" ? "No-show" : s.status}</Badge>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">{s.title}</div>
+              {ordered.map((s) => (
+                <li key={s.id}>
+                  {/* Whole row is the button: on a phone the date and time stay readable, and
+                      one tap opens labelled actions (Move, Mark done, No-show, Cancel). */}
+                  <button
+                    type="button"
+                    onClick={() => setActing(s)}
+                    className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-secondary/30"
+                  >
+                    <Badge variant="outline" className={`${statusTone(s.status)} w-[84px] shrink-0 justify-center`}>{s.status === "Missed" ? "No-show" : s.status}</Badge>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold">{whenLabel(s.session_date, s.start_time)}</div>
                       <div className="truncate text-xs text-muted-foreground">
-                        {new Date(s.session_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {fmtTimeRange(s.start_time, s.end_time)}{s.location ? ` · ${s.location}` : ""}
+                        {fmtTimeRange(s.start_time, s.end_time)} · {s.title}{s.location ? ` · ${s.location.split(",")[0]}` : ""}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    {s.status === "Scheduled" && (
-                      <>
-                        <Button size="sm" variant="ghost" title="Mark completed (uses 1 session)" onClick={() => changeStatus(s, "Completed")}><CheckCircle2 className="h-4 w-4 text-success" /></Button>
-                        <Button size="sm" variant="ghost" title="No-show" onClick={() => changeStatus(s, "Missed", confirm("Deduct one session for this no-show?"))}><Ban className="h-4 w-4 text-warning" /></Button>
-                        <Button size="sm" variant="ghost" title="Cancel (returns the session)" onClick={() => { if (confirm("Cancel this session? The reserved session is returned.")) changeStatus(s, "Cancelled"); }}><CircleOff className="h-4 w-4 text-muted-foreground" /></Button>
-                      </>
-                    )}
-                    {s.status === "Completed" && (
-                      <Button size="sm" variant="ghost" title="Undo completion (returns 1 session)" onClick={() => { if (confirm("Undo completion? One session is returned.")) changeStatus(s, "Scheduled"); }}><Undo2 className="h-4 w-4 text-primary" /></Button>
-                    )}
-                    <Button size="sm" variant="ghost" title="Edit / reschedule" onClick={() => { setEditing(s); setBookOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                  </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
                 </li>
               ))}
             </ul>
@@ -318,10 +311,19 @@ export function ClientSessionsPanel({
             <Input value={client?.default_session_location ?? ""} onChange={(e) => onChangeField?.("default_session_location", e.target.value)} placeholder="Iron Image Gym" />
           </div>
         </div>
-        <p className="text-[11px] text-muted-foreground">Reminders send in the client's time zone. Save at the top of the page to apply.</p>
+        <p className="text-[11px] text-muted-foreground">
+          Clients get one text at 6 PM the evening before each session, in this time zone. Save at the top of the page to apply.
+        </p>
       </Card>
 
       <PtSessionDialog open={bookOpen} onOpenChange={setBookOpen} clientId={clientId} initial={editing} />
+      <SessionActionsSheet
+        session={acting}
+        clientName={client?.full_name}
+        open={!!acting}
+        onOpenChange={(o) => { if (!o) setActing(null); }}
+        onEdit={(s) => { setEditing(sessions.find((x) => x.id === s.id) ?? s); setBookOpen(true); }}
+      />
       <SellSessionsDialog open={addOpen} onOpenChange={setAddOpen} clientId={clientId} />
       <AdjustSessionsDialog open={adjustOpen} onOpenChange={setAdjustOpen} clientId={clientId} onDone={invalidateAll} />
     </>

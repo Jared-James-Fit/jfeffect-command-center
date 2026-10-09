@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -148,8 +149,8 @@ export const getClientSessionCredits = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ client_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
     const [eventsRes, balRes] = await Promise.all([
       supabase
         .from("session_ledger_events")
@@ -157,7 +158,7 @@ export const getClientSessionCredits = createServerFn({ method: "POST" })
         .eq("client_id", data.client_id)
         .order("effective_date", { ascending: false })
         .order("created_at", { ascending: false }),
-      supabase.rpc("session_balance", { _client_id: data.client_id }),
+      supabase.rpc("session_balance", { _client_id: data.client_id }, { get: true }),
     ]);
     const events = eventsRes.data ?? [];
     const apptIds = Array.from(

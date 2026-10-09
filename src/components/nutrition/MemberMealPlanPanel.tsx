@@ -5,7 +5,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, FileText, Loader2, Utensils } from "lucide-react";
-import { MealPlanDisplay } from "@/components/meal-plan-display";
+import { MacroTargetsChart } from "@/components/nutrition/MacroTargetsChart";
+import { MealPlanReader } from "@/components/nutrition/MealPlanReader";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -119,32 +120,21 @@ export function MemberMealPlanPanel() {
         )}
 
         {active && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {(active.calories != null ||
               active.protein != null ||
               active.carbs != null ||
               active.fats != null) && (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {[
-                  { label: "Cal", value: active.calories },
-                  { label: "Protein", value: active.protein, unit: "g" },
-                  { label: "Carbs", value: active.carbs, unit: "g" },
-                  { label: "Fats", value: active.fats, unit: "g" },
-                ].map((m) => (
-                  <div key={m.label} className="rounded-md border border-border bg-secondary/20 px-3 py-2 text-center">
-                    <div className="text-lg font-black leading-none">
-                      {m.value ?? "—"}
-                      {m.value != null && m.unit && (
-                        <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{m.unit}</span>
-                      )}
-                    </div>
-                    <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{m.label}</div>
-                  </div>
-                ))}
-              </div>
+              <MacroTargetsChart
+                calories={active.calories}
+                protein={active.protein}
+                carbs={active.carbs}
+                fats={active.fats}
+                fibre={active.fibre}
+              />
             )}
             {active.notes && active.notes.trim() ? (
-              <MealPlanDisplay text={active.notes} />
+              <MealPlanReader text={String(active.notes)} />
             ) : !anyNotes && !plan.pdf_signed_url ? (
               <div className="text-xs text-muted-foreground">
                 Your coach hasn't added meal details for this day yet.

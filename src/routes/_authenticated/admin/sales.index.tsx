@@ -82,19 +82,19 @@ export const Route = createFileRoute("/_authenticated/admin/sales/")({
 function SalesWorkspace() {
   const { tab, sub } = Route.useSearch();
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { role, viewOnly } = useAuth();
 
   // Pipeline now lives in CRM — bounce legacy deep links there.
   useEffect(() => {
     if (tab === "pipeline") navigate({ to: "/admin/crm", replace: true });
   }, [tab, navigate]);
 
-  // Taxes & Books is the business owner's, not every admin's.
+  // Taxes & Books is the business owner's (and the finance login's), not every admin's.
   const isOwner = useIsBusinessOwner();
   const visible = useMemo(() => {
     const r = (role ?? "admin") as "admin" | "coach" | "media_manager";
-    return SECTIONS.filter((s) => s.roles.includes(r) && (s.value !== "taxes" || isOwner === true));
-  }, [role, isOwner]);
+    return SECTIONS.filter((s) => s.roles.includes(r) && (s.value !== "taxes" || isOwner === true || viewOnly));
+  }, [role, isOwner, viewOnly]);
 
   const primary = visible.filter((s) => s.primary);
   const active: SectionKey =
@@ -168,7 +168,7 @@ function SalesWorkspace() {
         <div className="min-w-0 flex-1 lg:overflow-y-auto">
           {active === "products" && <PaymentLinksPage embedded />}
           {active === "transactions" && <AdminTransactionsPage embedded />}
-          {active === "taxes" && <TaxesBooksPage />}
+          {active === "taxes" && <TaxesBooksPage mode={viewOnly ? "finance" : "owner"} />}
           {active === "discount-codes" && <DiscountCodesPage embedded />}
           {active === "settings" && <BillingSourcesPage />}
           {active === "sales-pages" && (

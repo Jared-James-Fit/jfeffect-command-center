@@ -208,6 +208,7 @@ const SignupInputWithCodes = SignupInput.extend({
 });
 
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
+import { assertAdminView } from "@/lib/permissions.server";
 
 /**
  * Strict E.164 normalization. 10 digits → +1XXXXXXXXXX, '+' prefix preserved,
@@ -1063,7 +1064,7 @@ async function assertAdmin(ctx: any) {
 export const adminGetJfSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data } = await supabaseAdmin.from("jf_membership_settings").select("*").eq("id", true).maybeSingle();
     const diagnostics = getStripeKeyDiagnostics();

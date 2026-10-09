@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertMemberCanReadProtected } from "@/lib/jf-access.server";
+import { assertAdminView } from "@/lib/permissions.server";
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
@@ -19,7 +20,7 @@ function slugify(s: string) {
 export const adminListResources = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("member_resources").select("*").order("created_at", { ascending: false });
@@ -31,7 +32,7 @@ export const adminGetResource = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("member_resources").select("*").eq("id", data.id).maybeSingle();

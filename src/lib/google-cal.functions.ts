@@ -172,7 +172,11 @@ export const listGoogleEventsRange = createServerFn({ method: "POST" })
     }
     const { gcalListEvents } = await import("./google-cal.server");
     try {
-      return await gcalListEvents(coachId, data.timeMin, data.timeMax);
+      const events = await gcalListEvents(coachId, data.timeMin, data.timeMax);
+      // Google copies of app sessions are already on the calendar as app items.
+      return events
+        .filter((e) => !e.appSessionId)
+        .map(({ raw: _raw, appSessionId: _a, ...e }) => e);
     } catch {
       return [];
     }

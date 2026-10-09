@@ -16,9 +16,10 @@ import { getMfaState, roleRequiresMfa, startTotpEnrollment, verifyTotp, type Mfa
  * pass straight through.
  */
 export function StaffMfaGate({ children }: { children: ReactNode }) {
-  const { role, signOut } = useAuth();
+  const { accountRole, signOut } = useAuth();
   const qc = useQueryClient();
-  const required = roleRequiresMfa(role);
+  // The account's own role: the finance login is shown the admin app but still needs MFA.
+  const required = roleRequiresMfa(accountRole);
   const [state, setState] = useState<MfaState | null>(null);
   const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
   const [code, setCode] = useState("");

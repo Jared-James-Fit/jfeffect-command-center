@@ -2,8 +2,8 @@ import { createContext, useContext } from "react";
 
 /**
  * Who is looking at Taxes & Books. The owner sees everything; the finance
- * bookkeeper can read and record but not delete, and doesn't get Cleo (the
- * admin assistant). The server and RLS enforce the same split.
+ * bookkeeper can read and record but not delete. The server and RLS enforce
+ * the same split.
  */
 export type BooksMode = "owner" | "finance";
 

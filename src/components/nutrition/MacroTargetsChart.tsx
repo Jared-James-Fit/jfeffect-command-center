@@ -1,13 +1,24 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MACRO_COLOR, formatKcal, kcalShares, toMacroNumber } from "./macro-palette";
 
 type Num = number | string | null | undefined;
 
+/** A secondary target shown under the ring (fibre, water, sleep…). */
+export type TargetExtra = {
+  label: string;
+  value: string;
+  /** Small line under the label, e.g. who set it. */
+  note?: string;
+  /** Makes the row tappable (e.g. edit the water target). */
+  onClick?: () => void;
+};
+
 /**
- * Client daily targets as one picture: a calorie ring split by where the
- * calories come from (protein / carbs / fat), the grams beside it, and the
- * secondary targets (fibre, water) underneath. Read-only coach data.
+ * Daily targets as one picture: a calorie ring split by where the calories
+ * come from (protein / carbs / fat), the grams beside it, and the secondary
+ * targets underneath. Used by the client and the member nutrition pages.
  */
 export function MacroTargetsChart({
   calories,
@@ -16,6 +27,7 @@ export function MacroTargetsChart({
   fats,
   fibre,
   water,
+  extras: extrasOverride,
   className,
 }: {
   calories?: Num;
@@ -24,6 +36,8 @@ export function MacroTargetsChart({
   fats?: Num;
   fibre?: Num;
   water?: string | null;
+  /** Replaces the default fibre / water row. */
+  extras?: TargetExtra[];
   className?: string;
 }) {
   const p = toMacroNumber(protein);
@@ -45,10 +59,12 @@ export function MacroTargetsChart({
     { key: "fats", label: "Fat", grams: f, color: MACRO_COLOR.fats },
   ].map((r, i) => ({ ...r, share: split?.shares[i] ?? 0, pct: split?.pcts[i] ?? null }));
 
-  const extras = [
-    fib != null ? { label: "Fibre", value: `${fib} g` } : null,
-    waterText ? { label: "Water", value: waterText } : null,
-  ].filter(Boolean) as { label: string; value: string }[];
+  const extras: TargetExtra[] =
+    extrasOverride ??
+    ([
+      fib != null ? { label: "Fibre", value: `${fib} g` } : null,
+      waterText ? { label: "Water", value: waterText } : null,
+    ].filter(Boolean) as TargetExtra[]);
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -99,12 +115,40 @@ export function MacroTargetsChart({
             extras.length > 1 ? "grid-cols-2" : "grid-cols-1",
           )}
         >
-          {extras.map((x) => (
-            <div key={x.label} className="flex items-baseline justify-between gap-2 px-4 py-3">
-              <span className="text-xs text-muted-foreground">{x.label}</span>
-              <span className="text-base font-bold tabular-nums">{x.value}</span>
-            </div>
-          ))}
+          {extras.map((x) => {
+            const body = (
+              <>
+                <span className="min-w-0">
+                  <span className="block text-xs text-muted-foreground">{x.label}</span>
+                  {x.note && (
+                    <span className="block truncate text-[11px] text-muted-foreground/80">
+                      {x.note}
+                    </span>
+                  )}
+                </span>
+                <span className="flex shrink-0 items-center gap-1 text-base font-bold tabular-nums">
+                  {x.value}
+                  {x.onClick && (
+                    <ChevronRight aria-hidden className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </span>
+              </>
+            );
+            return x.onClick ? (
+              <button
+                key={x.label}
+                type="button"
+                onClick={x.onClick}
+                className="flex items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-secondary"
+              >
+                {body}
+              </button>
+            ) : (
+              <div key={x.label} className="flex items-center justify-between gap-2 px-4 py-3">
+                {body}
+              </div>
+            );
+          })}
         </div>
       )}
 

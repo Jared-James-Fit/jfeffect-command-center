@@ -11,6 +11,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { EXPENSE_CATEGORIES, PICKABLE_CATEGORIES } from "@/lib/business-expense-categories";
 import { RECEIPTS_BUCKET, type ExpenseRow } from "@/lib/business-books";
 import { businessToday } from "@/lib/billing-schedule";
+import { assertAdminView } from "@/lib/permissions.server";
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const CategoryKey = z.string().refine((k) => EXPENSE_CATEGORIES.some((c) => c.key === k), "Unknown category");
@@ -352,9 +353,9 @@ export const syncStripeFees = createServerFn({ method: "POST" })
 export const getSummerMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    // The admin, or the finance login (view-only: its own Cleo, nothing else).
+    const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { data, error } = await supabase
       .from("summer_messages")
       .select("id, role, content, created_at")
@@ -376,11 +377,11 @@ export const askSummer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => AskInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    // The admin, or the finance login (view-only: its own Cleo, nothing else).
+    const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { answerSummer } = await import("@/lib/summer.server");
-    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice });
+    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly });
   });
 
 const VoiceInput = z.object({
@@ -396,13 +397,13 @@ export const askSummerVoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => VoiceInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    // The admin, or the finance login (view-only: its own Cleo, nothing else).
+    const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { answerSummer, transcribeAudio } = await import("@/lib/summer.server");
     const transcript = await transcribeAudio(data.audio, data.mime);
     if (!transcript) return { transcript: "", user: null, assistant: null };
-    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true });
+    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly });
     return { transcript, ...res };
   });
 
@@ -420,9 +421,9 @@ export const summerSpeech = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    // The admin, or the finance login (view-only: its own Cleo, nothing else).
+    const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { synthesizeSpeech } = await import("@/lib/summer.server");
     return synthesizeSpeech(data);
   });
@@ -431,14 +432,19 @@ export const summerSpeech = createServerFn({ method: "POST" })
 export const getSummerProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context as any;
-    const { assertAdmin, isBusinessOwner } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase, viewOnly } = await assertAdminView(context as any);
+    const { isBusinessOwner } = await import("@/lib/business-books.server");
     const [{ data }, owner] = await Promise.all([
       supabase.from("summer_profiles").select("tone, instructions").eq("user_id", userId).maybeSingle(),
       isBusinessOwner(supabase, userId),
     ]);
-    return { tone: (data?.tone as string | null) ?? null, instructions: (data?.instructions as string | null) ?? null, isOwner: owner };
+    return {
+      tone: (data?.tone as string | null) ?? null,
+      instructions: (data?.instructions as string | null) ?? null,
+      isOwner: owner,
+      isFinance: viewOnly,
+    };
   });
 
 const SummerSettingsInput = z.object({
@@ -451,9 +457,9 @@ export const saveSummerSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SummerSettingsInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    // The admin, or the finance login (view-only: its own Cleo, nothing else).
+    const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { error } = await supabase
       .from("summer_profiles")
       .upsert({ user_id: userId, tone: data.tone, instructions: data.instructions || null, updated_at: new Date().toISOString() });
@@ -464,9 +470,9 @@ export const saveSummerSettings = createServerFn({ method: "POST" })
 export const clearSummer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context as any;
-    const { assertAdmin } = await import("@/lib/business-books.server");
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    // The admin, or the finance login (view-only: its own Cleo, nothing else).
+    const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { error } = await supabase.from("summer_messages").delete().eq("user_id", userId);
     if (error) throw new Error(error.message);
     return { ok: true };

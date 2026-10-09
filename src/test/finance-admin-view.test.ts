@@ -1,0 +1,176 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { viewOnlyFetch, setAdminView } from "@/lib/admin-view";
+import { ADMIN_VIEW_HEADER, VIEW_ONLY_MESSAGE, RECORDABLE_PAYMENT_STATUSES } from "@/lib/permissions";
+import { assertAdminOr, withoutCredentials } from "@/lib/permissions.server";
+
+const API = "https://x.supabase.co/rest/v1";
+const json = (body: unknown, init: ResponseInit = {}) =>
+  new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" }, ...init });
+
+function recorder(respond: (url: string, init: RequestInit) => Response = () => json([])) {
+  const calls: Array<{ url: string; init: RequestInit; headers: Headers }> = [];
+  const base = (async (input: any, init: RequestInit = {}) => {
+    const url = typeof input === "string" ? input : input.url;
+    calls.push({ url, init, headers: new Headers(init.headers) });
+    return respond(url, init);
+  }) as typeof fetch;
+  return { calls, fetch: viewOnlyFetch(base) };
+}
+
+describe("finance login in the browser (admin view)", () => {
+  it("asks for the admin view on reads only", async () => {
+    const r = recorder();
+    await r.fetch(`${API}/clients?select=*`, { method: "GET", headers: { apikey: "k" } });
+    expect(r.calls[0].headers.get(ADMIN_VIEW_HEADER)).toBe("1");
+    expect(r.calls[0].headers.get("apikey")).toBe("k");
+
+    await r.fetch(`${API}/clients`, { method: "POST", body: JSON.stringify({ full_name: "x" }) });
+    expect(r.calls[1].headers.get(ADMIN_VIEW_HEADER)).toBeNull();
+  });
+
+  it("leaves storage, auth and functions alone", async () => {
+    const r = recorder();
+    await r.fetch("https://x.supabase.co/storage/v1/object/sign/progress-media/a.jpg", { method: "POST" });
+    await r.fetch("https://x.supabase.co/auth/v1/user", { method: "GET" });
+    expect(r.calls.every((c) => c.headers.get(ADMIN_VIEW_HEADER) === null)).toBe(true);
+  });
+
+  it("sends a database function with simple arguments as a read", async () => {
+    const r = recorder();
+    await r.fetch(`${API}/rpc/session_balance`, {
+      method: "POST",
+      body: JSON.stringify({ _client_id: "c1" }),
+      headers: { "Content-Type": "application/json", "Content-Profile": "public" },
+    });
+    const c = r.calls[0];
+    expect(c.init.method).toBe("GET");
+    expect(c.init.body).toBeUndefined();
+    expect(new URL(c.url).searchParams.get("_client_id")).toBe("c1");
+    expect(c.headers.get(ADMIN_VIEW_HEADER)).toBe("1");
+    expect(c.headers.get("Accept-Profile")).toBe("public");
+    expect(c.headers.get("Content-Profile")).toBeNull();
+  });
+
+  it("keeps a function with list or null arguments as sent (no admin view)", async () => {
+    const r = recorder();
+    await r.fetch(`${API}/rpc/books_labels`, { method: "POST", body: JSON.stringify({ a: ["1", "2"] }) });
+    await r.fetch(`${API}/rpc/thing`, { method: "POST", body: JSON.stringify({ a: null }) });
+    expect(r.calls.map((c) => c.init.method)).toEqual(["POST", "POST"]);
+    expect(r.calls.every((c) => c.headers.get(ADMIN_VIEW_HEADER) === null)).toBe(true);
+  });
+
+  it("turns a refused change into one plain message", async () => {
+    const r = recorder(() => json({ code: "42501", message: 'new row violates row-level security policy for table "clients"' }, { status: 403 }));
+    const res = await r.fetch(`${API}/clients`, { method: "POST", body: "{}" });
+    expect(res.status).toBe(403);
+    expect((await res.json()).message).toBe(VIEW_ONLY_MESSAGE);
+
+    const ro = recorder(() => json({ code: "25006", message: "cannot execute UPDATE in a read-only transaction" }, { status: 400 }));
+    expect((await (await ro.fetch(`${API}/rpc/mark_seen`, { method: "POST", body: "{}" })).json()).message).toBe(VIEW_ONLY_MESSAGE);
+  });
+
+  it("reports an update that matched nothing instead of a silent success", async () => {
+    const r = recorder(() => new Response(null, { status: 204, headers: { "Content-Range": "*/0" } }));
+    const res = await r.fetch(`${API}/clients?id=eq.1`, { method: "PATCH", body: "{}", headers: { Prefer: "return=minimal" } });
+    expect(r.calls[0].headers.get("Prefer")).toBe("return=minimal,count=exact");
+    expect(res.status).toBe(403);
+    expect((await res.json()).message).toBe(VIEW_ONLY_MESSAGE);
+
+    const ok = recorder(() => new Response(null, { status: 204, headers: { "Content-Range": "0-0/1" } }));
+    expect((await ok.fetch(`${API}/business_expenses?id=eq.1`, { method: "PATCH", body: "{}" })).status).toBe(204);
+  });
+
+  it("passes other errors through untouched", async () => {
+    const r = recorder(() => json({ code: "PGRST301", message: "JWT expired" }, { status: 401 }));
+    expect((await (await r.fetch(`${API}/clients`, { method: "POST", body: "{}" })).json()).message).toBe("JWT expired");
+  });
+
+  it("switches on and off on the API client", () => {
+    const original = (async () => json([])) as typeof fetch;
+    const client: any = { rest: { fetch: original } };
+    setAdminView(client, true);
+    expect(client.rest.fetch).not.toBe(original);
+    setAdminView(client, true);
+    setAdminView(client, false);
+    expect(client.rest.fetch).toBe(original);
+  });
+});
+
+describe("finance login on the server", () => {
+  const ctx = (roles: string[], opts: { aal?: string; allowed?: boolean } = {}) => {
+    const rpc: string[] = [];
+    return {
+      rpc,
+      userId: "u1",
+      claims: { aal: opts.aal ?? "aal2" },
+      supabase: {
+        from: () => ({ select: () => ({ eq: async () => ({ data: roles.map((role) => ({ role })), error: null }) }) }),
+        rpc: async (fn: string, args: any) => { rpc.push(`${fn}:${args._perm}`); return { data: !!opts.allowed, error: null }; },
+      },
+    };
+  };
+
+  it("lets the admin through without asking about permissions", async () => {
+    const c = ctx(["admin"]);
+    expect(await assertAdminOr(c, "payments.record")).toEqual({ viewOnly: false });
+    expect(c.rpc).toEqual([]);
+  });
+
+  it("lets a finance login through only with the permission and MFA", async () => {
+    const ok = ctx(["finance"], { allowed: true });
+    expect(await assertAdminOr(ok, "discounts.manage")).toEqual({ viewOnly: true });
+    expect(ok.rpc).toEqual(["has_permission:discounts.manage"]);
+    await expect(assertAdminOr(ctx(["finance"], { allowed: false }), "payments.record")).rejects.toThrow(/Forbidden: missing payments.record/);
+    await expect(assertAdminOr(ctx(["finance"], { aal: "aal1", allowed: true }), "payments.record")).rejects.toThrow(/MFA_REQUIRED/);
+  });
+
+  it("gives coaches and clients the usual admin-only error, without asking about permissions", async () => {
+    for (const roles of [["client"], ["coach"], []]) {
+      const c = ctx(roles, { allowed: true, aal: "aal1" });
+      await expect(assertAdminOr(c, "payments.request")).rejects.toThrow("Forbidden: admin only");
+      expect(c.rpc).toEqual([]);
+    }
+  });
+
+  it("strips setup tokens for view-only callers", () => {
+    expect(withoutCredentials({ id: "m1", email: "a@b.c", setup_token: "secret", setup_token_expires_at: "x" })).toEqual({ id: "m1", email: "a@b.c" });
+  });
+
+  it("records money in or owed, never refunds or cancellations", () => {
+    expect(RECORDABLE_PAYMENT_STATUSES).toContain("Paid");
+    for (const s of ["Refunded", "Cancelled", "Expired", "Draft"]) expect(RECORDABLE_PAYMENT_STATUSES as readonly string[]).not.toContain(s);
+  });
+});
+
+describe("finance admin-view migration", () => {
+  const sql = readFileSync("supabase/migrations/20261020093700_finance_admin_view.sql", "utf8");
+  const hasRole = sql.slice(sql.indexOf("FUNCTION public.has_role("), sql.indexOf("$$;", sql.indexOf("FUNCTION public.has_role(")));
+
+  it("only widens has_role for admin, in read-only transactions, on request, for the caller, as a viewer", () => {
+    expect(hasRole).toContain("_role = 'admin'");
+    expect(hasRole).toContain("current_setting('transaction_read_only') = 'on'");
+    expect(hasRole).toContain("->> 'x-jf-admin-view') IS NOT NULL");
+    expect(hasRole).toContain("_user_id = auth.uid()");
+    expect(hasRole).toContain("public.is_admin_viewer()");
+  });
+
+  it("needs MFA and never matches an admin", () => {
+    const viewer = sql.slice(sql.indexOf("FUNCTION public.is_admin_viewer()"), sql.indexOf("$$;", sql.indexOf("FUNCTION public.is_admin_viewer()")));
+    expect(viewer).toContain("public.session_mfa_verified()");
+    expect(viewer).toContain("NOT EXISTS (SELECT 1 FROM public.user_roles ur");
+  });
+
+  it("keeps credential tables away from view-only logins", () => {
+    for (const t of ["google_calendar_connections", "signnow_settings", "wearable_connection_secrets", "password_recovery_tokens", "na_guest_tokens", "email_unsubscribe_tokens", "coach_invites", "staff_invites"]) {
+      expect(sql).toContain(`'${t}'`);
+    }
+    expect(sql).toMatch(/AS RESTRICTIVE\s+FOR SELECT TO authenticated USING \(NOT public\.is_admin_viewer\(\)\)/);
+  });
+
+  it("lets discounts.manage create, edit and pause codes, but not delete them", () => {
+    expect(sql).toContain("FOR INSERT TO authenticated WITH CHECK (public.has_permission(auth.uid(), 'discounts.manage'))");
+    expect(sql).toMatch(/discounts\.manage update[\s\S]*FOR UPDATE/);
+    expect(sql).not.toMatch(/ON public\.discount_codes\s+FOR (DELETE|ALL)/);
+  });
+});

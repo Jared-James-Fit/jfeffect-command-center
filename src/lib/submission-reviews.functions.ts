@@ -20,6 +20,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { casualize } from "@/lib/coach-voice";
 import { voicePromptForClient } from "@/lib/coach-voice.functions";
+import { assertAdminView } from "@/lib/permissions.server";
 
 // ---------- Input validators -------------------------------------------------
 
@@ -271,7 +272,11 @@ export const listSubmissionReviews = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ListInput.parse(d))
   .handler(async ({ data, context }) => {
-    await assertCoachOrAdmin(context.supabase, context.userId);
+    // A view-only login (finance) sees the list the admin sees.
+    const staff = await assertCoachOrAdmin(context.supabase, context.userId).catch(async (e) => {
+      await assertAdminView(context as any).catch(() => { throw e; });
+      return { isAdmin: true as const };
+    });
     const sb = await admin();
 
     let q = sb
@@ -302,11 +307,7 @@ export const listSubmissionReviews = createServerFn({ method: "POST" })
 
     // Coach RLS-equivalent filter (the admin client bypasses RLS, so we
     // re-enforce here in code).
-    const { data: isAdmin } = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "admin",
-    });
-    if (isAdmin) return rows;
+    if (staff.isAdmin) return rows;
     const filtered: any[] = [];
     for (const r of rows ?? []) {
       if (!r.client_id) continue;

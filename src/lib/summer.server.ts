@@ -393,7 +393,7 @@ export type SummerMsg = { id: string; role: "user" | "assistant"; content: strin
 export async function answerSummer(
   supabase: any,
   userId: string,
-  input: { message: string; year?: number | null; voice?: boolean; route?: string | null },
+  input: { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean },
 ): Promise<{ user: SummerMsg; assistant: SummerMsg }> {
   const books = await import("@/lib/business-books.server");
   const { buildSummerContext, summerSystemPrompt } = await import("@/lib/summer-context");
@@ -414,10 +414,12 @@ export async function answerSummer(
     ownerFirstName(),
   ]);
 
-  // The books (taxes, expenses, income) are the owner's. Other admins get the
-  // rest of the app plus who still owes money, which is operational.
+  // The books (taxes, expenses, income) are the owner's, and the finance
+  // login keeps them. Other admins get the rest of the app plus who still owes
+  // money, which is operational.
+  const finance = !!input.finance && !owner;
   let booksSection: string;
-  if (owner) {
+  if (owner || finance) {
     const data = await books.loadBooksData(supabase);
     const currentYear = Number(businessToday().slice(0, 4));
     const year = input.year && data.years.includes(input.year) ? input.year : currentYear;
@@ -432,6 +434,7 @@ export async function answerSummer(
       instructions: profile.data?.instructions,
       voice: input.voice,
       owner,
+      finance,
       userName: firstName(me.data?.full_name),
       ownerName,
     }),

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KIND_META, ctaLabel, type CalendarItem, type CalendarKind } from "@/lib/calendar-sources";
 import { CalendarEmptyState } from "./empty-state";
@@ -36,16 +36,29 @@ export function CalendarBoard({
   showClientName = false,
   toolbar,
   emptyHint,
+  onCreate,
+  onItemSelect,
+  renderItemActions,
 }: {
   items: CalendarItem[];
   isLoading?: boolean;
   showClientName?: boolean;
   toolbar?: React.ReactNode;
   emptyHint?: string;
+  /** Shows "+ Book" on days; called with yyyy-mm-dd. */
+  onCreate?: (dateISO: string) => void;
+  /** Take over the tap on an item (return true to skip the default detail sheet). */
+  onItemSelect?: (item: CalendarItem) => boolean | void;
+  /** Extra buttons inside the default detail sheet for an item. */
+  renderItemActions?: (item: CalendarItem, close: () => void) => React.ReactNode;
 }) {
   const [view, setView] = useState<ViewMode>("month");
   const [cursor, setCursor] = useState<Date>(() => startOfDay(new Date()));
-  const [selected, setSelected] = useState<CalendarItem | null>(null);
+  const [selected, setSelectedRaw] = useState<CalendarItem | null>(null);
+  const setSelected = (it: CalendarItem | null) => {
+    if (it && onItemSelect?.(it) === true) return;
+    setSelectedRaw(it);
+  };
 
   const isEmpty = !isLoading && items.length === 0;
 
@@ -104,13 +117,22 @@ export function CalendarBoard({
 
           <div className="ml-auto flex items-center gap-2">
             <span className="text-sm font-semibold">{headerLabel}</span>
+            {onCreate && (
+              <Button
+                size="sm"
+                className="h-8 bg-gradient-primary font-bold"
+                onClick={() => onCreate(view === "day" || view === "week" ? isoDate(cursor) : isoDate(new Date()))}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Book
+              </Button>
+            )}
           </div>
         </div>
         {toolbar && <div className="mt-3 border-t border-border pt-3">{toolbar}</div>}
         <LegendRow items={items} />
       </Card>
 
-      {isEmpty ? (
+      {isEmpty && !onCreate ? (
         <CalendarEmptyState
           title={emptyHint ? "No calendar items yet" : "No calendar items"}
           hint={emptyHint}
@@ -121,10 +143,10 @@ export function CalendarBoard({
         <MonthGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} onSelectDay={(d) => { setCursor(d); setView("day"); }} />
       )}
       {view === "week" && (
-        <WeekGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} />
+        <WeekGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} onCreate={onCreate} />
       )}
       {view === "day" && (
-        <DayList date={cursor} items={itemsByDate.get(isoDate(cursor)) ?? []} onSelectItem={setSelected} showClientName={showClientName} emptyHint={emptyHint} />
+        <DayList date={cursor} items={itemsByDate.get(isoDate(cursor)) ?? []} onSelectItem={setSelected} showClientName={showClientName} emptyHint={emptyHint} onCreate={onCreate} />
       )}
       {view === "upcoming" && (
         <UpcomingList items={items} onSelectItem={setSelected} showClientName={showClientName} isLoading={isLoading} emptyHint={emptyHint} />
@@ -132,7 +154,7 @@ export function CalendarBoard({
         </>
       )}
 
-      <EventDetailSheet item={selected} onClose={() => setSelected(null)} showClientName={showClientName} />
+      <EventDetailSheet item={selected} onClose={() => setSelectedRaw(null)} showClientName={showClientName} renderItemActions={renderItemActions} />
     </div>
   );
 }
@@ -233,11 +255,12 @@ function MonthGrid({
 }
 
 function WeekGrid({
-  cursor, itemsByDate, onSelectItem,
+  cursor, itemsByDate, onSelectItem, onCreate,
 }: {
   cursor: Date;
   itemsByDate: Map<string, CalendarItem[]>;
   onSelectItem: (i: CalendarItem) => void;
+  onCreate?: (dateISO: string) => void;
 }) {
   const ws = startOfWeek(cursor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
@@ -252,7 +275,19 @@ function WeekGrid({
           <Card key={dIso} className={cn("border-border bg-card p-2", isToday && "ring-1 ring-primary/60")}>
             <div className="mb-2 flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{WEEKDAY_LABELS[d.getDay()]}</span>
-              <span className={cn("text-sm font-bold", isToday && "text-primary")}>{d.getDate()}</span>
+              <span className="flex items-center gap-1">
+                <span className={cn("text-sm font-bold", isToday && "text-primary")}>{d.getDate()}</span>
+                {onCreate && (
+                  <button
+                    type="button"
+                    aria-label={`Book on ${d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`}
+                    onClick={() => onCreate(dIso)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-primary/15 hover:text-primary"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                )}
+              </span>
             </div>
             {dayItems.length === 0 ? (
               <div className="rounded border border-dashed border-border p-2 text-center text-[10px] text-muted-foreground">—</div>
@@ -265,7 +300,7 @@ function WeekGrid({
                       onClick={() => onSelectItem(it)}
                       className={cn("w-full truncate rounded px-2 py-1 text-left text-[11px] border", KIND_META[it.kind].chip)}
                     >
-                      {fmtTime(it.startsAt)} {fmtTime(it.startsAt) ? "· " : ""}{it.title}
+                      {fmtTime(it.startsAt)} {fmtTime(it.startsAt) ? "· " : ""}{showNameFirst(it)}
                     </button>
                   </li>
                 ))}
@@ -279,28 +314,47 @@ function WeekGrid({
 }
 
 function DayList({
-  date, items, onSelectItem, showClientName, emptyHint,
+  date, items, onSelectItem, showClientName, emptyHint, onCreate,
 }: {
   date: Date;
   items: CalendarItem[];
   onSelectItem: (i: CalendarItem) => void;
   showClientName?: boolean;
   emptyHint?: string;
+  onCreate?: (dateISO: string) => void;
 }) {
+  const dayName = date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const bookButton = onCreate ? (
+    <Button variant="outline" className="h-11 w-full border-dashed" onClick={() => onCreate(isoDate(date))}>
+      <Plus className="mr-2 h-4 w-4" /> Book on {dayName}
+    </Button>
+  ) : null;
   if (items.length === 0) {
     return (
-      <Card className="border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-        <CalIcon className="mx-auto mb-2 h-5 w-5" />
-        Nothing scheduled for {date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}.
-        {emptyHint && <div className="mt-1 text-xs">{emptyHint}</div>}
-      </Card>
+      <div className="space-y-2">
+        <Card className="border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+          <CalIcon className="mx-auto mb-2 h-5 w-5" />
+          Nothing scheduled for {dayName}.
+          {emptyHint && !onCreate && <div className="mt-1 text-xs">{emptyHint}</div>}
+        </Card>
+        {bookButton}
+      </div>
     );
   }
+  const sorted = [...items].sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
   return (
-    <ul className="space-y-2">
-      {items.map((it) => <ItemRow key={it.id} item={it} onClick={() => onSelectItem(it)} showClientName={showClientName} />)}
-    </ul>
+    <div className="space-y-2">
+      <ul className="space-y-2">
+        {sorted.map((it) => <ItemRow key={it.id} item={it} onClick={() => onSelectItem(it)} showClientName={showClientName} />)}
+      </ul>
+      {bookButton}
+    </div>
   );
+}
+
+/** Week chips are tiny: lead with the client's name when there is one. */
+function showNameFirst(it: CalendarItem): string {
+  return it.kind === "pt_session" && it.clientName ? `${it.clientName.split(" ")[0]} · ${it.title}` : it.title;
 }
 
 function UpcomingList({
@@ -374,11 +428,12 @@ function ItemRow({ item, onClick, showClientName }: { item: CalendarItem; onClic
 }
 
 function EventDetailSheet({
-  item, onClose, showClientName,
+  item, onClose, showClientName, renderItemActions,
 }: {
   item: CalendarItem | null;
   onClose: () => void;
   showClientName?: boolean;
+  renderItemActions?: (item: CalendarItem, close: () => void) => React.ReactNode;
 }) {
   const open = !!item;
   return (
@@ -419,6 +474,7 @@ function EventDetailSheet({
                   </Button>
                 </a>
               )}
+              {renderItemActions?.(item, onClose)}
               {item.href && (
                 <Link
                   to={item.href.to as any}

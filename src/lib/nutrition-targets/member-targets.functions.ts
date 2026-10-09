@@ -9,6 +9,7 @@ import {
   type FormulaSettings,
   type FormulaInput,
 } from "./formula";
+import { assertAdminView } from "@/lib/permissions.server";
 
 const inputSchema = z.object({
   bodyweightKg: z.number().positive(),
@@ -120,7 +121,8 @@ export const getCoachAssignedMealPlan = createServerFn({ method: "GET" })
     z.object({ viewAsUserId: z.string().uuid().optional() }).parse(d ?? {}),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    let { supabase } = context as any;
+    const { userId } = context;
     // Resolve which client we are reading for. Admin/coach can pass
     // viewAsUserId to read as that client (POV mode); regular members read
     // their own data.
@@ -130,7 +132,10 @@ export const getCoachAssignedMealPlan = createServerFn({ method: "GET" })
         supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
         supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
       ]);
-      if (!isAdmin && !isCoach) throw new Error("Forbidden");
+      if (!isAdmin && !isCoach) {
+        // A view-only login (finance) reads what the admin would.
+        supabase = (await assertAdminView(context as any).catch(() => { throw new Error("Forbidden"); })).db;
+      }
       effectiveUserId = data.viewAsUserId;
     }
     const { data: client } = await supabase

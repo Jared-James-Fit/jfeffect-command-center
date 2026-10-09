@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 /**
  * Admin archive / restore / safe-delete for the exercise library.
@@ -56,7 +57,7 @@ export const getExerciseReferenceCounts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => IdInput.parse(data))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context as any);
+    await assertAdminView(context as any);
     const counts = await countReferences(data.exerciseId);
     const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
     return { counts, total, safeToDelete: total === 0 };

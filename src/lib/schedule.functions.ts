@@ -1,0 +1,296 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { wallTimeToUtc } from "@/lib/schedule-time";
+import { findConflicts, type BusyItem, type SlotConflict } from "@/lib/session-conflicts";
+
+/**
+ * Server functions behind the one Schedule (client) and the calendar quick
+ * actions (coach): double-booking checks, Google sync kicks, client change
+ * requests, last-minute change texts, and the client's calendar feed link.
+ */
+
+type Staff = { isAdmin: boolean; coachId: string | null };
+
+async function requireStaff(supabase: any, userId: string): Promise<Staff> {
+  const [{ data: roles }, { data: coach }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", userId),
+    supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle(),
+  ]);
+  const set = new Set(((roles ?? []) as any[]).map((r) => r.role));
+  if (set.has("admin")) return { isAdmin: true, coachId: coach?.id ?? null };
+  if (set.has("coach")) return { isAdmin: false, coachId: coach?.id ?? null };
+  throw new Error("Only coaches can manage the schedule.");
+}
+
+// ---- Double-booking check ----------------------------------------------------
+
+const ConflictInput = z.object({
+  timezone: z.string().min(1).max(64),
+  slots: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(64),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        start: z.string().regex(/^\d{2}:\d{2}/),
+        end: z.string().regex(/^\d{2}:\d{2}/),
+      }),
+    )
+    .min(1)
+    .max(60),
+  excludeSessionIds: z.array(z.string().uuid()).max(60).optional(),
+});
+
+export type ConflictCheckResult = {
+  conflicts: SlotConflict[];
+  /** False when Google couldn't be checked (not connected or unreachable). */
+  googleChecked: boolean;
+};
+
+export const checkSessionConflicts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ConflictInput.parse(d))
+  .handler(async ({ data, context }): Promise<ConflictCheckResult> => {
+    const { supabase, userId } = context as any;
+    const staff = await requireStaff(supabase, userId);
+
+    const slots = data.slots
+      .map((s) => ({
+        key: s.key,
+        start: wallTimeToUtc(s.date, s.start.slice(0, 5), data.timezone).getTime(),
+        end: wallTimeToUtc(s.date, s.end.slice(0, 5), data.timezone).getTime(),
+      }))
+      .filter((s) => s.end > s.start);
+    if (!slots.length) return { conflicts: [], googleChecked: true };
+    const minISO = new Date(Math.min(...slots.map((s) => s.start))).toISOString();
+    const maxISO = new Date(Math.max(...slots.map((s) => s.end))).toISOString();
+    const exclude = new Set(data.excludeSessionIds ?? []);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { listGoogleBusy } = await import("@/lib/pt-session-gcal.server");
+    const [ptRes, apptRes, google] = await Promise.all([
+      // One trainer's floor: every scheduled session counts, whoever the client is.
+      supabaseAdmin
+        .from("pt_sessions")
+        .select("id, title, starts_at, ends_at, client:clients(full_name, assigned_coach_id)")
+        .eq("status", "Scheduled")
+        .lt("starts_at", maxISO)
+        .gt("ends_at", minISO),
+      supabaseAdmin
+        .from("appointments")
+        .select("id, title, appointment_type, starts_at, ends_at, external_name, client:clients(full_name)")
+        .eq("status", "Scheduled")
+        .lt("starts_at", maxISO)
+        .gt("ends_at", minISO),
+      listGoogleBusy(staff.coachId, minISO, maxISO),
+    ]);
+
+    const busy: BusyItem[] = [];
+    for (const p of (ptRes.data ?? []) as any[]) {
+      if (exclude.has(p.id)) continue;
+      const mine = staff.isAdmin || (staff.coachId && p.client?.assigned_coach_id === staff.coachId);
+      busy.push({
+        source: "app",
+        id: p.id,
+        title: mine ? `${p.client?.full_name ?? "Client"} · ${p.title || "Session"}` : "Another session",
+        start: new Date(p.starts_at).getTime(),
+        end: new Date(p.ends_at).getTime(),
+      });
+    }
+    for (const a of (apptRes.data ?? []) as any[]) {
+      busy.push({
+        source: "app",
+        id: a.id,
+        title: `${a.client?.full_name ?? a.external_name ?? "Call"} · ${a.title || a.appointment_type || "Appointment"}`,
+        start: new Date(a.starts_at).getTime(),
+        end: new Date(a.ends_at).getTime(),
+      });
+    }
+    busy.push(...google.items);
+    return { conflicts: findConflicts(slots, busy), googleChecked: google.checked };
+  });
+
+// ---- Google sync -------------------------------------------------------------
+
+/** Push just-saved sessions to Google now instead of waiting for the 5-minute tick. */
+export const kickScheduleSync = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    await requireStaff(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { syncPtSessionsToGoogle } = await import("@/lib/pt-session-gcal.server");
+    return await syncPtSessionsToGoogle(supabaseAdmin as any, 16);
+  });
+
+/** Sync health for the Google Calendar settings card. */
+export const getScheduleSyncStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    await requireStaff(supabase, userId);
+    const { supabaseAdmin: typedAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = typedAdmin as any; // generated types predate the sync columns
+    const nowISO = new Date().toISOString();
+    const [synced, waiting, failing, last] = await Promise.all([
+      supabaseAdmin.from("pt_sessions").select("id", { count: "exact", head: true }).not("google_event_id", "is", null).gt("ends_at", nowISO),
+      supabaseAdmin.from("pt_sessions").select("id", { count: "exact", head: true }).eq("gcal_dirty", true).lt("gcal_attempts", 5),
+      supabaseAdmin.from("pt_sessions").select("id, gcal_error").eq("gcal_dirty", true).gte("gcal_attempts", 5).limit(5),
+      supabaseAdmin.from("pt_sessions").select("gcal_synced_at").not("gcal_synced_at", "is", null).order("gcal_synced_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    return {
+      upcomingSynced: synced.count ?? 0,
+      waiting: waiting.count ?? 0,
+      failing: ((failing.data ?? []) as any[]).map((r) => r.gcal_error as string | null),
+      lastSyncedAt: ((last.data as any)?.gcal_synced_at as string | null) ?? null,
+    };
+  });
+
+/** Retry sessions that stopped syncing after repeated errors. */
+export const retryFailedScheduleSync = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    await requireStaff(supabase, userId);
+    const { supabaseAdmin: typedAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = typedAdmin as any; // generated types predate the sync columns
+    await supabaseAdmin.from("pt_sessions").update({ gcal_attempts: 0 }).eq("gcal_dirty", true).gte("gcal_attempts", 5);
+    const { syncPtSessionsToGoogle } = await import("@/lib/pt-session-gcal.server");
+    return await syncPtSessionsToGoogle(supabaseAdmin as any, 16);
+  });
+
+// ---- Last-minute change text -------------------------------------------------
+
+export const textClientSessionChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        sessionId: z.string().uuid(),
+        kind: z.enum(["moved", "cancelled"]),
+        previousStartsAt: z.string().datetime({ offset: true }).nullish(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await requireStaff(supabase, userId);
+    // RLS: the caller must be able to see this session (admin, or its client's coach).
+    const { data: visible } = await supabase.from("pt_sessions").select("id").eq("id", data.sessionId).maybeSingle();
+    if (!visible) throw new Error("Session not found or not permitted.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { textSessionChange } = await import("@/lib/pt-session-reminders.server");
+    return await textSessionChange(supabaseAdmin as any, data.sessionId, data.kind, new Date(), data.previousStartsAt ?? null);
+  });
+
+// ---- Client change requests --------------------------------------------------
+
+async function myClientId(supabase: any, userId: string): Promise<string> {
+  const { data } = await supabase.from("clients").select("id").eq("user_id", userId).maybeSingle();
+  if (!data?.id) throw new Error("Only clients can request schedule changes.");
+  return data.id as string;
+}
+
+export const requestSessionChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        sessionId: z.string().uuid(),
+        kind: z.enum(["move", "cancel"]),
+        preferredTimes: z.string().trim().max(300).optional(),
+        note: z.string().trim().max(1000).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const clientId = await myClientId(supabase, userId);
+    // RLS returns only this client's own, visible sessions.
+    const { data: s } = await supabase
+      .from("pt_sessions")
+      .select("id, client_id, status, starts_at")
+      .eq("id", data.sessionId)
+      .maybeSingle();
+    if (!s || s.client_id !== clientId) throw new Error("Session not found.");
+    if (s.status !== "Scheduled") throw new Error("This session can't be changed anymore.");
+    if (new Date(s.starts_at).getTime() <= Date.now()) throw new Error("This session has already started.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: existing } = await supabaseAdmin
+      .from("pt_session_change_requests" as any)
+      .select("id")
+      .eq("pt_session_id", s.id)
+      .eq("status", "pending")
+      .maybeSingle();
+    if (existing) return { requestId: (existing as any).id as string, alreadyPending: true };
+
+    const { data: created, error } = await supabaseAdmin
+      .from("pt_session_change_requests" as any)
+      .insert({
+        pt_session_id: s.id,
+        client_id: clientId,
+        kind: data.kind,
+        preferred_times: data.preferredTimes || null,
+        note: data.note || null,
+        requested_by: userId,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { requestId: (created as any).id as string, alreadyPending: false };
+  });
+
+export const withdrawSessionChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ requestId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const clientId = await myClientId(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: updated, error } = await supabaseAdmin
+      .from("pt_session_change_requests" as any)
+      .update({ status: "withdrawn", resolved_at: new Date().toISOString(), resolved_by: userId, resolution: "withdrawn" })
+      .eq("id", data.requestId)
+      .eq("client_id", clientId)
+      .eq("status", "pending")
+      .select("id");
+    if (error) throw new Error(error.message);
+    return { ok: !!updated?.length };
+  });
+
+// ---- Client calendar feed ----------------------------------------------------
+
+function feedUrls(token: string) {
+  const origin = (process.env.PUBLIC_APP_URL || process.env.SITE_URL || "https://jfeffect.com").replace(/\/$/, "");
+  const https = `${origin}/api/public/calendar-feed?t=${token}`;
+  const webcal = https.replace(/^https?:\/\//, "webcal://");
+  return {
+    httpsUrl: https,
+    webcalUrl: webcal,
+    googleUrl: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
+  };
+}
+
+function newToken(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export const getMyCalendarFeed = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ reset: z.boolean().optional() }).parse(d ?? {}))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const clientId = await myClientId(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: c } = await supabaseAdmin.from("clients").select("calendar_feed_token").eq("id", clientId).maybeSingle();
+    let token = (c as any)?.calendar_feed_token as string | null;
+    if (!token || data.reset) {
+      token = newToken();
+      const { error } = await supabaseAdmin.from("clients").update({ calendar_feed_token: token } as any).eq("id", clientId);
+      if (error) throw new Error(error.message);
+    }
+    return feedUrls(token);
+  });

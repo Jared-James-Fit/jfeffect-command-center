@@ -11,6 +11,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveMembershipLaunchGate } from "@/lib/membership-launch-gate.functions";
 import { getStripeKeyDiagnostics } from "@/lib/stripe.server";
+import { assertAdminView } from "@/lib/permissions.server";
 
 export type ReadinessState = "ready" | "warning" | "blocked" | "manual";
 
@@ -459,7 +460,7 @@ export const adminListBillingEvents = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { limit?: number; type?: string }) => d ?? {})
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin
       .from("jf_billing_events")
@@ -517,7 +518,7 @@ export const adminListNotificationAttempts = createServerFn({ method: "GET" })
 export const adminListGraceCohort = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("app_members")

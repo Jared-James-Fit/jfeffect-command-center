@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 const PageKey = z.enum(["join", "coaching"]);
 
@@ -47,7 +48,7 @@ export const getSalesPageAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: { page_key: "join" | "coaching" }) => z.object({ page_key: PageKey }).parse(i))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("sales_pages").select("*").eq("page_key", data.page_key).maybeSingle();

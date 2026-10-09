@@ -25,6 +25,7 @@ import {
   invoiceIdByPaymentRef,
   invoicePaymentRecordId,
 } from "@/lib/stripe-invoice-refs";
+import { assertAdminView } from "@/lib/permissions.server";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -867,8 +868,8 @@ export const listStripeAccountTransactions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => StripeAccountInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
 
     const apiKey = getStripeKeyForMode(data.mode as StripeMode);
     if (!apiKey) {
