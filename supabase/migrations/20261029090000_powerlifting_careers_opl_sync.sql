@@ -136,7 +136,6 @@ begin
       case when nullif(r->>'Best3SquatKg', '')::numeric > 0 then (r->>'Best3SquatKg')::numeric end sq,
       case when nullif(r->>'Best3BenchKg', '')::numeric > 0 then (r->>'Best3BenchKg')::numeric end bp,
       case when nullif(r->>'Best3DeadliftKg', '')::numeric > 0 then (r->>'Best3DeadliftKg')::numeric end dl,
-      case when nullif(r->>'TotalKg', '')::numeric > 0 then (r->>'TotalKg')::numeric end tot,
       nullif(r->>'Goodlift', '')::numeric gl,
       nullif(r->>'Dots', '')::numeric dots,
       nullif(r->>'Place', '') place,
@@ -165,20 +164,21 @@ begin
     order by (x.source_key = 'opl:' || _slug || ':' || e.d || ':' || e.ev) desc nulls last, x.created_at
     limit 1;
 
+    -- total_kg is generated (squat + bench + deadlift), so it's never written.
     -- A result needs a bodyweight; OpenPowerlifting very rarely lacks one,
     -- and that meet alone is left out rather than failing the athlete's sync.
-    if existing is null and e.bw is null then
+    if existing is null and coalesce(e.bw, 0) <= 0 then
       continue;
     elsif existing is null then
       insert into public.athlete_powerlifting_results (
         athlete_id, client_id, athlete_name, sex, bodyweight_kg, weight_class_kg,
-        squat_kg, bench_kg, deadlift_kg, total_kg, gl_points, dots_points,
+        squat_kg, bench_kg, deadlift_kg, gl_points, dots_points,
         meet_name, meet_location, meet_town, meet_date, federation, parent_federation,
         competition_level, place, division, equipment, event, tested, sanctioned, attempts,
         source, source_key)
       values (
         _athlete, a.client_id, coalesce(e.entered_name, a.athlete_name), coalesce(e.sex, a.sex), e.bw, e.wc,
-        coalesce(e.sq, 0), coalesce(e.bp, 0), coalesce(e.dl, 0), e.tot, e.gl, e.dots,
+        coalesce(e.sq, 0), coalesce(e.bp, 0), coalesce(e.dl, 0), e.gl, e.dots,
         e.meet_name, e.location, e.town, e.d, e.federation, e.parent,
         public.powerlifting_meet_level(e.meet_name, e.federation), e.place, e.division, e.equipment, e.ev,
         e.tested, e.sanctioned, e.attempts,
@@ -205,7 +205,6 @@ begin
         squat_kg = case when coalesce(x.squat_kg, 0) > 0 then x.squat_kg else coalesce(e.sq, x.squat_kg, 0) end,
         bench_kg = case when coalesce(x.bench_kg, 0) > 0 then x.bench_kg else coalesce(e.bp, x.bench_kg, 0) end,
         deadlift_kg = case when coalesce(x.deadlift_kg, 0) > 0 then x.deadlift_kg else coalesce(e.dl, x.deadlift_kg, 0) end,
-        total_kg = case when coalesce(x.total_kg, 0) > 0 then x.total_kg else e.tot end,
         gl_points = coalesce(x.gl_points, e.gl),
         dots_points = coalesce(x.dots_points, e.dots),
         competition_level = public.powerlifting_meet_level(coalesce(nullif(x.meet_name, ''), e.meet_name), coalesce(nullif(x.federation, ''), e.federation)),

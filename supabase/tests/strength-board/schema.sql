@@ -30,7 +30,8 @@ create table powerlifting_athletes (id uuid primary key default gen_random_uuid(
 create table powerlifting_coaching_periods (id uuid primary key default gen_random_uuid(), athlete_id uuid, start_date date, end_date date);
 create table athlete_powerlifting_results (id uuid primary key default gen_random_uuid(), athlete_id uuid, client_id uuid,
   athlete_name text not null, sex text not null, bodyweight_kg numeric not null,
-  squat_kg numeric not null default 0, bench_kg numeric not null default 0, deadlift_kg numeric not null default 0, total_kg numeric,
+  squat_kg numeric not null default 0, bench_kg numeric not null default 0, deadlift_kg numeric not null default 0,
+  total_kg numeric generated always as (squat_kg + bench_kg + deadlift_kg) stored,
   gl_points numeric, meet_name text, meet_location text, meet_date date, federation text, weight_class_kg text,
   dots_points numeric, competition_level text, source text not null default 'manual', source_key text, created_at timestamptz default now());
 
