@@ -6,6 +6,7 @@ import { isCrewUnread, useCrewThreads } from "@/lib/crew-chats";
 import { useCommunityActivity } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
 import { useAdminNavBadgeCounts, adminBadgeMap } from "@/hooks/use-admin-nav-badges";
+import { messagesBadgeCount, unreadGroupCount } from "@/lib/nav-badge-counts";
 
 export type NavBadge = { count?: number; dot?: boolean };
 
@@ -39,7 +40,8 @@ export function markNavSeen(userId: string | undefined, route: string) {
 /**
  * Returns badge state per portal route. Only fetches data for clients.
  * Badge rules (kept minimal to avoid notification overload):
- *  - /portal/messages       — unread coach messages (count) + lift-review feedback (dot)
+ *  - /portal/messages       — one count: unread coach messages + lift-video feedback
+ *                             + member 1:1s + crews + coach groups (never a bare dot)
  *  - /portal/program        — program/phase updated since client last opened (dot)
  *  - /portal/nutrition-targets — nutrition targets updated since client last opened (dot)
  *  - /portal/check-in       — coach feedback on check-in media, link updated, or due (dot)
@@ -82,7 +84,25 @@ export function useClientNavBadges(): Record<string, NavBadge> {
         (supabase.from("training_phases") as any).select("updated_at").eq("client_id", client.id).order("updated_at", { ascending: false }).limit(5),
         (supabase.from("media_comments") as any).select("created_at, author_role, is_internal_note").eq("client_id", client.id).eq("author_role", "admin").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(20),
       ]);
-      return { client, msgs, state, vids, vcomments, nut, phases, mediaComments };
+      // Coach group chats (kind "group"); member 1:1s and crews come from their own lists.
+      const { data: memberships } = await (supabase.from("chat_group_members") as any)
+        .select("group_id, last_read_at, chat_groups!inner(kind, archived)")
+        .eq("user_id", user!.id)
+        .eq("chat_groups.kind", "group");
+      const groupMemberships = ((memberships ?? []) as any[])
+        .filter((m) => !m.chat_groups?.archived)
+        .map((m) => ({ group_id: m.group_id as string, last_read_at: (m.last_read_at ?? null) as string | null }));
+      let groupMsgs: any[] = [];
+      if (groupMemberships.length) {
+        const { data: gm } = await (supabase.from("group_messages") as any)
+          .select("group_id, sender_id, created_at")
+          .in("group_id", groupMemberships.map((m) => m.group_id))
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(200);
+        groupMsgs = (gm ?? []) as any[];
+      }
+      return { client, msgs, state, vids, vcomments, nut, phases, mediaComments, groupMemberships, groupMsgs };
     },
   });
 
@@ -106,6 +126,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
       .on("postgres_changes", { ...scoped, table: "media_comments" }, invalidateBadges)
       .on("postgres_changes", { ...scoped, table: "nutrition_targets" }, invalidateBadges)
       .on("postgres_changes", { ...scoped, table: "training_phases" }, invalidateBadges)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members", filter: `user_id=eq.${user.id}` }, invalidateBadges)
       .subscribe();
     return () => {
       if (invalidationTimer) clearTimeout(invalidationTimer);
@@ -134,30 +155,31 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   const lastRead = data.state?.client_last_read_at ? new Date(data.state.client_last_read_at).getTime() : 0;
   const unread = (data.msgs ?? []).filter((m: any) => new Date(m.created_at).getTime() > lastRead).length;
 
-  // Lift videos: coach feedback / comments newer than client_last_viewed_at
-  let liftDot = false;
+  // Lift videos: one per video with coach feedback / comments the client hasn't seen
+  const liftWithFeedback = new Set<string>();
   for (const v of (data.vids ?? []) as any[]) {
     const seen = v.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
-    if (v.watched_at && new Date(v.watched_at).getTime() > seen) { liftDot = true; break; }
-    if (v.liked_at && new Date(v.liked_at).getTime() > seen) { liftDot = true; break; }
-    if (v.reviewed_at && new Date(v.reviewed_at).getTime() > seen) { liftDot = true; break; }
-    if (v.status === "Needs Follow-Up" && new Date(v.updated_at).getTime() > seen) { liftDot = true; break; }
+    const newer = (t: string | null | undefined) => !!t && new Date(t).getTime() > seen;
+    if (newer(v.watched_at) || newer(v.liked_at) || newer(v.reviewed_at) || (v.status === "Needs Follow-Up" && newer(v.updated_at))) {
+      liftWithFeedback.add(v.id);
+    }
   }
-  if (!liftDot) {
+  {
     const vidMap = new Map<string, any>((data.vids ?? []).map((v: any) => [v.id, v]));
     for (const c of (data.vcomments ?? []) as any[]) {
       const v = vidMap.get(c.video_id);
       const seen = v?.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
-      if (new Date(c.created_at).getTime() > seen) { liftDot = true; break; }
+      if (new Date(c.created_at).getTime() > seen) liftWithFeedback.add(c.video_id);
     }
   }
-  const directDot = (directs ?? []).some((t) => isUnread(t, user?.id)) || (crews ?? []).some((t) => isCrewUnread(t, user?.id));
-  if (unread > 0 || liftDot || directDot) {
-    result["/portal/messages"] = {
-      ...(unread > 0 ? { count: unread } : {}),
-      ...(liftDot || directDot ? { dot: true } : {}),
-    };
-  }
+  const messagesCount = messagesBadgeCount({
+    coachMessages: unread,
+    liftFeedback: liftWithFeedback.size,
+    directThreads: (directs ?? []).filter((t) => isUnread(t, user?.id)).length,
+    crewThreads: (crews ?? []).filter((t) => isCrewUnread(t, user?.id)).length,
+    groupThreads: user ? unreadGroupCount(data.groupMemberships ?? [], data.groupMsgs ?? [], user.id) : 0,
+  });
+  if (messagesCount > 0) result["/portal/messages"] = { count: messagesCount };
 
   // Program/phase updates now surface on the Workouts tab
   const programSeen = getLastSeen(user?.id, "/portal/workouts");
