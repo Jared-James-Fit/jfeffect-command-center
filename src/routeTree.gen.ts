@@ -175,6 +175,8 @@ import { Route as AuthenticatedAdminCrmIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminEventsIndexRouteImport } from './routes/_authenticated/admin/events.index'
 import { Route as AuthenticatedAdminEventsIdRouteImport } from './routes/_authenticated/admin/events.$id'
 import { Route as AuthenticatedAdminEventsFormatGuideRouteImport } from './routes/_authenticated/admin/events.format-guide'
+import { Route as AuthenticatedAdminFinanceBooksRouteImport } from './routes/_authenticated/admin/finance_.books'
+import { Route as AuthenticatedAdminFinancePaymentsRouteImport } from './routes/_authenticated/admin/finance_.payments'
 import { Route as AuthenticatedAdminMemberPlansIndexRouteImport } from './routes/_authenticated/admin/member-plans.index'
 import { Route as AuthenticatedAdminMemberPlansPlanIdRouteImport } from './routes/_authenticated/admin/member-plans.$planId'
 import { Route as AuthenticatedAdminMemberPlansNewRouteImport } from './routes/_authenticated/admin/member-plans.new'
@@ -1202,6 +1204,18 @@ const AuthenticatedAdminEventsFormatGuideRoute =
     path: '/events/format-guide',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminFinanceBooksRoute =
+  AuthenticatedAdminFinanceBooksRouteImport.update({
+    id: '/finance_/books',
+    path: '/finance/books',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminFinancePaymentsRoute =
+  AuthenticatedAdminFinancePaymentsRouteImport.update({
+    id: '/finance_/payments',
+    path: '/finance/payments',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminMemberPlansIndexRoute =
   AuthenticatedAdminMemberPlansIndexRouteImport.update({
     id: '/member-plans/',
@@ -1926,6 +1940,8 @@ export interface FileRoutesByFullPath {
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
   '/admin/events/format-guide': typeof AuthenticatedAdminEventsFormatGuideRoute
+  '/admin/finance/books': typeof AuthenticatedAdminFinanceBooksRoute
+  '/admin/finance/payments': typeof AuthenticatedAdminFinancePaymentsRoute
   '/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
@@ -2183,6 +2199,8 @@ export interface FileRoutesByTo {
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
   '/admin/events/format-guide': typeof AuthenticatedAdminEventsFormatGuideRoute
+  '/admin/finance/books': typeof AuthenticatedAdminFinanceBooksRoute
+  '/admin/finance/payments': typeof AuthenticatedAdminFinancePaymentsRoute
   '/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
   '/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
@@ -2446,6 +2464,8 @@ export interface FileRoutesById {
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
   '/_authenticated/admin/events/$id': typeof AuthenticatedAdminEventsIdRoute
   '/_authenticated/admin/events/format-guide': typeof AuthenticatedAdminEventsFormatGuideRoute
+  '/_authenticated/admin/finance_/books': typeof AuthenticatedAdminFinanceBooksRoute
+  '/_authenticated/admin/finance_/payments': typeof AuthenticatedAdminFinancePaymentsRoute
   '/_authenticated/admin/member-plans/$planId': typeof AuthenticatedAdminMemberPlansPlanIdRoute
   '/_authenticated/admin/member-plans/new': typeof AuthenticatedAdminMemberPlansNewRoute
   '/_authenticated/admin/members/$memberId': typeof AuthenticatedAdminMembersMemberIdRoute
@@ -2709,6 +2729,8 @@ export interface FileRouteTypes {
     | '/admin/coaches/$id'
     | '/admin/events/$id'
     | '/admin/events/format-guide'
+    | '/admin/finance/books'
+    | '/admin/finance/payments'
     | '/admin/member-plans/$planId'
     | '/admin/member-plans/new'
     | '/admin/members/$memberId'
@@ -2966,6 +2988,8 @@ export interface FileRouteTypes {
     | '/admin/coaches/$id'
     | '/admin/events/$id'
     | '/admin/events/format-guide'
+    | '/admin/finance/books'
+    | '/admin/finance/payments'
     | '/admin/member-plans/$planId'
     | '/admin/member-plans/new'
     | '/admin/members/$memberId'
@@ -3228,6 +3252,8 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/coaches/$id'
     | '/_authenticated/admin/events/$id'
     | '/_authenticated/admin/events/format-guide'
+    | '/_authenticated/admin/finance_/books'
+    | '/_authenticated/admin/finance_/payments'
     | '/_authenticated/admin/member-plans/$planId'
     | '/_authenticated/admin/member-plans/new'
     | '/_authenticated/admin/members/$memberId'
@@ -4559,6 +4585,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminEventsFormatGuideRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/finance_/books': {
+      id: '/_authenticated/admin/finance_/books'
+      path: '/finance/books'
+      fullPath: '/admin/finance/books'
+      preLoaderRoute: typeof AuthenticatedAdminFinanceBooksRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/finance_/payments': {
+      id: '/_authenticated/admin/finance_/payments'
+      path: '/finance/payments'
+      fullPath: '/admin/finance/payments'
+      preLoaderRoute: typeof AuthenticatedAdminFinancePaymentsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/member-plans/': {
       id: '/_authenticated/admin/member-plans/'
       path: '/member-plans'
@@ -5460,6 +5500,8 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCoachesIdRoute: typeof AuthenticatedAdminCoachesIdRoute
   AuthenticatedAdminEventsIdRoute: typeof AuthenticatedAdminEventsIdRoute
   AuthenticatedAdminEventsFormatGuideRoute: typeof AuthenticatedAdminEventsFormatGuideRoute
+  AuthenticatedAdminFinanceBooksRoute: typeof AuthenticatedAdminFinanceBooksRoute
+  AuthenticatedAdminFinancePaymentsRoute: typeof AuthenticatedAdminFinancePaymentsRoute
   AuthenticatedAdminMemberPlansPlanIdRoute: typeof AuthenticatedAdminMemberPlansPlanIdRoute
   AuthenticatedAdminMemberPlansNewRoute: typeof AuthenticatedAdminMemberPlansNewRoute
   AuthenticatedAdminMembersMemberIdRoute: typeof AuthenticatedAdminMembersMemberIdRoute
@@ -5599,6 +5641,9 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminEventsIdRoute: AuthenticatedAdminEventsIdRoute,
     AuthenticatedAdminEventsFormatGuideRoute:
       AuthenticatedAdminEventsFormatGuideRoute,
+    AuthenticatedAdminFinanceBooksRoute: AuthenticatedAdminFinanceBooksRoute,
+    AuthenticatedAdminFinancePaymentsRoute:
+      AuthenticatedAdminFinancePaymentsRoute,
     AuthenticatedAdminMemberPlansPlanIdRoute:
       AuthenticatedAdminMemberPlansPlanIdRoute,
     AuthenticatedAdminMemberPlansNewRoute:
