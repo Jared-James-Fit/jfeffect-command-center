@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { ChevronDown, Dumbbell, Zap } from "lucide-react";
+import { Dumbbell, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkoutMealInfo } from "@/components/nutrition/WorkoutMealInfo";
 import {
@@ -13,18 +12,13 @@ import {
 type Props = {
   text?: string | null;
   className?: string;
-  /**
-   * Client-facing scanability option: keep Meal 1 expanded and collapse the
-   * later meals. Purely presentational — the coach-authored text is unchanged.
-   */
-  collapsibleMeals?: boolean;
 };
 
 // Parses pasted meal plan text into structured sections so each meal renders
 // as ONE compact card with its ingredients and an inline "Approx" macro row,
 // instead of being fragmented into multiple cards per blank line.
-const MEAL_HEADING = /^\s*(meal\s*\d+|pre[- ]?workout|post[- ]?workout|intra[- ]?workout|snack\s*\d*|breakfast|lunch|dinner)\b/i;
-const TOTAL_HEADING = /^\s*(daily\s*total|totals?)\b/i;
+export const MEAL_HEADING = /^\s*(meal\s*\d+|pre[- ]?workout|post[- ]?workout|intra[- ]?workout|snack\s*\d*|breakfast|lunch|dinner)\b/i;
+export const TOTAL_HEADING = /^\s*(daily\s*total|totals?)\b/i;
 const HIGHDAY_HEADING = /^\s*high\s*day\s*(changes?|adjustments?)?\s*$/i;
 const APPROX_LABEL = /^\s*approx[:.]?\s*$/i;
 const APPROX_INLINE = /^\s*approx[:.]\s*(.+)$/i;
@@ -33,7 +27,7 @@ const NATURAL_MACRO = /^\s*~?\s*\d+(?:\.\d+)?\s*g?\s*(protein|carbohydrates?|car
 const MACRO_TOKEN = /^~?\s*\d+(?:\.\d+)?\s*[pcfPCF]\s*$/;
 const MACRO_COMBINED = /^\s*~?\s*\d+\s*[pP]\s*[\/,]\s*~?\s*\d+\s*[cC]\s*[\/,]\s*~?\s*\d+\s*[fF]\b/;
 
-type Section =
+export type MealPlanSection =
   | { kind: "meal"; title: string; subtitle?: string; timing?: MealTiming; items: string[]; approx?: string; approxMacros?: { title: string; items: string[] } }
   | { kind: "total"; title: string; macros?: string }
   | { kind: "highday"; title: string; items: string[] }
@@ -46,10 +40,11 @@ function normalizeMacroLine(s: string) {
   return s.replace(/\s*[\/,]\s*/g, " / ").replace(/\s+/g, " ").trim().toUpperCase();
 }
 
-function parse(text: string): Section[] {
+/** Coach paste text → ordered sections (meals, totals, high-day changes, notes). */
+export function parseMealPlanText(text: string): MealPlanSection[] {
   const lines = text.replace(/\r\n/g, "\n").split("\n").map((l) => l.trim()).filter(Boolean);
-  const sections: Section[] = [];
-  let cur: Section | null = null;
+  const sections: MealPlanSection[] = [];
+  let cur: MealPlanSection | null = null;
   let approxBuf: string[] = [];
   let collectingApprox = false;
   let collectingApproxBlock = false;
@@ -155,8 +150,8 @@ function parse(text: string): Section[] {
     flushApprox();
     if (!cur) { cur = { kind: "other", items: [] }; sections.push(cur); }
     if (cur.kind === "total") {
-      const prev = cur as Extract<Section, { kind: "total" }>;
-      const replaced: Section = { kind: "other", items: [prev.title, ...(prev.macros ? [prev.macros] : []), line] };
+      const prev = cur as Extract<MealPlanSection, { kind: "total" }>;
+      const replaced: MealPlanSection = { kind: "other", items: [prev.title, ...(prev.macros ? [prev.macros] : []), line] };
       cur = replaced;
       sections[sections.length - 1] = cur;
     } else if (cur.kind === "meal" || cur.kind === "highday" || cur.kind === "other") {
@@ -176,19 +171,16 @@ function formatMacroValue(line: string) {
   return line.replace(/\s+/g, " ").trim();
 }
 
-export function MealPlanDisplay({ text, className, collapsibleMeals = false }: Props) {
+export function MealPlanDisplay({ text, className }: Props) {
   if (!text || !text.trim()) return null;
-  const sections = parse(text);
+  const sections = parseMealPlanText(text);
   if (!sections.length) return null;
-
-  let mealIndex = -1;
 
   return (
     <div className={cn("space-y-3 text-sm leading-relaxed", className)}>
       {sections.map((s, i) => {
         if (s.kind === "meal") {
-          mealIndex += 1;
-          const body = (
+          return (
             <div
               key={i}
               className={cn(
@@ -234,18 +226,6 @@ export function MealPlanDisplay({ text, className, collapsibleMeals = false }: P
                 </div>
               )}
             </div>
-          );
-          if (!collapsibleMeals) return body;
-          return (
-            <CollapsibleMeal
-              key={i}
-              title={titleCase(s.title)}
-              subtitle={s.subtitle}
-              timing={s.timing}
-              defaultOpen={mealIndex === 0 || !!s.timing}
-            >
-              {body}
-            </CollapsibleMeal>
           );
         }
         if (s.kind === "total") {
@@ -309,58 +289,5 @@ export function MealTimingBadge({ timing, className }: { timing: Exclude<MealTim
       <Icon className="h-3 w-3" />
       {MEAL_TIMING_LABEL[timing]}
     </span>
-  );
-}
-
-function CollapsibleMeal({
-  title,
-  subtitle,
-  timing,
-  defaultOpen,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  timing?: MealTiming;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(!!defaultOpen);
-  if (open) {
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-expanded
-          className="mb-1 flex w-full items-center justify-between text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
-        >
-          <span>Hide {title}</span>
-          <ChevronDown className="h-3.5 w-3.5 rotate-180" />
-        </button>
-        {children}
-      </div>
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => setOpen(true)}
-      aria-expanded={false}
-      className="flex w-full items-center justify-between rounded-md border border-border bg-secondary/20 px-3 py-2.5 text-left transition hover:border-primary/40"
-    >
-      <span className="min-w-0">
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-[11px] font-black uppercase tracking-widest text-primary">{title}</span>
-          {timing && <MealTimingBadge timing={timing} />}
-        </span>
-        {subtitle && (
-          <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {subtitle}
-          </span>
-        )}
-      </span>
-      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-    </button>
   );
 }

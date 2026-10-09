@@ -16,9 +16,8 @@ import { PageHeader } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Download, FileText, Loader2, Scale, ShieldAlert, Target, Utensils, Droplets } from "lucide-react";
+import { ClipboardList, Download, FileText, Loader2, Scale, ShieldAlert, Target, Utensils } from "lucide-react";
 import { NUTRITION_DISCLAIMER, NUTRITION_DISCLAIMER_TITLE } from "@/lib/nutrition-disclaimer";
-import { MealPlanDisplay } from "@/components/meal-plan-display";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { resolveWorkoutDatesFromItems } from "@/lib/resolved-client-days";
@@ -32,7 +31,8 @@ import {
   resolvePlanDaySelection,
 } from "@/lib/client-nutrition-day";
 import { TodaysPlanHero } from "@/components/nutrition/TodaysPlanHero";
-import { MacroBreakdown } from "@/components/nutrition/MacroBreakdown";
+import { MacroTargetsChart } from "@/components/nutrition/MacroTargetsChart";
+import { MealPlanReader } from "@/components/nutrition/MealPlanReader";
 import { TodaysIntakeCard, LogFoodToolButton } from "@/components/nutrition/TodaysIntakeCard";
 import { CookbookEntryCard } from "@/components/nutrition/CookbookSheet";
 import { NutritionToolsCard, ToolTile } from "@/components/nutrition/NutritionToolsCard";
@@ -229,45 +229,14 @@ function PortalNutrition() {
               </div>
 
               {day ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                    {[
-                      { label: "Calories", value: day.calories },
-                      { label: "Protein", value: day.protein, unit: "g" },
-                      { label: "Carbs", value: day.carbs, unit: "g" },
-                      { label: "Fats", value: day.fats, unit: "g" },
-                      { label: "Fibre", value: day.fibre, unit: "g" },
-                    ].map((m) => (
-                      <div key={m.label} className="rounded-md border border-border bg-secondary/20 px-3 py-2 text-center">
-                        <div className="text-lg font-black leading-none tabular-nums">
-                          {m.value ?? "—"}
-                          {m.value != null && m.unit && (
-                            <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{m.unit}</span>
-                          )}
-                        </div>
-                        <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{m.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {plan.water && (
-                    <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/20 px-3 py-2">
-                      <Droplets className="h-4 w-4 text-primary" />
-                      <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Water</div>
-                      <div className="ml-auto text-sm font-black">{plan.water}</div>
-                    </div>
-                  )}
-
-                  {/* Macro split lives inside Targets. */}
-                  <MacroBreakdown
-                    targets={{
-                      calories: day.calories,
-                      protein: day.protein,
-                      carbs: day.carbs,
-                      fats: day.fats,
-                    }}
-                  />
-                </>
+                <MacroTargetsChart
+                  calories={day.calories}
+                  protein={day.protein}
+                  carbs={day.carbs}
+                  fats={day.fats}
+                  fibre={day.fibre}
+                  water={plan.water ?? null}
+                />
               ) : (
                 <div className="text-xs text-muted-foreground">{missingDayNote ?? "No uploaded meal plan is available yet."}</div>
               )}
@@ -278,7 +247,7 @@ function PortalNutrition() {
         {/* 3. Meal Plan — always the same day as the targets above. */}
         {plan && day && (
           <SectionErrorBoundary label="Meal plan">
-            <Card className="space-y-3 p-4 md:p-5">
+            <Card className="space-y-4 p-4 md:p-5">
               <div className="flex items-center gap-2">
                 <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
                   <Utensils className="h-4 w-4" />
@@ -292,7 +261,7 @@ function PortalNutrition() {
                 </Button>
               </div>
               {day.notes && String(day.notes).trim() ? (
-                <MealPlanDisplay text={day.notes} collapsibleMeals />
+                <MealPlanReader text={String(day.notes)} />
               ) : (
                 <div className="text-xs text-muted-foreground">
                   Your coach hasn't added meal details for this day yet.
