@@ -22,6 +22,10 @@
 --    coach would see none of their clients' check-ins, measurements,
 --    bodyweight or photos. Now is_assigned_coach(c.id).
 --  * user_can_access_progress(): didn't check the coach is still active.
+--  * chat_reports (member DM/crew reports, with the last messages): any coach
+--    read and updated every report. Now admin or the reporter's assigned
+--    coach, who is the coach the report is for (AGENTS.md: reports are the
+--    coach's window into member chats).
 --
 -- Left as is, by design or pending a decision (see the PR):
 --  group chats (team-wide), events, tasks, resources, mass_message_log,
@@ -193,3 +197,21 @@ AS $$
     OR public.has_role(auth.uid(), 'admin')
     OR public.is_assigned_coach_by_user_id(_target_user);
 $$;
+
+-- chat_reports ---------------------------------------------------------------
+DROP POLICY IF EXISTS "chat_reports_staff_read" ON public.chat_reports;
+CREATE POLICY "chat_reports_staff_read" ON public.chat_reports FOR SELECT TO authenticated
+  USING (
+    public.has_role(auth.uid(), 'admin'::app_role)
+    OR (reporter_client_id IS NOT NULL AND public.is_assigned_coach(reporter_client_id))
+  );
+DROP POLICY IF EXISTS "chat_reports_staff_update" ON public.chat_reports;
+CREATE POLICY "chat_reports_staff_update" ON public.chat_reports FOR UPDATE TO authenticated
+  USING (
+    public.has_role(auth.uid(), 'admin'::app_role)
+    OR (reporter_client_id IS NOT NULL AND public.is_assigned_coach(reporter_client_id))
+  )
+  WITH CHECK (
+    public.has_role(auth.uid(), 'admin'::app_role)
+    OR (reporter_client_id IS NOT NULL AND public.is_assigned_coach(reporter_client_id))
+  );
