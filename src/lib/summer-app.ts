@@ -1,5 +1,5 @@
 /**
- * What Summer knows about the rest of the app (beyond the books): clients,
+ * What Cleo knows about the rest of the app (beyond the books): clients,
  * calendar, check-ins waiting, applications, tasks, unread messages, alerts,
  * plus the pages she can link to. Pure: the server loads the rows, this
  * writes them out for the model.
@@ -38,7 +38,7 @@ export const EMPTY_APP_SNAPSHOT: AppSnapshot = {
   clients: [], appointments: [], reviews: [], applications: [], tasks: [], unread: [], alerts: { open: 0, latest: [] },
 };
 
-/** Client profile tabs Summer can deep link to. */
+/** Client profile tabs Cleo can deep link to. */
 export const CLIENT_TABS = ["summary", "training", "nutrition", "metrics", "documents", "sessions", "purchases", "info", "goals-setup", "coaching", "notes", "account"];
 
 /** Pages that are not in the route registry but matter for an assistant. */

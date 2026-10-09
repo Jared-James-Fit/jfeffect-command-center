@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Cake, Check, ChevronRight, MessageCircle, RefreshCcw, X } from "lucide-react";
+import { Cake, Check, ChevronRight, Loader2, MessageCircle, RefreshCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { useBirthdayAct, useBirthdayPosts, type BirthdayAction, type BirthdayPost } from "@/lib/community.queries";
+import {
+  useBirthdayAct, useBirthdayPosts, useBirthdaysNext, useDraftBirthdayNow,
+  type BirthdayAction, type BirthdayNext, type BirthdayPost,
+} from "@/lib/community.queries";
 
 /** "Tomorrow", "Today", "Thu, Oct 9". */
 function dayWord(iso: string, now = new Date()) {
@@ -32,6 +35,14 @@ export function postTimeLine(b: Pick<BirthdayPost, "post_at" | "person">) {
   return theirs ? `${mine} (${theirs} their time)` : mine;
 }
 
+/** "Dec 21 · 74 days" (the card says drafts land at 5pm the day before). */
+function nextLine(n: BirthdayNext) {
+  if (n.days <= 0) return "Today";
+  if (n.days === 1) return "Tomorrow";
+  const d = new Date(`${n.birthday}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${d} · ${n.days} days`;
+}
+
 function statusLine(b: BirthdayPost) {
   const day = dayWord(b.birthday);
   if (b.status === "posted") return "Posted · message sent";
@@ -43,13 +54,18 @@ function statusLine(b: BirthdayPost) {
 /**
  * Coach dashboard: birthday posts. A draft in your voice lands the evening
  * before (with a push); review it here, and once you approve it goes out at
- * 8am on their birthday with a message to them. Hidden when there's none.
+ * 8am on their birthday with a message to them. Between birthdays it shows
+ * who's next and when their draft lands, with "Write it now" to see it early.
  * `#birthday=<client id>` (the push) opens that one straight away.
  */
-export function BirthdayPostsCard() {
+export function BirthdayPostsCard({ actionableOnly = false }: { actionableOnly?: boolean } = {}) {
   const { data } = useBirthdayPosts();
+  const { data: next = [] } = useBirthdaysNext(!actionableOnly);
+  const draftNow = useDraftBirthdayNow();
   const [openId, setOpenId] = useState<string | null>(null);
-  const items = (data ?? []).filter((b) => b.status !== "skipped");
+  // On the dashboard only what needs you shows (a draft to review, or the one a push opened);
+  // everything else lives on Community > Birthdays.
+  const items = (data ?? []).filter((b) => b.status !== "skipped" && (!actionableOnly || b.status === "ready" || b.id === openId));
 
   useEffect(() => {
     if (!data) return;
@@ -60,8 +76,16 @@ export function BirthdayPostsCard() {
     history.replaceState(null, "", window.location.pathname + window.location.search);
   }, [data]);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 && (actionableOnly || next.length === 0)) return null;
   const open = items.find((b) => b.id === openId) ?? null;
+  const writeNow = async (n: BirthdayNext) => {
+    try {
+      const row = await draftNow.mutateAsync(n.client_id);
+      setOpenId(row.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't write it. Try again.");
+    }
+  };
   const waiting = items.filter((b) => b.status === "ready").length;
 
   return (
@@ -73,7 +97,11 @@ export function BirthdayPostsCard() {
         <h2 className="text-[13px] font-bold tracking-tight">Birthday posts</h2>
         {waiting > 0 && <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-primary-foreground">{waiting} to review</span>}
       </div>
-      <p className="mb-2 text-[12px] text-muted-foreground">Written in your voice from their numbers. Nothing goes out until you approve it.</p>
+      {!actionableOnly && (
+        <p className="mb-2 text-[12px] text-muted-foreground">
+          Written in your voice from their numbers. Each draft lands at 5pm the day before, with a notification. Nothing goes out until you approve it.
+        </p>
+      )}
       <div className="divide-y divide-border/70">
         {items.map((b) => (
           <button key={b.id} type="button" onClick={() => setOpenId(b.id)} className="flex w-full items-center gap-3 py-2.5 text-left">
@@ -95,6 +123,34 @@ export function BirthdayPostsCard() {
           </button>
         ))}
       </div>
+      {!actionableOnly && next.length > 0 && (
+        <div className={cn(items.length > 0 && "mt-2 border-t border-border/70 pt-2")}>
+          <div className="pb-1 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Coming up</div>
+          <div className="divide-y divide-border/70">
+            {next.map((n) => {
+              const busy = draftNow.isPending && draftNow.variables === n.client_id;
+              return (
+                <div key={n.client_id} className="flex items-center gap-3 py-2.5">
+                  <UserAvatar src={n.person.avatar_url} name={n.person.full_name || n.person.name} size={38} expandable={false} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-bold">{n.person.full_name || n.person.name}</div>
+                    <div className="truncate text-[12px] text-muted-foreground">{nextLine(n)}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => writeNow(n)}
+                    disabled={draftNow.isPending}
+                    className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] font-bold hover:bg-muted disabled:opacity-60"
+                  >
+                    {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {busy ? "Writing…" : "Write now"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <BirthdayPostSheet post={open} onClose={() => setOpenId(null)} />
     </section>
   );

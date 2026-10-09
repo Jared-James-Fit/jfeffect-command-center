@@ -10,12 +10,13 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { ASSISTANT_NAME, ASSISTANT_SHORT } from "@/lib/business-books";
+import { ASSISTANT_NAME } from "@/lib/business-books";
 import { askSummer, askSummerVoice, clearSummer, getSummerMessages, summerSpeech } from "@/lib/business-books.functions";
 import { summerTone } from "@/lib/summer-persona";
 import { extractLinks, tokenizeInline } from "@/lib/summer-voice-text";
 import { loadVoicePrefs, summerSpeaker, type SummerVoicePrefs } from "@/lib/summer-speaker";
 import { blobToBase64, micSupported, useSummerMic } from "@/hooks/use-summer-mic";
+import { isAudioSessionError } from "@/lib/audio-session";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string };
@@ -39,7 +40,7 @@ const TEAM_STARTERS = [
   "Open the client list.",
 ];
 
-/** Opens an in-app link from Summer: router navigation, query string kept. */
+/** Opens an in-app link from Cleo: router navigation, query string kept. */
 function useOpenLink(onNavigated: () => void) {
   const navigate = useNavigate();
   return useCallback(
@@ -133,7 +134,7 @@ function SummerText({ text, onLink, hideLinkOnlyLines = true }: { text: string; 
 function VoiceOrb({ state, level, onTap }: { state: VoiceState; level: number; onTap: () => void }) {
   const scale = state === "listening" ? 1 + Math.min(0.35, level * 0.6) : 1;
   const label =
-    state === "listening" ? "Listening… tap when you're done" : state === "thinking" ? `${ASSISTANT_SHORT} is thinking…` : state === "speaking" ? "Speaking… tap to cut in" : "";
+    state === "listening" ? "Listening… tap when you're done" : state === "thinking" ? `${ASSISTANT_NAME} is thinking…` : state === "speaking" ? "Speaking… tap to cut in" : "";
   return (
     <button type="button" onClick={onTap} className="flex flex-col items-center gap-3 focus:outline-none" aria-label={label}>
       <span className="relative flex h-24 w-24 items-center justify-center">
@@ -236,7 +237,13 @@ export function SummerChat({
       try {
         take = await micStart();
       } catch (e: any) {
-        toast.error(e?.name === "NotAllowedError" ? "Allow the microphone to talk to Summer." : e?.message ?? "Couldn't use the microphone");
+        toast.error(
+          e?.name === "NotAllowedError"
+            ? "Allow the microphone to talk to Cleo."
+            : isAudioSessionError(e)
+              ? "Your phone's audio is busy (music or a call?). Pause it and tap the mic again."
+              : e?.message ?? "Couldn't use the microphone",
+        );
         endCall();
         return;
       }
@@ -252,7 +259,7 @@ export function SummerChat({
       try {
         res = await askVoice({ data: { audio: await blobToBase64(take.blob), mime: take.mime, year, route } });
       } catch (e: any) {
-        toast.error(e?.message ?? `${ASSISTANT_SHORT} couldn't answer that`);
+        toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
         endCall();
         return;
       }
@@ -278,7 +285,7 @@ export function SummerChat({
 
   const startTalking = (call: boolean) => {
     if (!canTalk) {
-      toast.error("Voice isn't supported in this browser. Type to Summer instead.");
+      toast.error("Voice isn't supported in this browser. Type to Cleo instead.");
       return;
     }
     speaker.unlock(); // this tap is what lets her reply play by itself
@@ -288,7 +295,7 @@ export function SummerChat({
     void talk();
   };
 
-  // Long-press on the Summer button: open straight into a call.
+  // Long-press on the Cleo button: open straight into a call.
   useEffect(() => {
     if (open && startCall && voiceState === "idle") {
       onCallStarted?.();
@@ -319,7 +326,7 @@ export function SummerChat({
       append([res.user, res.assistant]);
     } catch (e: any) {
       setDraft(message);
-      toast.error(e?.message ?? `${ASSISTANT_SHORT} couldn't answer that`);
+      toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
     } finally {
       setPending(null);
     }
@@ -366,9 +373,7 @@ export function SummerChat({
               </div>
               <div className="min-w-0">
                 <SheetTitle className="text-base">{ASSISTANT_NAME}</SheetTitle>
-                <SheetDescription className="text-xs">
-                  {tone.value === "girly_pop" ? "Your assistant bestie" : "Your assistant"} · she/her
-                </SheetDescription>
+                <SheetDescription className="sr-only">Chat with {ASSISTANT_NAME}</SheetDescription>
               </div>
             </div>
             <div className="flex shrink-0 items-center">
@@ -378,13 +383,13 @@ export function SummerChat({
                   size="sm"
                   className={cn("h-8 text-xs", !inCall && "text-muted-foreground")}
                   onClick={() => (inCall ? endCall() : startTalking(true))}
-                  aria-label={inCall ? "End call" : "Call Summer"}
+                  aria-label={inCall ? "End call" : "Call Cleo"}
                 >
                   {inCall ? <PhoneOff className="h-3.5 w-3.5 sm:mr-1" /> : <Phone className="h-3.5 w-3.5 sm:mr-1" />}
                   <span className="sr-only sm:not-sr-only">{inCall ? "End" : "Call"}</span>
                 </Button>
               )}
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setCustomizing(true)} aria-label="Customize Summer">
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setCustomizing(true)} aria-label="Customize Cleo">
                 <SlidersHorizontal className="h-3.5 w-3.5 sm:mr-1" /><span className="sr-only sm:not-sr-only">Customize</span>
               </Button>
               {messages.length > 0 && (
@@ -462,7 +467,7 @@ export function SummerChat({
                 <div className="max-w-[88%] whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-primary-foreground">{pending}</div>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {ASSISTANT_SHORT} is on it{tone.value === "girly_pop" ? " 💅" : "…"}
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {ASSISTANT_NAME} is on it{tone.value === "girly_pop" ? " 💅" : "…"}
               </div>
             </>
           )}
@@ -494,7 +499,7 @@ export function SummerChat({
                   className="h-10 w-10 shrink-0 rounded-full"
                   onClick={() => startTalking(false)}
                   disabled={!!pending}
-                  aria-label="Talk to Summer"
+                  aria-label="Talk to Cleo"
                 >
                   <Mic className="h-4 w-4" />
                 </Button>
@@ -506,7 +511,7 @@ export function SummerChat({
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(draft); }
                 }}
                 rows={1}
-                placeholder={`Ask ${ASSISTANT_SHORT} anything…`}
+                placeholder={`Ask ${ASSISTANT_NAME} anything…`}
                 className="max-h-32 min-h-10 resize-none"
                 disabled={!!pending}
               />
@@ -514,7 +519,7 @@ export function SummerChat({
                 <ArrowUp className="h-4 w-4" />
               </Button>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Mic to talk, phone for a hands-free call. {ASSISTANT_SHORT} can look things up and link you, but she can't change anything.</p>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Mic to talk, phone for a hands-free call. {ASSISTANT_NAME} can look things up and link you, but she can't change anything.</p>
           </form>
         )}
         <SummerCustomizeDialog open={customizing} onClose={() => setCustomizing(false)} persona={persona} onSaved={onPersonaSaved} />
