@@ -9,10 +9,9 @@ import { setPovPersona } from "@/lib/pov.functions";
 import { setPovFlag } from "@/components/pov-quick-toggle";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Users, Sparkles, AlertCircle, CreditCard, Camera, Phone, MessageCircle, Mail,
+  Users, AlertCircle, CreditCard, Camera, Phone, MessageCircle, Mail,
   Pause, ListChecks, XCircle, TrendingUp, Clock,
   Eye, ShieldCheck, AlertTriangle, Gift, UserSearch, Tags, FileText, Activity, Package, UserCog,
 } from "lucide-react";
@@ -80,7 +79,7 @@ function MembershipDashboard() {
       setPovFlag("app_member");
       await qc.invalidateQueries({ queryKey: ["m-me"] });
       await qc.invalidateQueries({ queryKey: ["current-member-access"] });
-      toast.success("Now viewing as a member");
+      toast.success("Viewing the member app as your test member");
       navigate({ to: "/m" });
     } catch (e: any) {
       toast.error(e?.message ?? "Could not enter POV");
@@ -92,12 +91,12 @@ function MembershipDashboard() {
   return (
     <>
       <PageHeader
-        title="Membership Admin Dashboard"
+        title="Membership"
         subtitle="JF Membership signups, subscriptions, setup health & content."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={enterPov} disabled={povBusy} className="bg-emerald-600 hover:bg-emerald-700">
-              <Eye className="mr-2 h-4 w-4" /> Enter Membership POV
+              <Eye className="mr-2 h-4 w-4" /> Open as test member
             </Button>
             <Link to="/admin/membership/action-needed"><Button variant="outline"><AlertCircle className="mr-2 h-4 w-4" />Action Needed</Button></Link>
             <Link to="/admin/membership/onboarding-email"><Button variant="outline"><Mail className="mr-2 h-4 w-4" />Onboarding Email</Button></Link>
@@ -109,13 +108,6 @@ function MembershipDashboard() {
         className="w-full max-w-full space-y-6 overflow-x-hidden p-4 md:p-6"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}
       >
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-          <Sparkles className="mr-1 h-3 w-3" />JF Membership Mode
-        </Badge>
-        <span>Switch back to Coaching above to manage coaching clients.</span>
-      </div>
-
       {/* 1. PRIORITY — Actions */}
       <section>
         <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Membership Actions</h2>

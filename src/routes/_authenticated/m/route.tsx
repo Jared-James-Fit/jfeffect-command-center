@@ -50,7 +50,7 @@ function MemberLayout() {
     && (subscriptionStatus && !["Trialing", "Active"].includes(subscriptionStatus));
 
   return (
-    <AppShell items={memberNav} bottomItems={memberBottomNav} title="Member">
+    <AppShell items={memberNav} bottomItems={memberBottomNav} title="Member" moreInHeader>
       {showToggle && <PovQuickToggle variant="banner" />}
       {showBanner && (
         <div className="px-4 pt-4 md:px-6 md:pt-6">

@@ -1,205 +1,55 @@
-import { useNavigate, useLocation, useRouterState } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { useQueryClient } from "@tanstack/react-query";
-import { Briefcase, Sparkles, Shield, User, ArrowRightLeft, Search, Eye } from "lucide-react";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import { useDashboardMode, type DashboardMode } from "@/lib/dashboard-mode";
-import { setPovPersona } from "@/lib/pov.functions";
-import { getPovFlag, setPovFlag } from "@/components/pov-quick-toggle";
+import { useRouterState } from "@tanstack/react-router";
+import { Eye, Search } from "lucide-react";
 import { KeyboardShortcutsButton } from "@/components/keyboard-shortcuts";
 import { useAuth } from "@/lib/auth";
 
 /**
- * Consolidated sticky top bar for the admin/coach layout.
- * Combines: dashboard mode tabs · admin/member POV toggle · keyboard shortcuts.
- * Designed to replace the three separate rows that previously stacked above
- * the page header.
+ * Slim desktop strip above admin and coach pages: search, keyboard shortcuts
+ * and "View as client". There is no Coaching / Membership switch any more:
+ * membership is a section of the one admin menu, and member, client and team
+ * accounts are all opened (and viewed as) from the Clients page.
+ *
+ * On phones the header already has search and More, so the strip stays out
+ * of the way; it is still mounted because it hosts the "?" shortcut listener.
  */
-export function AdminTopBar({ showDashboardMode = true }: { showDashboardMode?: boolean }) {
-  const [mode, setMode] = useDashboardMode();
-  const navigate = useNavigate();
-  const location = useLocation();
+export function AdminTopBar() {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as { tab?: string } | undefined });
-  const qc = useQueryClient();
-  const setPersona = useServerFn(setPovPersona);
-  const [busy, setBusy] = useState(false);
-  const pov = getPovFlag();
-  const isMemberView = pov.active || location.pathname.startsWith("/m");
-  const { role } = useAuth();
-  const canClientPov = role === "admin" || role === "coach";
+  const { role, viewOnly } = useAuth();
+  const canClientPov = (role === "admin" || role === "coach") && !viewOnly;
 
-  // The messaging surface is an immersive, full-bleed chat view (mobile
-  // overlays the whole screen; desktop uses full vertical height). The
-  // mode + POV switcher sitting on top eats vertical room above the chat
-  // header and competes with the Coach Chat / Group Chats and filter
-  // pills. Hide the top bar entirely on these routes — the same controls
-  // remain available from every other admin page.
+  // The chat is full-bleed; the strip would eat room above its header.
   const isChatRoute =
     pathname.startsWith("/admin/messages") ||
     (pathname.startsWith("/admin/communication") && (search?.tab ?? "messages") === "messages");
   if (isChatRoute) return null;
 
-  const selectMode = (m: DashboardMode) => {
-    setMode(m);
-    if (m === "membership") {
-      if (!pathname.startsWith("/admin/membership")) navigate({ to: "/admin/membership" });
-      return;
-    }
-    if (pathname.startsWith("/admin/membership")) {
-      navigate({ to: "/admin" });
-    }
-  };
-
-  const goAdmin = useCallback(async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      setPovFlag(null);
-      await qc.invalidateQueries({ queryKey: ["m-me"] });
-      toast.success("Back to Admin");
-      navigate({ to: "/admin" });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to switch");
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, qc, navigate]);
-
-  const goMember = useCallback(async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await setPersona({ data: { persona: "app_member" } as any });
-      setPovFlag("app_member");
-      await qc.invalidateQueries({ queryKey: ["m-me"] });
-      toast.success("Switched to Member view");
-      navigate({ to: "/m" });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Failed to switch");
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, qc, setPersona, navigate]);
-
   return (
-    <div
-      className={cn(
-        "sticky top-0 z-40 flex items-center justify-between gap-2 overflow-x-auto border-b px-3 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden backdrop-blur supports-[backdrop-filter]:bg-background/80 md:px-6",
-        isMemberView ? "border-emerald-500/30 bg-emerald-500/10" : "border-border bg-background/90",
+    <div className="sticky top-0 z-40 hidden items-center justify-end gap-2 border-b border-border bg-background/90 px-6 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:flex">
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+        className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label="Open global search"
+      >
+        <Search className="h-3.5 w-3.5" />
+        <span>Search…</span>
+        <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[9px] text-muted-foreground">⌘K</kbd>
+      </button>
+      <KeyboardShortcutsButton />
+      {canClientPov && (
+        <button
+          type="button"
+          onClick={() => {
+            try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {}
+          }}
+          className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-warning hover:bg-warning/10"
+          aria-label="View as client"
+          title="View as client"
+        >
+          <Eye className="h-3.5 w-3.5" /> View as client
+        </button>
       )}
-    >
-      <div className="flex min-w-0 items-center gap-1.5">
-        {showDashboardMode && (
-          <div className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-card p-0.5 text-xs">
-            <ModeTab active={mode === "coaching"} onClick={() => selectMode("coaching")} icon={<Briefcase className="h-3.5 w-3.5" />} label="Coaching" />
-            <ModeTab active={mode === "membership"} onClick={() => selectMode("membership")} icon={<Sparkles className="h-3.5 w-3.5" />} label="Membership" />
-            <KeyboardShortcutsButton />
-          </div>
-        )}
-        {!showDashboardMode && <KeyboardShortcutsButton />}
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
-          className="hidden md:inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Open global search"
-        >
-          <Search className="h-3.5 w-3.5" />
-          <span>Search…</span>
-          <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[9px] text-muted-foreground">⌘K</kbd>
-        </button>
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
-          className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Open global search"
-        >
-          <Search className="h-4 w-4" />
-        </button>
-        {role === "admin" && (
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("summer:toggle"))}
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2 text-xs font-semibold text-foreground hover:bg-muted md:px-2.5"
-            aria-label="Cleo"
-            title="Cleo (⌘⇧S)"
-          >
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white">
-              <Sparkles className="h-3 w-3" />
-            </span>
-            <span className="hidden md:inline">Cleo</span>
-          </button>
-        )}
-        <div className="hidden items-center gap-1.5 text-xs font-medium text-muted-foreground sm:flex">
-          <ArrowRightLeft className={cn("h-3.5 w-3.5", isMemberView ? "text-emerald-600" : "text-primary")} />
-          <span className={isMemberView ? "text-emerald-900 dark:text-emerald-100" : "text-foreground"}>
-            {isMemberView ? "Viewing as Member" : "Admin"}
-          </span>
-        </div>
-      </div>
-      <div className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-card p-0.5">
-        <PovBtn active={!isMemberView} onClick={goAdmin} disabled={busy || !isMemberView} icon={<Shield className="h-3.5 w-3.5" />} label="Admin" />
-        <PovBtn active={isMemberView} onClick={goMember} disabled={busy || isMemberView} icon={<User className="h-3.5 w-3.5" />} label="Member" tint="emerald" />
-        {canClientPov && (
-          <button
-            type="button"
-            onClick={() => {
-              try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {}
-            }}
-            className="ml-0.5 flex items-center gap-1.5 rounded border-l border-border px-2.5 py-1 text-xs font-semibold text-warning hover:bg-warning/10"
-            aria-label="Enter Client POV"
-            title="Enter Client POV"
-          >
-            <Eye className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Client POV</span>
-          </button>
-        )}
-      </div>
     </div>
-  );
-}
-
-function ModeTab({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-1.5 rounded px-2 py-1 text-xs font-semibold transition-colors sm:px-2.5",
-        active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-      aria-label={label}
-      title={label}
-    >
-      {icon}
-      <span className="hidden sm:inline">{label}</span>
-    </button>
-  );
-}
-
-function PovBtn({
-  active, onClick, disabled, icon, label, tint,
-}: { active: boolean; onClick: () => void; disabled?: boolean; icon: React.ReactNode; label: string; tint?: "emerald" }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex items-center gap-1.5 rounded px-2 py-1 text-xs font-semibold transition-colors disabled:cursor-default sm:px-2.5",
-        active
-          ? tint === "emerald"
-            ? "bg-emerald-600 text-white"
-            : "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-      aria-label={label}
-      title={label}
-    >
-      {icon}
-      <span className="hidden sm:inline">{label}</span>
-    </button>
   );
 }

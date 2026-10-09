@@ -29,9 +29,9 @@ describe("lift reviews live inside Messages", () => {
     }
   });
 
-  it("no bottom-bar button for lifts; Reviews is check-ins in one tap", () => {
+  it("no bottom-bar button for lifts (the staff bar is Dashboard, Clients, Messages, Tasks)", () => {
     expect(adminShell).not.toContain('pick("/admin/lift-videos")');
-    expect(adminShell).toContain('{ ...pick("/admin/check-in-reviews"), label: "Reviews" }');
+    expect(adminShell).toContain("return STAFF_BAR;");
   });
 
   it("old admin links land in Messages", () => {
