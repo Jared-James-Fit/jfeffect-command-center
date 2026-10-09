@@ -34,6 +34,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedCoachRouteRouteImport } from './routes/_authenticated/coach/route'
+import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
 import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated/m/route'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
@@ -73,7 +74,6 @@ import { Route as AuthenticatedAdminCoachingRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminCoachingAgreementsRouteImport } from './routes/_authenticated/admin/coaching-agreements'
 import { Route as AuthenticatedAdminCommunicationRouteImport } from './routes/_authenticated/admin/communication'
 import { Route as AuthenticatedAdminCommunityRouteImport } from './routes/_authenticated/admin/community'
-import { Route as AuthenticatedAdminVoiceRouteImport } from './routes/_authenticated/admin/voice'
 import { Route as AuthenticatedAdminContentRouteImport } from './routes/_authenticated/admin/content'
 import { Route as AuthenticatedAdminContentIdeasRouteImport } from './routes/_authenticated/admin/content-ideas'
 import { Route as AuthenticatedAdminDiscountCodesRouteImport } from './routes/_authenticated/admin/discount-codes'
@@ -119,6 +119,7 @@ import { Route as AuthenticatedAdminTestimonialsRouteImport } from './routes/_au
 import { Route as AuthenticatedAdminTrainingIntelligenceRouteImport } from './routes/_authenticated/admin/training-intelligence'
 import { Route as AuthenticatedAdminTrainingPhasesRouteImport } from './routes/_authenticated/admin/training-phases'
 import { Route as AuthenticatedAdminTransactionsRouteImport } from './routes/_authenticated/admin/transactions'
+import { Route as AuthenticatedAdminVoiceRouteImport } from './routes/_authenticated/admin/voice'
 import { Route as AuthenticatedAdminWarmupProtocolsRouteImport } from './routes/_authenticated/admin/warmup-protocols'
 import { Route as AuthenticatedCoachProgramsRouteImport } from './routes/_authenticated/coach/programs'
 import { Route as AuthenticatedMIndexRouteImport } from './routes/_authenticated/m/index'
@@ -241,11 +242,12 @@ import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/h
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
+import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
 import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/api/public/hooks/progress-archive-tick'
 import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './routes/api/public/hooks/scheduled-messages-worker'
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
-import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
+import { Route as ApiPublicHooksSummerVoiceCheckRouteImport } from './routes/api/public/hooks/summer-voice-check'
 import { Route as ApiPublicHooksWearablesSyncRouteImport } from './routes/api/public/hooks/wearables-sync'
 import { Route as ApiPublicPushSubscriptionChangeRouteImport } from './routes/api/public/push/subscription-change'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -388,6 +390,11 @@ const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
 const AuthenticatedCoachRouteRoute = AuthenticatedCoachRouteRouteImport.update({
   id: '/coach',
   path: '/coach',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFinanceRoute = AuthenticatedFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMRouteRoute = AuthenticatedMRouteRouteImport.update({
@@ -608,12 +615,6 @@ const AuthenticatedAdminCommunityRoute =
   AuthenticatedAdminCommunityRouteImport.update({
     id: '/community',
     path: '/community',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
-const AuthenticatedAdminVoiceRoute =
-  AuthenticatedAdminVoiceRouteImport.update({
-    id: '/voice',
-    path: '/voice',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminContentRoute =
@@ -879,6 +880,11 @@ const AuthenticatedAdminTransactionsRoute =
     path: '/transactions',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminVoiceRoute = AuthenticatedAdminVoiceRouteImport.update({
+  id: '/voice',
+  path: '/voice',
+  getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
 const AuthenticatedAdminWarmupProtocolsRoute =
   AuthenticatedAdminWarmupProtocolsRouteImport.update({
     id: '/warmup-protocols',
@@ -1596,6 +1602,12 @@ const ApiPublicHooksNutritionTickRoute =
     path: '/api/public/hooks/nutrition-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksPaymentReminderSmsRoute =
+  ApiPublicHooksPaymentReminderSmsRouteImport.update({
+    id: '/api/public/hooks/payment-reminder-sms',
+    path: '/api/public/hooks/payment-reminder-sms',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksProgressArchiveTickRoute =
   ApiPublicHooksProgressArchiveTickRouteImport.update({
     id: '/api/public/hooks/progress-archive-tick',
@@ -1620,10 +1632,10 @@ const ApiPublicHooksSmsRemindersRoute =
     path: '/api/public/hooks/sms-reminders',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicHooksPaymentReminderSmsRoute =
-  ApiPublicHooksPaymentReminderSmsRouteImport.update({
-    id: '/api/public/hooks/payment-reminder-sms',
-    path: '/api/public/hooks/payment-reminder-sms',
+const ApiPublicHooksSummerVoiceCheckRoute =
+  ApiPublicHooksSummerVoiceCheckRouteImport.update({
+    id: '/api/public/hooks/summer-voice-check',
+    path: '/api/public/hooks/summer-voice-check',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicHooksWearablesSyncRoute =
@@ -1769,6 +1781,7 @@ export interface FileRoutesByFullPath {
   '/m': typeof AuthenticatedMRouteRouteWithChildren
   '/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/book/': typeof BookRoute
+  '/finance': typeof AuthenticatedFinanceRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -1804,7 +1817,6 @@ export interface FileRoutesByFullPath {
   '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/community': typeof AuthenticatedAdminCommunityRoute
-  '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
@@ -1850,6 +1862,7 @@ export interface FileRoutesByFullPath {
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
+  '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/m/account': typeof AuthenticatedMAccountRoute
@@ -1957,11 +1970,12 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
-  '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -2023,6 +2037,7 @@ export interface FileRoutesByTo {
   '/unsubscribe': typeof UnsubscribeRoute
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/book': typeof BookRoute
+  '/finance': typeof AuthenticatedFinanceRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -2058,7 +2073,6 @@ export interface FileRoutesByTo {
   '/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/admin/community': typeof AuthenticatedAdminCommunityRoute
-  '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/content': typeof AuthenticatedAdminContentRoute
   '/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
@@ -2103,6 +2117,7 @@ export interface FileRoutesByTo {
   '/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
+  '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/m/account': typeof AuthenticatedMAccountRoute
@@ -2210,11 +2225,12 @@ export interface FileRoutesByTo {
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
-  '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -2281,6 +2297,7 @@ export interface FileRoutesById {
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
   '/_authenticated/portal': typeof AuthenticatedPortalRouteRouteWithChildren
   '/book/': typeof BookRoute
+  '/_authenticated/finance': typeof AuthenticatedFinanceRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
   '/book/$slug': typeof BookSlugRoute
@@ -2316,7 +2333,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/coaching-agreements': typeof AuthenticatedAdminCoachingAgreementsRoute
   '/_authenticated/admin/communication': typeof AuthenticatedAdminCommunicationRoute
   '/_authenticated/admin/community': typeof AuthenticatedAdminCommunityRoute
-  '/_authenticated/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/_authenticated/admin/content': typeof AuthenticatedAdminContentRoute
   '/_authenticated/admin/content-ideas': typeof AuthenticatedAdminContentIdeasRoute
   '/_authenticated/admin/discount-codes': typeof AuthenticatedAdminDiscountCodesRoute
@@ -2362,6 +2378,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/training-intelligence': typeof AuthenticatedAdminTrainingIntelligenceRoute
   '/_authenticated/admin/training-phases': typeof AuthenticatedAdminTrainingPhasesRoute
   '/_authenticated/admin/transactions': typeof AuthenticatedAdminTransactionsRoute
+  '/_authenticated/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/_authenticated/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/_authenticated/coach/programs': typeof AuthenticatedCoachProgramsRoute
   '/_authenticated/m/account': typeof AuthenticatedMAccountRoute
@@ -2469,11 +2486,12 @@ export interface FileRoutesById {
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
+  '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
-  '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -2540,6 +2558,7 @@ export interface FileRouteTypes {
     | '/m'
     | '/portal'
     | '/book/'
+    | '/finance'
     | '/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -2575,7 +2594,6 @@ export interface FileRouteTypes {
     | '/admin/coaching-agreements'
     | '/admin/communication'
     | '/admin/community'
-    | '/admin/voice'
     | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/discount-codes'
@@ -2621,6 +2639,7 @@ export interface FileRouteTypes {
     | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/admin/transactions'
+    | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
     | '/m/account'
@@ -2728,11 +2747,12 @@ export interface FileRouteTypes {
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
-    | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
@@ -2794,6 +2814,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/coach'
     | '/book'
+    | '/finance'
     | '/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -2829,7 +2850,6 @@ export interface FileRouteTypes {
     | '/admin/coaching-agreements'
     | '/admin/communication'
     | '/admin/community'
-    | '/admin/voice'
     | '/admin/content'
     | '/admin/content-ideas'
     | '/admin/discount-codes'
@@ -2874,6 +2894,7 @@ export interface FileRouteTypes {
     | '/admin/training-intelligence'
     | '/admin/training-phases'
     | '/admin/transactions'
+    | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
     | '/m/account'
@@ -2981,11 +3002,12 @@ export interface FileRouteTypes {
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
-    | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
@@ -3051,6 +3073,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m'
     | '/_authenticated/portal'
     | '/book/'
+    | '/_authenticated/finance'
     | '/_authenticated/notifications'
     | '/api/drive-upload'
     | '/book/$slug'
@@ -3086,7 +3109,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/coaching-agreements'
     | '/_authenticated/admin/communication'
     | '/_authenticated/admin/community'
-    | '/_authenticated/admin/voice'
     | '/_authenticated/admin/content'
     | '/_authenticated/admin/content-ideas'
     | '/_authenticated/admin/discount-codes'
@@ -3132,6 +3154,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/training-intelligence'
     | '/_authenticated/admin/training-phases'
     | '/_authenticated/admin/transactions'
+    | '/_authenticated/admin/voice'
     | '/_authenticated/admin/warmup-protocols'
     | '/_authenticated/coach/programs'
     | '/_authenticated/m/account'
@@ -3239,11 +3262,12 @@ export interface FileRouteTypes {
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-tick'
+    | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
-    | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
@@ -3328,11 +3352,12 @@ export interface RootRouteChildren {
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
+  ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
   ApiPublicHooksProgressArchiveTickRoute: typeof ApiPublicHooksProgressArchiveTickRoute
   ApiPublicHooksScheduledMessagesWorkerRoute: typeof ApiPublicHooksScheduledMessagesWorkerRoute
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
-  ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
+  ApiPublicHooksSummerVoiceCheckRoute: typeof ApiPublicHooksSummerVoiceCheckRoute
   ApiPublicHooksWearablesSyncRoute: typeof ApiPublicHooksWearablesSyncRoute
   ApiPublicPushSubscriptionChangeRoute: typeof ApiPublicPushSubscriptionChangeRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
@@ -3519,6 +3544,13 @@ declare module '@tanstack/react-router' {
       path: '/coach'
       fullPath: '/coach'
       preLoaderRoute: typeof AuthenticatedCoachRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/finance': {
+      id: '/_authenticated/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof AuthenticatedFinanceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/m': {
@@ -3792,13 +3824,6 @@ declare module '@tanstack/react-router' {
       path: '/community'
       fullPath: '/admin/community'
       preLoaderRoute: typeof AuthenticatedAdminCommunityRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
-    '/_authenticated/admin/voice': {
-      id: '/_authenticated/admin/voice'
-      path: '/voice'
-      fullPath: '/admin/voice'
-      preLoaderRoute: typeof AuthenticatedAdminVoiceRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/content': {
@@ -4114,6 +4139,13 @@ declare module '@tanstack/react-router' {
       path: '/transactions'
       fullPath: '/admin/transactions'
       preLoaderRoute: typeof AuthenticatedAdminTransactionsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/voice': {
+      id: '/_authenticated/admin/voice'
+      path: '/voice'
+      fullPath: '/admin/voice'
+      preLoaderRoute: typeof AuthenticatedAdminVoiceRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/warmup-protocols': {
@@ -4970,6 +5002,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksNutritionTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/payment-reminder-sms': {
+      id: '/api/public/hooks/payment-reminder-sms'
+      path: '/api/public/hooks/payment-reminder-sms'
+      fullPath: '/api/public/hooks/payment-reminder-sms'
+      preLoaderRoute: typeof ApiPublicHooksPaymentReminderSmsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/progress-archive-tick': {
       id: '/api/public/hooks/progress-archive-tick'
       path: '/api/public/hooks/progress-archive-tick'
@@ -4998,11 +5037,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSmsRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/hooks/payment-reminder-sms': {
-      id: '/api/public/hooks/payment-reminder-sms'
-      path: '/api/public/hooks/payment-reminder-sms'
-      fullPath: '/api/public/hooks/payment-reminder-sms'
-      preLoaderRoute: typeof ApiPublicHooksPaymentReminderSmsRouteImport
+    '/api/public/hooks/summer-voice-check': {
+      id: '/api/public/hooks/summer-voice-check'
+      path: '/api/public/hooks/summer-voice-check'
+      fullPath: '/api/public/hooks/summer-voice-check'
+      preLoaderRoute: typeof ApiPublicHooksSummerVoiceCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/wearables-sync': {
@@ -5323,7 +5362,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminCoachingAgreementsRoute: typeof AuthenticatedAdminCoachingAgreementsRoute
   AuthenticatedAdminCommunicationRoute: typeof AuthenticatedAdminCommunicationRoute
   AuthenticatedAdminCommunityRoute: typeof AuthenticatedAdminCommunityRoute
-  AuthenticatedAdminVoiceRoute: typeof AuthenticatedAdminVoiceRoute
   AuthenticatedAdminContentRoute: typeof AuthenticatedAdminContentRoute
   AuthenticatedAdminContentIdeasRoute: typeof AuthenticatedAdminContentIdeasRoute
   AuthenticatedAdminDiscountCodesRoute: typeof AuthenticatedAdminDiscountCodesRoute
@@ -5369,6 +5407,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminTrainingIntelligenceRoute: typeof AuthenticatedAdminTrainingIntelligenceRoute
   AuthenticatedAdminTrainingPhasesRoute: typeof AuthenticatedAdminTrainingPhasesRoute
   AuthenticatedAdminTransactionsRoute: typeof AuthenticatedAdminTransactionsRoute
+  AuthenticatedAdminVoiceRoute: typeof AuthenticatedAdminVoiceRoute
   AuthenticatedAdminWarmupProtocolsRoute: typeof AuthenticatedAdminWarmupProtocolsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminAgreementsNativePackageIdRoute: typeof AuthenticatedAdminAgreementsNativePackageIdRoute
@@ -5441,7 +5480,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminCoachingAgreementsRoute,
     AuthenticatedAdminCommunicationRoute: AuthenticatedAdminCommunicationRoute,
     AuthenticatedAdminCommunityRoute: AuthenticatedAdminCommunityRoute,
-    AuthenticatedAdminVoiceRoute: AuthenticatedAdminVoiceRoute,
     AuthenticatedAdminContentRoute: AuthenticatedAdminContentRoute,
     AuthenticatedAdminContentIdeasRoute: AuthenticatedAdminContentIdeasRoute,
     AuthenticatedAdminDiscountCodesRoute: AuthenticatedAdminDiscountCodesRoute,
@@ -5500,6 +5538,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminTrainingPhasesRoute:
       AuthenticatedAdminTrainingPhasesRoute,
     AuthenticatedAdminTransactionsRoute: AuthenticatedAdminTransactionsRoute,
+    AuthenticatedAdminVoiceRoute: AuthenticatedAdminVoiceRoute,
     AuthenticatedAdminWarmupProtocolsRoute:
       AuthenticatedAdminWarmupProtocolsRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
@@ -5799,6 +5838,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCoachRouteRoute: typeof AuthenticatedCoachRouteRouteWithChildren
   AuthenticatedMRouteRoute: typeof AuthenticatedMRouteRouteWithChildren
   AuthenticatedPortalRouteRoute: typeof AuthenticatedPortalRouteRouteWithChildren
+  AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
 }
 
@@ -5807,6 +5847,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCoachRouteRoute: AuthenticatedCoachRouteRouteWithChildren,
   AuthenticatedMRouteRoute: AuthenticatedMRouteRouteWithChildren,
   AuthenticatedPortalRouteRoute: AuthenticatedPortalRouteRouteWithChildren,
+  AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
 }
 
@@ -5877,6 +5918,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
+  ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
   ApiPublicHooksProgressArchiveTickRoute:
     ApiPublicHooksProgressArchiveTickRoute,
   ApiPublicHooksScheduledMessagesWorkerRoute:
@@ -5884,7 +5926,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksScheduledSendWorkerRoute:
     ApiPublicHooksScheduledSendWorkerRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
-  ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
+  ApiPublicHooksSummerVoiceCheckRoute: ApiPublicHooksSummerVoiceCheckRoute,
   ApiPublicHooksWearablesSyncRoute: ApiPublicHooksWearablesSyncRoute,
   ApiPublicPushSubscriptionChangeRoute: ApiPublicPushSubscriptionChangeRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
@@ -5898,3 +5940,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

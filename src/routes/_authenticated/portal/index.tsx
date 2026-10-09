@@ -26,6 +26,7 @@ import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner
 import { AgreementDashboardCard } from "@/components/coaching-agreement/agreement-dashboard-card";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { LeagueRecapHomeTile } from "@/components/portal/league-recap";
+import { StrengthBoardCard } from "@/components/portal/strength-board";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
 import { SexPromptCard } from "@/components/athlete-sex";
 import { CommunityHomeStrip, CommunityNavButton } from "@/components/community/community-entry";
@@ -354,6 +355,13 @@ function PortalHome() {
         {client?.id && (
           <SectionErrorBoundary label="League recap">
             <LeagueRecapHomeTile />
+          </SectionErrorBoundary>
+        )}
+
+        {/* All-time SBD leaderboard (hides itself until someone logs a competition lift) */}
+        {client?.id && (
+          <SectionErrorBoundary label="Strength board">
+            <StrengthBoardCard />
           </SectionErrorBoundary>
         )}
 

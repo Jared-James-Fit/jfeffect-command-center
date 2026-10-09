@@ -1,7 +1,7 @@
 /**
  * Client side of "snap a receipt": shrink phone photos (a 12MP shot is 3-5MB,
  * a readable receipt needs a fraction of that), upload to the private
- * business-receipts bucket, and hand the path to Summer to read.
+ * business-receipts bucket, and hand the path to Cleo to read.
  */
 import { supabase } from "@/integrations/supabase/client";
 import { RECEIPTS_BUCKET } from "@/lib/business-books";

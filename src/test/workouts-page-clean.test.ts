@@ -24,6 +24,18 @@ describe("Workouts page: one card per section, nothing said twice", () => {
     }
   });
 
+  it("uses line icons, not emoji: they render differently on every phone", () => {
+    const emoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{FE0F}]/u;
+    for (const [name, src] of [
+      ["readiness card", readiness],
+      ["month card", month],
+      ["readiness factors", read("src/lib/analytics/readiness-factors.ts")],
+    ] as const) {
+      expect(src, name).not.toMatch(emoji);
+    }
+    expect(readiness).toContain("FACTOR_ICON[factor.key]");
+  });
+
   it("the insights that weren't true are gone from the library too", () => {
     expect(read("src/lib/analytics/readiness-factors.ts")).not.toContain("buildPersonalInsights");
   });

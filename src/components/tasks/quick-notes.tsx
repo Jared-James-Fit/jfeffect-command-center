@@ -19,6 +19,9 @@
  * - Auto-saves (debounced, flushed on close / page hide) with a quiet
  *   Saving… / Saved indicator. Storage key + note shape are unchanged, so
  *   existing notes carry over as-is.
+ * - Save to client file: a note can be linked to a client. It then syncs to
+ *   their profile (client_file_notes) both ways. Deleting it here (or moving
+ *   it to the matrix) archives the client copy; it is never lost from their file.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -31,16 +34,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   MoreHorizontal, Trash2, ChevronDown, ChevronLeft, Copy, Check, Pencil, CheckSquare, Files, SquarePen,
-  RotateCcw, ArrowRightLeft,
+  RotateCcw, ArrowRightLeft, UserRound, UserRoundPlus, ExternalLink, Link2Off,
 } from "lucide-react";
 import { toast } from "sonner";
 import { QUADRANTS, type TaskQuadrant } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
+import { useOpenClientProfile } from "@/lib/open-client-profile";
+import { fetchLinkedCopies, pushQuickNote, setQuickNoteRemoved, unlinkQuickNote } from "@/lib/client-file-notes";
+import { ClientLinkDialog } from "@/components/tasks/client-link-dialog";
 
 /** `deletedAt` set ⇒ the note is in Recently Deleted. */
-export type Note = { id: string; title: string; body: string; updatedAt: number; deletedAt?: number };
+export type Note = {
+  id: string; title: string; body: string; updatedAt: number; deletedAt?: number;
+  /** Linked client: the note syncs to their client file. */
+  clientId?: string; clientName?: string;
+};
 type QuadStyle = { color: string; title: string; subtitle: string };
 /** What a note becomes in the matrix. */
 export type NoteTaskInput = { title: string; notes: string | null; quadrant: TaskQuadrant };
@@ -115,7 +125,106 @@ export function useNotes(storageKey: string) {
     };
   }, [flush]);
 
-  return { notes, setNotes, saveState, flush };
+  return { notes, setNotes, saveState, flush, ready };
+}
+
+// ---------------------------------------------------------------- client file sync
+
+/** What the server copy must reflect: client, text, and whether the note is still here. */
+export function syncSignature(n: Pick<Note, "clientId" | "title" | "body" | "deletedAt">) {
+  return JSON.stringify([n.clientId ?? null, n.title, n.body, !!n.deletedAt]);
+}
+
+/**
+ * Keeps linked notes in step with their client-file copy.
+ * Pull (on load + when the app comes back): edits made on the client profile flow in,
+ * unless this device has unsent changes. Push (debounced): text/client changes upsert the
+ * copy; a deleted note archives it; a restored note un-archives it.
+ */
+function useClientFileSync(
+  notes: Note[],
+  setNotes: React.Dispatch<React.SetStateAction<Note[]>>,
+  ready: boolean,
+) {
+  const sent = useRef(new Map<string, string>());
+  const latest = useRef(notes);
+  latest.current = notes;
+  const [pulledAt, setPulledAt] = useState(0);
+  const running = useRef(false);
+  const again = useRef(false);
+  const warned = useRef(false);
+
+  const pull = useCallback(async () => {
+    const linked = latest.current.filter((n) => n.clientId);
+    if (linked.length) {
+      try {
+        const rows = await fetchLinkedCopies(linked.map((n) => n.id));
+        const byId = new Map(rows.map((r) => [r.quick_note_id, r]));
+        const merges = new Map<string, Partial<Note>>();
+        for (const n of linked) {
+          const r = byId.get(n.id);
+          if (!r) continue; // no copy yet → push creates it
+          const prev = sent.current.get(n.id);
+          const pending = prev !== undefined && prev !== syncSignature(n);
+          const differs = r.title !== n.title || r.body !== n.body || r.client_id !== n.clientId;
+          const archivedOk = n.deletedAt ? !!r.archived_at : (!r.archived_at || r.archive_reason === "manual");
+          if (!differs && archivedOk) {
+            sent.current.set(n.id, syncSignature(n));
+          } else if (differs && !pending && !n.deletedAt && Date.parse(r.updated_at) > n.updatedAt) {
+            const patch = { title: r.title, body: r.body, clientId: r.client_id, updatedAt: Date.parse(r.updated_at) };
+            merges.set(n.id, patch);
+            if (archivedOk) sent.current.set(n.id, syncSignature({ ...n, ...patch }));
+          }
+        }
+        if (merges.size) setNotes((arr) => arr.map((n) => (merges.has(n.id) ? { ...n, ...merges.get(n.id) } : n)));
+      } catch { /* offline: push retries on the next change */ }
+    }
+    setPulledAt(Date.now());
+  }, [setNotes]);
+
+  useEffect(() => {
+    if (!ready) return;
+    void pull();
+    const onVis = () => { if (document.visibilityState === "visible") void pull(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [ready, pull]);
+
+  useEffect(() => {
+    if (!ready || !pulledAt) return;
+    const run = async () => {
+      if (running.current) { again.current = true; return; }
+      running.current = true;
+      try {
+        for (const n of latest.current) {
+          const prev = sent.current.get(n.id);
+          if (!n.clientId) { if (prev) sent.current.delete(n.id); continue; }
+          const sig = syncSignature(n);
+          if (prev === sig) continue;
+          try {
+            if (n.deletedAt) {
+              await setQuickNoteRemoved(n.id, true);
+            } else {
+              // First sync this session, or coming back from Recently Deleted.
+              if (prev === undefined || JSON.parse(prev)[3]) await setQuickNoteRemoved(n.id, false);
+              await pushQuickNote({ id: n.id, clientId: n.clientId, title: n.title, body: n.body });
+            }
+            sent.current.set(n.id, sig);
+          } catch {
+            if (!warned.current) {
+              warned.current = true;
+              toast.error("Couldn't sync a note to the client file yet. It'll retry.");
+            }
+          }
+        }
+      } finally {
+        running.current = false;
+        if (again.current) { again.current = false; void run(); }
+      }
+    };
+    const t = window.setTimeout(run, 800);
+    return () => window.clearTimeout(t);
+  }, [notes, ready, pulledAt]);
 }
 
 function usePersistedFlag(key: string, initial: boolean) {
@@ -265,7 +374,11 @@ export function QuickNotesPanel({
   /** Hide the floating compose button (e.g. while the task bulk bar is up). */
   hideComposeButton?: boolean;
 }) {
-  const { notes, setNotes, saveState, flush } = useNotes(storageKey);
+  const { notes, setNotes, saveState, flush, ready } = useNotes(storageKey);
+  useClientFileSync(notes, setNotes, ready);
+  const openClient = useOpenClientProfile();
+  /** Note whose client is being picked. */
+  const [linkFor, setLinkFor] = useState<string | null>(null);
   const [collapsed, setCollapsed] = usePersistedFlag(`${storageKey}-collapsed`, false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -324,7 +437,9 @@ export function QuickNotesPanel({
     setNotes((arr) => arr.filter((n) => !set.has(n.id)));
   };
   const duplicate = (n: Note) => {
-    const copy = { ...n, id: newId(), title: n.title ? `${n.title} (copy)` : n.title, updatedAt: Date.now() };
+    // A copy starts unlinked so one client never gets two synced copies by accident.
+    const { clientId: _c, clientName: _n, ...rest } = n;
+    const copy = { ...rest, id: newId(), title: n.title ? `${n.title} (copy)` : n.title, updatedAt: Date.now() };
     setNotes((arr) => [copy, ...arr]);
     toast.success("Note duplicated");
     return copy;
@@ -398,6 +513,45 @@ export function QuickNotesPanel({
       </div>
     </>
   );
+
+  const linkNote = (id: string, c: { id: string; name: string }) => {
+    // Linking isn't an edit: the note keeps its place in the list.
+    setNotes((arr) => arr.map((n) => (n.id === id ? { ...n, clientId: c.id, clientName: c.name } : n)));
+    setLinkFor(null);
+    const first = c.name.split(" ")[0];
+    toast.success(`Saved to ${first}'s client file`, {
+      description: "Edits stay in sync. If you delete it here, it stays in their notes archive.",
+      action: { label: "Open", onClick: () => { setOpenId(null); openClient(c.id, { tab: "notes" }); } },
+    });
+  };
+  const unlinkNote = async (n: Note) => {
+    try {
+      await unlinkQuickNote(n.id);
+      setNotes((arr) => arr.map((x) => (x.id === n.id ? { ...x, clientId: undefined, clientName: undefined } : x)));
+      toast.success(`Kept on ${(n.clientName ?? "the client").split(" ")[0]}'s file. No longer synced.`);
+    } catch {
+      toast.error("Couldn't stop syncing. Try again.");
+    }
+  };
+  const openClientFile = (n: Note) => {
+    if (!n.clientId) return;
+    if (openId) closeEditor();
+    openClient(n.clientId, { tab: "notes" });
+  };
+  const clientMenu = (n: Note) =>
+    n.clientId ? (
+      <>
+        <DropdownMenuLabel className="truncate pb-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          On {(n.clientName ?? "client").split(" ")[0]}&apos;s file · synced
+        </DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => openClientFile(n)}><ExternalLink className="mr-2 h-4 w-4" />Open client file</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setLinkFor(n.id)}><UserRound className="mr-2 h-4 w-4" />Change client…</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => void unlinkNote(n)}><Link2Off className="mr-2 h-4 w-4" />Stop syncing</DropdownMenuItem>
+      </>
+    ) : (
+      <DropdownMenuItem onClick={() => setLinkFor(n.id)}><UserRoundPlus className="mr-2 h-4 w-4" />Save to client file…</DropdownMenuItem>
+    );
+  const linkTarget = notes.find((n) => n.id === linkFor) ?? null;
 
   return (
     <section aria-label="Quick Notes">
@@ -510,11 +664,20 @@ export function QuickNotesPanel({
                           }}
                         >
                           <div className="truncate text-sm font-semibold leading-snug">{noteHeading(n)}</div>
-                          <div className="truncate text-xs leading-snug text-muted-foreground">{preview || "No additional text"}</div>
+                          <div className="flex min-w-0 items-center gap-1.5 text-xs leading-snug text-muted-foreground">
+                            {n.clientId && (
+                              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/12 px-1.5 py-px text-[10px] font-semibold text-primary">
+                                <UserRound className="h-2.5 w-2.5" />{(n.clientName ?? "Client").split(" ")[0]}
+                              </span>
+                            )}
+                            <span className="truncate">{preview || "No additional text"}</span>
+                          </div>
                         </button>
                         {!selectMode && (
                           <RowMenu label="Note actions">
                             {moveGrid(() => [n])}
+                            <DropdownMenuSeparator />
+                            {clientMenu(n)}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={async () => { if (await copyText(n.body || n.title)) toast.success("Copied ✓"); }}>
                               <Copy className="mr-2 h-4 w-4" />Copy
@@ -548,6 +711,7 @@ export function QuickNotesPanel({
       )}
 
       {/* Compose — floats bottom-right above the mobile nav, like Apple Notes. */}
+      {mounted && !openNote && !selectMode && !hideComposeButton && <PageFabFlag />}
       {mounted && !openNote && !selectMode && !hideComposeButton && createPortal(
         <button
           type="button"
@@ -577,8 +741,19 @@ export function QuickNotesPanel({
           onDuplicate={() => { const c = duplicate(openNote); setOpenId(c.id); }}
           onDelete={() => trashNotes([openNote.id])}
           moveGrid={moveGrid(() => [openNote])}
+          clientMenu={clientMenu(openNote)}
+          onPickClient={() => setLinkFor(openNote.id)}
+          onOpenClient={() => openClientFile(openNote)}
         />
       )}
+
+      <ClientLinkDialog
+        open={!!linkTarget}
+        noteText={linkTarget ? `${linkTarget.title}\n${linkTarget.body}` : ""}
+        currentClientId={linkTarget?.clientId}
+        onPick={(c) => linkTarget && linkNote(linkTarget.id, c)}
+        onClose={() => setLinkFor(null)}
+      />
 
       <Dialog open={trashOpen && trashed.length > 0} onOpenChange={setTrashOpen}>
         <DialogContent className="flex max-h-[85dvh] max-w-md flex-col gap-3">
@@ -645,7 +820,7 @@ export function QuickNotesPanel({
 // ---------------------------------------------------------------- editor
 
 function NoteEditor({
-  note, saveState, onChange, onClose, onDuplicate, onDelete, moveGrid,
+  note, saveState, onChange, onClose, onDuplicate, onDelete, moveGrid, clientMenu, onPickClient, onOpenClient,
 }: {
   note: Note;
   saveState: SaveState;
@@ -654,6 +829,9 @@ function NoteEditor({
   onDuplicate: () => void;
   onDelete: () => void;
   moveGrid: React.ReactNode;
+  clientMenu: React.ReactNode;
+  onPickClient: () => void;
+  onOpenClient: () => void;
 }) {
   const isDesktop = useIsDesktop();
   const box = useVisualViewportBox(!isDesktop);
@@ -764,6 +942,8 @@ function NoteEditor({
               <DropdownMenuContent align="end" className="z-[85] w-60">
                 {moveGrid}
                 <DropdownMenuSeparator />
+                {clientMenu}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => window.setTimeout(() => { titleRef.current?.focus(); titleRef.current?.select(); }, 50)}>
                   <Pencil className="mr-2 h-4 w-4" />Rename
                 </DropdownMenuItem>
@@ -791,6 +971,26 @@ function NoteEditor({
             enterKeyHint="next"
             className="w-full shrink-0 bg-transparent pb-2 pt-4 text-[22px] font-bold leading-tight tracking-tight outline-none placeholder:text-muted-foreground/50"
           />
+          {note.clientId ? (
+            <button
+              type="button"
+              onClick={onOpenClient}
+              className="mb-2 inline-flex w-fit max-w-full shrink-0 items-center gap-1 rounded-full bg-primary/12 px-2.5 py-1 text-[12px] font-semibold text-primary active:opacity-70"
+              title="Open client file"
+            >
+              <UserRound className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{note.clientName ?? "Client"}</span>
+              <span className="shrink-0 font-normal text-primary/70">· synced to client file</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onPickClient}
+              className="mb-2 inline-flex w-fit shrink-0 items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[12px] font-medium text-muted-foreground hover:text-foreground active:opacity-70"
+            >
+              <UserRoundPlus className="h-3.5 w-3.5" /> Save to client file
+            </button>
+          )}
           <div className="h-px shrink-0 bg-border/70" />
           <textarea
             ref={bodyRef}
@@ -808,4 +1008,15 @@ function NoteEditor({
     </div>,
     document.body,
   );
+}
+
+/** Tells other floating buttons (Cleo) that this page has its own, so they move up. */
+function PageFabFlag() {
+  useEffect(() => {
+    document.documentElement.dataset.pageFab = "1";
+    return () => {
+      delete document.documentElement.dataset.pageFab;
+    };
+  }, []);
+  return null;
 }
