@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 // A staff login linked to the person's own client account reads that
 // account's calendar data (and nothing else), so the staff home's "My
 // calendar" card isn't empty for the person themselves.
-const sql = readFileSync("supabase/migrations/20261029090000_linked_login_reads_own_calendar.sql", "utf8");
+const sql = readFileSync("supabase/migrations/20261029110000_linked_login_reads_own_calendar.sql", "utf8");
 
 describe("linked login reads its own calendar", () => {
   it("covers every table the client calendar reads", () => {
