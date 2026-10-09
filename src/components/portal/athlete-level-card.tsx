@@ -75,24 +75,25 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [] }: 
   useEffect(() => { const h=()=>setOpen("levels"); window.addEventListener("jf-open-athlete-levels",h); return () => window.removeEventListener("jf-open-athlete-levels",h); }, []);
 
   const openRankings = (athlete: string | null = null) => { setSelectedLeagueAthlete(athlete); setOpen("rankings"); };
-  const top10 = leagueRows.filter(r=>r.qualified && r.rank!=null && Number(r.rank)<=10).sort((a,b)=>Number(a.rank)-Number(b.rank));
-  const outside = !!leagueMe?.qualified && Number(leagueMe.rank) > 10;
-  const gap = outside && top10.at(-1) ? Math.max(0, leagueScore(top10.at(-1))-leagueScore(leagueMe)) : 0;
+  // The card shows the Top 5 (and you, if you're outside it); Full standings has everyone.
+  const top5 = leagueRows.filter(r=>r.qualified && r.rank!=null && Number(r.rank)<=5).sort((a,b)=>Number(a.rank)-Number(b.rank));
+  const outside = !!leagueMe?.qualified && Number(leagueMe.rank) > 5;
+  const rankedCount = leagueRows.filter(r=>r.qualified && r.rank!=null).length;
 
-  // The month's league: where you stand, the podium, last month's recap, the full Top 10.
+  // The month's league: where you stand, the podium, the Top 5, last month's recap, full standings.
   const leagueCard = (
     <div className="flex h-full flex-col">
       <button type="button" onClick={() => openRankings()} className="flex w-full items-start gap-3 px-4 pt-3 text-left active:opacity-70">
         <span className="min-w-0 flex-1">
           <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} Performance League</span>
-          <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">Top 10 <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>Live</span></span>
+          <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">Top 5 <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>Live</span></span>
           {isFinalWeek() && <span className="mt-1 inline-flex w-fit items-center rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">🔥 Final week · Boost live</span>}
         </span>
         {!leaguePending && leagueMe?.qualified && (
           <span className="shrink-0 text-right">
-            <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{outside ? "Your score" : "Your rank"}</span>
-            <span className="block text-lg font-bold leading-tight text-primary">{outside ? formatLeaguePoints(leagueScore(leagueMe)) : "#"+leagueMe.rank}</span>
-            <span className="block text-[11px] font-bold text-muted-foreground">{outside ? formatLeaguePoints(gap)+" pts to Top 10" : formatLeaguePoints(leagueScore(leagueMe))+" pts"}</span>
+            <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Your rank</span>
+            <span className="block text-lg font-bold leading-tight text-primary">#{leagueMe.rank}</span>
+            <span className="block text-[11px] font-bold text-muted-foreground">{formatLeaguePoints(leagueScore(leagueMe))} pts</span>
           </span>
         )}
       </button>
@@ -118,10 +119,10 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [] }: 
           })}
         </div>
       )}
-      {/* the rest of the Top 10, and you if you're outside it */}
-      {top10.length > 3 && (
+      {/* 4th and 5th, and you if you're outside the Top 5 */}
+      {(top5.length > 3 || outside) && (
         <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
-          {[...top10.slice(3), ...(outside && leagueMe ? [leagueMe] : [])].map((r) => (
+          {[...top5.slice(3), ...(outside && leagueMe ? [leagueMe] : [])].map((r) => (
             <li key={r.client_id}>
               <button type="button" onClick={() => openRankings(r.client_id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
                 <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{r.rank}</span>
@@ -133,11 +134,11 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [] }: 
           ))}
         </ol>
       )}
-      <div className="mt-auto flex items-center gap-2 px-3 pb-3 pt-2.5">
-        <LeagueRecapHomeTile variant="mini" className="min-w-0 flex-1" />
-        <button type="button" onClick={() => openRankings()} className="ml-auto inline-flex h-8 shrink-0 items-center gap-0.5 rounded-full px-2.5 text-xs font-bold text-primary active:bg-muted">
-          Full standings <ChevronRight className="h-3.5 w-3.5" />
+      <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
+        <button type="button" onClick={() => openRankings()} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
+          Full standings{rankedCount > 5 ? ` · all ${rankedCount}` : ""} <ChevronRight className="h-4 w-4" />
         </button>
+        <LeagueRecapHomeTile variant="mini" />
       </div>
     </div>
   );
@@ -167,12 +168,13 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [] }: 
       )}
       <div className="mt-auto grid grid-cols-2 gap-2 pb-3 pt-3">
         <div className="min-w-0 [&>button]:mt-0 [&>button]:h-full [&>button]:rounded-xl [&>button]:border-0 [&>button]:bg-muted/40 [&>button]:px-2.5 [&>button]:py-2"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
-        <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 rounded-xl bg-muted/40 px-2.5 py-2 text-left transition-colors active:bg-muted"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Competition Records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
+        <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 rounded-xl bg-muted/40 px-2.5 py-2 text-left transition-colors active:bg-muted"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Meet records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
       </div>
     </div>
   );
 
-  const cards = [{ key: "league", node: leagueCard }, { key: "level", node: levelCard }, ...boards];
+  // League, then the boards (Hall of Strength), then the Logging Level.
+  const cards = [{ key: "league", node: leagueCard }, ...boards, { key: "level", node: levelCard }];
   return (
     <>
       <div className="space-y-3">
@@ -184,7 +186,7 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [] }: 
       </div>
 
       <Sheet open={open === "levels" || open === "rankings"} onOpenChange={(o) => { if (!o) { setOpen(null); setSelectedLeagueAthlete(null); } }}>
-        <SheetContent side="bottom" hideCloseButton={open === "rankings" && !!selectedLeagueAthlete} className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
+        <SheetContent side="bottom" hideCloseButton={open === "rankings" && !!selectedLeagueAthlete} className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-5 pb-safe-bottom pt-5">
           {open === "levels" ? <LevelsView total={total} events={events} />
             : open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} selected={selectedLeagueAthlete} onSelectedChange={setSelectedLeagueAthlete} />
             : null}
@@ -192,7 +194,7 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [] }: 
       </Sheet>
 
       <Sheet open={open === "powerlifting"} onOpenChange={(o) => !o && setOpen(null)}>
-        <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
+        <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-5 pb-safe-bottom pt-5">
           <div className="min-h-[320px]">
             <HallOfStrength initialSource="meets" />
           </div>

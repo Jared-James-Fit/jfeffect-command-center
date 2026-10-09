@@ -210,7 +210,7 @@ export function StrengthBoardCard() {
         </div>
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">
+        <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-safe-bottom">
           <HallOfStrength />
         </SheetContent>
       </Sheet>
@@ -224,12 +224,13 @@ export function StrengthBoardCard() {
  */
 export function StrengthBoardSlide() {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<BoardMode>("p4p");
   const { data = [], isPending } = useStrengthBoard();
   const { unit } = useWeightUnit();
   const myP4p = data.find((r) => r.is_me && r.lift === "total" && r.p4p_rank != null)?.p4p_rank ?? null;
   const myAbs = data.find((r) => r.is_me && r.lift === "total" && r.all_rank != null)?.all_rank ?? null;
-  const p4pKing = pickBoard(data, "p4p", "total", "all").top[0] ?? null;
-  const absKing = pickBoard(data, "absolute", "total", "all").top[0] ?? null;
+  // The card's Top 5: total, pound for pound or heaviest; the sheet has every lift and everyone.
+  const top5 = pickBoard(data, mode, "total", "all", 5).top;
   const myLine = myP4p || myAbs
     ? `You: ${[myP4p && `#${myP4p} pound for pound`, myAbs && `#${myAbs} total`].filter(Boolean).join(" · ")}`
     : data.some((r) => r.is_me)
@@ -238,27 +239,64 @@ export function StrengthBoardSlide() {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="flex h-full w-full flex-col text-left active:opacity-80">
-        <span className="flex w-full items-start justify-between gap-3 px-4 pt-3">
+      <div className="flex h-full flex-col">
+        <button type="button" onClick={() => setOpen(true)} className="flex w-full items-start justify-between gap-3 px-4 pt-3 text-left active:opacity-70">
           <span className="min-w-0">
             <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">All-time strength board</span>
             <span className="mt-0.5 block text-lg font-bold tracking-tight">Hall of Strength</span>
+            <span className="block text-[11px] text-muted-foreground">Total · every JF Effect athlete · gym + meets</span>
           </span>
           <Trophy className="h-6 w-6 shrink-0 text-amber-400" />
-        </span>
-        <span className="mt-1 grid w-full grid-cols-2">
-          <KingTile label="Pound for pound #1" row={p4pKing} loading={isPending}
-            value={p4pKing ? <>{formatMultiple(p4pKing.bw_multiple)}<span className="ml-0.5 text-[10px] font-black text-muted-foreground">BW</span></> : null} />
-          <KingTile label="Heaviest total #1" row={absKing} loading={isPending}
-            value={absKing ? formatLoad(absKing.kg, unit) : null} />
-        </span>
-        <span className="mt-auto flex w-full items-center justify-between px-4 pb-3 pt-1 text-xs font-bold">
+        </button>
+        <div className="mx-3 mt-2.5 grid grid-cols-2 rounded-full bg-muted/50 p-1 text-xs font-bold" role="tablist" aria-label="Hall of Strength board">
+          {([["p4p", "Pound for pound"], ["absolute", "Heaviest"]] as const).map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => setMode(k)}
+              className={cn("min-h-8 rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {isPending ? (
+          <div className="mx-3 mt-2 h-48 animate-pulse rounded-xl bg-muted/40" />
+        ) : top5.length === 0 ? (
+          <button type="button" onClick={() => setOpen(true)} className="mx-3 mt-2 rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
+            Nobody's on this board yet. Be the first.
+          </button>
+        ) : (
+          <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
+            {top5.map((r) => {
+              const rank = rankOf(r, mode, "all")!;
+              return (
+                <li key={r.key}>
+                  <button type="button" onClick={() => setOpen(true)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left active:bg-muted", r.is_me && "bg-primary/10")}>
+                    <span className="w-6 shrink-0 text-center text-sm leading-none">
+                      {rank <= 3 ? ["🥇", "🥈", "🥉"][rank - 1] : <span className="text-[12px] font-black tabular-nums text-muted-foreground">{rank}</span>}
+                    </span>
+                    <LifterAvatar row={r} size="h-7 w-7 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold">{r.is_me ? "You" : r.display_name}</span>
+                      <span className="block truncate text-[10px] text-muted-foreground">
+                        {r.source === "meet" ? "Meet" : "Training"}{mode === "p4p" ? ` · ${formatLoad(r.kg, unit)}` : r.bw_multiple ? ` · ${formatMultiple(r.bw_multiple)} BW` : ""}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[13px] font-black tabular-nums">
+                      {mode === "p4p"
+                        ? <>{formatMultiple(r.bw_multiple)}<span className="ml-0.5 text-[9px] text-muted-foreground">BW</span></>
+                        : formatLoad(r.kg, unit)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        <button type="button" onClick={() => setOpen(true)} className="mt-auto flex w-full items-center justify-between px-4 pb-3 pt-2.5 text-xs font-bold active:opacity-70">
           <span className={cn(myP4p || myAbs ? "text-foreground" : "text-primary")}>{myLine}</span>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </span>
-      </button>
+          <span className="inline-flex items-center gap-0.5 text-primary">Open <ChevronRight className="h-4 w-4" /></span>
+        </button>
+      </div>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">
+        <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-safe-bottom">
           <HallOfStrength />
         </SheetContent>
       </Sheet>

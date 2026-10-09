@@ -47,14 +47,15 @@ describe("the centre tab is League: standings and the crew in one place", () => 
 });
 
 describe("the League tab", () => {
-  it("the crew goal first, then the League, Level and Hall of Strength, a card each", () => {
+  it("the crew goal first, then the League, the Hall of Strength and the Level, a card each", () => {
     expect(hub.indexOf("<CrewGoalCard />")).toBeLessThan(hub.indexOf("<AthleteLevelCard"));
     expect(hub).toContain('<AthleteLevelCard clientId={client.id} boards={[{ key: "strength", node: <StrengthBoardSlide /> }]} />');
-    expect(card).toContain('const cards = [{ key: "league", node: leagueCard }, { key: "level", node: levelCard }, ...boards];');
+    expect(card).toContain('const cards = [{ key: "league", node: leagueCard }, ...boards, { key: "level", node: levelCard }];');
     expect(card).toContain("data-standing={c.key}");
   });
-  it("the whole Top 10 shows, plus you when you're outside it; every row opens that athlete", () => {
-    expect(card).toContain("[...top10.slice(3), ...(outside && leagueMe ? [leagueMe] : [])]");
+  it("the card shows the Top 5, plus you when you're outside it; every row opens that athlete", () => {
+    expect(card).toContain("Number(r.rank)<=5");
+    expect(card).toContain("[...top5.slice(3), ...(outside && leagueMe ? [leagueMe] : [])]");
     expect(card).toContain("onClick={() => openRankings(r.client_id)}");
   });
   it("every board still opens in full: standings, levels, competition records, the Hall of Strength, last month's recap", () => {
@@ -63,7 +64,9 @@ describe("the League tab", () => {
     expect(card).toContain('onClick={() => setOpen("powerlifting")}');
     expect(board).toContain("export function StrengthBoardSlide()");
     expect(board).toContain("<HallOfStrength />");
-    expect(card).toContain('<LeagueRecapHomeTile variant="mini" className="min-w-0 flex-1" />');
+    expect(board).toContain('pickBoard(data, mode, "total", "all", 5)');
+    expect(card).toContain('<LeagueRecapHomeTile variant="mini" />');
+    expect(recap).toContain("You finished ${ordinal(recap.me.rank)} place");
     expect(recap).toContain("{playing && <LeagueRecapStory recap={playing} open={!!playing} onClose={() => setPlaying(null)} />}");
   });
   it("the level shows what just earned points", () => {
