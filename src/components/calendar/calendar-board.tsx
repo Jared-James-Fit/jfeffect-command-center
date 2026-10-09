@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,26 @@ function fmtFullDate(d: Date) {
 
 const WEEKDAY_LABELS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
+export type VisibleRange = { from: string; to: string };
+const UPCOMING_DAYS = 60;
+
+/** First and last day each view draws (the month view pads to whole weeks). */
+export function visibleRange(view: ViewMode, cursor: Date): VisibleRange {
+  if (view === "week") {
+    const ws = startOfWeek(cursor);
+    return { from: isoDate(ws), to: isoDate(addDays(ws, 6)) };
+  }
+  if (view === "day") return { from: isoDate(cursor), to: isoDate(cursor) };
+  if (view === "upcoming") {
+    const today = startOfDay(new Date());
+    return { from: isoDate(today), to: isoDate(addDays(today, UPCOMING_DAYS)) };
+  }
+  const monthStart = startOfMonth(cursor);
+  const gridStart = startOfWeek(monthStart);
+  const totalCells = Math.ceil((endOfMonth(cursor).getDate() + monthStart.getDay()) / 7) * 7;
+  return { from: isoDate(gridStart), to: isoDate(addDays(gridStart, totalCells - 1)) };
+}
+
 export function CalendarBoard({
   items,
   isLoading,
@@ -39,6 +59,7 @@ export function CalendarBoard({
   onCreate,
   onItemSelect,
   renderItemActions,
+  onRangeChange,
 }: {
   items: CalendarItem[];
   isLoading?: boolean;
@@ -51,9 +72,17 @@ export function CalendarBoard({
   onItemSelect?: (item: CalendarItem) => boolean | void;
   /** Extra buttons inside the default detail sheet for an item. */
   renderItemActions?: (item: CalendarItem, close: () => void) => React.ReactNode;
+  /** The days on screen (yyyy-mm-dd, inclusive), so a source can load just those. */
+  onRangeChange?: (range: VisibleRange) => void;
 }) {
   const [view, setView] = useState<ViewMode>("month");
   const [cursor, setCursor] = useState<Date>(() => startOfDay(new Date()));
+
+  const range = useMemo(() => visibleRange(view, cursor), [view, cursor]);
+  useEffect(() => {
+    onRangeChange?.(range);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.from, range.to]);
   const [selected, setSelectedRaw] = useState<CalendarItem | null>(null);
   const setSelected = (it: CalendarItem | null) => {
     if (it && onItemSelect?.(it) === true) return;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { resolveWeekDayDates } from "@/lib/workout-today";
@@ -498,7 +498,32 @@ export type AdminCalendarFilters = {
   clientId?: string | "all";
   kinds?: Set<CalendarKind>;
   includeGoogle?: boolean;
+  /** Days on screen (yyyy-mm-dd, inclusive). Google loads for these months. */
+  googleRange?: { from: string; to: string } | null;
 };
+
+/**
+ * Google fetch window for the days on screen, snapped to whole months so
+ * flipping weeks inside a month reuses one fetch. Without a range: last
+ * month through two months out.
+ */
+export function googleFetchWindow(range?: { from: string; to: string } | null): { timeMin: string; timeMax: string } {
+  if (!range) {
+    const now = new Date();
+    return {
+      timeMin: new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(),
+      timeMax: new Date(now.getFullYear(), now.getMonth() + 3, 1).toISOString(),
+    };
+  }
+  // yyyy-mm-dd months are 1-based, Date months 0-based: (y, m - 1, 1) is the
+  // first of the "from" month, (y, m, 1) the first of the month after "to".
+  const [fy, fm] = range.from.split("-").map(Number);
+  const [ty, tm] = range.to.split("-").map(Number);
+  return {
+    timeMin: new Date(fy, fm - 1, 1).toISOString(),
+    timeMax: new Date(ty, tm, 1).toISOString(),
+  };
+}
 
 export function useAdminCalendarSources(filters: AdminCalendarFilters) {
   const eventsQ = useQuery({
@@ -549,17 +574,17 @@ export function useAdminCalendarSources(filters: AdminCalendarFilters) {
     },
   });
 
-  // Google Calendar overlay — only fetched when explicitly toggled on.
+  // Google Calendar overlay, only fetched when toggled on: the months on
+  // screen, so paging to any month shows its Google events too.
+  const googleWindow = googleFetchWindow(filters.googleRange);
   const googleQ = useQuery({
-    queryKey: ["cal-admin-google"],
+    queryKey: ["cal-admin-google", googleWindow.timeMin, googleWindow.timeMax],
     enabled: !!filters.includeGoogle,
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
     queryFn: async () => {
-      const now = new Date();
-      const timeMin = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-      const timeMax = new Date(now.getFullYear(), now.getMonth() + 3, 0, 23, 59, 59).toISOString();
       try {
-        return await listGoogleEventsRange({ data: { timeMin, timeMax } as any });
+        return await listGoogleEventsRange({ data: googleWindow as any });
       } catch {
         return [];
       }

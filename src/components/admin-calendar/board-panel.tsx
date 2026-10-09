@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Filter, Calendar as CalIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { CalendarBoard } from "@/components/calendar/calendar-board";
+import { CalendarBoard, visibleRange, type VisibleRange } from "@/components/calendar/calendar-board";
 import { useAdminCalendarSources, useGoogleCalendarStatus, KIND_META, type CalendarKind, type CalendarItem } from "@/lib/calendar-sources";
 import { AdminNeedsAttentionPanel } from "@/components/calendar/needs-attention-panel";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
@@ -34,6 +34,9 @@ export function AdminCalendarBoardPanel() {
   const [booking, setBooking] = useState<{ date: string } | null>(null);
   const [editing, setEditing] = useState<any>(null);
   const [acting, setActing] = useState<{ session: ActionSession; clientName: string | null } | null>(null);
+  // Days the board is drawing; Google loads for those months. Starts on the
+  // board's own default (this month) so the first load is the right one.
+  const [visible, setVisible] = useState<VisibleRange>(() => visibleRange("month", new Date()));
 
   const { data: gcalStatus } = useGoogleCalendarStatus();
   const googleConnected = !!gcalStatus?.connected;
@@ -50,8 +53,8 @@ export function AdminCalendarBoardPanel() {
   const filters = useMemo(() => {
     const k = new Set(kinds);
     if (includeGoogle && googleConnected) k.add("google_event");
-    return { clientId, kinds: k, includeGoogle: includeGoogle && googleConnected };
-  }, [clientId, kinds, includeGoogle, googleConnected]);
+    return { clientId, kinds: k, includeGoogle: includeGoogle && googleConnected, googleRange: visible };
+  }, [clientId, kinds, includeGoogle, googleConnected, visible]);
   const { items, clients, isLoading } = useAdminCalendarSources(filters);
 
   const { data: bookingClients = [] } = useQuery({
@@ -181,6 +184,7 @@ export function AdminCalendarBoardPanel() {
             toolbar={toolbar}
             onCreate={(date) => setBooking({ date })}
             onItemSelect={onItemSelect}
+            onRangeChange={setVisible}
             emptyHint={
               activeFilterCount > 0
                 ? "No calendar items match your current filters. Try clearing filters or widening the date range."
