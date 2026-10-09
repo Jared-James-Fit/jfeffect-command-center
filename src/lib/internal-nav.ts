@@ -27,7 +27,7 @@ import {
   Link as LinkIcon, Trophy, Tag, ShieldCheck,
   Home as HomeIcon,
   ListChecks, Upload, Star, FileText, ExternalLink, Image as ImageIcon,
-  PowerOff, Landmark,
+  PowerOff, Landmark, Wallet,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -285,14 +285,16 @@ const MEMBERSHIP_OVERLAY: Entry[] = [
 ];
 
 /**
- * The finance login's own section, first in its sidebar: the money pages it
- * works in every day, from the same registry entries as the admin's Payments
- * menu (labels tuned for a bookkeeper). The rest of the admin nav follows.
+ * The finance login's own section, first in its sidebar: its home and the
+ * money pages it works in every day, from the same registry entries as the
+ * admin's Payments menu (labels tuned for a bookkeeper). The rest of the admin
+ * nav follows.
  */
+const FINANCE_HOME: NavItem = { to: "/admin/finance", label: "Home", icon: Wallet, group: "Finance" };
 const FINANCE_PAGES: Array<{ to: string; label?: string }> = [
   { to: "/admin/sales?tab=taxes" },
+  { to: "/admin/transactions", label: "Payments" },
   { to: "/admin/payments", label: "Revenue" },
-  { to: "/admin/transactions" },
   { to: "/admin/membership/billing", label: "Subscriptions" },
   { to: "/admin/discount-codes" },
   { to: "/admin/payment-links" },
@@ -300,12 +302,15 @@ const FINANCE_PAGES: Array<{ to: string; label?: string }> = [
 
 export function buildFinanceNav(): NavItem[] {
   const all = [...REGISTRY, ...MEMBERSHIP_OVERLAY];
-  return FINANCE_PAGES.flatMap(({ to, label }) => {
-    const entry = all.find((e) => e.to === to);
-    if (!entry) return [];
-    const { visibleTo: _v, section: _s, ...item } = entry as Entry & { section?: string };
-    return [{ ...item, label: label ?? item.label, group: "Finance" } as NavItem];
-  });
+  return [
+    FINANCE_HOME,
+    ...FINANCE_PAGES.flatMap(({ to, label }) => {
+      const entry = all.find((e) => e.to === to);
+      if (!entry) return [];
+      const { visibleTo: _v, section: _s, ...item } = entry as Entry & { section?: string };
+      return [{ ...item, label: label ?? item.label, group: "Finance" } as NavItem];
+    }),
+  ];
 }
 
 /**

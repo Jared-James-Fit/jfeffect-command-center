@@ -180,17 +180,18 @@ describe("finance login's workspace", () => {
     const { buildFinanceNav } = await import("@/lib/internal-nav");
     const nav = buildFinanceNav();
     expect(nav.map((i) => i.to)).toEqual([
-      "/admin/sales?tab=taxes", "/admin/payments", "/admin/transactions",
+      "/admin/finance", "/admin/sales?tab=taxes", "/admin/transactions", "/admin/payments",
       "/admin/membership/billing", "/admin/discount-codes", "/admin/payment-links",
     ]);
     expect(nav.every((i) => i.group === "Finance" && !!i.icon)).toBe(true);
-    expect(nav.map((i) => i.label)).toEqual(["Taxes & Books", "Revenue", "Transactions", "Subscriptions", "Discount Codes", "Products"]);
+    expect(nav.map((i) => i.label)).toEqual(["Home", "Taxes & Books", "Payments", "Revenue", "Subscriptions", "Discount Codes", "Products"]);
   });
 
   it("lands on the books and gets a money-first phone bar", () => {
     const route = readFileSync("src/routes/_authenticated/admin/route.tsx", "utf8");
     expect(route).toMatch(/viewOnly\s*\?\s*\[\.\.\.buildFinanceNav\(\), \.\.\.fullNav\]/);
-    expect(route).toMatch(/label: "Books"[\s\S]*label: "Sales"[\s\S]*label: "Discounts"[\s\S]*label: "Clients"[\s\S]*label: "Home"/);
+    expect(route).toMatch(/to: "\/admin\/finance", label: "Home"[\s\S]*label: "Books"[\s\S]*label: "Payments"[\s\S]*label: "Clients"/);
+    expect(readFileSync("src/routes/_authenticated/finance.tsx", "utf8")).toContain('to: "/admin/finance"');
     expect(readFileSync("src/routes/index.tsx", "utf8")).toContain('viewOnly ? "/finance"');
     expect(readFileSync("src/routes/auth.tsx", "utf8")).toContain('viewOnly ? "/finance"');
     expect(readFileSync("src/components/app-shell.tsx", "utf8")).toMatch(/"Finance", \/\/ the finance login's own section, always first\n\s+"Overview",/);
