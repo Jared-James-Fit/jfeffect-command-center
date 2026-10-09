@@ -519,7 +519,7 @@ function UpcomingAppointmentRow({ appt }: { appt: any }) {
     : isTomorrow(start) ? `Tomorrow · ${format(start, "h:mma")}`
     : format(start, "EEE, MMM d · h:mma");
   return (
-    <Link to="/portal/appointments" className="block">
+    <Link to="/portal/calendar" className="block">
       <div className="flex min-h-[64px] items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 transition active:bg-secondary/30">
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border bg-secondary/40">
           <CalendarIcon className="h-5 w-5 text-primary" />

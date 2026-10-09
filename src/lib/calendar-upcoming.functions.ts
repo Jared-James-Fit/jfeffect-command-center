@@ -58,7 +58,7 @@ export const listUpcomingUnified = createServerFn({ method: "POST" })
     // 2. PT sessions
     const ptQ = supabase
       .from("pt_sessions")
-      .select("id, client_id, title, session_type, custom_type, starts_at, ends_at, timezone, location, status")
+      .select("id, client_id, title, session_type, custom_type, starts_at, ends_at, timezone, location, status, google_event_id")
       .not("starts_at", "is", null)
       .gte("starts_at", past)
       .lte("starts_at", future)
@@ -143,12 +143,24 @@ export const listUpcomingUnified = createServerFn({ method: "POST" })
         client_id: s.client_id,
         client_lifecycle: c?.lifecycle_stage,
         client_is_active: !!(c && c.lifecycle_stage === "active_client" && !c.archived),
-        sync_state: "app_only",
+        google_event_id: (s as any).google_event_id ?? null,
+        google_synced: !!(s as any).google_event_id,
+        sync_state: (s as any).google_event_id ? "synced" : "app_only",
       });
     }
 
     // Google events: dedupe by google_event_id (primary), else composite (start time + 1 min tolerance + matching title)
     for (const g of googleEvents) {
+      // The Google copy of an app PT session is the same booking: link it, don't list it twice.
+      if (g.appSessionId) {
+        const pt = rows.find((r) => r.source === "pt_session" && r.source_id === g.appSessionId);
+        if (pt) {
+          pt.google_html_link = g.htmlLink;
+          pt.google_synced = true;
+          pt.sync_state = "synced";
+        }
+        continue;
+      }
       if (apptByGoogleId.has(g.id)) {
         // attach extra Google details to the matching appt row
         const matched = rows.find((r) => r.source === "appointment" && r.google_event_id === g.id);

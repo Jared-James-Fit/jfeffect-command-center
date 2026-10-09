@@ -349,6 +349,8 @@ export async function sendMessage(input: {
   priority?: string | null;
   replyToMessageId?: string | null;
   replyPreview?: MessageReplyPreview | null;
+  /** System-written notes (e.g. "Moved your session to ..."). Shown as "Auto:" in the inbox. */
+  isAutomated?: boolean;
 }) {
   const row: Record<string, unknown> = {
     client_id: input.clientId,
@@ -361,6 +363,7 @@ export async function sendMessage(input: {
     reply_to_message_id: input.replyToMessageId ?? null,
     reply_preview: input.replyPreview ?? null,
   };
+  if (input.isAutomated) row.is_automated = true;
   if (input.senderRole === "admin" && input.priority !== undefined) row.priority = input.priority;
   if (input.senderRole === "admin") {
     row.read_by_admin_at = new Date().toISOString();

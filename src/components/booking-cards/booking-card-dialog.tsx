@@ -202,8 +202,7 @@ export function BookingCardDialog({
           />
           <ToggleRow label="Show session in client calendar" checked={form.visible_to_client} onChange={(v) => set("visible_to_client", v)} />
           <ToggleRow label="Show notes to client" checked={form.client_visible_notes} onChange={(v) => set("client_visible_notes", v)} />
-          <ToggleRow label="Send 24h + 1h reminder emails" checked={form.reminders_enabled} onChange={(v) => set("reminders_enabled", v)} />
-          <ToggleRow label="Send booking confirmation email" checked={form.send_confirmation_email} onChange={(v) => set("send_confirmation_email", v)} />
+          <ToggleRow label="Text a reminder at 6 PM the evening before" checked={form.reminders_enabled} onChange={(v) => set("reminders_enabled", v)} />
           <ToggleRow label="Active (available when booking)" checked={form.is_active} onChange={(v) => set("is_active", v)} />
         </div>
         <DialogFooter>
