@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
 import { Camera, Check, ChevronLeft, Download, EyeOff, Images, Lock, RefreshCcw, Send, Smile, Timer, Type, User, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -99,6 +100,8 @@ export function ShareStudio({
   onVideo?: (file: File) => void;
   post: StudioPost | null;
 }) {
+  // No iOS focus-zoom anywhere in the studio: it left the editor zoomed and off-centre.
+  useNoAutoZoom(open);
   const [phase, setPhase] = useState<"shoot" | "edit">("shoot");
   // Shooting another slide for the carousel (plain camera, no card on it).
   const [adding, setAdding] = useState(false);

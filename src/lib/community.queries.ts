@@ -3,11 +3,12 @@
  * 20261006090000_community_sharing.sql. Row-level security and the RPCs are
  * the real gate; nothing here is trusted for permissions.
  */
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   FEED_PAGE_SIZE,
+  buildCommentPreview,
   nextFeedCursor,
   type CommunityComment,
   type CommunityFeedPage,
@@ -535,14 +536,42 @@ export function useShareComment() {
  */
 export function useSyncCommentCount(postId: string, comments: CommunityComment[] | undefined) {
   const qc = useQueryClient();
-  const last = useRef<number | null>(null);
   useEffect(() => {
     if (!comments || comments.length >= 300) return;
     const n = comments.filter((c) => !c.hidden).length;
-    if (last.current === n) return;
-    last.current = n;
-    patchPost(qc, postId, (p) => (p.comment_count === n ? p : { ...p, comment_count: n }));
+    // The count and the feed's comment preview follow the thread you're looking at.
+    patchPost(qc, postId, (p) => {
+      const preview = buildCommentPreview(comments.filter((c) => !c.pending), p.pinned_comment_id);
+      const same = p.comment_count === n && JSON.stringify(p.comment_preview ?? []) === JSON.stringify(preview);
+      return same ? p : { ...p, comment_count: n, comment_preview: preview };
+    });
   }, [comments, postId, qc]);
+}
+
+/** Pin / unpin a comment on your own post (one pin per post). */
+export function usePinComment(postId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, pinned }: { id: string; pinned: boolean }) => {
+      const { error } = await db.rpc("community_pin_comment", { _comment_id: id, _pinned: pinned });
+      if (error) throw error;
+    },
+    onMutate: ({ id, pinned }) => {
+      const comments = qc.getQueryData<CommunityComment[]>(communityKeys.comments(postId)) ?? [];
+      let before: string | null | undefined;
+      patchPost(qc, postId, (p) => {
+        before = p.pinned_comment_id;
+        const next = pinned ? id : p.pinned_comment_id === id ? null : p.pinned_comment_id ?? null;
+        return { ...p, pinned_comment_id: next, comment_preview: comments.length ? buildCommentPreview(comments, next) : p.comment_preview };
+      });
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      const comments = qc.getQueryData<CommunityComment[]>(communityKeys.comments(postId)) ?? [];
+      patchPost(qc, postId, (p) => ({ ...p, pinned_comment_id: ctx?.before ?? null, comment_preview: comments.length ? buildCommentPreview(comments, ctx?.before) : p.comment_preview }));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["community-feed"], refetchType: "none" }),
+  });
 }
 
 /** Signed URLs for every photo / video thumbnail in a thread, in one storage call. */

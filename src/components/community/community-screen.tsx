@@ -98,6 +98,17 @@ export function CommunityScreen({
     markHint(tipVisit);
   }, [hintId, tipVisit, markHint]);
   const onTipDone = useCallback(() => setTipDone(true), []);
+  // "View full workout": pulses on the first workout in the feed until they open one
+  // (on the account, so it never comes back on another phone). Waits for the like tip.
+  const OPEN_HINT = "open_workout";
+  const openHintId =
+    hints.data && !hints.data.includes(OPEN_HINT) && (tipDone || !tipVisit)
+      ? (posts.find((p) => p.kind !== "note" && !!p.stats)?.id ?? null)
+      : null;
+  const openPost = useCallback((post: CommunityPost) => {
+    if (post.kind !== "note") markHint(OPEN_HINT);
+    setDetailId(post.id);
+  }, [markHint]);
   const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? posts : []);
 
   // Opening the community clears the "new posts" badge (server-side, every device).
@@ -247,9 +258,9 @@ export function CommunityScreen({
       {scope.kind === "crew" ? (
         <CrewList onOpen={openAuthor} />
       ) : scope.kind === "you" && user?.id ? (
-        <ProfileView userId={user.id} unit={unit} onOpenPost={(p) => setDetailId(p.id)} />
+        <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} />
       ) : scope.kind === "author" ? (
-        <ProfileView userId={scope.author.user_id} unit={unit} onOpenPost={(p) => setDetailId(p.id)} />
+        <ProfileView userId={scope.author.user_id} unit={unit} onOpenPost={openPost} />
       ) : feed.isLoading ? (
         <div className="space-y-3">
           {[0, 1].map((i) => (
@@ -280,10 +291,11 @@ export function CommunityScreen({
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
               unit={unit}
               viewerIsStaff={viewerIsStaff}
-              onOpen={(post) => setDetailId(post.id)}
+              onOpen={openPost}
               onOpenComments={setCommentsFor}
               onOpenAuthor={openAuthor}
               doubleTapHint={p.id === hintId}
+              openHint={p.id === openHintId}
               onDoubleTap={onDoubleTap}
               onTipDone={onTipDone}
             />
@@ -316,6 +328,7 @@ function PostRow(props: {
   doubleTapHint?: boolean;
   onDoubleTap?: () => void;
   onTipDone?: () => void;
+  openHint?: boolean;
 }) {
   const react = useReact(props.post, props.viewerIsStaff);
   return (
