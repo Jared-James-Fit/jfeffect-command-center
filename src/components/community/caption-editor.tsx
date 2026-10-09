@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { Check } from "lucide-react";
+import { Check, PenLine } from "lucide-react";
 import { CAPTION_MAX } from "@/lib/community";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { MentionSuggestBar } from "@/components/community/mentions";
@@ -29,10 +29,11 @@ export function CaptionField({ value, onOpen }: { value: string; onOpen: () => v
     <button
       type="button"
       onClick={onOpen}
-      className="block min-h-11 w-full rounded-2xl bg-white/10 px-4 py-3 text-left text-[15px] leading-[1.4] active:bg-white/15"
-      aria-label={value ? "Edit caption" : "Write a caption"}
+      className="flex min-h-11 w-full items-center gap-2.5 rounded-2xl bg-white/10 px-4 py-3 text-left text-[15px] leading-[1.4] ring-1 ring-white/15 active:bg-white/15"
+      aria-label={value.trim() ? "Edit caption" : "Write a caption"}
     >
-      {value.trim() ? <span className="line-clamp-2 whitespace-pre-wrap break-words">{value.trim()}</span> : <span className="text-white/45">Write a caption…</span>}
+      <PenLine className="h-4 w-4 shrink-0 text-white/60" />
+      {value.trim() ? <span className="min-w-0 line-clamp-2 whitespace-pre-wrap break-words">{value.trim()}</span> : <span className="text-white/65">Write a caption…</span>}
     </button>
   );
 }
