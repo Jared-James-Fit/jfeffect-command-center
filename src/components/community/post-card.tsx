@@ -1,5 +1,5 @@
-import { memo, useRef, useState } from "react";
-import { BadgeCheck, Lock, MessageCircle, Play, Send } from "lucide-react";
+import { memo, useEffect, useRef, useState } from "react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Lock, MessageCircle, Play, Send } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import {
@@ -15,17 +15,20 @@ import {
   isTrainingNow,
   lockInTimeLabel,
   pickCardStats,
+  postSlides,
   postTimeLabel,
   reactionEmoji,
   reactionKinds,
   reactorsLine,
   sessionLine,
+  slideThumbPath,
   type CommunityAuthor,
   type CommunityPost,
+  type PostSlide,
   type ReactionKey,
   type WorkoutShareStats,
 } from "@/lib/community";
-import { useFullMediaUrl } from "@/lib/community.queries";
+import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
 import { WinsStatsCard } from "@/components/community/wins-stats";
 import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-cards";
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
@@ -449,38 +452,111 @@ export function ReactionBar({
 
 /** Feed media: the thumbnail only. Full-size image / video loads on demand. */
 export function PostMedia({ post, thumbUrl, full = false }: { post: CommunityPost; thumbUrl: string | null; full?: boolean }) {
-  const [playing, setPlaying] = useState(false);
-  const isVideo = post.media_type === "video";
-  const w = post.media_width ?? 4;
-  const h = post.media_height ?? 5;
+  const slides = postSlides(post);
+  const cover = slides[0] ?? null;
   // Never taller than 4:5, never wider than 16:9 — keeps the feed rhythm steady.
-  const ratio = Math.min(Math.max(w / h, 0.8), 1.78);
-  const { data: fullUrl } = useFullMediaUrl(post.media_path, full || playing);
-  const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
-
+  // A carousel takes its cover's shape for every slide (Instagram does too).
+  const ratio = Math.min(Math.max((post.media_width ?? 4) / (post.media_height ?? 5), 0.8), 1.78);
+  if (slides.length > 1) return <PostCarousel slides={slides} coverUrl={thumbUrl} ratio={ratio} full={full} />;
   return (
     <div className="relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }}>
-      {isVideo && playing && fullUrl ? (
-        <video src={fullUrl} poster={thumbUrl ?? undefined} className="h-full w-full object-cover" controls autoPlay playsInline onClick={(e) => e.stopPropagation()} />
-      ) : (
-        <>
-          {src ? <img src={src} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" /> : <div className="h-full w-full animate-pulse bg-muted" />}
-          {isVideo && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setPlaying(true);
-              }}
-              className="absolute inset-0 grid place-items-center bg-black/10"
-              aria-label="Play video"
-            >
-              <span className="grid h-14 w-14 place-items-center rounded-full bg-black/55 text-white backdrop-blur">
-                <Play className="ml-0.5 h-6 w-6 fill-current" />
-              </span>
-            </button>
-          )}
-        </>
+      {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+    </div>
+  );
+}
+
+/** One photo or video, filling its frame. Video bytes only load when it's played. */
+function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide; thumbUrl: string | null; full: boolean; active?: boolean }) {
+  const [playing, setPlaying] = useState(false);
+  const isVideo = slide.type === "video";
+  const { data: fullUrl } = useFullMediaUrl(slide.path, (full && active && !isVideo) || playing);
+  const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
+  // swiping away stops it
+  useEffect(() => {
+    if (!active) setPlaying(false);
+  }, [active]);
+  return isVideo && playing && fullUrl ? (
+    <video src={fullUrl} poster={thumbUrl ?? undefined} className="h-full w-full object-cover" controls autoPlay playsInline onClick={(e) => e.stopPropagation()} />
+  ) : (
+    <>
+      {src ? <img src={src} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" /> : <div className="h-full w-full animate-pulse bg-muted" />}
+      {isVideo && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setPlaying(true);
+          }}
+          className="absolute inset-0 grid place-items-center bg-black/10"
+          aria-label="Play video"
+        >
+          <span className="grid h-14 w-14 place-items-center rounded-full bg-black/55 text-white backdrop-blur">
+            <Play className="ml-0.5 h-6 w-6 fill-current" />
+          </span>
+        </button>
+      )}
+    </>
+  );
+}
+
+/**
+ * Up to 10 photos / videos: swipe sideways (it snaps one at a time), "2/5"
+ * and the dots say where you are. Only the slide you're on and its
+ * neighbours load; the rest wait. Taps still reach the post (open / double-tap).
+ */
+function PostCarousel({ slides, coverUrl, ratio, full }: { slides: PostSlide[]; coverUrl: string | null; ratio: number; full: boolean }) {
+  const [index, setIndex] = useState(0);
+  const [seen, setSeen] = useState(1);
+  const track = useRef<HTMLDivElement | null>(null);
+  const urls = useSlideThumbUrls(slides.slice(1));
+  const onScroll = () => {
+    const el = track.current;
+    if (!el || !el.clientWidth) return;
+    const i = Math.max(0, Math.min(slides.length - 1, Math.round(el.scrollLeft / el.clientWidth)));
+    if (i !== index) setIndex(i);
+    if (i + 1 > seen) setSeen(i + 1);
+  };
+  const go = (dir: 1 | -1) => {
+    const el = track.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth, behavior: "smooth" });
+  };
+  return (
+    <div className="group/carousel relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }} aria-roledescription="carousel" aria-label={`${slides.length} photos and videos`}>
+      <div
+        ref={track}
+        onScroll={onScroll}
+        data-carousel
+        className="flex h-full w-full snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ overscrollBehaviorX: "none", WebkitOverflowScrolling: "touch" }}
+      >
+        {slides.map((sl, i) => {
+          const near = Math.abs(i - index) <= 1 || i < seen;
+          const url = i === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
+          return (
+            <div key={`${sl.path}-${i}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${slides.length}`}>
+              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} /> : <div className="h-full w-full bg-muted" />}
+            </div>
+          );
+        })}
+      </div>
+      <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur">
+        {index + 1}/{slides.length}
+      </span>
+      <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1" aria-hidden>
+        {slides.map((_, i) => (
+          <span key={i} className={cn("h-1.5 rounded-full transition-all", i === index ? "w-4 bg-white" : "w-1.5 bg-white/55")} />
+        ))}
+      </div>
+      {/* mouse users get arrows (touch swipes) */}
+      {index > 0 && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); go(-1); }} className="absolute left-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow [@media(hover:hover)]:group-hover/carousel:grid" aria-label="Previous">
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+      )}
+      {index < slides.length - 1 && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); go(1); }} className="absolute right-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow [@media(hover:hover)]:group-hover/carousel:grid" aria-label="Next">
+          <ChevronRight className="h-5 w-5" />
+        </button>
       )}
     </div>
   );

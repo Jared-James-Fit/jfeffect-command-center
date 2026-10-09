@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { LOCK_IN_CAPTIONS, lockInTimeLabel, postPointsHint, type CommunityVisibility } from "@/lib/community";
+import { LOCK_IN_CAPTIONS, lockInTimeLabel, postPointsHint, type CommunityVisibility, postFiles } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, usePostPointsStatus, type MyPostRow, type SavePostInput } from "@/lib/community.queries";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import { TEMPLATE_LABEL, canvasToBlob, drawWorkoutShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
@@ -197,7 +197,8 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
       if (media) mediaArg = { action: "set", ...(await uploadPicked(media, user.id, () => {})) };
       else if (removedExisting) mediaArg = { action: "remove" };
       await saveCommunityPost({ completionId: id, caption, visibility, media: mediaArg, hideLoads });
-      if (mediaArg.action !== "keep" && existing?.media_path) await removeCommunityFiles([existing.media_path, existing.media_thumb_path]);
+      // removing the photo removes the whole carousel; replacing it keeps the other slides
+      if (mediaArg.action !== "keep" && existing?.media_path) await removeCommunityFiles(mediaArg.action === "remove" ? postFiles(existing) : [existing.media_path, existing.media_thumb_path]);
       invalidateCommunity(qc);
       setPosted(true);
       toast.success(visibility === "community" ? "You're locked in 🔒" : visibility === "coach" ? "Sent to your coach 🔒" : "Saved to your profile", {

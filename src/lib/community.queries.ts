@@ -20,11 +20,14 @@ import {
   type CommunityProfile,
   type CommunityVisibility,
   type PostPointsStatus,
+  type PostSlide,
   type ReactionKey,
   type WorkoutShareStats,
   type WinsStats,
   type Reactor,
   reactionTotal,
+  postFiles,
+  slideThumbPath,
   planDetail,
   pickLockInSession,
 } from "@/lib/community";
@@ -79,6 +82,19 @@ export function usePostMediaUrls(posts: CommunityPost[]) {
     staleTime: 45 * 60 * 1000,
     queryFn: () => signCommunityPaths(paths),
   });
+}
+
+/** A carousel's other slides, small: one storage call for all of them, when it scrolls into the feed. */
+export function useSlideThumbUrls(slides: PostSlide[]): Record<string, string> {
+  const paths = slides.map((s) => slideThumbPath(s)).filter((p): p is string => !!p);
+  const key = paths.join("|");
+  const { data } = useQuery({
+    queryKey: ["community-media-urls", key],
+    enabled: key.length > 0,
+    staleTime: 45 * 60 * 1000,
+    queryFn: () => signCommunityPaths(paths),
+  });
+  return data ?? {};
 }
 
 /** Full-size URL for one post, fetched only when the viewer opens it. */
@@ -565,6 +581,8 @@ export type MyPostRow = {
   media_path: string | null;
   media_thumb_path: string | null;
   media_type: "image" | "video" | null;
+  /** The carousel's other slides (in order). */
+  extra_media?: PostSlide[] | null;
   locked_in_at: string | null;
   hide_loads: boolean;
 };
@@ -578,7 +596,7 @@ export function useMyPostForCompletion(completionId: string | null | undefined, 
     queryFn: async (): Promise<MyPostRow | null> => {
       const { data, error } = await db
         .from("community_posts")
-        .select("id, caption, visibility, media_path, media_thumb_path, media_type, locked_in_at, hide_loads")
+        .select("id, caption, visibility, media_path, media_thumb_path, media_type, extra_media, locked_in_at, hide_loads")
         .eq("completion_id", completionId)
         .maybeSingle();
       if (error) throw error;
@@ -594,6 +612,8 @@ export type SavePostInput = {
   media: { action: "keep" } | { action: "remove" } | ({ action: "set" } & UploadedMedia);
   /** Hide loads from everyone but you. Omitted = keep the current setting. */
   hideLoads?: boolean;
+  /** The carousel's other slides, in order. Omitted = keep what it has. */
+  extras?: PostSlide[];
 };
 
 export async function saveCommunityPost(input: SavePostInput): Promise<string> {
@@ -609,6 +629,7 @@ export async function saveCommunityPost(input: SavePostInput): Promise<string> {
     _media_width: m.action === "set" ? m.media_width : null,
     _media_height: m.action === "set" ? m.media_height : null,
     _hide_loads: input.hideLoads ?? null,
+    _extra_media: input.extras === undefined ? null : input.extras,
   });
   if (error) throw error;
   return (data as { id: string }).id;
@@ -617,10 +638,10 @@ export async function saveCommunityPost(input: SavePostInput): Promise<string> {
 export function useDeletePost() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (post: { id: string; media_path: string | null; media_thumb_path: string | null; is_mine: boolean }) => {
+    mutationFn: async (post: { id: string; media_path: string | null; media_thumb_path: string | null; extra_media?: PostSlide[] | null; is_mine: boolean }) => {
       const { error } = await db.from("community_posts").delete().eq("id", post.id);
       if (error) throw error;
-      if (post.is_mine) await removeCommunityFiles([post.media_path, post.media_thumb_path]);
+      if (post.is_mine) await removeCommunityFiles(postFiles(post));
     },
     onSuccess: () => {
       invalidateCommunity(qc);
@@ -636,7 +657,17 @@ export function useDeletePost() {
  */
 export async function shareToCommunity(
   qc: ReturnType<typeof useQueryClient>,
-  i: { userId: string; completionId: string; caption: string; visibility: CommunityVisibility; hideLoads?: boolean; photo: File | null; existing: MyPostRow | null | undefined },
+  i: {
+    userId: string;
+    completionId: string;
+    caption: string;
+    visibility: CommunityVisibility;
+    hideLoads?: boolean;
+    photo: File | null;
+    existing: MyPostRow | null | undefined;
+    /** The other slides, already uploaded, in order. Omitted = keep what the post has. */
+    extras?: PostSlide[];
+  },
 ): Promise<void> {
   let media: SavePostInput["media"] = { action: "keep" };
   if (i.photo) {
@@ -648,8 +679,15 @@ export async function shareToCommunity(
       releasePicked(res.media);
     }
   }
-  await saveCommunityPost({ completionId: i.completionId, caption: i.caption, visibility: i.visibility, media, hideLoads: i.hideLoads });
-  if (media.action === "set" && i.existing?.media_path) await removeCommunityFiles([i.existing.media_path, i.existing.media_thumb_path]);
+  await saveCommunityPost({ completionId: i.completionId, caption: i.caption, visibility: i.visibility, media, hideLoads: i.hideLoads, extras: i.extras });
+  // tidy up whatever the post no longer points at
+  const old = i.existing;
+  if (old) {
+    const keep = new Set(media.action === "set" ? [] : [old.media_path, old.media_thumb_path]);
+    for (const x of i.extras ?? old.extra_media ?? []) [x.path, x.thumb].forEach((p) => p && keep.add(p));
+    const gone = postFiles(old).filter((p) => !keep.has(p));
+    if (gone.length) await removeCommunityFiles(gone);
+  }
   invalidateCommunity(qc);
 }
 

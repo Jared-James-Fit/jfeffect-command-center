@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Archive, Camera, Lock, Pencil, Play } from "lucide-react";
+import { Archive, Camera, Layers, Lock, Pencil, Play } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -178,7 +178,11 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
               ) : (
                 <div className="h-full w-full bg-muted" />
               )}
-              {p.media_type === "video" && <Play className="absolute right-1.5 top-1.5 h-4 w-4 fill-white text-white drop-shadow" />}
+              {(p.extra_media?.length ?? 0) > 0 ? (
+                <Layers className="absolute right-1.5 top-1.5 h-4 w-4 text-white drop-shadow" aria-label="Carousel" />
+              ) : (
+                p.media_type === "video" && <Play className="absolute right-1.5 top-1.5 h-4 w-4 fill-white text-white drop-shadow" />
+              )}
               {p.visibility !== "community" && <Lock className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 text-white drop-shadow" />}
             </button>
           );
