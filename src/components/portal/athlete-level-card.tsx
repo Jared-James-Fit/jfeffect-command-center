@@ -22,6 +22,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 import { CoachTag } from "@/components/portal/coach-tag";
+import { SwipeCards, type SwipeCard } from "@/components/portal/swipe-cards";
 import { CoachFocus, PointsBar, PointsLegend, VsCard } from "@/components/portal/league-insights";
 import { HallOfStrength } from "@/components/portal/strength-board";
 
@@ -51,10 +52,12 @@ function useXpEvents(clientId: string) {
  * Top 10, their Logging Level, plus any extra boards passed in (the Hall of
  * Strength), a card each. New-milestone reveals pop on Home (LevelCelebrations).
  */
-export function AthleteLevelCard({ clientId, defaultView = null, boards = [] }: {
+export function AthleteLevelCard({ clientId, defaultView = null, boards = [], levelSwipe }: {
   clientId: string;
   defaultView?: null | "rankings";
   boards?: { key: string; node: ReactNode }[];
+  /** A card to share one swipe spot with the Logging Level, shown first (the crew goal). */
+  levelSwipe?: SwipeCard;
 }) {
   const { data: events = [], isPending } = useXpEvents(clientId);
   const [open, setOpen] = useState<null | "levels" | "rankings" | "powerlifting">(defaultView);
@@ -173,11 +176,24 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [] }: 
     </div>
   );
 
-  // League, then the boards (Hall of Strength), then the Logging Level.
-  const cards = [{ key: "league", node: leagueCard }, ...boards, { key: "level", node: levelCard }];
+  // League, then the boards (Hall of Strength), then the Logging Level, unless
+  // the level shares a swipe (first, opening on the other card) instead.
+  const cards = levelSwipe
+    ? [{ key: "league", node: leagueCard }, ...boards]
+    : [{ key: "league", node: leagueCard }, ...boards, { key: "level", node: levelCard }];
   return (
     <>
       <div className="space-y-3">
+        {levelSwipe && (
+          <SwipeCards
+            storageKey="jf-league-top"
+            remember={false}
+            cards={[
+              levelSwipe,
+              { key: "level", label: "Logging Level", node: <section data-standing="level" className="overflow-hidden rounded-2xl border bg-card">{levelCard}</section> },
+            ]}
+          />
+        )}
         {cards.map((c) => (
           <section key={c.key} data-standing={c.key} className="overflow-hidden rounded-2xl border bg-card">
             {c.node}

@@ -47,10 +47,17 @@ describe("the centre tab is League: standings and the crew in one place", () => 
 });
 
 describe("the League tab", () => {
-  it("the crew goal first, then the League, the Hall of Strength and the Level, a card each", () => {
+  it("one swipe first: the crew goal (always the default) and the Logging Level; then the League and the Hall of Strength", () => {
     expect(hub.indexOf("<CrewGoalCard />")).toBeLessThan(hub.indexOf("<AthleteLevelCard"));
-    expect(hub).toContain('<AthleteLevelCard clientId={client.id} boards={[{ key: "strength", node: <StrengthBoardSlide /> }]} />');
-    expect(card).toContain('const cards = [{ key: "league", node: leagueCard }, ...boards, { key: "level", node: levelCard }];');
+    expect(hub).toContain('const crew = goal ? { key: "crew", label: "Crew goal", node: <CrewGoalCard /> } : undefined;');
+    expect(hub).toContain('<AthleteLevelCard clientId={client.id} levelSwipe={crew} boards={[{ key: "strength", node: <StrengthBoardSlide /> }]} />');
+    expect(card).toContain('storageKey="jf-league-top"');
+    expect(card).toContain("remember={false}");
+    expect(card.indexOf("levelSwipe,")).toBeLessThan(card.indexOf('{ key: "level", label: "Logging Level"'));
+    expect(card).toContain('? [{ key: "league", node: leagueCard }, ...boards]');
+    // no crew goal this week: the level is its own card again
+    expect(card).toContain(': [{ key: "league", node: leagueCard }, ...boards, { key: "level", node: levelCard }];');
+    expect(swipe).toContain("if (!remember) return;");
     expect(card).toContain("data-standing={c.key}");
   });
   it("the card shows the Top 5, plus you when you're outside it; every row opens that athlete", () => {
