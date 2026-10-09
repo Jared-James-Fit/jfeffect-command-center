@@ -11,13 +11,18 @@ import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { useClientCalendarSources } from "@/lib/calendar-sources";
 import { ClientSessionList, RequestChangeSheet } from "@/components/schedule/client-session-list";
 import { CalendarSyncCard } from "@/components/schedule/calendar-sync-card";
+import { ClientBookCard } from "@/components/schedule/client-book-card";
+import { listMyBookingTypes } from "@/lib/booking.functions";
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
+import { useServerFn } from "@tanstack/react-start";
 
 /**
  * The client's one Schedule (this replaced separate Calendar, Appointments and
  * Events pages, which showed the same things three ways):
- *   1. Your sessions: what's booked, where, and "Need to change it?"
- *   2. The calendar: sessions, workouts, cardio, check-ins, events, key dates.
- *   3. One-time phone calendar setup.
+ *   1. Book: the booking types the coach opened to them (no form, signed in).
+ *   2. Your sessions: what's booked, where, and "Need to change it?"
+ *   3. The calendar: sessions, workouts, cardio, check-ins, events, key dates.
+ *   4. One-time phone calendar setup (Google, Apple, Outlook, any app).
  */
 export const Route = createFileRoute("/_authenticated/portal/calendar")({
   head: () => ({ meta: [{ title: "Schedule" }] }),
@@ -34,6 +39,15 @@ function SchedulePage() {
   });
   const { items, isLoading } = useClientCalendarSources(client?.id);
   const [changing, setChanging] = useState<any>(null);
+  // In-app booking replaces the old per-client external booking link when it's set up.
+  const pov = usePovArgs();
+  const typesFn = usePovFn(useServerFn(listMyBookingTypes));
+  const { data: bookable = [] } = useQuery({
+    queryKey: ["my-booking-types", pov.viewAsClientId ?? null],
+    enabled: !!client?.id,
+    queryFn: () => typesFn({ data: {} }),
+    staleTime: 5 * 60_000,
+  });
 
   return (
     <>
@@ -51,6 +65,7 @@ function SchedulePage() {
           </Card>
         )}
 
+        {client?.id && <ClientBookCard />}
         {client?.id && <ClientSessionList clientId={client.id} />}
 
         <section className="space-y-2">
@@ -81,7 +96,7 @@ function SchedulePage() {
           <RequestChangeSheet clientId={client.id} session={changing} onClose={() => setChanging(null)} isPov={isImpersonating} />
         )}
 
-        {client?.calendar_link && (
+        {client?.calendar_link && bookable.length === 0 && (
           <Card className="flex flex-wrap items-center justify-between gap-3 border-border bg-card p-4">
             <div>
               <h2 className="text-sm font-bold">Book a call</h2>

@@ -14,9 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { submitCoachingApplication } from "@/lib/coaching-applications.functions";
-import {
-  computeAvailableSlots, bookSlotPublic, getBookingLinkPublic,
-} from "@/lib/booking-links.functions";
+import { bookOnline, getBookingPage, getBookingSlots } from "@/lib/booking.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/coaching/apply")({
@@ -279,9 +277,9 @@ function SlotPicker({
   onCancel: () => void;
   onBooked: (b: { starts_at: string; tz: string; duration: number; meet_link?: string | null }) => void;
 }) {
-  const getLink = useServerFn(getBookingLinkPublic);
-  const getSlots = useServerFn(computeAvailableSlots);
-  const book = useServerFn(bookSlotPublic);
+  const getLink = useServerFn(getBookingPage);
+  const getSlots = useServerFn(getBookingSlots);
+  const book = useServerFn(bookOnline);
 
   const localTz = useMemo(
     () => (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/New_York"),
@@ -312,27 +310,27 @@ function SlotPicker({
 
   const slotsQ = useQuery({
     queryKey: ["public-booking-slots", slug, date],
-    queryFn: () => getSlots({ data: { slug, date } }),
+    queryFn: () => getSlots({ data: { slug, from: date, to: date } }),
     enabled: !!slug && !!date,
   });
 
   const [chosen, setChosen] = useState<string | null>(null);
 
   const bookMut = useMutation({
-    mutationFn: async (starts_at: string) => book({ data: {
-      slug, starts_at, name, email, phone, application_id: applicationId || undefined,
+    mutationFn: async (start: string) => book({ data: {
+      slug, start, name, email, phone: phone || null, applicationId: applicationId || null,
     } }),
     onSuccess: (r) => onBooked({
-      starts_at: r.starts_at,
+      starts_at: r.start,
       tz: localTz,
-      duration: linkQ.data?.link?.duration_minutes ?? 20,
-      meet_link: r.meet_link,
+      duration: linkQ.data?.durationMin ?? 20,
+      meet_link: r.meetLink,
     }),
     onError: (e: any) => toast.error(e?.message ?? "Couldn't book that slot. Please try another time."),
   });
 
-  const duration = linkQ.data?.link?.duration_minutes ?? 20;
-  const coachName = linkQ.data?.coach?.full_name ?? "Your coach";
+  const duration = linkQ.data?.durationMin ?? 20;
+  const coachName = linkQ.data?.hostName ?? "Your coach";
 
   return (
     <Card className="p-5 md:p-6">
@@ -379,20 +377,22 @@ function SlotPicker({
           </div>
         ) : (slotsQ.data?.slots?.length ?? 0) === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            No times available on this day. Try another date.
+            {slotsQ.data?.error === "calendar_unavailable"
+              ? "We couldn't check the calendar just now. Try again in a minute."
+              : "No times available on this day. Try another date."}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {slotsQ.data!.slots.map((s) => {
-              const active = chosen === s.startISO;
-              const localLabel = new Date(s.startISO).toLocaleTimeString(undefined, {
+              const active = chosen === s.start;
+              const localLabel = new Date(s.start).toLocaleTimeString(undefined, {
                 hour: "numeric", minute: "2-digit",
               });
               return (
                 <button
-                  key={s.startISO}
+                  key={s.start}
                   type="button"
-                  onClick={() => setChosen(s.startISO)}
+                  onClick={() => setChosen(s.start)}
                   className={
                     "min-h-[48px] rounded-xl border px-3 py-2 text-sm font-bold transition " +
                     (active

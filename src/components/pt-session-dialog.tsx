@@ -27,7 +27,8 @@ import { PtSessionHistory } from "@/components/pt-session-history";
 import {
   AdjustPtCreditDialog, CancelPtSessionDialog, DeletePtSessionDialog, NoShowPtDialog,
 } from "@/components/pt-session-manage-dialogs";
-import { BookingCardDialog } from "@/components/booking-cards/booking-card-dialog";
+import { BookingTypeEditor } from "@/components/booking/booking-type-editor";
+import { creditDefaultFor } from "@/lib/booking-types";
 import { addMinutesToTime, cardAccent, fmtDuration, type BookingCard } from "@/lib/booking-cards";
 import { addDaysISO, deviceTodayISO } from "@/lib/schedule-time";
 import { ConflictNotice, useConflictCheck } from "@/components/schedule/use-conflict-check";
@@ -83,6 +84,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const [, setStep] = useState<"pick" | "form">("form");
   const [templateEditOpen, setTemplateEditOpen] = useState(false);
   const [conflictOverride, setConflictOverride] = useState(false);
+  // Once the coach flips "uses a session" by hand, changing the type leaves it alone.
+  const [creditTouched, setCreditTouched] = useState(false);
 
   // Booking cards (templates) — used for the picker step and the edit-mode
   // template badge.
@@ -122,7 +125,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       visible_to_client: card?.visible_to_client ?? true,
       reminders_enabled: card?.reminders_enabled ?? true,
       send_confirmation_email: card?.send_confirmation_email ?? true,
-      uses_credit: card?.uses_credit ?? true,
+      uses_credit: card ? card.uses_credit : true,
+      wants_meet: (card as any)?.location_mode === "video",
       booking_card_id: card?.id ?? null,
       _duration: card ? duration : null,
       _cardName: card?.name ?? null,
@@ -142,6 +146,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     setNoShowOpen(false); setCancelOpen(false); setDeleteOpen(false); setAdjustOpen(false);
     setTemplateEditOpen(false);
     setConflictOverride(false);
+    setCreditTouched(false);
     if (initial) {
       setForm({ ...initial, _isRecurring: false, _weekdays: [], _weeks: 4, _includeStartDate: true });
       return;
@@ -224,7 +229,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             <DialogTitle>What are you booking?</DialogTitle>
           </DialogHeader>
           <p className="-mt-2 text-xs text-muted-foreground">
-            Pick a booking card to prefill everything, or start a custom one-off booking.
+            Pick a booking type to fill everything in, or start a one-off booking.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             {activeCards.map((card) => {
@@ -264,7 +269,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           </div>
           {activeCards.length === 0 && (
             <p className="text-center text-[11px] text-muted-foreground">
-              No booking cards yet. Create them under Calendar → Sessions → Booking Cards.
+              No booking types yet. Add them under Calendar → Booking.
             </p>
           )}
         </DialogContent>
@@ -325,6 +330,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       uses_credit: form.uses_credit !== false,
       booking_card_id: form.booking_card_id ?? null,
     };
+    // A video-call type gets a Meet link from the Google sync (new bookings only).
+    if (!form.id) basePayload.wants_meet = !!form.wants_meet;
 
     let error: any = null;
     if (form.id) {
@@ -487,7 +494,12 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           </div>
           <div>
             <Label>Session type</Label>
-            <Select value={form.session_type} onValueChange={(v) => set("session_type", v)}>
+            <Select
+              value={form.session_type}
+              onValueChange={(v) =>
+                setForm({ ...form, session_type: v, ...(isNewBooking && !creditTouched && !form.booking_card_id ? { uses_credit: creditDefaultFor(v) } : {}) })
+              }
+            >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{SESSION_TYPES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
             </Select>
@@ -583,6 +595,27 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {isNewBooking && (
+            <div className="md:col-span-2 flex items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 px-3 py-2">
+              <div className="min-w-0">
+                <Label className="text-sm font-semibold">Uses a session credit</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  {form.uses_credit !== false
+                    ? "Holds 1 session from their package. Done uses it, cancelled gives it back."
+                    : "Free. Doesn't touch their package."}
+                </p>
+              </div>
+              <Switch
+                checked={form.uses_credit !== false}
+                onCheckedChange={(v) => {
+                  setCreditTouched(true);
+                  setConfirmOverbook(false);
+                  set("uses_credit", v);
+                }}
+              />
             </div>
           )}
 
@@ -745,7 +778,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
         </>
       )}
       {template && (
-        <BookingCardDialog open={templateEditOpen} onOpenChange={setTemplateEditOpen} initial={template} />
+        <BookingTypeEditor open={templateEditOpen} onOpenChange={setTemplateEditOpen} initial={template as any} />
       )}
     </Dialog>
   );

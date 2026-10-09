@@ -326,7 +326,7 @@ export async function gcalListEvents(
   timeMinISO: string,
   timeMaxISO: string,
   calendarIds?: string[],
-  opts: { strict?: boolean } = {},
+  opts: { strict?: boolean; requireAll?: boolean } = {},
 ): Promise<GcalListedEvent[]> {
   if (!workspaceCalendarConfigured()) return [];
   const ids = calendarIds?.length ? calendarIds : await scheduleCalendarIds(coachId);
@@ -335,6 +335,8 @@ export async function gcalListEvents(
   );
   // Strict callers (double-booking checks) must not mistake "Google unreachable" for "free".
   if (opts.strict && lists.every((l) => !l.ok)) throw new Error("Google Calendar could not be read.");
+  // Online booking offers times to strangers: every calendar must have been read.
+  if (opts.requireAll && lists.some((l) => !l.ok)) throw new Error("A Google calendar could not be read.");
   const out: GcalListedEvent[] = mergeGoogleCalendarLists(lists).map(({ calendarId, event: e }) => ({
     id: e.id,
     calendarId,
