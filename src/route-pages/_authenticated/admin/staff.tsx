@@ -22,9 +22,10 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { startTeamPreview } from "@/lib/team-preview";
 import {
-  getStaffInviteLink, inviteStaff, listTeam, removeStaffRole, resendStaffInvite, revokeStaffInvite,
+  getStaffInviteLink, inviteStaff, linkTeamMemberClient, listTeam, removeStaffRole, resendStaffInvite, revokeStaffInvite,
   searchInviteRecipients, type TeamInvite, type TeamMember,
 } from "@/lib/staff-invites.functions";
+import { ClientLinkDialog } from "@/components/tasks/client-link-dialog";
 import {
   INVITE_TTL_DAYS, STAFF_ROLE_INFO, STAFF_ROLE_ORDER, inviteExpiryLabel, staffInviteMessage, staffRoleLabel,
   type InvitableRole, type InviteDelivery, type StaffRoleKey,
@@ -240,14 +241,16 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
   const isCoachOnly = m.roles.includes("coach") && !m.roles.includes("admin");
 
   return (
-    <Card className="flex items-center gap-3 p-3">
+    <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
       <Avatar text={initials(m.name, m.email)} />
-      <div className="min-w-0 flex-1">
+      {/* The buttons drop to their own line on a phone rather than squeezing the name. */}
+      <div className="min-w-[11rem] flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="truncate font-semibold">{m.name || m.email || "Team member"}</span>
           {m.roles.filter((r) => r !== "coach" || !m.roles.includes("admin")).map((r) => <RoleBadge key={r} role={r} owner={m.owner} />)}
         </div>
         <div className="truncate text-xs text-muted-foreground">{m.email}</div>
+        <ClientAccountLine m={m} onChanged={onChanged} />
         {m.roles.includes("media_manager") && (
           <div className="mt-0.5 text-xs text-muted-foreground">Media Manager is retired, so this login has nowhere to go.</div>
         )}
@@ -284,6 +287,59 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
         </AlertDialogContent>
       </AlertDialog>
     </Card>
+  );
+}
+
+/**
+ * The person's own client account, linked to this login: their staff home
+ * shows its sessions and their calendar subscription carries them. Only the
+ * owner links or unlinks.
+ */
+function ClientAccountLine({ m, onChanged }: { m: TeamMember; onChanged: () => void }) {
+  const { role, viewOnly } = useAuth();
+  const link = useServerFn(linkTeamMemberClient);
+  const [picking, setPicking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const canLink = role === "admin" && !viewOnly;
+  const save = async (clientId: string | null, name?: string) => {
+    setBusy(true);
+    try {
+      await link({ data: { userId: m.user_id, clientId } });
+      toast.success(clientId ? `Linked to ${name}` : "Client account unlinked");
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't link the client account");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!m.client && !canLink) return null;
+  return (
+    <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-xs">
+      {m.client ? (
+        <span className="min-w-0 truncate text-muted-foreground">Client account: <span className="font-semibold text-foreground">{m.client.name}</span></span>
+      ) : null}
+      {canLink && (
+        <>
+          <button type="button" disabled={busy} onClick={() => setPicking(true)} className="inline-flex min-h-8 items-center gap-1 font-semibold text-primary disabled:opacity-50">
+            <Link2 className="h-3.5 w-3.5" /> {m.client ? "Change" : "Link their client account"}
+          </button>
+          {m.client && (
+            <button type="button" disabled={busy} onClick={() => save(null)} className="min-h-8 font-semibold text-muted-foreground disabled:opacity-50">Unlink</button>
+          )}
+          <ClientLinkDialog
+            open={picking}
+            noteText={m.name ?? ""}
+            currentClientId={m.client?.id}
+            title={`${m.name?.split(" ")[0] || "Their"} client account`}
+            description="Their home shows this account's sessions and workouts, and their calendar subscription carries them into Google."
+            suggestedLabel="Same name"
+            onPick={(c) => { setPicking(false); void save(c.id, c.name); }}
+            onClose={() => setPicking(false)}
+          />
+        </>
+      )}
+    </div>
   );
 }
 

@@ -33,6 +33,8 @@ export type TeamMember = {
   roles: string[];
   owner: boolean;
   since: string | null;
+  /** Their own client account, if the owner linked this login to it (calendar, Google sync). */
+  client: { id: string; name: string } | null;
 };
 
 export type TeamInvite = {
@@ -71,10 +73,23 @@ export const listTeam = createServerFn({ method: "GET" })
       ? await sb.from("profiles").select("id, email, full_name").in("id", ids)
       : { data: [] as any[] };
     const ownerIds = new Set(((owners ?? []) as any[]).map((o) => o.user_id));
+    // Logins linked to the person's client account (community_profiles.same_person_as).
+    const { data: links } = ids.length
+      ? await sb.from("community_profiles").select("user_id, same_person_as").in("user_id", ids).not("same_person_as", "is", null)
+      : { data: [] as any[] };
+    const linkedUids = ((links ?? []) as any[]).map((l) => l.same_person_as);
+    const { data: linkedClients } = linkedUids.length
+      ? await sb.from("clients").select("id, user_id, full_name, first_name").in("user_id", linkedUids)
+      : { data: [] as any[] };
+    const clientFor = (id: string) => {
+      const uid = ((links ?? []) as any[]).find((l) => l.user_id === id)?.same_person_as;
+      const c = uid ? ((linkedClients ?? []) as any[]).find((x) => x.user_id === uid) : null;
+      return c ? { id: c.id as string, name: ((c.full_name || c.first_name || "Client") as string).trim() } : null;
+    };
     const members: TeamMember[] = ids.map((id) => {
       const p = ((profiles ?? []) as any[]).find((x) => x.id === id);
       const v = byUser.get(id)!;
-      return { user_id: id, name: p?.full_name ?? null, email: p?.email ?? null, roles: v.roles, owner: ownerIds.has(id), since: v.since };
+      return { user_id: id, name: p?.full_name ?? null, email: p?.email ?? null, roles: v.roles, owner: ownerIds.has(id), since: v.since, client: clientFor(id) };
     });
 
     const clientIds = [...new Set(((invites ?? []) as any[]).map((i) => i.delivery_client_id).filter(Boolean))];
@@ -254,6 +269,39 @@ export const removeStaffRole = createServerFn({ method: "POST" })
     if (data.userId === context.userId) throw new Error("You can't remove your own access.");
     const sb = await admin();
     const { error } = await sb.from("user_roles").delete().eq("user_id", data.userId).eq("role", data.role);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/**
+ * Link a team member's login to their own client account (or unlink it), so
+ * their staff home shows their sessions and their calendar subscription
+ * carries them. The link is community_profiles.same_person_as, the same
+ * "same person" link the community already follows.
+ */
+export const linkTeamMemberClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ userId: z.string().uuid(), clientId: z.string().uuid().nullable() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = await admin();
+    const { data: roles } = await sb.from("user_roles").select("role").eq("user_id", data.userId).in("role", TEAM_ROLES);
+    if (!roles?.length) throw new Error("Not a team member.");
+    if (!data.clientId) {
+      const { error } = await sb.from("community_profiles").update({ same_person_as: null, updated_at: new Date().toISOString() }).eq("user_id", data.userId);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+    const { data: client } = await sb.from("clients").select("user_id").eq("id", data.clientId).maybeSingle();
+    if (!client?.user_id) throw new Error("That client hasn't set up their login yet.");
+    if (client.user_id === data.userId) throw new Error("That's already this login's own client account.");
+    // One hop only: the client account must be the person's main account.
+    const { data: main } = await sb.from("community_profiles").select("same_person_as").eq("user_id", client.user_id).maybeSingle();
+    if (main?.same_person_as) throw new Error("That client account is itself linked to another login.");
+    const { error } = await sb.from("community_profiles").upsert(
+      { user_id: data.userId, same_person_as: client.user_id, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" },
+    );
     if (error) throw new Error(error.message);
     return { ok: true };
   });
