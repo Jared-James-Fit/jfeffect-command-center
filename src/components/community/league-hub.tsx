@@ -5,11 +5,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { StrengthBoardSlide } from "@/components/portal/strength-board";
 import { CrewGoalCard } from "@/components/community/crew-goal";
+import { useCrewGoal } from "@/lib/community.queries";
 
 /**
- * The League tab: the crew's shared goal first (everyone pulls it), then you:
- * this month's League with its whole Top 10, your Logging Level, the Hall of
- * Strength. Every card opens its full view, as on Home before.
+ * The League tab: one swipe with the crew's shared goal (always first, everyone
+ * pulls it) and your Logging Level, then this month's League (Top 5) and the
+ * Hall of Strength. Every card opens its full view.
  */
 export function LeagueHub() {
   // the person whose portal this is (the client in coach "View as")
@@ -22,17 +23,25 @@ export function LeagueHub() {
       return data;
     },
   });
+  const { data: goal } = useCrewGoal(true);
+  // No goal this week: the level stays a card of its own, under the boards.
+  const crew = goal ? { key: "crew", label: "Crew goal", node: <CrewGoalCard /> } : undefined;
   return (
     <div data-league-hub className="space-y-3">
-      <CrewGoalCard />
       {client?.id ? (
-        <AthleteLevelCard clientId={client.id} boards={[{ key: "strength", node: <StrengthBoardSlide /> }]} />
+        <AthleteLevelCard clientId={client.id} levelSwipe={crew} boards={[{ key: "strength", node: <StrengthBoardSlide /> }]} />
       ) : isPending && userId ? (
-        <Skeleton className="h-64 w-full rounded-2xl" />
+        <>
+          <CrewGoalCard />
+          <Skeleton className="h-64 w-full rounded-2xl" />
+        </>
       ) : (
+        <>
+        <CrewGoalCard />
         <section className="overflow-hidden rounded-2xl border bg-card">
           <StrengthBoardSlide />
         </section>
+        </>
       )}
     </div>
   );

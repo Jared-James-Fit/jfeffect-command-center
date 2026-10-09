@@ -6,15 +6,18 @@ export type SwipeCard = { key: string; label: string; node: ReactNode };
 /**
  * Several cards in one spot: swipe between them (or tap the labels above).
  * The height follows the card you're on, so a short card never leaves a gap.
- * It opens on the card you looked at last (this device only).
+ * It opens on the card you looked at last (this device only), or always on
+ * the first one with `remember={false}`.
  */
 export function SwipeCards({
   cards,
   storageKey,
+  remember = true,
   className,
 }: {
   cards: SwipeCard[];
   storageKey: string;
+  remember?: boolean;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -23,6 +26,7 @@ export function SwipeCards({
   const [height, setHeight] = useState<number | null>(null);
 
   useEffect(() => {
+    if (!remember) return;
     let i = 0;
     try {
       i = Number(localStorage.getItem(storageKey)) || 0;
@@ -54,6 +58,7 @@ export function SwipeCards({
     const i = Math.round(el.scrollLeft / el.clientWidth);
     if (i === active || i < 0 || i >= cards.length) return;
     setActive(i);
+    if (!remember) return;
     try {
       localStorage.setItem(storageKey, String(i));
     } catch {}
