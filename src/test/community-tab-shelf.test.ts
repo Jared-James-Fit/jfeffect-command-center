@@ -90,15 +90,22 @@ describe("Home order: what you do today, then what you check", () => {
 
 describe("the recap's one-tap post", () => {
   const footer = read("src/components/community/recap-post.tsx");
-  it("posts the workout card to the crew, no caption needed", () => {
-    expect(footer).toContain('saveCommunityPost({ completionId, caption: "", visibility: "community", media: { action: "keep" } })');
+  it("posts the workout card to the crew, with a caption right there (optional)", () => {
+    expect(footer).toContain('saveCommunityPost({ completionId, caption: caption.trim(), visibility: "community", media: { action: "keep" } })');
+    expect(footer).toContain("<CaptionRow value={caption} onOpen={() => setWriting(true)} />");
+    expect(footer).toContain("<CaptionSheet open={writing}");
+    // opening the camera instead keeps what they wrote
+    expect(footer).toContain("onClick={() => onStudio(caption)}");
+    expect(read("src/components/community/use-workout-studio.ts")).toContain("caption: existing ? existing.caption : draftCaption,");
   });
   it("says what it earns only when it really earns (DB rule: recent workout, 1 a day, 2 a week)", () => {
     expect(footer).toContain('const earn = hint?.tone === "earn" && points ? points.points : 0;');
     expect(footer).toContain("{earn > 0 && <span");
   });
-  it("a lock-in or an earlier post: says where it is, Done takes over", () => {
-    expect(footer).toContain('"Your lock-in now has your numbers"');
+  it("an earlier finish post: says where it is, Done takes over; a lock-in never counts as one", () => {
+    expect(footer).toContain('"It\'s in the crew\'s feed"');
     expect(footer).toContain('existing.visibility === "coach"');
+    expect(footer).not.toContain("locked_in_at");
+    expect(footer).toContain('useMyPostForCompletion(completionId, true, "lockin")');
   });
 });

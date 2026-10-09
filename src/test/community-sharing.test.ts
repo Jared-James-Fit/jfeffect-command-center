@@ -228,13 +228,14 @@ describe("sharing stays optional", () => {
     const footer = read("src/components/community/recap-post.tsx");
     expect(summary).toContain("useState(false);\n  const [shareMounted");
     expect(summary).toContain("<RecapPostFooter");
-    expect(summary).toContain("onStudio={() => { setShareMounted(true); setShareOpen(true); }}");
+    expect(summary).toContain("onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}");
     expect(summary).not.toMatch(/useEffect\([^)]*setShareOpen\(true\)/);
     // posting only ever happens from the button, and the footer can take it back
     expect(footer).toContain("onClick={() => void post()}");
     expect(footer).not.toMatch(/useEffect\([^)]*post\(\)/);
     expect(footer).toContain("{justPosted === existing.id && (");
-    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(3);
+    // one per footer state, plus the caption sheet's
+    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(4);
   });
 
   it("is not offered to memberships or to a coach in View-as-client", () => {
@@ -1072,7 +1073,7 @@ describe("every Share is the same one-screen studio", () => {
   it("Community Share and the recap build workout looks and posts the same way", () => {
     const hook = read("src/components/community/use-workout-studio.ts");
     expect(read("src/components/community/share-workout-picker.tsx")).toContain("const workout = useWorkoutStudio(target, unit, capturing);");
-    expect(read("src/components/community/workout-share-studio.tsx")).toContain("const w = useWorkoutStudio(target, unit, open);");
+    expect(read("src/components/community/workout-share-studio.tsx")).toContain("const w = useWorkoutStudio(target, unit, open, draftCaption);");
     expect(hook).toContain("return { data, looks: cameraLooks(data) };");
     expect(hook).toContain("await shareToCommunity(qc, {");
   });
