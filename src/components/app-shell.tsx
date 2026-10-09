@@ -36,7 +36,7 @@ import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
 import { useExerciseAliasIndex } from "@/hooks/use-exercise-alias-index";
 import { useSalesRealtime } from "@/hooks/use-sales-realtime";
-import { MORE_BAR_TO, resolveVisibleBarItems } from "@/lib/floating-bar";
+import { MORE_BAR_TO, barPrefixMatch, resolveVisibleBarItems } from "@/lib/floating-bar";
 import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
 
 export interface NavItem {
@@ -938,6 +938,10 @@ export function AppShell({
           // At 320px five columns give ~60px per slot — tighten padding so
           // labels stay on one line and nothing clips.
           const dense = cols >= 5;
+          // A plain tab stays lit on its sub-pages (a client's page keeps
+          // Clients lit); the deepest matching tab wins, and top-level homes
+          // like /admin only light up on themselves.
+          const prefixTo = barPrefixMatch(visible, pathname);
           return (
         <nav
           data-mobile-bottom-nav
@@ -966,6 +970,7 @@ export function AppShell({
                 navBadges={navBadges}
                 onNavigate={(to) => markNavSeen(user?.id, to)}
                 dense={dense}
+                prefixActive={prefixTo === item.to}
               />
             ),
           )}
@@ -1472,7 +1477,7 @@ function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }
   return null;
 }
 
-function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }: {
+function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, prefixActive }: {
   item: NavItem;
   pathname: string;
   search?: Record<string, unknown>;
@@ -1480,6 +1485,8 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }:
   onNavigate: (to: string) => void;
   /** True when 6 columns share the bar — tightens icon/label sizing. */
   dense?: boolean;
+  /** This tab is the deepest prefix of the current page (see barPrefixMatch). */
+  prefixActive?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -1529,6 +1536,7 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }:
         : null;
     const active =
       pathname === item.to ||
+      !!prefixActive ||
       (tabAlias != null &&
         pathname === tabAlias.path &&
         (search?.tab === tabAlias.tab ||
@@ -1554,6 +1562,7 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }:
           item.featured && "justify-end active:scale-95",
           active ? "text-primary" : "text-muted-foreground hover:text-foreground",
         )}
+        aria-current={active ? "page" : undefined}
         aria-label={item.featured && badge?.count ? `${item.label}, ${badge.count} new` : undefined}
       >
         {item.featured ? (

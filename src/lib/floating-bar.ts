@@ -52,6 +52,21 @@ export function withBarActionItems(nav: NavItem[]): NavItem[] {
 }
 
 /**
+ * The plain bar tab whose path is the deepest prefix of the current page, if
+ * no tab matches it exactly. Single-segment homes (/admin, /portal) never
+ * match by prefix, or they'd light up on every page.
+ */
+export function barPrefixMatch(items: NavItem[], pathname: string): string | null {
+  if (items.some((i) => !i.children && i.to === pathname)) return null;
+  let best: string | null = null;
+  for (const i of items) {
+    if (i.children || i.to.includes("?") || i.to.split("/").filter(Boolean).length < 2) continue;
+    if (pathname.startsWith(i.to + "/") && (best === null || i.to.length > best.length)) best = i.to;
+  }
+  return best;
+}
+
+/**
  * Canonical visible-bar contract: at most five buttons TOTAL.
  *
  * "More" is one of those five, never an extra sixth button. When a layout does

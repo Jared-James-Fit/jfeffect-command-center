@@ -180,21 +180,41 @@ describe("finance login's workspace", () => {
     const { buildFinanceNav } = await import("@/lib/internal-nav");
     const nav = buildFinanceNav();
     expect(nav.map((i) => i.to)).toEqual([
-      "/admin/finance", "/admin/sales?tab=taxes", "/admin/transactions", "/admin/payments",
+      "/admin/finance", "/admin/finance/books", "/admin/finance/payments", "/admin/transactions", "/admin/payments",
       "/admin/membership/billing", "/admin/discount-codes", "/admin/payment-links",
     ]);
     expect(nav.every((i) => i.group === "Finance" && !!i.icon)).toBe(true);
-    expect(nav.map((i) => i.label)).toEqual(["Home", "Taxes & Books", "Payments", "Revenue", "Subscriptions", "Discount Codes", "Products"]);
+    expect(nav.map((i) => i.label)).toEqual(["Home", "Books", "Payments", "Stripe activity", "Revenue", "Subscriptions", "Discount Codes", "Products"]);
+    // Real paths, so the sidebar and phone bar can show them as selected.
+    expect(nav.some((i) => i.to.includes("?"))).toBe(false);
   });
 
   it("lands on the books and gets a money-first phone bar", () => {
     const route = readFileSync("src/routes/_authenticated/admin/route.tsx", "utf8");
     expect(route).toMatch(/viewOnly\s*\?\s*\[\.\.\.buildFinanceNav\(\), \.\.\.fullNav\]/);
-    expect(route).toMatch(/to: "\/admin\/finance", label: "Home"[\s\S]*label: "Books"[\s\S]*label: "Payments"[\s\S]*label: "Clients"/);
+    // Clients is a plain tab: no pop-up of client tools.
+    expect(route).toContain('return [FINANCE_HOME, FINANCE_BOOKS, FINANCE_PAYMENTS, { to: "/admin/clients", label: "Clients", icon: Users }];');
     expect(readFileSync("src/routes/_authenticated/finance.tsx", "utf8")).toContain('to: "/admin/finance"');
     expect(readFileSync("src/routes/index.tsx", "utf8")).toContain('viewOnly ? "/finance"');
     expect(readFileSync("src/routes/auth.tsx", "utf8")).toContain('viewOnly ? "/finance"');
     expect(readFileSync("src/components/app-shell.tsx", "utf8")).toMatch(/"Finance", \/\/ the finance login's own section, always first\n\s+"Overview",/);
+  });
+});
+
+describe("phone bar selected tab", () => {
+  it("lights the deepest tab on sub-pages and never a top-level home", async () => {
+    const { barPrefixMatch } = await import("@/lib/floating-bar");
+    const Icon = (() => null) as any;
+    const bar = [
+      { to: "/admin/finance", label: "Home", icon: Icon },
+      { to: "/admin/finance/books", label: "Books", icon: Icon },
+      { to: "/admin/clients", label: "Clients", icon: Icon },
+    ];
+    expect(barPrefixMatch(bar, "/admin/finance/books")).toBeNull(); // exact match wins
+    expect(barPrefixMatch(bar, "/admin/finance/payments")).toBe("/admin/finance");
+    expect(barPrefixMatch(bar, "/admin/clients/abc")).toBe("/admin/clients");
+    expect(barPrefixMatch([{ to: "/admin", label: "Home", icon: Icon }], "/admin/tasks")).toBeNull();
+    expect(barPrefixMatch([{ to: "/admin/sales?tab=taxes", label: "Books", icon: Icon }], "/admin/sales/x")).toBeNull();
   });
 });
 

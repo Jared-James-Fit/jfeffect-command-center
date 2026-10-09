@@ -6,7 +6,7 @@ import {
   AlertTriangle, CalendarClock, Camera, CheckCircle2, ChevronDown, Download, FileSpreadsheet, FileText,
   Info, Lightbulb, Loader2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2,
 } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ import { BooksModeContext, useBooksMode, type BooksMode } from "./books-mode";
 import { openSummer } from "@/components/summer/summer-assistant";
 import { SummerCustomizeDialog } from "./summer-customize";
 import { summerTone } from "@/lib/summer-persona";
+import { methodLabel, RankBars, type RankRow } from "@/components/admin/finance/finance-charts";
 
 const STRIPE_FEE_STALE_MS = 12 * 60 * 60 * 1000;
 
@@ -60,15 +61,22 @@ function Kpi({ label, value, sub, tone, compact }: { label: string; value: strin
   );
 }
 
-export function TaxesBooksPage({ mode = "owner" }: { mode?: BooksMode } = {}) {
+const TABS = ["overview", "expenses", "gst", "year-end", "settings"];
+
+export function TaxesBooksPage({ mode = "owner", initialTab, initialFilter }: {
+  mode?: BooksMode;
+  /** Open on this tab (e.g. a "receipts to check" link opens Expenses). */
+  initialTab?: string;
+  initialFilter?: string;
+} = {}) {
   return (
     <BooksModeContext.Provider value={mode}>
-      <TaxesBooksPageInner />
+      <TaxesBooksPageInner initialTab={initialTab} initialFilter={initialFilter} />
     </BooksModeContext.Provider>
   );
 }
 
-function TaxesBooksPageInner() {
+function TaxesBooksPageInner({ initialTab, initialFilter }: { initialTab?: string; initialFilter?: string }) {
   const qc = useQueryClient();
   const loadFn = useServerFn(getBooksData);
   const { snap, scanning, label: snapLabel } = useSnapReceipts();
@@ -83,10 +91,10 @@ function TaxesBooksPageInner() {
   });
 
   const [year, setYear] = useState(currentYear);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(initialTab && TABS.includes(initialTab) ? initialTab : "overview");
   const [editing, setEditing] = useState<ExpenseRow | null>(null);
   const [adding, setAdding] = useState(false);
-  const [expenseFilter, setExpenseFilter] = useState<string>("all");
+  const [expenseFilter, setExpenseFilter] = useState<string>(initialFilter ?? "all");
   const [syncingFees, setSyncingFees] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -250,7 +258,7 @@ function TaxesBooksPageInner() {
           tone={s.profitMinor >= 0 ? "good" : "warn"}
         />
         <Kpi
-          label={s.inProgress ? `Tax for ${s.year} (projected)` : `Tax for ${s.year}`}
+          label={s.inProgress ? `${s.year} tax (est.)` : `${s.year} tax`}
           value={money(s.incomeTax.projected.totalMinor)}
           sub={s.settings.businessStructure === "corporation" ? "Corporate tax estimate" : `Income tax + CPP on ${short(s.projection.profitMinor)} profit`}
         />
@@ -331,12 +339,15 @@ function OverviewTab({
   onSyncFees: () => void;
   syncingFees: boolean;
 }) {
-  const chart = s.months.map((m) => ({
+  // A year in progress charts January to now; empty months ahead only squash it.
+  const thisMonth = today.slice(0, 7);
+  const months = s.inProgress ? s.months.filter((m) => m.month <= thisMonth) : s.months;
+  const chart = months.map((m) => ({
     name: MONTH_NAMES[Number(m.month.slice(5)) - 1].slice(0, 3),
     Sales: Math.round(m.salesMinor / 100),
     Expenses: Math.round(m.expensesMinor / 100),
   }));
-  const upcoming = s.deadlines.filter((d) => d.date >= today).slice(0, 5);
+  const upcoming = s.deadlines.filter((d) => d.date >= today).slice(0, 4);
   const issueAction: Record<string, () => void> = {
     "needs-review": () => onGo("expenses", "review"),
     uncategorized: () => onGo("expenses", "uncategorized"),
@@ -345,45 +356,58 @@ function OverviewTab({
     "stripe-fees": onSyncFees,
   };
 
+  // grid-cols-1 (minmax(0, 1fr)) keeps the chart and long text inside a phone screen.
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <Card className="p-4 lg:col-span-2">
-        <div className="mb-3 flex items-baseline justify-between">
+    <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
+      <Card className="min-w-0 p-4 lg:col-span-2">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <h3 className="text-sm font-semibold">Sales vs expenses by month</h3>
-          <span className="text-xs text-muted-foreground">GST/HST excluded</span>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" /> Sales</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-muted-foreground/50" /> Expenses</span>
+          </div>
         </div>
-        <div className="h-56">
+        <div className="h-52 min-w-0" role="img" aria-label={`Sales and expenses by month for ${s.year}`}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chart} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+            <BarChart data={chart} margin={{ top: 4, right: 0, left: 0, bottom: 0 }} barGap={2} barCategoryGap="22%">
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : String(v))} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={2} />
+              <YAxis width={34} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 100) / 10}k` : String(v))} />
               <Tooltip
+                cursor={{ fill: "var(--muted)", opacity: 0.5 }}
                 formatter={(v: number) => `$${v.toLocaleString("en-CA")}`}
-                contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, color: "var(--popover-foreground)" }}
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Sales" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Expenses" fill="var(--muted-foreground)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Sales" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={18} isAnimationActive={false} />
+              <Bar dataKey="Expenses" fill="var(--muted-foreground)" fillOpacity={0.45} radius={[4, 4, 0, 0]} maxBarSize={18} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Projection to Dec 31: {money(s.projection.salesMinor)} sales, {money(s.projection.profitMinor)} profit. {s.projection.basis}
+        <div className="mt-3 grid grid-cols-3 gap-2 border-t pt-3">
+          <MiniStat label={s.inProgress ? "Sales by Dec 31" : "Sales"} value={short(s.projection.salesMinor)} />
+          <MiniStat label="Expenses" value={short(s.projection.expensesMinor)} />
+          <MiniStat label="Profit" value={short(s.projection.profitMinor)} good={s.projection.profitMinor >= 0} />
+        </div>
+        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+          {s.inProgress ? "Projected to Dec 31. " : ""}{s.projection.basis} GST/HST excluded.
         </p>
       </Card>
 
-      <Card className="p-4">
+      <Card className="min-w-0 p-4">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold"><CalendarClock className="h-4 w-4" /> Coming up</h3>
         {upcoming.length ? (
-          <ul className="space-y-3 text-sm">
+          <ul className="space-y-3">
             {upcoming.map((d, i) => (
-              <li key={i}>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-medium">{d.title}</span>
-                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{d.date}</span>
+              <li key={i} className="flex gap-3">
+                <div className="w-11 shrink-0 rounded-lg border py-1 text-center">
+                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">{MONTH_NAMES[Number(d.date.slice(5, 7)) - 1].slice(0, 3)}</div>
+                  <div className="text-base font-semibold leading-tight tabular-nums">{Number(d.date.slice(8, 10))}</div>
+                  {d.date.slice(0, 4) !== today.slice(0, 4) && <div className="text-[9px] text-muted-foreground">{d.date.slice(0, 4)}</div>}
                 </div>
-                <p className="text-xs text-muted-foreground">{d.detail}</p>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium leading-snug">{d.title}</div>
+                  <p className="line-clamp-2 text-xs text-muted-foreground">{d.detail}</p>
+                </div>
               </li>
             ))}
           </ul>
@@ -392,7 +416,7 @@ function OverviewTab({
         )}
       </Card>
 
-      <Card className="p-4 lg:col-span-2">
+      <Card className="min-w-0 p-4 lg:col-span-2">
         <h3 className="mb-3 text-sm font-semibold">Books checklist</h3>
         {s.issues.length ? (
           <ul className="divide-y">
@@ -416,7 +440,7 @@ function OverviewTab({
         )}
       </Card>
 
-      <Card className="p-4">
+      <Card className="min-w-0 p-4">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4 text-amber-500" /> Tips from your numbers</h3>
         {s.tips.length ? (
           <ul className="space-y-3 text-sm">
@@ -432,33 +456,31 @@ function OverviewTab({
         )}
       </Card>
 
-      <Card className="p-4 lg:col-span-3">
-        <div className="grid gap-6 md:grid-cols-3">
-          <TopList title="Top clients" rows={s.revenue.byClient.slice(0, 6).map((r) => [r.client, r.salesMinor, r.count])} />
-          <TopList title="By product" rows={s.revenue.byProduct.slice(0, 6).map((r) => [r.product, r.salesMinor, r.count])} />
-          <TopList title="By payment method" rows={s.revenue.byMethod.map((r) => [r.method === "etransfer" ? "E-transfer" : r.method.charAt(0).toUpperCase() + r.method.slice(1), r.salesMinor, r.count])} />
+      <Card className="min-w-0 p-4 lg:col-span-3">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <TopList title="Top clients" rows={s.revenue.byClient.slice(0, 5).map((r) => ({ label: r.client, valueMinor: r.salesMinor, sub: `×${r.count}` }))} />
+          <TopList title="By product" rows={s.revenue.byProduct.slice(0, 5).map((r) => ({ label: r.product, valueMinor: r.salesMinor, sub: `×${r.count}` }))} />
+          <TopList title="By payment method" rows={s.revenue.byMethod.slice(0, 5).map((r) => ({ label: methodLabel(r.method), valueMinor: r.salesMinor, sub: `×${r.count}` }))} />
         </div>
       </Card>
     </div>
   );
 }
 
-function TopList({ title, rows }: { title: string; rows: Array<[string, number, number]> }) {
+function MiniStat({ label, value, good }: { label: string; value: string; good?: boolean }) {
   return (
-    <div>
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h4>
-      {rows.length ? (
-        <ul className="space-y-1.5 text-sm">
-          {rows.map(([label, v, n]) => (
-            <li key={label} className="flex items-baseline justify-between gap-2">
-              <span className="truncate">{label} <span className="text-xs text-muted-foreground">({n})</span></span>
-              <span className="shrink-0 tabular-nums">{money(v)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-muted-foreground">No sales yet.</p>
-      )}
+    <div className="min-w-0">
+      <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={cn("text-base font-semibold tabular-nums", good && "text-emerald-600 dark:text-emerald-400")}>{value}</div>
+    </div>
+  );
+}
+
+function TopList({ title, rows }: { title: string; rows: RankRow[] }) {
+  return (
+    <div className="min-w-0">
+      <h4 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h4>
+      <RankBars rows={rows} empty="No sales yet." />
     </div>
   );
 }

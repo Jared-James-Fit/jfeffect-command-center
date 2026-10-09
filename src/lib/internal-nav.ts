@@ -290,10 +290,12 @@ const MEMBERSHIP_OVERLAY: Entry[] = [
  * admin's Payments menu (labels tuned for a bookkeeper). The rest of the admin
  * nav follows.
  */
-const FINANCE_HOME: NavItem = { to: "/admin/finance", label: "Home", icon: Wallet, group: "Finance" };
+export const FINANCE_HOME: NavItem = { to: "/admin/finance", label: "Home", icon: Wallet, group: "Finance" };
+/** Real paths (no query string) so the sidebar and phone bar can show them as selected. */
+export const FINANCE_BOOKS: NavItem = { to: "/admin/finance/books", label: "Books", icon: Landmark, group: "Finance" };
+export const FINANCE_PAYMENTS: NavItem = { to: "/admin/finance/payments", label: "Payments", icon: CreditCard, group: "Finance" };
 const FINANCE_PAGES: Array<{ to: string; label?: string }> = [
-  { to: "/admin/sales?tab=taxes" },
-  { to: "/admin/transactions", label: "Payments" },
+  { to: "/admin/transactions", label: "Stripe activity" },
   { to: "/admin/payments", label: "Revenue" },
   { to: "/admin/membership/billing", label: "Subscriptions" },
   { to: "/admin/discount-codes" },
@@ -304,6 +306,8 @@ export function buildFinanceNav(): NavItem[] {
   const all = [...REGISTRY, ...MEMBERSHIP_OVERLAY];
   return [
     FINANCE_HOME,
+    FINANCE_BOOKS,
+    FINANCE_PAYMENTS,
     ...FINANCE_PAGES.flatMap(({ to, label }) => {
       const entry = all.find((e) => e.to === to);
       if (!entry) return [];

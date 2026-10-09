@@ -3,14 +3,14 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
-import { buildFinanceNav, buildInternalNav, buildInternalNavCollapsed, buildMembershipAdminNav, resolveStaffRoleTag } from "@/lib/internal-nav";
+import { FINANCE_BOOKS, FINANCE_HOME, FINANCE_PAYMENTS, buildFinanceNav, buildInternalNav, buildInternalNavCollapsed, buildMembershipAdminNav, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { SummerAssistant } from "@/components/summer/summer-assistant";
 import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
-import { LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy, Landmark, Activity, Wallet } from "lucide-react";
+import { LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
 import { StaffMfaGate } from "@/components/staff-mfa-gate";
@@ -87,13 +87,10 @@ function AdminLayout() {
       nav.find((i) => i.to === to) ?? legacy.find((i) => i.to === to)!;
     if (viewOnly) {
       // The finance login's phone bar: its home (snap, record, collect, Cleo),
-      // the books, payments and clients; More holds the rest.
-      return [
-        { to: "/admin/finance", label: "Home", icon: Wallet },
-        { to: "/admin/sales?tab=taxes", label: "Books", icon: Landmark },
-        { to: "/admin/transactions", label: "Payments", icon: Activity },
-        { ...pick("/admin/clients"), label: "Clients" },
-      ];
+      // the books, payments and clients; More holds the rest. Clients is a
+      // plain tab (no pop-up of client tools) and every tab is a real path so
+      // it shows as selected.
+      return [FINANCE_HOME, FINANCE_BOOKS, FINANCE_PAYMENTS, { to: "/admin/clients", label: "Clients", icon: Users }];
     }
     if (isCoach) {
       return [
