@@ -10,6 +10,7 @@ import { useCommunityActivity, useCommunityFeed, usePostMediaUrls, useReact, use
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
+import { CrewGoalStrip } from "@/components/community/crew-goal";
 
 const NEW_GRADIENT = "bg-primary";
 
@@ -106,6 +107,7 @@ export function CommunityHomeStrip() {
           See all <ChevronRight className="h-4 w-4" />
         </button>
       </div>
+      <CrewGoalStrip className="mt-2" />
       <div className="-mx-1 mt-2.5 flex snap-x items-start gap-2.5 overflow-x-auto px-1 pb-0.5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <ShareWorkoutButton unit={unit} label="Share your session" variant="tile" previewOnly={isImpersonating} />
         {shelf.map(({ post, live, fresh }) => {

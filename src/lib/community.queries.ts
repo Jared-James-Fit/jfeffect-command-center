@@ -21,6 +21,7 @@ import {
   type CommunityMember,
   type CommunityPoll,
   type CommunityPost,
+  type CrewGoal,
   type CommunityPostDetail,
   type CommunityProfile,
   type CommunityVisibility,
@@ -117,6 +118,23 @@ function patchPost(qc: ReturnType<typeof useQueryClient>, postId: string, patch:
     old ? { ...old, pages: old.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => (p.id === postId ? patch(p) : p)) })) } : old,
   );
   qc.setQueryData<CommunityPostDetail | null>(communityKeys.post(postId), (old) => (old ? (patch(old) as CommunityPostDetail) : old));
+}
+
+/* ---- crew goal ------------------------------------------------------ */
+
+/** The crew's shared weekly goal. Every finished workout moves it. */
+export function useCrewGoal(enabled = true, opts: { fresh?: boolean } = {}) {
+  return useQuery({
+    queryKey: ["community-crew-goal"],
+    enabled,
+    staleTime: opts.fresh ? 0 : 60_000,
+    refetchOnMount: opts.fresh ? "always" : true,
+    queryFn: async (): Promise<CrewGoal | null> => {
+      const { data, error } = await db.rpc("community_crew_goal");
+      if (error) throw error;
+      return (data ?? null) as CrewGoal | null;
+    },
+  });
 }
 
 /* ---- polls ---------------------------------------------------------- */
@@ -775,6 +793,7 @@ export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-recent-completions"] });
   qc.invalidateQueries({ queryKey: ["community-profile"] });
   qc.invalidateQueries({ queryKey: ["community-members"] });
+  qc.invalidateQueries({ queryKey: ["community-crew-goal"] });
 }
 
 /* ---- post detail / profile ------------------------------------------ */

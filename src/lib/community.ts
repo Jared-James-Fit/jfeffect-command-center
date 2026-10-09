@@ -1215,3 +1215,37 @@ export function cleanPollOptions(options: string[]): { ok: true; options: string
   if (new Set(opts.map((o) => o.toLowerCase())).size < opts.length) return { ok: false, reason: "Each option needs to be different" };
   return { ok: true, options: opts };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Crew goal                                                          */
+/* ------------------------------------------------------------------ */
+
+/** The crew's shared weekly session goal (community_crew_goal). */
+export type CrewGoal = {
+  week_of: string;
+  ends_at: string;
+  target: number;
+  done: number;
+  hit_at: string | null;
+  hit_by: CommunityAuthor | null;
+  people: number;
+  /** Who's trained this week, most recent first (no counts: nobody's ranked here). */
+  contributors: CommunityAuthor[];
+  mine: number;
+  last_week: { target: number; done: number; hit: boolean };
+};
+
+/** Where the goal stands, in words: "11 to go · 3 days left" / "Goal hit Thursday 🎉 · Vicky closed it out". */
+export function crewGoalStatus(g: CrewGoal, opts: { now?: Date; me?: string | null } = {}): { pct: number; left: number; hit: boolean; line: string } {
+  const now = opts.now ?? new Date();
+  const hit = g.done >= g.target;
+  const pct = g.target > 0 ? Math.min(100, Math.round((g.done / g.target) * 100)) : 0;
+  const left = Math.max(0, g.target - g.done);
+  if (hit) {
+    const day = g.hit_at ? new Date(g.hit_at).toLocaleDateString(undefined, { weekday: "long" }) : null;
+    const who = g.hit_by ? (g.hit_by.user_id === opts.me ? "you closed it out" : `${g.hit_by.name.split(" ")[0]} closed it out`) : null;
+    return { pct, left, hit, line: [`Goal hit${day ? ` ${day}` : ""} 🎉`, who].filter(Boolean).join(" · ") };
+  }
+  const days = Math.max(1, Math.ceil((new Date(g.ends_at).getTime() - now.getTime()) / 86_400_000));
+  return { pct, left, hit, line: `${left} to go · ${days === 1 ? "last day" : `${days} days left`}` };
+}
