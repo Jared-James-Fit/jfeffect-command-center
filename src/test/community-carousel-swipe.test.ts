@@ -140,7 +140,8 @@ describe("swipe back", () => {
     expect(swipe).toMatch(/if \(t\.clientX < EDGE_PX \|\| sheetOpen\(\) \|\| blocked\(e\.target\)\) return;/);
   });
   it("only takes sideways-right swipes, and only then stops scrolling", () => {
-    expect(swipe).toMatch(/if \(ddx > 0 && ddx > Math\.abs\(ddy\) \* 1\.3\) mode = "back";/);
+    expect(swipe).toMatch(/if \(ddx > 0 && ddx > Math\.abs\(ddy\) \* DIRECTION\) \{\s*mode = "back";/);
+    expect(swipe).toMatch(/const DIRECTION = 1\.4;/);
     expect(swipe).toMatch(/if \(e\.cancelable\) e\.preventDefault\(\);/);
     expect(swipe).toMatch(/document\.addEventListener\("touchmove", onMove, \{ passive: false \}\);/);
   });
