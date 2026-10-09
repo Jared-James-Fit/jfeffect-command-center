@@ -71,9 +71,8 @@ begin
   perform t_bw(shy, 180, '2026-08-01');
   perform t_set(shy, 'Competition Deadlift', 250, 'kg', 1, wpg('2026-08-02 10:00'));
 
-  -- Archived client and non-competition exercises never count.
+  -- Non-competition exercises never count. (Former clients: scenario-all-time.sql.)
   update clients set archived = true where id = gone;
-  perform t_set(gone, 'Competition Squat', 400, 'kg', 1, wpg('2026-08-01 10:00'));
   perform t_set(jared, 'Hack Squat', 300, 'kg', 1, wpg('2026-08-01 10:00'));
   perform t_set(jared, 'Romanian Deadlift', 300, 'kg', 1, wpg('2026-08-01 10:00'));
 
@@ -101,7 +100,6 @@ begin
     'real elite lifts (270 kg deadlift at 147 lb = 4.05x) pass');
   perform t_assert((select count(*) from strength_board_sets() where client_id = dwayne and flag is not null) = 0,
     '315 kg x2 deadlift at 203 lb passes');
-  perform t_assert(not exists (select 1 from strength_board_sets() where client_id = gone), 'archived clients never count');
   perform t_assert(not exists (select 1 from strength_board_sets() where load_kg = 300), 'hack squats and RDLs never count');
 
   -- 2. Bodyweight closest to the lift.

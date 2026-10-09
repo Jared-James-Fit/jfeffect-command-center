@@ -5,6 +5,7 @@ import {
   gapToTop10,
   meStatus,
   meetHistory,
+  normalizeAllRow,
   normalizeMeetRow,
   normalizeRow,
   pickBoard,
@@ -158,12 +159,30 @@ describe("meet history", () => {
     expect(r.key).toBe("a1");
     expect(r.reps).toBeNull();
     expect(r.meet?.competed_as).toBe("Nicole Carta");
-    expect(r.meet?.is_alumni).toBe(true);
+    expect(r.is_alumni).toBe(true);
+    expect(r.source).toBe("meet");
   });
 
   it("counts athletes and meets once each", () => {
     const rows = [meet("a1", "total", 3, "2019-05-01"), meet("a1", "squat", 3, "2019-05-01"), meet("a2", "bench", 2, "2021-01-01")];
     expect(meetHistory(rows)).toEqual({ athletes: 2, meets: 5, since: 2019 });
     expect(meetHistory([])).toEqual({ athletes: 0, meets: 0, since: null });
+  });
+});
+
+describe("all-time rows", () => {
+  it("keys by person and tags where the number was made", () => {
+    const meet = normalizeAllRow({ person: "a:p1", client_id: null, athlete_id: "p1", display_name: "Phillip B", lift: "total", kg: 672.5,
+      reps: null, source: "meet", lifted_on: "2024-06-01", meet_name: "Nationals", federation: "CPU", all_rank: 4, is_alumni: false });
+    expect(meet.key).toBe("a:p1");
+    expect(meet.source).toBe("meet");
+    expect(meet.meet?.name).toBe("Nationals");
+    expect(meet.lifted_at).toBe("2024-06-01T12:00:00");
+    const gym = normalizeAllRow({ person: "c:v", client_id: "v", display_name: "Vicky T", lift: "squat", kg: 265.4, reps: 2,
+      source: "training", lifted_on: "2026-09-19", all_rank: 2, is_alumni: true });
+    expect(gym.source).toBe("training");
+    expect(gym.meet).toBeUndefined();
+    expect(gym.reps).toBe(2);
+    expect(gym.is_alumni).toBe(true);
   });
 });

@@ -144,7 +144,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
 
         <div className="grid grid-cols-2 border-t">
           <div className="min-w-0 px-3 py-2 [&>button]:mt-0 [&>button]:border-0 [&>button]:px-1 [&>button]:py-1"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
-          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-3 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Meet History</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
+          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-3 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Competition Records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
         </div>
       </Card>
 
