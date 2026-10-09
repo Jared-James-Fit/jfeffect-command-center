@@ -231,6 +231,8 @@ export type BirthdayPost = {
   post_id: string | null;
   message_id: string | null;
   posted_at: string | null;
+  /** Photos / videos that go out with the post (same rules as any post). */
+  media?: PostSlide[];
   person: { name: string; full_name: string; avatar_url: string | null; timezone: string | null };
 };
 export type BirthdayAction = "save" | "reroll" | "approve" | "post_now" | "unschedule" | "skip";
@@ -293,8 +295,11 @@ export function useDraftBirthdayNow() {
 export function useBirthdayAct() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (a: { id: string; action: BirthdayAction; body?: string; dmBody?: string }): Promise<BirthdayPost> => {
-      const { data, error } = await db.rpc("community_birthday_act", { _id: a.id, _action: a.action, _body: a.body ?? null, _dm_body: a.dmBody ?? null });
+    mutationFn: async (a: { id: string; action: BirthdayAction; body?: string; dmBody?: string; media?: PostSlide[] }): Promise<BirthdayPost> => {
+      // _media only when the photos changed (left out, the post keeps the ones it has)
+      const { data, error } = await db.rpc("community_birthday_act", {
+        _id: a.id, _action: a.action, _body: a.body ?? null, _dm_body: a.dmBody ?? null, ...(a.media ? { _media: a.media } : {}),
+      });
       if (error) throw error;
       return data as BirthdayPost;
     },
@@ -883,6 +888,8 @@ export type SeriesItem = {
   quote: string | null;
   quote_source: string | null;
   data?: Record<string, any> | null;
+  /** Photos that go out with this one's next run (then it's text-only again). */
+  media?: PostSlide[];
 };
 export type SeriesOverview = {
   paused: boolean;
@@ -964,15 +971,25 @@ export function useCommunityPulse(enabled = true) {
 export function useSeriesAction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (a: { kind: "pause"; paused: boolean } | { kind: "publish"; series: CommunitySeries } | { kind: "item"; id: string; body: string; active?: boolean } | { kind: "note"; body: string; poll?: string[] | null }) => {
+    mutationFn: async (
+      a:
+        | { kind: "pause"; paused: boolean }
+        | { kind: "publish"; series: CommunitySeries }
+        | { kind: "item"; id: string; body: string; active?: boolean; media?: PostSlide[] }
+        | { kind: "note"; body: string; poll?: string[] | null; media?: PostSlide[] },
+    ) => {
       const call =
         a.kind === "pause"
           ? db.rpc("community_series_set_paused", { _paused: a.paused })
           : a.kind === "publish"
             ? db.rpc("community_publish_series", { _series: a.series, _force: true })
             : a.kind === "item"
-              ? db.rpc("community_series_update_item", { _id: a.id, _body: a.body, _active: a.active ?? true })
-              : db.rpc("community_create_note", a.poll?.length ? { _body: a.body, _poll: a.poll } : { _body: a.body });
+              ? db.rpc("community_series_update_item", { _id: a.id, _body: a.body, _active: a.active ?? true, ...(a.media ? { _media: a.media } : {}) })
+              : db.rpc("community_create_note", {
+                  _body: a.body,
+                  ...(a.poll?.length ? { _poll: a.poll } : {}),
+                  ...(a.media?.length ? { _media: a.media } : {}),
+                });
       const { data, error } = await call;
       if (error) throw error;
       return data as { status?: string } | null;
@@ -990,6 +1007,25 @@ export function useUpdateNote() {
   return useMutation({
     mutationFn: async (a: { postId: string; body: string }) => {
       const { error } = await db.rpc("community_update_note", { _post_id: a.postId, _body: a.body });
+      if (error) throw error;
+    },
+    onSuccess: (_d, a) => {
+      invalidateCommunity(qc);
+      qc.invalidateQueries({ queryKey: communityKeys.post(a.postId) });
+    },
+  });
+}
+
+/**
+ * Swap the photos / videos on a post (its author, any time; staff on a coach
+ * note): cover first, up to 10, at most 3 videos. Caption, audience and
+ * points stay as they are.
+ */
+export function useSetPostMedia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { postId: string; media: PostSlide[] }) => {
+      const { error } = await db.rpc("community_set_post_media", { _post_id: a.postId, _media: a.media });
       if (error) throw error;
     },
     onSuccess: (_d, a) => {

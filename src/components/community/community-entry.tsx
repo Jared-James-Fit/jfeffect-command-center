@@ -126,7 +126,7 @@ function CrewCard({ post, unit, thumb, fresh, onOpen }: { post: CommunityPost; u
   const name = post.is_mine ? "You" : post.author.name.split(" ")[0];
   const likes = post.reaction_count ?? 0;
   const counts = likes > 0 || post.comment_count > 0;
-  const photo = !!(post.media_type && thumb && post.kind !== "note");
+  const photo = !!(post.media_type && thumb);
   const lift = photo && post.stats ? featuredLift(post.stats) : null;
   // a photo says what the session was underneath it
   const title = photo ? (post.stats?.workout_title ?? (post.locked_in_at ? "Locked in" : null)) : null;

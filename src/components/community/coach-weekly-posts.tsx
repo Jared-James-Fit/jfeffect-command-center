@@ -166,6 +166,11 @@ export function CoachWeeklyPosts() {
                         )}
                         {next.quote && <div className="mt-1.5 line-clamp-2 text-[13px] font-semibold">“{next.quote}”</div>}
                         <div className="mt-1 line-clamp-3 whitespace-pre-line text-[12px] text-muted-foreground">{next.body}</div>
+                        {!!next.media?.length && (
+                          <div className="mt-1.5 text-[11px] font-bold text-primary">
+                            + {next.media.length} {next.media.length === 1 ? "photo" : "photos / videos"}
+                          </div>
+                        )}
                       </button>
                     )}
                     {series === "try_it_thursday" && next?.data?.habit && (
@@ -232,9 +237,10 @@ export function CoachWeeklyPosts() {
         quote={editing?.item.quote ? { text: editing.item.quote, author: editing.item.mentor } : null}
         saving={act.isPending}
         onClose={() => setEditing(null)}
-        onSave={async (body) => {
+        media={editing ? { initial: editing.item.media, key: editing.item.id, hint: "Photos go out with this post once. The text stays for next time." } : undefined}
+        onSave={async (body, _poll, media) => {
           if (!editing) return;
-          await act.mutateAsync({ kind: "item", id: editing.item.id, body });
+          await act.mutateAsync({ kind: "item", id: editing.item.id, body, media });
           toast.success("Saved. It goes out like this.");
         }}
       />

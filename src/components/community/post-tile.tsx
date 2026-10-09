@@ -22,7 +22,10 @@ export function PostTileFace({ post, thumb, unit, footer = false, large = false 
   const bottom = footer && (large ? "pb-11" : "pb-8");
   return (
     <>
-      {post.kind === "note" ? (
+      {post.kind === "note" && post.media_type && thumb ? (
+        // a coach post with a photo shows the photo, like any other post
+        <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+      ) : post.kind === "note" ? (
         <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)] text-left", pad, bottom)}>
           <span className={cn("font-black uppercase tracking-[0.14em] text-primary", large ? "text-[10px]" : "text-[8px]")}>{post.poll ? "Poll" : post.series ? SERIES_LABEL[post.series]?.name.split(" ")[0] ?? "Note" : "Note"}</span>
           <span className={cn("font-semibold leading-snug", large ? "line-clamp-4 text-[15px]" : cn("text-[11px]", footer ? "line-clamp-4" : "line-clamp-5"))}>
