@@ -80,9 +80,9 @@ describe("pickBoard", () => {
     expect(pickBoard(rows, "absolute", "total", "female").top.map((r) => r.client_id)).toEqual(["c"]);
   });
 
-  it("pound for pound is one board for everyone with a bodyweight", () => {
-    const { top } = pickBoard(rows, "p4p", "total", "female");
-    expect(top.map((r) => r.client_id)).toEqual(["a", "b", "c"]);
+  it("pound for pound: All is everyone with a bodyweight; Women / Men filter it", () => {
+    expect(pickBoard(rows, "p4p", "total", "all").top.map((r) => r.client_id)).toEqual(["a", "b", "c"]);
+    expect(pickBoard(rows, "p4p", "total", "female").top.map((r) => r.client_id)).toEqual(["c"]);
   });
 
   it("keeps lifts separate", () => {
@@ -184,5 +184,30 @@ describe("all-time rows", () => {
     expect(gym.meet).toBeUndefined();
     expect(gym.reps).toBe(2);
     expect(gym.is_alumni).toBe(true);
+  });
+});
+
+describe("pound for pound by sex", () => {
+  const p = (key: string, sex: "male" | "female" | null, p4p_rank: number) =>
+    ({ ...normalizeRow({ client_id: key, display_name: key, sex, lift: "total", kg: 500, lifted_at: "2026-09-01T12:00:00Z",
+      bw_kg: 80, bw_multiple: 6, p4p_rank, p4p_count: 5, all_rank: p4p_rank, all_count: 5 }), key });
+  const rows = [p("m1", "male", 1), p("f1", "female", 2), p("m2", "male", 3), p("x", null, 4), p("f2", "female", 5)];
+
+  it("keeps the overall order and renumbers within the sex", () => {
+    const women = pickBoard(rows, "p4p", "total", "female");
+    expect(women.top.map((r) => [r.key, r.p4p_rank])).toEqual([["f1", 1], ["f2", 2]]);
+    expect(women.count).toBe(2);
+    expect(pickBoard(rows, "p4p", "total", "male").top.map((r) => r.key)).toEqual(["m1", "m2"]);
+    expect(pickBoard(rows, "p4p", "total", "all").top).toHaveLength(5);
+  });
+
+  it("says why you're not on a sex board", () => {
+    const meNoSex = { ...rows[3], is_me: true };
+    expect(meStatus(pickBoard([meNoSex], "p4p", "total", "male").me, "p4p", "total", "male")).toEqual({ kind: "no-division" });
+    const meWoman = { ...rows[1], is_me: true };
+    const onMen = pickBoard([...rows.slice(0, 1), meWoman], "p4p", "total", "male");
+    expect(meStatus(onMen.me, "p4p", "total", "male")).toEqual({ kind: "other-division" });
+    const onWomen = pickBoard([meWoman], "p4p", "total", "female");
+    expect(meStatus(onWomen.me, "p4p", "total", "female")).toEqual({ kind: "ranked", rank: 1, count: 1 });
   });
 });
