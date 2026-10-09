@@ -563,6 +563,10 @@ describe("Monday Motivation + Finish Strong Friday: real coach posts", () => {
   it("rotate mentors and never put words in anyone's mouth", () => {
     expect(sql).toContain("ORDER BY (i.mentor = ANY (coalesce(v_recent, '{}'))) ASC, i.last_used_at ASC NULLS FIRST");
     expect(sql).toContain("CONSTRAINT community_series_items_quote_has_source CHECK (quote IS NULL OR quote_source IS NOT NULL)");
+    // the post credits the person only; the source stays on file
+    const postCard = read("src/components/community/post-card.tsx");
+    expect(postCard).toContain("{post.quote_author}</figcaption>");
+    expect(postCard).not.toContain("post.quote_source");
     // quotes are not editable after the fact, only the coach's own words
     expect(sql).toMatch(/community_update_note\(_post_id uuid, _body text\)/);
     for (const known of ["Rest at the end, not in the middle", "Pain is weakness leaving the body", "opportunity for me to rise"]) expect(sql).not.toContain(known);
