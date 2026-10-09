@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { cn } from "@/lib/utils";
 import type { CommunityVisibility } from "@/lib/community";
 import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
+import { CaptionEditor, CaptionField, captionThumb } from "@/components/community/caption-editor";
 import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 
 export type CameraMode = { key: string; label: string };
@@ -98,6 +99,9 @@ export function ShareStudio({
   const [busy, setBusy] = useState<null | "post" | "save">(null);
   const [posted, setPosted] = useState(false);
   const [area, setArea] = useState<HTMLDivElement | null>(null);
+  // Writing the caption happens on its own screen (with a preview of the post).
+  const [captioning, setCaptioning] = useState(false);
+  const [thumb, setThumb] = useState<string | null>(null);
   const [areaSize, setAreaSize] = useState({ w: 0, h: 0 });
   const [cardEl, setCardEl] = useState<HTMLCanvasElement | null>(null);
   const [logo, setLogo] = useState<HTMLImageElement | null>(null);
@@ -391,6 +395,12 @@ export function ShareStudio({
     return b ? new File([b], `jf-${card.look}.jpg`, { type: "image/jpeg" }) : finalPhoto();
   };
 
+  // The caption screen's preview: the card as it is now, stickers and all, small.
+  const openCaption = () => {
+    setThumb(captionThumb(cardEl, (ctx, w, h) => drawStickers(ctx, items, w, h)));
+    setCaptioning(true);
+  };
+
   const doPost = async () => {
     if (!post || busy || posted || !card) return;
     setBusy("post");
@@ -571,24 +581,24 @@ export function ShareStudio({
             </>
           ) : (
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  value={caption}
-                  onChange={(e) => {
-                    setCaption(e.target.value.slice(0, 280));
-                    setPosted(false);
-                  }}
-                  placeholder="Say something… (optional)"
-                  className="h-11 min-w-0 flex-1 rounded-full border-0 bg-white/10 px-4 text-[16px] text-white placeholder:text-white/45 focus:outline-none focus:ring-2 focus:ring-white/30"
-                  aria-label="Caption"
-                />
+              <CaptionField value={caption} onOpen={openCaption} />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={!!busy || !card}
+                  onClick={() => void doSave()}
+                  className="grid h-14 w-12 shrink-0 place-items-center rounded-2xl bg-white/10 active:scale-[0.97] disabled:opacity-60"
+                  aria-label="Save image"
+                >
+                  {busy === "save" ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Download className="h-6 w-6" />}
+                </button>
                 <button
                   type="button"
                   onClick={() => {
                     setVisibility(AUDIENCE[(AUDIENCE.indexOf(aud) + 1) % AUDIENCE.length].key);
                     setPosted(false);
                   }}
-                  className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-3.5 text-[13px] font-black active:scale-95"
+                  className="inline-flex h-14 shrink-0 items-center gap-1.5 rounded-2xl bg-white/10 px-3 text-[13px] font-black active:scale-95"
                   aria-label={`Who sees it: ${aud.label}. Tap to change`}
                 >
                   <AudIcon className="h-4 w-4" /> {aud.label}
@@ -601,31 +611,20 @@ export function ShareStudio({
                       setHideLoads(!hideLoads);
                       setPosted(false);
                     }}
-                    className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-full active:scale-95", hideLoads ? "bg-white text-black" : "bg-white/10")}
+                    className={cn("grid h-14 w-12 shrink-0 place-items-center rounded-2xl active:scale-95", hideLoads ? "bg-white text-black" : "bg-white/10")}
                     aria-label={hideLoads ? "Weights hidden. Tap to show" : "Hide my weights"}
                     aria-pressed={hideLoads}
                   >
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOff className="h-5 w-5" />
                   </button>
                 )}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={!!busy || !card}
-                  onClick={() => void doSave()}
-                  className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/10 active:scale-[0.97] disabled:opacity-60"
-                  aria-label="Save image"
-                >
-                  {busy === "save" ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Download className="h-6 w-6" />}
-                </button>
                 <button
                   type="button"
                   disabled={!!busy || posted || !post || !card}
                   onClick={() => void doPost()}
                   className={cn(
                     // the app's own primary button: JF red, solid
-                    "inline-flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl text-[16px] font-black shadow-lg shadow-primary/25 active:scale-[0.98] disabled:opacity-100",
+                    "inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl text-[16px] font-black shadow-lg shadow-primary/25 active:scale-[0.98] disabled:opacity-100",
                     posted ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground",
                     !post && "opacity-60",
                   )}
@@ -637,6 +636,17 @@ export function ShareStudio({
             </div>
           )}
         </div>
+        {captioning && (
+          <CaptionEditor
+            value={caption}
+            onChange={(v) => {
+              setCaption(v);
+              setPosted(false);
+            }}
+            onDone={() => setCaptioning(false)}
+            thumb={thumb}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

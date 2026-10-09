@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   AlertTriangle, CalendarClock, Camera, CheckCircle2, ChevronDown, Download, FileSpreadsheet, FileText,
-  Info, Lightbulb, Loader2, Paperclip, Plus, RefreshCw, Search, Sparkles, Trash2,
+  Info, Lightbulb, Loader2, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card } from "@/components/ui/card";
@@ -23,17 +23,20 @@ import {
 import { cn } from "@/lib/utils";
 import { EXPENSE_CATEGORIES, expenseCategory } from "@/lib/business-expense-categories";
 import {
-  ASSISTANT_NAME, ASSISTANT_SHORT, minorToInput, parseMoneyToMinor, toExpenseEntry, toTaxPaymentEntry, toTaxSettings,
+  ASSISTANT_NAME, minorToInput, parseMoneyToMinor, toExpenseEntry, toTaxPaymentEntry, toTaxSettings,
   type BooksData, type ExpenseRow, type TaxPaymentRow,
 } from "@/lib/business-books";
 import { buildBooksSnapshot, expenseTaxView, fmtCad, MONTH_NAMES, type BooksSnapshot } from "@/lib/business-tax";
 import { businessToday } from "@/lib/billing-schedule";
 import {
-  addTaxPayment, deleteTaxPayment, getBooksData, markExpensesReviewed, saveTaxSettings, scanReceipt, syncStripeFees,
+  addTaxPayment, deleteTaxPayment, getBooksData, getSummerProfile, markExpensesReviewed, saveTaxSettings, scanReceipt, syncStripeFees,
 } from "@/lib/business-books.functions";
 import { RECEIPT_ACCEPT, receiptSignedUrl, uploadReceiptFile } from "@/lib/receipt-upload";
 import { ExpenseDialog } from "./expense-dialog";
-import { SummerChat } from "./summer-chat";
+import { BooksModeContext, useBooksMode, type BooksMode } from "./books-mode";
+import { openSummer } from "@/components/summer/summer-assistant";
+import { SummerCustomizeDialog } from "./summer-customize";
+import { summerTone } from "@/lib/summer-persona";
 
 const BOOKS_KEY = ["books-data"];
 const STRIPE_FEE_STALE_MS = 12 * 60 * 60 * 1000;
@@ -57,7 +60,16 @@ function Kpi({ label, value, sub, tone, compact }: { label: string; value: strin
   );
 }
 
-export function TaxesBooksPage() {
+export function TaxesBooksPage({ mode = "owner" }: { mode?: BooksMode } = {}) {
+  return (
+    <BooksModeContext.Provider value={mode}>
+      <TaxesBooksPageInner />
+    </BooksModeContext.Provider>
+  );
+}
+
+function TaxesBooksPageInner() {
+  const mode = useBooksMode();
   const qc = useQueryClient();
   const loadFn = useServerFn(getBooksData);
   const scanFn = useServerFn(scanReceipt);
@@ -73,7 +85,6 @@ export function TaxesBooksPage() {
 
   const [year, setYear] = useState(currentYear);
   const [tab, setTab] = useState("overview");
-  const [summerOpen, setSummerOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [expenseFilter, setExpenseFilter] = useState<string>("all");
@@ -149,7 +160,7 @@ export function TaxesBooksPage() {
     setTab("expenses");
     if (list.length === 1 && last) {
       if (last.status === "reviewed") {
-        toast.success(`${ASSISTANT_SHORT} filed it: ${last.vendor ?? "Receipt"} ${money(Number(last.amount_minor))}, ${expenseCategory(last.category).label}`);
+        toast.success(`${ASSISTANT_NAME} filed it: ${last.vendor ?? "Receipt"} ${money(Number(last.amount_minor))}, ${expenseCategory(last.category).label}`);
       }
       setEditing(last);
     } else if (list.length > 1) {
@@ -216,9 +227,11 @@ export function TaxesBooksPage() {
             {scanState ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Camera className="mr-1.5 h-4 w-4" />}
             {scanState ? `Reading ${scanState.done + (scanState.done < scanState.total ? 1 : 0)} of ${scanState.total}` : "Snap receipt"}
           </Button>
-          <Button size="sm" variant="outline" className="h-9" onClick={() => setSummerOpen(true)}>
-            <Sparkles className="mr-1.5 h-4 w-4 text-amber-500" /> Ask {ASSISTANT_SHORT}
-          </Button>
+          {mode === "owner" && (
+            <Button size="sm" variant="outline" className="h-9" onClick={() => openSummer({ year })}>
+              <Sparkles className="mr-1.5 h-4 w-4 text-amber-500" /> Ask {ASSISTANT_NAME}
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-9" disabled={!!exporting}>
@@ -323,7 +336,7 @@ export function TaxesBooksPage() {
         onChanged={refresh}
         gstRegistered={gstRegistered}
       />
-      <SummerChat open={summerOpen} onOpenChange={setSummerOpen} year={year} />
+
     </div>
   );
 }
@@ -436,7 +449,7 @@ function OverviewTab({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Nothing stands out. Ask {ASSISTANT_SHORT} for a review.</p>
+          <p className="text-sm text-muted-foreground">Nothing stands out. Ask {ASSISTANT_NAME} for a review.</p>
         )}
       </Card>
 
@@ -580,7 +593,7 @@ function ExpensesTab({
         <Card className="p-8 text-center text-sm text-muted-foreground">
           {yearRows.length ? "Nothing matches." : (
             <div className="space-y-3">
-              <p>No expenses for {s.year} yet. Snap a receipt and {ASSISTANT_SHORT} files it for you.</p>
+              <p>No expenses for {s.year} yet. Snap a receipt and {ASSISTANT_NAME} files it for you.</p>
               <Button size="sm" onClick={onSnap}><Camera className="mr-1.5 h-4 w-4" /> Snap receipt</Button>
             </div>
           )}
@@ -653,6 +666,7 @@ function TaxPaymentDialog({ open, onClose, year, kind, onSaved }: { open: boolea
 
 function PaymentsList({ payments, year, kind, onChanged }: { payments: TaxPaymentRow[]; year: number; kind: "gst_hst" | "income_tax"; onChanged: () => void }) {
   const delFn = useServerFn(deleteTaxPayment);
+  const canDelete = useBooksMode() === "owner";
   const rows = payments.filter((p) => p.tax_year === year && p.kind === kind);
   if (!rows.length) return <p className="text-xs text-muted-foreground">No payments recorded for {year}.</p>;
   return (
@@ -662,10 +676,12 @@ function PaymentsList({ payments, year, kind, onChanged }: { payments: TaxPaymen
           <span>{p.paid_on}{p.period_label ? ` · ${p.period_label}` : ""}{p.reference ? <span className="text-xs text-muted-foreground"> · #{p.reference}</span> : null}</span>
           <span className="flex items-center gap-1">
             <span className="tabular-nums">{money(Number(p.amount_minor))}</span>
-            <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Delete payment" onClick={async () => {
-              if (!window.confirm("Delete this payment record?")) return;
-              try { await delFn({ data: { id: p.id } }); onChanged(); } catch (e: any) { toast.error(e?.message ?? "Could not delete"); }
-            }}><Trash2 className="h-3.5 w-3.5" /></Button>
+            {canDelete && (
+              <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Delete payment" onClick={async () => {
+                if (!window.confirm("Delete this payment record?")) return;
+                try { await delFn({ data: { id: p.id } }); onChanged(); } catch (e: any) { toast.error(e?.message ?? "Could not delete"); }
+              }}><Trash2 className="h-3.5 w-3.5" /></Button>
+            )}
           </span>
         </li>
       ))}
@@ -839,7 +855,57 @@ function YearEndTab({
 
 // ---------------------------------------------------------------------------
 
+function SummerSettingsCard({ onSaved }: { onSaved: () => void }) {
+  const qc = useQueryClient();
+  const profileFn = useServerFn(getSummerProfile);
+  const [open, setOpen] = useState(false);
+  const { data: profile } = useQuery({
+    queryKey: ["summer-profile"],
+    queryFn: () => profileFn() as Promise<{ tone: string | null; instructions: string | null; isOwner: boolean }>,
+    staleTime: 5 * 60_000,
+  });
+  const persona = { tone: profile?.tone, instructions: profile?.instructions };
+  const tone = summerTone(persona.tone);
+  return (
+    <Card className="max-w-2xl p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-orange-500 text-white">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">{ASSISTANT_NAME}</div>
+            <p className="text-xs text-muted-foreground">Vibe: {tone.label}. {persona.instructions?.trim() ? "Your custom instructions are on." : "No custom instructions yet."}</p>
+          </div>
+        </div>
+        <Button size="sm" variant="outline" className="shrink-0" onClick={() => setOpen(true)}>
+          <SlidersHorizontal className="mr-1.5 h-4 w-4" /> Customize
+        </Button>
+      </div>
+      <SummerCustomizeDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        persona={persona}
+        onSaved={() => {
+          onSaved();
+          qc.invalidateQueries({ queryKey: ["summer-profile"] });
+        }}
+      />
+    </Card>
+  );
+}
+
 function SettingsTab({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
+  const mode = useBooksMode();
+  return (
+    <div className="space-y-4">
+      {mode === "owner" && <SummerSettingsCard onSaved={onSaved} />}
+      <TaxSettingsForm data={data} onSaved={onSaved} />
+    </div>
+  );
+}
+
+function TaxSettingsForm({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
   const saveFn = useServerFn(saveTaxSettings);
   const st = toTaxSettings(data.settings);
   const [form, setForm] = useState({
@@ -936,7 +1002,7 @@ function SettingsTab({ data, onSaved }: { data: BooksData; onSaved: () => void }
           <Input value={form.accountant_name} onChange={(e) => setForm({ ...form, accountant_name: e.target.value })} placeholder="Name or firm" />
         </div>
         <div className="space-y-1.5 sm:col-span-2">
-          <Label>Notes for {ASSISTANT_SHORT} and your accountant</Label>
+          <Label>Notes for {ASSISTANT_NAME} and your accountant</Label>
           <Textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="e.g. Home office is 10% of the apartment. Car is 30% business." />
         </div>
       </div>

@@ -32,6 +32,7 @@ import {
   lockInTimeLabel,
   SERIES_LABEL,
   REACTION,
+  reactionKinds,
   reactionTotal,
   reactorsLine,
   compactNumber,
@@ -47,7 +48,7 @@ import {
   type WorkoutShareStats,
 } from "@/lib/community";
 import { availableTemplates, cameraLooks, exportType, wrapLines } from "@/lib/workout-share-card";
-import { densityFor, remapStickers, snapAngle } from "@/components/community/sticker-layer";
+import { densityFor, highlightShape, nextTextAlign, nextTextStyle, remapStickers, snapAngle, TEXT_SIZE, TEXT_STYLES, textMetrics } from "@/components/community/sticker-layer";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const migration = read("supabase/migrations/20261006090000_community_sharing.sql");
@@ -111,7 +112,7 @@ describe("share card data", () => {
 
 describe("reactions", () => {
   it("is a small fixed set with no scoring attached", () => {
-    expect(REACTIONS.map((r) => r.emoji)).toEqual(["🔥", "💪", "👏", "❤️"]);
+    expect(REACTIONS.map((r) => r.emoji)).toEqual(["❤️", "👍", "‼️", "🔥", "😂"]);
     expect(Object.keys(REACTIONS[0]).sort()).toEqual(["emoji", "key", "label"]);
   });
 });
@@ -162,8 +163,10 @@ describe("card text wrapping", () => {
   it("never drops a single very long word", () => {
     expect(wrapLines(ctx, "supercalifragilistic", 50, 2)[0]).toContain("supercal");
   });
-  it("caption limit matches the database check", () => {
-    expect(migration).toContain(`char_length(caption) <= ${CAPTION_MAX}`);
+  it("caption limit matches the database check (and both save / edit functions)", () => {
+    const longer = readFileSync("supabase/migrations/20261013090000_community_caption_longer.sql", "utf8");
+    expect(longer).toContain(`CASE WHEN kind = 'note' THEN 1200 ELSE ${CAPTION_MAX} END`);
+    expect(longer.match(new RegExp(`char_length\\(v_cap\\) > ${CAPTION_MAX} THEN RAISE EXCEPTION 'Caption too long'`, "g"))).toHaveLength(2);
   });
 });
 
@@ -200,7 +203,10 @@ describe("community_sharing migration contract", () => {
 
   it("limits reactions to one per person from the fixed set", () => {
     expect(migration).toContain("PRIMARY KEY (post_id, user_id)");
-    expect(migration).toContain("CHECK (emoji IN ('fire', 'muscle', 'clap', 'heart'))");
+    expect(migration).toContain("PRIMARY KEY (post_id, user_id)");
+    const now = read("supabase/migrations/20261014090000_community_reactions_heart.sql");
+    expect(now).toContain("CHECK (emoji IN ('heart', 'thumbs', 'bang', 'fire', 'laugh'))");
+    expect(REACTIONS.map((r) => r.key)).toEqual(["heart", "thumbs", "bang", "fire", "laugh"]);
   });
 
   it("stays out of the XP / league systems", () => {
@@ -355,7 +361,7 @@ describe("community is easy to find without taking over", () => {
   });
 });
 
-describe("community is its own page, reached from Home", () => {
+describe("community lives on Home (and in More), Nutrition keeps its tab", () => {
   const workouts = read("src/routes/_authenticated/portal/workouts.index.tsx");
   const page = read("src/routes/_authenticated/portal/community.tsx");
   const entry = read("src/components/community/community-entry.tsx");
@@ -364,27 +370,48 @@ describe("community is its own page, reached from Home", () => {
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("has a Back to Home and keeps Home lit, so nobody is stranded in Workouts", () => {
-    expect(page).toContain('backTo="/portal" backLabel="Home"');
-    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} />");
-    expect(shellSrc).toContain('(item.to === "/portal" && pathname === "/portal/community")');
+  it("bottom bar is Home, Workouts, Messages, Nutrition; the feed opens from Home with Home still lit", () => {
+    const nav = read("src/lib/admin-nav.ts");
+    const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
+    expect(bottom).toContain('{ to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },');
+    expect(bottom).not.toContain("/portal/community");
+    // still one tap away in More, with the new-posts count there
+    expect(nav).toContain('{ to: "/portal/community", label: "Community", icon: Users');
+    expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
+    expect(shellSrc).toContain('(item.to === "/portal" && pathname === "/portal/community") ||');
+    // the feed starts right under the app bar: a back arrow, not a page header
+    expect(page).toContain('<CommunityScreen canShare previewOnly={isImpersonating} bell backTo="/portal" />');
+    expect(page).not.toContain("PageHeader");
+    expect(screen).toContain('<Link to={backTo} aria-label="Back to Home"');
+  });
+  it("Home's card shows the two newest posts and a big 'Open the feed'; every tap lands in the feed", () => {
+    expect(entry).toContain("return (others.length ? others : recent).slice(0, 2)");
+    expect(entry).toContain("onClick={() => openAt(post.id)}");
+    expect(entry).toContain("{postLine(post, unit)}");
+    expect(entry).toContain("Open the feed");
+    expect(entry).not.toContain("PostDetailDialog");
+    // the feed scrolls to the post you tapped (or opens it if it's older than what's loaded)
+    expect(screen).toContain('const el = document.querySelector(`[data-post-id="${jumpTo}"]`);');
+    expect(screen).toContain("} else setDetailId(jumpTo);");
   });
   it("leaves Workouts as pure training and forwards old #community links", () => {
     expect(workouts).not.toContain("CommunityScreen");
     expect(workouts).toContain('throw redirect({ to: "/portal/community"');
     expect(entry).not.toContain('to="/portal/workouts"');
   });
-  it("opens a person's workout right on Home instead of navigating away", () => {
-    expect(entry).toContain("onClick={() => setOpenPost(p.id)}");
-    expect(entry).toContain("postId={openPost}");
+  it("tapping a person opens the feed at their latest post (not a dead-end single post)", () => {
+    expect(entry).toContain("onClick={() => openAt(p.id)}");
+    expect(entry).toContain('navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : undefined })');
   });
   it("only shows a header nudge when there is something new", () => {
     expect(entry).toContain("data.unseen <= 0) return null;");
   });
-  it("puts one-tap coach props on the coach dashboard, visible even before anyone posts", () => {
-    expect(admin).toContain("<CommunityCoachCard />");
-    expect(entry).toContain("No posts yet. Clients share from Home and after each workout");
+  it("puts the community on the coach dashboard, with one-tap props on the Community page", () => {
+    expect(admin).toContain("<CommunityPulseCard />");
+    expect(read("src/components/community/admin-community-hub.tsx")).toContain("<CoachPostRow key={x.id} post={x} unit={unit} />");
     expect(entry).toContain('react.mutate(given ? null : "fire"');
+    // a ❤️ from the feed counts as props given
+    expect(entry).toContain("const given = !!post.my_reaction;");
   });
   it("lets an athlete share any recent session (their own only)", () => {
     expect(recent).toContain("c.user_id = auth.uid()");
@@ -393,7 +420,7 @@ describe("community is its own page, reached from Home", () => {
     expect(screen).toContain('label="Share your last workout"');
   });
   it("never lets a coach in View-as-client share for the athlete", () => {
-    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} />");
+    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating}");
     expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />');
   });
 });
@@ -496,10 +523,10 @@ describe("the crew: find anyone's profile", () => {
     expect(sql).toContain("WHERE m.user_id <> uid");
     expect(sql).not.toMatch(/community_follow|is_following/i);
   });
-  it("is a Crew tab, and Home opens a person's profile instead of dead-ending", () => {
+  it("is a Crew tab, and Home never dead-ends: a person opens the feed at their post", () => {
     expect(screen).toContain('(["feed", "crew", "you"] as const)');
     expect(screen).toContain("<CrewList onOpen={openAuthor} />");
-    expect(entry).toContain("hash: a.user_id === user?.id ? undefined : `person=${a.user_id}`");
+    expect(entry).toContain("onClick={() => openAt(p.id)}");
   });
 });
 
@@ -590,7 +617,8 @@ describe("Wednesday Wins reads like the coach wrote it, with the crew's numbers"
     expect(sql).toContain("'series_data', n.series_data,");
     expect(sql).toContain("WHERE a.action = 'signed_in'");
     expect(card).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
-    expect(detail).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
+    // the detail shows the same card through NoteExtras (Wins, Sunday Recap, Tuesday/Thursday cards)
+    expect(detail).toContain("<NoteExtras post={post} unit={unit}");
   });
   const s: WinsStats = {
     week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,
@@ -724,19 +752,21 @@ describe("Wednesday Wins card v2 + voice", () => {
   });
 });
 
-describe("one reaction (🔥) and who gave it", () => {
+describe("reactions and who gave them", () => {
   const sql = read("supabase/migrations/20261008200000_community_one_reaction.sql");
+  const heart = read("supabase/migrations/20261014090000_community_reactions_heart.sql");
   const card = read("src/components/community/post-card.tsx");
   const p = (n: number, names: [string, boolean?][]) => ({
     reaction_count: n,
     reactions: { fire: n },
     reactors: names.map(([name, me]) => ({ user_id: name, name, avatar_url: null, is_coach: false, is_me: !!me })),
   });
-  it("is one tap, and old reactions all count as 🔥", () => {
-    expect(REACTION.emoji).toBe("🔥");
-    expect(sql).toContain("UPDATE public.community_reactions SET emoji = 'fire' WHERE emoji IS DISTINCT FROM 'fire';");
-    expect(sql).toContain("VALUES (_post_id, uid, 'fire')");
-    expect(card).toContain("onReact(post, mine ? null : REACTION.key)");
+  it("❤️ is one tap; the five keep what you picked; one number, not split counts", () => {
+    expect(REACTION.emoji).toBe("❤️");
+    expect(heart).toContain("INSERT INTO public.community_reactions (post_id, user_id, emoji) VALUES (_post_id, uid, v)");
+    expect(heart).toContain("ON CONFLICT (post_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji;");
+    expect(heart).toContain("v text := CASE WHEN _emoji IN ('muscle', 'clap') THEN 'heart' ELSE nullif(_emoji, '') END;");
+    expect(card).toContain("<ReactionButton post={post} onReact={onReact} />");
     expect(card).not.toContain("REACTIONS.map(");
     expect(reactionTotal({ reactions: { fire: 2, heart: 1 } })).toBe(3);
   });
@@ -747,6 +777,14 @@ describe("one reaction (🔥) and who gave it", () => {
     expect(reactorsLine(p(3, [["Jared"], ["Vicky"], ["Nicole"]]))).toBe("Jared, Vicky and Nicole");
     expect(reactorsLine(p(5, [["Jared"], ["Vicky"], ["Nicole"]]))).toBe("Jared, Vicky and 3 others");
     expect(reactorsLine(p(3, [["Jared"], ["Vicky"]]))).toBe("Jared, Vicky and 1 other");
+  });
+  it("shows the kinds beside the names once it isn't just hearts", () => {
+    expect(reactionKinds({ reactions: { heart: 1, fire: 3, laugh: 2, thumbs: 1 } })).toEqual(["🔥", "😂", "❤️"]);
+    expect(reactionKinds({ reactions: {} })).toEqual([]);
+    expect(card).toContain("kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji)");
+    // and the full list says who gave which
+    expect(heart).toContain("'emoji', r.emoji,");
+    expect(read("src/components/community/reactors-sheet.tsx")).toContain("reactionEmoji(r.emoji)");
   });
   it("only people who can see the post can see who reacted", () => {
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.community_post_reactors(_post_id uuid)");
@@ -1105,5 +1143,175 @@ describe("post what you see; rotate smooth and sharp; snap to centre", () => {
     expect(m.x).toBeCloseTo(0.5);
     expect(m.y).toBeCloseTo(0.5);
     expect(m.s).toBeCloseTo(0.75); // the 4:5 shows the photo smaller
+  });
+});
+
+describe("Highlight text: a box carved round each line", () => {
+  const layer = readFileSync("src/components/community/sticker-layer.tsx", "utf8");
+  const o = { lineH: 80, padX: 24, padY: 8, r: 20 };
+  it("sits next to Box in the Aa cycle, and the cycle visits every style", () => {
+    expect(TEXT_STYLES[4]).toBe("Highlight");
+    expect(nextTextStyle(1)).toBe(4);
+    const seen = new Set<number>();
+    let s = 0;
+    for (let i = 0; i < TEXT_STYLES.length; i++) seen.add((s = nextTextStyle(s)));
+    expect(seen.size).toBe(TEXT_STYLES.length);
+    expect(s).toBe(0);
+  });
+  it("each line gets its own width; lines touch with no gap", () => {
+    const { boxes } = highlightShape([600, 300, 500], o);
+    expect(boxes.map((b) => b.right - b.left)).toEqual([648, 348, 548]);
+    expect(boxes.map((b) => (b.left + b.right) / 2)).toEqual([324, 324, 324]); // centred
+    expect(boxes[0].top).toBe(0);
+    for (let i = 1; i < boxes.length; i++) expect(boxes[i].top).toBe(boxes[i - 1].bottom);
+    expect(boxes[2].bottom).toBe(8 * 2 + 80 * 3);
+  });
+  it("rounds only the exposed corners and curves the inside ones", () => {
+    const { boxes, fillets } = highlightShape([600, 300], o);
+    expect(boxes[0].radii).toEqual([20, 20, 20, 20]); // wider line: all four show
+    expect(boxes[1].radii).toEqual([0, 0, 20, 20]); // narrow line tucks under it
+    expect(fillets).toEqual([
+      { x: 498, y: 88, r: 20, down: true, side: 1 },
+      { x: 150, y: 88, r: 20, down: true, side: -1 },
+    ]);
+    // narrow on top of wide: the curve sits above the seam
+    expect(highlightShape([300, 600], o).fillets[0].down).toBe(false);
+  });
+  it("near-equal lines share a width so the edge doesn't stair-step", () => {
+    const { boxes, fillets } = highlightShape([500, 480, 300], o);
+    expect([boxes[0].left, boxes[0].right]).toEqual([boxes[1].left, boxes[1].right]);
+    expect(boxes[0].radii.slice(2)).toEqual([0, 0]);
+    expect(boxes[1].radii.slice(0, 2)).toEqual([0, 0]);
+    expect(fillets).toHaveLength(2); // one seam, both sides
+  });
+  it("the editor shows the card's own render of it while you type", () => {
+    expect(layer).toContain("renderText(hlText, 4, hlColor, { size: hlSize, align: hlAlign })");
+    expect(layer).toContain('caretColor: readable(editing.color)');
+  });
+});
+
+describe("text size slider, alignment, and the editor above the keyboard", () => {
+  const layer = readFileSync("src/components/community/sticker-layer.tsx", "utf8");
+  const o = { lineH: 80, padX: 24, padY: 8, r: 20 };
+  it("size scales the font and its padding, but not the wrap width (so it re-wraps)", () => {
+    const a = textMetrics(4, 1);
+    const b = textMetrics(4, 2);
+    expect(b.size).toBe(a.size * 2);
+    expect(b.padX).toBe(a.padX * 2);
+    expect(b.radius).toBe(a.radius * 2);
+    expect(textMetrics(3, 1.5).stroke).toBeCloseTo(13.5);
+    expect(TEXT_SIZE.min).toBeLessThan(1);
+    expect(TEXT_SIZE.max).toBeGreaterThan(2);
+    expect(layer).toContain("wrapText(ctx, m.display ? raw.toUpperCase() : raw, WRAP * PX)");
+    expect(layer).toContain('aria-label="Text size"');
+  });
+  it("alignment cycles centre, left, right", () => {
+    expect(nextTextAlign("center")).toBe("left");
+    expect(nextTextAlign("left")).toBe("right");
+    expect(nextTextAlign("right")).toBe("center");
+  });
+  it("left-aligned highlight has a straight left edge and curves only on the right", () => {
+    const { boxes, fillets } = highlightShape([600, 300, 500], { ...o, align: "left" });
+    expect(boxes.map((b) => b.left)).toEqual([0, 0, 0]);
+    expect(boxes[1].radii[0]).toBe(0); // top-left: flush with the line above
+    expect(boxes[1].radii[3]).toBe(0);
+    expect(boxes[0].radii[0]).toBe(20); // very first corner is round
+    expect(fillets.every((f) => f.side === 1)).toBe(true);
+  });
+  it("right-aligned highlight mirrors it", () => {
+    const { boxes, fillets } = highlightShape([600, 300], { ...o, align: "right", width: 648 });
+    expect(boxes.map((b) => b.right)).toEqual([648, 648]);
+    expect(fillets).toEqual([{ x: 300, y: 88, r: 20, down: true, side: -1 }]);
+  });
+  it("a blank line is a clean gap: no box, and both sides round off", () => {
+    const { boxes, fillets } = highlightShape([600, 0, 300], o);
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0].radii).toEqual([20, 20, 20, 20]);
+    expect(boxes[1].radii).toEqual([20, 20, 20, 20]);
+    expect(boxes[0].bottom).toBe(8 + 80 + 8); // padding reaches into the gap
+    expect(boxes[1].top).toBe(8 + 160 - 8);
+    expect(fillets).toEqual([]);
+  });
+  it("huge text draws less dense instead of blowing the canvas limit", () => {
+    expect(layer).toContain("if (w * h > MAX_AREA) return atDensity(");
+  });
+  it("the editor pins to the visible screen so the top bar and colours stay above the iOS keyboard", () => {
+    expect(layer).toContain("const view = useVisualViewportBox(!!editing);");
+    expect(layer).toContain('top: view?.keyboard ? view.top : 0, height: view?.keyboard ? view.height : "100%"');
+  });
+});
+
+describe("captions: Instagram-length, written on their own screen", () => {
+  const read = (f: string) => readFileSync(f, "utf8");
+  const editor = read("src/components/community/caption-editor.tsx");
+  it("allows Instagram-length captions", () => {
+    expect(CAPTION_MAX).toBe(2200);
+  });
+  it("tapping the caption opens a caption screen: preview, roomy text, Return for new lines, Done", () => {
+    expect(editor).toContain('placeholder="Write a caption…"');
+    expect(editor).toContain('enterKeyHint="enter"');
+    expect(editor).toContain("<Check className=\"h-4 w-4\" /> Done");
+    // keyboard up on iOS: pinned to what you can see
+    expect(editor).toContain("const view = useVisualViewportBox(true);");
+    // caret after what's there, focused within the tap so iOS raises the keyboard
+    expect(editor).toContain("t.setSelectionRange(t.value.length, t.value.length);");
+    for (const f of ["src/components/community/share-studio.tsx", "src/components/community/lock-in-editor.tsx"]) {
+      const src = read(f);
+      expect(src).toContain("<CaptionField");
+      expect(src).toContain("<CaptionEditor");
+      expect(src).not.toContain("Say something");
+    }
+  });
+  it("the folded caption shows your line breaks", () => {
+    expect(editor).toContain('line-clamp-2 whitespace-pre-wrap');
+    expect(read("src/components/community/feed-caption.tsx")).toContain("whitespace-pre-line");
+    expect(read("src/components/community/post-detail.tsx")).toContain('<p className="whitespace-pre-line');
+  });
+  it("the preview on the caption screen includes the stickers and text", () => {
+    expect(read("src/components/community/share-studio.tsx")).toContain("captionThumb(cardEl, (ctx, w, h) => drawStickers(ctx, items, w, h))");
+  });
+  it("long captions fold to three lines in the feed with 'more'", () => {
+    expect(read("src/components/community/feed-caption.tsx")).toContain('!open && "line-clamp-3"');
+    expect(read("src/components/community/post-card.tsx")).toContain("<FeedCaption name={post.author.name} caption={post.caption} />");
+  });
+});
+
+describe("like: tap the heart, hold for more, double-tap the post", () => {
+  const btn = read("src/components/community/reaction-button.tsx");
+  const card = read("src/components/community/post-card.tsx");
+  const detail = read("src/components/community/post-detail.tsx");
+  const screen = read("src/components/community/community-screen.tsx");
+  const heart = read("supabase/migrations/20261014090000_community_reactions_heart.sql");
+  it("tap = ❤️ (again to take it back); a hold opens 👍 ‼️ 🔥 😂 and the tap after it doesn't also like", () => {
+    expect(btn).toContain("choose(mine ? null : REACTION.key);");
+    expect(btn).toContain("const HOLD_MS = 380;");
+    expect(btn).toContain("if (held.current) {");
+    expect(btn).toContain('role="menuitemradio"');
+    // no copy / save callout on a long press
+    expect(btn).toContain("[-webkit-touch-callout:none]");
+  });
+  it("double-tap gives ❤️ in the feed and on the post page, and never takes a reaction back", () => {
+    expect(card).toContain("if (!post.my_reaction) onReact(post, REACTION.key);");
+    expect(detail).toContain("if (!post.my_reaction) onReact(post, REACTION.key);");
+    expect(detail).toContain("const onHeroTap = useDoubleTap(() => {");
+  });
+  it("the double-tap demo is brief and out of the way: low pill, fades by itself, once a visit, retires after a few", () => {
+    expect(screen).toContain("doubleTapHint={p.id === hintId}");
+    expect(screen).toContain('hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k))');
+    expect(screen).toContain("let tipShownThisVisit = false;");
+    expect(card).toContain("{doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}");
+    expect(card).toContain("onDoubleTap?.();");
+    expect(btn).toContain('className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center"');
+    expect(btn).toContain('e.animationName === "community-hint-life" && onDone?.()');
+    expect(read("src/styles.css")).toContain(".community-hint { animation: community-hint-life 5.2s ease-out forwards; }");
+    // not on the post page (the feed teaches it); a double-tap there still counts
+    expect(detail).not.toContain("<DoubleTapHint");
+    expect(detail).toContain('markHint("double_tap");');
+    // server-side (not localStorage), one row per tip, only your own
+    const q = read("src/lib/community.queries.ts");
+    expect(q).toContain('db.from("community_hints_seen").select("hint")');
+    expect(q).not.toMatch(/localStorage[^\n]*hint/);
+    expect(heart).toContain("PRIMARY KEY (user_id, hint)");
+    expect(heart).toContain("FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());");
   });
 });

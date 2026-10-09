@@ -506,7 +506,17 @@ export const getMoveContext = createServerFn({ method: "GET" })
         .from("pl_scheduled_workouts")
         .select("id, source_day_id, scheduled_date, scheduled_time, order_index")
         .eq("client_id", instance.client_id);
-      siblingInstances = sibs ?? [];
+      // Titles for the move picker's day list: block days are already loaded,
+      // anything from another block is one small lookup.
+      const titleById = new Map<string, string | null>(
+        decorated.map((d: any) => [d.id, d.title?.trim() || `Day ${d.day_index}`]),
+      );
+      const missing = [...new Set((sibs ?? []).map((s: any) => s.source_day_id).filter((id: any) => id && !titleById.has(id)))];
+      if (missing.length) {
+        const { data: extra } = await supabase.from("pl_days").select("id, title, day_index").in("id", missing);
+        for (const d of extra ?? []) titleById.set(d.id, d.title?.trim() || `Day ${d.day_index}`);
+      }
+      siblingInstances = (sibs ?? []).map((s: any) => ({ ...s, title: titleById.get(s.source_day_id) ?? null }));
     }
 
     let completion: any = null;

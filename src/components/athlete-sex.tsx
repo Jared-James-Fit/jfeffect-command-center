@@ -8,7 +8,7 @@ import { SEX_OPTIONS, SEX_REASON, type AthleteSex } from "@/lib/athlete-sex";
 import { getMySexFn, saveMySexFn } from "@/lib/athlete-sex.functions";
 
 /** Every query that reads the athlete's sex, refreshed after an answer. */
-export const ATHLETE_SEX_KEYS = [["athlete-sex"], ["form-prefill-profile"], ["sbd-split"]] as const;
+export const ATHLETE_SEX_KEYS = [["athlete-sex"], ["form-prefill-profile"], ["sbd-split"], ["strength-board"]] as const;
 
 /** Three-way segmented choice: Male · Female · Prefer not to say. */
 export function SexChoice({

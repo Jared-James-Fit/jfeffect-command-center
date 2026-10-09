@@ -23,7 +23,6 @@ export type FactorStatus = "good" | "watch" | "low";
 export interface FactorDetail {
   key: FactorKey;
   label: string;
-  emoji: string;
   score: number;
   status: FactorStatus;
   currentValue: string;
@@ -100,7 +99,6 @@ function buildSleep(samples: SleepSample[]): FactorDetail {
     return {
       key: "sleep",
       label: "Sleep",
-      emoji: "😴",
       score: 0,
       status: "watch",
       currentValue: "—",
@@ -135,7 +133,6 @@ function buildSleep(samples: SleepSample[]): FactorDetail {
   return {
     key: "sleep",
     label: "Sleep",
-    emoji: "😴",
     score,
     status: statusFor(score),
     currentValue: sleepBucketLabel(latest.bucket),
@@ -154,7 +151,6 @@ function buildRecoveryFeel(samples: Array<{ ts: string; rating: number }>): Fact
     return {
       key: "recovery",
       label: "Recovery",
-      emoji: "💪",
       score: 0,
       status: "watch",
       currentValue: "—",
@@ -183,7 +179,6 @@ function buildRecoveryFeel(samples: Array<{ ts: string; rating: number }>): Fact
   return {
     key: "recovery",
     label: "Recovery",
-    emoji: "💪",
     score: info.s,
     status: statusFor(info.s),
     currentValue: info.label,
@@ -281,7 +276,6 @@ function buildLoad(input: LoadInput): FactorDetail {
     return {
       key: "load",
       label: "Training Load",
-      emoji: "📈",
       score: 75,
       status: "watch",
       currentValue: "Building baseline",
@@ -371,7 +365,6 @@ function buildLoad(input: LoadInput): FactorDetail {
   return {
     key: "load",
     label: "Training Load",
-    emoji: "📈",
     score,
     status: statusFor(score),
     currentValue: label,
@@ -548,10 +541,14 @@ function buildConsistency(inp: ConsistencyInput): FactorDetail {
   return {
     key: "consistency",
     label: "Consistency",
-    emoji: "🏋️",
     score,
     status: statusFor(score),
-    currentValue: weeklyPct != null ? `${weeklyPct}% · ${weeklyLabel}` : weeklyLabel,
+    // Nothing due yet this week: the score comes from the last 4 weeks, so say so.
+    currentValue: weeklyPct != null
+      ? `${weeklyPct}% · ${weeklyLabel}`
+      : last4Pct != null
+        ? `${last4Pct}% last 4 weeks`
+        : weeklyLabel,
     subtitle: hasDueThisWeek
       ? `${weekCompleted} of ${weekDueSoFar} due workouts completed`
       : weekTotalScheduled > 0
@@ -570,7 +567,6 @@ function buildPerformance(scores: number[]): FactorDetail {
     return {
       key: "performance",
       label: "Performance Trend",
-      emoji: "📊",
       score: 70,
       status: "watch",
       currentValue: "Building",
@@ -595,7 +591,6 @@ function buildPerformance(scores: number[]): FactorDetail {
   return {
     key: "performance",
     label: "Performance Trend",
-    emoji: "📊",
     score,
     status: statusFor(score),
     currentValue: trend === "Building" ? "Building" : trend,
@@ -622,7 +617,6 @@ function buildPain(painDays7d: number): FactorDetail {
   return {
     key: "pain",
     label: "Pain / Injury",
-    emoji: "⚠️",
     score,
     status: statusFor(score),
     currentValue: clean ? "None" : `${painDays7d} session${painDays7d === 1 ? "" : "s"}`,
@@ -675,41 +669,4 @@ function pickRecommendation(
   if (f.recovery.score < 60) return "You're feeling under-recovered. Warm up thoroughly and let the first working set dictate the day.";
   if (!limiter) return "Everything is in a great window. Train as planned and push your top sets if warm-ups feel sharp.";
   return "Train as planned. Stay within today's prescribed RPE and avoid adding unnecessary volume.";
-}
-
-export function buildPersonalInsights(
-  scores: Array<{ ts: string; score: number }>,
-  sleepSamples: SleepSample[],
-  completed30d: number,
-  scheduled30d: number | null,
-): string[] {
-  const out: string[] = [];
-  const highDays = scores.filter((s) => s.score >= 80).length;
-  if (scores.length >= 5 && highDays >= 3) {
-    const pct = Math.round((highDays / scores.length) * 100);
-    out.push(`💪 You complete ${pct}% of workouts when readiness is above 80%.`);
-  }
-  if (scores.length >= 9) {
-    const recent = scores.slice(-9);
-    const first = recent.slice(0, 3).reduce((s, x) => s + x.score, 0) / 3;
-    const last = recent.slice(-3).reduce((s, x) => s + x.score, 0) / 3;
-    if (last - first >= 5) out.push("📈 Your readiness has improved over the past three weeks.");
-    else if (first - last >= 5) out.push("📉 Your readiness has dipped over the past three weeks.");
-  }
-  if (sleepSamples.length >= 6) {
-    const sweet = sleepSamples.filter(
-      (s) =>
-        s.bucket === "7_8" || s.bucket === "8_9" || s.bucket === "gte7" || s.bucket === "gte8",
-    ).length;
-    const pct = Math.round((sweet / sleepSamples.length) * 100);
-    if (pct >= 60) out.push("🏆 Your best sessions usually occur after 7+ hours of sleep.");
-    else if (sleepSamples.filter((s) => s.bucket === "lt5" || s.bucket === "5_6").length >= 3) {
-      out.push("⚠️ Short-sleep nights are pulling your readiness down. Protect bedtime this week.");
-    }
-  }
-  if (scheduled30d && scheduled30d > 0) {
-    const rate = Math.round((completed30d / scheduled30d) * 100);
-    if (rate >= 90) out.push("🔥 You've completed nearly every scheduled workout this month.");
-  }
-  return out.slice(0, 4);
 }
