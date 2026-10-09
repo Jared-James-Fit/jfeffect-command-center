@@ -23,6 +23,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 import { CoachTag } from "@/components/portal/coach-tag";
+import { CoachFocus, PointsBar, PointsLegend, VsCard } from "@/components/portal/league-insights";
 import { HallOfStrength } from "@/components/portal/strength-board";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
@@ -298,13 +299,18 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague, myLeague, onBack }: {
+function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague, myLeague, theirRow, myRow, live, onBack }: {
   clientId: string;
   myClientId?: string | null;
   myStats: BadgeStats;
   myBadgeCount: number;
   theirLeague?: LeagueStat;
   myLeague?: LeagueStat;
+  /** Full league rows for the month being viewed (points by source). */
+  theirRow?: BoostLeagueRow;
+  myRow?: BoostLeagueRow;
+  /** The month is still running, so coaching tips make sense. */
+  live: boolean;
   onBack: () => void;
 }) {
   const { data: p, isPending } = useQuery({
@@ -354,6 +360,15 @@ function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague,
               <div className="mt-0.5 text-[11px] text-muted-foreground">{Number(theirXp ?? 0).toLocaleString()} lifetime points · {publicBadges.length} milestones</div>
             </div>
           </div>
+
+          {!isMe && myRow && theirRow && (
+            <div className="space-y-2">
+              <div className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{monthName} points · head to head</div>
+              <VsCard me={myRow} them={theirRow} themName={p.display_name} />
+              {live && <CoachFocus me={myRow} title={Number(theirRow.total_points) > Number(myRow.total_points) ? "How to close the gap" : "How to stay ahead"} />}
+            </div>
+          )}
+          {isMe && live && theirRow && <CoachFocus me={theirRow} />}
 
           <div className="flex items-center justify-end gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Weight units</span>
@@ -439,6 +454,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     },
   });
   const qualified = data.filter((r) => r.qualified && r.rank <= 10);
+  const topPoints = Math.max(0, ...qualified.map((r) => Number(r.total_points ?? 0)));
   const podium = qualified.slice(0, 3);
   const rest = qualified.slice(3);
   const me = data.find((r) => r.is_me);
@@ -460,6 +476,9 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
         myBadgeCount={myBadgeCount}
         theirLeague={toStat(data.find((r) => r.client_id === selected))}
         myLeague={toStat(me)}
+        theirRow={boostRows.find((r) => r.client_id === selected)}
+        myRow={boostMe}
+        live={view === "current" && !boostMe?.month_closed}
         onBack={() => onSelectedChange(null)}
       />
     );
@@ -469,7 +488,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     <div className="space-y-4">
       <SheetHeader className="text-left">
         <SheetTitle>{monthName} {view === "previous" ? "Final Standings" : "Performance League"}</SheetTitle>
-        <SheetDescription>{view === "previous" ? "Final results, including Final Week Boost awards." : "Earn points all month. Tap anyone to see their profile."}</SheetDescription>
+        <SheetDescription>{view === "previous" ? "Final results, including Final Week Boost awards." : "Earn points all month. Tap anyone to see where their points come from."}</SheetDescription>
       </SheetHeader>
 
       <div className="grid grid-cols-2 rounded-xl bg-muted/50 p-1 text-xs font-bold">
@@ -512,6 +531,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
         <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">No athletes have qualified for {monthName} yet. Log a bodyweight and complete training to get on the board.</div>
       ) : (
         <>
+          <PointsLegend rows={qualified} />
           <div className="grid grid-cols-3 items-end gap-2">
             {[podium[1], podium[0], podium[2]].map((r, i) => r ? (
               <button type="button" onClick={() => onSelectedChange(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md", r.rank === 1 ? "pb-4 bg-amber-50/70 ring-2 ring-amber-300" : r.rank === 2 ? "bg-slate-50/80" : "bg-orange-50/40", r.is_me && "ring-2 ring-primary")}>
@@ -522,6 +542,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
                 <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
                 <div className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</div>
                 <RecordBadges row={r} size="xs" center className="mt-1" />
+                <PointsBar row={r} max={topPoints} className="mt-1.5" />
                 {finalWeek && <RowBoost row={{ ...r, rank: r.rank } as BoostLeagueRow} />}
               </button>
             ) : <div key={i} />)}
@@ -531,7 +552,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
               <li key={r.client_id} onClick={() => onSelectedChange(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
                 <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
                 <RankAvatar row={r} size="h-9 w-9" />
-                <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</span>{r.is_coach && <CoachTag />}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div><RecordBadges row={r} size="xs" className="mt-1" />{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
+                <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</span>{r.is_coach && <CoachTag />}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div><RecordBadges row={r} size="xs" className="mt-1" /><PointsBar row={r} max={topPoints} className="mt-1.5" />{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
                 <span className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</span>
               </li>
             ))}
@@ -544,6 +565,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
           <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
           <div className="mt-1 text-2xl font-black text-primary">{formatLeaguePoints(me.xp)} <span className="text-sm">pts</span></div>
           <MonthBreakdown me={me as BoostLeagueRow} />
+          {view === "current" && boostMe && <CoachFocus me={boostMe} className="mt-3" />}
           {(() => {
             const tenth = data.filter((r) => r.qualified && r.rank <= 10).sort((a,b)=>a.rank-b.rank).at(-1);
             const gap = me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
