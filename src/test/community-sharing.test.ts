@@ -361,7 +361,7 @@ describe("community is easy to find without taking over", () => {
   });
 });
 
-describe("community is its own page, reached from Home", () => {
+describe("community lives on Home (and in More), Nutrition keeps its tab", () => {
   const workouts = read("src/routes/_authenticated/portal/workouts.index.tsx");
   const page = read("src/routes/_authenticated/portal/community.tsx");
   const entry = read("src/components/community/community-entry.tsx");
@@ -370,26 +370,45 @@ describe("community is its own page, reached from Home", () => {
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("has a Back to Home and keeps Home lit, so nobody is stranded in Workouts", () => {
-    expect(page).toContain('backTo="/portal" backLabel="Home"');
-    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} />");
-    expect(shellSrc).toContain('(item.to === "/portal" && pathname === "/portal/community")');
+  it("bottom bar is Home, Workouts, Messages, Nutrition; the feed opens from Home with Home still lit", () => {
+    const nav = read("src/lib/admin-nav.ts");
+    const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
+    expect(bottom).toContain('{ to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },');
+    expect(bottom).not.toContain("/portal/community");
+    // still one tap away in More, with the new-posts count there
+    expect(nav).toContain('{ to: "/portal/community", label: "Community", icon: Users');
+    expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
+    expect(shellSrc).toContain('(item.to === "/portal" && pathname === "/portal/community") ||');
+    // the feed starts right under the app bar: a back arrow, not a page header
+    expect(page).toContain('<CommunityScreen canShare previewOnly={isImpersonating} bell backTo="/portal" />');
+    expect(page).not.toContain("PageHeader");
+    expect(screen).toContain('<Link to={backTo} aria-label="Back to Home"');
+  });
+  it("Home's card shows the two newest posts and a big 'Open the feed'; every tap lands in the feed", () => {
+    expect(entry).toContain("return (others.length ? others : recent).slice(0, 2)");
+    expect(entry).toContain("onClick={() => openAt(post.id)}");
+    expect(entry).toContain("{postLine(post, unit)}");
+    expect(entry).toContain("Open the feed");
+    expect(entry).not.toContain("PostDetailDialog");
+    // the feed scrolls to the post you tapped (or opens it if it's older than what's loaded)
+    expect(screen).toContain('const el = document.querySelector(`[data-post-id="${jumpTo}"]`);');
+    expect(screen).toContain("} else setDetailId(jumpTo);");
   });
   it("leaves Workouts as pure training and forwards old #community links", () => {
     expect(workouts).not.toContain("CommunityScreen");
     expect(workouts).toContain('throw redirect({ to: "/portal/community"');
     expect(entry).not.toContain('to="/portal/workouts"');
   });
-  it("opens a person's workout right on Home instead of navigating away", () => {
-    expect(entry).toContain("onClick={() => setOpenPost(p.id)}");
-    expect(entry).toContain("postId={openPost}");
+  it("tapping a person opens the feed at their latest post (not a dead-end single post)", () => {
+    expect(entry).toContain("onClick={() => openAt(p.id)}");
+    expect(entry).toContain('navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : undefined })');
   });
   it("only shows a header nudge when there is something new", () => {
     expect(entry).toContain("data.unseen <= 0) return null;");
   });
-  it("puts one-tap coach props on the coach dashboard, visible even before anyone posts", () => {
-    expect(admin).toContain("<CommunityCoachCard />");
-    expect(entry).toContain("No posts yet. Clients share from Home and after each workout");
+  it("puts the community on the coach dashboard, with one-tap props on the Community page", () => {
+    expect(admin).toContain("<CommunityPulseCard />");
+    expect(read("src/components/community/admin-community-hub.tsx")).toContain("<CoachPostRow key={x.id} post={x} unit={unit} />");
     expect(entry).toContain('react.mutate(given ? null : "fire"');
     // a ❤️ from the feed counts as props given
     expect(entry).toContain("const given = !!post.my_reaction;");
@@ -401,7 +420,7 @@ describe("community is its own page, reached from Home", () => {
     expect(screen).toContain('label="Share your last workout"');
   });
   it("never lets a coach in View-as-client share for the athlete", () => {
-    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} />");
+    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating}");
     expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />');
   });
 });
@@ -504,10 +523,10 @@ describe("the crew: find anyone's profile", () => {
     expect(sql).toContain("WHERE m.user_id <> uid");
     expect(sql).not.toMatch(/community_follow|is_following/i);
   });
-  it("is a Crew tab, and Home opens a person's profile instead of dead-ending", () => {
+  it("is a Crew tab, and Home never dead-ends: a person opens the feed at their post", () => {
     expect(screen).toContain('(["feed", "crew", "you"] as const)');
     expect(screen).toContain("<CrewList onOpen={openAuthor} />");
-    expect(entry).toContain("hash: a.user_id === user?.id ? undefined : `person=${a.user_id}`");
+    expect(entry).toContain("onClick={() => openAt(p.id)}");
   });
 });
 
@@ -598,7 +617,8 @@ describe("Wednesday Wins reads like the coach wrote it, with the crew's numbers"
     expect(sql).toContain("'series_data', n.series_data,");
     expect(sql).toContain("WHERE a.action = 'signed_in'");
     expect(card).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
-    expect(detail).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
+    // the detail shows the same card through NoteExtras (Wins, Sunday Recap, Tuesday/Thursday cards)
+    expect(detail).toContain("<NoteExtras post={post} unit={unit}");
   });
   const s: WinsStats = {
     week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,

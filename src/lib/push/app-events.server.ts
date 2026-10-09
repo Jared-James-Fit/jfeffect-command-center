@@ -19,6 +19,7 @@ export type AppEvent =
   | "agreement_signed"
   | "birthday_post_ready"
   | "birthday_post_reminder"
+  | "chat_reported"
   // → client
   | "agreement_requested"
   | "checkin_requested"
@@ -57,6 +58,14 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: (n) => `🎂 It's ${n}'s birthday today`,
     body: () => "Their post is still waiting. Tap to review and post it.",
     url: (id) => `/admin#birthday=${id}`, rateMinutes: 60,
+  },
+  // A client reported a member-to-member chat. The chat is waiting in their
+  // coach chat as an internal note; this opens it.
+  chat_reported: {
+    to: "staff", category: "messages",
+    title: (n) => `🚩 ${n} reported a chat`,
+    body: () => "Tap to see what was said. They've blocked the other person.",
+    url: (id) => `/admin/messages?client=${id}`, rateMinutes: 60,
   },
   checkin_submitted: {
     to: "staff", category: "check_ins",

@@ -17,7 +17,7 @@ import {
 
 export type SummerPersona = { tone?: string | null; instructions?: string | null };
 
-/** Customize Summer: pick her vibe and write your own instructions. */
+/** Customize Cleo: pick her vibe and write your own instructions. */
 export function SummerCustomizeDialog({
   open,
   onClose,
@@ -57,7 +57,7 @@ export function SummerCustomizeDialog({
     setTesting(true);
     try {
       await speaker.speak(
-        "Bonjour! It's Summer. You've got $1,104.25 to set aside right now, and two check-ins waiting on you.",
+        "Bonjour! It's Cleo. You've got $1,104.25 to set aside right now, and two check-ins waiting on you.",
         voicePrefs,
         (text) => speechFn({ data: { text } }) as any,
       );
@@ -87,7 +87,7 @@ export function SummerCustomizeDialog({
     setBusy(true);
     try {
       await save({ data: { tone, instructions: instructions.trim() || null } });
-      toast.success("Summer's updated ✨ Ask her something to hear the new vibe.");
+      toast.success("Cleo's updated ✨ Ask her something to hear the new vibe.");
       onSaved();
       onClose();
     } catch (e: any) {
@@ -101,7 +101,7 @@ export function SummerCustomizeDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Customize Summer</DialogTitle>
+          <DialogTitle>Customize Cleo</DialogTitle>
           <DialogDescription>
             Change how she talks any time. She always uses your real numbers, whatever the vibe.
           </DialogDescription>
@@ -109,7 +109,7 @@ export function SummerCustomizeDialog({
 
         <div className="space-y-2">
           <Label>Her vibe</Label>
-          <div className="grid gap-2" role="radiogroup" aria-label="Summer's vibe">
+          <div className="grid gap-2" role="radiogroup" aria-label="Cleo's vibe">
             {SUMMER_TONES.map((t) => {
               const active = t.value === tone;
               return (
@@ -173,14 +173,14 @@ export function SummerCustomizeDialog({
             <Select value={voicePrefs.voice} onValueChange={(v) => updateVoice({ voice: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
-                <SelectItem value="summer">Summer · French accent</SelectItem>
+                <SelectItem value="summer">Cleo</SelectItem>
                 {voices.map((v) => (
                   <SelectItem key={v.voiceURI} value={v.voiceURI}>{v.name} · {v.lang}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              "Summer" is her own voice, English with a French accent. If it isn't available, this device's English voice reads for her. Device French voices sound French but read numbers in French.
+              "Cleo" is her own voice, English with a French accent. If it isn't available, this device's English voice reads for her. Device French voices sound French but read numbers in French.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">

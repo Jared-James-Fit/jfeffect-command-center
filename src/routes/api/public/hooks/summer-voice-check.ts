@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { authorizeHookRequest } from "@/lib/hook-auth.server";
 
 /**
- * Health check for Summer's voice: tries every text-to-speech provider with a
+ * Health check for Cleo's voice: tries every text-to-speech provider with a
  * short sample and reports which ones answer. Auth is the same as the
  * scheduled hooks (x-hook-secret from Vault, or x-worker-secret), so it can be
  * run from the database with net.http_post.

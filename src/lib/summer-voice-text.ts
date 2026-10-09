@@ -1,5 +1,5 @@
 /**
- * Text helpers for Summer: which links she may hand out, how her replies are
+ * Text helpers for Cleo: which links she may hand out, how her replies are
  * split into renderable pieces, and what gets read aloud. Pure, so the same
  * rules hold in the chat, in voice and in tests.
  */
@@ -63,7 +63,7 @@ export function extractLinks(text: string): Array<{ label: string; href: string;
 const EMOJI = /[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]/gu;
 
 /**
- * What Summer says out loud: no markdown, no tables, no emojis, links read as
+ * What Cleo says out loud: no markdown, no tables, no emojis, links read as
  * their label. Trimmed at a sentence boundary so speech never cuts mid-word.
  */
 export function speechFromReply(text: string, maxChars = 700): string {

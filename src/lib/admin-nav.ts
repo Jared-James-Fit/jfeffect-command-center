@@ -68,7 +68,7 @@ export const adminNav: NavItem[] = [
   { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Documents" },
   // TEAM / OPS
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
-  { to: "/admin/staff", label: "Staff & Media Managers", icon: UserPlus, group: "Team / Ops" },
+  { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team / Ops" },
   { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Team / Ops" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team / Ops" },
   { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Team / Ops" },
@@ -127,7 +127,7 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/resources", label: "Resources", icon: FolderOpen, group: "Documents" },
   // TEAM / OPS
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
-  { to: "/admin/staff", label: "Staff & Media Managers", icon: UserPlus, group: "Team / Ops" },
+  { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team / Ops" },
   { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Team / Ops" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team / Ops" },
   { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Team / Ops" },
@@ -184,6 +184,8 @@ export const clientNav: NavItem[] = [
 // Mobile bottom-tab nav for the client portal. Max 5 single-word labels so
 // nothing wraps and tap targets stay large. Everything else lives in the
 // side drawer (clientNav) via the "More" trigger in AppShell.
+// Nutrition is a main tab. Community lives on Home (the card under today's
+// training, one tap to the feed) and in More, so it never costs a tab.
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
