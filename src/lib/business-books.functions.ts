@@ -381,7 +381,7 @@ export const askSummer = createServerFn({ method: "POST" })
     // The admin, or the finance login (view-only: its own Cleo, nothing else).
     const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { answerSummer } = await import("@/lib/summer.server");
-    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly });
+    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly, own: (context as any).supabase });
   });
 
 const VoiceInput = z.object({
@@ -403,7 +403,7 @@ export const askSummerVoice = createServerFn({ method: "POST" })
     const { answerSummer, transcribeAudio } = await import("@/lib/summer.server");
     const transcript = await transcribeAudio(data.audio, data.mime);
     if (!transcript) return { transcript: "", user: null, assistant: null };
-    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly });
+    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly, own: (context as any).supabase });
     return { transcript, ...res };
   });
 
@@ -477,3 +477,39 @@ export const clearSummer = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ---------------------------------------------------------------------------
+// Cleo's action cards (cleo-actions.server.ts). Staff only: the admin, or the
+// finance login. Each action then runs through the app's own server
+// functions with the tapper's session, so their permissions decide.
+
+async function cleoActor(context: any) {
+  const { db } = await assertAdminView(context);
+  return { supabase: context.supabase, db, userId: context.userId as string };
+}
+
+/** Cards in this person's chat, and (for the owner) requests waiting on them. */
+export const getCleoActions = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { listActions } = await import("@/lib/cleo-actions.server");
+    return listActions(await cleoActor(context));
+  });
+
+const CleoActionInput = z.object({ id: z.string().uuid(), decision: z.enum(["confirm", "cancel", "approve", "decline"]) });
+
+/** Confirm or cancel your own card; approve or decline someone's request (owner). */
+export const decideCleoAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => CleoActionInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const actor = await cleoActor(context);
+    const m = await import("@/lib/cleo-actions.server");
+    switch (data.decision) {
+      case "confirm": return m.confirmAction(actor, data.id);
+      case "cancel": return m.cancelAction(actor, data.id);
+      case "approve": return m.approveAction(actor, data.id);
+      case "decline": return m.declineAction(actor, data.id);
+    }
+  });
+
