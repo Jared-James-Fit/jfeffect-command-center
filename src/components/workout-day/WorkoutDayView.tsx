@@ -71,7 +71,8 @@ import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
 import { WarmupRows, useWarmupSets } from "@/components/workout-day/final-warmup-input";
-import { LoadSuggestionCard } from "@/components/workout-day/load-suggestion-card";
+import { LoadSuggestionCard, LoadSuggestionsToggle } from "@/components/workout-day/load-suggestion-card";
+import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
 import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
 import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
@@ -2517,6 +2518,7 @@ function WorkoutDay({
               exerciseRows={rows as any[]}
               className="h-7 min-h-0 px-2.5 text-xs"
             />
+            <LoadSuggestionsToggle />
           </div>
         )}
 
@@ -3376,6 +3378,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     return prescribedLoadInActiveUnit();
   }, [row.manual_override, row.load_kg, row.load_lb, percentageBackoffWeight, computed, activeUnit]);
 
+  const [showSuggestionCard] = useShowLoadSuggestions();
   const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
   const rpeTarget = useMemo(() => parseEffortTarget(row.rpe), [row.rpe]);
   const rirTarget = useMemo(() => parseEffortTarget(row.rir), [row.rir]);
@@ -3835,7 +3838,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           )}
         </div>
       )}
-      {loadModel && loadPlan && (
+      {/* Off by default (the "◎" weight in the next set carries the number);
+          the workout-level toggle opens it on every card. */}
+      {showSuggestionCard && loadModel && loadPlan && (
         <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} />
       )}
       {row.manual_override && (row.load_kg || row.load_lb) && (

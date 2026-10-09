@@ -1,4 +1,6 @@
 import { Info, Target } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { audibleStep, type LoadModel, type LoadSuggestion } from "@/lib/load-suggestion";
 
@@ -109,5 +111,29 @@ export function LoadSuggestionCard({
       </Popover>
     </div>
     </div>
+  );
+}
+
+/**
+ * One tap at the top of the workout shows / hides the suggested-load card on
+ * every exercise. Off by default; the faded "◎" weight in each next set stays.
+ */
+export function LoadSuggestionsToggle({ className }: { className?: string }) {
+  const [show, setShow] = useShowLoadSuggestions();
+  return (
+    <button
+      type="button"
+      onClick={() => setShow(!show)}
+      aria-pressed={show}
+      data-testid="load-suggestions-toggle"
+      className={cn(
+        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition active:scale-[0.98]",
+        show ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background text-foreground",
+        className,
+      )}
+    >
+      <Target className="h-3.5 w-3.5" aria-hidden="true" />
+      {show ? "Hide suggestions" : "Show suggestions"}
+    </button>
   );
 }
