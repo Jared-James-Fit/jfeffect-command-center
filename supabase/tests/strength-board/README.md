@@ -19,6 +19,7 @@ psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/2026101711
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261017120000_hall_of_strength_meets.sql
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261024090000_hall_of_strength_all_time.sql
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261029090000_powerlifting_careers_opl_sync.sql
+psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261030090000_powerlifting_opl_sync_reused_ids.sql
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/tests/strength-board/scenario.sql
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/tests/strength-board/scenario-meets.sql
 psql -d strength_board_test -v ON_ERROR_STOP=1 -f supabase/tests/strength-board/scenario-all-time.sql

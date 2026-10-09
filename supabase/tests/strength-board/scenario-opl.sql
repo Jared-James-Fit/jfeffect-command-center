@@ -144,6 +144,31 @@ begin
   res := powerlifting_opl_tick();
   perform t_assert(not res ? 'requested', 'no new round while one ran in the last 20 hours');
 
+  -- pg_net restarted (20261030090000): request ids start over.
+  n := (select request_id from powerlifting_opl_sync_requests where slug = 'kennethmorris');
+  insert into net._http_response (id, status_code, content, created)
+    values (n, 200, (select csv from fx where slug = 'dwaynegordon'), now() - interval '1 hour');
+  perform t_assert(powerlifting_opl_collect(n) = '{"merged": 0, "failed": 0}'
+      and (select collected_at is null from powerlifting_opl_sync_requests where request_id = n),
+    'a response older than its request (an old download with the same id) is ignored');
+  -- Time passes; a new download for Phillip gets the id Dwayne's download had.
+  select request_id into r from powerlifting_opl_sync_requests where slug = 'dwaynegordon';
+  update net._http_response set created = now() - interval '2 hours' where id = r.request_id;
+  perform setval('net.http_request_queue_id_seq', r.request_id - 1);
+  n := (powerlifting_opl_request(phil))[1];
+  perform t_assert(n = r.request_id
+      and (select athlete_id = phil and slug = 'phillipbennett4' and collected_at is null and result is null
+           from powerlifting_opl_sync_requests where request_id = n)
+      and powerlifting_opl_collect(n) = '{"merged": 0, "failed": 0}',
+    'a reused id belongs to the new download, which waits for its own response');
+  insert into net._http_response (id, status_code, content) values (n, 200, (select csv from fx where slug = 'phillipbennett4'));
+  res := powerlifting_opl_collect(n);
+  perform t_assert(res = '{"merged": 1, "failed": 0}'
+      and (select result = '{"meets": 2, "added": 0, "updated": 2}' from powerlifting_opl_sync_requests where request_id = n)
+      and (select count(*) from athlete_powerlifting_results where athlete_id = dw) = 3,
+    'then merges into the right athlete (Dwayne untouched)');
+  perform setval('net.http_request_queue_id_seq', 1000);
+
   -- Coach "Sync now".
   delete from auth_ctx;
   insert into auth_ctx (uid) values (gen_random_uuid());

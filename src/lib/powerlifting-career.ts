@@ -177,14 +177,33 @@ export function byYear(meets: CareerMeet[]): [string, CareerMeet[]][] {
   return [...map.entries()];
 }
 
-/** "2022–now" / "2023–2024", from the coaching periods. */
-export function coachedSpan(c: Career): string | null {
+export type CoachingStatus = { kind: "current" | "former" | "never"; title: string; detail: string | null };
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const monthYear = (d: string) => `${MONTHS[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
+const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/**
+ * Whether JF Effect coaches them now or did in the past, and when, from the
+ * coaching periods. A period with no start date reads from their first
+ * coached meet (year only, since that isn't when coaching began).
+ */
+export function coachingStatus(c: Career, today = new Date()): CoachingStatus {
   const ps = c.athlete.periods;
-  if (!ps.length) return null;
-  const y = (d: string | null) => (d ? d.slice(0, 4) : null);
-  const starts = ps.map((p) => y(p.start));
-  const ends = ps.map((p) => y(p.end));
-  const first = starts.includes(null) ? y(c.meets.filter((m) => m.coached).at(-1)?.date ?? null) : starts.sort()[0];
-  const last = ends.includes(null) ? "now" : ends.sort().at(-1)!;
-  return first ? (first === last ? first : `${first}–${last}`) : `until ${last}`;
+  if (!ps.length) return { kind: "never", title: "Not coached by JF Effect", detail: null };
+  const day = localDay(today);
+  const starts = ps.map((p) => p.start);
+  const firstMeet = c.meets.filter((m) => m.coached).map((m) => m.date).sort()[0] ?? null;
+  const from = starts.includes(null) ? (firstMeet ? firstMeet.slice(0, 4) : null) : monthYear(starts.sort()[0]!);
+  if (!c.athlete.is_alumni && ps.some((p) => !p.end || p.end >= day)) {
+    return { kind: "current", title: "Current JF Effect athlete", detail: from ? `Coached since ${from}` : null };
+  }
+  const ends = ps.map((p) => p.end).filter((e): e is string => !!e).sort();
+  const lastMeet = c.meets.filter((m) => m.coached).map((m) => m.date).sort().at(-1) ?? null;
+  const to = ends.length && ends.length === ps.length ? monthYear(ends.at(-1)!) : lastMeet ? lastMeet.slice(0, 4) : null;
+  const detail = from && to ? (from === to ? `Coached ${to}` : `Coached ${from} – ${to}`) : to ? `Coached until ${to}` : null;
+  return { kind: "former", title: "Former JF Effect athlete", detail };
 }
+
+/** Podium finishes (1st to 3rd). */
+export const podiums = (meets: CareerMeet[]) => meets.filter((m) => { const p = placeNum(m.place); return p != null && p <= 3; }).length;
