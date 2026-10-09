@@ -113,7 +113,7 @@ function ClubBadge({ row }: { row: StrengthRow }) {
   const club = row.lift === "total" ? totalClub(row.kg) : null;
   if (!club) return null;
   return (
-    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-black tracking-wider text-amber-500">
+    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-black tracking-wide text-amber-500">
       {club}
     </span>
   );
@@ -122,11 +122,11 @@ function ClubBadge({ row }: { row: StrengthRow }) {
 /** All-time board only: where the number was made. */
 function SourceTag({ row }: { row: StrengthRow }) {
   return row.source === "meet" ? (
-    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-black tracking-wider text-amber-600 dark:text-amber-400">
+    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-black tracking-wide text-amber-600 dark:text-amber-400">
       <Landmark className="h-2.5 w-2.5" /> MEET
     </span>
   ) : (
-    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-black tracking-wider text-muted-foreground">
+    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-black tracking-wide text-muted-foreground">
       <Dumbbell className="h-2.5 w-2.5" /> TRAINING
     </span>
   );
@@ -135,7 +135,7 @@ function SourceTag({ row }: { row: StrengthRow }) {
 function AlumniTag({ row }: { row: StrengthRow }) {
   if (!row.is_alumni) return null;
   return (
-    <span className="inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[8px] font-black tracking-wider text-muted-foreground">
+    <span className="inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[8px] font-black tracking-wide text-muted-foreground">
       ALUMNI
     </span>
   );
@@ -471,17 +471,20 @@ function PodiumSpot({ row, rank, mode, unit, showSource }: { row: StrengthRow; r
 function BoardLine({ row, rank, mode, unit, showSource }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean }) {
   return (
     <li className={cn("flex items-center gap-3 px-3 py-2.5", row.is_me && "bg-primary/5")}>
-      <span className="w-6 text-center text-sm font-black text-muted-foreground">#{rank}</span>
-      <LifterAvatar row={row} size="h-9 w-9" />
+      <span className="w-8 shrink-0 text-center text-sm font-black text-muted-foreground">#{rank}</span>
+      <LifterAvatar row={row} size="h-9 w-9 shrink-0" />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
+        {/* The name gets its own line so it's never squeezed by tags. */}
+        <div className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-sm font-bold">{row.display_name}{row.is_me ? " (You)" : ""}</span>
           {row.is_coach && <CoachTag />}
+        </div>
+        <NameLine row={row} />
+        <div className="mt-0.5 flex flex-wrap items-center gap-1">
           {showSource && <SourceTag row={row} />}
           <AlumniTag row={row} />
         </div>
-        <NameLine row={row} />
-        <div className="truncate text-[10px] text-muted-foreground">{subline(row, mode, unit)}</div>
+        <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{subline(row, mode, unit)}</div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
         <div className="text-sm font-black tabular-nums"><Headline row={row} mode={mode} unit={unit} /></div>
