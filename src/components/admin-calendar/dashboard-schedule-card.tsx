@@ -197,7 +197,10 @@ export function DashboardScheduleCard() {
   }, [sessions, appts, events, googleEvents, googleOn]);
 
   const rows = rowsByDay.get(day) ?? [];
-  const bookable = (d: string) => (rowsByDay.get(d) ?? []).filter((r) => r.kind === "session" && r.s.status === "Scheduled").length;
+  // A dot per thing on that day's list: coaching items first, then Google (when shown).
+  const coachingCount = (d: string) =>
+    (rowsByDay.get(d) ?? []).filter((r) => (r.kind === "session" ? r.s.status === "Scheduled" : r.kind !== "google")).length;
+  const googleCount = (d: string) => (rowsByDay.get(d) ?? []).filter((r) => r.kind === "google").length;
   const dayName = day === today ? "today" : new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: "long" });
 
   const toggleGoogle = () => {
@@ -239,8 +242,16 @@ export function DashboardScheduleCard() {
         </div>
       </div>
 
-      {/* 7-day strip: a dot per booked session, today highlighted */}
-      <WeekStrip days={days} today={today} selected={day} onSelect={setDay} count={bookable} />
+      {/* 7-day strip: violet dots for coaching, sky for Google, today highlighted */}
+      <WeekStrip
+        days={days}
+        today={today}
+        selected={day}
+        onSelect={setDay}
+        count={coachingCount}
+        extraCount={googleOn ? googleCount : undefined}
+        extraDotClass="bg-sky-400/80"
+      />
 
       <div className="mt-3">
         {isLoading ? (

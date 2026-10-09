@@ -2,7 +2,7 @@
 // Do not import this from client code.
 
 import { createHmac, timingSafeEqual } from "crypto";
-import { appSessionIdOf, type GoogleEventLike } from "@/lib/session-conflicts";
+import { appSessionIdOf, mergeGoogleCalendarLists, type GoogleEventLike } from "@/lib/session-conflicts";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -286,21 +286,37 @@ export type GcalListedEvent = {
   raw: GoogleEventLike;
 };
 
-/** Raw events of one calendar in a range (ok=false when that calendar can't be read). */
+/** A busy coach's main calendar easily passes 250 events in a few months. */
+const EVENTS_PAGE_SIZE = 2500;
+const MAX_EVENT_PAGES = 4;
+
+/**
+ * Raw events of one calendar in a range, following Google's pages
+ * (ok=false when the first page can't be read; a later page failing keeps
+ * what was already read).
+ */
 async function listCalendarEvents(calendarId: string, timeMinISO: string, timeMaxISO: string): Promise<{ ok: boolean; items: any[] }> {
-  const params = new URLSearchParams({
-    timeMin: timeMinISO,
-    timeMax: timeMaxISO,
-    singleEvents: "true",
-    orderBy: "startTime",
-    maxResults: "250",
-  });
-  const res = await fetch(`${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, {
-    headers: gatewayHeaders(),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, items: [] };
-  return { ok: true, items: (data.items ?? []) as any[] };
+  const items: any[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < MAX_EVENT_PAGES; page++) {
+    const params = new URLSearchParams({
+      timeMin: timeMinISO,
+      timeMax: timeMaxISO,
+      singleEvents: "true",
+      orderBy: "startTime",
+      maxResults: String(EVENTS_PAGE_SIZE),
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const res = await fetch(`${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, {
+      headers: gatewayHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return page === 0 ? { ok: false, items: [] } : { ok: true, items };
+    items.push(...((data.items ?? []) as any[]));
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
+  }
+  return { ok: true, items };
 }
 
 // Returns Google Calendar events for a range across the coach's schedule
@@ -319,30 +335,25 @@ export async function gcalListEvents(
   );
   // Strict callers (double-booking checks) must not mistake "Google unreachable" for "free".
   if (opts.strict && lists.every((l) => !l.ok)) throw new Error("Google Calendar could not be read.");
-  const seen = new Set<string>();
-  const out: GcalListedEvent[] = [];
-  for (const { id: calendarId, items } of lists) {
-    for (const e of items) {
-      if (e.status === "cancelled" || !(e.start?.dateTime || e.start?.date)) continue;
-      const key = e.iCalUID || e.id;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({
-        id: e.id,
-        calendarId,
-        summary: e.summary || "(busy)",
-        start: e.start.dateTime || e.start.date,
-        end: e.end?.dateTime || e.end?.date,
-        allDay: !e.start.dateTime,
-        htmlLink: e.htmlLink,
-        location: e.location,
-        status: e.status,
-        hangoutLink: e.hangoutLink,
-        transparency: e.transparency ?? null,
-        appSessionId: appSessionIdOf(e),
-        raw: e,
-      });
-    }
-  }
-  return out.sort((a, b) => a.start.localeCompare(b.start));
+  const out: GcalListedEvent[] = mergeGoogleCalendarLists(lists).map(({ calendarId, event: e }) => ({
+    id: e.id,
+    calendarId,
+    summary: e.summary || "(busy)",
+    start: e.start.dateTime || e.start.date,
+    end: e.end?.dateTime || e.end?.date,
+    allDay: !e.start.dateTime,
+    htmlLink: e.htmlLink,
+    location: e.location,
+    status: e.status,
+    hangoutLink: e.hangoutLink,
+    transparency: e.transparency ?? null,
+    appSessionId: appSessionIdOf(e),
+    raw: e,
+  }));
+  // Sort by the real instant: "…-05:00" and "…Z" strings don't compare as text.
+  const at = (s: string) => {
+    const ms = Date.parse(s.length === 10 ? `${s}T00:00:00` : s);
+    return Number.isNaN(ms) ? 0 : ms;
+  };
+  return out.sort((a, b) => at(a.start) - at(b.start));
 }
