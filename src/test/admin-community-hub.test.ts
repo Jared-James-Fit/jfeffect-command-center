@@ -15,7 +15,7 @@ describe("the coach's community, in one place", () => {
     expect(hub).toContain('{ key: "birthdays", label: "Birthdays" }');
     expect(hub).toContain("<CommunityScreen hideTabs />");
     expect(hub).toContain("<UpcomingBirthdaysWidget windowDays={30} />");
-    expect(hub).toContain('await act.mutateAsync({ kind: "note", body });');
+    expect(hub).toContain('await act.mutateAsync({ kind: "note", body, poll });');
     // the composer lives on the page now, not at the bottom of the schedule
     expect(read("src/components/community/coach-weekly-posts.tsx")).not.toContain("Write a post for the crew");
   });

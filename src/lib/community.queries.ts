@@ -12,12 +12,14 @@ import {
   FIRST_FEED_PAGE,
   buildCommentPreview,
   nextFeedCursor,
+  votePoll,
   type CommunityComment,
   type CommunityFeedPage,
   type CommunityActivity,
   type CommunityAuthor,
   type CommunitySeries,
   type CommunityMember,
+  type CommunityPoll,
   type CommunityPost,
   type CommunityPostDetail,
   type CommunityProfile,
@@ -115,6 +117,34 @@ function patchPost(qc: ReturnType<typeof useQueryClient>, postId: string, patch:
     old ? { ...old, pages: old.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => (p.id === postId ? patch(p) : p)) })) } : old,
   );
   qc.setQueryData<CommunityPostDetail | null>(communityKeys.post(postId), (old) => (old ? (patch(old) as CommunityPostDetail) : old));
+}
+
+/* ---- polls ---------------------------------------------------------- */
+
+/** Vote on a post's poll (or switch, or take it back with null): the bars move at once. */
+export function useVotePoll(post: CommunityPost) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (optionId: string | null) => {
+      const { data, error } = await db.rpc("community_poll_vote", { _post_id: post.id, _option_id: optionId });
+      if (error) throw error;
+      return data as CommunityPoll | null;
+    },
+    onMutate: async (optionId) => {
+      await qc.cancelQueries({ queryKey: ["community-feed"] });
+      const snapshot = qc.getQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: ["community-feed"] });
+      const detail = qc.getQueryData(communityKeys.post(post.id));
+      patchPost(qc, post.id, (p) => (p.poll ? { ...p, poll: votePoll(p.poll, optionId) } : p));
+      return { snapshot, detail };
+    },
+    onSuccess: (poll) => {
+      if (poll) patchPost(qc, post.id, (p) => ({ ...p, poll }));
+    },
+    onError: (_e, _v, ctx) => {
+      ctx?.snapshot.forEach(([key, data]) => qc.setQueryData(key, data));
+      if (ctx?.detail !== undefined) qc.setQueryData(communityKeys.post(post.id), ctx.detail);
+    },
+  });
 }
 
 /* ---- reactions ------------------------------------------------------ */
@@ -897,7 +927,7 @@ export function useCommunityPulse(enabled = true) {
 export function useSeriesAction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (a: { kind: "pause"; paused: boolean } | { kind: "publish"; series: CommunitySeries } | { kind: "item"; id: string; body: string; active?: boolean } | { kind: "note"; body: string }) => {
+    mutationFn: async (a: { kind: "pause"; paused: boolean } | { kind: "publish"; series: CommunitySeries } | { kind: "item"; id: string; body: string; active?: boolean } | { kind: "note"; body: string; poll?: string[] | null }) => {
       const call =
         a.kind === "pause"
           ? db.rpc("community_series_set_paused", { _paused: a.paused })
@@ -905,7 +935,7 @@ export function useSeriesAction() {
             ? db.rpc("community_publish_series", { _series: a.series, _force: true })
             : a.kind === "item"
               ? db.rpc("community_series_update_item", { _id: a.id, _body: a.body, _active: a.active ?? true })
-              : db.rpc("community_create_note", { _body: a.body });
+              : db.rpc("community_create_note", a.poll?.length ? { _body: a.body, _poll: a.poll } : { _body: a.body });
       const { data, error } = await call;
       if (error) throw error;
       return data as { status?: string } | null;

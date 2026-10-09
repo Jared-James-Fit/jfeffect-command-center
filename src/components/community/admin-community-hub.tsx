@@ -185,9 +185,10 @@ export function AdminCommunityHub() {
         initial=""
         saving={act.isPending}
         onClose={() => setWriting(false)}
-        onSave={async (body) => {
-          await act.mutateAsync({ kind: "note", body });
-          toast.success("Posted to the community");
+        allowPoll
+        onSave={async (body, poll) => {
+          await act.mutateAsync({ kind: "note", body, poll });
+          toast.success(poll ? "Poll posted to the community" : "Posted to the community");
         }}
       />
     </div>

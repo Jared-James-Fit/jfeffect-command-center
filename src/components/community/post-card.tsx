@@ -35,6 +35,7 @@ import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
+import { PollCard } from "@/components/community/poll";
 import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
 import { useAuth } from "@/lib/auth";
 import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
@@ -118,6 +119,7 @@ export function NoteBody({ post, clamp = false, onOpenPerson }: { post: Communit
           <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenPerson} />
         </p>
       )}
+      {post.poll && <PollCard post={post} onOpenPerson={onOpenPerson} className="mb-2" />}
     </div>
   );
 }

@@ -21,7 +21,7 @@ export function PostTileFace({ post, thumb, unit, footer = false }: { post: Comm
     <>
       {post.kind === "note" ? (
         <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)] p-2.5 text-left", footer && "pb-8")}>
-          <span className="text-[8px] font-black uppercase tracking-[0.14em] text-primary">{post.series ? SERIES_LABEL[post.series]?.name.split(" ")[0] ?? "Note" : "Note"}</span>
+          <span className="text-[8px] font-black uppercase tracking-[0.14em] text-primary">{post.poll ? "Poll" : post.series ? SERIES_LABEL[post.series]?.name.split(" ")[0] ?? "Note" : "Note"}</span>
           <span className={cn("text-[11px] font-semibold leading-snug", footer ? "line-clamp-4" : "line-clamp-5")}>
             {post.quote ? `“${post.quote}”` : post.caption || (shared ? `“${shared.body || "📷"}”` : "")}
           </span>
