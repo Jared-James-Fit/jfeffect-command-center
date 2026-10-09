@@ -30,7 +30,7 @@ export const Route = createFileRoute("/")({
 });
 
 function IndexRedirect() {
-  const { user, role, loading } = useAuth();
+  const { user, role, viewOnly, loading } = useAuth();
   const navigate = useNavigate();
   const { isImpersonating } = useClientImpersonation();
   // Give the impersonation provider one tick to hydrate from sessionStorage
@@ -100,13 +100,14 @@ function IndexRedirect() {
       const dest =
         role === "client" ? "/portal"
         : role === "member" ? "/m"
-        // Staff, including the finance login (shown the admin app, view-only).
+        // The finance login starts at its desk, Taxes & Books (/finance redirects there).
+        : viewOnly ? "/finance"
         : "/admin";
       navigate({ to: dest, replace: true });
     } else {
       navigate({ to: "/auth", replace: true });
     }
-  }, [user, role, loading, navigate, isImpersonating, hydrated]);
+  }, [user, role, viewOnly, loading, navigate, isImpersonating, hydrated]);
 
   return <DashboardSplash />;
 }

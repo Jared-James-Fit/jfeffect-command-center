@@ -3,14 +3,14 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
-import { buildInternalNav, buildInternalNavCollapsed, buildMembershipAdminNav, resolveStaffRoleTag } from "@/lib/internal-nav";
+import { buildFinanceNav, buildInternalNav, buildInternalNavCollapsed, buildMembershipAdminNav, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { SummerAssistant } from "@/components/summer/summer-assistant";
 import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
-import { LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
+import { LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy, Landmark, Activity, Ticket } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
 import { StaffMfaGate } from "@/components/staff-mfa-gate";
@@ -65,10 +65,13 @@ function AdminLayout() {
     : roleTag
       ? buildInternalNavCollapsed(roleTag, { mode: "coaching" })
       : (isCoach ? coachNav : coachingAdminNav);
-  // Owner-only pages (Taxes & Books) stay out of other admins' menus; the
-  // finance login keeps them (it keeps the books).
-  const nav = isOwner === false && !viewOnly ? withoutOwnerOnly(fullNav) : fullNav;
-  const title = isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
+  // Owner-only pages (Taxes & Books) stay out of other admins' menus. The
+  // finance login keeps them, with its money pages first and the whole admin
+  // menu after.
+  const nav = viewOnly
+    ? [...buildFinanceNav(), ...fullNav]
+    : isOwner === false ? withoutOwnerOnly(fullNav) : fullNav;
+  const title = viewOnly ? "Finance" : isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
   // Use a dedicated "membership" bar scope when in membership mode so the
   // admin can customize a different floating bar for member-facing ops.
   const barScope = isCoach ? "coach" : (isMembership ? "admin" : "admin");
@@ -82,6 +85,16 @@ function AdminLayout() {
     const legacy = isCoach ? coachNav : coachingAdminNav;
     const pick = (to: string) =>
       nav.find((i) => i.to === to) ?? legacy.find((i) => i.to === to)!;
+    if (viewOnly) {
+      // The finance login's phone bar: its daily work first, home last.
+      return [
+        { to: "/admin/sales?tab=taxes", label: "Books", icon: Landmark },
+        { to: "/admin/transactions", label: "Sales", icon: Activity },
+        { to: "/admin/discount-codes", label: "Discounts", icon: Ticket },
+        { ...pick("/admin/clients"), label: "Clients" },
+        { ...pick("/admin"), label: "Home" },
+      ];
+    }
     if (isCoach) {
       return [
         pick("/admin"),
@@ -111,7 +124,7 @@ function AdminLayout() {
       // lift reviews moved into the chat, so Reviews is just check-ins: one tap
       { ...pick("/admin/check-in-reviews"), label: "Reviews" },
     ];
-  }, [isCoach, isMembership, nav]);
+  }, [isCoach, isMembership, nav, viewOnly]);
 
   const bottomItems = useMemo(() => {
     if (customLayout && customLayout.slots.length > 0) {

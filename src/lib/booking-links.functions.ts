@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { readClientFor } from "@/lib/permissions.server";
 
 const APPT_TYPES = [
   "Coaching Call","Check-In Call","Onboarding Call","Strategy Call",
@@ -42,7 +43,7 @@ const BookingLinkInput = z.object({
 export const listBookingLinks = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase } = context as any;
+    const { db: supabase } = await readClientFor(context as any);
     const { data, error } = await supabase.from("booking_links")
       .select("*, host_coach:coaches!booking_links_host_coach_id_fkey(id, full_name), availability:booking_link_availability(*)")
       .order("created_at", { ascending: false });

@@ -66,6 +66,33 @@ export async function assertAdminOr(ctx: PermissionContext, perm: Permission): P
   return { viewOnly: await assertAdminOrPermission(ctx, perm) };
 }
 
+/**
+ * For read-only handlers with no admin check of their own, where RLS or the
+ * database function decides what comes back: a view-only login reads through
+ * its admin view, everyone else keeps their own client. Never use it where a
+ * read decides whether something may be changed.
+ */
+export async function readClientFor(ctx: PermissionContext): Promise<{ db: any; viewOnly: boolean }> {
+  const own = { db: ctx.supabase, viewOnly: false };
+  if (ctx.claims?.aal !== "aal2") return own; // every view-only session is MFA-verified
+  if ((await callerKind(ctx)) !== "permissions") return own;
+  try {
+    await assertPermission(ctx, "admin.view");
+  } catch {
+    return own;
+  }
+  return { db: await adminViewClient(), viewOnly: true };
+}
+
+/**
+ * Calls a read-only (STABLE) database function as a read, so the admin view
+ * applies. Null arguments are left out, so the function's defaults apply.
+ */
+export function rpcRead(db: any, fn: string, args: Record<string, unknown>) {
+  const given = Object.fromEntries(Object.entries(args).filter(([, v]) => v !== null && v !== undefined));
+  return db.rpc(fn, given, { get: true });
+}
+
 /** The caller's own client plus the admin-view header (reads only; see assertAdminView). */
 export async function adminViewClient(): Promise<any> {
   const { getRequest } = await import("@tanstack/react-start/server");

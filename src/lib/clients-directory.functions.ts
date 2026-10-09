@@ -11,6 +11,7 @@ import {
   type DirectoryCounts,
 } from "@/lib/clients-directory-filters";
 import type { ExemptKind, RosterStatus } from "@/lib/coaching-agreement/rules";
+import { readClientFor, rpcRead } from "@/lib/permissions.server";
 
 export type { DirectoryCounts };
 
@@ -122,7 +123,12 @@ export const listClientsDirectoryFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data, context }): Promise<DirectoryResult> => {
     const offset = (data.page - 1) * data.size;
-    const { data: rpc, error } = await context.supabase.rpc(
+    // A view-only login (finance) reads the admin's list: a read-only call, so
+    // the admin view applies (admin_clients_directory is STABLE).
+    const { db, viewOnly } = await readClientFor(context as any);
+    const call = (fn: string, args: Record<string, unknown>) =>
+      viewOnly ? rpcRead(db, fn, args) : context.supabase.rpc(fn as any, args as any);
+    const { data: rpc, error } = await call(
       "admin_clients_directory",
       {
         p_search: data.search || null,
