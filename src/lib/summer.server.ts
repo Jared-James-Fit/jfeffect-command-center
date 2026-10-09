@@ -10,6 +10,8 @@ import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
 import { buildAppContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot, type LinkEntry } from "@/lib/summer-app";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
+/** Used when the main model refuses a tool step (see answerSummer). */
+const CLEO_FALLBACK_MODEL = "google/gemini-2.5-flash";
 
 function settle<T>(res: { data: T | null; error: any }, fallback: T): T {
   return res.error || res.data == null ? fallback : res.data;
@@ -459,7 +461,6 @@ export async function answerSummer(
   const { loadCaller, proposeAction } = await import("@/lib/cleo-actions.server");
   const { CLEO_ACTION_INFO, CLEO_ACTION_KINDS, CLEO_ACTION_PARAMS } = await import("@/lib/cleo-actions");
   const { generateText, stepCountIs, tool } = await import("ai");
-  const { createLovableAiGateway } = await import("@/lib/ai-gateway.server");
 
   const caller = await loadCaller(own, userId);
   const boss = ownerName ?? "the owner";
@@ -488,10 +489,17 @@ export async function answerSummer(
   const tz = BUSINESS_TZ;
   const tools = { ...cleoReadTools({ db: supabase, tz, today: businessToday() }), ...actionTools };
 
-  let text = "";
-  try {
-    const result = await generateText({
-      model: createLovableAiGateway()(books.BOOKS_AI_MODEL),
+  // Gemini 3 needs its "thought signature" echoed back on every tool step.
+  // The SDK keeps it under the provider's name but only sends back what's
+  // under "google", so Cleo's provider is named "google". If the gateway
+  // still refuses, the answer is retried once on a model that doesn't need it.
+  const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("AI is not configured (LOVABLE_API_KEY missing).");
+  const gateway = createOpenAICompatible({ name: "google", baseURL: GATEWAY, headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" } });
+  const run = (model: string) =>
+    generateText({
+      model: gateway(model),
       system,
       messages: [
         ...past.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content })),
@@ -500,9 +508,21 @@ export async function answerSummer(
       tools,
       stopWhen: stepCountIs(8),
     });
-    text = result.text.trim();
+
+  let text = "";
+  try {
+    try {
+      text = (await run(books.BOOKS_AI_MODEL)).text.trim();
+    } catch (e: any) {
+      const status = e?.statusCode ?? e?.status ?? e?.lastError?.statusCode;
+      if (status !== 400) throw e;
+      console.warn("[cleo] retrying on the fallback model", String(e?.message ?? e).slice(0, 200));
+      const { discardProposals } = await import("@/lib/cleo-actions.server");
+      await discardProposals(userId, proposed.splice(0));
+      text = (await run(CLEO_FALLBACK_MODEL)).text.trim();
+    }
   } catch (e: any) {
-    const status = e?.statusCode ?? e?.status;
+    const status = e?.statusCode ?? e?.status ?? e?.lastError?.statusCode;
     if (status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
     if (status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
     throw new Error(`AI request failed${status ? ` (${status})` : ""}: ${String(e?.message ?? e).slice(0, 200)}`);

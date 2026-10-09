@@ -18,12 +18,15 @@ import { loadVoicePrefs, summerSpeaker, type ServerVoice, type SummerVoicePrefs 
 import { blobToBase64, micSupported, useSummerMic } from "@/hooks/use-summer-mic";
 import { isAudioSessionError } from "@/lib/audio-session";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
+import { CleoActionCard, CleoApprovals, useCleoActions } from "./cleo-action-card";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string };
 type VoiceState = "idle" | "listening" | "thinking" | "speaking";
 
 const OWNER_STARTERS = [
   "What's on my plate today?",
+  "Who missed workouts this week?",
+  "Any pain flags in recent check-ins?",
   "Who still owes me money?",
   "How much should I have set aside for taxes right now?",
   "Which check-ins are waiting on me?",
@@ -33,6 +36,8 @@ const OWNER_STARTERS = [
 
 const TEAM_STARTERS = [
   "What's on the calendar today?",
+  "Who missed workouts this week?",
+  "Any pain flags in recent check-ins?",
   "Which check-ins are waiting?",
   "Who has unread messages?",
   "Who still has an unpaid sale?",
@@ -201,6 +206,7 @@ export function SummerChat({
   const speaker = summerSpeaker();
   const prefsRef = useRef<SummerVoicePrefs>(loadVoicePrefs());
   const canTalk = typeof window !== "undefined" && micSupported();
+  const cleo = useCleoActions(open);
 
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ["summer-messages"],
@@ -281,6 +287,7 @@ export function SummerChat({
         return;
       }
       append([res.user, res.assistant]);
+      void cleo.refresh();
       prefsRef.current = loadVoicePrefs();
       if (prefsRef.current.autoplay || inCallRef.current) {
         setVoiceState("speaking");
@@ -335,6 +342,7 @@ export function SummerChat({
     try {
       const res = (await ask({ data: { message, year, route } })) as { user: Msg; assistant: Msg };
       append([res.user, res.assistant]);
+      void cleo.refresh();
     } catch (e: any) {
       setDraft(message);
       toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
@@ -414,6 +422,7 @@ export function SummerChat({
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 text-sm">
           {isLoading && <div className="flex justify-center py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
+          {cleo.data && <CleoApprovals approvals={cleo.data.approvals} ownerName={cleo.data.ownerName} />}
           {!isLoading && messages.length === 0 && !pending && voiceState === "idle" && (
             <div className="space-y-3">
               <p className="text-muted-foreground">{tone.greeting}</p>
@@ -433,6 +442,13 @@ export function SummerChat({
                 <div className={cn("max-w-[88%] rounded-2xl px-3 py-2", m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted")}>
                   {m.role === "assistant" ? <SummerText text={m.content} onLink={openLink} /> : <p className="whitespace-pre-wrap">{m.content}</p>}
                 </div>
+                {m.role === "assistant" && cleo.forMessage(m.id).length > 0 && (
+                  <div className="mt-1.5 w-full max-w-[88%] space-y-2">
+                    {cleo.forMessage(m.id).map((a) => (
+                      <CleoActionCard key={a.id} action={a} ownerName={cleo.data?.ownerName ?? "the owner"} />
+                    ))}
+                  </div>
+                )}
                 {m.role === "assistant" && (
                   <div className="mt-1 flex max-w-[88%] flex-wrap items-center gap-1">
                     {links.map((l) => (
@@ -530,7 +546,7 @@ export function SummerChat({
                 <ArrowUp className="h-4 w-4" />
               </Button>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Mic to talk, phone for a hands-free call. {ASSISTANT_NAME} can look things up and link you, but she can't change anything.</p>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Mic to talk, phone for a hands-free call. {ASSISTANT_NAME} can look anything up, and does things only after you tap Confirm.</p>
           </form>
         )}
         <SummerCustomizeDialog open={customizing} onClose={() => setCustomizing(false)} persona={persona} onSaved={onPersonaSaved} />

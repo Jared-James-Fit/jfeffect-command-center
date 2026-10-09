@@ -395,6 +395,73 @@ export function cleoReadTools(ctx: ToolCtx) {
       }),
     }),
 
+    team_training: tool({
+      description:
+        "Across ALL clients: scheduled workouts in the last N days, how many were logged, and which were missed (scheduled, past, not logged). Use for 'who missed workouts', 'who's on track', 'who hasn't trained'.",
+      inputSchema: z.object({ days: z.number().int().min(1).max(30).default(7) }),
+      execute: safe("team training", async ({ days }) => {
+        const from = new Date(Date.parse(`${today}T00:00:00Z`) - days * DAY).toISOString().slice(0, 10);
+        const [schedRes, compRes] = await Promise.all([
+          db.from("pl_scheduled_workouts").select("id, client_id, scheduled_date, source_day_id").gte("scheduled_date", from).lt("scheduled_date", today).limit(3000),
+          db.from("pl_day_completions").select("scheduled_workout_id, client_id, completed_at").gte("completed_at", new Date(Date.parse(`${from}T00:00:00Z`) - 3 * DAY).toISOString()).limit(5000),
+        ]);
+        const sched = rows<any>(schedRes as any, "schedule");
+        const done = new Set(rows<any>(compRes as any, "completions").filter((c) => c.completed_at).map((c) => c.scheduled_workout_id));
+        const per = new Map<string, { total: number; done: number; missed: string[] }>();
+        for (const w of sched) {
+          const p = per.get(w.client_id) ?? { total: 0, done: 0, missed: [] };
+          p.total += 1;
+          if (done.has(w.id)) p.done += 1;
+          else p.missed.push(w.scheduled_date);
+          per.set(w.client_id, p);
+        }
+        if (!per.size) return `No workouts were scheduled from ${from} to yesterday.`;
+        const ids = [...per.keys()];
+        const names = new Map<string, any>();
+        for (let i = 0; i < ids.length; i += 150) {
+          for (const r of rows<any>(await db.from("clients").select("id, full_name, preferred_name, first_name, last_name, email, archived, archived_at, deactivated_at").in("id", ids.slice(i, i + 150)), "clients")) names.set(r.id, r);
+        }
+        const list = [...per.entries()]
+          .filter(([id]) => { const c = names.get(id); return c && !(c.archived || c.archived_at || c.deactivated_at); })
+          .sort((a, b) => b[1].missed.length - a[1].missed.length || a[1].done / a[1].total - b[1].done / b[1].total);
+        return [
+          `Scheduled workouts ${from} to yesterday (current clients), most missed first:`,
+          ...list.map(([id, p]) => `- ${clientName(names.get(id))} (${id}) | logged ${p.done}/${p.total}${p.missed.length ? ` | missed ${p.missed.sort().join(", ")}` : " | none missed"}`),
+        ].join("\n");
+      }),
+    }),
+
+    pain_flags: tool({
+      description: "Across ALL clients: pain or injury flags from workout feedback and weekly check-ins in the last N days, newest first, with whether they were reviewed.",
+      inputSchema: z.object({ days: z.number().int().min(1).max(60).default(14) }),
+      execute: safe("pain flags", async ({ days }) => {
+        const since = new Date(Date.now() - days * DAY).toISOString();
+        const [fbRes, ciRes] = await Promise.all([
+          db.from("pl_workout_feedback").select("client_id, created_at, pain, pain_area, pain_level, reviewed_at").gte("created_at", since).order("created_at", { ascending: false }).limit(500),
+          db.from("messenger_checkins").select("client_id, submitted_at, answers, reviewed_at").gte("submitted_at", since).order("submitted_at", { ascending: false }).limit(300),
+        ]);
+        const items: Array<{ at: string; client: string; text: string }> = [];
+        for (const f of rows<any>(fbRes as any, "workout feedback")) {
+          if (!f.pain && !f.pain_level) continue;
+          items.push({ at: f.created_at, client: f.client_id, text: `workout pain ${[f.pain_area, f.pain_level != null ? `level ${f.pain_level}` : null].filter(Boolean).join(", ") || "reported"}${f.reviewed_at ? "" : " (not reviewed)"}` });
+        }
+        for (const c of rows<any>(ciRes as any, "check-ins")) {
+          const a = c.answers ?? {};
+          const pain = [answerText(a.pain_details), answerText(a.recovery_flags)].filter((x) => x && x !== "-" && !/^(none|no|n\/a|\[\])$/i.test(x.trim()));
+          if (!pain.length) continue;
+          items.push({ at: c.submitted_at, client: c.client_id, text: `check-in: ${pain.join(" | ").slice(0, 300)}${c.reviewed_at ? "" : " (not reviewed)"}` });
+        }
+        if (!items.length) return `No pain flags in the last ${days} days.`;
+        const ids = [...new Set(items.map((i) => i.client).filter(Boolean))];
+        const names = new Map<string, string>();
+        for (const r of rows<any>(await db.from("clients").select("id, full_name, preferred_name, first_name, last_name, email").in("id", ids.slice(0, 200)), "clients")) names.set(r.id, clientName(r));
+        return items
+          .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+          .map((i) => `- ${dayIn(i.at, tz)} | ${names.get(i.client) ?? "client"} (${i.client}) | ${i.text}`)
+          .join("\n");
+      }),
+    }),
+
     calendar: tool({
       description: "Appointments and PT sessions between two dates (YYYY-MM-DD, inclusive), for any range beyond the 14 days already in APP.",
       inputSchema: z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),

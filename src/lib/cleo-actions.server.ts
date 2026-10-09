@@ -422,3 +422,11 @@ export async function attachToMessage(userId: string, ids: string[], messageId: 
   const admin = await service();
   await admin.from("cleo_actions").update({ message_id: messageId }).in("id", ids).eq("requested_by", userId);
 }
+
+/** Cards from an answer that was thrown away (never shown), so a retry doesn't double them. */
+export async function discardProposals(userId: string, ids: string[]) {
+  if (!ids.length) return;
+  const admin = await service();
+  await admin.from("cleo_actions").delete().in("id", ids).eq("requested_by", userId).eq("status", "proposed").is("message_id", null);
+}
+
