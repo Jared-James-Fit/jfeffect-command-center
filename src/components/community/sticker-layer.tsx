@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
 import { Check, TextAlignCenter, TextAlignEnd, TextAlignStart, Trash2 } from "lucide-react";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { cn } from "@/lib/utils";
@@ -740,6 +741,8 @@ export function StickerLayer({
   // instead), so the editor pins itself to the part you can see: the top
   // bar stays put and the colours sit right on the keyboard.
   const view = useVisualViewportBox(!!editing);
+  // Small text sizes put the textarea under 16px: keep iOS from zooming the page in.
+  useNoAutoZoom(!!editing);
 
   return (
     <>

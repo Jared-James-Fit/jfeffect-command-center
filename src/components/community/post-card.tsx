@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { BadgeCheck, ChevronLeft, ChevronRight, Lock, MessageCircle, Play, Send } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Lock, MessageCircle, Pin, Play, Send } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import {
@@ -247,9 +247,11 @@ type Props = {
   onDoubleTap?: () => void;
   /** The tip finished playing. */
   onTipDone?: () => void;
+  /** First-time demo on "View full workout" (until they open one). */
+  openHint?: boolean;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
   const singleTimer = useRef<number | null>(null);
@@ -347,6 +349,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </button>
       )}
 
+      {/* Every workout has more than the card shows: say so, plainly. */}
+      {!isNote && s && <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />}
+
       {post.caption && !isNote && <FeedCaption name={post.author.name} caption={post.caption} />}
 
       {(post.coach_reactions.length > 0 || post.coach_commented) && (
@@ -362,11 +367,73 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       )}
 
       <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} />
+      <CommentPreviewList post={post} onOpenComments={() => onOpenComments(post)} />
     </article>
   );
 }
 
 export const PostCard = memo(PostCardInner);
+
+/**
+ * "View full workout ›" under a workout. The first time someone sees the feed it pulses with
+ * a "Tap to see every set" bubble until they open a workout (remembered on the account).
+ */
+export function ViewWorkoutRow({ post, onOpen, hint }: { post: CommunityPost; onOpen: () => void; hint: boolean }) {
+  const prs = post.stats?.pr_count ?? 0;
+  return (
+    <div className={cn("relative px-3.5 pt-3", hint && "z-[1]")}>
+      {hint && (
+        <div className="pointer-events-none absolute -top-8 left-1/2 z-10 -translate-x-1/2 animate-bounce" aria-hidden>
+          <div className="relative whitespace-nowrap rounded-full bg-primary px-3 py-1.5 text-[12px] font-bold text-primary-foreground shadow-lg">
+            👇 Tap to see every set & rep
+            <span className="absolute left-1/2 top-full -mt-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-primary" />
+          </div>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onOpen}
+        className={cn(
+          "flex h-11 w-full items-center justify-between gap-2 rounded-2xl px-3.5 text-left transition active:scale-[0.99]",
+          hint ? "bg-primary/10 ring-2 ring-primary" : "bg-muted/60 hover:bg-muted",
+        )}
+        aria-label="View full workout"
+      >
+        {hint && <span className="pointer-events-none absolute inset-x-3.5 bottom-0 top-3 animate-pulse rounded-2xl bg-primary/15" aria-hidden />}
+        <span className="text-[13px] font-bold">View full workout</span>
+        <span className="flex min-w-0 items-center gap-1 text-[12px] font-semibold text-muted-foreground">
+          <span className="truncate">{prs > 0 ? `Every set · ${prs} PR${prs === 1 ? "" : "s"}` : "Every set & rep"}</span>
+          <ChevronRight className="h-4 w-4 shrink-0" />
+        </span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Instagram-style comments under a post: "View all N comments", then at most two lines (the
+ * pinned one first). One line each, so a busy post never turns into a wall of chat.
+ */
+export function CommentPreviewList({ post, onOpenComments }: { post: CommunityPost; onOpenComments: () => void }) {
+  const preview = post.comment_preview ?? [];
+  if (!preview.length) return null;
+  const more = post.comment_count > preview.length;
+  return (
+    <button type="button" onClick={onOpenComments} className="-mt-1 block w-full space-y-0.5 px-3.5 pb-3 text-left" aria-label={`Open comments (${post.comment_count})`}>
+      {more && <div className="text-[13px] font-medium text-muted-foreground">View all {post.comment_count} comments</div>}
+      {preview.map((c) => (
+        <div key={c.id} className="flex min-w-0 items-baseline gap-1 text-[13px] leading-snug">
+          {c.pinned && <Pin className="h-3 w-3 shrink-0 translate-y-[1px] rotate-45 text-muted-foreground" aria-label="Pinned" />}
+          <span className="line-clamp-1 min-w-0">
+            <span className="font-bold">{c.author.name}</span>
+            {c.author.is_coach && <CoachBadge className="mx-0.5 inline h-3.5 w-3.5 -translate-y-px" />}{" "}
+            <span className="text-foreground/85">{c.body || (c.media ? "📷 Photo" : "")}</span>
+          </span>
+        </div>
+      ))}
+    </button>
+  );
+}
 
 /**
  * The heart (tap for ❤️, hold for 👍 ‼️ 🔥 😂) and how many, then the faces

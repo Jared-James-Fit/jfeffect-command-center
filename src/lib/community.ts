@@ -177,7 +177,47 @@ export type CommunityPost = {
   coach_reactions: { name: string; emoji: ReactionKey }[];
   comment_count: number;
   coach_commented: boolean;
+  /** The comment the post's author pinned (shown first, in the feed and the sheet). */
+  pinned_comment_id?: string | null;
+  /** Up to 2 comments for the feed: the pinned one first, then the newest. */
+  comment_preview?: CommentPreview[];
 };
+
+/** A comment line under a post in the feed (Instagram style). */
+export type CommentPreview = {
+  id: string;
+  body: string;
+  author: CommunityAuthor;
+  pinned: boolean;
+  /** It has a photo / video (the feed says so instead of showing it). */
+  media: boolean;
+  created_at: string;
+};
+
+export const COMMENT_PREVIEW_MAX = 2;
+
+/**
+ * The feed's comment preview from a full thread: visible top-level comments, the pinned
+ * one first, then the newest. Mirrors community_comment_preview() so the feed updates the
+ * moment you comment or pin, without a refetch.
+ */
+export function buildCommentPreview(
+  comments: Array<Pick<CommunityComment, "id" | "parent_id" | "hidden" | "body" | "author" | "media" | "created_at">>,
+  pinnedId: string | null | undefined,
+): CommentPreview[] {
+  return comments
+    .filter((c) => !c.parent_id && !c.hidden)
+    .sort((a, b) => Number(b.id === pinnedId) - Number(a.id === pinnedId) || b.created_at.localeCompare(a.created_at))
+    .slice(0, COMMENT_PREVIEW_MAX)
+    .map((c) => ({ id: c.id, body: (c.body ?? "").slice(0, 160), author: c.author, pinned: c.id === pinnedId, media: !!c.media, created_at: c.created_at }));
+}
+
+/** Top-level threads with the pinned one moved to the top (the rest keep their order). */
+export function pinnedFirst<T extends { comment: { id: string } }>(threads: T[], pinnedId: string | null | undefined): T[] {
+  if (!pinnedId) return threads;
+  const i = threads.findIndex((t) => t.comment.id === pinnedId);
+  return i <= 0 ? threads : [threads[i], ...threads.slice(0, i), ...threads.slice(i + 1)];
+}
 
 export type Reactor = CommunityAuthor & { is_me?: boolean };
 

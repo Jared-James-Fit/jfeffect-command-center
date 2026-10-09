@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Copy, CornerUpLeft, Eye, EyeOff, Heart, ImagePlus, Loader2, MoreHorizontal, Play, Send, Share2, Trash2, X } from "lucide-react";
+import { Copy, CornerUpLeft, Eye, EyeOff, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Send, Share2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -11,7 +11,7 @@ import { CoachBadge } from "@/components/community/post-card";
 import { SharedCommentCard } from "@/components/community/shared-comment";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { COMMENT_MAX, likesLabel, postTimeLabel, threadComments, type CommunityAuthor, type CommunityComment, type CommunityPost } from "@/lib/community";
+import { COMMENT_MAX, likesLabel, pinnedFirst, postTimeLabel, threadComments, type CommunityAuthor, type CommunityComment, type CommunityPost } from "@/lib/community";
 import { pickMedia, releasePicked, type PickedMedia } from "@/lib/community-media";
 import {
   useAddComment,
@@ -25,6 +25,7 @@ import {
   useHintsSeen,
   useLikeComment,
   useMarkHintSeen,
+  usePinComment,
   useShareComment,
   useSyncCommentCount,
 } from "@/lib/community.queries";
@@ -93,11 +94,15 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
   const like = useLikeComment(post.id);
   const del = useDeleteComment(post.id);
   const hide = useHideComment(post.id);
+  const pin = usePinComment(post.id);
+  // Local, so the sheet reflects a pin straight away (the `post` prop is a snapshot).
+  const [pinnedId, setPinnedId] = useState<string | null>(post.pinned_comment_id ?? null);
+  useEffect(() => setPinnedId(post.pinned_comment_id ?? null), [post.id, post.pinned_comment_id]);
   const { data: urls } = useCommentMediaUrls(comments);
   const { data: profile } = useCommunityProfile(user?.id ?? null);
   const hints = useHintsSeen();
   const markHint = useMarkHintSeen();
-  const threads = useMemo(() => threadComments(comments), [comments]);
+  const threads = useMemo(() => pinnedFirst(threadComments(comments), pinnedId), [comments, pinnedId]);
   const showHoldTip = !!hints.data && !hints.data.includes("comment_hold") && comments.some((c) => !c.pending);
 
   // an unsent photo is let go with the composer
@@ -180,6 +185,18 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
       })
       .catch((e: any) => toast.error(e?.message ?? "Couldn't change that"));
   };
+  const togglePin = (c: CommunityComment) => {
+    const next = pinnedId !== c.id;
+    const before = pinnedId;
+    setPinnedId(next ? c.id : null);
+    pin
+      .mutateAsync({ id: c.id, pinned: next })
+      .then(() => toast(next ? "Pinned to the top" : "Unpinned"))
+      .catch((e: any) => {
+        setPinnedId(before);
+        toast.error(e?.message ?? "Couldn't pin that");
+      });
+  };
   const remove = (c: CommunityComment) => {
     if (replyTo && (replyTo.id === c.id || replyTo.threadId === c.id)) setReplyTo(null);
     del.mutateAsync(c).then(
@@ -217,7 +234,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
               const shown = open ? replies : replies.slice(-REPLIES_SHOWN);
               return (
                 <div key={comment.id}>
-                  <CommentRow c={comment} url={urlFor(comment, urls)} progress={progress[comment.id]} onReply={startReply} onLike={toggleLike} onHold={openMenu} onOpenMedia={setViewing} />
+                  <CommentRow c={comment} pinned={comment.id === pinnedId && !comment.hidden} url={urlFor(comment, urls)} progress={progress[comment.id]} onReply={startReply} onLike={toggleLike} onHold={openMenu} onOpenMedia={setViewing} />
                   {replies.length > 0 && (
                     <div className="ml-10 space-y-0.5">
                       {!open && (
@@ -327,6 +344,10 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
         onHide={setHidden}
         onDelete={setDeleteFor}
         seenBy={seenBy}
+        // Only the person who posted pins, and only top-level comments that are showing.
+        canPin={(c) => post.is_mine && !c.parent_id && !c.hidden && !c.pending}
+        pinnedId={pinnedId}
+        onPin={togglePin}
       />
       <ShareCommentSheet c={shareFor} onClose={() => setShareFor(null)} postAuthor={post.author.name} />
       <MediaViewer c={viewing} thumbUrl={viewing ? urlFor(viewing, urls) : null} onClose={() => setViewing(null)} />
@@ -451,6 +472,7 @@ function useHold(onHold: () => void, disabled: boolean) {
 function CommentRow({
   c,
   reply = false,
+  pinned = false,
   url,
   progress,
   onReply,
@@ -460,6 +482,8 @@ function CommentRow({
 }: {
   c: CommunityComment;
   reply?: boolean;
+  /** Pinned by the person who posted: sits first, labelled. */
+  pinned?: boolean;
   url: string | null;
   progress?: number;
   onReply: (c: CommunityComment) => void;
@@ -485,6 +509,11 @@ function CommentRow({
     >
       <UserAvatar src={c.author.avatar_url} name={c.author.name} size={reply ? 26 : 32} expandable={false} />
       <div className="min-w-0 flex-1">
+        {pinned && (
+          <div className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+            <Pin className="h-3 w-3 rotate-45" /> Pinned
+          </div>
+        )}
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-[13px] font-bold">{c.author.name}</span>
           {c.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
@@ -584,6 +613,9 @@ function CommentMenu({
   onHide,
   onDelete,
   seenBy,
+  canPin,
+  pinnedId,
+  onPin,
 }: {
   c: CommunityComment | null;
   onClose: () => void;
@@ -594,6 +626,9 @@ function CommentMenu({
   onDelete: (c: CommunityComment) => void;
   /** "Only you, coaches and Fionna": who still sees it once hidden. */
   seenBy: (c: CommunityComment) => string;
+  canPin: (c: CommunityComment) => boolean;
+  pinnedId: string | null;
+  onPin: (c: CommunityComment) => void;
 }) {
   const act = (fn: () => void) => () => {
     onClose();
@@ -614,6 +649,14 @@ function CommentMenu({
               </SheetDescription>
             </SheetHeader>
             <div className="py-1">
+              {canPin(c) && (
+                <MenuRow
+                  icon={pinnedId === c.id ? PinOff : Pin}
+                  label={pinnedId === c.id ? "Unpin" : "Pin comment"}
+                  sub={pinnedId === c.id ? undefined : pinnedId ? "Replaces the one pinned now" : "Shows first, here and in the feed"}
+                  onClick={act(() => onPin(c))}
+                />
+              )}
               <MenuRow icon={CornerUpLeft} label="Reply" onClick={act(() => onReply(c))} />
               <MenuRow
                 icon={Heart}
