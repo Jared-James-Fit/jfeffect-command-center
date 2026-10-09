@@ -23,7 +23,7 @@ begin
     (a_old, 'Old Timer', 'male', 90, 300, 200, 350, 850, 'After he left', 'Canada', '2023-06-01', 99),
     (a_us, 'Border Guy', 'male', 80, 200, 150, 250, 600, 'Away meet', 'USA-TX', '2024-01-01', 90),
     (a_us, 'Border Guy', 'male', 80, 190, 140, 240, 570, 'Home meet', 'Canada-MB', '2024-06-01', 85),
-    (a_bench, 'Bench Only', 'male', 100, null, 180, null, 180, 'Bench meet', 'Canada', '2024-06-01', null);
+    (a_bench, 'Bench Only', 'male', 100, 0, 180, 0, 180, 'Bench meet', 'Canada', '2024-06-01', null);
 
   delete from auth_ctx;
   perform t_assert(not exists (select 1 from get_strength_board_meets(null)), 'signed out: no meet board');

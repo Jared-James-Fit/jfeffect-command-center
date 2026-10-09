@@ -165,7 +165,11 @@ begin
     order by (x.source_key = 'opl:' || _slug || ':' || e.d || ':' || e.ev) desc nulls last, x.created_at
     limit 1;
 
-    if existing is null then
+    -- A result needs a bodyweight; OpenPowerlifting very rarely lacks one,
+    -- and that meet alone is left out rather than failing the athlete's sync.
+    if existing is null and e.bw is null then
+      continue;
+    elsif existing is null then
       insert into public.athlete_powerlifting_results (
         athlete_id, client_id, athlete_name, sex, bodyweight_kg, weight_class_kg,
         squat_kg, bench_kg, deadlift_kg, total_kg, gl_points, dots_points,
@@ -174,7 +178,7 @@ begin
         source, source_key)
       values (
         _athlete, a.client_id, coalesce(e.entered_name, a.athlete_name), coalesce(e.sex, a.sex), e.bw, e.wc,
-        e.sq, e.bp, e.dl, e.tot, e.gl, e.dots,
+        coalesce(e.sq, 0), coalesce(e.bp, 0), coalesce(e.dl, 0), e.tot, e.gl, e.dots,
         e.meet_name, e.location, e.town, e.d, e.federation, e.parent,
         public.powerlifting_meet_level(e.meet_name, e.federation), e.place, e.division, e.equipment, e.ev,
         e.tested, e.sanctioned, e.attempts,
@@ -198,9 +202,9 @@ begin
         federation = coalesce(nullif(x.federation, ''), e.federation),
         weight_class_kg = coalesce(nullif(x.weight_class_kg, ''), e.wc),
         bodyweight_kg = coalesce(x.bodyweight_kg, e.bw),
-        squat_kg = case when coalesce(x.squat_kg, 0) > 0 then x.squat_kg else e.sq end,
-        bench_kg = case when coalesce(x.bench_kg, 0) > 0 then x.bench_kg else e.bp end,
-        deadlift_kg = case when coalesce(x.deadlift_kg, 0) > 0 then x.deadlift_kg else e.dl end,
+        squat_kg = case when coalesce(x.squat_kg, 0) > 0 then x.squat_kg else coalesce(e.sq, x.squat_kg, 0) end,
+        bench_kg = case when coalesce(x.bench_kg, 0) > 0 then x.bench_kg else coalesce(e.bp, x.bench_kg, 0) end,
+        deadlift_kg = case when coalesce(x.deadlift_kg, 0) > 0 then x.deadlift_kg else coalesce(e.dl, x.deadlift_kg, 0) end,
         total_kg = case when coalesce(x.total_kg, 0) > 0 then x.total_kg else e.tot end,
         gl_points = coalesce(x.gl_points, e.gl),
         dots_points = coalesce(x.dots_points, e.dots),

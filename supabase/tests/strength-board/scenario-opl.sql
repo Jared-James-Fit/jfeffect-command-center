@@ -101,7 +101,7 @@ begin
   insert into powerlifting_coaching_periods (athlete_id) values (nic);
   res := powerlifting_opl_apply(nic, 'nicolecarta', (select csv from fx where slug = 'nicolecarta'));
   select * into r from athlete_powerlifting_results where athlete_id = nic and meet_date = '2025-03-22';
-  perform t_assert(r.event = 'B' and r.bench_kg = 47.5 and r.squat_kg is null and r.athlete_name = 'Nicole Carta',
+  perform t_assert(r.event = 'B' and r.bench_kg = 47.5 and r.squat_kg = 0 and r.deadlift_kg = 0 and r.athlete_name = 'Nicole Carta',
     'bench-only meet stored as bench only, under the name she competed under');
 
   -- Phillip: OpenPowerlifting's "#4" (namesake number) is dropped; a Worlds lifter.
@@ -117,6 +117,13 @@ begin
   select * into r from get_powerlifting_athlete_tiers() where athlete_id = ken;
   perform t_assert(r.top_level = 'regional' and r.top_place = 3 and r.meets = 5 and r.coached_meets = 3,
     'tiers count coached meets');
+
+  res := powerlifting_opl_apply(phil, 'phillipbennett4',
+    'Name,Sex,Event,Equipment,Division,BodyweightKg,WeightClassKg,Best3SquatKg,Best3BenchKg,Best3DeadliftKg,TotalKg,Place,Federation,Date,MeetCountry,MeetName'
+    || E'\n' || 'Phillip Bennett #4,M,SBD,Raw,Open,,93,200,150,250,600,1,CPU,2015-01-01,Canada,No Scale Classic');
+  perform t_assert(res = '{"meets": 1, "added": 0, "updated": 0}'
+      and not exists (select 1 from athlete_powerlifting_results where athlete_id = phil and meet_date = '2015-01-01'),
+    'a meet with no bodyweight is left out, without failing the sync');
 
   -- The sync round (pg_net stand-in): auto sync athletes only; coach can sync anyone now.
   delete from powerlifting_opl_sync_requests;
