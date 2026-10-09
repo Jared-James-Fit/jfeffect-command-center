@@ -9,6 +9,7 @@ import {
   useBirthdayAct, useBirthdayPosts, useBirthdaysNext, useDraftBirthdayNow,
   type BirthdayAction, type BirthdayNext, type BirthdayPost,
 } from "@/lib/community.queries";
+import { MediaStrip, useMediaDraft } from "@/components/community/media-strip";
 
 /** "Tomorrow", "Today", "Thu, Oct 9". */
 function dayWord(iso: string, now = new Date()) {
@@ -184,10 +185,16 @@ function GrowText({ value, onChange, className, label, max }: { value: string; o
  * message to them, both editable. New wording, skip, or approve (it goes
  * out at 8am on their birthday) / post now.
  */
-export function BirthdayPostSheet({ post, onClose }: { post: BirthdayPost | null; onClose: () => void }) {
+export function BirthdayPostSheet({ post, onClose: closeSheet }: { post: BirthdayPost | null; onClose: () => void }) {
   const act = useBirthdayAct();
   const [body, setBody] = useState("");
   const [dm, setDm] = useState("");
+  // photos / videos that go out with the post (same rules as any post)
+  const draft = useMediaDraft({ open: !!post && post.status !== "posted", initial: post?.media, key: post?.id ?? "none" });
+  const onClose = () => {
+    draft.discard();
+    closeSheet();
+  };
   useEffect(() => {
     if (post) {
       setBody(post.body);
@@ -197,19 +204,25 @@ export function BirthdayPostSheet({ post, onClose }: { post: BirthdayPost | null
 
   const name = post?.person.name ?? "";
   const due = post ? new Date(post.post_at).getTime() <= Date.now() : false;
-  const edited = !!post && (body !== post.body || dm !== post.dm_body);
-  const run = (action: BirthdayAction, done?: string) => {
+  const edited = !!post && (body !== post.body || dm !== post.dm_body || draft.changed);
+  const busy = act.isPending || draft.tray.uploading > 0;
+  const run = async (action: BirthdayAction, done?: string) => {
     if (!post) return;
-    act.mutate(
-      { id: post.id, action, body, dmBody: dm },
-      {
-        onSuccess: (row) => {
-          if (done) toast.success(done);
-          if (row.status === "posted" || row.status === "skipped") onClose();
-        },
-        onError: (e: any) => toast.error(e?.message ?? "Couldn't save that"),
-      },
-    );
+    try {
+      let row: BirthdayPost | undefined;
+      // saving the words saves the photos with them; new wording, unschedule and skip keep them as they are
+      if ((action === "save" || action === "approve" || action === "post_now") && draft.changed) {
+        await draft.save(async (media) => {
+          row = await act.mutateAsync({ id: post.id, action, body, dmBody: dm, media });
+        });
+      } else {
+        row = await act.mutateAsync({ id: post.id, action, body, dmBody: dm });
+      }
+      if (done) toast.success(done);
+      if (row && (row.status === "posted" || row.status === "skipped")) closeSheet();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't save that");
+    }
   };
 
   return (
@@ -240,8 +253,8 @@ export function BirthdayPostSheet({ post, onClose }: { post: BirthdayPost | null
                   {post.status !== "posted" && (
                     <button
                       type="button"
-                      disabled={act.isPending}
-                      onClick={() => run("reroll")}
+                      disabled={busy}
+                      onClick={() => void run("reroll")}
                       className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-bold text-muted-foreground hover:bg-muted disabled:opacity-50"
                     >
                       <RefreshCcw className="h-3.5 w-3.5" /> New wording
@@ -252,6 +265,7 @@ export function BirthdayPostSheet({ post, onClose }: { post: BirthdayPost | null
                   <GrowText value={body} onChange={setBody} max={1200} label="Community post" className="whitespace-pre-wrap text-[15px] leading-[1.45]" />
                 </div>
                 <p className="mt-1.5 text-[11px] text-muted-foreground">Goes to the JF crew as you. Every number is from their training.</p>
+                {post.status !== "posted" && <MediaStrip tray={draft.tray} className="mt-3" label="Add photos or videos" />}
               </div>
 
               <div>
@@ -283,15 +297,15 @@ export function BirthdayPostSheet({ post, onClose }: { post: BirthdayPost | null
               ) : post.status === "scheduled" ? (
                 <>
                   {edited && (
-                    <button type="button" disabled={act.isPending} onClick={() => run("approve", "Saved")} className="h-12 w-full rounded-2xl bg-primary text-[15px] font-black text-primary-foreground disabled:opacity-60">
-                      Save changes
+                    <button type="button" disabled={busy} onClick={() => void run("approve", "Saved")} className="h-12 w-full rounded-2xl bg-primary text-[15px] font-black text-primary-foreground disabled:opacity-60">
+                      {draft.tray.uploading > 0 ? "Uploading…" : act.isPending ? "Saving…" : "Save changes"}
                     </button>
                   )}
                   <div className="flex gap-2">
-                    <button type="button" disabled={act.isPending} onClick={() => run("post_now", `Posted. ${name} got your message`)} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
+                    <button type="button" disabled={busy} onClick={() => void run("post_now", `Posted. ${name} got your message`)} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
                       Post now instead
                     </button>
-                    <button type="button" disabled={act.isPending} onClick={() => run("unschedule")} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
+                    <button type="button" disabled={busy} onClick={() => void run("unschedule")} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
                       Unschedule
                     </button>
                   </div>
@@ -300,19 +314,24 @@ export function BirthdayPostSheet({ post, onClose }: { post: BirthdayPost | null
                 <>
                   <button
                     type="button"
-                    disabled={act.isPending || !body.trim() || !dm.trim()}
-                    onClick={() => run(due ? "post_now" : "approve", due ? `Posted. ${name} got your message` : `Scheduled for ${dayWord(post.birthday).toLowerCase()} ${postTime(post)}`)}
+                    disabled={busy || !body.trim() || !dm.trim()}
+                    onClick={() => void run(due ? "post_now" : "approve", due ? `Posted. ${name} got your message` : `Scheduled for ${dayWord(post.birthday).toLowerCase()} ${postTime(post)}`)}
                     className="h-12 w-full rounded-2xl bg-primary text-[15px] font-black text-primary-foreground shadow-lg shadow-primary/20 disabled:opacity-60"
                   >
-                    {act.isPending ? "Saving…" : due ? `Post & message ${name}` : `Approve for ${dayWord(post.birthday).toLowerCase()} ${postTime(post)}`}
+                    {draft.tray.uploading > 0 ? "Uploading…" : act.isPending ? "Saving…" : due ? `Post & message ${name}` : `Approve for ${dayWord(post.birthday).toLowerCase()} ${postTime(post)}`}
                   </button>
                   <div className="flex gap-2">
+                    {edited && (
+                      <button type="button" disabled={busy} onClick={() => void run("save", "Saved for later")} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
+                        Save for later
+                      </button>
+                    )}
                     {!due && (
-                      <button type="button" disabled={act.isPending} onClick={() => run("post_now", `Posted. ${name} got your message`)} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
+                      <button type="button" disabled={busy} onClick={() => void run("post_now", `Posted. ${name} got your message`)} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
                         Post now
                       </button>
                     )}
-                    <button type="button" disabled={act.isPending} onClick={() => run("skip", "Skipped this year")} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold text-muted-foreground disabled:opacity-60">
+                    <button type="button" disabled={busy} onClick={() => void run("skip", "Skipped this year")} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold text-muted-foreground disabled:opacity-60">
                       Skip this year
                     </button>
                   </div>

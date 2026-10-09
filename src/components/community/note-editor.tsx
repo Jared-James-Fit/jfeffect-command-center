@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { POLL_MAX_OPTIONS, POLL_OPTION_MAX, cleanPollOptions } from "@/lib/community";
+import { POLL_MAX_OPTIONS, POLL_OPTION_MAX, cleanPollOptions, type PostSlide } from "@/lib/community";
 import { MentionSuggestBar } from "@/components/community/mentions";
+import { MediaStrip, useMediaDraft } from "@/components/community/media-strip";
 
 export const NOTE_MAX = 1200;
 
@@ -14,6 +15,8 @@ export const NOTE_MAX = 1200;
  * Write or edit a coach note's text. The featured quote (if any) isn't
  * editable here: quotes only ever come from the verified library. A new
  * post can carry a poll (`allowPoll`): the text is the question, 2-4 options.
+ * With `media`, photos and videos too (up to 10, at most 3 videos): they're
+ * uploaded as they're picked and handed to onSave in order.
  */
 export function NoteEditor({
   open,
@@ -24,6 +27,7 @@ export function NoteEditor({
   onClose,
   onSave,
   allowPoll = false,
+  media,
 }: {
   open: boolean;
   title: string;
@@ -31,10 +35,17 @@ export function NoteEditor({
   quote?: { text: string; author: string | null } | null;
   saving: boolean;
   onClose: () => void;
-  onSave: (body: string, poll?: string[]) => Promise<void>;
+  onSave: (body: string, poll?: string[], media?: PostSlide[]) => Promise<void>;
   allowPoll?: boolean;
+  /** Offer photos: what's on it now (when editing) and a key for this post. `hint` says where they go. */
+  media?: { initial: PostSlide[] | null | undefined; key: string; hint?: string };
 }) {
   const [body, setBody] = useState(initial);
+  const draft = useMediaDraft({ open: open && !!media, initial: media?.initial, key: media?.key ?? "none" });
+  const close = () => {
+    if (media) draft.discard();
+    onClose();
+  };
   // null = no poll; otherwise the options as typed
   const [poll, setPoll] = useState<string[] | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
@@ -49,7 +60,7 @@ export function NoteEditor({
   const pollReady = !pollCheck || pollCheck.ok;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && !saving && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && !saving && close()}>
       <DialogContent className="max-w-[520px] rounded-3xl" showBackButton={false} onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogTitle className="text-base font-black">{title}</DialogTitle>
         <DialogDescription className="sr-only">Write the post text.</DialogDescription>
@@ -69,6 +80,12 @@ export function NoteEditor({
           aria-label={poll ? "Poll question" : "Post text"}
         />
         <MentionSuggestBar value={body} onChange={(v) => setBody(v.slice(0, NOTE_MAX))} inputRef={bodyRef} className="-my-2" />
+        {media && (
+          <div>
+            <MediaStrip tray={draft.tray} />
+            {media.hint && <p className="mt-1 text-[11px] text-muted-foreground">{media.hint}</p>}
+          </div>
+        )}
         {allowPoll &&
           (poll ? (
             <div data-poll-editor className="space-y-2 rounded-2xl border border-border p-3">
@@ -109,18 +126,23 @@ export function NoteEditor({
         <div className="flex items-center justify-between">
           <span className="text-[11px] tabular-nums text-muted-foreground">{body.length}/{NOTE_MAX}</span>
           <div className="flex gap-2">
-            <Button type="button" variant="ghost" disabled={saving} onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="ghost" disabled={saving} onClick={close}>Cancel</Button>
             <Button
               type="button"
-              disabled={saving || !trimmed || !pollReady}
-              onClick={() =>
-                void onSave(trimmed, pollCheck?.ok ? pollCheck.options : undefined).then(
+              disabled={saving || !trimmed || !pollReady || draft.tray.uploading > 0}
+              onClick={() => {
+                const options = pollCheck?.ok ? pollCheck.options : undefined;
+                // photos only go when they changed (left out, the post keeps what it has)
+                const run = media && draft.changed
+                  ? draft.save((m) => onSave(trimmed, options, m))
+                  : onSave(trimmed, options).then(() => { if (media) draft.discard(); });
+                void run.then(
                   () => onClose(),
                   (e: any) => toast.error(e?.message ?? "Couldn't save"),
-                )
-              }
+                );
+              }}
             >
-              {saving ? "Saving…" : poll ? "Post poll" : "Save"}
+              {saving ? "Saving…" : draft.tray.uploading > 0 ? "Uploading…" : poll ? "Post poll" : "Save"}
             </Button>
           </div>
         </div>

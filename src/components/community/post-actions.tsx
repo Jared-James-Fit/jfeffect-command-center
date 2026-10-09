@@ -6,7 +6,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { NoteEditor } from "@/components/community/note-editor";
 import { EditPostSheet } from "@/components/community/edit-post-sheet";
 import type { CommunityPost } from "@/lib/community";
-import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useUpdateNote } from "@/lib/community.queries";
+import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useSetPostMedia, useUpdateNote } from "@/lib/community.queries";
+import { postSlides } from "@/lib/community";
 
 /**
  * The "…" on a post, Instagram-style. Your own post: Edit, Archive (only you
@@ -21,6 +22,7 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
   const del = useDeletePost();
   const archive = useArchivePost();
   const updateNote = useUpdateNote();
+  const setMedia = useSetPostMedia();
   const leave = useLeavePost();
   const me = useMyCommunityId();
 
@@ -134,10 +136,12 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
           title="Edit post"
           initial={post.caption ?? ""}
           quote={post.quote ? { text: post.quote, author: post.quote_author ?? null } : null}
-          saving={updateNote.isPending}
+          saving={updateNote.isPending || setMedia.isPending}
           onClose={() => setEditing(false)}
-          onSave={async (body) => {
+          media={{ initial: postSlides(post), key: post.id }}
+          onSave={async (body, _poll, media) => {
             await updateNote.mutateAsync({ postId: post.id, body });
+            if (media) await setMedia.mutateAsync({ postId: post.id, media });
             toast.success("Post updated");
           }}
         />

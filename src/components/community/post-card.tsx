@@ -335,6 +335,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         {isNote ? (
           <>
             <NoteBody post={post} clamp onOpenPerson={onOpenAuthor} />
+            {/* a coach post's photos / videos, under its words */}
+            {post.media_type && <div className="mt-2"><PostMedia post={post} thumbUrl={thumbUrl} /></div>}
             <NoteExtras post={post} unit={unit} className="mx-4 mb-1 mt-2" />
           </>
         ) : post.media_type ? (
