@@ -233,7 +233,7 @@ export function StrengthBoardSlide() {
   const { top: top5, me, count } = pickBoard(data, mode, lift, division, 5);
   const status = meStatus(me, mode, lift, division);
   const myLine =
-    status.kind === "ranked" ? `You: #${status.rank} of ${status.count ?? count}`
+    status.kind === "ranked" ? `You're #${status.rank} of ${status.count ?? count} on this board`
     : status.kind === "no-bodyweight" ? "Log your bodyweight to rank pound for pound"
     : status.kind === "no-division" ? "Pick Men or Women in your profile to rank here"
     : status.kind === "other-division" ? `${count} on this board`
@@ -312,10 +312,13 @@ export function StrengthBoardSlide() {
             })}
           </ol>
         )}
-        <button type="button" onClick={() => setOpen(true)} className="mt-auto flex w-full items-center justify-between gap-2 px-4 pb-3 pt-2.5 text-xs font-bold active:opacity-70">
-          <span className={cn("truncate", status.kind === "ranked" ? "text-foreground" : "text-muted-foreground")}>{myLine}</span>
-          <span className="inline-flex shrink-0 items-center gap-0.5 text-primary">Full board <ChevronRight className="h-4 w-4" /></span>
-        </button>
+        <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
+          <p className={cn("px-1 text-center text-[13px] font-semibold", status.kind === "ranked" ? "text-foreground" : "text-muted-foreground")}>{myLine}</p>
+          {/* Same button as the League card: everyone on this board, the board you picked. */}
+          <button type="button" onClick={() => setOpen(true)} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
+            Full standings{count > 0 ? ` · ${count}` : ""} <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-safe-bottom">
