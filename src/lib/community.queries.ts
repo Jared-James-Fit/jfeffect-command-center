@@ -148,6 +148,102 @@ export function usePostReactors(postId: string | null) {
   });
 }
 
+/* ---- birthday posts (coach reviews, then they go out) ------------------ */
+
+export type BirthdayPost = {
+  id: string;
+  client_id: string;
+  birthday: string;
+  birthday_year: number;
+  status: "ready" | "scheduled" | "posted" | "skipped";
+  /** 8am on their birthday, their time. */
+  post_at: string;
+  body: string;
+  dm_body: string;
+  post_id: string | null;
+  message_id: string | null;
+  posted_at: string | null;
+  person: { name: string; full_name: string; avatar_url: string | null; timezone: string | null };
+};
+export type BirthdayAction = "save" | "reroll" | "approve" | "post_now" | "unschedule" | "skip";
+
+const BIRTHDAYS_KEY = ["community-birthdays"] as const;
+
+/** Birthday posts waiting for review or going out (and ones posted in the last day). */
+export function useBirthdayPosts(enabled = true) {
+  return useQuery({
+    queryKey: BIRTHDAYS_KEY,
+    enabled,
+    staleTime: 30_000,
+    queryFn: async (): Promise<BirthdayPost[]> => {
+      const { data, error } = await db.rpc("community_birthdays_upcoming");
+      if (error) throw error;
+      return (data ?? []) as BirthdayPost[];
+    },
+  });
+}
+
+/** The next birthdays without a draft yet (so the dashboard card is never empty). */
+export type BirthdayNext = {
+  client_id: string;
+  birthday: string;
+  days: number;
+  /** 5pm Winnipeg the evening before: when the draft (and its push) lands on its own. */
+  draft_at: string;
+  person: { name: string; full_name: string; avatar_url: string | null };
+};
+
+export function useBirthdaysNext(enabled = true) {
+  return useQuery({
+    queryKey: ["community-birthdays-next"],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<BirthdayNext[]> => {
+      const { data, error } = await db.rpc("community_birthdays_next", { _limit: 3 });
+      if (error) throw error;
+      return (data ?? []) as BirthdayNext[];
+    },
+  });
+}
+
+/** Write someone's draft today instead of the evening before. */
+export function useDraftBirthdayNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (clientId: string): Promise<BirthdayPost> => {
+      const { draftBirthdayNow } = await import("@/lib/birthday-posts.functions");
+      return (await draftBirthdayNow({ data: { clientId } })) as unknown as BirthdayPost;
+    },
+    onSuccess: (row) => {
+      qc.setQueryData<BirthdayPost[]>(BIRTHDAYS_KEY, (cur) => [...(cur ?? []).filter((b) => b.id !== row.id), row]);
+      qc.invalidateQueries({ queryKey: ["community-birthdays-next"] });
+    },
+  });
+}
+
+/** Save / new wording / approve / post now / unschedule / skip. Posting now also pushes the message straight away. */
+export function useBirthdayAct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { id: string; action: BirthdayAction; body?: string; dmBody?: string }): Promise<BirthdayPost> => {
+      const { data, error } = await db.rpc("community_birthday_act", { _id: a.id, _action: a.action, _body: a.body ?? null, _dm_body: a.dmBody ?? null });
+      if (error) throw error;
+      return data as BirthdayPost;
+    },
+    onSuccess: (row) => {
+      qc.setQueryData<BirthdayPost[]>(BIRTHDAYS_KEY, (cur) => (cur ?? []).map((b) => (b.id === row.id ? row : b)));
+      if (row.status === "posted") {
+        qc.invalidateQueries({ queryKey: ["community-feed"] });
+        if (row.message_id) {
+          void import("@/lib/push/events.functions")
+            .then(({ notifyNewMessage }) => notifyNewMessage({ data: { messageId: row.message_id! } }))
+            .catch(() => {});
+        }
+      }
+    },
+  });
+}
+
 /* ---- one-time tips (e.g. "double-tap to like") ------------------------ */
 
 const HINTS_KEY = ["community-hints"] as const;
@@ -355,6 +451,7 @@ export function usePostPointsStatus(enabled = true) {
 
 export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-feed"] });
+  qc.invalidateQueries({ queryKey: ["community-pulse"] });
   qc.invalidateQueries({ queryKey: ["community-post-points"] });
   qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly-view"] });
   qc.invalidateQueries({ queryKey: ["community-my-post"] });
@@ -405,7 +502,15 @@ export function useSetBio(userId: string | null) {
 
 /* ---- coach notes + the weekly series ---------------------------------- */
 
-export type SeriesItem = { id: string; mentor: string; body: string; quote: string | null; quote_source: string | null };
+export type SeriesItem = {
+  id: string;
+  /** Mon/Fri: who the quote is from. Tue: the kind of tip. Thu: the feature. Sat: the scene. */
+  mentor: string;
+  body: string;
+  quote: string | null;
+  quote_source: string | null;
+  data?: Record<string, any> | null;
+};
 export type SeriesOverview = {
   paused: boolean;
   author: CommunityAuthor | null;
@@ -426,6 +531,58 @@ export function useSeriesOverview(enabled: boolean) {
       const { data, error } = await db.rpc("community_series_overview");
       if (error) throw error;
       return data as SeriesOverview;
+    },
+  });
+}
+
+/**
+ * What a data day would say right now: Sunday's report card so far,
+ * Tuesday's observation (null = a tip from the library goes out), Thursday's
+ * stat for the next feature (null = it posts without a number).
+ */
+export function useSeriesPreview(series: "sunday_recap" | "tuesday_tips" | "try_it_thursday", enabled: boolean) {
+  return useQuery({
+    queryKey: ["community-series", "preview", series],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Record<string, any> | null> => {
+      const { data, error } = await db.rpc("community_series_preview", { _series: series });
+      if (error) throw error;
+      return (data ?? null) as Record<string, any> | null;
+    },
+  });
+}
+
+/** The coach's week in the community (dashboard card + top of the Community page). */
+export type CommunityPulse = {
+  roster: number;
+  /** Clients who opened the community in the last 7 days. */
+  opened: number;
+  /** Everyone who hasn't looked this week, never-opened first. */
+  not_opened: { user_id: string; client_id: string; name: string; avatar_url: string | null; seen_at: string | null }[];
+  client_posts: number;
+  reactions: number;
+  comments: number;
+  /** Shared workouts (last 7 days) with no coach reaction or comment. */
+  waiting_props: number;
+  /** Client comments (last 2 weeks) with no coach comment after them on that post. */
+  to_reply: { post_id: string; comment_id: string; created_at: string; body: string; name: string; avatar_url: string | null }[];
+  top_post: { post_id: string; series: CommunitySeries | null; name: string; line: string; reactions: number; comments: number } | null;
+  paused: boolean;
+  next: { series: CommunitySeries; at: string } | null;
+  birthday_review: number;
+  birthday_next: { id: string; status: "ready" | "scheduled"; post_at: string; birthday: string; name: string } | null;
+};
+
+export function useCommunityPulse(enabled = true) {
+  return useQuery({
+    queryKey: ["community-pulse"],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<CommunityPulse> => {
+      const { data, error } = await db.rpc("community_admin_pulse");
+      if (error) throw error;
+      return data as CommunityPulse;
     },
   });
 }

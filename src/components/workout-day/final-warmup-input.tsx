@@ -4,7 +4,8 @@ import { Flame, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { describeWarmup, normalizeWarmupRow, type WarmupSetRow, type WarmupUnit } from "@/lib/final-warmup";
+import { describeWarmup, estimateOneRepMax, normalizeWarmupRow, repsLeftLabel, type WarmupSetRow, type WarmupUnit } from "@/lib/final-warmup";
+import { validateSetField } from "@/lib/set-input-cascade";
 import { WARMUP_MAX_REPS } from "@/lib/load-suggestion";
 
 const sb = supabase as any;
@@ -56,36 +57,16 @@ export function useWarmupSets(rowId: string, clientId: string | null | undefined
   return { sets, save, remove, atLimit: sets.length >= MAX_WARMUPS };
 }
 
-/**
- * How a last warm-up felt, on the same RPE scale as the set table. Only the
- * range that changes the number: anything easier than 6 counts as 6 (the
- * engine floors it there — easy-set ratings are unreliable and would inflate
- * the estimate), and 9+ catches a grindy warm-up, which pulls today's weight
- * down. Whole numbers only: halves are false precision on a warm-up.
- */
-export const WARMUP_RPE_SCALE: Array<{ rpe: number; label: string; left: string; feel: string }> = [
-  { rpe: 6, label: "≤6", left: "4+ left", feel: "Fast and easy — 4 or more reps left" },
-  { rpe: 7, label: "7", left: "3 left", feel: "Moving well — about 3 reps left" },
-  { rpe: 8, label: "8", left: "2 left", feel: "Slowing down — about 2 reps left" },
-  { rpe: 9, label: "9+", left: "1 left", feel: "Grindy — 1 rep left at most. Today's weight drops" },
-];
-
-/** The scale step a stored warm-up RPE falls on. */
-export function warmupRpeStep(rpe: number | null | undefined) {
-  if (rpe == null || !Number.isFinite(rpe)) return null;
-  const r = Math.min(9, Math.max(6, Math.round(rpe)));
-  return WARMUP_RPE_SCALE.find((x) => x.rpe === r) ?? null;
-}
-
 type WarmupSaveInput = { id?: string; load: number; unit: WarmupUnit; reps: number; rpe: number | null };
 
 /**
  * Warm-up sets as "W" rows at the top of an exercise's set table, above Set 1 —
- * where the athlete is already looking when they need a weight. Before the
- * first working set on a compound lift with no warm-up yet, one row asks for
- * the last warm-up (it sets or fine-tunes the suggested working weight). Logged
- * warm-ups stay as W rows; tap one to edit or remove it. `form` is controlled so
- * the "Add set" menu can open it too. Never counted as work.
+ * where the athlete is already looking when they need a weight. On a compound
+ * lift with no warm-up yet, one row asks for the last warm-up: before the first
+ * working set it sets or fine-tunes the suggested weight; any time, it gives a
+ * rough 1RM estimate (weight × reps @ RPE). Logged warm-ups stay as W rows; tap
+ * one to edit or remove it. `form` is controlled so the "Add set" menu can open
+ * it too. Never counted as work.
  */
 export function WarmupRows({
   sets,
@@ -109,10 +90,14 @@ export function WarmupRows({
   onFormChange: (f: string | null) => void;
   onSave: (v: WarmupSaveInput) => void | Promise<void>;
   onRemove: (id: string) => void | Promise<void>;
-  /** False once working sets are logged / when read-only: the rows stay, edits go. */
+  /** False when read-only: the rows stay, edits go. */
   canEdit: boolean;
-  /** Ask for the last warm-up (no warm-up logged yet). `suggested` = what to warm up to, when known. */
-  prompt?: { suggested: { load: number; reps: number } | null } | null;
+  /**
+   * Ask for the last warm-up (no warm-up logged yet). `tunes` = it still feeds
+   * today's suggestion (before the first working set); `suggested` = what to
+   * warm up to, when known.
+   */
+  prompt?: { suggested: { load: number; reps: number } | null; tunes: boolean } | null;
   /** Pre-fill for a NEW warm-up (the suggested last warm-up), so the athlete only picks how it felt. */
   seed?: { load: number; reps: number } | null;
   /** The warm-up today's suggestion is tuned from. */
@@ -155,11 +140,15 @@ export function WarmupRows({
               <span className="font-bold tabular-nums text-foreground">
                 {warmupDisplay(s, unit)} {unit} × {s.reps}
               </span>
-              {warmupRpeStep(s.rpe) && (
-                <span className="text-xs text-muted-foreground">@ RPE {warmupRpeStep(s.rpe)!.label}</span>
-              )}
+              {s.rpe != null && <span className="shrink-0 text-xs text-muted-foreground">@ {fmt(s.rpe)}</span>}
+              {(() => {
+                const max = estimateOneRepMax({ load: warmupDisplay(s, unit), reps: s.reps, rpe: s.rpe }, unit);
+                return max != null ? (
+                  <span className="truncate text-xs text-muted-foreground" title="Rough estimate, not a tested max">· ≈1RM {fmt(max)}</span>
+                ) : null;
+              })()}
               {tunedId === s.id && (
-                <span className="truncate text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">✓ set your weight</span>
+                <span className="shrink-0 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">✓ tuned</span>
               )}
               {canEdit && <Pencil className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
             </button>
@@ -183,12 +172,16 @@ export function WarmupRows({
               <span className="min-w-0 flex-1 leading-tight">
                 <span className="block text-sm font-bold text-foreground">
                   Last warm-up
-                  {prompt.suggested && (
+                  {prompt.tunes && prompt.suggested && (
                     <span className="tabular-nums"> ~{fmt(prompt.suggested.load)} × {prompt.suggested.reps}</span>
                   )}
                 </span>
                 <span className="block text-[11px] text-muted-foreground">
-                  {prompt.suggested ? "Log how it felt to fine-tune your weight" : "Log it to get your working weight"}
+                  {!prompt.tunes
+                    ? "Log it for a rough 1RM estimate"
+                    : prompt.suggested
+                      ? "Tunes today's weight · rough 1RM estimate"
+                      : "Gets your working weight · rough 1RM estimate"}
                 </span>
               </span>
               <span className="inline-flex h-8 shrink-0 items-center rounded-full bg-orange-500 px-3.5 text-xs font-bold text-white">
@@ -212,7 +205,11 @@ function WBadge() {
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
 
-/** Add / edit one warm-up: weight × reps and how it felt (Easy / Solid / Heavy). */
+/**
+ * Add / edit one warm-up: weight × reps @ RPE, typed like the set cells. The
+ * suggested warm-up shows faded (used if left as is). A live line explains
+ * the RPE and gives a rough 1RM estimate from RPE 6 up.
+ */
 function WarmupForm({
   editing,
   unit,
@@ -228,13 +225,11 @@ function WarmupForm({
   onSave: (v: WarmupSaveInput) => void | Promise<void>;
   onRemove: (() => void | Promise<void>) | null;
 }) {
-  const base = editing
-    ? { load: warmupDisplay(editing, unit), reps: editing.reps, rpe: editing.rpe }
-    : seed ? { load: seed.load, reps: seed.reps, rpe: null } : null;
-  const [load, setLoad] = useState(base ? String(base.load) : "");
-  const [reps, setReps] = useState(base ? String(base.reps) : "");
-  const [rpe, setRpe] = useState<number | null>(base?.rpe ?? null);
-  const picked = warmupRpeStep(rpe);
+  const [load, setLoad] = useState(editing ? String(warmupDisplay(editing, unit)) : "");
+  const [reps, setReps] = useState(editing ? String(editing.reps) : "");
+  const [rpe, setRpe] = useState(editing?.rpe != null ? fmt(editing.rpe) : "");
+  const ghostLoad = !editing && seed ? fmt(seed.load) : "";
+  const ghostReps = !editing && seed ? String(seed.reps) : "";
   const loadRef = useRef<HTMLInputElement | null>(null);
 
   // A blank new warm-up starts with the weight field focused. Retried once the
@@ -248,13 +243,27 @@ function WarmupForm({
     return () => { cancelAnimationFrame(raf); clearTimeout(t); };
   }, [blankNew]);
 
-  const loadNum = Number(load.replace(",", "."));
-  const repsNum = Number(reps);
-  const valid = loadNum > 0 && Number.isFinite(loadNum) && Number.isInteger(repsNum) && repsNum >= 1 && repsNum <= WARMUP_MAX_REPS;
+  const loadNum = Number((load || ghostLoad).replace(",", "."));
+  const repsNum = Number(reps || ghostReps);
+  const rpeCheck = validateSetField("rpe", rpe);
+  const rpeNum = rpeCheck.ok && rpeCheck.value !== "" ? Number(rpeCheck.value) : null;
+  const valid =
+    loadNum > 0 && Number.isFinite(loadNum) && Number.isInteger(repsNum) && repsNum >= 1 && repsNum <= WARMUP_MAX_REPS && rpeCheck.ok;
+  const max = valid ? estimateOneRepMax({ load: loadNum, reps: repsNum, rpe: rpeNum }, unit) : null;
   const save = () => {
     if (!valid) return;
-    void onSave({ id: editing?.id, load: loadNum, unit, reps: repsNum, rpe });
+    void onSave({ id: editing?.id, load: loadNum, unit, reps: repsNum, rpe: rpeNum });
   };
+  const next = (name: string) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const el = e.currentTarget.form?.elements.namedItem(name) as HTMLInputElement | null;
+    if (el) el.focus();
+    else e.currentTarget.blur();
+  };
+  const cell =
+    "h-11 w-full rounded-lg border border-input bg-background px-1 text-center text-lg font-bold tabular-nums text-foreground placeholder:text-muted-foreground/40";
+  const label = "mb-1 block text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground";
 
   return (
     <div className="space-y-2 border-t border-orange-500/30 bg-orange-500/[0.05] p-2.5" data-testid="warmup-form">
@@ -268,71 +277,77 @@ function WarmupForm({
           <X className="h-4 w-4" />
         </button>
       </div>
+      {/* Keyboard Next walks weight → reps → RPE; Done on RPE closes the
+          keyboard. Saving is always the explicit Add / Save button. */}
       <form
-        className="flex items-center gap-2"
-        onSubmit={(e) => { e.preventDefault(); save(); }}
+        className="grid grid-cols-[1.3fr_auto_1fr_auto_1fr] items-end gap-1.5"
+        onSubmit={(e) => { e.preventDefault(); (document.activeElement as HTMLElement | null)?.blur(); }}
       >
-        <label className="relative min-w-0 flex-[1.4]">
-          <span className="sr-only">Warm-up weight in {unit}</span>
-          <input
+        <label className="min-w-0">
+          <span className={label}>Wt ({unit})</span>
+          <ReplaceInput
+            name="warmup-load"
             inputMode="decimal"
             enterKeyHint="next"
             value={load}
-            ref={loadRef}
-            placeholder="0"
-            onChange={(e) => setLoad(e.target.value.replace(/[^0-9.,]/g, ""))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.form?.elements.namedItem("warmup-reps") as HTMLInputElement | null)?.focus(); }
-            }}
-            className="h-11 w-full rounded-lg border border-input bg-background pl-3 pr-9 text-center text-lg font-bold tabular-nums text-foreground placeholder:text-muted-foreground/40"
+            ghost={ghostLoad}
+            inputRef={loadRef}
+            clean={(v) => v.replace(/[^0-9.,]/g, "").slice(0, 6)}
+            onValue={setLoad}
+            onKeyDown={next("warmup-reps")}
+            className={cell}
             aria-label={`Warm-up weight in ${unit}`}
           />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">{unit}</span>
         </label>
-        <span className="text-base font-bold text-muted-foreground" aria-hidden>×</span>
-        <label className="relative min-w-0 flex-1">
-          <span className="sr-only">Warm-up reps</span>
-          <input
+        <span className="pb-3 text-sm font-bold text-muted-foreground" aria-hidden>×</span>
+        <label className="min-w-0">
+          <span className={label}>Reps</span>
+          <ReplaceInput
             name="warmup-reps"
             inputMode="numeric"
-            enterKeyHint="done"
+            enterKeyHint="next"
             value={reps}
-            placeholder="0"
-            onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, ""))}
-            className="h-11 w-full rounded-lg border border-input bg-background pl-3 pr-11 text-center text-lg font-bold tabular-nums text-foreground placeholder:text-muted-foreground/40"
+            ghost={ghostReps}
+            clean={(v) => v.replace(/[^0-9]/g, "").slice(0, 2)}
+            onValue={setReps}
+            onKeyDown={next("warmup-rpe")}
+            className={cell}
             aria-label="Warm-up reps"
           />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">reps</span>
+        </label>
+        <span className="pb-3 text-sm font-bold text-muted-foreground" aria-hidden>@</span>
+        <label className="min-w-0">
+          <span className={label}>RPE</span>
+          <ReplaceInput
+            name="warmup-rpe"
+            inputMode="decimal"
+            enterKeyHint="done"
+            value={rpe}
+            clean={(v) => v.replace(/[^0-9.,]/g, "").slice(0, 4)}
+            onValue={setRpe}
+            onKeyDown={next("")}
+            className={cn(cell, !rpeCheck.ok && "border-destructive")}
+            aria-label="Warm-up RPE"
+            aria-invalid={!rpeCheck.ok}
+          />
         </label>
       </form>
-      <div role="group" aria-label="How hard was it (RPE)">
-        <div className="mb-1 flex items-baseline justify-between text-[11px] font-semibold text-muted-foreground">
-          <span>How hard? <span className="font-normal">RPE · reps left</span></span>
-        </div>
-        <div className="grid grid-cols-4 gap-1">
-          {WARMUP_RPE_SCALE.map((f) => {
-            const on = picked?.rpe === f.rpe;
-            return (
-              <button
-                key={f.rpe}
-                type="button"
-                onClick={() => setRpe(on ? null : f.rpe)}
-                aria-pressed={on}
-                aria-label={`RPE ${f.label}, ${f.left}`}
-                className={cn(
-                  "flex h-12 flex-col items-center justify-center rounded-lg border leading-none transition active:scale-[0.97]",
-                  on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-muted",
-                )}
-              >
-                <span className="text-base font-bold tabular-nums">{f.label}</span>
-                <span className="mt-1 text-[10px] font-medium opacity-70">{f.left}</span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="mt-1 min-h-4 text-center text-[11px] leading-snug text-muted-foreground" aria-live="polite" data-testid="warmup-rpe-feel">
-          {picked ? picked.feel : "Rate it by reps you had left in the tank"}
-        </p>
+      <div className="flex items-start justify-between gap-3 text-[11px] leading-snug" aria-live="polite" data-testid="warmup-read">
+        <span className={rpeCheck.ok ? "text-muted-foreground" : "font-semibold text-destructive"}>
+          {!rpeCheck.ok
+            ? rpeCheck.error
+            : rpeNum != null
+              ? `RPE ${fmt(rpeNum)} · ${repsLeftLabel(rpeNum)}`
+              : "RPE = how many reps you had left"}
+        </span>
+        {max != null ? (
+          <span className="shrink-0 text-right">
+            <span className="font-bold text-foreground">≈ 1RM {fmt(max)} {unit}</span>
+            <span className="block text-[10px] text-muted-foreground">rough estimate</span>
+          </span>
+        ) : valid && rpeNum != null ? (
+          <span className="shrink-0 text-right text-muted-foreground">Too easy for a 1RM read (RPE 6+)</span>
+        ) : null}
       </div>
       <div className="flex gap-1.5">
         {onRemove && (
@@ -353,8 +368,53 @@ function WarmupForm({
           {editing ? "Save warm-up" : "Add warm-up"}
         </button>
       </div>
-      <p className="text-center text-[11px] leading-snug text-muted-foreground">Not counted in volume, records or points.</p>
+      <p className="text-center text-[11px] leading-snug text-muted-foreground">
+        ≈1RM is a rough guide from weight × reps @ RPE, not a tested max. Not counted in volume, records or points.
+      </p>
     </div>
+  );
+}
+
+/**
+ * Number box that types like the set table's cells: tapping it turns the
+ * current value into the placeholder so the first digit replaces it, and
+ * leaving it blank keeps the old value (a blank never wipes a number).
+ */
+function ReplaceInput({
+  value,
+  onValue,
+  clean,
+  inputRef,
+  ghost = "",
+  ...rest
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "onFocus" | "onBlur" | "placeholder"> & {
+  value: string;
+  onValue: (v: string) => void;
+  clean: (raw: string) => string;
+  inputRef?: React.Ref<HTMLInputElement>;
+  /** Suggested value shown faded while the field is empty (the caller uses it if left blank). */
+  ghost?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const before = useRef("");
+  return (
+    <input
+      {...rest}
+      ref={inputRef}
+      type="text"
+      value={draft ?? value}
+      placeholder={draft != null ? before.current || ghost : ghost || "–"}
+      onFocus={() => {
+        before.current = value;
+        setDraft("");
+      }}
+      onChange={(e) => {
+        const v = clean(e.target.value);
+        setDraft(v);
+        onValue(v || before.current);
+      }}
+      onBlur={() => setDraft(null)}
+    />
   );
 }
 

@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader } from "@/components/app-shell";
 import { CommunityScreen } from "@/components/community/community-screen";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
 /**
- * The client community: its own page, opened from Home (and the header "🔥 new"
- * pill, push notifications, the post-share toast). Back always returns to Home,
- * and Home stays the active tab, so it never strands anyone in Workouts.
- * `#post=<id>` opens a post straight away.
+ * The client community feed, opened from Home's community card (also from
+ * More, the header "🔥 new" pill, pushes and the post-share toast). Home stays
+ * the lit tab while it's open. No page header: the feed starts right under
+ * the app bar, with a back arrow, Feed / Crew / You, the bell and + Share on
+ * one row. `#post=<id>` opens a post straight away.
  */
 export const Route = createFileRoute("/_authenticated/portal/community")({
   head: () => ({ meta: [{ title: "Community" }] }),
@@ -16,10 +16,5 @@ export const Route = createFileRoute("/_authenticated/portal/community")({
 
 function PortalCommunity() {
   const { isImpersonating } = useClientImpersonation();
-  return (
-    <>
-      <PageHeader title="Community" subtitle="What the crew is lifting" backTo="/portal" backLabel="Home" />
-      <CommunityScreen canShare previewOnly={isImpersonating} />
-    </>
-  );
+  return <CommunityScreen canShare previewOnly={isImpersonating} bell backTo="/portal" />;
 }

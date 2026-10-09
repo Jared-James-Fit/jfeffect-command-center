@@ -23,7 +23,6 @@ export type FactorStatus = "good" | "watch" | "low";
 export interface FactorDetail {
   key: FactorKey;
   label: string;
-  emoji: string;
   score: number;
   status: FactorStatus;
   currentValue: string;
@@ -100,7 +99,6 @@ function buildSleep(samples: SleepSample[]): FactorDetail {
     return {
       key: "sleep",
       label: "Sleep",
-      emoji: "😴",
       score: 0,
       status: "watch",
       currentValue: "—",
@@ -135,7 +133,6 @@ function buildSleep(samples: SleepSample[]): FactorDetail {
   return {
     key: "sleep",
     label: "Sleep",
-    emoji: "😴",
     score,
     status: statusFor(score),
     currentValue: sleepBucketLabel(latest.bucket),
@@ -154,7 +151,6 @@ function buildRecoveryFeel(samples: Array<{ ts: string; rating: number }>): Fact
     return {
       key: "recovery",
       label: "Recovery",
-      emoji: "💪",
       score: 0,
       status: "watch",
       currentValue: "—",
@@ -183,7 +179,6 @@ function buildRecoveryFeel(samples: Array<{ ts: string; rating: number }>): Fact
   return {
     key: "recovery",
     label: "Recovery",
-    emoji: "💪",
     score: info.s,
     status: statusFor(info.s),
     currentValue: info.label,
@@ -281,7 +276,6 @@ function buildLoad(input: LoadInput): FactorDetail {
     return {
       key: "load",
       label: "Training Load",
-      emoji: "📈",
       score: 75,
       status: "watch",
       currentValue: "Building baseline",
@@ -371,7 +365,6 @@ function buildLoad(input: LoadInput): FactorDetail {
   return {
     key: "load",
     label: "Training Load",
-    emoji: "📈",
     score,
     status: statusFor(score),
     currentValue: label,
@@ -548,7 +541,6 @@ function buildConsistency(inp: ConsistencyInput): FactorDetail {
   return {
     key: "consistency",
     label: "Consistency",
-    emoji: "🏋️",
     score,
     status: statusFor(score),
     // Nothing due yet this week: the score comes from the last 4 weeks, so say so.
@@ -575,7 +567,6 @@ function buildPerformance(scores: number[]): FactorDetail {
     return {
       key: "performance",
       label: "Performance Trend",
-      emoji: "📊",
       score: 70,
       status: "watch",
       currentValue: "Building",
@@ -600,7 +591,6 @@ function buildPerformance(scores: number[]): FactorDetail {
   return {
     key: "performance",
     label: "Performance Trend",
-    emoji: "📊",
     score,
     status: statusFor(score),
     currentValue: trend === "Building" ? "Building" : trend,
@@ -627,7 +617,6 @@ function buildPain(painDays7d: number): FactorDetail {
   return {
     key: "pain",
     label: "Pain / Injury",
-    emoji: "⚠️",
     score,
     status: statusFor(score),
     currentValue: clean ? "None" : `${painDays7d} session${painDays7d === 1 ? "" : "s"}`,
