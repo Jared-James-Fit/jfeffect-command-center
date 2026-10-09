@@ -3,22 +3,22 @@ import { useEffect } from "react";
 import { z } from "zod";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UpcomingPanel } from "@/components/admin-calendar/upcoming-panel";
-import { BookingLinksPage } from "@/route-pages/_authenticated/admin/booking-links";
-import { GoogleCalendarPage } from "@/route-pages/_authenticated/admin/google-calendar";
 import { PtCalendarPanel } from "@/components/admin-calendar/pt-calendar-panel";
 import { AdminEventsPage } from "@/route-pages/_authenticated/admin/events.index";
 import { AdminCalendarBoardPanel } from "@/components/admin-calendar/board-panel";
-import { GoogleSyncStatusCard } from "@/components/admin-calendar/google-sync-status";
+import { AdminBookingPanel } from "@/components/admin-calendar/booking-panel";
 
-// Five tabs, one job each. Older links (?tab=pt-calendar, google-calendar,
-// booking-links, availability) still land on the right one.
-const TAB_VALUES = ["board", "sessions", "upcoming", "events", "setup"] as const;
+// Five tabs, one job each. Older links (?tab=setup, pt-calendar,
+// google-calendar, booking-links, availability) still land on the right one.
+const TAB_VALUES = ["board", "booking", "sessions", "upcoming", "events"] as const;
 type TabValue = typeof TAB_VALUES[number];
 const LEGACY_TABS: Record<string, TabValue> = {
   "pt-calendar": "sessions",
-  "google-calendar": "setup",
-  "booking-links": "setup",
-  availability: "board",
+  setup: "booking",
+  "google-calendar": "booking",
+  "booking-links": "booking",
+  "booking-cards": "booking",
+  availability: "booking",
 };
 const LS_KEY = "admin.calendar.lastTab";
 
@@ -82,25 +82,19 @@ function AdminCalendarShell() {
           <Tabs value={active} onValueChange={setTab}>
             <TabsList className="flex w-max gap-1 h-auto flex-nowrap">
               <TabsTrigger value="board">Calendar</TabsTrigger>
+              <TabsTrigger value="booking">Booking</TabsTrigger>
               <TabsTrigger value="sessions">Sessions</TabsTrigger>
               <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
               <TabsTrigger value="events">Events</TabsTrigger>
-              <TabsTrigger value="setup">Setup</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
       {active === "board" && <AdminCalendarBoardPanel />}
+      {active === "booking" && <AdminBookingPanel />}
       {active === "sessions" && <PtCalendarPanel />}
       {active === "upcoming" && <UpcomingPanel />}
       {active === "events" && <div className="p-3 sm:p-4 md:p-6"><AdminEventsPage embedded /></div>}
-      {active === "setup" && (
-        <>
-          <GoogleCalendarPage />
-          <div className="px-6 md:px-8 max-w-3xl"><GoogleSyncStatusCard /></div>
-          <BookingLinksPage />
-        </>
-      )}
     </>
   );
 }

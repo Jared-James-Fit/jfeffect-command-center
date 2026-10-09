@@ -71,6 +71,12 @@ export function localDateISO(at: Date, tz: string | null | undefined): string {
   return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
 }
 
+/** Wall-clock "HH:MM" (24h) of an instant in a zone. */
+export function localTimeHM(at: Date, tz: string | null | undefined): string {
+  const p = partsIn(safeTz(tz), at);
+  return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
+}
+
 /** Hour of day (0-23) of an instant in a zone. */
 export function localHour(at: Date, tz: string | null | undefined): number {
   return partsIn(safeTz(tz), at).hour;

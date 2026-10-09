@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
-import { CalendarDays, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronRight, Plus } from "lucide-react";
+import { listMyBookingTypes } from "@/lib/booking.functions";
+import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { KIND_META, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
 import { isAppointmentItem, selectHomeUpcoming } from "@/lib/home-upcoming";
 import { WeekStrip, nextSevenDays } from "@/components/calendar/week-strip";
@@ -42,6 +46,15 @@ const MAX_DAY_ROWS = 4;
  */
 export function UpcomingScheduleCard({ clientId }: { clientId: string | null | undefined }) {
   const { items } = useClientCalendarSources(clientId);
+  // "Book" shows when the coach has opened booking types to this client.
+  const pov = usePovArgs();
+  const typesFn = usePovFn(useServerFn(listMyBookingTypes));
+  const { data: bookable = [] } = useQuery({
+    queryKey: ["my-booking-types", pov.viewAsClientId ?? null],
+    enabled: !!clientId,
+    queryFn: () => typesFn({ data: {} }),
+    staleTime: 5 * 60_000,
+  });
   const today = isoToday();
   const [selected, setSelected] = useState(today);
   const days = useMemo(() => nextSevenDays(today), [today]);
@@ -73,12 +86,30 @@ export function UpcomingScheduleCard({ clientId }: { clientId: string | null | u
           <CalendarDays className="h-3.5 w-3.5 shrink-0 text-primary" />
           <span className="truncate">{heading}</span>
         </h3>
-        <Link
-          to="/portal/calendar"
-          className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary"
-        >
-          View calendar <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex shrink-0 items-center gap-3">
+          {bookable.length > 0 && !pov.viewAsClientId && (
+            bookable.length === 1 ? (
+              <Link
+                to="/book/$slug"
+                params={{ slug: bookable[0].slug }}
+                search={{ name: "", email: "", phone: "", application_id: "", i: "" }}
+                className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary"
+              >
+                <Plus className="h-3.5 w-3.5" /> Book
+              </Link>
+            ) : (
+              <Link to="/portal/calendar" className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary">
+                <Plus className="h-3.5 w-3.5" /> Book
+              </Link>
+            )
+          )}
+          <Link
+            to="/portal/calendar"
+            className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary"
+          >
+            View calendar <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
       </div>
 
       <WeekStrip

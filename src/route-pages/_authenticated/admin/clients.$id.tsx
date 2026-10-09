@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, DollarSign, LayoutDashboard, IdCard, Target, Phone, Calendar } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { SendBookingLinkDialog } from "@/components/appointments/send-booking-link-dialog";
+import { ShareBookingSheet } from "@/components/booking/share-booking-sheet";
+import { useBookingTypes } from "@/components/booking/use-booking-types";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -192,6 +193,7 @@ export function ClientProfileWorkspace({
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
   const [bookingLinkOpen, setBookingLinkOpen] = useState(false);
+  const { data: bookingTypes = [] } = useBookingTypes(bookingLinkOpen);
   const [quickBookOpen, setQuickBookOpen] = useState(false);
   const [checkInResponseOpen, setCheckInResponseOpen] = useState(false);
   const inviteFn = useServerFn(inviteClient);
@@ -1257,11 +1259,14 @@ export function ClientProfileWorkspace({
         clientId={id}
         clients={[{ id, full_name: form.full_name, timezone: form.timezone, default_session_location: form.default_session_location, package_tracking_enabled: form.package_tracking_enabled, sessions_purchased: form.sessions_purchased, sessions_used: form.sessions_used }]}
       />
-      <SendBookingLinkDialog
+      <ShareBookingSheet
+        target={null}
+        choices={bookingTypes
+          .filter((t) => t.is_active && t.online_enabled && t.slug && (t.hours ?? []).length)
+          .map((t) => ({ name: t.name, slug: t.slug! }))}
         open={bookingLinkOpen}
         onOpenChange={setBookingLinkOpen}
-        defaultPhone={form.phone}
-        defaultEmail={form.email}
+        client={{ id, full_name: form.full_name ?? null, email: form.email ?? null, phone: form.phone ?? null }}
       />
 
       <ManualCheckInReviewComposer

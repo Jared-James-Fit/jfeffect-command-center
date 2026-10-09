@@ -6,7 +6,7 @@ export const Route = createFileRoute("/_authenticated/admin/google-calendar")({
   beforeLoad: ({ search }) => {
     throw redirect({
       to: "/admin/calendar",
-      search: { tab: "setup", connected: search.connected, error: search.error } as any,
+      search: { tab: "booking", connected: search.connected, error: search.error } as any,
     });
   },
 });

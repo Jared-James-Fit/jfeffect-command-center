@@ -266,10 +266,14 @@ function feedUrls(token: string) {
   const origin = (process.env.PUBLIC_APP_URL || process.env.SITE_URL || "https://jfeffect.com").replace(/\/$/, "");
   const https = `${origin}/api/public/calendar-feed?t=${token}`;
   const webcal = https.replace(/^https?:\/\//, "webcal://");
+  const name = encodeURIComponent("JF Effect");
   return {
     httpsUrl: https,
     webcalUrl: webcal,
     googleUrl: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
+    // Outlook subscribes from the web: outlook.com accounts, and work / school (Microsoft 365).
+    outlookUrl: `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(https)}&name=${name}`,
+    office365Url: `https://outlook.office.com/calendar/0/addfromweb?url=${encodeURIComponent(https)}&name=${name}`,
   };
 }
 
