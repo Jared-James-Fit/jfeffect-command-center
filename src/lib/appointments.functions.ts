@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { PovInput, resolvePovClientId } from "@/lib/client-pov.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { readClientFor } from "@/lib/permissions.server";
 
 const APPT_TYPES = [
   "Coaching Call","Check-In Call","Onboarding Call","Strategy Call",
@@ -136,7 +137,7 @@ export const listAppointments = createServerFn({ method: "GET" })
     coachId: z.string().uuid().optional(),
   }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const { supabase } = context as any;
+    const { db: supabase } = await readClientFor(context as any);
     let q = supabase.from("appointments")
       .select("*, host_coach:coaches!appointments_host_coach_id_fkey(id, full_name), client:clients(id, full_name, phone)")
       .order("starts_at", { ascending: true });

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { assertAdminView } from "@/lib/permissions.server";
+import { assertAdminView, readClientFor } from "@/lib/permissions.server";
 
 // ============================================================================
 // Legal & Safety — server functions
@@ -55,7 +55,8 @@ async function assertAdmin(context: { supabase: any; userId: string }) {
 export const listLegalDocuments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+    const { db } = await readClientFor(context as any);
+    const { data, error } = await db
       .from("legal_documents")
       .select("*, current_version:legal_document_versions!fk_legal_documents_current_version(*)")
       .order("doc_type", { ascending: true });
@@ -67,7 +68,8 @@ export const listVersions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { documentId: string }) => d)
   .handler(async ({ data, context }) => {
-    const { data: rows, error } = await context.supabase
+    const { db } = await readClientFor(context as any);
+    const { data: rows, error } = await db
       .from("legal_document_versions")
       .select("*")
       .eq("document_id", data.documentId)

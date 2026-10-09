@@ -285,6 +285,30 @@ const MEMBERSHIP_OVERLAY: Entry[] = [
 ];
 
 /**
+ * The finance login's own section, first in its sidebar: the money pages it
+ * works in every day, from the same registry entries as the admin's Payments
+ * menu (labels tuned for a bookkeeper). The rest of the admin nav follows.
+ */
+const FINANCE_PAGES: Array<{ to: string; label?: string }> = [
+  { to: "/admin/sales?tab=taxes" },
+  { to: "/admin/payments", label: "Revenue" },
+  { to: "/admin/transactions" },
+  { to: "/admin/membership/billing", label: "Subscriptions" },
+  { to: "/admin/discount-codes" },
+  { to: "/admin/payment-links" },
+];
+
+export function buildFinanceNav(): NavItem[] {
+  const all = [...REGISTRY, ...MEMBERSHIP_OVERLAY];
+  return FINANCE_PAGES.flatMap(({ to, label }) => {
+    const entry = all.find((e) => e.to === to);
+    if (!entry) return [];
+    const { visibleTo: _v, section: _s, ...item } = entry as Entry & { section?: string };
+    return [{ ...item, label: label ?? item.label, group: "Finance" } as NavItem];
+  });
+}
+
+/**
  * Build the sidebar for a given staff role tag and dashboard mode.
  * Returns `NavItem[]` (already filtered, already grouped via NavItem.group).
  */

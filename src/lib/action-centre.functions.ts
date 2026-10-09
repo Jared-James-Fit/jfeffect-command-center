@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { cadenceLabel, lastFridayOfMonth, nextLastFridayDate, nextSemiMonthlyDate } from "@/lib/task-cadence";
+import { readClientFor } from "@/lib/permissions.server";
 
 // ============================================================
 // Types
@@ -475,7 +476,8 @@ export type TaskOverride = {
 export const listTaskDefinitions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<TaskDefinition[]> => {
-    const { data, error } = await context.supabase
+    const { db } = await readClientFor(context as any);
+    const { data, error } = await db
       .from("coach_task_definitions")
       .select("*")
       // Nutrition Review is retired: Nutrition Update Requests replace it.
@@ -526,7 +528,8 @@ export const listClientOverrides = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId: string }) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }): Promise<TaskOverride[]> => {
-    const { data: rows, error } = await context.supabase
+    const { db } = await readClientFor(context as any);
+    const { data: rows, error } = await db
       .from("client_task_overrides")
       .select("*")
       .eq("client_id", data.clientId);

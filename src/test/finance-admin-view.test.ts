@@ -174,3 +174,62 @@ describe("finance admin-view migration", () => {
     expect(sql).not.toMatch(/ON public\.discount_codes\s+FOR (DELETE|ALL)/);
   });
 });
+
+describe("finance login's workspace", () => {
+  it("puts its money pages first, in the order it works", async () => {
+    const { buildFinanceNav } = await import("@/lib/internal-nav");
+    const nav = buildFinanceNav();
+    expect(nav.map((i) => i.to)).toEqual([
+      "/admin/sales?tab=taxes", "/admin/payments", "/admin/transactions",
+      "/admin/membership/billing", "/admin/discount-codes", "/admin/payment-links",
+    ]);
+    expect(nav.every((i) => i.group === "Finance" && !!i.icon)).toBe(true);
+    expect(nav.map((i) => i.label)).toEqual(["Taxes & Books", "Revenue", "Transactions", "Subscriptions", "Discount Codes", "Products"]);
+  });
+
+  it("lands on the books and gets a money-first phone bar", () => {
+    const route = readFileSync("src/routes/_authenticated/admin/route.tsx", "utf8");
+    expect(route).toMatch(/viewOnly\s*\?\s*\[\.\.\.buildFinanceNav\(\), \.\.\.fullNav\]/);
+    expect(route).toMatch(/label: "Books"[\s\S]*label: "Sales"[\s\S]*label: "Discounts"[\s\S]*label: "Clients"[\s\S]*label: "Home"/);
+    expect(readFileSync("src/routes/index.tsx", "utf8")).toContain('viewOnly ? "/finance"');
+    expect(readFileSync("src/routes/auth.tsx", "utf8")).toContain('viewOnly ? "/finance"');
+    expect(readFileSync("src/components/app-shell.tsx", "utf8")).toMatch(/"Finance", \/\/ the finance login's own section, always first\n\s+"Overview",/);
+  });
+});
+
+describe("reads with no admin check of their own", () => {
+  const ctx = (roles: string[], opts: { aal?: string; allowed?: boolean } = {}) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      userId: "u1",
+      claims: { aal: opts.aal ?? "aal2" },
+      supabase: {
+        tag: "own",
+        from: () => ({ select: () => ({ eq: async () => { calls.push("roles"); return { data: roles.map((role) => ({ role })), error: null }; } }) }),
+        rpc: async (fn: string) => { calls.push(fn); return { data: !!opts.allowed, error: null }; },
+      },
+    };
+  };
+
+  it("keeps everyone's own client unless it's an MFA-verified view-only login", async () => {
+    const { readClientFor } = await import("@/lib/permissions.server");
+    for (const c of [ctx(["coach"], { aal: "aal1" }), ctx(["client"]), ctx(["admin"]), ctx(["finance"], { aal: "aal1", allowed: true }), ctx(["finance"], { allowed: false })]) {
+      const r = await readClientFor(c);
+      expect(r.viewOnly).toBe(false);
+      expect(r.db.tag).toBe("own");
+    }
+    // aal1 sessions never even look up roles
+    const quick = ctx(["coach"], { aal: "aal1" });
+    await readClientFor(quick);
+    expect(quick.calls).toEqual([]);
+  });
+
+  it("calls a database function as a read and leaves null arguments to the defaults", async () => {
+    const { rpcRead } = await import("@/lib/permissions.server");
+    const seen: any[] = [];
+    const db = { rpc: (fn: string, args: any, opts: any) => { seen.push({ fn, args, opts }); return Promise.resolve({ data: null, error: null }); } };
+    await rpcRead(db, "admin_clients_directory", { p_search: null, p_sort: "attention", p_coach_id: undefined, p_flags: ["overdue"], p_limit: 15 });
+    expect(seen).toEqual([{ fn: "admin_clients_directory", args: { p_sort: "attention", p_flags: ["overdue"], p_limit: 15 }, opts: { get: true } }]);
+  });
+});

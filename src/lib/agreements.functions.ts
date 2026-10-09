@@ -14,6 +14,7 @@ import {
   getSignNowDocument,
 } from "@/lib/signnow.server";
 import { listAllSignNowDocuments } from "@/lib/signnow.server";
+import { readClientFor } from "@/lib/permissions.server";
 
 async function assertAdminOrCoach(supabase: any, userId: string) {
   const { data } = await supabase
@@ -1411,7 +1412,9 @@ export const getSignedAgreementUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    const { userId } = context;
+    // A view-only login (finance) sees what the admin sees.
+    const { db: supabase, viewOnly } = await readClientFor(context as any);
     // RLS-scoped read: returns null for rows the caller can't see.
     const { data: ag, error } = await supabase
       .from("agreements")
@@ -1426,7 +1429,9 @@ export const getSignedAgreementUrl = createServerFn({ method: "POST" })
     // a clear server-side audit if someone tries to fish for IDs.
     // Unlinked agreements (no client_id) are admin-only.
     let accessRole: string;
-    if (ag.client_id) {
+    if (viewOnly) {
+      accessRole = "finance";
+    } else if (ag.client_id) {
       accessRole = await assertClientAccess(supabase, userId, ag.client_id);
     } else {
       const { data: roleRows } = await supabase

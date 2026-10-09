@@ -75,6 +75,7 @@ function groupNavItems(items: NavItem[]) {
     // render in the intended order when the sidebar is driven by
     // `buildInternalNav()` from `@/lib/internal-nav`. Legacy groups remain
     // below for back-compat with any nav source still using the old labels.
+    "Finance", // the finance login's own section, always first
     "Overview",
     "Main Menu",
     "Other",

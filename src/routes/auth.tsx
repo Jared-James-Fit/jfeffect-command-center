@@ -13,13 +13,13 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const { user, role, loading, signOut } = useAuth();
+  const { user, role, viewOnly, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const { next } = Route.useSearch();
 
   useEffect(() => {
     if (!loading && user && role) {
-      const fallback = role === "member" ? "/m" : role === "client" ? "/portal" : "/admin";
+      const fallback = role === "member" ? "/m" : role === "client" ? "/portal" : viewOnly ? "/finance" : "/admin";
       // Only honor in-app relative paths to prevent open-redirect.
       const safeNext =
         next && next.startsWith("/") && !next.startsWith("//") ? next : null;
@@ -29,7 +29,7 @@ function AuthPage() {
         navigate({ to: fallback, replace: true });
       }
     }
-  }, [user, role, loading, navigate, next]);
+  }, [user, role, viewOnly, loading, navigate, next]);
 
   // Avoid flashing the login form while the session is still restoring,
   // or while an authenticated user with a resolved role is being routed.
