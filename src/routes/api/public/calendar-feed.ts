@@ -5,8 +5,9 @@ import { createFileRoute } from "@tanstack/react-router";
  * from Google, Apple or Outlook Calendar. The token is the only key, so it's
  * long and random, and the client can reset it from their Schedule.
  *
- * Contains their sessions from the last 30 days on (cancelled ones stay in as
- * CANCELLED so subscribed calendars remove them) and coach events they're in.
+ * Contents: their 1:1 sessions, scheduled workouts and coach events
+ * (src/lib/calendar-feed.server.ts). Each fetch by a real calendar app is
+ * recorded on the client; that's what turns the Setup card green.
  */
 export const Route = createFileRoute("/api/public/calendar-feed")({
   server: {
@@ -17,7 +18,8 @@ export const Route = createFileRoute("/api/public/calendar-feed")({
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { buildIcsFeed } = await import("@/lib/ics-feed");
-        const { wallTimeToUtc } = await import("@/lib/schedule-time");
+        const { buildClientFeedEvents } = await import("@/lib/calendar-feed.server");
+        const { calendarAppFromUserAgent } = await import("@/lib/calendar-sync");
         const admin = supabaseAdmin as any;
 
         const { data: client } = await admin
@@ -27,66 +29,34 @@ export const Route = createFileRoute("/api/public/calendar-feed")({
           .maybeSingle();
         if (!client) return new Response("Not found", { status: 404 });
 
-        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-        const today = new Date().toISOString().slice(0, 10);
-        const [{ data: sessions }, { data: assigned }] = await Promise.all([
-          admin
-            .from("pt_sessions")
-            .select("id, title, session_type, starts_at, ends_at, location, notes, client_visible_notes, status, updated_at")
-            .eq("client_id", client.id)
-            .eq("visible_to_client", true)
-            .gte("starts_at", since)
-            .order("starts_at", { ascending: true })
-            .limit(500),
-          admin.from("event_assignments").select("event_id").eq("client_id", client.id),
-        ]);
-        const assignedIds = ((assigned ?? []) as any[]).map((r) => r.event_id);
-        const { data: events } = await admin
-          .from("events")
-          .select("id, name, event_type, event_date, start_time, end_time, timezone, location, client_facing_notes, status, audience_scope, updated_at")
-          .in("status", ["Active", "Completed"])
-          .gte("event_date", today)
-          .limit(200);
-
         const origin = new URL(request.url).origin;
-        const feedEvents = [
-          ...((sessions ?? []) as any[])
-            .filter((s) => s.status !== "Rescheduled")
-            .map((s) => ({
-              uid: `pt-${s.id}@jfeffect.com`,
-              start: new Date(s.starts_at),
-              end: new Date(s.ends_at),
-              summary: s.title || s.session_type || "Training session",
-              location: s.location,
-              description: s.client_visible_notes && s.notes ? s.notes : null,
-              url: `${origin}/portal/calendar`,
-              cancelled: s.status === "Cancelled",
-              lastModified: s.updated_at ? new Date(s.updated_at) : null,
-            })),
-          ...((events ?? []) as any[])
-            .filter((e) => assignedIds.includes(e.id) || e.audience_scope === "all_coaching")
-            .filter((e) => e.start_time)
-            .map((e) => {
-              const tz = e.timezone || "America/Winnipeg";
-              const start = wallTimeToUtc(e.event_date, String(e.start_time).slice(0, 5), tz);
-              const end = e.end_time
-                ? wallTimeToUtc(e.event_date, String(e.end_time).slice(0, 5), tz)
-                : new Date(start.getTime() + 60 * 60 * 1000);
-              return {
-                uid: `event-${e.id}@jfeffect.com`,
-                start,
-                end: end > start ? end : new Date(start.getTime() + 60 * 60 * 1000),
-                summary: e.name,
-                location: e.location,
-                description: e.client_facing_notes,
-                url: `${origin}/portal/events/${e.id}`,
-                lastModified: e.updated_at ? new Date(e.updated_at) : null,
-              };
-            }),
-        ];
+        const events = await buildClientFeedEvents(admin, client.id, origin);
+
+        // Proof of sync for the Setup card. Browsers and link previews don't
+        // count; writes are throttled to one per 10 minutes per client.
+        const app = calendarAppFromUserAgent(request.headers.get("user-agent"));
+        if (app) {
+          const { data: prev } = await admin
+            .from("client_calendar_sync")
+            .select("last_fetch_at, app, fetch_count")
+            .eq("client_id", client.id)
+            .maybeSingle();
+          const last = prev?.last_fetch_at ? new Date(prev.last_fetch_at).getTime() : 0;
+          if (!prev || Date.now() - last > 10 * 60 * 1000 || prev.app !== app) {
+            await admin.from("client_calendar_sync").upsert(
+              {
+                client_id: client.id,
+                last_fetch_at: new Date().toISOString(),
+                app,
+                fetch_count: Number(prev?.fetch_count ?? 0) + 1,
+              },
+              { onConflict: "client_id" },
+            );
+          }
+        }
 
         const first = (client.first_name || client.full_name?.split(" ")[0] || "").trim();
-        const ics = buildIcsFeed({ name: first ? `JF Effect · ${first}` : "JF Effect", events: feedEvents });
+        const ics = buildIcsFeed({ name: first ? `JF Effect · ${first}` : "JF Effect", events });
         return new Response(ics, {
           status: 200,
           headers: {

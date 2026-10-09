@@ -10,7 +10,7 @@ import { AlertTriangle, ExternalLink } from "lucide-react";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { useClientCalendarSources } from "@/lib/calendar-sources";
 import { ClientSessionList, RequestChangeSheet } from "@/components/schedule/client-session-list";
-import { CalendarFeedCard } from "@/components/schedule/calendar-feed-card";
+import { CalendarSyncCard } from "@/components/schedule/calendar-sync-card";
 
 /**
  * The client's one Schedule (this replaced separate Calendar, Appointments and
@@ -76,7 +76,7 @@ function SchedulePage() {
           />
         </section>
 
-        {!isImpersonating && client?.id && <CalendarFeedCard />}
+        {client?.id && <CalendarSyncCard />}
         {client?.id && (
           <RequestChangeSheet clientId={client.id} session={changing} onClose={() => setChanging(null)} isPov={isImpersonating} />
         )}

@@ -43,6 +43,11 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  /* Semantic status colors. --success / --warning were defined below but never
+     registered here, so text-success, bg-warning/10 etc. (~250 uses) rendered
+     with no color at all: "Completed" badges, "Installed" checks, warnings. */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
