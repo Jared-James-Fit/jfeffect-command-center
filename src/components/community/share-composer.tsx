@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { CAPTION_MAX, buildShareCardFields, lockInTimeLabel, postPointsHint, type CommunityVisibility } from "@/lib/community";
+import { CAPTION_MAX, buildShareCardFields, lockInTimeLabel, postPointsHint, type CommunityVisibility, postFiles } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, usePostPointsStatus, type SavePostInput } from "@/lib/community.queries";
 import { AudiencePicker } from "@/components/community/audience-picker";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
@@ -330,7 +330,8 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
       else if (removedExisting) mediaArg = { action: "remove" };
 
       await saveCommunityPost({ completionId, caption, visibility, media: mediaArg, hideLoads });
-      if (mediaArg.action !== "keep" && existing?.media_path) await removeCommunityFiles([existing.media_path, existing.media_thumb_path]);
+      // removing the photo removes the whole carousel; replacing it keeps the other slides
+      if (mediaArg.action !== "keep" && existing?.media_path) await removeCommunityFiles(mediaArg.action === "remove" ? postFiles(existing) : [existing.media_path, existing.media_thumb_path]);
 
       invalidateCommunity(qc);
       setPostedAs(visibility);

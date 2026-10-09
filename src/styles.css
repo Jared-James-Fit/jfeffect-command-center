@@ -870,6 +870,24 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   100% { opacity: 0; transform: translateY(4px); }
 }
 .community-hint { animation: community-hint-life 5.2s ease-out forwards; }
+/* "swipe right to go back" demo: a finger sweeps right, the back arrow fills in */
+@keyframes swipe-demo-finger {
+  0% { transform: translateX(0); opacity: 0; }
+  12% { transform: translateX(0); opacity: 1; }
+  62% { transform: translateX(84px); opacity: 1; }
+  78%, 100% { transform: translateX(96px); opacity: 0; }
+}
+@keyframes swipe-demo-arrow {
+  0%, 15% { opacity: 0; transform: scale(0.6); }
+  55% { opacity: 1; transform: scale(1); }
+  75%, 100% { opacity: 0; transform: scale(1); }
+}
+.swipe-demo-finger { animation: swipe-demo-finger 2s ease-in-out infinite; }
+.swipe-demo-arrow { animation: swipe-demo-arrow 2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .swipe-demo-finger,
+  .swipe-demo-arrow { animation: none; opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
   .community-pop,
   .community-picker,

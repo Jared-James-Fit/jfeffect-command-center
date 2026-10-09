@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import type { CommunityVisibility } from "@/lib/community";
 import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
 import { CaptionEditor, CaptionField, captionThumb } from "@/components/community/caption-editor";
+import { SlideTray, useSlideTray } from "@/components/community/slide-tray";
+import { MAX_SLIDES, type PostSlide } from "@/lib/community";
 import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 
 export type CameraMode = { key: string; label: string };
@@ -18,7 +20,16 @@ export type CameraCard = {
   onLook: (t: ShareTemplate) => void;
 };
 
-export type StudioPostArgs = { photo: File | null; live: boolean; caption: string; visibility: CommunityVisibility; hideLoads: boolean; look: ShareTemplate };
+export type StudioPostArgs = {
+  photo: File | null;
+  live: boolean;
+  caption: string;
+  visibility: CommunityVisibility;
+  hideLoads: boolean;
+  look: ShareTemplate;
+  /** Slides 2..10, already uploaded, in order. */
+  extras: PostSlide[];
+};
 export type StudioPost = {
   /** Changes when the post it's for changes (resets the caption etc.). */
   key: string;
@@ -27,6 +38,8 @@ export type StudioPost = {
   visibility?: CommunityVisibility | null;
   hideLoads?: boolean;
   showHideLoads?: boolean;
+  /** The post's other slides already (editing it). */
+  extras?: PostSlide[] | null;
   onPost: (a: StudioPostArgs) => Promise<void>;
 };
 
@@ -53,6 +66,11 @@ const timeLabel = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric"
  *
  * No live camera (permission denied, old webview)? It falls back to the
  * phone's own camera and picker, and carries on from the frozen frame.
+ *
+ * Carousels: up to 10 on a post. The camera still comes first; the library
+ * button picks several at once (the first photo gets the card, the rest
+ * follow it), and the strip above the caption adds more from the camera or
+ * the library. Each extra starts uploading the moment it's added.
  */
 export function ShareStudio({
   open,
@@ -82,6 +100,9 @@ export function ShareStudio({
   post: StudioPost | null;
 }) {
   const [phase, setPhase] = useState<"shoot" | "edit">("shoot");
+  // Shooting another slide for the carousel (plain camera, no card on it).
+  const [adding, setAdding] = useState(false);
+  const [coverThumb, setCoverThumb] = useState<string | null>(null);
   const [shot, setShot] = useState<Shot | null>(null);
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
@@ -113,15 +134,24 @@ export function ShareStudio({
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const cardRef = useRef(card);
   cardRef.current = card;
+  const tray = useSlideTray({ open, initial: post?.extras, resetKey: post?.key ?? "", coverCount: 1 });
+  const postedRef = useRef(false);
+  postedRef.current = posted;
 
   // Fresh every time it opens.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      // closed without posting: new uploads are thrown away
+      if (!postedRef.current) tray.discard();
+      return;
+    }
     setPhase("shoot");
+    setAdding(false);
     setShot(null);
     setItems([]);
     setPosted(false);
     setBusy(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   // The post it's for: start from what's already there (editing, not duplicating).
   // Not while posting: saving changes the post's key, and the caption must not blink.
@@ -202,7 +232,7 @@ export function ShareStudio({
   }, [open]);
 
   /* ---- the card ----------------------------------------------------- */
-  const showCard = !!card && !cardFailed;
+  const showCard = !!card && !cardFailed && !adding;
   const frozenLockedIn = (d: CameraCard["data"]) =>
     d.lockedIn?.live ? { time: timeLabel(shot?.at ?? new Date()), live: !!shot?.live } : d.lockedIn;
 
@@ -293,7 +323,18 @@ export function ShareStudio({
     ctx.drawImage(video, 0, 0, c.width, c.height);
     setFlash(true);
     setTimeout(() => setFlash(false), 140);
+    if (adding) {
+      // another slide: straight into the strip, back to the post
+      void canvasToBlob(c, "image/jpeg", 0.92).then((b) => b && tray.add([new File([b], `jf-live-${Date.now()}.jpg`, { type: "image/jpeg" })]));
+      backToPost();
+      return;
+    }
     freeze({ src: c, file: null, live: true, at: new Date() });
+  };
+  const backToPost = () => {
+    cancelCount();
+    setAdding(false);
+    setPhase("edit");
   };
   const shoot = () => {
     if (!canShoot) return;
@@ -311,16 +352,33 @@ export function ShareStudio({
     }, 1000);
   };
   const fromInput = (e: React.ChangeEvent<HTMLInputElement>, live: boolean) => {
-    const f = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (!f) return;
-    if (f.type.startsWith("video/")) {
-      if (onVideo) {
-        stop();
-        onVideo(f);
-      } else toast.error("Pick a photo for this one");
+    if (!files.length) return;
+    // adding to the carousel (from the strip, or the camera while adding)
+    if (phase === "edit" || adding) {
+      void tray.add(files);
+      if (adding) backToPost();
       return;
     }
+    const isVideo = (x: File) => x.type.startsWith("video/");
+    const heroAt = files.findIndex((x) => !isVideo(x));
+    if (heroAt === -1) {
+      if (!onVideo) return void toast.error("Pick a photo for this one");
+      // one video: the video editor, as before. Several: the card leads, the clips follow.
+      if (files.length === 1) {
+        stop();
+        onVideo(files[0]);
+        return;
+      }
+      skipPhoto();
+      void tray.add(files);
+      return;
+    }
+    // the first photo gets the card; everything else follows it, in order
+    const f = files[heroAt];
+    const rest = files.filter((_, i) => i !== heroAt);
+    if (rest.length) void tray.add(rest);
     const url = URL.createObjectURL(f);
     const img = new Image();
     img.onload = () => freeze({ src: img, file: f, live, at: new Date() });
@@ -384,16 +442,26 @@ export function ShareStudio({
   // What gets posted is what you see: the look you're on, as a 4:5 feed card
   // (stickers moved onto the same spot of the photo). "No filter" posts the
   // photo itself; so does Hide weights, so a card never shows your numbers.
-  const postPhoto = async (): Promise<File | null> => {
-    if (!shot || !card) return null;
-    if (card.look === "plain" || (post?.showHideLoads && hideLoads)) return finalPhoto();
+  // With no photo, a carousel opens on the card itself (what you see as slide 1).
+  const postPhoto = async (carousel: boolean): Promise<File | null> => {
+    if (!card) return null;
+    const bare = card.look === "plain" || (post?.showHideLoads && hideLoads);
+    if (!shot && (!carousel || bare)) return null;
+    if (shot && bare) return finalPhoto();
     const FEED_H = 1350;
     const c = document.createElement("canvas");
-    paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot.src }, logo, 1);
-    drawStickers(c.getContext("2d")!, remapStickers(items, shot.src, { w: CARD_W, h: CARD_H }, { w: CARD_W, h: FEED_H }), CARD_W, FEED_H);
+    paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);
+    if (shot) drawStickers(c.getContext("2d")!, remapStickers(items, shot.src, { w: CARD_W, h: CARD_H }, { w: CARD_W, h: FEED_H }), CARD_W, FEED_H);
     const b = await canvasToBlob(c, "image/jpeg", 0.92);
     return b ? new File([b], `jf-${card.look}.jpg`, { type: "image/jpeg" }) : finalPhoto();
   };
+
+  // Slide 1 in the strip: the card as it is now, small.
+  useEffect(() => {
+    if (phase !== "edit") return;
+    const t = setTimeout(() => setCoverThumb(captionThumb(cardEl) ?? null), 120);
+    return () => clearTimeout(t);
+  }, [phase, cardEl, card?.look, shot]);
 
   // The caption screen's preview: the card as it is now, stickers and all, small.
   const openCaption = () => {
@@ -405,7 +473,10 @@ export function ShareStudio({
     if (!post || busy || posted || !card) return;
     setBusy("post");
     try {
-      await post.onPost({ photo: await postPhoto(), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card.look });
+      // the extras have been uploading all along; this only waits for any still going
+      const extras = await tray.ready();
+      await post.onPost({ photo: await postPhoto(extras.length > 0), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card.look, extras });
+      tray.commit();
       setPosted(true);
       setTimeout(onClose, 900);
     } catch (e: any) {
@@ -448,7 +519,7 @@ export function ShareStudio({
       >
         <DialogTitle className="sr-only">Share</DialogTitle>
         <DialogDescription className="sr-only">Take a photo, add text or stickers, then post it to the community or share it to your story.</DialogDescription>
-        <input ref={libRef} type="file" accept={accept} hidden onChange={(e) => fromInput(e, false)} />
+        <input ref={libRef} type="file" accept={accept} multiple hidden onChange={(e) => fromInput(e, false)} />
         <input ref={capRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => fromInput(e, true)} />
 
         <div ref={setArea} className="flex min-h-0 flex-1 items-center justify-center px-2" style={{ paddingTop: "max(env(safe-area-inset-top), 0.5rem)" }}>
@@ -506,9 +577,15 @@ export function ShareStudio({
             <div className="absolute inset-x-0 top-0 flex items-center gap-2 p-2.5">
               {phase === "shoot" ? (
                 <>
-                  <button type="button" onClick={onClose} className={pill} aria-label="Close">
-                    <X className="h-6 w-6" />
-                  </button>
+                  {adding ? (
+                    <button type="button" onClick={backToPost} className={pill} aria-label="Back to your post">
+                      <ChevronLeft className="h-6 w-6" />
+                    </button>
+                  ) : (
+                    <button type="button" onClick={onClose} className={pill} aria-label="Close">
+                      <X className="h-6 w-6" />
+                    </button>
+                  )}
                   {status === "live" && (
                     <button
                       type="button"
@@ -520,7 +597,7 @@ export function ShareStudio({
                       {timer ? `${timer}s` : null}
                     </button>
                   )}
-                  {canShoot && (
+                  {canShoot && !adding && (
                     <button type="button" onClick={skipPhoto} className="ml-auto h-10 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
                       No photo
                     </button>
@@ -545,7 +622,15 @@ export function ShareStudio({
 
         {/* Bottom: shoot controls, or caption + post */}
         <div className="shrink-0 px-4 pt-2.5" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
-          {chip && <div className="mb-2.5 flex justify-center">{chip}</div>}
+          {adding ? (
+            <div className="mb-2.5 flex justify-center">
+              <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/10 px-3.5 text-[12px] font-bold">
+                Adding slide {tray.total + 1} of up to {MAX_SLIDES}
+              </span>
+            </div>
+          ) : (
+            chip && <div className="mb-2.5 flex justify-center">{chip}</div>
+          )}
           {phase === "shoot" ? (
             <>
               <div className="flex items-center justify-between px-2">
@@ -559,7 +644,7 @@ export function ShareStudio({
                   <RefreshCcw className="h-6 w-6" />
                 </button>
               </div>
-              {modes && modes.length > 1 && (
+              {modes && modes.length > 1 && !adding && (
                 <div className="mx-auto mt-3 flex w-max gap-1 rounded-full bg-white/10 p-1" role="tablist" aria-label="What you're sharing">
                   {modes.map((m) => (
                     <button
@@ -581,6 +666,15 @@ export function ShareStudio({
             </>
           ) : (
             <div className="space-y-2">
+              <SlideTray
+                tray={tray}
+                cover={coverThumb}
+                onCamera={() => {
+                  setAdding(true);
+                  setPhase("shoot");
+                }}
+                onLibrary={() => libRef.current?.click()}
+              />
               <CaptionField value={caption} onOpen={openCaption} />
               <div className="flex gap-2">
                 <button
@@ -630,7 +724,7 @@ export function ShareStudio({
                   )}
                 >
                   {posted ? <Check className="h-5 w-5" /> : <Send className="h-5 w-5" />}
-                  {busy === "post" ? "Posting…" : posted ? "Posted" : post?.label ?? "Post"}
+                  {busy === "post" ? (tray.uploading ? `Uploading ${tray.items.length - tray.uploading + 1}/${tray.items.length}…` : "Posting…") : posted ? "Posted" : post?.label ?? "Post"}
                 </button>
               </div>
             </div>

@@ -59,9 +59,10 @@ export function useWorkoutStudio(target: StudioWorkout | null, unit: "kg" | "lb"
         visibility: existing?.visibility,
         hideLoads: existing?.hide_loads,
         showHideLoads: true,
+        extras: existing?.extra_media ?? null,
         onPost: async (a) => {
           if (!user?.id) throw new Error("Sign in again to post");
-          await shareToCommunity(qc, { userId: user.id, completionId: target.completion_id, caption: a.caption, visibility: a.visibility, hideLoads: a.hideLoads, photo: a.photo, existing });
+          await shareToCommunity(qc, { userId: user.id, completionId: target.completion_id, caption: a.caption, visibility: a.visibility, hideLoads: a.hideLoads, photo: a.photo, existing, extras: a.extras });
           const t = postedToast(a.visibility, false, !!existing);
           toast.success(t.title, { description: t.description, action: a.visibility === "community" ? { label: "View", onClick: () => navigate({ to: "/portal/community" }) } : undefined });
         },

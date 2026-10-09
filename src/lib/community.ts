@@ -134,6 +134,8 @@ export type CommunityPost = {
   media_type: "image" | "video" | null;
   media_width: number | null;
   media_height: number | null;
+  /** Slides 2..10 of a carousel, in order (the cover is media_*). Missing / null = one. */
+  extra_media?: PostSlide[] | null;
   /** null for coach notes (no workout behind them). */
   completion_id: string | null;
   /** "workout" (a session) or "note" (a coach's text post). Missing = workout. */
@@ -401,6 +403,68 @@ export function checkVideoDuration(seconds: number): MediaCheck {
     return { ok: false, reason: `Keep videos under ${MAX_VIDEO_SECONDS} seconds.` };
   }
   return { ok: true, kind: "video" };
+}
+
+/**
+ * Carousels: up to 10 photos / videos on a post, at most 3 of them videos.
+ * Photos are ~300 KB once resized, so 10 go up in seconds; three 45-second
+ * clips is already a lot of upload on a phone connection.
+ */
+export const MAX_SLIDES = 10;
+export const MAX_SLIDE_VIDEOS = 3;
+
+export type PostSlide = { path: string; thumb: string | null; type: "image" | "video"; width: number | null; height: number | null };
+
+/** Every slide of a post, cover first. [] when it has no photo. */
+export function postSlides(post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media">): PostSlide[] {
+  if (!post.media_path || !post.media_type) return [];
+  return [
+    { path: post.media_path, thumb: post.media_thumb_path, type: post.media_type, width: post.media_width, height: post.media_height },
+    ...(post.extra_media ?? []).filter((s) => !!s?.path),
+  ];
+}
+
+/** What to show small: the thumbnail, else the photo itself. */
+export function slideThumbPath(s: Pick<PostSlide, "path" | "thumb" | "type">): string | null {
+  return s.thumb ?? (s.type === "image" ? s.path : null);
+}
+
+/** Every file a post points at (for tidying up after a delete or a replace). */
+export function postFiles(post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "extra_media">): string[] {
+  return [post.media_path, post.media_thumb_path, ...(post.extra_media ?? []).flatMap((s) => [s.path, s.thumb])].filter((p): p is string => !!p);
+}
+
+/**
+ * Of what was just picked, what still fits after `current`: in order, up to
+ * 10 in all and 3 videos. `reason` says why anything was left out.
+ */
+export function fitSlides<T extends { kind: "image" | "video" }>(
+  current: { kind: "image" | "video" }[],
+  picked: T[],
+  max = MAX_SLIDES,
+  maxVideos = MAX_SLIDE_VIDEOS,
+): { take: T[]; dropped: number; reason: string | null } {
+  let slots = max - current.length;
+  let videos = maxVideos - current.filter((c) => c.kind === "video").length;
+  const take: T[] = [];
+  let full = false;
+  let tooManyVideos = false;
+  for (const p of picked) {
+    if (slots <= 0) {
+      full = true;
+      continue;
+    }
+    if (p.kind === "video" && videos <= 0) {
+      tooManyVideos = true;
+      continue;
+    }
+    take.push(p);
+    slots -= 1;
+    if (p.kind === "video") videos -= 1;
+  }
+  const dropped = picked.length - take.length;
+  const reason = !dropped ? null : full ? `Up to ${max} photos and videos on a post` : tooManyVideos ? `Up to ${maxVideos} videos on a post` : null;
+  return { take, dropped, reason };
 }
 
 /* ------------------------------------------------------------------ */
