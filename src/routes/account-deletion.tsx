@@ -57,8 +57,12 @@ function AccountDeletionPage() {
               Open <span className="font-medium text-foreground">Settings → Account</span>.
             </li>
             <li>
-              Tap <span className="font-medium text-foreground">Delete account</span> and
-              confirm.
+              Under <span className="font-medium text-foreground">Your data</span>, tap{" "}
+              <span className="font-medium text-foreground">Delete my account</span> and confirm.
+              You can download your data there first.
+            </li>
+            <li>
+              We hold the request for 30 days so you can change your mind, then delete your account.
             </li>
           </ol>
           <div className="pt-2">
