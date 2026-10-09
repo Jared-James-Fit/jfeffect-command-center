@@ -52,6 +52,55 @@ export function appSessionIdOf(e: Pick<GoogleEventLike, "extendedProperties">): 
   return e.extendedProperties?.private?.[GCAL_PT_SESSION_KEY] ?? null;
 }
 
+type GoogleWhen = { dateTime?: string | null; date?: string | null } | null | undefined;
+type GoogleOccurrenceLike = {
+  id: string;
+  iCalUID?: string | null;
+  status?: string | null;
+  start?: GoogleWhen;
+  originalStartTime?: GoogleWhen;
+};
+
+function whenKey(w: GoogleWhen): string | null {
+  if (w?.dateTime) {
+    const ms = Date.parse(w.dateTime);
+    return Number.isNaN(ms) ? w.dateTime : String(ms);
+  }
+  return w?.date ?? null;
+}
+
+/**
+ * One key per occurrence of a Google event. Every repeat of a recurring event
+ * shares the series' iCalUID, so keying on the UID alone collapses a weekly
+ * session into its first week. The original start pins the occurrence: it
+ * stays put when one repeat is moved, and matches across calendars.
+ */
+export function googleOccurrenceKey(e: GoogleOccurrenceLike): string {
+  return `${e.iCalUID || e.id}|${whenKey(e.originalStartTime) ?? whenKey(e.start) ?? ""}`;
+}
+
+/**
+ * Merge the event lists of several calendars (the app's calendar plus the
+ * coach's main one). Drops cancelled and start-less rows, and shows an event
+ * that sits on both calendars once, keeping the first calendar's copy.
+ */
+export function mergeGoogleCalendarLists<T extends GoogleOccurrenceLike>(
+  lists: Array<{ id: string; items: T[] }>,
+): Array<{ calendarId: string; event: T }> {
+  const seen = new Set<string>();
+  const out: Array<{ calendarId: string; event: T }> = [];
+  for (const { id: calendarId, items } of lists) {
+    for (const e of items) {
+      if (e.status === "cancelled" || !(e.start?.dateTime || e.start?.date)) continue;
+      const key = googleOccurrenceKey(e);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ calendarId, event: e });
+    }
+  }
+  return out;
+}
+
 export function googleEventBlocksTime(e: GoogleEventLike): boolean {
   if (e.status === "cancelled") return false;
   if (e.transparency === "transparent") return false;

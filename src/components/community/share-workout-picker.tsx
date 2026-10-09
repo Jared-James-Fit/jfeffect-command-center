@@ -41,10 +41,13 @@ export function ShareWorkoutButton({
   label = "Share a workout",
   variant = "pill",
   previewOnly = false,
+  labelClassName,
 }: {
   unit: "kg" | "lb";
   className?: string;
   label?: string;
+  /** e.g. hide the words on small phones (the button keeps them as its name) */
+  labelClassName?: string;
   variant?: "pill" | "block" | "bubble" | "tile";
   /** Coach viewing as a client: looks the same, but never posts as them. */
   previewOnly?: boolean;
@@ -68,7 +71,7 @@ export function ShareWorkoutButton({
   const activeMode: Mode = today ? mode ?? "lockin" : "workout";
   const [startedId, setStartedId] = useState<string | null>(null);
   const lockCompletionId = today ? startedId ?? today.completionId : null;
-  const { data: lockExisting } = useMyPostForCompletion(lockCompletionId, capturing && !!lockCompletionId);
+  const { data: lockExisting } = useMyPostForCompletion(lockCompletionId, capturing && !!lockCompletionId, "lockin");
   const { data: plan } = useDayPlan(capturing ? today?.dayId ?? null : null);
   const startSrv = useServerFn(startWorkoutFn);
 
@@ -115,7 +118,7 @@ export function ShareWorkoutButton({
           if (!user?.id) throw new Error("Sign in again to post");
           const id = await ensureStarted();
           if (!id) throw new Error("Couldn't start your session. Try again.");
-          await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing: lockExisting, extras: a.extras });
+          await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing: lockExisting, extras: a.extras, lockIn: true });
           const t = postedToast(a.visibility, true, !!lockExisting);
           toast.success(t.title, { description: t.description });
         },
@@ -151,9 +154,10 @@ export function ShareWorkoutButton({
             variant === "pill" ? "h-9 rounded-full px-4 text-[13px]" : "h-12 w-full rounded-2xl text-[15px]",
             className,
           )}
+          aria-label={labelClassName ? label : undefined}
         >
           <Plus className="h-4 w-4" strokeWidth={3} />
-          {label}
+          {labelClassName ? <span className={labelClassName}>{label}</span> : label}
         </button>
       )}
 

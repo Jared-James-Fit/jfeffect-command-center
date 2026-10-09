@@ -25,7 +25,7 @@ export function postedToast(visibility: CommunityVisibility, lockIn: boolean, up
  * and posting to it (editing the post if there already is one). Shared by
  * Community "+ Share" and the workout recap's Share, so both feel the same.
  */
-export function useWorkoutStudio(target: StudioWorkout | null, unit: "kg" | "lb", enabled: boolean) {
+export function useWorkoutStudio(target: StudioWorkout | null, unit: "kg" | "lb", enabled: boolean, draftCaption?: string) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -55,7 +55,8 @@ export function useWorkoutStudio(target: StudioWorkout | null, unit: "kg" | "lb"
     ? {
         key: `workout:${target.completion_id}:${existing?.id ?? ""}`,
         label: existing ? "Update" : "Post",
-        caption: existing?.caption,
+        // editing keeps what the post says; a new one starts from any caption they already wrote
+        caption: existing ? existing.caption : draftCaption,
         visibility: existing?.visibility,
         hideLoads: existing?.hide_loads,
         showHideLoads: true,
@@ -64,7 +65,7 @@ export function useWorkoutStudio(target: StudioWorkout | null, unit: "kg" | "lb"
           if (!user?.id) throw new Error("Sign in again to post");
           await shareToCommunity(qc, { userId: user.id, completionId: target.completion_id, caption: a.caption, visibility: a.visibility, hideLoads: a.hideLoads, photo: a.photo, existing, extras: a.extras });
           const t = postedToast(a.visibility, false, !!existing);
-          toast.success(t.title, { description: t.description, action: a.visibility === "community" ? { label: "View", onClick: () => navigate({ to: "/portal/community" }) } : undefined });
+          toast.success(t.title, { description: t.description, action: a.visibility === "community" ? { label: "View", onClick: () => navigate({ to: "/portal/community", hash: "feed" }) } : undefined });
         },
       }
     : null;

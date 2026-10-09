@@ -3,7 +3,8 @@ import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge } from "@/components/community/post-card";
 import { communityIsoDow, trainedLabel, trainingSinceLabel, type CommunityAuthor, type CommunityMember } from "@/lib/community";
-import { useCommunityMembers, useCrewGoal } from "@/lib/community.queries";
+import { useCommunityMembers, useCommunityProfile, useCrewGoal } from "@/lib/community.queries";
+import { useAuth } from "@/lib/auth";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -41,9 +42,11 @@ function WeekDots({ days, today }: { days: number[]; today: number }) {
  * trained this week. Posts aren't the measure here: most people train far
  * more than they post. Tap anyone for their profile. No counts to compete on.
  */
-export function CrewList({ onOpen }: { onOpen: (a: CommunityAuthor) => void }) {
+export function CrewList({ onOpen, onOpenMe }: { onOpen: (a: CommunityAuthor) => void; onOpenMe?: () => void }) {
   const { data: members, isLoading, isError, refetch } = useCommunityMembers(true);
   const { data: goal } = useCrewGoal(true);
+  const { user } = useAuth();
+  const { data: me } = useCommunityProfile(onOpenMe ? (user?.id ?? null) : null);
 
   if (isLoading) {
     return (
@@ -73,6 +76,16 @@ export function CrewList({ onOpen }: { onOpen: (a: CommunityAuthor) => void }) {
         {goal && goal.people > 0 && <span className="shrink-0 text-[11px] font-bold text-primary">{goal.people} trained this week</span>}
       </div>
       <div className="divide-y divide-border/60">
+        {/* you first: your profile, your posts, your photo and bio */}
+        {onOpenMe && me && (
+          <button type="button" data-crew-me onClick={onOpenMe} className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-muted">
+            <UserAvatar src={me.author.avatar_url} name={me.author.name} size={44} expandable={false} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-bold">You</span>
+              <span className="block truncate text-[12px] text-muted-foreground">Your profile · {me.posts === 1 ? "1 post" : `${me.posts ?? 0} posts`}</span>
+            </span>
+          </button>
+        )}
         {members.map((m) => (
           <CrewRow key={m.author.user_id} m={m} today={today} onOpen={onOpen} />
         ))}

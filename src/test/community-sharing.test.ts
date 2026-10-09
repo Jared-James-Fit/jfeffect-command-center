@@ -228,13 +228,14 @@ describe("sharing stays optional", () => {
     const footer = read("src/components/community/recap-post.tsx");
     expect(summary).toContain("useState(false);\n  const [shareMounted");
     expect(summary).toContain("<RecapPostFooter");
-    expect(summary).toContain("onStudio={() => { setShareMounted(true); setShareOpen(true); }}");
+    expect(summary).toContain("onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}");
     expect(summary).not.toMatch(/useEffect\([^)]*setShareOpen\(true\)/);
     // posting only ever happens from the button, and the footer can take it back
     expect(footer).toContain("onClick={() => void post()}");
     expect(footer).not.toMatch(/useEffect\([^)]*post\(\)/);
     expect(footer).toContain("{justPosted === existing.id && (");
-    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(3);
+    // one per footer state, plus the caption sheet's
+    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(4);
   });
 
   it("is not offered to memberships or to a coach in View-as-client", () => {
@@ -375,13 +376,13 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("bottom bar is Home, Workouts, Community (centre), Nutrition, Messages; More opens from the top bar", () => {
+  it("bottom bar is Home, Workouts, League (centre), Nutrition, Messages; More opens from the top bar", () => {
     const nav = read("src/lib/admin-nav.ts");
     const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
     expect(bottom.match(/\{ to: "[^"]+"/g)).toEqual([
       '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/community"', '{ to: "/portal/nutrition-targets"', '{ to: "/portal/messages"',
     ]);
-    expect(bottom).toContain('{ to: "/portal/community", label: "Community", icon: Flame, featured: true },');
+    expect(bottom).toContain('{ to: "/portal/community", label: "League", icon: Trophy, featured: true },');
     // the count of new posts rides on the centre button
     expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
     // its own tab now, so Home no longer lights up for it
@@ -407,7 +408,8 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   });
   it("tapping a post opens the feed at it (not a dead-end single post)", () => {
     expect(entry).toContain("onClick={() => openAt(post.id)}");
-    expect(entry).toContain('navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : undefined })');
+    // the tab opens on League; anything from a post lands on the feed
+    expect(entry).toContain('navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : "feed" })');
   });
   it("only shows a header nudge when there is something new", () => {
     expect(entry).toContain("data.unseen <= 0) return null;");
@@ -529,9 +531,9 @@ describe("the crew: find anyone's profile", () => {
     expect(sql).toContain("WHERE m.user_id <> uid");
     expect(sql).not.toMatch(/community_follow|is_following/i);
   });
-  it("is a Crew tab, and Home never dead-ends: a person opens the feed at their post", () => {
-    expect(screen).toContain('(["feed", "crew", "you"] as const)');
-    expect(screen).toContain("<CrewList onOpen={openAuthor} />");
+  it("is a Crew tab (you're its first row), and Home never dead-ends: a person opens the feed at their post", () => {
+    expect(screen).toContain('(["league", "feed", "crew"] as const)');
+    expect(screen).toContain('<CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "crew" })} />');
     expect(entry).toContain("onClick={() => openAt(post.id)}");
   });
 });
@@ -1072,7 +1074,7 @@ describe("every Share is the same one-screen studio", () => {
   it("Community Share and the recap build workout looks and posts the same way", () => {
     const hook = read("src/components/community/use-workout-studio.ts");
     expect(read("src/components/community/share-workout-picker.tsx")).toContain("const workout = useWorkoutStudio(target, unit, capturing);");
-    expect(read("src/components/community/workout-share-studio.tsx")).toContain("const w = useWorkoutStudio(target, unit, open);");
+    expect(read("src/components/community/workout-share-studio.tsx")).toContain("const w = useWorkoutStudio(target, unit, open, draftCaption);");
     expect(hook).toContain("return { data, looks: cameraLooks(data) };");
     expect(hook).toContain("await shareToCommunity(qc, {");
   });

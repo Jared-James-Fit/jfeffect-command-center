@@ -49,7 +49,7 @@ export const communityKeys = {
   feed: (authorUserId: string | null) => ["community-feed", authorUserId] as const,
   comments: (postId: string) => ["community-comments", postId] as const,
   preview: (completionId: string | null | undefined) => ["community-preview", completionId ?? null] as const,
-  myPost: (completionId: string | null | undefined) => ["community-my-post", completionId ?? null] as const,
+  myPost: (completionId: string | null | undefined, slot: PostSlot = "finish") => ["community-my-post", completionId ?? null, slot] as const,
   post: (postId: string | null) => ["community-post", postId] as const,
   reactors: (postId: string | null) => ["community-reactors", postId] as const,
   profile: (userId: string | null) => ["community-profile", userId] as const,
@@ -666,18 +666,26 @@ export type MyPostRow = {
   hide_loads: boolean;
 };
 
-/** The post (if any) already made for this workout — so reopening Share edits it instead of duplicating. */
-export function useMyPostForCompletion(completionId: string | null | undefined, enabled = true) {
+/**
+ * A session can have two posts: the lock-in ("I showed up", made while it's
+ * open) and the finished-workout share. They're separate posts, so sharing the
+ * finish never overwrites (or deletes the photo of) the lock-in.
+ */
+export type PostSlot = "lockin" | "finish";
+
+/** The post (if any) already made in this slot — so reopening Share edits it instead of duplicating. */
+export function useMyPostForCompletion(completionId: string | null | undefined, enabled = true, slot: PostSlot = "finish") {
   return useQuery({
-    queryKey: communityKeys.myPost(completionId),
+    queryKey: communityKeys.myPost(completionId, slot),
     enabled: enabled && !!completionId,
     staleTime: 0,
     queryFn: async (): Promise<MyPostRow | null> => {
-      const { data, error } = await db
+      let q = db
         .from("community_posts")
         .select("id, caption, visibility, media_path, media_thumb_path, media_type, extra_media, locked_in_at, hide_loads")
-        .eq("completion_id", completionId)
-        .maybeSingle();
+        .eq("completion_id", completionId);
+      q = slot === "lockin" ? q.not("locked_in_at", "is", null) : q.is("locked_in_at", null);
+      const { data, error } = await q.maybeSingle();
       if (error) throw error;
       return (data ?? null) as MyPostRow | null;
     },
@@ -693,6 +701,8 @@ export type SavePostInput = {
   hideLoads?: boolean;
   /** The carousel's other slides, in order. Omitted = keep what it has. */
   extras?: PostSlide[];
+  /** Save to the session's lock-in post (lock-in screens). Omitted = lock-in while open, finish once done. */
+  lockIn?: boolean;
 };
 
 export async function saveCommunityPost(input: SavePostInput): Promise<string> {
@@ -709,6 +719,7 @@ export async function saveCommunityPost(input: SavePostInput): Promise<string> {
     _media_height: m.action === "set" ? m.media_height : null,
     _hide_loads: input.hideLoads ?? null,
     _extra_media: input.extras === undefined ? null : input.extras,
+    _lock_in: input.lockIn ?? null,
   });
   if (error) throw error;
   return (data as { id: string }).id;
@@ -746,6 +757,8 @@ export async function shareToCommunity(
     existing: MyPostRow | null | undefined;
     /** The other slides, already uploaded, in order. Omitted = keep what the post has. */
     extras?: PostSlide[];
+    /** Lock-in screens: save to the lock-in post, never the finish post. */
+    lockIn?: boolean;
   },
 ): Promise<void> {
   let media: SavePostInput["media"] = { action: "keep" };
@@ -758,7 +771,7 @@ export async function shareToCommunity(
       releasePicked(res.media);
     }
   }
-  await saveCommunityPost({ completionId: i.completionId, caption: i.caption, visibility: i.visibility, media, hideLoads: i.hideLoads, extras: i.extras });
+  await saveCommunityPost({ completionId: i.completionId, caption: i.caption, visibility: i.visibility, media, hideLoads: i.hideLoads, extras: i.extras, lockIn: i.lockIn });
   // tidy up whatever the post no longer points at
   const old = i.existing;
   if (old) {

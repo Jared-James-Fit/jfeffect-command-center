@@ -145,7 +145,7 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     to: "client", category: "lift_reviews",
     title: () => "Props from your coach",
     body: (n) => `${n} saw your training.`,
-    url: () => "/portal/community", rateMinutes: 180,
+    url: () => "/portal/community#feed", rateMinutes: 180,
   },
 };
 

@@ -19,6 +19,7 @@ export function WorkoutShareStudio({
   athleteName,
   workoutTitle,
   unit,
+  draftCaption,
 }: {
   open: boolean;
   onClose: () => void;
@@ -26,9 +27,11 @@ export function WorkoutShareStudio({
   athleteName?: string | null;
   workoutTitle?: string | null;
   unit: "kg" | "lb";
+  /** A caption they already started (the recap's caption box), for a new post. */
+  draftCaption?: string;
 }) {
   const target = useMemo<StudioWorkout>(() => ({ completion_id: completionId, title: workoutTitle || "Workout", athlete_name: athleteName ?? null }), [completionId, workoutTitle, athleteName]);
-  const w = useWorkoutStudio(target, unit, open);
+  const w = useWorkoutStudio(target, unit, open, draftCaption);
   const [video, setVideo] = useState<File | null>(null);
   return (
     <>

@@ -196,7 +196,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
       let mediaArg: SavePostInput["media"] = { action: "keep" };
       if (media) mediaArg = { action: "set", ...(await uploadPicked(media, user.id, () => {})) };
       else if (removedExisting) mediaArg = { action: "remove" };
-      await saveCommunityPost({ completionId: id, caption, visibility, media: mediaArg, hideLoads });
+      await saveCommunityPost({ completionId: id, caption, visibility, media: mediaArg, hideLoads, lockIn: true });
       // removing the photo removes the whole carousel; replacing it keeps the other slides
       if (mediaArg.action !== "keep" && existing?.media_path) await removeCommunityFiles(mediaArg.action === "remove" ? postFiles(existing) : [existing.media_path, existing.media_thumb_path]);
       invalidateCommunity(qc);

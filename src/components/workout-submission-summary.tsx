@@ -73,6 +73,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const [sharing, setSharing] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareMounted, setShareMounted] = useState(false);
+  // A caption started in the recap's footer, carried into the studio.
+  const [draftCaption, setDraftCaption] = useState("");
   const shareCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -399,7 +401,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               completionId={completionId}
               completedAt={workoutDate ?? null}
               onDone={() => { onOpenChange(false); onClose?.(); }}
-              onStudio={() => { setShareMounted(true); setShareOpen(true); }}
+              onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}
             />
           ) : (
             <>
@@ -424,6 +426,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           athleteName={athleteName}
           workoutTitle={workoutTitle}
           unit={displayUnit}
+          draftCaption={draftCaption}
         />
       </Suspense>
     )}
