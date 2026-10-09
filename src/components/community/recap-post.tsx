@@ -4,6 +4,7 @@ import { Camera, Check, Flame } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { postPointsHint } from "@/lib/community";
+import { CrewGoalAfterWorkout } from "@/components/community/crew-goal";
 import {
   invalidateCommunity,
   saveCommunityPost,
@@ -80,6 +81,7 @@ export function RecapPostFooter({
           : "Saved to your profile";
     return (
       <div className="w-full">
+        {canPost && <CrewGoalAfterWorkout className="mb-2.5" />}
         <div className="mb-2 flex items-center justify-center gap-1.5 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">
           <Check className="h-3.5 w-3.5" strokeWidth={3} /> {where}
           {justPosted === existing.id && (
@@ -117,6 +119,8 @@ export function RecapPostFooter({
   }
 
   return (
+    <div className="w-full">
+    <CrewGoalAfterWorkout className="mb-2.5" />
     <div className="grid w-full grid-cols-[1fr_auto_1.5fr] gap-2">
       <Button type="button" variant="outline" className="h-12 rounded-xl text-sm font-bold" onClick={onDone}>
         Done
@@ -136,6 +140,7 @@ export function RecapPostFooter({
         </span>
         {earn > 0 && <span className="text-[10px] font-bold opacity-90">+{earn} league points</span>}
       </Button>
+    </div>
     </div>
   );
 }

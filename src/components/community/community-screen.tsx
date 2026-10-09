@@ -14,6 +14,7 @@ import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { CrewList } from "@/components/community/crew-list";
+import { CrewGoalCard } from "@/components/community/crew-goal";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
@@ -306,6 +307,8 @@ export function CommunityScreen({
         />
       ) : (
         <>
+          {/* the week's shared goal leads the feed */}
+          <CrewGoalCard />
           {posts.map((p, i) => (
             <FeedItem key={p.id} index={i} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
