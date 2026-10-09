@@ -53,13 +53,18 @@ export function withBarActionItems(nav: NavItem[]): NavItem[] {
   return out;
 }
 
+/** The page is one of `pages` or under one of them (a tab's `activeOn`). */
+export function onPages(pages: string[] | undefined, pathname: string): boolean {
+  return !!pages?.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
 /**
  * The plain bar tab whose path is the deepest prefix of the current page, if
  * no tab matches it exactly. Single-segment homes (/admin, /portal) never
  * match by prefix, or they'd light up on every page.
  */
 export function barPrefixMatch(items: NavItem[], pathname: string): string | null {
-  if (items.some((i) => !i.children && i.to === pathname)) return null;
+  if (items.some((i) => !i.children && (i.to === pathname || onPages(i.activeOn, pathname)))) return null;
   let best: string | null = null;
   for (const i of items) {
     if (i.children || i.to.includes("?") || i.to.split("/").filter(Boolean).length < 2) continue;

@@ -14,10 +14,10 @@ describe("the coach's community, in one place", () => {
     expect(hub).toContain('{ key: "feed", label: "Feed" }');
     expect(hub).toContain('{ key: "daily", label: "Daily" }');
     expect(hub).toContain('{ key: "birthdays", label: "Birthdays" }');
-    expect(hub).toContain("<StaffLeagueTab />");
+    expect(hub).toContain("<StaffLeagueTab tools={!viewOnly} />");
     // the week at a glance heads the feed; anything waiting shows on every other tab
-    expect(hub).toContain("<PulsePanel onGo={setTab} />");
-    expect(hub).toContain('{tab !== "feed" && <NeedsYouStrip onGo={setTab} />}');
+    expect(hub).toContain("{!viewOnly && <PulsePanel onGo={setTab} />}");
+    expect(hub).toContain('{tab !== "feed" && !viewOnly && <NeedsYouStrip onGo={setTab} />}');
     // links to a post land on the feed
     expect(hub).toContain('if (/tab=feed/.test(h) || /post=/.test(h)) return "feed";');
     expect(hub).toContain("<CommunityScreen hideTabs />");
