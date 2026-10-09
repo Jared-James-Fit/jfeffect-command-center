@@ -224,12 +224,17 @@ describe("sharing stays optional", () => {
   const composer = read("src/components/community/share-composer.tsx");
   const dayView = read("src/components/workout-day/WorkoutDayView.tsx");
 
-  it("only opens when the athlete taps Share, and Done is the main action", () => {
+  it("never posts or opens anything on its own: one tap to post, Done always right there", () => {
+    const footer = read("src/components/community/recap-post.tsx");
     expect(summary).toContain("useState(false);\n  const [shareMounted");
-    expect(summary).toContain('<Share2 className="mr-1.5 h-4 w-4" />Share\n');
-    expect(summary).toContain("Done\n");
-    expect(summary).toContain("setShareOpen(true)");
+    expect(summary).toContain("<RecapPostFooter");
+    expect(summary).toContain("onStudio={() => { setShareMounted(true); setShareOpen(true); }}");
     expect(summary).not.toMatch(/useEffect\([^)]*setShareOpen\(true\)/);
+    // posting only ever happens from the button, and the footer can take it back
+    expect(footer).toContain("onClick={() => void post()}");
+    expect(footer).not.toMatch(/useEffect\([^)]*post\(\)/);
+    expect(footer).toContain("{justPosted === existing.id && (");
+    expect(footer.match(/>\s*Done\s*</g)?.length).toBe(3);
   });
 
   it("is not offered to memberships or to a coach in View-as-client", () => {

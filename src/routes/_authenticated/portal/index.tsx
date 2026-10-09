@@ -339,12 +339,29 @@ function PortalHome() {
           </SectionErrorBoundary>
         )}
 
-        {/* Who shared recently — renders nothing if nobody has this week. */}
+        {/* The crew's week: a shelf of posts, "+ Share" first. */}
         {client?.id && (
           <SectionErrorBoundary label="Community">
             <CommunityHomeStrip />
           </SectionErrorBoundary>
         )}
+
+        {/* Bodyweight: the daily weigh-in (most clients log it), so it sits with
+            today's actions, above the boards you just check (syncs with
+            Progress > Weight tracker) */}
+        {client?.id ? (
+          <DeferRender placeholderHeight="h-52">
+            <SectionErrorBoundary label="Bodyweight">
+              <BodyweightSummaryCard
+                clientId={client.id}
+                userId={portalUserId ?? ""}
+                defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
+              />
+            </SectionErrorBoundary>
+          </DeferRender>
+        ) : clientLoading ? (
+          <SectionSkeleton height="h-52" />
+        ) : null}
 
         {client?.id && (
           <SectionErrorBoundary label="Performance league">
@@ -362,38 +379,6 @@ function PortalHome() {
         {client?.id && (
           <SectionErrorBoundary label="Strength board">
             <StrengthBoardCard />
-          </SectionErrorBoundary>
-        )}
-
-        {/* 2 — Bodyweight tracker (syncs with Progress > Weight tracker) */}
-        {client?.id ? (
-          <DeferRender placeholderHeight="h-52">
-            <SectionErrorBoundary label="Bodyweight">
-              <BodyweightSummaryCard
-                clientId={client.id}
-                userId={portalUserId ?? ""}
-                defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
-              />
-            </SectionErrorBoundary>
-          </DeferRender>
-        ) : clientLoading ? (
-          <SectionSkeleton height="h-52" />
-        ) : null}
-
-        {client?.id && (
-          <SectionErrorBoundary label="Devices">
-            <WearablesCard mode="summary" />
-          </SectionErrorBoundary>
-        )}
-
-        {/* 3 — Water Today */}
-        {portalUserId && (
-          <SectionErrorBoundary label="Water">
-            <HomeWaterCard
-              userId={portalUserId ?? ""}
-              currentUserId={portalUserId}
-              surface="portal"
-            />
           </SectionErrorBoundary>
         )}
 
@@ -419,6 +404,22 @@ function PortalHome() {
           </SectionErrorBoundary>
         )}
 
+        {client?.id && (
+          <SectionErrorBoundary label="Devices">
+            <WearablesCard mode="summary" />
+          </SectionErrorBoundary>
+        )}
+
+        {/* Water (few log it): below the coaching cards */}
+        {portalUserId && (
+          <SectionErrorBoundary label="Water">
+            <HomeWaterCard
+              userId={portalUserId ?? ""}
+              currentUserId={portalUserId}
+              surface="portal"
+            />
+          </SectionErrorBoundary>
+        )}
 
         {/* 7 — Upcoming appointment (compact, only if exists) */}
         {nextAppointment && <UpcomingAppointmentRow appt={nextAppointment} />}
