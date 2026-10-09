@@ -2,13 +2,13 @@ import { type ReactNode } from "react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { Flame, Beef, Wheat, Cookie, Droplets, Moon, HelpCircle, Calculator, AlertTriangle } from "lucide-react";
+import { HelpCircle, Calculator, AlertTriangle } from "lucide-react";
 import type { RecipeProfile } from "./RecipeBrowser";
 import { CookbookEntryCard } from "./CookbookSheet";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { WaterTargetDialog } from "@/components/progress/water-target-dialog";
 import { useAuth } from "@/lib/auth";
-import { MacroBreakdown } from "./MacroBreakdown";
+import { MacroTargetsChart, type TargetExtra } from "./MacroTargetsChart";
 import { TargetsHistorySparkline } from "./TargetsHistorySparkline";
 import { CoachTargetChangeBanner } from "./CoachTargetChangeBanner";
 import { RecentAdherenceWidget } from "./RecentAdherenceWidget";
@@ -68,9 +68,6 @@ export function NutritionDashboard({
           )}
         </SectionErrorBoundary>
       </div>
-      <SectionErrorBoundary label="Macro breakdown">
-        <MacroBreakdown targets={targets} />
-      </SectionErrorBoundary>
       {viewer === "member" && (
         <SectionErrorBoundary label="Target history">
           <TargetsHistorySparkline />
@@ -176,56 +173,28 @@ function TargetsStrip({ targets, userId }: { targets?: NutritionTargets; userId?
   const viewerRole: "owner" | "admin" | "coach" =
     role === "admin" ? "admin" : role === "coach" ? "coach" : "owner";
 
-  const items = [
-    { icon: Flame, label: "Cal", value: targets?.calories, unit: "" },
-    { icon: Beef, label: "Protein", value: targets?.protein, unit: "g" },
-    { icon: Wheat, label: "Carbs", value: targets?.carbs, unit: "g" },
-    { icon: Cookie, label: "Fats", value: targets?.fats, unit: "g" },
-    { icon: Droplets, label: "Water", value: syncedWaterValue ?? targets?.water, unit: "", isWater: true as const },
-    { icon: Moon, label: "Sleep", value: targets?.sleep, unit: "" },
-  ];
+  const waterValue = syncedWaterValue ?? (targets?.water != null ? String(targets.water) : null);
+  const extras: TargetExtra[] = [];
+  if (waterValue || userId) {
+    extras.push({
+      label: "Water",
+      value: waterValue ?? "—",
+      note: syncedWaterValue ? waterSourceLabel : undefined,
+      onClick: userId ? () => setWaterOpen(true) : undefined,
+    });
+  }
+  if (targets?.sleep != null) extras.push({ label: "Sleep", value: String(targets.sleep) });
+
   return (
-    <Card className="p-3 sm:p-4">
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-        {items.map((it) => {
-          const isWater = "isWater" in it && it.isWater;
-          const clickable = isWater && !!userId;
-          const content = (
-            <>
-              <it.icon className="mx-auto h-4 w-4 text-primary" />
-              <div className="mt-1 text-lg font-black leading-none">
-                {it.value ?? "—"}
-                {it.value != null && it.unit && (
-                  <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{it.unit}</span>
-                )}
-              </div>
-              <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                {isWater && syncedWaterValue ? waterSourceLabel : it.label}
-              </div>
-            </>
-          );
-          if (clickable) {
-            return (
-              <button
-                key={it.label}
-                type="button"
-                onClick={() => setWaterOpen(true)}
-                className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-center transition hover:border-primary/50 active:scale-[0.98]"
-              >
-                {content}
-              </button>
-            );
-          }
-          return (
-            <div
-              key={it.label}
-              className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-center"
-            >
-              {content}
-            </div>
-          );
-        })}
-      </div>
+    <Card className="space-y-4 p-4 md:p-5">
+      <div className="text-sm font-black uppercase tracking-widest">Daily Targets</div>
+      <MacroTargetsChart
+        calories={targets?.calories}
+        protein={targets?.protein}
+        carbs={targets?.carbs}
+        fats={targets?.fats}
+        extras={extras}
+      />
       {userId && user?.id && (
         <WaterTargetDialog
           open={waterOpen}

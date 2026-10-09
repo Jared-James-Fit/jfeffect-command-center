@@ -95,4 +95,14 @@ describe("meal plan reader", () => {
     expect(page).toContain("<MealPlanReader");
     expect(page).not.toContain("collapsibleMeals");
   });
+
+  it("member nutrition surfaces use the same chart and reader", () => {
+    const dashboard = readFileSync("src/components/nutrition/NutritionDashboard.tsx", "utf8");
+    const panel = readFileSync("src/components/nutrition/MemberMealPlanPanel.tsx", "utf8");
+    expect(dashboard).toContain("<MacroTargetsChart");
+    expect(dashboard).toContain("setWaterOpen(true)");
+    expect(dashboard).not.toContain("MacroBreakdown");
+    expect(panel).toContain("<MacroTargetsChart");
+    expect(panel).toContain("<MealPlanReader");
+  });
 });

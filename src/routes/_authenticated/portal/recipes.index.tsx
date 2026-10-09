@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { RecipeBrowser } from "@/components/nutrition/RecipeBrowser";
 import { MemberMealPlanPanel } from "@/components/nutrition/MemberMealPlanPanel";
+import { MacroTargetsChart } from "@/components/nutrition/MacroTargetsChart";
 import { getActiveMemberTargets } from "@/lib/nutrition-targets/member-targets.functions";
 import { Card } from "@/components/ui/card";
 import { Target } from "lucide-react";
@@ -61,7 +62,7 @@ function PortalRecipes() {
       <MemberMealPlanPanel />
       {t && (
         <div className="px-4 md:px-6 pt-4">
-          <Card className="p-4 md:p-5 space-y-3">
+          <Card className="p-4 md:p-5 space-y-4">
             <div className="flex items-center gap-2">
               <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
                 <Target className="h-4 w-4" />
@@ -73,24 +74,12 @@ function PortalRecipes() {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[
-                { label: "Cal", value: t.calories },
-                { label: "Protein", value: t.protein_g, unit: "g" },
-                { label: "Carbs", value: t.carbs_g, unit: "g" },
-                { label: "Fats", value: t.fat_g, unit: "g" },
-              ].map((m) => (
-                <div key={m.label} className="rounded-md border border-border bg-secondary/20 px-3 py-2 text-center">
-                  <div className="text-lg font-black leading-none">
-                    {m.value ?? "—"}
-                    {m.value != null && m.unit && (
-                      <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{m.unit}</span>
-                    )}
-                  </div>
-                  <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{m.label}</div>
-                </div>
-              ))}
-            </div>
+            <MacroTargetsChart
+              calories={t.calories}
+              protein={t.protein_g}
+              carbs={t.carbs_g}
+              fats={t.fat_g}
+            />
           </Card>
         </div>
       )}
