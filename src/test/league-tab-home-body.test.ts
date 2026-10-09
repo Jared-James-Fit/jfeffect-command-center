@@ -17,7 +17,7 @@ describe("the centre tab is League: standings and the crew in one place", () => 
     const centre = clientBottomNav.find((i) => i.featured);
     expect(centre).toMatchObject({ to: "/portal/community", label: "League" });
     const menu = clientNav.find((i) => i.to === "/portal/community");
-    expect(menu?.label).toBe("League & Community");
+    expect(menu?.label).toBe("League & Crew");
     expect(menu?.keywords).toEqual(expect.arrayContaining(["league", "leaderboard", "community", "feed", "crew"]));
   });
   it("League · Feed · Crew; your profile is the first row of Crew", () => {

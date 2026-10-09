@@ -340,7 +340,7 @@ function PortalHome() {
 
         {/* The crew's week: a shelf of posts, "+ Share" first. */}
         {client?.id && (
-          <SectionErrorBoundary label="Community">
+          <SectionErrorBoundary label="Crew feed">
             <CommunityHomeStrip />
           </SectionErrorBoundary>
         )}

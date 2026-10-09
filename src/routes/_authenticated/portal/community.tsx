@@ -9,7 +9,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
  * `#post=<id>` opens a post straight away, `#at=<id>` scrolls to it.
  */
 export const Route = createFileRoute("/_authenticated/portal/community")({
-  head: () => ({ meta: [{ title: "Community" }] }),
+  head: () => ({ meta: [{ title: "League" }] }),
   component: PortalCommunity,
 });
 

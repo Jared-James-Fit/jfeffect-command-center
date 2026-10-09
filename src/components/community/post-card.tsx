@@ -33,6 +33,7 @@ import { WinsStatsCard } from "@/components/community/wins-stats";
 import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-cards";
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
+import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
 import { PollCard } from "@/components/community/poll";
@@ -498,14 +499,24 @@ export function ReactionBar({
   const kinds = reactionKinds(post);
   const showKinds = kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji);
   const faces = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me)).slice(0, 3);
+  // People are reacting to this one: a moment after it's on screen, its
+  // reactions float up out of the heart and who reacted pops (never over the post).
+  const pop = useEngagementPop<HTMLDivElement>(post);
+  const { on, done } = pop;
+  useEffect(() => {
+    if (!on) return;
+    const t = window.setTimeout(done, 2400);
+    return () => window.clearTimeout(t);
+  }, [on, done]);
   return (
-    <div className="flex items-center gap-1 px-2 pb-2 pt-2">
+    <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative flex items-center gap-1 px-2 pb-2 pt-2">
       <ReactionButton post={post} onReact={onReact} />
+      {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} className="bottom-1/2 left-5" />}
       {who && (
         <button
           type="button"
           onClick={() => setListFor(post.id)}
-          className="flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-left hover:bg-muted"
+          className={cn("flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-left hover:bg-muted", on && "engage-chip")}
           aria-label={`See who reacted: ${who}`}
         >
           {faces.length > 0 && (
