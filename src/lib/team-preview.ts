@@ -92,7 +92,7 @@ const READ_NAME = /^(get|list|load|fetch|search|count|read|lookup|find|check|res
 const WRITE_HINT = /(OrCreate|Ensure|Upsert|Save|Update|Create|Delete|Remove|Send|Record|Mark|Sync|Upload|Invite|Archive|Restore|Toggle|Approve|Reject|Claim|Grant|Revoke|Reset|Set[A-Z])/;
 
 // Read-named functions that still change something (token rotation, cleanup).
-const WRITES_DESPITE_NAME = new Set(["getSetupLink", "getCoachSetupLink", "getMemberInstallLink", "getAtHomeBackupSessionState"]);
+const WRITES_DESPITE_NAME = new Set(["getSetupLink", "getCoachSetupLink", "getMemberInstallLink", "getAtHomeBackupSessionState", "getMyCalendarFeed"]);
 
 export function isPreviewSafeFn(name: string | undefined | null): boolean {
   if (!name || WRITES_DESPITE_NAME.has(name) || !READ_NAME.test(name)) return false;

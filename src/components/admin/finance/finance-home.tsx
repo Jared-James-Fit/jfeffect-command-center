@@ -15,6 +15,7 @@ import { BOOKS_KEY, useSnapReceipts } from "@/components/admin/books/use-snap-re
 import { RecordPaymentDialog, type PaymentToRecord } from "./record-payment-dialog";
 import { PeriodBars, RankBars, shortCad, shortMonth } from "./finance-charts";
 import { CollectList, Kpi, PaymentLine, Section, useBooksData } from "./finance-ui";
+import { MyCalendarCard } from "./my-calendar-card";
 
 function QuickAction({ icon: Icon, label, onClick, to, search, primary, busy }: {
   icon: typeof Camera; label: string; onClick?: () => void; to?: string; search?: Record<string, string>; primary?: boolean; busy?: boolean;
@@ -130,6 +131,8 @@ export function FinanceHome() {
           ? <Kpi label="GST/HST owing" value={fmtCad(s.gst.owingMinor)} sub={`${shortCad(s.revenue.collectedMinor)} collected, ${shortCad(s.gst.paidMinor)} paid`} />
           : <Kpi label="Profit so far" value={fmtCad(s.profitMinor)} sub={`${s.year} to date`} />}
       </div>
+
+      <MyCalendarCard />
 
       {toCheck > 0 && (
         <Link to={"/admin/finance/books" as any} search={{ tab: "expenses", filter: "review" } as any} className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">

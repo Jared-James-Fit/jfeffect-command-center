@@ -15,12 +15,18 @@ type PickClient = { id: string; full_name: string | null; profile_picture_url: s
  */
 export function ClientLinkDialog({
   open, noteText, currentClientId, onPick, onClose,
+  title = "Save to client file",
+  description = "The note syncs to their profile. If you delete it here, it stays in their notes archive.",
+  suggestedLabel = "Mentioned in this note",
 }: {
   open: boolean;
   noteText: string;
   currentClientId?: string;
   onPick: (c: { id: string; name: string }) => void;
   onClose: () => void;
+  title?: string;
+  description?: string;
+  suggestedLabel?: string;
 }) {
   const [q, setQ] = useState("");
   const { data: clients = [], isLoading } = useQuery({
@@ -71,8 +77,8 @@ export function ClientLinkDialog({
     <Dialog open={open} onOpenChange={(o) => { if (!o) { setQ(""); onClose(); } }}>
       <DialogContent className="z-[90] flex max-h-[80dvh] max-w-md flex-col gap-3">
         <DialogHeader>
-          <DialogTitle>Save to client file</DialogTitle>
-          <DialogDescription>The note syncs to their profile. If you delete it here, it stays in their notes archive.</DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <label className="flex items-center gap-2 rounded-lg border border-border px-2.5">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -87,7 +93,7 @@ export function ClientLinkDialog({
           {suggested.length > 0 && (
             <>
               <div className="flex items-center gap-1 px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                <Sparkles className="h-3 w-3" /> Mentioned in this note
+                <Sparkles className="h-3 w-3" /> {suggestedLabel}
               </div>
               <ul>{suggested.map((c) => row(c, "Suggested"))}</ul>
               <div className="my-2 h-px bg-border" />

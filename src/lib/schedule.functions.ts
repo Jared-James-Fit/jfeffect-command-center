@@ -3,7 +3,8 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { wallTimeToUtc } from "@/lib/schedule-time";
 import { findConflicts, type BusyItem, type SlotConflict } from "@/lib/session-conflicts";
-import { PovInput, resolvePovClientId } from "@/lib/client-pov.server";
+import { PovInput, isPovRequest, resolvePovClientId } from "@/lib/client-pov.server";
+import { ownOrLinkedClient } from "@/lib/linked-client.server";
 
 /**
  * Server functions behind the one Schedule (client) and the calendar quick
@@ -283,12 +284,19 @@ function newToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * The subscribe link for your own client calendar. A staff login the owner
+ * linked to its person's client account (linked-client.server.ts) gets that
+ * account's link, so the same sessions land in their Google Calendar.
+ */
 export const getMyCalendarFeed = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ reset: z.boolean().optional() }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    const clientId = await myClientId(supabase, userId);
+    const { userId } = context as any;
+    const mine = await ownOrLinkedClient(userId);
+    if (!mine) throw new Error("Only clients can sync a calendar.");
+    const clientId = mine.id;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: c } = await supabaseAdmin.from("clients").select("calendar_feed_token").eq("id", clientId).maybeSingle();
     let token = (c as any)?.calendar_feed_token as string | null;
@@ -309,7 +317,8 @@ export const getMyCalendarSyncStatus = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => PovInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const clientId = await resolvePovClientId(supabase, userId, data);
+    const clientId = (await resolvePovClientId(supabase, userId, data))
+      ?? (isPovRequest(userId, data) ? null : (await ownOrLinkedClient(userId))?.id ?? null);
     if (!clientId) return { isClient: false, lastFetchAt: null as string | null, app: null as string | null };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row } = await (supabaseAdmin as any)
@@ -322,4 +331,23 @@ export const getMyCalendarSyncStatus = createServerFn({ method: "POST" })
       lastFetchAt: (row?.last_fetch_at as string | null) ?? null,
       app: (row?.app as string | null) ?? null,
     };
+  });
+
+/**
+ * Whose calendar a staff home shows: the signed-in person's own client
+ * account, or the one the owner linked their staff login to. The owner,
+ * previewing a team member, asks for that member's.
+ */
+export const getMyClientAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ userId: z.string().uuid().nullish() }).parse(d ?? {}))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    let target = userId as string;
+    if (data.userId && data.userId !== userId) {
+      const { data: isAdmin } = await supabase.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
+      if (!isAdmin) throw new Error("Forbidden");
+      target = data.userId;
+    }
+    return ownOrLinkedClient(target);
   });

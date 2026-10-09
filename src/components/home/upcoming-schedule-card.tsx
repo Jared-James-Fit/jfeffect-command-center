@@ -45,14 +45,18 @@ const MAX_DAY_ROWS = 4;
  * with something on it when today is clear). Tapping another day shows that
  * day. The full Day / Week / Month calendar stays behind "View calendar".
  */
-export function UpcomingScheduleCard({ clientId }: { clientId: string | null | undefined }) {
+export function UpcomingScheduleCard({ clientId, links = true }: {
+  clientId: string | null | undefined;
+  /** False on a staff home (the person's own client account): no Book, no portal links. */
+  links?: boolean;
+}) {
   const { items } = useClientCalendarSources(clientId);
   // "Book" shows when the coach has opened booking types to this client.
   const pov = usePovArgs();
   const typesFn = usePovFn(useServerFn(listMyBookingTypes));
   const { data: bookable = [] } = useQuery({
     queryKey: ["my-booking-types", pov.viewAsClientId ?? null],
-    enabled: !!clientId,
+    enabled: !!clientId && links,
     queryFn: () => typesFn({ data: {} }),
     staleTime: 5 * 60_000,
   });
@@ -87,7 +91,7 @@ export function UpcomingScheduleCard({ clientId }: { clientId: string | null | u
           <CalendarDays className="h-3.5 w-3.5 shrink-0 text-primary" />
           <span className="truncate">{heading}</span>
         </h3>
-        <div className="flex shrink-0 items-center gap-3">
+        {links && <div className="flex shrink-0 items-center gap-3">
           {bookable.length > 0 && !pov.viewAsClientId && (
             bookable.length === 1 ? (
               <Link
@@ -110,7 +114,7 @@ export function UpcomingScheduleCard({ clientId }: { clientId: string | null | u
           >
             View calendar <ChevronRight className="h-3.5 w-3.5" />
           </Link>
-        </div>
+        </div>}
       </div>
 
       <WeekStrip
@@ -134,7 +138,7 @@ export function UpcomingScheduleCard({ clientId }: { clientId: string | null | u
             const appointment = isAppointmentItem(item);
             const when = mode === "next" ? [dayLabel(item.date, today), time].filter(Boolean).join(" · ") : time;
             // Sessions open the Schedule, where "Need to change it?" lives.
-            const href = item.href ?? (item.kind === "pt_session" ? { to: "/portal/calendar" } : null);
+            const href = !links ? null : item.href ?? (item.kind === "pt_session" ? { to: "/portal/calendar" } : null);
             const row = (
               <div
                 className={cn(
@@ -177,12 +181,16 @@ export function UpcomingScheduleCard({ clientId }: { clientId: string | null | u
       )}
 
       {moreCount > 0 ? (
-        <Link
-          to="/portal/calendar"
-          className="block text-[11px] font-bold uppercase tracking-widest text-muted-foreground"
-        >
-          +{moreCount} more
-        </Link>
+        links ? (
+          <Link
+            to="/portal/calendar"
+            className="block text-[11px] font-bold uppercase tracking-widest text-muted-foreground"
+          >
+            +{moreCount} more
+          </Link>
+        ) : (
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">+{moreCount} more</p>
+        )
       ) : null}
     </Card>
   );
