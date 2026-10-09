@@ -59,7 +59,8 @@ import { WorkoutEmptyCard } from "@/components/workout-empty-state";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
-import { resolveExerciseUnit, modeUnit, saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
+import { saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
+import { resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
 import {
   convertLoad,
   displayLoadInUnit,
@@ -1395,47 +1396,16 @@ function WorkoutDay({
 
   // Map exercise_id -> resolved unit, recomputed when inputs change.
   const [unitOverrides, setUnitOverrides] = useState<Record<string, WUnit>>({});
-  const resolvedUnitMap = useMemo(() => {
-    const prefByEx: Record<string, WUnit> = {};
-    for (const p of prefRows as any[]) {
-      if (p.exercise_id && (p.unit === "kg" || p.unit === "lb")) prefByEx[p.exercise_id] = p.unit;
-    }
-    const historyByEx: Record<string, string[]> = {};
-    for (const h of historyRows as any[]) {
-      const exId = h.pl_exercise_rows?.exercise_id;
-      if (!exId) continue;
-      (historyByEx[exId] ||= []).push(h.actual_load_unit);
-    }
-    const map: Record<string, WUnit> = {};
-    for (const r of rows as any[]) {
-      const exId = r.exercises?.id ?? r.exercise_id ?? null;
-      const rowKey = `row:${r.id}`;
-      // Unit choice belongs to the canonical exercise, not the program row.
-      // Repeated cards for the same exercise switch together immediately.
-      const preferenceKey = exId ? `exercise:${exId}` : rowKey;
-      const local = unitOverrides[preferenceKey];
-      // Sensible defaults when there's no explicit preference/history:
-      //   Competition squat, bench, deadlift → kg
-      //   Everything else → lb
-      const isCompLift =
-        r.exercises?.is_competition_lift === true ||
-        r.exercises?.competition_lift_type === "squat" ||
-        r.exercises?.competition_lift_type === "bench" ||
-        r.exercises?.competition_lift_type === "deadlift";
-      const libraryDefault: WUnit | null =
-        r.exercises?.default_load_unit === "kg" || r.exercises?.default_load_unit === "lb"
-          ? r.exercises.default_load_unit
-          : (isCompLift ? "kg" : "lb");
-      map[rowKey] = local ?? resolveExerciseUnit({
-        prefUnit: exId ? prefByEx[exId] ?? null : null,
-        historyUnit: exId ? modeUnit(historyByEx[exId] ?? []) : null,
-        rowLoadUnit: (r.load_unit === "kg" || r.load_unit === "lb") ? r.load_unit : null,
-        exerciseDefault: libraryDefault,
-        workoutUnit: isCompLift ? "kg" : "lb",
-      });
-    }
-    return map;
-  }, [rows, prefRows, historyRows, unitOverrides, unit]);
+  // One unit per exercise per workout — see resolveWorkoutRowUnits.
+  const resolvedUnitMap = useMemo(
+    () => resolveWorkoutRowUnits({
+      rows: rows as any[],
+      prefRows: prefRows as any[],
+      historyRows: historyRows as any[],
+      overrides: unitOverrides,
+    }),
+    [rows, prefRows, historyRows, unitOverrides],
+  );
 
   const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
     const rowKey = `row:${rowId}`;
@@ -4568,6 +4538,18 @@ function SetRow({
   const existingDisplayLoad = fmtLoad(displayLoadInUnit(existing, unit));
   const initialDisplayLoad = existingDisplayLoad || (autoFillSuggestedWeight && suggestedWeight != null ? fmtLoad(suggestedWeight) : "");
   const [load, setLoad] = useState(initialDisplayLoad);
+  // The unit `load` is written in. It changes in the same update as `load`, so
+  // the saved pair is always physically consistent. Saving `load` with the
+  // card's current `unit` instead let one render pair the old number with a
+  // new unit after a kg/lb flip, and a save in that render stored e.g. 135 kg
+  // for a set typed as 135 lb (Jared McIntyre, Paused Bench, Oct 2026).
+  const [loadUnit, setLoadUnit] = useState<"kg" | "lb">(unit);
+  const unitRef = useRef(unit);
+  unitRef.current = unit;
+  const setLoadPaired = (next: string | ((prev: string) => string)) => {
+    setLoad(next as any);
+    setLoadUnit(unitRef.current);
+  };
   const serverVelocity = (existing as any)?.mean_concentric_velocity_mps != null ? Number((existing as any).mean_concentric_velocity_mps) : null;
   const [velocity, setVelocity] = useState(serverVelocity != null ? String(serverVelocity) : "");
   useEffect(() => { setVelocity(serverVelocity != null ? String(serverVelocity) : ""); }, [serverVelocity]);
@@ -4654,11 +4636,19 @@ function SetRow({
   }, [focusedField, load, reps, rpe]);
   useEffect(() => {
     if (!draftKey || hydrated) return;
-    const d = readLocalDraft<{ load: string; reps: string; rpe: string }>(draftKey);
+    const d = readLocalDraft<{ load: string; reps: string; rpe: string; unit?: "kg" | "lb" }>(draftKey);
     if (d?.value && (d.value.load || d.value.reps || d.value.rpe)) {
       // Only restore draft if server has nothing for this set yet
       if (!existing) {
-        setLoad(d.value.load);
+        // A draft keeps the unit it was typed in; show it converted to the
+        // card's unit so the screen and the saved pair agree.
+        const draftUnit = d.value.unit === "kg" || d.value.unit === "lb" ? d.value.unit : unit;
+        const draftNum = Number(d.value.load);
+        setLoadPaired(
+          d.value.load && Number.isFinite(draftNum) && draftUnit !== unit
+            ? fmtLoad(convertLoad(draftNum, draftUnit, unit))
+            : d.value.load,
+        );
         setReps(d.value.reps);
         setRpe(d.value.rpe);
       }
@@ -4714,7 +4704,7 @@ function SetRow({
     if (recentlySavedRef.current) return;
     const display = display0;
     if (focused !== "load" && !loadLocked) {
-      setLoad(display);
+      setLoadPaired(display);
       setLoadType(serverType0);
     }
     if (focused !== "reps") {
@@ -4749,7 +4739,9 @@ function SetRow({
     // relabel or rewrite historical storage.
     const current = Number(load);
     if (load.trim() !== "" && Number.isFinite(current)) {
-      setLoad(fmtLoad(convertLoad(current, previousUnit, unit)));
+      setLoadPaired(fmtLoad(convertLoad(current, previousUnit, unit)));
+    } else {
+      setLoadUnit(unit);
     }
     queueMicrotask(() => { saveRef.current?.markClean(); });
   }, [unit]);
@@ -4783,13 +4775,13 @@ function SetRow({
     if (forcedFill && setIndex !== 1 && !latest?.completed_at) {
       // forcedFill wins for uncompleted sets — it's the value just written to the DB
       const forcedLoad = Number(forcedFill.load);
-      setLoad(Number.isFinite(forcedLoad) ? fmtLoad(convertLoad(forcedLoad, forcedFill.unit, unit)) : forcedFill.load);
+      setLoadPaired(Number.isFinite(forcedLoad) ? fmtLoad(convertLoad(forcedLoad, forcedFill.unit, unit)) : forcedFill.load);
       if (forcedFill.loadType) setLoadType(forcedFill.loadType);
       if (forcedFill.reps) setReps(forcedFill.reps);
       if (forcedFill.rpe) setRpe(forcedFill.rpe);
     } else {
       const display = fmtLoad(displayLoadInUnit(latest, unit));
-      setLoad(display);
+      setLoadPaired(display);
       if (latest?.actual_reps != null) setReps(String(latest.actual_reps));
       if (latest?.actual_rpe_num != null) setRpe(String(latest.actual_rpe_num));
       else if (latest?.actual_rpe != null) setRpe(latest.actual_rpe);
@@ -4810,7 +4802,7 @@ function SetRow({
     setFocusedField(null);
     setLoadType(cascade.loadType);
     const cascadeLoad = Number(cascade.load);
-    setLoad(cascade.loadType === "bodyweight" ? "0" : Number.isFinite(cascadeLoad) ? fmtLoad(convertLoad(cascadeLoad, cascade.unit, unit)) : cascade.load);
+    setLoadPaired(cascade.loadType === "bodyweight" ? "0" : Number.isFinite(cascadeLoad) ? fmtLoad(convertLoad(cascadeLoad, cascade.unit, unit)) : cascade.load);
     // The parent's batch write carries this value — treat it as our commit so
     // a stale refetch can't restore the pre-cascade weight either.
     committedLoadRef.current = {
@@ -4834,7 +4826,7 @@ function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cascade?.token]);
 
-  const value = useMemo(() => ({ load, reps, rpe, velocity, unit, bw, loadType }), [load, reps, rpe, velocity, unit, bw, loadType]);
+  const value = useMemo(() => ({ load, reps, rpe, velocity, unit: loadUnit, bw, loadType }), [load, reps, rpe, velocity, loadUnit, bw, loadType]);
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
@@ -4927,7 +4919,7 @@ function SetRow({
       if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
       const persistedLoad = bw
         ? { value: 0, unit }
-        : persistedLoadForDisplayValue(load, unit, existing);
+        : persistedLoadForDisplayValue(load, loadUnit, existing);
       const completedAt = isSetLogComplete({
         requireReps: showReps,
         requireTime: showTimer,
@@ -5191,7 +5183,7 @@ function SetRow({
     const rpeNum = rpe ? Number(rpe) : null;
     const persistedLoad = bw
       ? { value: 0, unit }
-      : persistedLoadForDisplayValue(load, unit, existing);
+      : persistedLoadForDisplayValue(load, loadUnit, existing);
     const currentHasRequiredValues = isSetLogComplete({
       requireReps: showReps,
       requireTime: showTimer,
@@ -5263,14 +5255,14 @@ function SetRow({
   };
 
   // Quick-fill helpers — these only update local state, never auto-confirm.
-  const applySuggestedWeight = () => { if (suggestedWeight != null) setLoad(fmtNum(suggestedWeight)); };
+  const applySuggestedWeight = () => { if (suggestedWeight != null) setLoadPaired(fmtNum(suggestedWeight)); };
   const bumpWeight = (delta: number) => {
     const base = load ? Number(load) : (suggestedWeight ?? 0);
     const next = Math.max(0, base + delta);
-    setLoad(fmtNum(Math.round(next / weightIncrement(unit)) * weightIncrement(unit)));
+    setLoadPaired(fmtNum(Math.round(next / weightIncrement(unit)) * weightIncrement(unit)));
   };
   const useTargets = () => {
-    if (suggestedWeight != null) setLoad(fmtNum(suggestedWeight));
+    if (suggestedWeight != null) setLoadPaired(fmtNum(suggestedWeight));
     if (repTarget?.max != null) setReps(String(repTarget.max));
     else if (repTarget?.exact != null) setReps(String(repTarget.exact));
     else if (repTarget?.min != null) setReps(String(repTarget.min));
@@ -5407,7 +5399,7 @@ function SetRow({
     const rpeNumNow = rpe ? Number(rpe) : null;
     const persistedLoadNow = bw
       ? { value: 0, unit }
-      : persistedLoadForDisplayValue(load, unit, existing);
+      : persistedLoadForDisplayValue(load, loadUnit, existing);
     // Timer is one of several inputs — the set only turns green when every
     // required input for this row has a value.
     const completeNow = isSetLogComplete({
@@ -5575,7 +5567,7 @@ function SetRow({
           // assisted and explicit clear alike).
           committedLoadRef.current = { load: bodyweight ? "0" : nextLoad, loadType: nextType };
           setLoadType(nextType);
-          setLoad(bodyweight ? "0" : nextLoad);
+          setLoadPaired(bodyweight ? "0" : nextLoad);
           setFocusedField(null);
           setOptimisticComplete(false);
           // Commit → persist + re-evaluate completion immediately, after the
