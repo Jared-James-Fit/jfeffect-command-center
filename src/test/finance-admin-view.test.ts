@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { viewOnlyFetch, setAdminView } from "@/lib/admin-view";
-import { ADMIN_VIEW_HEADER, VIEW_ONLY_MESSAGE, RECORDABLE_PAYMENT_STATUSES } from "@/lib/permissions";
+import { ADMIN_VIEW_HEADER, PERMISSIONS, VIEW_ONLY_MESSAGE, RECORDABLE_PAYMENT_STATUSES } from "@/lib/permissions";
 import { assertAdminOr, withoutCredentials } from "@/lib/permissions.server";
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -246,9 +246,9 @@ describe("the finance phone bar: Home, Money, League (raised), Clients, Tasks", 
     expect(read("src/components/admin/finance/money-switcher.tsx")).toContain("navigate({ to: TO[p], replace: true })");
   });
 
-  it("the League is the crew's boards, without the coach's queues and tools", () => {
+  it("the League is the crew's boards and feed, without the coach's queues and tools", () => {
     const hub = read("src/components/community/admin-community-hub.tsx");
-    expect(hub).toContain('const VIEW_TABS: HubTab[] = ["league"];');
+    expect(hub).toContain('const VIEW_TABS: HubTab[] = ["league", "feed"];');
     expect(hub).toContain("{tabs.length > 1 && <div");
     expect(hub).toContain('const tab = tabs.some((t) => t.key === picked) ? picked : "league";');
     expect(hub).toContain("{!viewOnly && <button");
@@ -258,6 +258,30 @@ describe("the finance phone bar: Home, Money, League (raised), Clients, Tasks", 
     expect(read("src/components/community/staff-league-board.tsx")).toContain("{tools && <LeagueTools />}");
     // A count it can never clear would sit on the button for good.
     expect(read("src/hooks/use-client-nav-badges.ts")).toContain('if (!viewOnly && community?.enabled && community.unseen > 0) map["/admin/community"]');
+  });
+});
+
+describe("Fionna works the task board and sees the feed's photos", () => {
+  const mig = read("supabase/migrations/20261028090000_finance_tasks_and_feed.sql");
+
+  it("tasks.manage adds, edits, completes and removes team tasks, never the media board", () => {
+    expect(mig).toContain("INSERT INTO public.role_permissions (role, permission) VALUES ('finance', 'tasks.manage')");
+    for (const cmd of ["SELECT", "INSERT", "UPDATE", "DELETE"]) expect(mig).toContain(`FOR ${cmd} TO authenticated`);
+    expect(mig.match(/scope = 'admin' AND public\.has_permission\(auth\.uid\(\), 'tasks\.manage'\)/g)).toHaveLength(5);
+    expect(PERMISSIONS).toContain("tasks.manage");
+  });
+
+  it("posted photos and comment photos open for a view-only login; drafts and the storage rule are untouched", () => {
+    expect(mig).toContain("OR public.is_admin_viewer()))\n      OR (public.is_community_staff() AND (");
+    expect(mig).toContain("AND (public.community_comment_readable(c.post_id, c.author_user_id, c.hidden_at)\n                         OR public.is_admin_viewer()))");
+    expect(mig).not.toMatch(/POLICY[^;]*storage\.objects/);
+  });
+
+  it("the feed asks with plain values, so a view-only login reads it", () => {
+    const q = read("src/lib/community.queries.ts");
+    expect(q).toContain("...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),");
+    expect(q).toContain("...(authorUserId ? { _author_user_id: authorUserId } : {}),");
+    expect(q).not.toContain("_before_at: pageParam?.at ?? null");
   });
 });
 
