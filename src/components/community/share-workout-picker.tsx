@@ -68,7 +68,7 @@ export function ShareWorkoutButton({
   const activeMode: Mode = today ? mode ?? "lockin" : "workout";
   const [startedId, setStartedId] = useState<string | null>(null);
   const lockCompletionId = today ? startedId ?? today.completionId : null;
-  const { data: lockExisting } = useMyPostForCompletion(lockCompletionId, capturing && !!lockCompletionId);
+  const { data: lockExisting } = useMyPostForCompletion(lockCompletionId, capturing && !!lockCompletionId, "lockin");
   const { data: plan } = useDayPlan(capturing ? today?.dayId ?? null : null);
   const startSrv = useServerFn(startWorkoutFn);
 
@@ -115,7 +115,7 @@ export function ShareWorkoutButton({
           if (!user?.id) throw new Error("Sign in again to post");
           const id = await ensureStarted();
           if (!id) throw new Error("Couldn't start your session. Try again.");
-          await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing: lockExisting, extras: a.extras });
+          await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing: lockExisting, extras: a.extras, lockIn: true });
           const t = postedToast(a.visibility, true, !!lockExisting);
           toast.success(t.title, { description: t.description });
         },
