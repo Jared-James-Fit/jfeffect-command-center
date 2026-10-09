@@ -118,11 +118,16 @@ export function MemberProfileWorkspace({
 
   const accessActive = isMemberAccessActive(member);
 
+  // The member app on the admin's test account, with this member's access.
   const onEnterPov = async () => {
     try {
       await copyPov({ data: { memberId } });
-      setPovFlag(`as:${member.full_name || member.email}`);
-      toast.success("Entering member POV");
+      setPovFlag(`as:${member.full_name || member.email}`, "/admin/clients?kind=members");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["m-me"] }),
+        qc.invalidateQueries({ queryKey: ["current-member-access"] }),
+      ]);
+      toast.success(`Showing the member app with ${member.full_name || member.email}'s access`);
       navigate({ to: "/m" });
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
@@ -139,7 +144,7 @@ export function MemberProfileWorkspace({
   // subscription tab was misleading. A missing action is better than a fake
   // one. Restore them when their own workflows exist.
   const memberActions: WorkspaceAction[] = [
-    { key: "pov", label: "Open Member POV", icon: Eye, onClick: onEnterPov, tone: "warn" },
+    { key: "pov", label: "View as member", icon: Eye, onClick: onEnterPov, tone: "warn" },
     { key: "message", label: "Message Member", icon: MessageSquare, onClick: () => setTab("sms") },
     { key: "manage", label: "Manage Membership", icon: Settings2, onClick: () => setTab("subscription") },
     { key: "grant", label: "Grant Access", icon: Gift, onClick: () => setTab("access") },

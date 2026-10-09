@@ -149,11 +149,12 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
   const missedShownAsBadge = badges.some((b) => b.id === "missed");
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
-  const { role } = useAuth();
+  const { role, viewOnly } = useAuth();
   const isAdmin = role === "admin";
   const navigate = useNavigate();
   const impersonation = useClientImpersonation();
-  const canPov = role === "admin" || role === "coach";
+  // A view-only login (or a team preview) can't open client view: the server refuses it.
+  const canPov = (role === "admin" || role === "coach") && !viewOnly;
   const [povBusy, setPovBusy] = useState(false);
 
   const enterPov = async () => {

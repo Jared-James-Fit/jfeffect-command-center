@@ -18,11 +18,11 @@ import { toast } from "sonner";
  * fuzzy-search active clients and jump straight into their portal POV.
  */
 export function ClientPovQuickPicker() {
-  const { role } = useAuth();
+  const { role, viewOnly } = useAuth();
   const navigate = useNavigate();
   const impersonation = useClientImpersonation();
   const [open, setOpen] = useState(false);
-  const canPov = role === "admin" || role === "coach";
+  const canPov = (role === "admin" || role === "coach") && !viewOnly;
 
   useEffect(() => {
     if (!canPov) return;
