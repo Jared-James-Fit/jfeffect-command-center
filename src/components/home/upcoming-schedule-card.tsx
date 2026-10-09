@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { CalendarDays, ChevronRight } from "lucide-react";
 import { KIND_META, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
 import { isAppointmentItem, selectHomeUpcoming } from "@/lib/home-upcoming";
+import { WeekStrip, nextSevenDays } from "@/components/calendar/week-strip";
 import { cn } from "@/lib/utils";
 
 function isoToday() {
@@ -25,25 +26,52 @@ function timeLabel(item: CalendarItem): string | null {
   return new Date(item.startsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+/** Cardio rides on training days; counting it would double every dot. */
+function countsOnStrip(item: CalendarItem): boolean {
+  return item.kind !== "cardio" && item.status !== "Cancelled";
+}
+
+const MAX_DAY_ROWS = 4;
+
 /**
- * Compact Today / Next-up strip for the client Home screen.
+ * Client Home schedule: a 7-day strip on top of a short list.
  *
- * Home is a summary: at most a few rows covering today's remaining events,
- * or the next scheduled day when today is clear. The full Day / Week / Month
- * calendar stays behind "View calendar".
+ * Today keeps the summary behaviour (today's remaining items, or the next day
+ * with something on it when today is clear). Tapping another day shows that
+ * day. The full Day / Week / Month calendar stays behind "View calendar".
  */
 export function UpcomingScheduleCard({ clientId }: { clientId: string | null | undefined }) {
   const { items } = useClientCalendarSources(clientId);
   const today = isoToday();
+  const [selected, setSelected] = useState(today);
+  const days = useMemo(() => nextSevenDays(today), [today]);
 
   const summary = useMemo(() => selectHomeUpcoming(items ?? [], { today }), [items, today]);
+  const countByDay = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const it of items ?? []) if (countsOnStrip(it)) m.set(it.date, (m.get(it.date) ?? 0) + 1);
+    return m;
+  }, [items]);
+
+  const isToday = selected === today;
+  const dayItems = useMemo(
+    () =>
+      (items ?? [])
+        .filter((i) => i.date === selected && i.status !== "Cancelled")
+        .sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? "")),
+    [items, selected],
+  );
+  const rows = isToday ? summary.rows : dayItems.slice(0, MAX_DAY_ROWS);
+  const moreCount = isToday ? summary.moreCount : Math.max(0, dayItems.length - MAX_DAY_ROWS);
+  const mode = isToday ? summary.mode : "day";
+  const heading = mode === "next" ? "Next up" : isToday ? "Today" : dayLabel(selected, today);
 
   return (
     <Card className="space-y-2.5 border-border bg-card p-3.5">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
         <h3 className="flex min-w-0 items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">
           <CalendarDays className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <span className="truncate">{summary.mode === "today" ? "Today" : "Next up"}</span>
+          <span className="truncate">{heading}</span>
         </h3>
         <Link
           to="/portal/calendar"
@@ -53,15 +81,28 @@ export function UpcomingScheduleCard({ clientId }: { clientId: string | null | u
         </Link>
       </div>
 
-      {summary.rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing scheduled right now.</p>
+      <WeekStrip
+        days={days}
+        today={today}
+        selected={selected}
+        onSelect={setSelected}
+        count={(d) => countByDay.get(d) ?? 0}
+        dotClass="bg-emerald-400"
+      />
+
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {isToday ? "Nothing scheduled right now." : `Nothing on ${dayLabel(selected, today)}.`}
+        </p>
       ) : (
         <ul className="space-y-1.5">
-          {summary.rows.map((item) => {
+          {rows.map((item) => {
             const meta = KIND_META[item.kind];
             const time = timeLabel(item);
             const appointment = isAppointmentItem(item);
-            const when = summary.mode === "today" ? time : [dayLabel(item.date, today), time].filter(Boolean).join(" · ");
+            const when = mode === "next" ? [dayLabel(item.date, today), time].filter(Boolean).join(" · ") : time;
+            // Sessions open the Schedule, where "Need to change it?" lives.
+            const href = item.href ?? (item.kind === "pt_session" ? { to: "/portal/calendar" } : null);
             const row = (
               <div
                 className={cn(
@@ -75,18 +116,21 @@ export function UpcomingScheduleCard({ clientId }: { clientId: string | null | u
                     {when ? <span className="tabular-nums">{when} · </span> : null}
                     {item.title}
                   </div>
-                  <div className="truncate text-[11px] text-muted-foreground">{meta?.label}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {meta?.label}
+                    {item.status === "Completed" ? " · Done" : ""}
+                  </div>
                 </div>
-                {item.href ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" /> : null}
+                {href ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" /> : null}
               </div>
             );
             return (
               <li key={item.id} className="min-w-0">
-                {item.href ? (
+                {href ? (
                   <Link
-                    to={item.href.to as any}
-                    params={item.href.params as any}
-                    search={item.href.search as any}
+                    to={href.to as any}
+                    params={(href as any).params as any}
+                    search={(href as any).search as any}
                     className="block"
                   >
                     {row}
@@ -100,12 +144,12 @@ export function UpcomingScheduleCard({ clientId }: { clientId: string | null | u
         </ul>
       )}
 
-      {summary.moreCount > 0 ? (
+      {moreCount > 0 ? (
         <Link
           to="/portal/calendar"
           className="block text-[11px] font-bold uppercase tracking-widest text-muted-foreground"
         >
-          +{summary.moreCount} more
+          +{moreCount} more
         </Link>
       ) : null}
     </Card>
