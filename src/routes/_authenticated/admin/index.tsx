@@ -24,7 +24,8 @@ import {
   buildSnapshot, waitingOnMe, groupWins, winLine, revenueDelta, formatMoney, TIER_LABEL,
   type InboxRow, type SnapshotTile, type Overview, type OverviewSession, type OverviewWin,
 } from "@/lib/dashboard-feed";
-import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
+import { DashboardScheduleCard } from "@/components/admin-calendar/dashboard-schedule-card";
+import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
 const PriceCardPickerDialog = lazyWithRetry(() =>
   import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
 );
@@ -467,6 +468,13 @@ function AdminDashboard() {
         {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
         <SnapshotGrid tiles={snapshot} loading={directoryLoading} />
 
+        {/* ---------------- SCHEDULE: client change requests (hidden when none), then the next 7 days.
+            Right under the numbers because it's the one part of "Today" tied to the clock. ---------------- */}
+        <SectionErrorBoundary label="Schedule">
+          <ChangeRequestsCard />
+          <DashboardScheduleCard />
+        </SectionErrorBoundary>
+
         {/* ---------------- TODAY: who trains today and who already has ---------------- */}
         <TrainingTodayCard overview={overview} loading={overviewLoading} />
 
@@ -547,8 +555,6 @@ function AdminDashboard() {
         {/* ---------------- BUSINESS (admins only: the RPC returns no money for coaches) ---------------- */}
         {overview?.money && <BusinessCard overview={overview} />}
 
-        {/* Empty schedule sections collapse instead of consuming dashboard space. */}
-        <UpcomingAppointmentsCard mode="admin" limit={3} hideWhenEmpty />
       </div>
 
       {sellTo ? (

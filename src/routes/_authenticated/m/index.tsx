@@ -15,6 +15,7 @@ import { ProgressSummaryCard } from "@/components/progress/progress-summary-card
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { HomeBodyweightCard } from "@/components/home/home-bodyweight-card";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
+import { MemberWeekCard } from "@/components/member/member-week-card";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 
 export const Route = createFileRoute("/_authenticated/m/")({
@@ -49,6 +50,8 @@ function MemberHome() {
       <div className="-mt-3 flex justify-end">
         <DashboardRefreshIndicator />
       </div>
+      {/* The week first: it's the one part of Home tied to the date (same strip as clients and coaches). */}
+      <MemberWeekCard memberId={me?.member?.id} />
       {me?.member?.user_id && (
         <HomeBodyweightCard
           userId={me.member.user_id}
