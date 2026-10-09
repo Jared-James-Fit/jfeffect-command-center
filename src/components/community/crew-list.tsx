@@ -1,17 +1,49 @@
-import { ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge } from "@/components/community/post-card";
-import { postTimeLabel, type CommunityAuthor } from "@/lib/community";
-import { useCommunityMembers } from "@/lib/community.queries";
+import { communityIsoDow, trainedLabel, trainingSinceLabel, type CommunityAuthor, type CommunityMember } from "@/lib/community";
+import { useCommunityMembers, useCrewGoal } from "@/lib/community.queries";
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** This week, Mon to Sun: a filled dot for each day they trained, today ringed. */
+function WeekDots({ days, today }: { days: number[]; today: number }) {
+  const set = new Set(days);
+  return (
+    <span className="flex shrink-0 items-center gap-[3px]" aria-label={`Trained ${days.map((d) => DAYS[d - 1]).join(", ")} this week`} role="img">
+      {DAYS.map((_, i) => {
+        const d = i + 1;
+        return (
+          <span
+            key={d}
+            className={cn(
+              "h-[7px] w-[7px] rounded-full",
+              set.has(d)
+                ? "bg-primary"
+                : d === today
+                  ? "border border-muted-foreground/70" // today, still open
+                  : d > today
+                    ? "bg-muted-foreground/15"
+                    : "bg-muted-foreground/30",
+            )}
+          />
+        );
+      })}
+    </span>
+  );
+}
 
 /**
- * Everyone in the JF crew: coaches first, then whoever shared most recently.
- * Tap anyone to open their profile. No follow buttons, no counts to compete on.
+ * Everyone in the JF crew, by who's training: training now, the coach, then
+ * whoever trained most recently. Each row says when they last trained (only
+ * within the week; a quiet stretch is never shown) and dots for the days they
+ * trained this week. Posts aren't the measure here: most people train far
+ * more than they post. Tap anyone for their profile. No counts to compete on.
  */
 export function CrewList({ onOpen }: { onOpen: (a: CommunityAuthor) => void }) {
   const { data: members, isLoading, isError, refetch } = useCommunityMembers(true);
+  const { data: goal } = useCrewGoal(true);
 
   if (isLoading) {
     return (
@@ -33,36 +65,48 @@ export function CrewList({ onOpen }: { onOpen: (a: CommunityAuthor) => void }) {
     return <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-[13px] text-muted-foreground">Nobody else here yet.</div>;
   }
 
+  const today = communityIsoDow();
   return (
     <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
-      <div className="border-b border-border/60 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-        {members.length + 1} in the JF crew
+      <div className="flex items-baseline justify-between gap-2 border-b border-border/60 px-3.5 py-2">
+        <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{members.length + 1} in the JF crew</span>
+        {goal && goal.people > 0 && <span className="shrink-0 text-[11px] font-bold text-primary">{goal.people} trained this week</span>}
       </div>
       <div className="divide-y divide-border/60">
         {members.map((m) => (
-          <button key={m.author.user_id} type="button" onClick={() => onOpen(m.author)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-muted">
-            <span className={cn("shrink-0 rounded-full", m.live && "ring-2 ring-red-500 ring-offset-2 ring-offset-card")}>
-              <UserAvatar src={m.author.avatar_url} name={m.author.name} size={44} expandable={false} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1.5">
-                <span className="truncate text-[15px] font-bold">{m.author.name}</span>
-                {m.author.is_coach && <CoachBadge />}
-                {m.live && <span className="rounded-[5px] bg-red-500 px-1 text-[9px] font-black uppercase leading-[14px] text-white">Live</span>}
-              </span>
-              <span className="block truncate text-[12px] text-muted-foreground">
-                {m.bio ||
-                  (m.posts > 0
-                    ? `${m.author.is_coach ? m.author.title || "Coach · JF Effect" : `${m.posts} ${m.posts === 1 ? "post" : "posts"}`} · ${postTimeLabel(m.last_post_at!)}`
-                    : m.author.is_coach
-                      ? m.author.title || "Coach · JF Effect"
-                      : "No posts yet")}
-              </span>
-            </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </button>
+          <CrewRow key={m.author.user_id} m={m} today={today} onOpen={onOpen} />
         ))}
       </div>
     </div>
+  );
+}
+
+function CrewRow({ m, today, onOpen }: { m: CommunityMember; today: number; onOpen: (a: CommunityAuthor) => void }) {
+  const activity = m.live ? null : trainedLabel(m.trained_at);
+  const about = m.bio || (m.author.is_coach ? m.author.title || "Coach · JF Effect" : null) || trainingSinceLabel(m.training_since) || "In the JF crew";
+  const days = m.week_days ?? [];
+  return (
+    <button type="button" data-crew-row onClick={() => onOpen(m.author)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-muted">
+      <span className={cn("shrink-0 rounded-full", m.live && "ring-2 ring-red-500 ring-offset-2 ring-offset-card")}>
+        <UserAvatar src={m.author.avatar_url} name={m.author.name} size={44} expandable={false} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-[15px] font-bold">{m.author.name}</span>
+          {m.author.is_coach && <CoachBadge />}
+          {m.live && <span className="rounded-[5px] bg-red-500 px-1 text-[9px] font-black uppercase leading-[14px] text-white">Live</span>}
+        </span>
+        <span className="block truncate text-[12px] text-muted-foreground">
+          {m.live ? (
+            <span className="font-bold text-red-500">Training now</span>
+          ) : activity ? (
+            <span className="font-semibold text-foreground/80">{activity}</span>
+          ) : null}
+          {(m.live || activity) && " · "}
+          {about}
+        </span>
+      </span>
+      {days.length > 0 && <WeekDots days={days} today={today} />}
+    </button>
   );
 }

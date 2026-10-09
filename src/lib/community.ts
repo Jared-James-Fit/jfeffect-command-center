@@ -329,7 +329,32 @@ export type CommunityMember = {
   posts: number;
   last_post_at: string | null;
   live: boolean;
+  /** Their latest session, only if it was in the last 7 days (a quiet stretch is never shown). */
+  trained_at?: string | null;
+  /** Days they trained this week, 1 = Monday … 7 = Sunday (the community's week, Winnipeg time). */
+  week_days?: number[];
+  /** Their first session (the profile shows it too). */
+  training_since?: string | null;
 };
+
+/** "Trained today" / "Trained yesterday" / "Trained Tue"; null when it's been more than a week. */
+export function trainedLabel(iso: string | null | undefined, now = new Date()): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return null;
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86_400_000);
+  if (diff <= 0) return "Trained today";
+  if (diff === 1) return "Trained yesterday";
+  if (diff > 7) return null;
+  return `Trained ${d.toLocaleDateString(undefined, { weekday: "short" })}`;
+}
+
+/** Today in the community's week (1 = Monday … 7 = Sunday, Winnipeg time). */
+export function communityIsoDow(now = new Date()): number {
+  const wd = now.toLocaleDateString("en-US", { timeZone: "America/Winnipeg", weekday: "short" });
+  return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(wd) + 1 || 1;
+}
 
 export type CommunityPostDetail = CommunityPost & { exercises: CommunityExercise[] };
 
