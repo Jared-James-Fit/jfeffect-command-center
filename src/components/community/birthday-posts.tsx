@@ -58,12 +58,14 @@ function statusLine(b: BirthdayPost) {
  * who's next and when their draft lands, with "Write it now" to see it early.
  * `#birthday=<client id>` (the push) opens that one straight away.
  */
-export function BirthdayPostsCard() {
+export function BirthdayPostsCard({ actionableOnly = false }: { actionableOnly?: boolean } = {}) {
   const { data } = useBirthdayPosts();
-  const { data: next = [] } = useBirthdaysNext();
+  const { data: next = [] } = useBirthdaysNext(!actionableOnly);
   const draftNow = useDraftBirthdayNow();
   const [openId, setOpenId] = useState<string | null>(null);
-  const items = (data ?? []).filter((b) => b.status !== "skipped");
+  // On the dashboard only what needs you shows (a draft to review, or the one a push opened);
+  // everything else lives on Community > Birthdays.
+  const items = (data ?? []).filter((b) => b.status !== "skipped" && (!actionableOnly || b.status === "ready" || b.id === openId));
 
   useEffect(() => {
     if (!data) return;
@@ -74,7 +76,7 @@ export function BirthdayPostsCard() {
     history.replaceState(null, "", window.location.pathname + window.location.search);
   }, [data]);
 
-  if (items.length === 0 && next.length === 0) return null;
+  if (items.length === 0 && (actionableOnly || next.length === 0)) return null;
   const open = items.find((b) => b.id === openId) ?? null;
   const writeNow = async (n: BirthdayNext) => {
     try {
@@ -95,9 +97,11 @@ export function BirthdayPostsCard() {
         <h2 className="text-[13px] font-bold tracking-tight">Birthday posts</h2>
         {waiting > 0 && <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-primary-foreground">{waiting} to review</span>}
       </div>
-      <p className="mb-2 text-[12px] text-muted-foreground">
-        Written in your voice from their numbers. Each draft lands at 5pm the day before, with a notification. Nothing goes out until you approve it.
-      </p>
+      {!actionableOnly && (
+        <p className="mb-2 text-[12px] text-muted-foreground">
+          Written in your voice from their numbers. Each draft lands at 5pm the day before, with a notification. Nothing goes out until you approve it.
+        </p>
+      )}
       <div className="divide-y divide-border/70">
         {items.map((b) => (
           <button key={b.id} type="button" onClick={() => setOpenId(b.id)} className="flex w-full items-center gap-3 py-2.5 text-left">
@@ -119,7 +123,7 @@ export function BirthdayPostsCard() {
           </button>
         ))}
       </div>
-      {next.length > 0 && (
+      {!actionableOnly && next.length > 0 && (
         <div className={cn(items.length > 0 && "mt-2 border-t border-border/70 pt-2")}>
           <div className="pb-1 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Coming up</div>
           <div className="divide-y divide-border/70">

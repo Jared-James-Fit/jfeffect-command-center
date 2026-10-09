@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ChevronRight } from "lucide-react";
+import { Activity, CalendarCheck, ChevronRight, Gauge, HeartPulse, Moon, ShieldPlus, TrendingUp, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   Sheet,
@@ -599,11 +599,22 @@ function ReadinessRing({
 /** Grid labels that fit half a phone width; the sheet keeps the full name. */
 const SHORT_LABEL: Partial<Record<FactorKey, string>> = { performance: "Performance" };
 
+/** One line icon per factor, same weight as the rest of the app. */
+const FACTOR_ICON: Record<FactorKey, LucideIcon> = {
+  sleep: Moon,
+  recovery: HeartPulse,
+  load: Gauge,
+  consistency: CalendarCheck,
+  performance: TrendingUp,
+  pain: ShieldPlus,
+};
+
 /** One readiness input as a label, score and thin bar — tap for the detail sheet. */
 function FactorBar({ factor, onClick }: { factor: FactorDetail; onClick: () => void }) {
   const dim = factor.isMissing || factor.isBuilding;
   const pct = Math.max(0, Math.min(100, factor.score));
   const bar = dim ? "bg-muted-foreground/30" : statusColor[factor.status].dot;
+  const Icon = FACTOR_ICON[factor.key];
   return (
     <button
       type="button"
@@ -614,7 +625,7 @@ function FactorBar({ factor, onClick }: { factor: FactorDetail; onClick: () => v
     >
       <div className="flex items-center justify-between gap-2 text-xs">
         <span className="flex min-w-0 items-center gap-1.5 font-semibold text-foreground/90">
-          <span aria-hidden="true">{factor.emoji}</span>
+          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={2} aria-hidden />
           <span className="truncate">{SHORT_LABEL[factor.key] ?? factor.label}</span>
         </span>
         <span className={cn("font-bold tabular-nums", dim ? "text-muted-foreground" : "text-foreground")}>
@@ -651,7 +662,12 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
       <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted-foreground/30" />
       <SheetHeader className="text-left">
         <SheetTitle className="flex items-center gap-2 text-lg">
-          <span className="text-2xl leading-none" aria-hidden>{factor.emoji}</span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted" aria-hidden>
+            {(() => {
+              const Icon = FACTOR_ICON[factor.key];
+              return <Icon className={cn("h-4 w-4", colors.text)} strokeWidth={2} />;
+            })()}
+          </span>
           {factor.label}
         </SheetTitle>
         <SheetDescription className="sr-only">

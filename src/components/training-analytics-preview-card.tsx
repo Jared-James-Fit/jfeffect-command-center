@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { ArrowRight, CalendarDays, Dumbbell, TrendingUp } from "lucide-react";
+import { ArrowRight, CalendarDays, Dumbbell, TrendingUp, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientResults } from "@/lib/pl-programs";
@@ -56,7 +56,7 @@ export function TrainingAnalyticsPreviewCard({
     ? `${compare.pct >= 0 ? "▲" : "▼"} ${Math.abs(compare.pct)}% vs ${h.prevMonthLabel}'s pace`
     : null;
   const weightLine = beatLastMonth
-    ? `Beat all of ${h.prevMonthLabel} (${wholeWeight(h.prevMonthTotalLb, unit)} ${unit}) 🔥`
+    ? `Beat all of ${h.prevMonthLabel} (${wholeWeight(h.prevMonthTotalLb, unit)} ${unit})`
     : goalPct != null
       ? [`${goalPct}% of ${h.prevMonthLabel}'s total`, pace].filter(Boolean).join(" · ")
       : pace;
@@ -104,6 +104,7 @@ export function TrainingAnalyticsPreviewCard({
                 }
                 data-testid="month-weight-line"
               >
+                {beatLastMonth && <Trophy className="mr-1 inline h-3.5 w-3.5 -translate-y-px" strokeWidth={2.25} aria-hidden />}
                 {weightLine}
               </div>
             )}
