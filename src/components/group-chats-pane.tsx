@@ -24,6 +24,10 @@ import { ManageGroupDialog } from "@/components/manage-group-dialog";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { useGroupPresence } from "@/hooks/use-group-presence";
 import { LiveDot } from "@/hooks/use-chat-presence";
+import { directThreadsKey, isUnread, useDirectThreads } from "@/lib/direct-chats";
+import { DirectChatView, DirectRow, RequestsEntry, RequestsList } from "@/components/direct-chat";
+import { crewThreadsKey, isCrewUnread, useCrewThreads } from "@/lib/crew-chats";
+import { CreateCrewSheet, CrewChatView, CrewRow } from "@/components/crew-chat";
 
 export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const { user, role } = useAuth();
@@ -58,6 +62,29 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
     queryKey: ["chat-groups", asAdmin],
     queryFn: () => (asAdmin ? listAllGroupsForAdmin() : listMyGroups()),
   });
+
+  // Member-to-member chats (and requests). Private to the two people, so
+  // never in the coach's list or in "View as client".
+  const { data: rawDirects } = useDirectThreads(!asAdmin && !isImpersonating);
+  const directs = Array.isArray(rawDirects) ? rawDirects : [];
+  const requests = directs.filter((t) => t.incoming);
+  const directChats = directs.filter((t) => !t.incoming);
+  const me = viewerId ?? user?.id ?? null;
+  // Group chats members started (and invites to them): same privacy as DMs.
+  const { data: rawCrews } = useCrewThreads(!asAdmin && !isImpersonating);
+  const crews = Array.isArray(rawCrews) ? rawCrews : [];
+  const crewInvites = crews.filter((t) => t.status === "invited");
+  const crewChats = crews.filter((t) => t.status === "joined");
+  const [crewOpen, setCrewOpen] = useState(false);
+  const [showRequests, setShowRequests] = useState(false);
+  const selectedDirect = directs.find((t) => t.group_id === selectedId) ?? null;
+  const selectedCrew = crews.find((t) => t.group_id === selectedId) ?? null;
+  const requestCount = requests.length + crewInvites.length;
+  // Opened from a "Message request" / invite push: back goes to the requests.
+  const openedRequest = !!selectedDirect?.incoming || selectedCrew?.status === "invited";
+  useEffect(() => {
+    if (openedRequest) setShowRequests(true);
+  }, [openedRequest]);
 
   const { data: memberships = [] } = useQuery({
     queryKey: ["group-memberships", viewerId],
@@ -108,7 +135,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   });
 
   const resyncGroups = () => {
-    for (const k of ["chat-groups", "group-memberships", "group-last-messages", "group-unread"]) {
+    for (const k of ["chat-groups", "group-memberships", "group-last-messages", "group-unread", "direct-threads", "crew-threads"]) {
       qc.invalidateQueries({ queryKey: [k] });
     }
   };
@@ -120,10 +147,18 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
       .channel("groups-pane")
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_groups" }, () => {
         qc.invalidateQueries({ queryKey: ["chat-groups"] });
+        qc.invalidateQueries({ queryKey: directThreadsKey });
+        qc.invalidateQueries({ queryKey: crewThreadsKey });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members" }, () => {
         qc.invalidateQueries({ queryKey: ["chat-groups"] });
         qc.invalidateQueries({ queryKey: ["group-memberships"] });
+        qc.invalidateQueries({ queryKey: directThreadsKey });
+        qc.invalidateQueries({ queryKey: crewThreadsKey });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_direct_closed" }, () => {
+        qc.invalidateQueries({ queryKey: directThreadsKey });
+        qc.invalidateQueries({ queryKey: crewThreadsKey });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "group_messages" }, (payload: any) => {
         const row = payload?.new;
@@ -139,9 +174,11 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
           qc.invalidateQueries({ queryKey: ["group-last-messages"] });
         }
         qc.invalidateQueries({ queryKey: ["group-unread"] });
+        qc.invalidateQueries({ queryKey: directThreadsKey });
+        qc.invalidateQueries({ queryKey: crewThreadsKey });
       })
       .subscribe(onRealtimeRejoin(() => {
-        for (const k of ["chat-groups", "group-memberships", "group-last-messages", "group-unread"]) {
+        for (const k of ["chat-groups", "group-memberships", "group-last-messages", "group-unread", "direct-threads", "crew-threads"]) {
           qc.invalidateQueries({ queryKey: [k] });
         }
       }));
@@ -163,6 +200,16 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
         return bt.localeCompare(at);
       });
   }, [groupRows, lastMsgByGroup, lastReadByGroup, user?.id, viewerId]);
+
+  // Coach groups, member groups and 1:1 chats in one list, newest activity first.
+  const listRows = useMemo(() => {
+    const rows: Array<{ at: string; group?: (typeof visibleGroups)[number]; direct?: (typeof directChats)[number]; crew?: (typeof crewChats)[number] }> = [
+      ...visibleGroups.map((g) => ({ at: g.last?.created_at ?? g.group.updated_at ?? "", group: g })),
+      ...directChats.map((t) => ({ at: t.last_at, direct: t })),
+      ...crewChats.map((t) => ({ at: t.last_at, crew: t })),
+    ];
+    return rows.sort((a, b) => b.at.localeCompare(a.at));
+  }, [visibleGroups, directChats, crewChats]);
 
   const selected = groupRows.find((g) => g.id === selectedId);
   const myMembership = selected ? membershipRows.find((m) => m.group_id === selected.id) : undefined;
@@ -197,10 +244,25 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
       {/* Sidebar list */}
       <aside className={cn(
         "flex w-full flex-col border-r border-border bg-card md:w-[300px] md:shrink-0",
-        selected ? "hidden md:flex" : "flex",
+        selected || selectedDirect || selectedCrew ? "hidden md:flex" : "flex",
       )}>
+        {showRequests && !asAdmin ? (
+          <RequestsList
+            threads={requests}
+            crews={crewInvites}
+            me={me}
+            selectedId={selectedId}
+            onOpen={setSelectedId}
+            onBack={() => { setShowRequests(false); if (openedRequest) setSelectedId(null); }}
+          />
+        ) : (<>
         <header className="flex items-center justify-between border-b border-border px-3 py-2">
-          <div className="text-sm font-bold tracking-tight">Group chats</div>
+          <div className="text-sm font-bold tracking-tight">{asAdmin ? "Group chats" : "Chats"}</div>
+          {!asAdmin && !isImpersonating && (
+            <Button size="sm" variant="ghost" onClick={() => setCrewOpen(true)}>
+              <Plus className="mr-1 h-3 w-3" /> New group
+            </Button>
+          )}
           {asAdmin && (
             <div className="flex items-center gap-1">
               {isAdmin && (
@@ -248,11 +310,34 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
           </div>
         )}
         <div className="flex-1 overflow-y-auto">
-          {visibleGroups.length === 0 ? (
+          {requestCount > 0 && !selectMode && (
+            <RequestsEntry
+              count={requestCount}
+              fresh={requests.some((t) => isUnread(t, me)) || crewInvites.some((t) => isCrewUnread(t, me))}
+              onClick={() => setShowRequests(true)}
+            />
+          )}
+          {listRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
-              {asAdmin ? "No groups yet. Create one to get started." : "No group chats yet."}
+              {asAdmin ? "No groups yet. Create one to get started." : "No chats yet. Start a group, or tap the send icon on someone's post to message them."}
             </div>
-          ) : visibleGroups.map(({ group, last, unread }) => (
+          ) : listRows.map((row) => row.crew ? (
+            <CrewRow
+              key={row.crew.group_id}
+              thread={row.crew}
+              me={me}
+              selected={selectedId === row.crew.group_id}
+              onClick={() => setSelectedId(row.crew!.group_id)}
+            />
+          ) : row.direct ? (
+            <DirectRow
+              key={row.direct.group_id}
+              thread={row.direct}
+              me={me}
+              selected={selectedId === row.direct.group_id}
+              onClick={() => setSelectedId(row.direct!.group_id)}
+            />
+          ) : row.group && (({ group, last, unread }) => (
             <div
               key={group.id}
               role="button"
@@ -297,13 +382,18 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
                 </div>
               </div>
             </div>
-          ))}
+          ))(row.group))}
         </div>
+        </>)}
       </aside>
 
       {/* Thread pane */}
-      <section className={cn("flex min-w-0 flex-1 flex-col", selected ? "flex" : "hidden md:flex")}>
-        {selected ? (
+      <section className={cn("flex min-w-0 flex-1 flex-col", selected || selectedDirect || selectedCrew ? "flex" : "hidden md:flex")}>
+        {selectedCrew && !asAdmin ? (
+          <CrewChatView key={selectedCrew.group_id} thread={selectedCrew} onBack={() => setSelectedId(null)} />
+        ) : selectedDirect && !asAdmin ? (
+          <DirectChatView key={selectedDirect.group_id} thread={selectedDirect} onBack={() => setSelectedId(null)} />
+        ) : selected ? (
           <>
             <header className="flex items-center gap-2 border-b border-border bg-card/80 px-3 py-2 backdrop-blur md:px-4">
               <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setSelectedId(null)}>
@@ -357,12 +447,13 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
           </>
         ) : (
           <div className="grid flex-1 place-items-center text-sm text-muted-foreground">
-            Select a group to start.
+            {asAdmin ? "Select a group to start." : "Select a chat to start."}
           </div>
         )}
       </section>
 
       {asAdmin && <CreateGroupDialog open={createOpen} onOpenChange={setCreateOpen} />}
+      {!asAdmin && <CreateCrewSheet open={crewOpen} onOpenChange={setCrewOpen} onCreated={(id) => { setShowRequests(false); setSelectedId(id); }} />}
       {selected && (asAdmin || isAdminOfGroup) && (
         <ManageGroupDialog open={manageOpen} onOpenChange={setManageOpen} group={selected} />
       )}
@@ -422,7 +513,7 @@ function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "c
   );
 }
 
-/** Hook used by client portal toggle to show "do they have any groups?" + unread badge. */
+/** Client Messenger's "Chats" toggle: any groups or 1:1 chats? + how many are new. */
 export function useMyGroupSummary() {
   const { user } = useAuth();
   const { isImpersonating } = useClientImpersonation();
@@ -469,5 +560,17 @@ export function useMyGroupSummary() {
       unread += 1;
     }
   }
-  return { hasGroups: groups.length > 0, unread, groups };
+  // 1:1 chats and message requests count once each while there's something new.
+  const { data: rawDirects } = useDirectThreads(!isImpersonating);
+  const directs = Array.isArray(rawDirects) ? rawDirects : [];
+  for (const t of directs) if (isUnread(t, viewerId ?? user?.id)) unread += 1;
+  const { data: rawCrews } = useCrewThreads(!isImpersonating);
+  const crews = Array.isArray(rawCrews) ? rawCrews : [];
+  for (const t of crews) if (isCrewUnread(t, viewerId ?? user?.id)) unread += 1;
+  return {
+    hasGroups: groups.length > 0 || directs.length > 0 || crews.length > 0,
+    unread,
+    groups,
+    requests: directs.filter((t) => t.incoming).length + crews.filter((t) => t.status === "invited").length,
+  };
 }

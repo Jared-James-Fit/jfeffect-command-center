@@ -4,7 +4,7 @@ Status: **plan only. Nothing here has been run against the live database.**
 
 The rule: anyone with a staff role (admin, coach, media_manager, finance) uses a staff-only login with its own email. A personal client or member login never holds a staff role. A staff login never has a `clients` or `app_members` row. One person's staff roles share one staff login.
 
-Migration `20261015090300_staff_personal_split.sql` enforces this for **new** grants and links. Accounts that already mix both keep working as they are. The dual-account switcher (`use-dual-account.ts`) stays in place for them until they're split.
+Migration `20261019100000_staff_personal_split.sql` enforces this for **new** grants and links. Accounts that already mix both keep working as they are. The dual-account switcher (`use-dual-account.ts`) stays in place for them until they're split.
 
 ## 1. List the mixed accounts (read-only)
 

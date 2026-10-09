@@ -1,7 +1,7 @@
 /**
  * business-tax.ts
  *
- * The numbers behind Taxes & Books and Summer Ledger. Pure functions only, so
+ * The numbers behind Taxes & Books and Cleo. Pure functions only, so
  * the dashboard, the PDFs and the assistant all read the same figures.
  *
  * Money is integer cents throughout. Revenue is counted when it is received
@@ -703,7 +703,7 @@ export function buildBooksSnapshot(input: {
   const issues: ReadinessIssue[] = [];
   const needsReview = expenses.filter((e) => e.status === "needs_review");
   if (needsReview.length) {
-    issues.push({ id: "needs-review", severity: "warn", title: `${needsReview.length} receipt${needsReview.length === 1 ? "" : "s"} to confirm`, detail: "Summer filed these but was not sure about something. Check the amount, GST and category.", count: needsReview.length, amountMinor: sumBy(needsReview, (e) => e.amountMinor) });
+    issues.push({ id: "needs-review", severity: "warn", title: `${needsReview.length} receipt${needsReview.length === 1 ? "" : "s"} to confirm`, detail: "Cleo filed these but was not sure about something. Check the amount, GST and category.", count: needsReview.length, amountMinor: sumBy(needsReview, (e) => e.amountMinor) });
   }
   const uncategorized = expenses.filter((e) => e.category === "uncategorized");
   if (uncategorized.length) {

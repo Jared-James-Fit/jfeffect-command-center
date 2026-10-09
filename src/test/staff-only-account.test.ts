@@ -96,7 +96,7 @@ describe("assertNotStaffAccount (personal side)", () => {
 
 describe("finalizeStaffOnlyUser", () => {
   it("leaves the account holding only its staff role", async () => {
-    // As if handle_new_user (pre-20261015090200) had added the client role.
+    // As if handle_new_user (before 20261018100200) had added the client role.
     const sb = fakeAdmin({ tables: { user_roles: [{ user_id: "u1", role: "client" }] } });
     await finalizeStaffOnlyUser(sb, "u1", "finance");
     expect(sb.tables.user_roles).toEqual([{ user_id: "u1", role: "finance" }]);

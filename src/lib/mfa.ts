@@ -1,6 +1,6 @@
 /**
  * Supabase TOTP MFA for staff. Admin and finance must use an authenticator
- * app: their session has to be aal2 before the staff areas open, and the
+ * app: their session has to be aal2 before their area opens, and the
  * database (has_role admin, has_permission) refuses them otherwise.
  */
 import { supabase } from "@/integrations/supabase/client";
@@ -28,7 +28,7 @@ export async function getMfaState(): Promise<MfaState> {
   return verified ? { status: "needs_verify", factorId: verified.id } : { status: "needs_enroll" };
 }
 
-export type TotpEnrollment = { factorId: string; qrCode: string; secret: string };
+export type TotpEnrollment = { factorId: string; qrCode: string; secret: string; uri: string };
 
 /** Start enrolling a new authenticator. Clears half-finished (unverified) ones first. */
 export async function startTotpEnrollment(): Promise<TotpEnrollment> {
@@ -43,7 +43,7 @@ export async function startTotpEnrollment(): Promise<TotpEnrollment> {
     friendlyName: `JF Effect ${new Date().toISOString().slice(0, 10)}`,
   });
   if (error) throw error;
-  return { factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret };
+  return { factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret, uri: data.totp.uri };
 }
 
 /** Verify a 6-digit code. On success the session is upgraded to aal2. */

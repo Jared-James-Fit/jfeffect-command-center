@@ -2,11 +2,13 @@
  * Named permissions checked by has_permission() in SQL and requirePermission()
  * on the server. Keep in sync with public.role_permissions seeds.
  *
- *   finance.read   – payment ledgers, Taxes & Books, Summer
+ *   finance.read   – payment ledgers, Taxes & Books
  *   finance.record – add/edit expenses, receipts, tax payments, tax settings
- *   finance.delete – delete books records (admin only)
+ *   finance.delete – delete books records (the business owner only)
  *
- * Admin has every permission. Every permission needs an MFA-verified session.
+ * finance.* belongs to the business owner plus role grants (the finance role);
+ * admins keep every other permission. Your own permissions need an
+ * MFA-verified session.
  */
 export const PERMISSIONS = ["finance.read", "finance.record", "finance.delete"] as const;
 export type Permission = (typeof PERMISSIONS)[number];
