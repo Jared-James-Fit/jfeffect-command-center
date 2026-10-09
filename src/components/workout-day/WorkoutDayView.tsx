@@ -3426,10 +3426,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const workedToday = existingResults.some(
     (r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external",
   );
-  // Warm-up sets can be logged on any external-load exercise (before the first
-  // working set); the heaviest one feeds the suggestion engine for that exercise.
+  // Warm-up sets can be logged on any external-load exercise, any time: before
+  // the first working set the heaviest one feeds the suggestion engine; after
+  // it, a warm-up is still a rough 1RM read (weight × reps @ RPE).
   const warmupAllowed =
-    !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId && !workedToday;
+    !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;
   const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
   const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
   const [warmupForm, setWarmupForm] = useState<string | null>(null);
@@ -3468,7 +3469,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     }
     return best?.id ?? null;
   }, [warmupSets]);
-  const warmupGauge = warmupPromptable && loadModel ? { suggested: warmupGaugeSuggested } : null;
+  // Tuning only happens before the first working set.
+  const warmupGauge = warmupPromptable && loadModel && !workedToday ? { suggested: warmupGaugeSuggested } : null;
+  // The W prompt row: on lifts that ramp up, offered any time — it tunes the
+  // weight while it still can, and always gives a rough 1RM estimate.
+  const warmupPrompt = warmupAllowed && rampsUp
+    ? { suggested: warmupGauge?.suggested ?? null, tunes: !!warmupGauge }
+    : null;
   const tunedWarmupId =
     warmupGauge && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
 
@@ -4074,7 +4081,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             </div>
           )}
         </div>
-        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupGauge))) && (
+        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupPrompt))) && (
           <WarmupRows
             sets={warmupSets}
             unit={activeUnit}
@@ -4084,7 +4091,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             onFormChange={setWarmupForm}
             onSave={saveWarmup}
             onRemove={removeWarmup}
-            prompt={warmupGauge}
+            prompt={warmupPrompt}
             seed={warmupGauge?.suggested ?? null}
             tunedId={tunedWarmupId}
           />
@@ -4168,7 +4175,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setWarmupForm("new")} disabled={warmupAtLimit} className="rounded-lg">
                     Warm-up set
-                    <span className="ml-auto text-[10px] text-muted-foreground">sharpens suggestion</span>
+                    <span className="ml-auto text-[10px] text-muted-foreground">{workedToday ? "rough 1RM" : "sharpens suggestion"}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
