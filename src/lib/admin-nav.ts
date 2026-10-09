@@ -1,8 +1,7 @@
 import {
   LayoutDashboard, Users, CreditCard, DollarSign,
   Package, Dumbbell, FolderOpen, Calendar, Layers,
-  Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, Video,
-  UserCheck, FileSignature, Film,
+  Settings, Briefcase, Apple, ClipboardCheck, UserCog, MessageCircle, UserCheck, FileSignature, Film,
   ClipboardList, FileEdit,
   Scale, BookOpen, Activity, Archive,
   UserPlus, Library, Wrench, HelpCircle,
@@ -89,7 +88,6 @@ export const coachingAdminNav: NavItem[] = [
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks, group: "Core" },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Core" },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList, group: "Core" },
-  { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video, group: "Core" },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Core" },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Core" },
   // COMMUNICATION
@@ -147,7 +145,6 @@ export const coachNav: NavItem[] = [
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
   { to: "/admin/training-intelligence", label: "Training Intelligence", icon: Activity },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
-  { to: "/admin/lift-videos", label: "Lift Reviews", icon: Video },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck },
   { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle },

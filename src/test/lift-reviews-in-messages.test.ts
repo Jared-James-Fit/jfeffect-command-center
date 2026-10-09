@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const thread = readFileSync("src/components/message-thread.tsx", "utf8");
@@ -9,13 +9,33 @@ const legacyNav = readFileSync("src/lib/admin-nav.ts", "utf8");
 const clientBadges = readFileSync("src/hooks/use-client-nav-badges.ts", "utf8");
 const adminBadges = readFileSync("src/hooks/use-admin-nav-badges.ts", "utf8");
 const clientLegacyRoute = readFileSync("src/routes/_authenticated/portal/lift-videos.tsx", "utf8");
+const adminLegacyPage = readFileSync("src/route-pages/_authenticated/admin/lift-videos.tsx", "utf8");
+const adminShell = readFileSync("src/routes/_authenticated/admin/route.tsx", "utf8");
 
 describe("lift reviews live inside Messages", () => {
-  it("gives both sides a direct lift-review action in the message composer", () => {
-    expect(thread).toContain("LiftReviewMessageSheet");
-    expect(thread).toContain("setLiftReviewOpen(true)");
-    expect(plusMenu).toContain('key: "lift-review"');
-    expect(plusMenu).toContain("onLiftReview");
+  // "Send a lift for review" was retired: a form check is just a video in the
+  // chat. No separate sheet, prompt, queue page or bottom-bar button.
+  it("has no separate send-for-review flow anywhere", () => {
+    expect(thread).not.toContain("LiftReviewMessageSheet");
+    expect(plusMenu).not.toContain('key: "lift-review"');
+    for (const gone of [
+      "src/components/messages/lift-review-message-sheet.tsx",
+      "src/components/post-workout-lift-prompt.tsx",
+      "src/components/client-lift-video-uploader.tsx",
+      "src/components/lift-videos-panel.tsx",
+      "src/components/admin-lift-review-thread.tsx",
+    ]) {
+      expect(existsSync(gone), gone).toBe(false);
+    }
+  });
+
+  it("no bottom-bar button for lifts; Reviews is check-ins in one tap", () => {
+    expect(adminShell).not.toContain('pick("/admin/lift-videos")');
+    expect(adminShell).toContain('{ ...pick("/admin/check-in-reviews"), label: "Reviews" }');
+  });
+
+  it("old admin links land in Messages", () => {
+    expect(adminLegacyPage).toContain('navigate({ to: "/admin/communication", search: { tab: "messages" } as any, replace: true });');
   });
 
   it("removes the standalone coaching tab and nav destinations", () => {

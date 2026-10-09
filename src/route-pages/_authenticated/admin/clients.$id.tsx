@@ -82,7 +82,6 @@ const ClientSessionsPanel = lazyDefault(() => import("@/components/sessions/clie
 const NutritionRequestPanel = lazyDefault(() => import("@/components/nutrition/NutritionRequestPanel"), "NutritionRequestPanel");
 const NutritionTargetsPanel = lazyDefault(() => import("@/components/nutrition-targets-panel"), "NutritionTargetsPanel");
 const CardioTargetsPanel = lazyDefault(() => import("@/components/cardio-targets-panel"), "CardioTargetsPanel");
-const LiftVideosPanel = lazyDefault(() => import("@/components/lift-videos-panel"), "LiftVideosPanel");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
@@ -816,7 +815,6 @@ export function ClientProfileWorkspace({
                 canOpenLog
               />
             </div>
-            <LiftVideosPanel clientId={id} />
           </Suspense>
         </TabsContent>
 

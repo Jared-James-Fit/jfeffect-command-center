@@ -10,7 +10,7 @@ import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { SummerAssistant } from "@/components/summer/summer-assistant";
 import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
-import { ClipboardList, LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
+import { LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
 
@@ -88,7 +88,7 @@ function AdminLayout() {
         pick("/admin"),
         { ...pick("/admin/clients"), label: "Clients" },
         pick("/admin/messages"),
-        { ...pick("/admin/lift-videos"), label: "Lifts" },
+        { ...pick("/admin/check-in-reviews"), label: "Reviews" },
         { ...pick("/admin/tasks"), label: "Tasks" },
       ].filter(Boolean);
     }
@@ -109,15 +109,8 @@ function AdminLayout() {
       { ...pick("/admin/clients"), label: "Clients" },
       { to: "/admin/athlete-records", label: "Records", icon: Trophy },
       pick("/admin/messages"),
-      {
-        to: "/admin/check-in-reviews",
-        label: "Reviews",
-        icon: ClipboardList,
-        children: [
-          { ...pick("/admin/check-in-reviews"), label: "Check-Ins" },
-          { ...pick("/admin/lift-videos"), label: "Lifts" },
-        ],
-      },
+      // lift reviews moved into the chat, so Reviews is just check-ins: one tap
+      { ...pick("/admin/check-in-reviews"), label: "Reviews" },
     ];
   }, [isCoach, isMembership, nav]);
 
