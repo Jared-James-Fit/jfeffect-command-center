@@ -231,14 +231,15 @@ function CalendarSyncSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto w-full max-w-lg space-y-4">
+          {/* Title sits on the Back row; the description gets the full width below it. */}
           <SheetHeader className="text-left">
             <SheetTitle className="text-left">{synced ? "Calendar synced" : "Add to your calendar"}</SheetTitle>
-            <SheetDescription className="text-left">
-              {synced
-                ? `Your sessions and workouts are in ${synced}. New, moved and cancelled ones update on their own.`
-                : "Pick the calendar you use. Set it up once: new, moved and cancelled sessions and workouts update on their own."}
-            </SheetDescription>
           </SheetHeader>
+          <SheetDescription className="text-left">
+            {synced
+              ? `Your sessions and workouts are in ${synced}. New, moved and cancelled ones update on their own.`
+              : "Pick the calendar you use. Set it up once and new, moved and cancelled sessions and workouts update on their own."}
+          </SheetDescription>
 
           {isPov && (
             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
@@ -254,8 +255,9 @@ function CalendarSyncSheet({
 
           <div className="grid gap-2">
             {choices.map((c, i) => {
-              const primary = !synced && i === 0;
-              const btnClass = cn("h-12 justify-between text-sm font-bold", primary && "bg-gradient-primary");
+              // One red action at a time: the recommended calendar, until they open another one's steps.
+              const primary = !synced && !expanded && i === 0;
+              const btnClass = cn("h-12 w-full justify-between text-sm font-bold", primary && "bg-gradient-primary");
 
               if (c.how === "web") {
                 const isOpen = expanded === c.id;
@@ -360,7 +362,7 @@ function StepButton({ onClick, children }: { onClick: () => void; children: Reac
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-bold text-primary-foreground active:scale-[0.98]"
+      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-bold text-foreground transition hover:bg-secondary active:scale-[0.98]"
     >
       <Copy className="h-3.5 w-3.5" /> {children}
     </button>
