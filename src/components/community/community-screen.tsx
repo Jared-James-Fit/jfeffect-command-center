@@ -14,17 +14,19 @@ import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { CrewList } from "@/components/community/crew-list";
-import { CrewGoalCard } from "@/components/community/crew-goal";
-import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
-import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
+import { LeagueHub } from "@/components/community/league-hub";
+import { communityKeys, markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
+import type { CommunityActivity, CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
 import { CaughtUp, FeedItem, NewPostsPill, PostSkeleton, useNewPosts } from "@/components/community/feed-motion";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
-type Tab = "feed" | "crew" | "you";
-type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
+type Tab = "league" | "feed" | "crew";
+/** A tab, or a profile opened from one (yours, or someone else's). */
+type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab } | { kind: "you"; from: Tab };
+const TAB_LABEL: Record<Tab, string> = { league: "League", feed: "Feed", crew: "Crew" };
 
 /** `#post=<id>` opens a post straight away (used by the Home strip and pushes). */
 function postFromHash(): string | null {
@@ -76,9 +78,18 @@ export function CommunityScreen({
   const viewerIsStaff = role === "admin" || role === "coach";
   const [scope, setScope] = useState<Scope>(() => {
     const person = personFromHash();
-    return person ? { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "crew" } : { kind: "feed" };
+    if (person) return { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "crew" };
+    // the coach's own Community page is just the feed
+    if (hideTabs) return { kind: "feed" };
+    const hash = typeof window === "undefined" ? "" : window.location.hash;
+    if (/(post|at)=|#feed/.test(hash)) return { kind: "feed" };
+    if (/#league/.test(hash)) return { kind: "league" };
+    // the League by default (it moves every day); the feed when there's something new in it
+    const activity = qc.getQueryData<CommunityActivity>(communityKeys.activity);
+    return (activity?.unseen ?? 0) > 0 ? { kind: "feed" } : { kind: "league" };
   });
-  const tab: Tab = scope.kind === "author" ? scope.from : scope.kind;
+  const tab: Tab = scope.kind === "author" || scope.kind === "you" ? scope.from : scope.kind;
+  const inProfile = scope.kind === "author" || scope.kind === "you";
   const [commentsFor, setCommentsFor] = useState<CommunityPost | null>(null);
   const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
   const [jumpTo, setJumpTo] = useState<string | null>(() => atFromHash());
@@ -94,7 +105,7 @@ export function CommunityScreen({
   const onDoubleTap = useCallback(() => markHint("double_tap"), [markHint]);
   const [tipDone, setTipDone] = useState(tipShownThisVisit);
   const tipVisit = hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k)) : undefined;
-  const hintId = !tipDone && tipVisit && posts.length ? ((posts.find((p) => p.kind !== "note") ?? posts[0])?.id ?? null) : null;
+  const hintId = scope.kind === "feed" && !tipDone && tipVisit && posts.length ? ((posts.find((p) => p.kind !== "note") ?? posts[0])?.id ?? null) : null;
   useEffect(() => {
     if (!hintId || !tipVisit || tipShownThisVisit) return;
     tipShownThisVisit = true;
@@ -105,7 +116,7 @@ export function CommunityScreen({
   // (on the account, so it never comes back on another phone). Waits for the like tip.
   const OPEN_HINT = "open_workout";
   const openHintId =
-    hints.data && !hints.data.includes(OPEN_HINT) && (tipDone || !tipVisit)
+    scope.kind === "feed" && hints.data && !hints.data.includes(OPEN_HINT) && (tipDone || !tipVisit)
       ? (posts.find((p) => p.kind !== "note" && !!p.stats)?.id ?? null)
       : null;
   const openPost = useCallback((post: CommunityPost) => {
@@ -114,13 +125,14 @@ export function CommunityScreen({
   }, [markHint]);
   const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? posts : []);
 
-  // Opening the community clears the "new posts" badge (server-side, every device).
+  // Seeing the feed clears the "new posts" badge (server-side, every device). Only the
+  // feed: opening on the League mustn't clear a count you haven't looked at.
   const markedRef = useRef(false);
   useEffect(() => {
-    if (markedRef.current || !feed.isSuccess) return;
+    if (markedRef.current || !feed.isSuccess || scope.kind !== "feed") return;
     markedRef.current = true;
     void markCommunitySeen(qc);
-  }, [feed.isSuccess, qc]);
+  }, [feed.isSuccess, qc, scope.kind]);
 
   const { data: unit = "lb" } = useViewerUnit(user?.id);
 
@@ -130,11 +142,14 @@ export function CommunityScreen({
   // Tapping the Community tab while you're on it: back to the feed's top, fresh.
   const showNew = useRef(newPosts.show);
   showNew.current = newPosts.show;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
   useEffect(() => {
     const onRetap = (e: Event) => {
       if ((e as CustomEvent).detail !== window.location.pathname) return;
-      setScope({ kind: "feed" });
-      showNew.current();
+      // out of a profile first; on the feed, back to the top and fresh
+      setScope((sc) => (sc.kind === "author" || sc.kind === "you" ? { kind: sc.from } : sc));
+      if (scopeRef.current.kind === "feed") showNew.current();
     };
     window.addEventListener("nav-retap", onRetap);
     return () => window.removeEventListener("nav-retap", onRetap);
@@ -147,14 +162,14 @@ export function CommunityScreen({
   const navigate = useNavigate();
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const canSwipeBack = scope.kind === "author" || !!backTo;
+  const canSwipeBack = inProfile || !!backTo;
   const leaveAuthor = () => {
-    if (scope.kind !== "author") return;
+    if (scope.kind !== "author" && scope.kind !== "you") return;
     setScope({ kind: scope.from });
     if (window.location.hash.includes("person=")) history.replaceState(null, "", window.location.pathname + window.location.search);
   };
   const swipeBack = () => {
-    if (scope.kind === "author") return leaveAuthor();
+    if (inProfile) return leaveAuthor();
     if (!backTo) return;
     if (router.history.canGoBack()) router.history.back();
     else void navigate({ to: backTo });
@@ -225,7 +240,7 @@ export function CommunityScreen({
 
   const openAuthor = (a: CommunityAuthor) => {
     setDetailId(null);
-    if (a.user_id === user?.id) setScope({ kind: "you" });
+    if (a.user_id === user?.id || a.user_id === myId) setScope({ kind: "you", from: tab });
     else setScope({ kind: "author", author: a, from: tab });
     window.scrollTo({ top: 0 });
   };
@@ -239,14 +254,14 @@ export function CommunityScreen({
   return (
     <>
     <div ref={rootRef} className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 [touch-action:pan-x_pan-y] sm:px-4">
-      {scope.kind === "author" ? (
+      {inProfile ? (
         <Button
           type="button"
           variant="ghost"
           className="-ml-2 h-10 rounded-full px-3"
           onClick={leaveAuthor}
         >
-          <ArrowLeft className="mr-1.5 h-4 w-4" /> {scope.from === "crew" ? "Crew" : scope.from === "you" ? "You" : "Feed"}
+          <ArrowLeft className="mr-1.5 h-4 w-4" /> {TAB_LABEL[tab]}
         </Button>
       ) : hideTabs ? null : (
         <div className="flex items-center justify-between gap-2">
@@ -257,29 +272,35 @@ export function CommunityScreen({
           </Link>
         )}
         <div className="inline-flex rounded-full bg-muted p-1" role="tablist" aria-label="Community view">
-          {(["feed", "crew", "you"] as const).map((k) => (
+          {(["league", "feed", "crew"] as const).map((k) => (
             <button
               key={k}
               type="button"
               role="tab"
               aria-selected={scope.kind === k}
-              onClick={() => setScope({ kind: k })}
-              className={cn("h-9 rounded-full px-3.5 text-[13px] font-bold transition-colors", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+              onClick={() => {
+                setScope({ kind: k });
+                window.scrollTo({ top: 0 });
+              }}
+              className={cn("h-9 rounded-full px-2.5 text-[13px] font-bold transition-colors min-[360px]:px-3", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
             >
-              {k === "feed" ? "Feed" : k === "crew" ? "Crew" : "You"}
+              {TAB_LABEL[k]}
             </button>
           ))}
         </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           {bell && <NotificationBell />}
-          {canShare && <ShareWorkoutButton unit={unit} label="Share" previewOnly={previewOnly} />}
+          {/* small phones: just the "+", so League · Feed · Crew keep their room */}
+          {canShare && <ShareWorkoutButton unit={unit} label="Share" previewOnly={previewOnly} className="max-[389px]:w-9 max-[389px]:px-0" labelClassName="max-[389px]:sr-only" />}
         </div>
         </div>
       )}
 
-      {scope.kind === "crew" ? (
-        <CrewList onOpen={openAuthor} />
+      {scope.kind === "league" ? (
+        <LeagueHub />
+      ) : scope.kind === "crew" ? (
+        <CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "crew" })} />
       ) : scope.kind === "you" && user?.id ? (
         <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} />
       ) : scope.kind === "author" ? (
@@ -307,8 +328,6 @@ export function CommunityScreen({
         />
       ) : (
         <>
-          {/* the week's shared goal leads the feed */}
-          <CrewGoalCard />
           {posts.map((p, i) => (
             <FeedItem key={p.id} index={i} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
             <PostRow

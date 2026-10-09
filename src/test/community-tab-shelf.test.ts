@@ -14,10 +14,10 @@ const profile = read("src/components/community/profile-view.tsx");
 const screen = read("src/components/community/community-screen.tsx");
 const item = (to: string): NavItem => ({ to, label: to, icon: Home });
 
-describe("client tab bar: Community in the centre", () => {
-  it("five destinations, Community raised in the middle", () => {
+describe("client tab bar: League in the centre", () => {
+  it("five destinations, League (standings + the crew) raised in the middle", () => {
     const visible = resolveVisibleBarItems(clientBottomNav, { more: false });
-    expect(visible.map((i) => i.label)).toEqual(["Home", "Workouts", "Community", "Nutrition", "Messages"]);
+    expect(visible.map((i) => i.label)).toEqual(["Home", "Workouts", "League", "Nutrition", "Messages"]);
     expect(visible[2].featured).toBe(true);
     expect(visible.some((i) => i.to === MORE_BAR_TO)).toBe(false);
   });
@@ -80,8 +80,8 @@ describe("Home's community shelf", () => {
 describe("Home order: what you do today, then what you check", () => {
   const home = read("src/routes/_authenticated/portal/index.tsx");
   const at = (s: string) => home.indexOf(s);
-  it("Today, the crew, the weigh-in, then the boards; water (few log it) below the coaching cards", () => {
-    const order = ["<UpcomingScheduleCard", "<CommunityHomeStrip", "<BodyweightSummaryCard", "<AthleteLevelCard", "<ProgressSummaryCard", "<HomeWaterCard"];
+  it("Today, the crew, then one Body swipe (weigh-in, water, progress), then the training block", () => {
+    const order = ["<UpcomingScheduleCard", "<CommunityHomeStrip", "<BodyweightSummaryCard", "<HomeWaterCard", "<ProgressSummaryCard", "<TrainingBlockCard"];
     const idx = order.map(at);
     expect(idx.every((i) => i > 0)).toBe(true);
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);

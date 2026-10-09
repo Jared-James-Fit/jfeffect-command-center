@@ -150,7 +150,7 @@ describe("swipe back", () => {
   });
   it("goes back for real when there's history, else to Home; a profile goes back to the list", () => {
     expect(screen).toMatch(/if \(router\.history\.canGoBack\(\)\) router\.history\.back\(\);/);
-    expect(screen).toMatch(/if \(scope\.kind === "author"\) return leaveAuthor\(\);/);
+    expect(screen).toMatch(/if \(inProfile\) return leaveAuthor\(\);/);
   });
   it("the demo asks until it's used once (remembered on the account), at most 5 visits", () => {
     expect(screen).toMatch(/const SWIPE_TIP_VISITS = 5;/);

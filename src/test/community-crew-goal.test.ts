@@ -53,8 +53,9 @@ describe("the goal on the server", () => {
 });
 
 describe("where it shows", () => {
-  it("leads the feed, sits on Home's community card, and greets you after a workout", () => {
-    expect(screen).toContain("<CrewGoalCard />");
+  it("leads the League tab, sits on Home's community card, and greets you after a workout", () => {
+    expect(read("src/components/community/league-hub.tsx")).toContain("<CrewGoalCard />");
+    expect(screen).not.toContain("<CrewGoalCard />");
     expect(entry).toContain('<CrewGoalStrip className="mt-2" />');
     expect(recap).toContain('<CrewGoalAfterWorkout className="mb-2.5" />');
   });

@@ -7,7 +7,7 @@ import {
   UserPlus, Library, Wrench, HelpCircle,
   ChefHat, Megaphone, Phone,
   ListChecks, LayoutGrid,
-  Heart, Flame,
+  Heart, Flame, Trophy,
   Ticket,
   AlertCircle,
   Download,
@@ -167,7 +167,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
   { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
-  { to: "/portal/community", label: "Community", icon: Users, keywords: ["community","shared workouts","feed","posts","photos","reactions"] },
+  { to: "/portal/community", label: "League & Community", icon: Trophy, keywords: ["league","rank","leaderboard","level","hall of strength","community","shared workouts","feed","posts","photos","reactions","crew"] },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
   { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
@@ -178,14 +178,14 @@ export const clientNav: NavItem[] = [
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 
-// Mobile bottom-tab nav for the client portal: five destinations, Community
-// as the raised centre button (with a ring and a count when there's something
-// new). "More" opens from the top bar instead (AppShell `moreInHeader`), so
+// Mobile bottom-tab nav for the client portal: five destinations, the League
+// as the raised centre button: League · Feed · Crew inside, with a ring and a
+// count when there are new posts (it opens on the feed then). "More" opens from the top bar instead (AppShell `moreInHeader`), so
 // Home, Workouts and Nutrition keep their places and Messages takes More's.
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
-  { to: "/portal/community", label: "Community", icon: Flame, featured: true },
+  { to: "/portal/community", label: "League", icon: Trophy, featured: true },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
 ];

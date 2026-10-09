@@ -345,7 +345,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
       if (visibility === "community") {
         const earned = pointsHint?.tone === "earn" ? ` +${pointsStatus?.points} league points` : "";
         toast.success(existing ? "Post updated 🔥" : `You're in the feed 🔥${earned}`, {
-          action: { label: "View", onClick: () => navigate({ to: "/portal/community" }) },
+          action: { label: "View", onClick: () => navigate({ to: "/portal/community", hash: "feed" }) },
         });
       } else if (visibility === "coach") {
         toast.success("Sent to your coach", { description: "Only you and your coach can see it." });

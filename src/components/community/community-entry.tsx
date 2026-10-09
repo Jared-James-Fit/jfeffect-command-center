@@ -68,7 +68,7 @@ export function CommunityHomeStrip() {
   const feed = useCommunityFeed(null);
   const seenAt = activity?.seen_at ? new Date(activity.seen_at).getTime() : 0;
   const navigate = useNavigate();
-  const openAt = (postId?: string) => navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : undefined });
+  const openAt = (postId?: string) => navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : "feed" });
 
   const shelf = useMemo(() => {
     const weekAgo = Date.now() - 7 * 86_400_000;
@@ -94,7 +94,7 @@ export function CommunityHomeStrip() {
   return (
     <section className="rounded-2xl border border-border/80 bg-card px-3.5 pb-3 pt-3">
       <div className="flex items-center justify-between gap-2">
-        <Link to="/portal/community" className="-my-1 flex min-w-0 items-center gap-1.5 whitespace-nowrap py-1 text-[13px] font-black">
+        <Link to="/portal/community" hash="feed" className="-my-1 flex min-w-0 items-center gap-1.5 whitespace-nowrap py-1 text-[13px] font-black">
           <Flame className="h-4 w-4 shrink-0 text-orange-500" /> Community
           {/* Who showed up today beats "N new": it's the nudge to go train. */}
           {lockedToday > 0 ? (

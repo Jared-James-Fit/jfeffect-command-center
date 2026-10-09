@@ -57,9 +57,9 @@ describe("the database says who the coach is", () => {
 });
 
 describe("clients see the badge", () => {
-  it("on the home podium, the league podium and rows, and the athlete profile", () => {
+  it("on the League tab's podium and rows, the league podium and rows, and the athlete profile", () => {
     expect(card).toContain('import { CoachTag } from "@/components/portal/coach-tag"');
-    expect(card.match(/<CoachTag/g)?.length).toBe(4);
+    expect(card.match(/<CoachTag/g)?.length).toBe(5);
     expect(card).toMatch(/r\.is_coach && <div className="mt-0\.5 flex justify-center"><CoachTag \/><\/div>/);
     expect(card).toContain("p.is_coach && <CoachTag />");
   });
