@@ -376,13 +376,13 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("bottom bar is Home, Workouts, Community (centre), Nutrition, Messages; More opens from the top bar", () => {
+  it("bottom bar is Home, Workouts, League (centre), Nutrition, Messages; More opens from the top bar", () => {
     const nav = read("src/lib/admin-nav.ts");
     const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
     expect(bottom.match(/\{ to: "[^"]+"/g)).toEqual([
       '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/community"', '{ to: "/portal/nutrition-targets"', '{ to: "/portal/messages"',
     ]);
-    expect(bottom).toContain('{ to: "/portal/community", label: "Community", icon: Flame, featured: true },');
+    expect(bottom).toContain('{ to: "/portal/community", label: "League", icon: Trophy, featured: true },');
     // the count of new posts rides on the centre button
     expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
     // its own tab now, so Home no longer lights up for it
@@ -408,7 +408,8 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   });
   it("tapping a post opens the feed at it (not a dead-end single post)", () => {
     expect(entry).toContain("onClick={() => openAt(post.id)}");
-    expect(entry).toContain('navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : undefined })');
+    // the tab opens on League; anything from a post lands on the feed
+    expect(entry).toContain('navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : "feed" })');
   });
   it("only shows a header nudge when there is something new", () => {
     expect(entry).toContain("data.unseen <= 0) return null;");
@@ -530,9 +531,9 @@ describe("the crew: find anyone's profile", () => {
     expect(sql).toContain("WHERE m.user_id <> uid");
     expect(sql).not.toMatch(/community_follow|is_following/i);
   });
-  it("is a Crew tab, and Home never dead-ends: a person opens the feed at their post", () => {
-    expect(screen).toContain('(["feed", "crew", "you"] as const)');
-    expect(screen).toContain("<CrewList onOpen={openAuthor} />");
+  it("is a Crew tab (you're its first row), and Home never dead-ends: a person opens the feed at their post", () => {
+    expect(screen).toContain('(["league", "feed", "crew"] as const)');
+    expect(screen).toContain('<CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "crew" })} />');
     expect(entry).toContain("onClick={() => openAt(post.id)}");
   });
 });

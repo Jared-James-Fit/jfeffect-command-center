@@ -24,8 +24,8 @@ import { WearablesCard } from "@/components/portal/wearables-card";
 import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AgreementDashboardCard } from "@/components/coaching-agreement/agreement-dashboard-card";
-import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
-import { StrengthBoardSlide } from "@/components/portal/strength-board";
+import { LevelCelebrations } from "@/components/portal/athlete-level-card";
+import { SwipeCards } from "@/components/portal/swipe-cards";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
 import { SexPromptCard } from "@/components/athlete-sex";
 import { CommunityHomeStrip } from "@/components/community/community-entry";
@@ -345,47 +345,61 @@ function PortalHome() {
           </SectionErrorBoundary>
         )}
 
-        {/* Bodyweight: the daily weigh-in (most clients log it), so it sits with
-            today's actions, above the boards you just check (syncs with
-            Progress > Weight tracker) */}
-        {client?.id ? (
+        {/* Body: the daily weigh-in first (most clients log it), then water and
+            progress, one swipe apart. The standings live on the League tab. */}
+        {client?.id && portalUserId ? (
           <DeferRender placeholderHeight="h-52">
-            <SectionErrorBoundary label="Bodyweight">
-              <BodyweightSummaryCard
-                clientId={client.id}
-                userId={portalUserId ?? ""}
-                defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
-              />
-            </SectionErrorBoundary>
+            <SwipeCards
+              storageKey="jf-home-body"
+              cards={[
+                {
+                  key: "bodyweight",
+                  label: "Bodyweight",
+                  node: (
+                    <SectionErrorBoundary label="Bodyweight">
+                      <BodyweightSummaryCard
+                        clientId={client.id}
+                        userId={portalUserId}
+                        defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
+                      />
+                    </SectionErrorBoundary>
+                  ),
+                },
+                {
+                  key: "water",
+                  label: "Water",
+                  node: (
+                    <SectionErrorBoundary label="Water">
+                      <HomeWaterCard userId={portalUserId} currentUserId={portalUserId} surface="portal" />
+                    </SectionErrorBoundary>
+                  ),
+                },
+                {
+                  key: "progress",
+                  label: "Progress",
+                  node: (
+                    <SectionErrorBoundary label="Progress">
+                      <ProgressSummaryCard
+                        userId={portalUserId}
+                        currentUserId={portalUserId}
+                        viewerRole="owner"
+                        progressHref={{ kind: "portal" }}
+                        liftHref="/portal/lift-videos"
+                      />
+                    </SectionErrorBoundary>
+                  ),
+                },
+              ]}
+            />
           </DeferRender>
         ) : clientLoading ? (
           <SectionSkeleton height="h-52" />
         ) : null}
 
-        {/* Standings: League, Logging Level and the Hall of Strength in one card,
-            swipe between them (last month's recap plays from the League slide). */}
-        {client?.id && (
-          <SectionErrorBoundary label="Standings">
-            <AthleteLevelCard clientId={client.id} slides={[{ key: "strength", label: "Strength", node: <StrengthBoardSlide /> }]} />
-          </SectionErrorBoundary>
-        )}
+        {/* New-milestone reveals pop here, on the way in */}
+        {client?.id && <LevelCelebrations clientId={client.id} />}
 
-        {/* 4 — Progress summary */}
-        {portalUserId ? (
-          <SectionErrorBoundary label="Progress">
-            <ProgressSummaryCard
-              userId={portalUserId ?? ""}
-              currentUserId={portalUserId}
-              viewerRole="owner"
-              progressHref={{ kind: "portal" }}
-              liftHref="/portal/lift-videos"
-            />
-          </SectionErrorBoundary>
-        ) : (
-          <SectionSkeleton height="h-44" />
-        )}
-
-        {/* 5 — Current Training Block */}
+        {/* Current Training Block */}
         {activePhase && (
           <SectionErrorBoundary label="Training block">
             <TrainingBlockCard phase={activePhase} />
@@ -395,17 +409,6 @@ function PortalHome() {
         {client?.id && (
           <SectionErrorBoundary label="Devices">
             <WearablesCard mode="summary" />
-          </SectionErrorBoundary>
-        )}
-
-        {/* Water (few log it): below the coaching cards */}
-        {portalUserId && (
-          <SectionErrorBoundary label="Water">
-            <HomeWaterCard
-              userId={portalUserId ?? ""}
-              currentUserId={portalUserId}
-              surface="portal"
-            />
           </SectionErrorBoundary>
         )}
 

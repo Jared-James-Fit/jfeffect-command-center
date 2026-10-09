@@ -41,10 +41,13 @@ export function ShareWorkoutButton({
   label = "Share a workout",
   variant = "pill",
   previewOnly = false,
+  labelClassName,
 }: {
   unit: "kg" | "lb";
   className?: string;
   label?: string;
+  /** e.g. hide the words on small phones (the button keeps them as its name) */
+  labelClassName?: string;
   variant?: "pill" | "block" | "bubble" | "tile";
   /** Coach viewing as a client: looks the same, but never posts as them. */
   previewOnly?: boolean;
@@ -151,9 +154,10 @@ export function ShareWorkoutButton({
             variant === "pill" ? "h-9 rounded-full px-4 text-[13px]" : "h-12 w-full rounded-2xl text-[15px]",
             className,
           )}
+          aria-label={labelClassName ? label : undefined}
         >
           <Plus className="h-4 w-4" strokeWidth={3} />
-          {label}
+          {labelClassName ? <span className={labelClassName}>{label}</span> : label}
         </button>
       )}
 

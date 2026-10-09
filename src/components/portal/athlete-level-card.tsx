@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Info, Trophy, Medal, Zap, ChevronRight, Scale, Crown } from "lucide-react";
@@ -16,7 +16,6 @@ import { ArrowLeft } from "lucide-react";
 import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 import { RecordBadges } from "@/components/portal/record-badges";
 import { LeagueRecapButton, LeagueRecapHomeTile } from "@/components/portal/league-recap";
-import { StandingsCarousel, type StandingsSlide } from "@/components/portal/standings-carousel";
 import { formatWeightLifted, type WeightUnit } from "@/lib/weight-lifted";
 import { useWeightUnit } from "@/lib/use-weight-unit";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -47,7 +46,16 @@ function useXpEvents(clientId: string) {
   });
 }
 
-export function AthleteLevelCard({ clientId, defaultView = null, slides = [] }: { clientId: string; defaultView?: null | "rankings"; slides?: StandingsSlide[] }) {
+/**
+ * The athlete's standings (the League tab): this month's League with its whole
+ * Top 10, their Logging Level, plus any extra boards passed in (the Hall of
+ * Strength), a card each. New-milestone reveals pop on Home (LevelCelebrations).
+ */
+export function AthleteLevelCard({ clientId, defaultView = null, boards = [] }: {
+  clientId: string;
+  defaultView?: null | "rankings";
+  boards?: { key: string; node: ReactNode }[];
+}) {
   const { data: events = [], isPending } = useXpEvents(clientId);
   const [open, setOpen] = useState<null | "levels" | "rankings" | "powerlifting">(defaultView);
   const [selectedLeagueAthlete, setSelectedLeagueAthlete] = useState<string | null>(null);
@@ -72,7 +80,7 @@ export function AthleteLevelCard({ clientId, defaultView = null, slides = [] }: 
   const gap = outside && top10.at(-1) ? Math.max(0, leagueScore(top10.at(-1))-leagueScore(leagueMe)) : 0;
 
   // The month's league: where you stand, the podium, last month's recap, the full Top 10.
-  const leagueSlide = (
+  const leagueCard = (
     <div className="flex h-full flex-col">
       <button type="button" onClick={() => openRankings()} className="flex w-full items-start gap-3 px-4 pt-3 text-left active:opacity-70">
         <span className="min-w-0 flex-1">
@@ -110,17 +118,32 @@ export function AthleteLevelCard({ clientId, defaultView = null, slides = [] }: 
           })}
         </div>
       )}
+      {/* the rest of the Top 10, and you if you're outside it */}
+      {top10.length > 3 && (
+        <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
+          {[...top10.slice(3), ...(outside && leagueMe ? [leagueMe] : [])].map((r) => (
+            <li key={r.client_id}>
+              <button type="button" onClick={() => openRankings(r.client_id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
+                <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{r.rank}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold">{r.is_me ? "You" : r.display_name}</span>
+                {r.is_coach && <CoachTag />}
+                <span className="shrink-0 text-[12px] font-bold tabular-nums text-primary">{formatLeaguePoints(leagueScore(r))} pts</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
       <div className="mt-auto flex items-center gap-2 px-3 pb-3 pt-2.5">
         <LeagueRecapHomeTile variant="mini" className="min-w-0 flex-1" />
         <button type="button" onClick={() => openRankings()} className="ml-auto inline-flex h-8 shrink-0 items-center gap-0.5 rounded-full px-2.5 text-xs font-bold text-primary active:bg-muted">
-          View Top 10 <ChevronRight className="h-3.5 w-3.5" />
+          Full standings <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
   );
 
   // Logging Level: the level, the bar to the next one, milestones, competition records.
-  const levelSlide = (
+  const levelCard = (
     <div className="flex h-full flex-col px-4 pt-3">
       <button type="button" onClick={() => setOpen("levels")} className="w-full text-left active:opacity-70">
         <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Logging Level</span>
@@ -149,11 +172,16 @@ export function AthleteLevelCard({ clientId, defaultView = null, slides = [] }: 
     </div>
   );
 
+  const cards = [{ key: "league", node: leagueCard }, { key: "level", node: levelCard }, ...boards];
   return (
     <>
-      <AchievementCelebrations clientId={clientId} catalog={catalog} />
-      {/* League, Level and whatever Home adds (the Hall of Strength): one card, swipe between them */}
-      <StandingsCarousel slides={[{ key: "league", label: "League", node: leagueSlide }, { key: "level", label: "Level", node: levelSlide }, ...slides]} />
+      <div className="space-y-3">
+        {cards.map((c) => (
+          <section key={c.key} data-standing={c.key} className="overflow-hidden rounded-2xl border bg-card">
+            {c.node}
+          </section>
+        ))}
+      </div>
 
       <Sheet open={open === "levels" || open === "rankings"} onOpenChange={(o) => { if (!o) { setOpen(null); setSelectedLeagueAthlete(null); } }}>
         <SheetContent side="bottom" hideCloseButton={open === "rankings" && !!selectedLeagueAthlete} className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
@@ -182,6 +210,12 @@ function whenLabel(iso: string): string {
   if (diff <= 0) return "today";
   if (diff === 1) return "yesterday";
   return diff < 7 ? format(d, "EEE") : format(d, "MMM d");
+}
+
+/** New-milestone reveals, for a page that doesn't show the standings themselves (Home). */
+export function LevelCelebrations({ clientId }: { clientId: string }) {
+  const { data: catalog = [] } = useBadgeCatalog();
+  return <AchievementCelebrations clientId={clientId} catalog={catalog} />;
 }
 
 function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
