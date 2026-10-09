@@ -241,9 +241,10 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
   const isCoachOnly = m.roles.includes("coach") && !m.roles.includes("admin");
 
   return (
-    <Card className="flex items-center gap-3 p-3">
+    <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
       <Avatar text={initials(m.name, m.email)} />
-      <div className="min-w-0 flex-1">
+      {/* The buttons drop to their own line on a phone rather than squeezing the name. */}
+      <div className="min-w-[11rem] flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="truncate font-semibold">{m.name || m.email || "Team member"}</span>
           {m.roles.filter((r) => r !== "coach" || !m.roles.includes("admin")).map((r) => <RoleBadge key={r} role={r} owner={m.owner} />)}
