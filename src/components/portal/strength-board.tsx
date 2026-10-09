@@ -15,6 +15,8 @@ import { ATHLETE_SEX_KEYS, SexChoice } from "@/components/athlete-sex";
 import { saveMySexFn } from "@/lib/athlete-sex.functions";
 import type { AthleteSex } from "@/lib/athlete-sex";
 import { useWeightUnit } from "@/lib/use-weight-unit";
+import { LevelBadge, PowerliftingCareer } from "@/components/portal/powerlifting-career";
+import type { MeetLevel } from "@/lib/powerlifting-career";
 import type { WeightUnit } from "@/lib/weight-lifted";
 import {
   BOARD_LIFTS,
@@ -413,6 +415,9 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   const [lift, setLift] = useState<BoardLift>(initialLift);
   const [division, setDivision] = useState<Division>(initialDivision);
   const [showAll, setShowAll] = useState(false);
+  // A lifter's powerlifting career, opened from the board (rows with a meet record).
+  const [career, setCareer] = useState<string | null>(null);
+  const { data: tiers } = useTiers();
   const active = source === "all" ? allTime : meets;
   const rows = active.data ?? [];
   const { top, me, count } = pickBoard(rows, mode, lift, division, showAll ? Infinity : TOP);
@@ -423,6 +428,8 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   const history = meetHistory(meets.data ?? []);
   const what = lift === "total" ? "squat + bench + deadlift" : LIFT_NAME[lift];
   const pick = <T,>(set: (v: T) => void) => (v: T) => { set(v); setShowAll(false); };
+
+  if (career) return <PowerliftingCareer athleteId={career} onBack={() => setCareer(null)} backLabel="Hall of Strength" />;
 
   return (
     <div className="space-y-4">
@@ -510,6 +517,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
             : source === "meets"
               ? `Heaviest ${what} passed by the referees at a meet.`
               : `Heaviest ${what} from training or a meet. ×3 = done for 3 reps.`}
+          {source === "meets" ? " Tap a lifter to see every meet of their career." : ""}
         </p>
         <ToggleGroup type="single" value={unit} onValueChange={(v) => v && setUnit(v as WeightUnit)} className="shrink-0 rounded-lg border bg-card p-0.5">
           {(["lb", "kg"] as const).map((u) => (
@@ -534,12 +542,14 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
         <>
           <div className="grid grid-cols-3 items-end gap-2">
             {[podium[1], podium[0], podium[2]].map((r, i) =>
-              r ? <PodiumSpot key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"} /> : <div key={i} />,
+              r ? <PodiumSpot key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"}
+                tier={r.athlete_id ? tiers?.get(r.athlete_id) : undefined} onOpen={r.athlete_id ? () => setCareer(r.athlete_id) : undefined} /> : <div key={i} />,
             )}
           </div>
           {rest.length > 0 && (
             <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
-              {rest.map((r) => <BoardLine key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"} />)}
+              {rest.map((r) => <BoardLine key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"}
+                tier={r.athlete_id ? tiers?.get(r.athlete_id) : undefined} onOpen={r.athlete_id ? () => setCareer(r.athlete_id) : undefined} />)}
             </ul>
           )}
           {count > TOP && (
@@ -584,17 +594,36 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   );
 }
 
+type Tier = { top_level: MeetLevel; top_place: number | null };
+
+/** Each meet athlete's highest level and best finish there, for the badge by their name. */
+function useTiers() {
+  return useQuery({
+    queryKey: ["strength-board", "tiers"],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await db.rpc("get_powerlifting_athlete_tiers");
+      if (error) throw error;
+      return new Map(((data ?? []) as any[]).map((t) => [String(t.athlete_id), { top_level: t.top_level, top_place: t.top_place == null ? null : Number(t.top_place) } as Tier]));
+    },
+  });
+}
+
 function NameLine({ row }: { row: StrengthRow }) {
   return row.meet?.competed_as ? (
     <div className="truncate text-[9px] text-muted-foreground">competed as {row.meet.competed_as}</div>
   ) : null;
 }
 
-function PodiumSpot({ row, rank, mode, unit, showSource }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean }) {
+function PodiumSpot({ row, rank, mode, unit, showSource, tier, onOpen }: {
+  row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean; tier?: Tier; onOpen?: () => void;
+}) {
   const first = rank === 1;
+  const Tag = onOpen ? "button" : "div";
   return (
-    <div className={cn(
+    <Tag type={onOpen ? "button" : undefined} onClick={onOpen} className={cn(
       "flex flex-col items-center rounded-2xl border p-2 text-center shadow-sm",
+      onOpen && "transition active:scale-[0.98]",
       first ? "bg-gradient-to-b from-amber-400/20 to-card pb-4 ring-2 ring-amber-400/60" : "bg-card",
       row.is_me && "ring-2 ring-primary",
     )}>
@@ -608,6 +637,7 @@ function PodiumSpot({ row, rank, mode, unit, showSource }: { row: StrengthRow; r
         <Headline row={row} mode={mode} unit={unit} />
       </div>
       <div className="mt-1 flex flex-wrap justify-center gap-1">
+        {tier && <LevelBadge level={tier.top_level} place={tier.top_place} />}
         {showSource && <SourceTag row={row} />}
         {mode === "absolute" && <XBadge row={row} />}
         <ClubBadge row={row} />
@@ -619,13 +649,18 @@ function PodiumSpot({ row, rank, mode, unit, showSource }: { row: StrengthRow; r
         </div>
       )}
       {row.meet && <div className="w-full truncate text-[9px] text-muted-foreground">{row.meet.name} · {format(new Date(row.lifted_at), "yyyy")}</div>}
-    </div>
+      {onOpen && <div className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">Career ›</div>}
+    </Tag>
   );
 }
 
-function BoardLine({ row, rank, mode, unit, showSource }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean }) {
+function BoardLine({ row, rank, mode, unit, showSource, tier, onOpen }: {
+  row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean; tier?: Tier; onOpen?: () => void;
+}) {
+  const Tag = onOpen ? "button" : "div";
   return (
-    <li className={cn("flex items-center gap-3 px-3 py-2.5", row.is_me && "bg-primary/5")}>
+    <li className={cn(row.is_me && "bg-primary/5")}>
+    <Tag type={onOpen ? "button" : undefined} onClick={onOpen} className={cn("flex w-full items-center gap-3 px-3 py-2.5 text-left", onOpen && "active:bg-muted")}>
       <span className="w-8 shrink-0 text-center text-sm font-black text-muted-foreground">#{rank}</span>
       <LifterAvatar row={row} size="h-9 w-9 shrink-0" />
       <div className="min-w-0 flex-1">
@@ -636,6 +671,7 @@ function BoardLine({ row, rank, mode, unit, showSource }: { row: StrengthRow; ra
         </div>
         <NameLine row={row} />
         <div className="mt-0.5 flex flex-wrap items-center gap-1">
+          {tier && <LevelBadge level={tier.top_level} place={tier.top_place} />}
           {showSource && <SourceTag row={row} />}
           <AlumniTag row={row} />
         </div>
@@ -646,6 +682,8 @@ function BoardLine({ row, rank, mode, unit, showSource }: { row: StrengthRow; ra
         {mode === "absolute" && <XBadge row={row} />}
         <ClubBadge row={row} />
       </div>
+      {onOpen && <ChevronRight className="-mr-1 h-4 w-4 shrink-0 text-muted-foreground" />}
+    </Tag>
     </li>
   );
 }
