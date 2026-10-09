@@ -19,6 +19,8 @@ export type StrengthRow = {
   /** Stable per-athlete key: the client, or the meet athlete when not linked to one. */
   key: string;
   client_id: string | null;
+  /** The athlete's meet record (their powerlifting career), when they have one. */
+  athlete_id: string | null;
   display_name: string;
   avatar_url: string | null;
   is_me: boolean;
@@ -76,6 +78,7 @@ export function normalizeRow(r: any): StrengthRow {
   return {
     key: String(r.client_id),
     client_id: r.client_id,
+    athlete_id: r.athlete_id ?? null,
     display_name: r.display_name ?? "Athlete",
     avatar_url: r.avatar_url ?? null,
     is_me: !!r.is_me,
