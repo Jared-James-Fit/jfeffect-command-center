@@ -1,4 +1,4 @@
--- All-time board (20261023090000_hall_of_strength_all_time.sql): everyone
+-- All-time board (20261024090000_hall_of_strength_all_time.sql): everyone
 -- JF Effect has coached, best of training and meets. Run after scenario.sql
 -- and scenario-meets.sql (uses its own people).
 do $$

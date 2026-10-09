@@ -3,7 +3,7 @@
  * ever coached, training + meets) and get_strength_board_meets()
  * (Competition: sanctioned meets only) rows into the boards clients see,
  * plus the copy and math that make them easy to read. Ranking itself happens
- * in the database (20261023090000_hall_of_strength_all_time.sql).
+ * in the database (20261024090000_hall_of_strength_all_time.sql).
  */
 import type { WeightUnit } from "@/lib/weight-lifted";
 
