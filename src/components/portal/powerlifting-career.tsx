@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { ArrowLeft, Ban, Check, ExternalLink, Landmark, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Ban, Check, ExternalLink, History, Landmark, Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
@@ -14,15 +14,17 @@ import {
   attemptsMade,
   byYear,
   careerBests,
-  coachedSpan,
+  coachingStatus,
   competitorTier,
   honours,
   isDq,
   normalizeCareer,
   placeLabel,
   placeNum,
+  podiums,
   totalRecords,
   type CareerMeet,
+  type CoachingStatus,
   type MeetLevel,
 } from "@/lib/powerlifting-career";
 
@@ -48,6 +50,28 @@ export function LevelBadge({ level, place, className }: { level: MeetLevel; plac
       {place != null && place <= 3 ? <span className="mr-0.5">{["🥇", "🥈", "🥉"][place - 1]}</span> : null}
       {LEVELS[level].label}
     </span>
+  );
+}
+
+/** Coaching them now, or in the past (and when): nobody should think a former athlete is still with JF Effect. */
+function CoachingLine({ status }: { status: CoachingStatus }) {
+  const current = status.kind === "current";
+  return (
+    <div className={cn("mt-3 flex items-center gap-2.5 rounded-xl border px-3 py-2",
+      current ? "border-emerald-500/40 bg-emerald-500/10" : "border-dashed border-muted-foreground/40 bg-muted/40")}>
+      {current ? (
+        <span className="relative flex h-2.5 w-2.5 shrink-0">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+        </span>
+      ) : (
+        <History className="h-4 w-4 shrink-0 text-muted-foreground" />
+      )}
+      <div className="min-w-0 leading-tight">
+        <div className={cn("text-[13px] font-black", current ? "text-emerald-700 dark:text-emerald-300" : "text-foreground")}>{status.title}</div>
+        {status.detail && <div className="text-[11px] font-semibold text-muted-foreground">{status.detail}</div>}
+      </div>
+    </div>
   );
 }
 
@@ -164,7 +188,7 @@ export function PowerliftingCareer({ athleteId, onBack, backLabel = "Board" }: {
   const shown = filter === "all" ? meets : meets.filter((m) => (filter === "coached" ? m.coached : !m.coached));
   const bests = careerBests(filter === "all" ? meets : shown);
   const records = totalRecords(meets);
-  const span = coachedSpan(c);
+  const coaching = coachingStatus(c);
   const competedAs = [...new Set(meets.map((m) => m.entered_name).filter((n): n is string => !!n && n !== c.athlete.display_name))];
 
   return (
@@ -184,6 +208,7 @@ export function PowerliftingCareer({ athleteId, onBack, backLabel = "Board" }: {
             {competedAs.length > 0 && <div className="text-[11px] text-muted-foreground">competed as {competedAs.join(", ")}</div>}
           </div>
         </div>
+        <CoachingLine status={coaching} />
         <div className="mt-3 flex flex-wrap gap-1.5">
           {tier && (
             <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide", LEVELS[tier.level].tone)}>
@@ -195,16 +220,15 @@ export function PowerliftingCareer({ athleteId, onBack, backLabel = "Board" }: {
               {["🥇", "🥈", "🥉"][h.place - 1]} {h.title}{h.count > 1 ? ` ×${h.count}` : ""}
             </span>
           ))}
-          {c.athlete.is_alumni && <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-muted-foreground">JF Effect alumni</span>}
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           {[
             [String(meets.length), "meets"],
             [String(coachedCount), "with JF Effect"],
-            [span ?? "—", "coached"],
+            [String(podiums(meets)), "podiums"],
           ].map(([v, label]) => (
             <div key={label} className="rounded-xl bg-background/60 px-1 py-2">
-              <div className="whitespace-nowrap text-base font-black tabular-nums">{v}</div>
+              <div className="text-base font-black tabular-nums">{v}</div>
               <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
             </div>
           ))}

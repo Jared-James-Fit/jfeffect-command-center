@@ -36,9 +36,10 @@ create table athlete_powerlifting_results (id uuid primary key default gen_rando
   dots_points numeric, competition_level text, source text not null default 'manual', source_key text, created_at timestamptz default now());
 
 -- Stand-in for pg_net: http_get queues the URL; tests write the responses.
+-- Like pg_net, ids aren't unique: they start over after a restart.
 create schema net;
-create table net.http_request_queue (id bigserial primary key, url text);
-create table net._http_response (id bigint primary key, status_code int, content text, error_msg text, timed_out boolean, created timestamptz default now());
+create table net.http_request_queue (id bigserial, url text);
+create table net._http_response (id bigint, status_code int, content text, error_msg text, timed_out boolean, created timestamptz default now());
 create function net.http_get(url text, params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds int default 5000)
 returns bigint language sql as $$ insert into net.http_request_queue (url) values (url) returning id $$;
 

@@ -3,11 +3,12 @@ import {
   attemptsMade,
   byYear,
   careerBests,
-  coachedSpan,
+  coachingStatus,
   competitorTier,
   honours,
   normalizeCareer,
   placeLabel,
+  podiums,
   totalRecords,
   type CareerMeet,
 } from "@/lib/powerlifting-career";
@@ -74,7 +75,7 @@ describe("career numbers", () => {
   });
 });
 
-describe("normalizeCareer / coached span", () => {
+describe("normalizeCareer / coaching status", () => {
   const raw = {
     athlete: { athlete_id: "a", display_name: "Kenneth Morris", periods: [{ start: null, end: "2024-12-14" }] },
     meets: [
@@ -90,8 +91,24 @@ describe("normalizeCareer / coached span", () => {
     expect(c.meets[3].level).toBe("local");
     expect(normalizeCareer(null)).toBeNull();
   });
-  it("coached span from the periods (open start = first coached meet)", () => {
-    expect(coachedSpan(normalizeCareer(raw)!)).toBe("2023–2024");
-    expect(coachedSpan(normalizeCareer({ ...raw, athlete: { ...raw.athlete, periods: [{ start: "2022-10-16", end: null }] } })!)).toBe("2022–now");
+  const today = new Date(2026, 9, 9);
+  const as = (athlete: object) => normalizeCareer({ ...raw, athlete: { ...raw.athlete, ...athlete } })!;
+
+  it("former athlete: says so, and when (open start = year of the first coached meet)", () => {
+    expect(coachingStatus(as({}), today)).toEqual({ kind: "former", title: "Former JF Effect athlete", detail: "Coached 2023 – Dec 2024" });
+    expect(coachingStatus(as({ periods: [{ start: "2023-07-21", end: "2024-09-14" }] }), today).detail).toBe("Coached Jul 2023 – Sep 2024");
+    expect(coachingStatus(as({ periods: [{ start: "2023-08-10", end: "2023-08-10" }] }), today).detail).toBe("Coached Aug 2023");
+  });
+
+  it("current athlete: an open period (or one ending later), unless marked retired", () => {
+    expect(coachingStatus(as({ periods: [{ start: "2026-05-02", end: null }] }), today)).toEqual({ kind: "current", title: "Current JF Effect athlete", detail: "Coached since May 2026" });
+    expect(coachingStatus(as({ periods: [{ start: null, end: "2026-12-31" }] }), today).kind).toBe("current");
+    expect(coachingStatus(as({ periods: [{ start: null, end: null }], is_alumni: true }), today)).toEqual({ kind: "former", title: "Former JF Effect athlete", detail: "Coached 2023 – 2024" });
+    expect(coachingStatus(as({ periods: [] }), today).kind).toBe("never");
+  });
+
+  it("podiums count 1st to 3rd only", () => {
+    expect(podiums(jared)).toBe(5);
+    expect(podiums([meet({ place: "DQ" }), meet({ place: "4" }), meet({ place: null })])).toBe(0);
   });
 });
