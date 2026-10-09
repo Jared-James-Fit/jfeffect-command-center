@@ -1,12 +1,12 @@
 /**
- * Supabase TOTP MFA for staff. The finance login must use an authenticator
- * app: its session has to be aal2 before the books open, and the database
- * (has_permission) refuses it otherwise. Admin MFA ships separately.
+ * Supabase TOTP MFA for staff. Admin and finance must use an authenticator
+ * app: their session has to be aal2 before their area opens, and the
+ * database (has_role admin, has_permission) refuses them otherwise.
  */
 import { supabase } from "@/integrations/supabase/client";
 
 /** Roles whose sessions must be MFA-verified (aal2). */
-export const MFA_REQUIRED_ROLES = new Set(["finance"]);
+export const MFA_REQUIRED_ROLES = new Set(["admin", "finance"]);
 
 export function roleRequiresMfa(role: string | null | undefined): boolean {
   return !!role && MFA_REQUIRED_ROLES.has(role);
