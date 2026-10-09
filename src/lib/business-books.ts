@@ -7,9 +7,8 @@ import { DEFAULT_TAX_SETTINGS } from "@/lib/business-tax";
 
 export const RECEIPTS_BUCKET = "business-receipts";
 
-/** Summer Ledger: the bookkeeping assistant. */
-export const ASSISTANT_NAME = "Summer Ledger";
-export const ASSISTANT_SHORT = "Summer";
+/** The assistant's name, shown on its own everywhere. */
+export const ASSISTANT_NAME = "Cleo";
 
 export type ExpenseRow = {
   id: string;
@@ -56,7 +55,7 @@ export type TaxSettingsRow = {
   accountant_name: string | null;
   notes: string | null;
   stripe_fees_synced_at: string | null;
-  /** Summer's vibe preset and the owner's custom instructions. */
+  /** Cleo's vibe preset and the owner's custom instructions. */
   assistant_tone?: string | null;
   assistant_instructions?: string | null;
 };

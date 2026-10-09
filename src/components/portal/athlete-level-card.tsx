@@ -17,9 +17,14 @@ import { ArrowLeft } from "lucide-react";
 import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 import { RecordBadges } from "@/components/portal/record-badges";
 import { LeagueRecapButton } from "@/components/portal/league-recap";
+import { formatWeightLifted, type WeightUnit } from "@/lib/weight-lifted";
+import { useWeightUnit } from "@/lib/use-weight-unit";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 import { CoachTag } from "@/components/portal/coach-tag";
+import { CoachFocus, PointsBar, PointsLegend, VsCard } from "@/components/portal/league-insights";
+import { HallOfStrength } from "@/components/portal/strength-board";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
 type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean; is_coach?: boolean };
@@ -139,7 +144,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
 
         <div className="grid grid-cols-2 border-t">
           <div className="min-w-0 px-3 py-2 [&>button]:mt-0 [&>button]:border-0 [&>button]:px-1 [&>button]:py-1"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
-          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-3 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Powerlifting Records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
+          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 border-l px-3 py-3.5 text-left transition-colors active:bg-muted/30"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Meet History</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
         </div>
       </Card>
 
@@ -154,7 +159,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: { clientId: s
       <Sheet open={open === "powerlifting"} onOpenChange={(o) => !o && setOpen(null)}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
           <div className="min-h-[320px]">
-            <PowerliftingRecordsView />
+            <HallOfStrength initialSource="meets" />
           </div>
         </SheetContent>
       </Sheet>
@@ -209,7 +214,7 @@ function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[11px] text-muted-foreground">Editing a record never earns extra points. Monthly Performance League and Powerlifting Records are scored separately.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">Editing a record never earns extra points. Monthly Performance League and the Hall of Strength are scored separately.</p>
       </div>
       <div>
         <div className="mb-2 text-sm font-semibold">Points history</div>
@@ -262,6 +267,28 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 type LeagueStat = { workouts_completed: number; rank: number; qualified: boolean; xp: number };
 
+type WeightLifted = { month_lb: number; lifetime_lb: number; month_sessions: number; lifetime_sessions: number };
+
+function useWeightLifted(clientId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["athlete-weight-lifted", clientId],
+    enabled: !!clientId,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<WeightLifted | null> => {
+      const { data, error } = await (supabase as any).rpc("get_athlete_weight_lifted", { _client_id: clientId });
+      if (error) throw error;
+      const r = (data ?? [])[0];
+      if (!r) return null;
+      return {
+        month_lb: Number(r.month_lb ?? 0),
+        lifetime_lb: Number(r.lifetime_lb ?? 0),
+        month_sessions: Number(r.month_sessions ?? 0),
+        lifetime_sessions: Number(r.lifetime_sessions ?? 0),
+      };
+    },
+  });
+}
+
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-2xl border bg-card px-3 py-2.5">
@@ -272,12 +299,18 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, onBack }: {
+function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague, myLeague, theirRow, myRow, live, onBack }: {
   clientId: string;
+  myClientId?: string | null;
   myStats: BadgeStats;
   myBadgeCount: number;
   theirLeague?: LeagueStat;
   myLeague?: LeagueStat;
+  /** Full league rows for the month being viewed (points by source). */
+  theirRow?: BoostLeagueRow;
+  myRow?: BoostLeagueRow;
+  /** The month is still running, so coaching tips make sense. */
+  live: boolean;
   onBack: () => void;
 }) {
   const { data: p, isPending } = useQuery({
@@ -293,6 +326,9 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
   const povClientId = useClientImpersonation().client?.id ?? null;
   const isMe = !!p?.is_me || (!!povClientId && clientId === povClientId);
   const theirXp = Number(p?.xp ?? 0);
+  const { unit, setUnit } = useWeightUnit();
+  const { data: theirWeight, isPending: weightPending } = useWeightLifted(clientId);
+  const { data: myWeight } = useWeightLifted(!isMe ? myClientId : null);
   const { data: publicBadges = [] } = usePublicAchievements(clientId);
   const monthName = format(new Date(), "MMMM");
   const lifetimeWorkouts = Number(p?.workouts_completed ?? 0);
@@ -301,6 +337,8 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
   const loggedPct = lifetimeWorkouts > 0 ? Math.round((Math.min(fullyLogged, lifetimeWorkouts) / lifetimeWorkouts) * 100) : 0;
   const since = p?.first_workout_at ? format(new Date(p.first_workout_at), "MMM yyyy") : null;
   const lastWorkout = p?.last_workout_at ? format(new Date(p.last_workout_at), "MMM d") : null;
+  const weightValue = (lb?: number) => (theirWeight ? formatWeightLifted(lb ?? 0, unit) : weightPending ? "…" : "—");
+  const weightSub = (n?: number) => (theirWeight ? plural(n ?? 0, "session") : undefined);
   const leagueSub = theirLeague?.qualified && theirLeague.rank < 999
     ? `#${theirLeague.rank} · ${formatLeaguePoints(theirLeague.xp)} pts`
     : undefined;
@@ -323,9 +361,29 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
             </div>
           </div>
 
+          {!isMe && myRow && theirRow && (
+            <div className="space-y-2">
+              <div className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{monthName} points · head to head</div>
+              <VsCard me={myRow} them={theirRow} themName={p.display_name} />
+              {live && <CoachFocus me={myRow} title={Number(theirRow.total_points) > Number(myRow.total_points) ? "How to close the gap" : "How to stay ahead"} />}
+            </div>
+          )}
+          {isMe && live && theirRow && <CoachFocus me={theirRow} />}
+
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Weight units</span>
+            <ToggleGroup type="single" value={unit} onValueChange={(v) => v && setUnit(v as WeightUnit)} className="rounded-lg border bg-card p-0.5">
+              {(["lb", "kg"] as const).map((u) => (
+                <ToggleGroupItem key={u} value={u} aria-label={`Show weight in ${u}`} className="h-9 px-3 text-xs font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">{u}</ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <StatTile label="Lifetime workouts" value={lifetimeWorkouts.toLocaleString()} sub={since ? `Training since ${since}` : undefined} />
             <StatTile label={`${monthName} workouts`} value={monthWorkouts.toLocaleString()} sub={leagueSub} />
+            <StatTile label={`${monthName} weight lifted`} value={weightValue(theirWeight?.month_lb)} sub={weightSub(theirWeight?.month_sessions)} />
+            <StatTile label="Lifetime weight lifted" value={weightValue(theirWeight?.lifetime_lb)} sub={weightSub(theirWeight?.lifetime_sessions)} />
             <StatTile label="Fully logged" value={fullyLogged.toLocaleString()} sub={lifetimeWorkouts > 0 ? `${loggedPct}% of workouts` : undefined} />
             <StatTile label="Last workout" value={lastWorkout ?? "—"} sub={p?.month_workouts_fully_logged != null ? `${p.month_workouts_fully_logged} fully logged in ${monthName}` : undefined} />
           </div>
@@ -340,6 +398,8 @@ function CompareView({ clientId, myStats, myBadgeCount, theirLeague, myLeague, o
                 ["Lifetime points", Number(myStats?.xp ?? 0).toLocaleString(), Number(theirXp ?? 0).toLocaleString()],
                 ["Lifetime workouts", Number(myStats?.workouts_completed ?? 0).toLocaleString(), lifetimeWorkouts.toLocaleString()],
                 [`${monthName} workouts`, myLeague ? String(myLeague.workouts_completed) : "—", String(monthWorkouts)],
+                [`${monthName} weight lifted`, myWeight ? formatWeightLifted(myWeight.month_lb, unit) : "—", theirWeight ? formatWeightLifted(theirWeight.month_lb, unit) : "—"],
+                ["Lifetime weight lifted", myWeight ? formatWeightLifted(myWeight.lifetime_lb, unit) : "—", theirWeight ? formatWeightLifted(theirWeight.lifetime_lb, unit) : "—"],
                 ["Badges", String(myBadgeCount), String(publicBadges.length)],
               ].map(([k, a, b]) => (
                 <div key={k} className="grid grid-cols-3 border-t px-3 py-2.5">
@@ -394,6 +454,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     },
   });
   const qualified = data.filter((r) => r.qualified && r.rank <= 10);
+  const topPoints = Math.max(0, ...qualified.map((r) => Number(r.total_points ?? 0)));
   const podium = qualified.slice(0, 3);
   const rest = qualified.slice(3);
   const me = data.find((r) => r.is_me);
@@ -410,10 +471,14 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     return (
       <CompareView
         clientId={selected}
+        myClientId={me?.client_id ?? null}
         myStats={myStats}
         myBadgeCount={myBadgeCount}
         theirLeague={toStat(data.find((r) => r.client_id === selected))}
         myLeague={toStat(me)}
+        theirRow={boostRows.find((r) => r.client_id === selected)}
+        myRow={boostMe}
+        live={view === "current" && !boostMe?.month_closed}
         onBack={() => onSelectedChange(null)}
       />
     );
@@ -423,7 +488,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     <div className="space-y-4">
       <SheetHeader className="text-left">
         <SheetTitle>{monthName} {view === "previous" ? "Final Standings" : "Performance League"}</SheetTitle>
-        <SheetDescription>{view === "previous" ? "Final results, including Final Week Boost awards." : "Earn points all month. Tap anyone to see their profile."}</SheetDescription>
+        <SheetDescription>{view === "previous" ? "Final results, including Final Week Boost awards." : "Earn points all month. Tap anyone to see where their points come from."}</SheetDescription>
       </SheetHeader>
 
       <div className="grid grid-cols-2 rounded-xl bg-muted/50 p-1 text-xs font-bold">
@@ -466,6 +531,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
         <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">No athletes have qualified for {monthName} yet. Log a bodyweight and complete training to get on the board.</div>
       ) : (
         <>
+          <PointsLegend rows={qualified} />
           <div className="grid grid-cols-3 items-end gap-2">
             {[podium[1], podium[0], podium[2]].map((r, i) => r ? (
               <button type="button" onClick={() => onSelectedChange(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md", r.rank === 1 ? "pb-4 bg-amber-50/70 ring-2 ring-amber-300" : r.rank === 2 ? "bg-slate-50/80" : "bg-orange-50/40", r.is_me && "ring-2 ring-primary")}>
@@ -476,6 +542,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
                 <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
                 <div className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</div>
                 <RecordBadges row={r} size="xs" center className="mt-1" />
+                <PointsBar row={r} max={topPoints} className="mt-1.5" />
                 {finalWeek && <RowBoost row={{ ...r, rank: r.rank } as BoostLeagueRow} />}
               </button>
             ) : <div key={i} />)}
@@ -485,7 +552,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
               <li key={r.client_id} onClick={() => onSelectedChange(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
                 <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
                 <RankAvatar row={r} size="h-9 w-9" />
-                <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</span>{r.is_coach && <CoachTag />}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div><RecordBadges row={r} size="xs" className="mt-1" />{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
+                <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</span>{r.is_coach && <CoachTag />}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div><RecordBadges row={r} size="xs" className="mt-1" /><PointsBar row={r} max={topPoints} className="mt-1.5" />{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
                 <span className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</span>
               </li>
             ))}
@@ -498,6 +565,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
           <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
           <div className="mt-1 text-2xl font-black text-primary">{formatLeaguePoints(me.xp)} <span className="text-sm">pts</span></div>
           <MonthBreakdown me={me as BoostLeagueRow} />
+          {view === "current" && boostMe && <CoachFocus me={boostMe} className="mt-3" />}
           {(() => {
             const tenth = data.filter((r) => r.qualified && r.rank <= 10).sort((a,b)=>a.rank-b.rank).at(-1);
             const gap = me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
@@ -548,41 +616,4 @@ function RankLine({ row, onSelect }: { row: RankRow; onSelect: (id: string) => v
       <span className="text-xs text-muted-foreground">{Number(row?.xp ?? 0).toLocaleString()} XP</span>
     </li>
   );
-}
-
-
-function PowerliftingRecordsView() {
-  const [tab, setTab] = useState<"gl"|"dots"|"total"|"squat"|"bench"|"deadlift">("gl");
-  const [division, setDivision] = useState<"male"|"female">("male");
-  const [selectedAthlete, setSelectedAthlete] = useState<any|null>(null);
-  const { data = [], isPending, error } = useQuery({
-    queryKey: ["powerlifting-rankings"], staleTime: 5 * 60_000,
-    queryFn: async () => { const { data, error } = await (supabase as any).rpc("get_powerlifting_rankings"); if (error) throw error; return (data ?? []) as any[]; },
-  });
-  const { data: roster = [] } = useQuery({
-    queryKey: ["powerlifting-athlete-roster"], staleTime: 5 * 60_000,
-    queryFn: async () => { const { data, error } = await (supabase as any).rpc("get_powerlifting_athlete_roster"); if (error) throw error; return (data ?? []) as any[]; },
-  });
-  const pointSystem = (r:any) => String(r.points_system||"").toUpperCase();
-  const value = (r:any) => tab==="gl" ? Number(r.gl_points??0) : tab==="dots" ? Number(r.dots_points??0) : Number(r[tab==="total"?"total_kg":tab+"_kg"]??0);
-  const eligible = data.filter((r:any)=> String(r.sex).toLowerCase()===division);
-  const ordered=[...eligible].filter((r:any)=>value(r)>0).sort((a:any,b:any)=>value(b)-value(a));
-  const seen=new Set<string>();
-  const sorted=ordered.filter((r:any)=>{const key=r.athlete_id||r.client_id||String(r.athlete_name||"").toLowerCase();if(seen.has(key))return false;seen.add(key);return true}).slice(0,10);
-  const represented=new Set(data.map((r:any)=>r.athlete_id).filter(Boolean));
-  const awaiting=roster.filter((a:any)=>!represented.has(a.athlete_id));
-  const tabs=[["gl","GL Points"],["dots","DOTS"],["total","Total"],["squat","Squat"],["bench","Bench"],["deadlift","Deadlift"]] as const;
-  return <div className="space-y-4">
-    <SheetHeader className="text-left">
-      <SheetTitle>JF Powerlifting Records</SheetTitle>
-      <SheetDescription>Verified JF-coached meet records. One athlete, one spot. Tap a category for their best.</SheetDescription>
-    </SheetHeader>
-    <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">{([["male","Men"],["female","Women"]] as const).map(([k,label])=><button key={k} type="button" onClick={()=>setDivision(k)} className={cn("rounded-lg px-2 py-2 text-xs font-bold",division===k?"bg-background text-foreground shadow-sm":"text-muted-foreground")}>{label}</button>)}</div>
-    <div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Top 10</span><span className="text-[10px] font-semibold text-muted-foreground">{division==="male"?"Men":"Women"} · {tab==="gl"?"GL Points":tab==="dots"?"DOTS":tab[0].toUpperCase()+tab.slice(1)}</span></div>
-    <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1 sm:grid-cols-6">{tabs.map(([k,label])=><button key={k} type="button" onClick={()=>setTab(k)} className={cn("rounded-lg px-2 py-2 text-[11px] font-bold",tab===k?"bg-background shadow-sm":"text-muted-foreground")}>{label}</button>)}</div>
-    {(tab==="gl"||tab==="dots")&&<div className="rounded-xl border bg-muted/20 px-3 py-2 text-xs text-muted-foreground"><b className="text-foreground">{tab==="gl"?"GL Points":"DOTS"}:</b> a bodyweight-adjusted score used to compare powerlifting performances across different bodyweights. Higher is better.</div>}
-    {isPending?<div className="py-8 text-center text-sm text-muted-foreground">Loading records…</div>:error?<div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm"><div className="font-bold text-destructive">Records could not load</div><div className="mt-1 text-xs text-muted-foreground">Please try again. If this continues, staff can manage the saved athlete data from Athlete Records.</div></div>:sorted.length===0?<div className="rounded-xl border p-6 text-center text-sm text-muted-foreground">No saved {tab==="gl"?"GL Points":tab==="dots"?"DOTS":tab} results are available for qualifying JF meets yet.</div>:<div className="overflow-hidden rounded-2xl border bg-card">{sorted.map((r:any,i)=><div key={r.id} className="flex items-center gap-3 border-b p-3 last:border-0"><div className="w-6 text-center text-sm font-black text-muted-foreground">{i+1}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><button type="button" onClick={()=>setSelectedAthlete(r)} className="truncate text-left text-sm font-bold hover:text-primary hover:underline">{r.athlete_name}</button>{r.arenapl_url&&<a href={r.arenapl_url} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-black tracking-wide text-muted-foreground hover:text-primary" aria-label={`Open ${r.athlete_name} on ArenaPL`}>ARENA ↗</a>}</div><div className="text-[10px] font-bold uppercase text-primary">{r.weight_class_kg?`${r.weight_class_kg} KG · `:""}{r.sex} · {r.competition_level||"competitor"}</div><div className="truncate text-[10px] text-muted-foreground">{r.meet_location||r.meet_name||"Meet"}{r.meet_date?` · ${new Date(r.meet_date+"T00:00:00").getFullYear()}`:""}</div></div><div className="text-right"><div className="text-sm font-black">{tab==="gl"||tab==="dots"?`${value(r).toFixed(2)} ${tab==="gl"?"GL":"DOTS"}`:`${Number(r[tab==="total"?"total_kg":tab+"_kg"])} kg`}</div><div className="text-[10px] text-muted-foreground">S {r.squat_kg} · B {r.bench_kg} · D {r.deadlift_kg}</div></div></div>)}</div>}
-    <Sheet open={!!selectedAthlete} onOpenChange={(o)=>!o&&setSelectedAthlete(null)}><SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl pb-safe-bottom"><button type="button" onClick={()=>setSelectedAthlete(null)} className="mb-3 inline-flex min-h-11 items-center gap-2 rounded-xl border bg-card px-3 text-sm font-bold shadow-sm"><ArrowLeft className="h-4 w-4" /> Back to records</button>{selectedAthlete&&(()=>{const athleteRows=data.filter((x:any)=>(x.athlete_id||x.client_id)===(selectedAthlete.athlete_id||selectedAthlete.client_id));const classes=[...new Set(athleteRows.map((x:any)=>x.weight_class_kg).filter(Boolean))];return <div className="space-y-4"><SheetHeader className="text-left"><SheetTitle>{selectedAthlete.athlete_name}</SheetTitle><SheetDescription>JF-coached competition bests by weight class.</SheetDescription></SheetHeader>{selectedAthlete.arenapl_url&&<a href={selectedAthlete.arenapl_url} target="_blank" rel="noreferrer" className="inline-flex rounded-lg border px-3 py-2 text-xs font-black text-primary">Open Arena Powerlifting ↗</a>}{classes.map((wc:any)=>{const rows=athleteRows.filter((x:any)=>x.weight_class_kg===wc);const best=(key:string)=>rows.reduce((a:any,b:any)=>Number(b[key]||0)>Number(a?.[key]||0)?b:a,null);return <div key={wc} className="rounded-2xl border bg-card p-4"><div className="mb-3 text-sm font-black">{wc} kg class</div><div className="grid grid-cols-3 gap-2 text-center">{[["Squat","squat_kg"],["Bench","bench_kg"],["Deadlift","deadlift_kg"],["Total","total_kg"],["GL","gl_points"],["DOTS","dots_points"]].map(([label,key])=>{const r=best(key);return <div key={key} className="rounded-xl bg-muted/40 p-2"><div className="text-[9px] font-bold uppercase text-muted-foreground">{label}</div><div className="text-sm font-black">{r?Number(r[key]).toFixed(key.includes("points")?2:1):"—"}{r&&!key.includes("points")?" kg":""}</div><div className="truncate text-[8px] text-muted-foreground">{r?.meet_date?new Date(r.meet_date+"T00:00:00").getFullYear():""}</div></div>})}</div></div>})}</div>})()}</SheetContent></Sheet>
-    {!isPending&&roster.length>0&&<div className="rounded-2xl border bg-card p-4"><div className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">JF Powerlifting Roster</div><div className="mt-1 text-sm font-semibold">{roster.length} athletes tracked</div>{awaiting.length>0&&<div className="mt-3 border-t pt-3"><div className="mb-2 text-[11px] font-bold text-muted-foreground">Athletes still needing qualifying meet data</div><div className="flex flex-wrap gap-1.5">{awaiting.map((a:any)=><span key={a.athlete_id} className="rounded-full border bg-muted/30 px-2 py-1 text-[10px] font-semibold">{a.athlete_name}</span>)}</div></div>}</div>}
-  </div>;
 }

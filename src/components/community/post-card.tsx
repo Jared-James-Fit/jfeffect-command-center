@@ -1,19 +1,23 @@
 import { memo, useRef, useState } from "react";
-import { BadgeCheck, Lock, MessageCircle, Play } from "lucide-react";
+import { BadgeCheck, Lock, MessageCircle, Play, Send } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import {
   REACTION,
   SCOPE_WORD,
   SERIES_LABEL,
+  extraScene,
+  extraTipKind,
   featuredLift,
+  isRecapStats,
+  isWinsStats,
   formatTopSet,
   isTrainingNow,
   lockInTimeLabel,
   pickCardStats,
   postTimeLabel,
   reactionEmoji,
-  reactionTotal,
+  reactionKinds,
   reactorsLine,
   sessionLine,
   type CommunityAuthor,
@@ -23,9 +27,14 @@ import {
 } from "@/lib/community";
 import { useFullMediaUrl } from "@/lib/community.queries";
 import { WinsStatsCard } from "@/components/community/wins-stats";
+import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-cards";
+import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
+import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
+import { useAuth } from "@/lib/auth";
+import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -88,14 +97,17 @@ export function CoachBadge({ className }: { className?: string }) {
  */
 export function NoteBody({ post, clamp = false }: { post: CommunityPost; clamp?: boolean }) {
   const series = post.series ? SERIES_LABEL[post.series] ?? null : null;
+  // Saturday: the picture says it, the words just sit under it
+  const scene = post.series === "saturday_spirit" ? extraScene(post.series_extra) : null;
   return (
     <div className="px-4 pb-1 pt-1">
       {series && (
         <div className="mb-2.5 flex min-w-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em]">
           <span className="shrink-0 whitespace-nowrap text-primary">{series.name}</span>
-          <span className="truncate text-muted-foreground/70">· {series.tagline}</span>
+          <span className="truncate text-muted-foreground/70">· {extraTipKind(post.series_extra) ?? series.tagline}</span>
         </div>
       )}
+      {scene && isSpiritScene(scene) && <SpiritScene scene={scene} className="mb-3 rounded-2xl" />}
       {post.quote && (
         <figure className="mb-3 border-l-[3px] border-primary pl-3.5">
           <blockquote className="whitespace-pre-line text-[18px] font-semibold leading-[1.32] tracking-[-0.01em]">“{post.quote}”</blockquote>
@@ -107,9 +119,18 @@ export function NoteBody({ post, clamp = false }: { post: CommunityPost; clamp?:
           )}
         </figure>
       )}
-      {post.caption && <p className={cn("whitespace-pre-line text-[15px] leading-[1.45]", clamp && "line-clamp-[8]")}>{post.caption}</p>}
+      {post.caption && (
+        <p className={cn("whitespace-pre-line leading-[1.45]", scene ? "text-[17px] font-semibold" : "text-[15px]", clamp && "line-clamp-[8]")}>{post.caption}</p>
+      )}
     </div>
   );
+}
+
+/** Whatever a series post carries under its words: Sunday's report card, Wednesday's numbers, Tuesday's / Thursday's card. */
+export function NoteExtras({ post, unit, className }: { post: CommunityPost; unit: "kg" | "lb"; className?: string }) {
+  if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return <SundayRecapCard stats={post.series_data} unit={unit} className={className} />;
+  if (isWinsStats(post.series_data)) return <WinsStatsCard stats={post.series_data} unit={unit} className={className} />;
+  return <SeriesExtraCard post={post} className={className} />;
 }
 
 export function AuthorLine({ author, sub, onOpen, size = 40 }: { author: CommunityAuthor; sub?: string; onOpen?: () => void; size?: number }) {
@@ -215,9 +236,15 @@ type Props = {
   onOpenComments: (post: CommunityPost) => void;
   onOpenAuthor?: (author: CommunityAuthor) => void;
   onReact: (post: CommunityPost, next: ReactionKey | null) => void;
+  /** Show the "double-tap to like" tip on this post (until the first double-tap). */
+  doubleTapHint?: boolean;
+  /** Someone double-tapped this post (so the tip can go). */
+  onDoubleTap?: () => void;
+  /** The tip finished playing. */
+  onTipDone?: () => void;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
   const singleTimer = useRef<number | null>(null);
@@ -228,7 +255,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
   const sub = [postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
 
-  // Tap opens the workout; double-tap gives 🔥 (Instagram muscle memory).
+  // Tap opens the workout; double-tap gives ❤️ (Instagram muscle memory).
+  // Already reacted? It stays as it is (a double-tap never takes one back).
   const onHeroTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 280) {
@@ -236,7 +264,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       singleTimer.current = null;
       lastTap.current = 0;
       setBurst((b) => b + 1);
-      if (post.my_reaction !== "fire") onReact(post, "fire");
+      if (!post.my_reaction) onReact(post, REACTION.key);
+      onDoubleTap?.();
       return;
     }
     lastTap.current = now;
@@ -261,7 +290,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         {isNote ? (
           <>
             <NoteBody post={post} clamp />
-            {post.series_data && <WinsStatsCard stats={post.series_data} unit={unit} className="mx-4 mb-1 mt-2" />}
+            <NoteExtras post={post} unit={unit} className="mx-4 mb-1 mt-2" />
           </>
         ) : post.media_type ? (
           <PostMedia post={post} thumbUrl={thumbUrl} />
@@ -272,11 +301,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         ) : (
           <div className="px-4 py-6 text-sm text-muted-foreground">Workout was reopened, numbers will be back once it's finished.</div>
         )}
-        {burst > 0 && (
-          <span key={burst} className="community-burst pointer-events-none absolute inset-0 grid place-items-center text-[88px] drop-shadow-xl" aria-hidden>
-            🔥
-          </span>
-        )}
+        {doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}
+        <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
       </div>
 
       {/* A photo lock-in: the stamp sits under it until the numbers arrive */}
@@ -338,8 +364,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 export const PostCard = memo(PostCardInner);
 
 /**
- * One tap: 🔥 and how many, then the faces of who gave it ("🔥 from Jared,
- * Vicky and 3 others"), which opens the full list. Comments on the right.
+ * The heart (tap for ❤️, hold for 👍 ‼️ 🔥 😂) and how many, then the faces
+ * of who reacted ("Jared, Vicky and 3 others", with the kinds they gave),
+ * which opens the full list. Comments on the right.
  */
 export function ReactionBar({
   post,
@@ -353,31 +380,24 @@ export function ReactionBar({
   onOpenAuthor?: (a: CommunityAuthor) => void;
 }) {
   const [listFor, setListFor] = useState<string | null>(null);
-  const total = reactionTotal(post);
-  const mine = !!post.my_reaction;
+  const [messaging, setMessaging] = useState(false);
+  const { role } = useAuth();
+  // Message the person who posted (never yourself; coaches use team chat with each other).
+  const canMessage = !post.is_mine && !(post.author.is_coach && (role === "admin" || role === "coach"));
   const who = reactorsLine(post);
+  // the little ❤️🔥😂 beside the names, once it's not just hearts
+  const kinds = reactionKinds(post);
+  const showKinds = kinds.length > 1 || (kinds.length === 1 && kinds[0] !== REACTION.emoji);
   const faces = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me)).slice(0, 3);
   return (
     <div className="flex items-center gap-1 px-2 pb-2 pt-2">
-      <button
-        type="button"
-        onClick={() => onReact(post, mine ? null : REACTION.key)}
-        aria-pressed={mine}
-        aria-label={`${mine ? "Remove your fire" : "Give it fire"}${total ? `, ${total}` : ""}`}
-        className={cn(
-          "flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[18px] transition-all active:scale-90",
-          mine ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-muted",
-        )}
-      >
-        <span className={cn(!mine && "opacity-70 grayscale-[35%]")}>{REACTION.emoji}</span>
-        {total > 0 && <span className={cn("text-[13px] font-black tabular-nums", mine ? "text-primary" : "text-muted-foreground")}>{total}</span>}
-      </button>
+      <ReactionButton post={post} onReact={onReact} />
       {who && (
         <button
           type="button"
           onClick={() => setListFor(post.id)}
           className="flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-left hover:bg-muted"
-          aria-label={`See who gave it fire: ${who}`}
+          aria-label={`See who reacted: ${who}`}
         >
           {faces.length > 0 && (
             <span className="flex shrink-0 -space-x-1.5">
@@ -388,6 +408,7 @@ export function ReactionBar({
               ))}
             </span>
           )}
+          {showKinds && <span className="shrink-0 text-[13px] leading-none tracking-[-0.15em]">{kinds.join("")}</span>}
           <span className="truncate text-[12px] text-muted-foreground">
             <span className="font-bold text-foreground">{who}</span>
           </span>
@@ -404,7 +425,22 @@ export function ReactionBar({
           {post.comment_count > 0 ? post.comment_count : "Comment"}
         </button>
       )}
+      {canMessage && (
+        <button
+          type="button"
+          onClick={() => setMessaging(true)}
+          className={cn(
+            "grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
+            !onOpenComments && "ml-auto",
+          )}
+          aria-label={`Message ${post.author.name}`}
+          title={`Message ${post.author.name}`}
+        >
+          <Send className="h-[18px] w-[18px] -rotate-12" />
+        </button>
+      )}
       <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
+      {canMessage && <MessageAuthorSheet post={post} open={messaging} onOpenChange={setMessaging} />}
     </div>
   );
 }

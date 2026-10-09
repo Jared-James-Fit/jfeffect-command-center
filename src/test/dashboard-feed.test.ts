@@ -31,6 +31,8 @@ describe("dashboard is an overview, not another inbox", () => {
     expect(src).toMatch(/WinsCard/);
     // money is admin-only: rendered only when the RPC returns it
     expect(src).toMatch(/overview\?\.money && <BusinessCard/);
+    // numbers refresh silently: no "Updating" spinner floating over the tiles
+    expect(src).not.toMatch(/DashboardRefreshIndicator/);
   });
 
   it("coaches never get money or leads from the RPC", () => {

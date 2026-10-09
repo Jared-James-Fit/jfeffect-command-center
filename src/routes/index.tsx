@@ -83,11 +83,13 @@ function IndexRedirect() {
           const isPortal = saved.startsWith("/portal");
           const isMember = saved === "/m" || saved.startsWith("/m/");
           const isAdmin  = saved === "/admin" || saved.startsWith("/admin/");
+          const isFinance = saved === "/finance" || saved.startsWith("/finance/");
 
           const roleMatch =
             (isPortal && (role === "client" || role === "admin" || role === "coach")) ||
             (isMember && (role === "member"  || role === "admin" || role === "coach")) ||
-            (isAdmin  && (role === "admin"   || role === "coach"));
+            (isAdmin  && (role === "admin"   || role === "coach")) ||
+            (isFinance && role === "finance");
 
           if (roleMatch) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,6 +102,8 @@ function IndexRedirect() {
       const dest =
         role === "client" ? "/portal"
         : role === "member" ? "/m"
+        // Finance is a staff-only login: the books, never the portal or /m.
+        : role === "finance" ? "/finance"
         : "/admin";
       navigate({ to: dest, replace: true });
     } else {
