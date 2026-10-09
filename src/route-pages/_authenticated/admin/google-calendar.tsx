@@ -85,7 +85,7 @@ export function GoogleCalendarPage() {
 
   return (
     <>
-      <PageHeader title="Google Calendar" subtitle="Connect your calendar to sync appointments and Meet links." />
+      <PageHeader title="Google Calendar" subtitle="Sessions sync here automatically, and your Google events block double-booking." />
       <div className="p-6 md:p-8 space-y-4 max-w-3xl">
         <Card className="border-border bg-card p-5">
           <div className="flex items-center justify-between gap-3">
@@ -117,7 +117,7 @@ export function GoogleCalendarPage() {
 
         {status.connected && (
           <Card className="border-border bg-card p-5">
-            <div className="font-semibold mb-2">Calendar used for sync</div>
+            <div className="font-semibold mb-2">Calendar the app writes to</div>
             <Select
               value={effectiveId}
               disabled={choose.isPending}
@@ -150,7 +150,9 @@ export function GoogleCalendarPage() {
             {!effectiveId && (
               <p className="text-xs text-muted-foreground mt-2">Using primary calendar by default.</p>
             )}
-            <p className="text-xs text-muted-foreground mt-2">All new appointments will be created on the selected calendar.</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              1:1 sessions and appointments are added to this calendar. Sessions already synced stay on the calendar they were added to.
+            </p>
           </Card>
         )}
       </div>
