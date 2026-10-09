@@ -537,7 +537,7 @@ describe("Monday Motivation + Finish Strong Friday: real coach posts", () => {
     expect(sql).toContain("CHECK ((kind = 'workout') = (completion_id IS NOT NULL))");
     expect(sql).toContain("'note', 'community', v_item.body");
     expect(sql).toContain("LEFT JOIN public.pl_day_completions pc ON pc.id = n.completion_id");
-    expect(card).toContain("<NoteBody post={post} clamp />");
+    expect(card).toContain("<NoteBody post={post} clamp onOpenPerson={onOpenAuthor} />");
   });
   it("publish once per theme per week, Winnipeg time, never twice even after a delete", () => {
     expect(sql).toContain("AT TIME ZONE 'America/Winnipeg'");
@@ -1275,7 +1275,7 @@ describe("captions: Instagram-length, written on their own screen", () => {
   });
   it("long captions fold to three lines in the feed with 'more'", () => {
     expect(read("src/components/community/feed-caption.tsx")).toContain('!open && "line-clamp-3"');
-    expect(read("src/components/community/post-card.tsx")).toContain("<FeedCaption name={post.author.name} caption={post.caption} />");
+    expect(read("src/components/community/post-card.tsx")).toContain("<FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} />");
   });
 });
 

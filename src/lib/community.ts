@@ -13,6 +13,8 @@ import { dayScheduledDate, type WorkoutItem } from "@/lib/workout-today";
 export const CAPTION_MAX = 2200;
 export const COMMENT_MAX = 300;
 export const FEED_PAGE_SIZE = 10;
+/** The first page is smaller: the top of the feed shows sooner, the rest loads as you scroll. */
+export const FIRST_FEED_PAGE = 5;
 
 /**
  * Reactions: ❤️ is the one-tap default (tap the heart, or double-tap the
@@ -175,6 +177,10 @@ export type CommunityPost = {
   /** The first few people who gave it 🔥: coaches first, then newest. */
   reactors?: Reactor[];
   coach_reactions: { name: string; emoji: ReactionKey }[];
+  /** Everyone the caption names (tappable), in caption order. */
+  mentions?: CommunityMention[];
+  /** A community post about 1-3 people: shown with the author ("Jared and Dwayne"), on their profiles too. */
+  collaborators?: CommunityAuthor[];
   comment_count: number;
   coach_commented: boolean;
   /** The comment the post's author pinned (shown first, in the feed and the sheet). */
@@ -220,6 +226,66 @@ export function pinnedFirst<T extends { comment: { id: string } }>(threads: T[],
 }
 
 export type Reactor = CommunityAuthor & { is_me?: boolean };
+
+/** Someone a caption names: tappable there. `text` is how it names them ("@Dwayne", "Dwayne"). */
+export type CommunityMention = CommunityAuthor & { text: string | null };
+
+export type MentionSegment = { text: string; mention?: CommunityMention };
+
+const WORD = /[\p{L}\p{N}_]/u;
+
+/**
+ * A caption cut into plain text and the names it mentions (case-insensitive,
+ * whole words only, every time they appear; the longer name wins where two
+ * start at the same spot).
+ */
+export function splitMentions(text: string, mentions: CommunityMention[] | null | undefined): MentionSegment[] {
+  const list = (mentions ?? []).filter((m) => m.text && m.text.trim());
+  if (!text || !list.length) return [{ text }];
+  const lower = text.toLowerCase();
+  const hits: { start: number; end: number; m: CommunityMention }[] = [];
+  for (const m of list) {
+    const needle = m.text!.toLowerCase();
+    for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, at + 1)) {
+      const before = at > 0 ? text[at - 1] : "";
+      const after = text[at + needle.length] ?? "";
+      if ((needle.startsWith("@") || !before || !WORD.test(before)) && !(before === "@" && !needle.startsWith("@")) && (!after || !WORD.test(after))) {
+        hits.push({ start: at, end: at + needle.length, m });
+      }
+    }
+  }
+  hits.sort((a, b) => a.start - b.start || b.end - a.end);
+  const out: MentionSegment[] = [];
+  let i = 0;
+  for (const h of hits) {
+    if (h.start < i) continue; // inside one already taken
+    if (h.start > i) out.push({ text: text.slice(i, h.start) });
+    out.push({ text: text.slice(h.start, h.end), mention: h.m });
+    i = h.end;
+  }
+  if (i < text.length) out.push({ text: text.slice(i) });
+  return out;
+}
+
+/**
+ * The "@…" being typed right before the caret, if any (a name can have one
+ * space: "@Alyssa Am"). null when the caret isn't in a mention.
+ */
+export function mentionQuery(value: string, caret: number): { query: string; start: number } | null {
+  const before = value.slice(0, Math.max(0, caret));
+  const m = /(^|[\s(])@([^\s@]{0,24}(?: [^\s@]{0,24})?)$/u.exec(before);
+  if (!m) return null;
+  return { query: m[2], start: before.length - m[2].length - 1 };
+}
+
+/** People whose name fits what's typed after "@", best first (name starts with it, then any word does). */
+export function suggestMentions<T extends { name: string }>(people: T[], query: string, max = 6): T[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return people.slice(0, max);
+  const starts = people.filter((p) => p.name.toLowerCase().startsWith(q));
+  const words = people.filter((p) => !starts.includes(p) && p.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)));
+  return [...starts, ...words].slice(0, max);
+}
 
 /** The kinds a post got, most given first (for the little ❤️🔥😂 beside the names). */
 export function reactionKinds(post: Pick<CommunityPost, "reactions">, max = 3): string[] {

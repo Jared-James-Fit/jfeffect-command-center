@@ -14,11 +14,12 @@ import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { CrewList } from "@/components/community/crew-list";
-import { markCommunitySeen, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
+import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
+import { CaughtUp, FeedItem, NewPostsPill, PostSkeleton, useNewPosts } from "@/components/community/feed-motion";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
 type Tab = "feed" | "crew" | "you";
@@ -122,6 +123,10 @@ export function CommunityScreen({
 
   const { data: unit = "lb" } = useViewerUnit(user?.id);
 
+  // New posts from the crew while you're down the feed: a pill to jump up to them.
+  const myId = useMyCommunityId();
+  const newPosts = useNewPosts(scope.kind === "feed" && !previewOnly, myId);
+
   // The page never zooms (pinch or double-tap); photos and videos pinch-zoom on their own.
   useMediaPinchZoom(true);
 
@@ -198,7 +203,8 @@ export function CommunityScreen({
       (entries) => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) void fetchNextPage();
       },
-      { rootMargin: "800px 0px" },
+      // well before the end, so scrolling never waits on the next posts
+      { rootMargin: "1400px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -288,8 +294,8 @@ export function CommunityScreen({
         />
       ) : (
         <>
-          {posts.map((p) => (
-            <div key={p.id} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
+          {posts.map((p, i) => (
+            <FeedItem key={p.id} index={i} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
               post={p}
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
@@ -303,11 +309,15 @@ export function CommunityScreen({
               onDoubleTap={onDoubleTap}
               onTipDone={onTipDone}
             />
-            </div>
+            </FeedItem>
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
-          {isFetchingNextPage && <Skeleton className="h-64 w-full rounded-3xl" />}
-          {!hasNextPage && posts.length > 3 && <p className="py-4 text-center text-[12px] text-muted-foreground">You're all caught up 💪</p>}
+          {isFetchingNextPage && <PostSkeleton />}
+          {!hasNextPage && posts.length > 1 && (
+            <FeedItem index={0}>
+              <CaughtUp action={canShare ? <ShareWorkoutButton unit={unit} label="Share your session" previewOnly={previewOnly} /> : null} />
+            </FeedItem>
+          )}
         </>
       )}
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} />
@@ -316,6 +326,7 @@ export function CommunityScreen({
     {/* outside the page that slides, so they stay put */}
     <SwipeBack enabled={canSwipeBack} target={rootRef} onBack={swipeBack} onUsed={onSwipeUsed} />
     {swipeTip && <SwipeBackTip onDismiss={() => setSwipeTip(false)} />}
+    {scope.kind === "feed" && <NewPostsPill count={newPosts.count} onShow={newPosts.show} />}
     </>
   );
 }

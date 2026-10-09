@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { AuthorLine, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote } from "@/components/community/post-card";
 import { CommentThread } from "@/components/community/comments-sheet";
+import { MentionText } from "@/components/community/mentions";
 import { PostActions } from "@/components/community/post-actions";
 import { ReactionBurst, useDoubleTap } from "@/components/community/reaction-button";
 import {
@@ -135,12 +136,14 @@ function Detail({
           size={44}
           sub={[postTimeLabel(post.created_at), post.kind === "note" ? new Date(post.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : null, post.edited_at ? "Edited" : null, s ? new Date(s.completed_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : null, audienceNote(post)].filter(Boolean).join(" · ")}
           onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined}
+          collaborators={post.collaborators}
+          onOpenPerson={onOpenAuthor}
         />
       </div>
 
       {post.kind === "note" ? (
         <>
-          <NoteBody post={post} />
+          <NoteBody post={post} onOpenPerson={onOpenAuthor} />
           <NoteExtras post={post} unit={unit} className="mx-4 mb-2 mt-2" />
         </>
       ) : post.media_type || s || post.locked_in_at ? (
@@ -165,7 +168,7 @@ function Detail({
 
       {post.caption && post.kind !== "note" && (
         <p className="whitespace-pre-line px-4 pt-3 text-[15px] leading-snug">
-          <span className="font-bold">{post.author.name}</span> {post.caption}
+          <span className="font-bold">{post.author.name}</span> <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenAuthor} />
         </p>
       )}
 

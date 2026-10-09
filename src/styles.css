@@ -870,6 +870,23 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   100% { opacity: 0; transform: translateY(4px); }
 }
 .community-hint { animation: community-hint-life 5.2s ease-out forwards; }
+/* The feed builds as you scroll: each post eases in the first time it's on screen. */
+.feed-item { opacity: 0; transform: translateY(14px); transition: opacity 420ms ease-out, transform 480ms cubic-bezier(.2,.8,.2,1); }
+.feed-item[data-shown] { opacity: 1; transform: none; }
+@keyframes caught-up-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.feed-item[data-shown] .caught-up-ring { animation: caught-up-pop 520ms cubic-bezier(.2,.8,.2,1) 120ms both; }
+/* photos fade in as they arrive instead of popping */
+.media-fade { opacity: 0; transition: opacity 280ms ease-out; }
+.media-fade[data-loaded] { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .feed-item { opacity: 1; transform: none; transition: none; }
+  .feed-item[data-shown] .caught-up-ring { animation: none; }
+  .media-fade { transition: none; }
+}
 /* "swipe right to go back" demo: a finger sweeps right, the back arrow fills in */
 @keyframes swipe-demo-finger {
   0% { transform: translateX(0); opacity: 0; }

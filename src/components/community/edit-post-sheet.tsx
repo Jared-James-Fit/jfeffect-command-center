@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AudiencePicker } from "@/components/community/audience-picker";
 import { CAPTION_MAX, type CommunityPost, type CommunityVisibility } from "@/lib/community";
 import { useEditPost } from "@/lib/community.queries";
+import { MentionSuggestBar } from "@/components/community/mentions";
 
 /**
  * Edit your own workout post, Instagram-style: caption, who it's for, hide
@@ -17,6 +18,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
   const edit = useEditPost();
   const archived = !!post?.archived_at;
   const [caption, setCaption] = useState("");
+  const captionRef = useRef<HTMLTextAreaElement | null>(null);
   const [visibility, setVisibility] = useState<CommunityVisibility>("community");
   const [hideLoads, setHideLoads] = useState(false);
 
@@ -54,6 +56,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
         <div className="space-y-4 px-5 py-4">
           <div>
             <Textarea
+              ref={captionRef}
               value={caption}
               maxLength={CAPTION_MAX}
               onChange={(e) => setCaption(e.target.value)}
@@ -61,6 +64,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
               className="min-h-[96px] resize-none text-[15px]"
               aria-label="Caption"
             />
+            <MentionSuggestBar value={caption} onChange={(v) => setCaption(v.slice(0, CAPTION_MAX))} inputRef={captionRef} className="mt-1" />
             <div className="mt-1 text-right text-[11px] text-muted-foreground">
               {caption.length}/{CAPTION_MAX}
             </div>
