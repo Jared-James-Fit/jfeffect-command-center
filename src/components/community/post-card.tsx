@@ -542,10 +542,13 @@ function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide
   useEffect(() => {
     if (!active) setPlaying(false);
   }, [active]);
+  // data-pinch-zoom: pinch lifts just this (the page never zooms), see useMediaPinchZoom
   return isVideo && playing && fullUrl ? (
-    <video src={fullUrl} poster={thumbUrl ?? undefined} className="h-full w-full object-cover" controls autoPlay playsInline onClick={(e) => e.stopPropagation()} />
+    <div data-pinch-zoom className="absolute inset-0">
+      <video src={fullUrl} poster={thumbUrl ?? undefined} className="h-full w-full object-cover" controls autoPlay playsInline onClick={(e) => e.stopPropagation()} />
+    </div>
   ) : (
-    <>
+    <div data-pinch-zoom className="absolute inset-0">
       {src ? <img src={src} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" /> : <div className="h-full w-full animate-pulse bg-muted" />}
       {isVideo && (
         <button
@@ -562,7 +565,7 @@ function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide
           </span>
         </button>
       )}
-    </>
+    </div>
   );
 }
 
