@@ -102,6 +102,8 @@ export function InlineWorkoutPreview({
   clientId,
   enabled = true,
   estimatedMinutes,
+  scheduledWorkoutId,
+  maxSetsShown = 6,
 }: {
   dayId: string;
   clientId: string;
@@ -109,6 +111,15 @@ export function InlineWorkoutPreview({
   /** Explicit estimate from the day/block (canonical fields). When omitted,
    *  falls back to the deterministic row-based estimator. */
   estimatedMinutes?: number | null;
+  /**
+   * Show only the sets logged for THIS scheduled instance (the same day can
+   * be on the calendar more than once). A string scopes to that instance,
+   * null to the legacy no-instance sets, the same rule the workout logger
+   * uses. Omitted: all of the client's sets for the day (older callers).
+   */
+  scheduledWorkoutId?: string | null;
+  /** Logged set lines shown per exercise. */
+  maxSetsShown?: number;
 }) {
   // CANONICAL structure query. The exercise list renders from this alone —
   // logged sets are an optional overlay so a results failure can never keep
@@ -138,20 +149,22 @@ export function InlineWorkoutPreview({
   // OPTIONAL overlay: the client's logged sets. Keeps previous data while
   // refetching (logging a set invalidates it) so the list never blanks out.
   const resultsQuery = useQuery({
-    queryKey: ["inline-workout-preview-results", dayId, clientId, rowIdsKey],
+    queryKey: ["inline-workout-preview-results", dayId, clientId, rowIdsKey, scheduledWorkoutId ?? "any"],
     enabled: enabled && !!clientId && rowIds.length > 0,
     staleTime: 10_000,
     retry: 1,
     placeholderData: (prev) => prev,
     queryFn: async () => {
-      const resultsRes = await supabase
+      let q = supabase
         .from("pl_row_results")
         .select(
           "row_id, set_index, actual_load, actual_load_unit, actual_reps, actual_rpe, actual_rir, completed_duration_seconds",
         )
         .eq("client_id", clientId)
-        .in("row_id", rowIds)
-        .order("set_index", { ascending: true });
+        .in("row_id", rowIds);
+      if (scheduledWorkoutId) q = q.eq("scheduled_workout_id", scheduledWorkoutId);
+      else if (scheduledWorkoutId === null) q = q.is("scheduled_workout_id", null);
+      const resultsRes = await q.order("set_index", { ascending: true });
       if (resultsRes.error) throw resultsRes.error;
       return ((resultsRes.data ?? []) as unknown) as Result[];
     },
@@ -304,7 +317,7 @@ export function InlineWorkoutPreview({
                   <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
                     {loggedCount} of {prescribedSets} sets completed
                   </div>
-                  {results.slice(0, 6).map((s, idx) => (
+                  {results.slice(0, maxSetsShown).map((s, idx) => (
                     <div
                       key={`${s.row_id}-${s.set_index ?? idx}`}
                       className="text-[12px] tabular-nums text-foreground/90"

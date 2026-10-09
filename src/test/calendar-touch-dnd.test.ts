@@ -42,8 +42,11 @@ function item(over: Partial<WorkoutItem> & { id: string; date: string }): Workou
 describe("calendar reschedule surfaces", () => {
   it("A+B: coach week and month views share one dnd provider and cell", () => {
     expect(experience).toContain("<CalendarDndProvider dnd={dnd}>");
-    // Both WeekStrip and MonthGrid cells go through the shared cell wrapper.
-    expect(experience.match(/<CalendarDayCell /g)?.length).toBe(2);
+    // Both WeekStrip (now shared in week-strip.tsx) and MonthGrid cells go through the shared cell wrapper.
+    const weekStrip = readFileSync("src/components/workouts/week-strip.tsx", "utf8");
+    expect(experience.match(/<CalendarDayCell /g)?.length).toBe(1);
+    expect(weekStrip.match(/<CalendarDayCell /g)?.length).toBe(1);
+    expect(experience).toContain('import { WeekStrip, statusDotClass } from "@/components/workouts/week-strip";');
   });
 
   it("C+D: the same component serves the client self portal calendar", () => {

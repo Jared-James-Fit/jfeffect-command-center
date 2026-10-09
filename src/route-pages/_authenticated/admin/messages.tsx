@@ -13,6 +13,7 @@ import {
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { MessageThread, PriorityChip, threadMessagesQuery } from "@/components/message-thread";
+import { ClientWorkoutPeek } from "@/components/messages/client-workout-peek";
 import {
   type ConversationState, type Message,
   setConversationStatus, setConversationPriority, PRIORITIES,
@@ -986,6 +987,8 @@ export function MessagesInbox({
                 </DropdownMenuContent>
               </DropdownMenu>
             </header>
+            {/* What the client trained last; tap for any past or upcoming workout. */}
+            <ClientWorkoutPeek clientId={selected.id} clientName={selected.full_name} />
             <MessageThread
               clientId={selected.id}
               role="admin"
