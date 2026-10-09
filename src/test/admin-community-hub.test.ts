@@ -8,20 +8,27 @@ const hub = read("src/components/community/admin-community-hub.tsx");
 const dash = read("src/routes/_authenticated/admin/index.tsx");
 
 describe("the coach's community, in one place", () => {
-  it("the Community page is the hub: the week, what needs you, then Feed / Daily posts / Birthdays and + Post", () => {
+  it("the League page is the hub: League / Feed / Daily / Birthdays, what needs you, and + Post", () => {
     expect(read("src/routes/_authenticated/admin/community.tsx")).toContain("component: AdminCommunityHub,");
+    expect(hub).toContain('{ key: "league", label: "League" }');
     expect(hub).toContain('{ key: "feed", label: "Feed" }');
-    expect(hub).toContain('{ key: "daily", label: "Daily posts" }');
+    expect(hub).toContain('{ key: "daily", label: "Daily" }');
     expect(hub).toContain('{ key: "birthdays", label: "Birthdays" }');
+    expect(hub).toContain("<StaffLeagueTab />");
+    // the week at a glance heads the feed; anything waiting shows on every other tab
+    expect(hub).toContain("<PulsePanel onGo={setTab} />");
+    expect(hub).toContain('{tab !== "feed" && <NeedsYouStrip onGo={setTab} />}');
+    // links to a post land on the feed
+    expect(hub).toContain('if (/tab=feed/.test(h) || /post=/.test(h)) return "feed";');
     expect(hub).toContain("<CommunityScreen hideTabs />");
     expect(hub).toContain("<UpcomingBirthdaysWidget windowDays={30} />");
     expect(hub).toContain('await act.mutateAsync({ kind: "note", body, poll });');
     // the composer lives on the page now, not at the bottom of the schedule
     expect(read("src/components/community/coach-weekly-posts.tsx")).not.toContain("Write a post for the crew");
   });
-  it("the dashboard gets one Community card right after Wins; no empty 'nothing shared' card, no second birthday list", () => {
-    expect(dash).toContain("<CommunityPulseCard />");
-    expect(dash.indexOf("<CommunityPulseCard />")).toBeGreaterThan(dash.indexOf("<WinsCard"));
+  it("the dashboard has no community card: it's one tap away on the League button (a birthday draft to approve still shows)", () => {
+    expect(dash).not.toContain("CommunityPulseCard");
+    expect(dash).toContain("<BirthdayPostsCard actionableOnly />");
     expect(dash).not.toContain("CommunityCoachCard");
     expect(dash).not.toContain("UpcomingBirthdaysWidget");
     expect(read("src/components/community/community-entry.tsx")).not.toContain("Nothing shared this week yet");

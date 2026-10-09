@@ -5,10 +5,17 @@ import { STAFF_BAR, buildInternalNav, buildInternalNavCollapsed } from "@/lib/in
 const read = (p: string) => readFileSync(p, "utf8");
 
 describe("one staff app, laid out like the client app", () => {
-  it("every staff phone bar is Dashboard, Clients, Messages, Tasks: plain tabs", () => {
-    expect(STAFF_BAR.map((i) => i.label)).toEqual(["Dashboard", "Clients", "Messages", "Tasks"]);
-    expect(STAFF_BAR.map((i) => i.to)).toEqual(["/admin", "/admin/clients", "/admin/messages", "/admin/tasks"]);
+  it("every staff phone bar is Dashboard, Clients, League (raised, centre), Messages, Tasks: plain tabs", () => {
+    expect(STAFF_BAR.map((i) => i.label)).toEqual(["Dashboard", "Clients", "League", "Messages", "Tasks"]);
+    expect(STAFF_BAR.map((i) => i.to)).toEqual(["/admin", "/admin/clients", "/admin/community", "/admin/messages", "/admin/tasks"]);
     expect(STAFF_BAR.every((i) => !i.children && !!i.icon)).toBe(true);
+    expect(STAFF_BAR.filter((i) => i.featured).map((i) => i.label)).toEqual(["League"]);
+  });
+
+  it("League rings and counts new posts for staff, like the client button", () => {
+    const badges = read("src/hooks/use-client-nav-badges.ts");
+    expect(badges).toContain("useCommunityActivity(enabled || adminEnabled)");
+    expect(badges).toContain('map["/admin/community"] = { count: community.unseen };');
   });
 
   it("More opens from a big header button for staff, clients and members", () => {
@@ -23,7 +30,7 @@ describe("one staff app, laid out like the client app", () => {
   });
 
   it("bars saved before the reset start fresh", () => {
-    expect(read("src/lib/floating-bar.ts")).toContain('const KEY = "jf-floating-bar-v3";');
+    expect(read("src/lib/floating-bar.ts")).toContain('const KEY = "jf-floating-bar-v4";');
   });
 });
 
