@@ -120,11 +120,20 @@ export const setPtSessionStatus = createServerFn({ method: "POST" })
       // Sessions booked from a "No credit" booking card never touch the wallet.
       const { data: s } = await (supabase as any)
         .from("pt_sessions")
-        .select("uses_credit")
+        .select("uses_credit, client_id")
         .eq("id", data.sessionId)
         .maybeSingle();
-      if (!s || s.uses_credit !== false) {
-        await supabase.rpc("consume_session_for_pt", { _pt_session_id: data.sessionId });
+      if (s && s.uses_credit !== false) {
+        // Credits are only consumed by staff for their own clients; the RPC is
+        // service-role only so nobody can call it directly.
+        const { userId } = context;
+        const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
+          supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
+          supabase.rpc("is_assigned_coach", { _client_id: s.client_id }),
+        ]);
+        if (!isAdmin && !isCoach) throw new Error("Not allowed");
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await supabaseAdmin.rpc("consume_session_for_pt", { _pt_session_id: data.sessionId });
       }
     }
     const { data: updated, error } = await supabase

@@ -27,7 +27,9 @@ export const reportWorkoutSyncStuck = createServerFn({ method: "POST" })
 
     let clientRow: any = null;
     if (data.client_id) {
-      const { data: c } = await supabaseAdmin
+      // Through RLS: only a client you can see (your own, or one you coach),
+      // so nobody can raise alerts and SMS a coach about someone else.
+      const { data: c } = await supabase
         .from("clients")
         .select("id, full_name, first_name, assigned_coach_id")
         .eq("id", data.client_id)

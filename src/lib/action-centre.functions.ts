@@ -273,6 +273,7 @@ export const listActionCentre = createServerFn({ method: "GET" })
   .inputValidator((d: { clientId?: string }) => d)
   .handler(async ({ data, context }): Promise<ActionCentreItem[]> => {
     let clientId = data.clientId;
+    if (clientId) await assertVisibleClient(context.supabase, clientId);
     if (!clientId) {
       const { data: c } = await context.supabase.from("clients").select("id").eq("user_id", context.userId).maybeSingle();
       clientId = c?.id;
@@ -379,10 +380,17 @@ export const completeTaskOccurrence = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** The caller can see this client through RLS (their own, or one they coach). */
+async function assertVisibleClient(supabase: any, clientId: string) {
+  const { data } = await supabase.from("clients").select("id").eq("id", clientId).maybeSingle();
+  if (!data) throw new Error("Client not found");
+}
+
 export const generateNextOccurrence = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId: string; taskType: string }) => d)
   .handler(async ({ data, context }) => {
+    await assertVisibleClient(context.supabase, data.clientId);
     await ensureNextOccurrence(context.supabase, data.clientId, data.taskType, new Date());
     return { ok: true };
   });
@@ -398,6 +406,7 @@ export const bootstrapClientOccurrences = createServerFn({ method: "POST" })
   .inputValidator((d: { clientId?: string }) => d)
   .handler(async ({ data, context }) => {
     let clientId = data.clientId;
+    if (clientId) await assertVisibleClient(context.supabase, clientId);
     if (!clientId) {
       const { data: c } = await context.supabase
         .from("clients").select("id").eq("user_id", context.userId).maybeSingle();

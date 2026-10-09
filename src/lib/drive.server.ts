@@ -44,8 +44,9 @@ export async function driveGetFile(fileId: string) {
     webViewLink?: string;
     thumbnailLink?: string;
     videoMediaMetadata?: { durationMillis?: string };
+    parents?: string[];
   }>(
-    `/drive/v3/files/${fileId}?fields=id,name,mimeType,size,webViewLink,thumbnailLink,videoMediaMetadata&supportsAllDrives=true`,
+    `/drive/v3/files/${fileId}?fields=id,name,mimeType,size,webViewLink,thumbnailLink,videoMediaMetadata,parents&supportsAllDrives=true`,
   );
 }
 

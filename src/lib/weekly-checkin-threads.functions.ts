@@ -28,13 +28,34 @@ async function getMyMemberId(supabase: any, userId: string): Promise<string | nu
   return data?.id ?? null;
 }
 
+async function staffRoleOf(supabase: any, userId: string): Promise<"admin" | "coach" | null> {
+  // Roles live in user_roles (profiles has no role column).
+  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const roles = (data ?? []).map((r: any) => r.role);
+  return roles.includes("admin") ? "admin" : roles.includes("coach") ? "coach" : null;
+}
+
 async function assertAdminOrCoach(context: any) {
   const { supabase, userId } = context;
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
-  if (!profile || !["admin", "coach"].includes(profile.role)) {
-    throw new Error("Unauthorized: admin or coach role required.");
-  }
-  return profile;
+  const role = await staffRoleOf(supabase, userId);
+  if (!role) throw new Error("Unauthorized: admin or coach role required.");
+  return { role };
+}
+
+/**
+ * The thread as the caller is allowed to see it (RLS: the client or member
+ * who owns it, an admin, or the assigned coach), and whether the caller is
+ * its owner. Reply/archive write with the service role, so this is the gate.
+ */
+async function loadThreadForCaller(context: any, threadId: string) {
+  const { supabase, userId } = context;
+  const { data: thread, error } = await supabase
+    .from("weekly_checkin_threads").select("id, client_id, member_id").eq("id", threadId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!thread) throw new Error("Thread not found");
+  const [clientId, memberId] = await Promise.all([getMyClientId(supabase, userId), getMyMemberId(supabase, userId)]);
+  const isOwner = (!!thread.client_id && thread.client_id === clientId) || (!!thread.member_id && thread.member_id === memberId);
+  return { thread, isOwner, staffRole: isOwner ? null : await staffRoleOf(supabase, userId) };
 }
 
 /* ─────────────────────────────────────────────────────── create thread ── */
@@ -160,13 +181,12 @@ export const replyToCheckinThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ReplyInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { userId } = context as any;
     const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
 
-    // Determine sender role
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
-    const isAdminOrCoach = profile && ["admin", "coach"].includes(profile.role);
-    const senderRole = isAdminOrCoach ? profile.role : "client";
+    const { isOwner, staffRole } = await loadThreadForCaller(context, data.threadId);
+    if (!isOwner && !staffRole) throw new Error("Not allowed");
+    const senderRole = isOwner ? "client" : staffRole;
 
     const { error } = await supabaseAdmin
       .from("weekly_checkin_messages")
@@ -191,6 +211,8 @@ export const archiveCheckinThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ArchiveInput.parse(d))
   .handler(async ({ data, context }) => {
+    const { isOwner, staffRole } = await loadThreadForCaller(context, data.threadId);
+    if (data.archiveFor === "client" ? !isOwner : !staffRole) throw new Error("Not allowed");
     const supabaseAdmin = (await import("@/integrations/supabase/client.server")).supabaseAdmin as any;
     const field = data.archiveFor === "client" ? "client_archived_at" : "admin_archived_at";
     const { error } = await supabaseAdmin

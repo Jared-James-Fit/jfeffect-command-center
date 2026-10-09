@@ -165,14 +165,12 @@ export const listGoogleEventsRange = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    let coachId = data.coach_id ?? null;
-    if (!coachId) {
-      const { data: c } = await supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle();
-      coachId = c?.id ?? null;
-    }
+    const { calendarCoachForCaller } = await import("./google-cal.server");
+    const access = await calendarCoachForCaller(supabase, userId, data.coach_id ?? null);
+    if (!access.ok) return [];
     const { gcalListEvents } = await import("./google-cal.server");
     try {
-      return await gcalListEvents(coachId, data.timeMin, data.timeMax);
+      return await gcalListEvents(access.coachId, data.timeMin, data.timeMax);
     } catch {
       return [];
     }
@@ -187,14 +185,12 @@ export const getGoogleBusy = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    let coachId = data.coach_id ?? null;
-    if (!coachId) {
-      const { data: c } = await supabase.from("coaches").select("id").eq("user_id", userId).maybeSingle();
-      coachId = c?.id ?? null;
-    }
+    const { calendarCoachForCaller } = await import("./google-cal.server");
+    const access = await calendarCoachForCaller(supabase, userId, data.coach_id ?? null);
+    if (!access.ok) return [];
     const { gcalFreeBusy } = await import("./google-cal.server");
     try {
-      return await gcalFreeBusy(coachId ?? "", data.timeMin, data.timeMax);
+      return await gcalFreeBusy(access.coachId ?? "", data.timeMin, data.timeMax);
     } catch {
       return [];
     }
