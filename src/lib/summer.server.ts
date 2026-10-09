@@ -196,8 +196,9 @@ export async function transcribeAudio(b64: string, mime: string): Promise<string
 }
 
 // ---------------------------------------------------------------------------
-// Voice: text to speech. Tries the server voices in order; the browser falls
-// back to a device voice when none answers.
+// Voice: text to speech. Tries the server voices in order (ElevenLabs when
+// a key is set, then OpenAI, then Gemini); the browser falls back to a device
+// voice when none answers.
 
 export const SUMMER_VOICE_STYLE =
   "Voice: a calm, clear, warm woman's voice with a neutral North American accent, like a polished voice assistant. Delivery: smooth and even, relaxed conversational pace, never rushed. Let sentences flow into each other with natural, short pauses; no dramatic pitch swings, no sing-song, no breathiness. Read numbers and dollar amounts clearly and naturally.";
@@ -206,12 +207,23 @@ export const SUMMER_VOICE_STYLE =
 const OPENAI_VOICES = ["marin", "nova"];
 /** Gemini's "smooth" prebuilt voice. */
 const GEMINI_VOICE = "Despina";
+/** ElevenLabs "Sarah": soft, calm, American. Override with ELEVENLABS_VOICE_ID. */
+const ELEVENLABS_DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL";
+/** Their most natural model. eleven_flash_v2_5 trades a little quality for speed. */
+const ELEVENLABS_DEFAULT_MODEL = "eleven_multilingual_v2";
+
+/**
+ * One piece of a reply. rate is the owner's speed setting; prev/next are the
+ * text around this piece when a reply is spoken in parts, so the voice keeps
+ * one intonation across the seam (ElevenLabs uses them; the others ignore them).
+ */
+export type SpeechRequest = { text: string; rate?: number; prev?: string; next?: string };
 
 type SpeechOk = { ok: true; audio: string; mime: string; provider: string };
 type SpeechFail = { ok: false; reason: string };
 export type SpeechAttempt = { provider: string; ok: boolean; status?: number; detail?: string; bytes?: number };
 
-type Provider = { name: string; run: (text: string) => Promise<{ audio: string; mime: string } | { error: string; status?: number }> };
+type Provider = { name: string; run: (req: SpeechRequest) => Promise<{ audio: string; mime: string } | { error: string; status?: number }> };
 
 async function toBase64(buf: ArrayBuffer): Promise<string> {
   const bytes = new Uint8Array(buf);
@@ -220,20 +232,36 @@ async function toBase64(buf: ArrayBuffer): Promise<string> {
   return btoa(bin);
 }
 
-async function speechEndpoint(url: string, headers: Record<string, string>, model: string, text: string) {
+/**
+ * The speed setting as words. The voice itself paces the speech, which sounds
+ * far cleaner than the browser time-stretching the audio afterwards.
+ */
+function styleFor(rate = 1): string {
+  if (rate <= 0.95) return `${SUMMER_VOICE_STYLE} Pace: a little slower than usual, unhurried.`;
+  if (rate >= 1.05) return `${SUMMER_VOICE_STYLE} Pace: a little brisker than usual, still clear.`;
+  return SUMMER_VOICE_STYLE;
+}
+
+async function audioResponse(res: Response): Promise<{ audio: string; mime: string } | { error: string; status?: number }> {
+  const type = res.headers.get("content-type") ?? "";
+  if (res.ok && type.startsWith("audio")) {
+    return { audio: await toBase64(await res.arrayBuffer()), mime: type.split(";")[0] || "audio/mpeg" };
+  }
+  const detail = (await res.text().catch(() => "")).slice(0, 160);
+  return { error: detail || `HTTP ${res.status}`, status: res.status };
+}
+
+async function speechEndpoint(url: string, headers: Record<string, string>, model: string, req: SpeechRequest) {
   let last: { error: string; status?: number } = { error: "no voice" };
   for (const voice of OPENAI_VOICES) {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({ model, voice, input: text, instructions: SUMMER_VOICE_STYLE, response_format: "mp3" }),
+      body: JSON.stringify({ model, voice, input: req.text, instructions: styleFor(req.rate), response_format: "mp3" }),
     });
-    const type = res.headers.get("content-type") ?? "";
-    if (res.ok && type.startsWith("audio")) {
-      return { audio: await toBase64(await res.arrayBuffer()), mime: type.split(";")[0] || "audio/mpeg" };
-    }
-    const detail = (await res.text().catch(() => "")).slice(0, 160);
-    last = { error: detail || `HTTP ${res.status}`, status: res.status };
+    const r = await audioResponse(res);
+    if ("audio" in r) return r;
+    last = r;
     // Only a rejected request is worth retrying with the next voice (an older
     // gateway may not know the newest one); auth, quota and outages aren't.
     if (res.status !== 400 && res.status !== 422) break;
@@ -243,15 +271,45 @@ async function speechEndpoint(url: string, headers: Record<string, string>, mode
 
 function providers(): Provider[] {
   const list: Provider[] = [];
+  const eleven = process.env.ELEVENLABS_API_KEY;
+  if (eleven) {
+    const voice = process.env.ELEVENLABS_VOICE_ID || ELEVENLABS_DEFAULT_VOICE;
+    const model = process.env.ELEVENLABS_MODEL || ELEVENLABS_DEFAULT_MODEL;
+    list.push({
+      name: `elevenlabs:${model}`,
+      run: async (req) => {
+        const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "audio/mpeg", "xi-api-key": eleven },
+          body: JSON.stringify({
+            text: req.text,
+            model_id: model,
+            ...(req.prev ? { previous_text: req.prev } : {}),
+            ...(req.next ? { next_text: req.next } : {}),
+            // Steady and clean: enough stability that she never wobbles, no
+            // exaggerated style. Their natural speed range is 0.7 to 1.2.
+            voice_settings: {
+              stability: 0.55,
+              similarity_boost: 0.75,
+              style: 0,
+              use_speaker_boost: true,
+              speed: Math.min(1.2, Math.max(0.7, req.rate ?? 1)),
+            },
+          }),
+        });
+        return audioResponse(res);
+      },
+    });
+  }
   const lovable = process.env.LOVABLE_API_KEY;
   if (lovable) {
     list.push({
       name: "lovable:openai/gpt-4o-mini-tts",
-      run: (text) => speechEndpoint(`${GATEWAY}/audio/speech`, { "Lovable-API-Key": lovable }, "openai/gpt-4o-mini-tts", text),
+      run: (req) => speechEndpoint(`${GATEWAY}/audio/speech`, { "Lovable-API-Key": lovable }, "openai/gpt-4o-mini-tts", req),
     });
     list.push({
       name: "lovable:google/gemini-2.5-flash-preview-tts",
-      run: async (text) => {
+      run: async (req) => {
         const res = await fetch(`${GATEWAY}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Lovable-API-Key": lovable },
@@ -259,7 +317,7 @@ function providers(): Provider[] {
             model: "google/gemini-2.5-flash-preview-tts",
             modalities: ["audio"],
             audio: { voice: GEMINI_VOICE, format: "wav" },
-            messages: [{ role: "user", content: `${SUMMER_VOICE_STYLE}\n\nSay exactly this:\n${text}` }],
+            messages: [{ role: "user", content: `${styleFor(req.rate)}\n\nSay exactly this:\n${req.text}` }],
           }),
         });
         if (!res.ok) return { error: (await res.text().catch(() => "")).slice(0, 160) || `HTTP ${res.status}`, status: res.status };
@@ -274,7 +332,7 @@ function providers(): Provider[] {
   if (openai) {
     list.push({
       name: "openai:gpt-4o-mini-tts",
-      run: (text) => speechEndpoint("https://api.openai.com/v1/audio/speech", { Authorization: `Bearer ${openai}` }, "gpt-4o-mini-tts", text),
+      run: (req) => speechEndpoint("https://api.openai.com/v1/audio/speech", { Authorization: `Bearer ${openai}` }, "gpt-4o-mini-tts", req),
     });
   }
   return list;
@@ -285,9 +343,14 @@ function providers(): Provider[] {
 let workingProvider: string | null = null;
 let noVoiceUntil = 0;
 
-export async function synthesizeSpeech(text: string): Promise<SpeechOk | SpeechFail> {
-  const input = text.trim().slice(0, 1200);
-  if (!input) return { ok: false, reason: "nothing to say" };
+export async function synthesizeSpeech(req: SpeechRequest): Promise<SpeechOk | SpeechFail> {
+  const input: SpeechRequest = {
+    text: req.text.trim().slice(0, 1200),
+    rate: req.rate,
+    prev: req.prev?.trim().slice(-600) || undefined,
+    next: req.next?.trim().slice(0, 600) || undefined,
+  };
+  if (!input.text) return { ok: false, reason: "nothing to say" };
   if (Date.now() < noVoiceUntil) return { ok: false, reason: "no voice provider available" };
   const all = providers();
   const ordered = workingProvider ? [...all.filter((p) => p.name === workingProvider), ...all.filter((p) => p.name !== workingProvider)] : all;
@@ -312,7 +375,7 @@ export async function probeSpeechProviders(sample = "Hi, it's Cleo. Your books a
   const out: SpeechAttempt[] = [];
   for (const p of providers()) {
     try {
-      const r = await p.run(sample);
+      const r = await p.run({ text: sample });
       if ("audio" in r) out.push({ provider: p.name, ok: true, bytes: Math.round((r.audio.length * 3) / 4), detail: r.mime });
       else out.push({ provider: p.name, ok: false, status: r.status, detail: r.error });
     } catch (e: any) {

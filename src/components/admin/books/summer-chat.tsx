@@ -14,7 +14,7 @@ import { ASSISTANT_NAME } from "@/lib/business-books";
 import { askSummer, askSummerVoice, clearSummer, getSummerMessages, summerSpeech } from "@/lib/business-books.functions";
 import { summerTone } from "@/lib/summer-persona";
 import { extractLinks, tokenizeInline } from "@/lib/summer-voice-text";
-import { loadVoicePrefs, summerSpeaker, type SummerVoicePrefs } from "@/lib/summer-speaker";
+import { loadVoicePrefs, summerSpeaker, type ServerVoice, type SummerVoicePrefs } from "@/lib/summer-speaker";
 import { blobToBase64, micSupported, useSummerMic } from "@/hooks/use-summer-mic";
 import { isAudioSessionError } from "@/lib/audio-session";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
@@ -204,7 +204,7 @@ export function SummerChat({
 
   const append = (rows: Msg[]) => qc.setQueryData<Msg[]>(["summer-messages"], (prev = []) => [...prev, ...rows]);
 
-  const serverVoice = useCallback((text: string) => speechFn({ data: { text } }) as Promise<any>, [speechFn]);
+  const serverVoice = useCallback<ServerVoice>((text, ctx) => speechFn({ data: { text, ...ctx } }) as Promise<any>, [speechFn]);
 
   const speak = useCallback(
     async (msg: Msg) => {

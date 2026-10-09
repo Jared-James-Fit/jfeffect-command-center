@@ -60,6 +60,17 @@ export function extractLinks(text: string): Array<{ label: string; href: string;
   return links;
 }
 
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** 2026-10-01 → October 1, 2026 (a voice reads the ISO form digit by digit). */
+function spokenDates(s: string): string {
+  return s.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (m, y, mo, d) => {
+    const month = MONTHS[Number(mo) - 1];
+    const day = Number(d);
+    return month && day >= 1 && day <= 31 ? `${month} ${day}, ${y}` : m;
+  });
+}
+
 const EMOJI = /[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]/gu;
 
 /**
@@ -82,10 +93,12 @@ export function speechFromReply(text: string, maxChars = 700): string {
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/[*_`~]/g, "")
     .replace(EMOJI, "")
+    .replace(/\s&\s/g, " and ")
     .replace(/\s+([.,!?])/g, "$1")
     .replace(/\.{2,}/g, ".")
     .replace(/\s{2,}/g, " ")
     .trim();
+  s = spokenDates(s);
   if (s.length <= maxChars) return s;
   const cut = s.slice(0, maxChars);
   const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));

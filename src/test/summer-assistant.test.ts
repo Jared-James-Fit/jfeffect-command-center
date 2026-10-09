@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractLinks, isSafeInternalHref, speechFromReply, tokenizeInline } from "@/lib/summer-voice-text";
-import { speechChunks } from "@/lib/summer-speaker";
+import { leadAndRest, speechChunks } from "@/lib/summer-speaker";
 import { buildAppContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot } from "@/lib/summer-app";
 import { summerSystemPrompt } from "@/lib/summer-context";
 import { audioFormat } from "@/lib/summer.server";
@@ -46,7 +46,11 @@ describe("speechFromReply", () => {
       "[Open Taxes & Books](/admin/sales?tab=taxes)",
     ].join("\n");
     const said = speechFromReply(reply);
-    expect(said).toBe("About $1,104 to set aside. GST owing: $445.22. Open Taxes & Books.");
+    expect(said).toBe("About $1,104 to set aside. GST owing: $445.22. Open Taxes and Books.");
+  });
+
+  it("says dates the way a person would", () => {
+    expect(speechFromReply("Your GST is due 2026-10-31.")).toBe("Your GST is due October 31, 2026.");
   });
 
   it("stops at a sentence boundary when long", () => {
@@ -70,6 +74,24 @@ describe("speechChunks", () => {
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.every((c) => c.length <= 100 && c.endsWith("."))).toBe(true);
     expect(chunks.join(" ")).toBe(text);
+  });
+
+  it("never splits a dollar amount at its decimal point", () => {
+    expect(speechChunks("Set aside $1,104.25 now. Thanks.", 20)).toEqual(["Set aside $1,104.25 now.", "Thanks."]);
+  });
+});
+
+describe("leadAndRest", () => {
+  it("keeps short replies whole so there's no seam", () => {
+    expect(leadAndRest("You owe $445. It's due April 30.")).toEqual(["You owe $445. It's due April 30."]);
+  });
+
+  it("splits a longer reply after an opening of at least a few words", () => {
+    const text =
+      "Okay. You've got $1,104.25 to set aside right now. GST is the biggest piece of that, and it's due at the end of the month, so move it this week.";
+    const [lead, rest] = leadAndRest(text);
+    expect(lead).toBe("Okay. You've got $1,104.25 to set aside right now.");
+    expect(`${lead} ${rest}`).toBe(text);
   });
 });
 

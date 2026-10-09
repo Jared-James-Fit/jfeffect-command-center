@@ -82,13 +82,19 @@ function fallbackVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | u
   return rankVoices(voices)[0];
 }
 
+/** Sentences, broken only where punctuation is followed by a space ($1,104.25 stays whole). */
+function splitSentences(text: string): string[] {
+  const out = text.replace(/([.!?])\s+/g, "$1\n").split("\n").map((p) => p.trim()).filter(Boolean);
+  return out.length ? out : [text];
+}
+
 /**
  * Sentences grouped into chunks of up to ~maxChars. Fewer, longer utterances
  * flow like speech; one per sentence leaves an audible gap between each.
  * Kept short enough that Chrome doesn't cut a long utterance off mid-way.
  */
 export function speechChunks(text: string, maxChars = 220): string[] {
-  const sentences = text.match(/[^.!?]+[.!?]*/g)?.map((p) => p.trim()).filter(Boolean) ?? [text];
+  const sentences = splitSentences(text);
   const chunks: string[] = [];
   for (const sentence of sentences) {
     const last = chunks.length - 1;
@@ -98,7 +104,28 @@ export function speechChunks(text: string, maxChars = 220): string[] {
   return chunks;
 }
 
-type ServerVoice = (text: string) => Promise<{ ok: true; audio: string; mime: string } | { ok: false; reason?: string }>;
+/**
+ * A reply split so she can start talking sooner: the opening sentence (fast to
+ * generate) and the rest, generated at the same time. Short replies stay whole
+ * so there is no seam at all.
+ */
+export function leadAndRest(text: string): [string] | [string, string] {
+  if (text.length < 140) return [text];
+  const sentences = splitSentences(text);
+  let lead = "";
+  let i = 0;
+  // At least ~40 chars so the first piece isn't a lonely "Okay."
+  while (i < sentences.length - 1 && lead.length < 40) {
+    lead = lead ? `${lead} ${sentences[i]}` : sentences[i];
+    i++;
+  }
+  const rest = sentences.slice(i).join(" ");
+  return lead && rest ? [lead, rest] : [text];
+}
+
+type ServerAudio = { ok: true; audio: string; mime: string } | { ok: false; reason?: string };
+/** The server voice for one piece of a reply (see SpeechRequest in summer.server). */
+export type ServerVoice = (text: string, ctx: { rate: number; prev?: string; next?: string }) => Promise<ServerAudio>;
 
 // 0.1s of silence; playing it on a tap unlocks the element for later replies.
 const SILENT_WAV =
@@ -109,6 +136,8 @@ class SummerSpeaker {
   private objectUrl: string | null = null;
   private serverVoiceOff = false;
   private stopCurrent: (() => void) | null = null;
+  /** Bumped by every speak() and stop(), so a superseded reply goes quiet. */
+  private turn = 0;
   private listeners = new Set<(speaking: boolean) => void>();
   speaking = false;
 
@@ -151,6 +180,7 @@ class SummerSpeaker {
   }
 
   stop() {
+    this.turn++;
     this.stopCurrent?.();
     this.stopCurrent = null;
     try {
@@ -171,6 +201,7 @@ class SummerSpeaker {
   /** Speak a reply. Resolves when finished or stopped. */
   async speak(reply: string, prefs: SummerVoicePrefs, serverVoice: ServerVoice): Promise<void> {
     this.stop();
+    const turn = ++this.turn;
     const text = speechFromReply(reply);
     if (!text) return;
     this.set(true);
@@ -179,17 +210,34 @@ class SummerSpeaker {
     const prevSession = setAudioSessionType("playback");
     try {
       if (prefs.voice === "summer" && !this.serverVoiceOff) {
-        const r = await serverVoice(text).catch(() => ({ ok: false as const }));
-        if (r.ok) {
-          await this.playAudio(r.audio, r.mime, prefs.rate);
-          return;
+        const parts = leadAndRest(text);
+        const ask = (i: number) =>
+          serverVoice(parts[i], { rate: prefs.rate, prev: parts[i - 1], next: parts[i + 1] }).catch(() => ({ ok: false as const }));
+        // Both pieces start generating now; the second is usually ready
+        // before the first finishes playing.
+        const pending = parts.map((_, i) => ask(i));
+        for (let i = 0; i < pending.length; i++) {
+          const r = await pending[i];
+          if (turn !== this.turn) return;
+          if (!r.ok) {
+            if (i === 0) this.serverVoiceOff = true;
+            await this.speakDevice(parts.slice(i).join(" "), prefs);
+            return;
+          }
+          // The voice already paced itself to prefs.rate.
+          await this.playAudio(r.audio, r.mime, 1);
+          if (turn !== this.turn) return;
         }
-        this.serverVoiceOff = true;
+        return;
       }
       await this.speakDevice(text, prefs);
     } finally {
-      if (prevSession && prevSession !== "playback") setAudioSessionType(prevSession);
-      this.set(false);
+      // Stopped or finished: put the session back and go idle. Superseded by
+      // a newer reply that is already speaking: leave both to that one.
+      if (turn === this.turn || !this.speaking) {
+        if (prevSession && prevSession !== "playback") setAudioSessionType(prevSession);
+      }
+      if (turn === this.turn) this.set(false);
     }
   }
 

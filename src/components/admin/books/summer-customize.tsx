@@ -59,7 +59,7 @@ export function SummerCustomizeDialog({
       await speaker.speak(
         "Hi, it's Cleo. You've got $1,104.25 to set aside right now, and two check-ins waiting on you.",
         voicePrefs,
-        (text) => speechFn({ data: { text } }) as any,
+        (text, ctx) => speechFn({ data: { text, ...ctx } }) as any,
       );
     } finally {
       setTesting(false);
