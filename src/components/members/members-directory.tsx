@@ -68,44 +68,28 @@ function statusLine(m: Member): { text: string; warn: boolean } {
 /** Where "Back" in the member app returns to. */
 const MEMBERS_HREF = "/admin/clients?kind=members";
 
-/**
- * Every app member in one fast list: search, tap a filter, tap a name to
- * manage them, or "View as" to open the member app with their access. The
- * owner's own test member sits on top for trying the member experience.
- * Used on the Clients page (Members) and on /admin/members.
- */
-export function MembersDirectory({ returnTo = MEMBERS_HREF }: { returnTo?: string }) {
-  const listFn = useServerFn(listMembers);
-  const personaFn = useServerFn(setPovPersona);
-  const copyFn = useServerFn(copyPovFromMember);
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const openMember = useOpenMemberProfile();
-  const { user, role, viewOnly } = useAuth();
-  // The member app preview runs on the admin's own test account (server: admin only).
-  const canPreview = role === "admin" && !viewOnly;
-  const [filter, setFilter] = useState("all");
-  const [query, setQuery] = useState("");
-  const [limit, setLimit] = useState(PAGE);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [persona, setPersona] = useState<(typeof PERSONAS)[number]["key"]>("app_member");
+type Persona = (typeof PERSONAS)[number]["key"];
 
-  const { data, isLoading, error } = useQuery({
+/** Every app member (coaching clients aren't members; the server leaves them out). */
+function useMembersList() {
+  const listFn = useServerFn(listMembers);
+  return useQuery({
     queryKey: MEMBERS_KEY,
     queryFn: () => listFn({ data: {} }) as Promise<{ members: Member[] }>,
     staleTime: 30_000,
   });
-  const all = data?.members ?? [];
-  const sandbox = all.find((m) => m.is_admin_sandbox && m.user_id === user?.id) ?? null;
-  const members = useMemo(() => all.filter((m) => !m.is_admin_sandbox), [all]);
+}
 
-  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, members.filter(f.test).length])), [members]);
-  const shown = useMemo(() => {
-    const test = FILTERS.find((f) => f.key === filter)?.test ?? FILTERS[0].test;
-    const q = query.trim().toLowerCase();
-    return members.filter((m) => test(m) && (!q || [m.full_name, m.email, m.phone].some((v) => (v ?? "").toLowerCase().includes(q))));
-  }, [members, filter, query]);
+/** Real members: not the admins' test accounts, not archived. */
+export function realMemberCount(members: Array<Pick<Member, "is_admin_sandbox" | "status">> | undefined): number | undefined {
+  return members?.filter((m) => !m.is_admin_sandbox && m.status !== "Archived").length;
+}
 
+/** Opens the member app after `run` sets up whose access it shows. */
+function useEnterMemberApp(returnTo: string) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState<string | null>(null);
   const enter = async (key: string, run: () => Promise<unknown>, flag: string, done: string) => {
     if (busy) return;
     setBusy(key);
@@ -125,9 +109,104 @@ export function MembersDirectory({ returnTo = MEMBERS_HREF }: { returnTo?: strin
       setBusy(null);
     }
   };
+  return { busy, enter };
+}
+
+/**
+ * The owner's one test account: the member app on their own login (the
+ * per-admin sandbox), as a Member, Premium or Program-only member. No extra
+ * login or data. Admins only; nobody else ever sees it.
+ */
+export function TestAccountCard({ returnTo = MEMBERS_HREF, className }: { returnTo?: string; className?: string }) {
+  const personaFn = useServerFn(setPovPersona);
+  const openMember = useOpenMemberProfile();
+  const { user, role, viewOnly } = useAuth();
+  const { busy, enter } = useEnterMemberApp(returnTo);
+  const [persona, setPersona] = useState<Persona>("app_member");
+  const { data } = useMembersList();
+  const sandbox = data?.members.find((m) => m.is_admin_sandbox && m.user_id === user?.id) ?? null;
+  // The member app preview runs on the admin's own test account (server: admin only).
+  if (role !== "admin" || viewOnly) return null;
 
   const openTest = () =>
-    enter("test", () => personaFn({ data: { persona } as any }), persona, "Viewing the member app as your test member");
+    enter("test", () => personaFn({ data: { persona } as any }), persona, "Viewing the member app as your test account");
+
+  return (
+    <Card className={cn("border-emerald-500/30 bg-emerald-500/5 p-3.5", className)}>
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+          <FlaskConical className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold">Your test account</div>
+          <p className="text-xs text-muted-foreground">
+            See the member app the way a member would. It runs on your own login, so there's no extra account, and nobody else sees it.
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex gap-1 rounded-xl border bg-background/60 p-1" role="group" aria-label="Test as">
+        {PERSONAS.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            aria-pressed={persona === p.key}
+            onClick={() => setPersona(p.key)}
+            className={cn(
+              "flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors",
+              persona === p.key ? "bg-emerald-600 text-white" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <Button className="h-10 flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => void openTest()} disabled={!!busy}>
+          {busy === "test" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}
+          Open member app
+        </Button>
+        <Button
+          variant="outline"
+          className="h-10"
+          disabled={!sandbox}
+          title={sandbox ? undefined : "Open the member app once to create it"}
+          onClick={() => sandbox && openMember(sandbox.id)}
+        >
+          Manage
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Every app member in one fast list: search, tap a filter, tap a name to
+ * manage them, or "View as" to open the member app with their access.
+ * Coaching clients aren't here (they're under Clients). The owner's test
+ * account sits on top unless the page shows it elsewhere (`showTest`).
+ * Used on the Clients page (Members) and on /admin/members.
+ */
+export function MembersDirectory({ returnTo = MEMBERS_HREF, showTest = true }: { returnTo?: string; showTest?: boolean }) {
+  const copyFn = useServerFn(copyPovFromMember);
+  const openMember = useOpenMemberProfile();
+  const { role, viewOnly } = useAuth();
+  const canPreview = role === "admin" && !viewOnly;
+  const [filter, setFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [limit, setLimit] = useState(PAGE);
+  const { busy, enter } = useEnterMemberApp(returnTo);
+
+  const { data, isLoading, error } = useMembersList();
+  const all = data?.members ?? [];
+  const members = useMemo(() => all.filter((m) => !m.is_admin_sandbox), [all]);
+
+  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, members.filter(f.test).length])), [members]);
+  const shown = useMemo(() => {
+    const test = FILTERS.find((f) => f.key === filter)?.test ?? FILTERS[0].test;
+    const q = query.trim().toLowerCase();
+    return members.filter((m) => test(m) && (!q || [m.full_name, m.email, m.phone].some((v) => (v ?? "").toLowerCase().includes(q))));
+  }, [members, filter, query]);
+
   const viewAs = (m: Member) => {
     const name = m.full_name || m.email || "This member";
     void enter(m.id, () => copyFn({ data: { memberId: m.id } }), `as:${name}`, `Showing the member app with ${name}'s access`);
@@ -135,52 +214,7 @@ export function MembersDirectory({ returnTo = MEMBERS_HREF }: { returnTo?: strin
 
   return (
     <div className="space-y-3">
-      {canPreview && (
-        <Card className="border-emerald-500/30 bg-emerald-500/5 p-3.5">
-          <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-              <FlaskConical className="h-5 w-5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold">Your test member</div>
-              <p className="text-xs text-muted-foreground">
-                Try the member app the way members see it. It's a private test account on your login; members never see it.
-              </p>
-            </div>
-          </div>
-          <div className="mt-3 flex gap-1 rounded-xl border bg-background/60 p-1" role="group" aria-label="Test as">
-            {PERSONAS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                aria-pressed={persona === p.key}
-                onClick={() => setPersona(p.key)}
-                className={cn(
-                  "flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors",
-                  persona === p.key ? "bg-emerald-600 text-white" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <div className="mt-2 flex gap-2">
-            <Button className="h-10 flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => void openTest()} disabled={!!busy}>
-              {busy === "test" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}
-              Open member app
-            </Button>
-            <Button
-              variant="outline"
-              className="h-10"
-              disabled={!sandbox}
-              title={sandbox ? undefined : "Open the member app once to create it"}
-              onClick={() => sandbox && openMember(sandbox.id)}
-            >
-              Manage
-            </Button>
-          </div>
-        </Card>
-      )}
+      {showTest && <TestAccountCard returnTo={returnTo} />}
 
       <div className="relative">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -215,6 +249,8 @@ export function MembersDirectory({ returnTo = MEMBERS_HREF }: { returnTo?: strin
         <div className="flex items-center justify-center py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
       ) : error ? (
         <Card className="border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">Couldn't load members: {(error as any)?.message}</Card>
+      ) : members.length === 0 ? (
+        <Card className="p-6 text-center text-sm text-muted-foreground">No members. Everyone you coach is under Clients.</Card>
       ) : shown.length === 0 ? (
         <Card className="p-6 text-center text-sm text-muted-foreground">No members match.</Card>
       ) : (

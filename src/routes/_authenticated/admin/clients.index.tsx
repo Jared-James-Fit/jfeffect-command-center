@@ -33,7 +33,7 @@ import { AddClientDialog } from "@/components/clients/add-client-dialog";
 import { cn } from "@/lib/utils";
 import { listMembers } from "@/lib/members.functions";
 import { listTeam } from "@/lib/staff-invites.functions";
-import { MembersDirectory, MEMBERS_KEY, NewMemberButton } from "@/components/members/members-directory";
+import { MembersDirectory, MEMBERS_KEY, NewMemberButton, TestAccountCard, realMemberCount } from "@/components/members/members-directory";
 import { StaffPage } from "@/route-pages/_authenticated/admin/staff";
 import { AccountsSwitcher, KINDS, useSwipeBetween, type AccountKind } from "@/components/accounts/accounts-switcher";
 
@@ -134,7 +134,11 @@ function ClientsDirectoryPage() {
   const { data: teamData } = useQuery({ queryKey: ["team-access"], enabled: isAdmin, queryFn: () => teamFn(), staleTime: 30_000 });
   const goKind = (k: AccountKind) =>
     navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, kind: k === "clients" ? undefined : k }), resetScroll: false });
-  const swipe = useSwipeBetween(KINDS.indexOf(kind), (i) => goKind(KINDS[i]));
+  // Everyone here is coached, so Members (memberships) only shows once there's a
+  // member; a saved ?kind=members link still opens it.
+  const memberCount = realMemberCount(membersData?.members);
+  const kinds: AccountKind[] = (memberCount ?? 0) > 0 || kind === "members" ? KINDS : KINDS.filter((k) => k !== "members");
+  const swipe = useSwipeBetween(kinds.indexOf(kind), (i) => goKind(kinds[i]), kinds.length);
   const qc = useQueryClient();
   const listFn = useServerFn(listClientsDirectoryFn);
   const archiveFn = useServerFn(archiveClient);
@@ -193,7 +197,6 @@ function ClientsDirectoryPage() {
         ? "No matches"
         : `${total} result${total === 1 ? "" : "s"}`;
 
-  const memberCount = membersData?.members.filter((m) => !m.is_admin_sandbox && m.status !== "Archived").length;
   const teamCount = teamData?.members.length;
 
   return (
@@ -218,6 +221,7 @@ function ClientsDirectoryPage() {
         <AccountsSwitcher
           kind={kind}
           onChange={goKind}
+          kinds={kinds}
           counts={{ clients: counts?.all, members: memberCount, team: teamCount }}
         />
       )}
@@ -226,9 +230,13 @@ function ClientsDirectoryPage() {
           right swipe is still the app's "back". */}
       <div {...swipe} data-no-swipe-back={kind === "clients" ? undefined : ""} className="min-h-[60vh]">
       {kind === "members" ? (
-        <div className="p-3 sm:p-4 md:p-6"><MembersDirectory /></div>
+        <div className="p-3 sm:p-4 md:p-6"><MembersDirectory showTest={false} /></div>
       ) : kind === "team" ? (
         <div>
+          {/* The one test account lives with the logins that run the business. */}
+          <div className="mx-auto max-w-3xl px-4 pt-3 md:px-6">
+            <TestAccountCard returnTo="/admin/clients?kind=team" />
+          </div>
           <StaffPage embedded />
           <div className="mx-auto max-w-3xl px-4 pb-6 md:px-6">
             <Link to="/admin/team" search={{ tab: "people" } as any} className="flex items-center justify-between rounded-xl border bg-card px-4 py-3 text-sm font-semibold hover:bg-muted/40">

@@ -34,3 +34,19 @@ export function isSubscriptionActive(status: string | null | undefined): boolean
   if (!status) return false;
   return !INACTIVE_STATUSES.includes(status);
 }
+
+/**
+ * App members minus coaching clients. A coaching client gets an app_members
+ * row the first time they open Nutrition (their meal logs hang off it); that
+ * row isn't a membership, they're a client (listed under Clients). Matched by
+ * login, or by email for a row not linked to one yet. Admins' test accounts
+ * always stay (the page decides where they show).
+ */
+export function withoutCoachingClients<
+  M extends { user_id: string | null; email: string | null; is_admin_sandbox?: boolean | null },
+>(members: M[], clients: Array<{ user_id: string | null; email: string | null }>): M[] {
+  const norm = (e: string | null | undefined) => (e ?? "").trim().toLowerCase();
+  const users = new Set(clients.map((c) => c.user_id).filter(Boolean));
+  const emails = new Set(clients.map((c) => norm(c.email)).filter(Boolean));
+  return members.filter((m) => m.is_admin_sandbox || !((m.user_id && users.has(m.user_id)) || emails.has(norm(m.email))));
+}
