@@ -6,8 +6,10 @@
 import { useCallback, useEffect } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 import {
   FEED_PAGE_SIZE,
+  FIRST_FEED_PAGE,
   buildCommentPreview,
   nextFeedCursor,
   type CommunityComment,
@@ -61,7 +63,7 @@ export function useCommunityFeed(authorUserId: string | null = null) {
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
       const { data, error } = await db.rpc("community_feed", {
-        _limit: FEED_PAGE_SIZE,
+        _limit: pageParam ? FEED_PAGE_SIZE : FIRST_FEED_PAGE,
         _before_at: pageParam?.at ?? null,
         _before_id: pageParam?.id ?? null,
         _author_user_id: authorUserId,
@@ -771,6 +773,25 @@ export function useCommunityProfile(userId: string | null) {
       if (error) throw error;
       return (data ?? null) as CommunityProfile | null;
     },
+  });
+}
+
+/** Your id in the community (a coach's admin login maps to their community account). */
+export function useMyCommunityId(): string | null {
+  const { user } = useAuth();
+  const { data } = useCommunityProfile(user?.id ?? null);
+  return data?.author.user_id ?? user?.id ?? null;
+}
+
+/** Take yourself off a post someone named you in (no longer a collaborator, name no longer a link). */
+export function useLeavePost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      const { error } = await db.rpc("community_leave_post", { _post_id: postId });
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateCommunity(qc),
   });
 }
 

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { MentionSuggestBar } from "@/components/community/mentions";
 
 export const NOTE_MAX = 1200;
 
@@ -28,6 +29,7 @@ export function NoteEditor({
   onSave: (body: string) => Promise<void>;
 }) {
   const [body, setBody] = useState(initial);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     if (open) setBody(initial);
   }, [open, initial]);
@@ -35,7 +37,7 @@ export function NoteEditor({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent className="max-w-[520px] rounded-3xl" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-[520px] rounded-3xl" showBackButton={false} onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogTitle className="text-base font-black">{title}</DialogTitle>
         <DialogDescription className="sr-only">Write the post text.</DialogDescription>
         {quote && (
@@ -44,7 +46,8 @@ export function NoteEditor({
             {quote.author && <figcaption className="mt-1 text-[11px] text-muted-foreground">{quote.author}</figcaption>}
           </figure>
         )}
-        <Textarea value={body} onChange={(e) => setBody(e.target.value.slice(0, NOTE_MAX))} rows={7} className="resize-none rounded-2xl text-[16px] leading-snug" aria-label="Post text" />
+        <Textarea ref={bodyRef} value={body} onChange={(e) => setBody(e.target.value.slice(0, NOTE_MAX))} rows={7} className="resize-none rounded-2xl text-[16px] leading-snug" aria-label="Post text" />
+        <MentionSuggestBar value={body} onChange={(v) => setBody(v.slice(0, NOTE_MAX))} inputRef={bodyRef} className="-my-2" />
         <div className="flex items-center justify-between">
           <span className="text-[11px] tabular-nums text-muted-foreground">{body.length}/{NOTE_MAX}</span>
           <div className="flex gap-2">

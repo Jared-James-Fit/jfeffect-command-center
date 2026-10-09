@@ -39,6 +39,7 @@ import { MessageAuthorSheet } from "@/components/community/message-author-sheet"
 import { useAuth } from "@/lib/auth";
 import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
 import { SharedCommentCard, openCommunityPost } from "@/components/community/shared-comment";
+import { CollaboratorsSheet, MentionText } from "@/components/community/mentions";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -99,7 +100,7 @@ export function CoachBadge({ className }: { className?: string }) {
  * a quiet series label, the featured quote with its speaker, then the words.
  * `clamp` keeps long notes tidy in the feed; the detail shows everything.
  */
-export function NoteBody({ post, clamp = false }: { post: CommunityPost; clamp?: boolean }) {
+export function NoteBody({ post, clamp = false, onOpenPerson }: { post: CommunityPost; clamp?: boolean; onOpenPerson?: (a: CommunityAuthor) => void }) {
   const series = post.series ? SERIES_LABEL[post.series] ?? null : null;
   // Saturday: the picture says it, the words just sit under it
   const scene = post.series === "saturday_spirit" ? extraScene(post.series_extra) : null;
@@ -124,7 +125,9 @@ export function NoteBody({ post, clamp = false }: { post: CommunityPost; clamp?:
         </figure>
       )}
       {post.caption && (
-        <p className={cn("whitespace-pre-line leading-[1.45]", scene ? "text-[17px] font-semibold" : "text-[15px]", clamp && "line-clamp-[8]")}>{post.caption}</p>
+        <p className={cn("whitespace-pre-line leading-[1.45]", scene ? "text-[17px] font-semibold" : "text-[15px]", clamp && "line-clamp-[8]")}>
+          <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenPerson} />
+        </p>
       )}
     </div>
   );
@@ -138,7 +141,69 @@ export function NoteExtras({ post, unit, className }: { post: CommunityPost; uni
   return <SeriesExtraCard post={post} className={className} />;
 }
 
-export function AuthorLine({ author, sub, onOpen, size = 40 }: { author: CommunityAuthor; sub?: string; onOpen?: () => void; size?: number }) {
+export function AuthorLine({
+  author,
+  sub,
+  onOpen,
+  size = 40,
+  collaborators,
+  onOpenPerson,
+}: {
+  author: CommunityAuthor;
+  sub?: string;
+  onOpen?: () => void;
+  size?: number;
+  /** A collab post's other people: "Jared McIntyre and Dwayne" / "and 2 others". */
+  collaborators?: CommunityAuthor[] | null;
+  onOpenPerson?: (a: CommunityAuthor) => void;
+}) {
+  const collabs = collaborators ?? [];
+  const [listOpen, setListOpen] = useState(false);
+  const subLine =
+    author.is_coach || sub ? (
+      <div className="truncate text-[11px] leading-tight text-muted-foreground">
+        {[author.is_coach ? author.title || "Coach · JF Effect" : null, sub].filter(Boolean).join(" · ")}
+      </div>
+    ) : null;
+
+  if (collabs.length) {
+    const small = Math.round(size * 0.74);
+    const people = [author, ...collabs];
+    return (
+      <div className="flex min-w-0 items-center gap-2.5">
+        <button type="button" onClick={() => setListOpen(true)} className="relative shrink-0" style={{ width: size, height: size }} aria-label="Who's on this post">
+          <span className="absolute left-0 top-0">
+            <UserAvatar src={author.avatar_url} name={author.name} size={small} expandable={false} />
+          </span>
+          <span className="absolute bottom-0 right-0 rounded-full ring-2 ring-card">
+            <UserAvatar src={collabs[0].avatar_url} name={collabs[0].name} size={small} expandable={false} />
+          </span>
+        </button>
+        <div className="min-w-0 text-left">
+          <div className="flex min-w-0 items-center gap-1 text-sm leading-tight">
+            {/* the poster's name stays whole where it can; the other name gives way first */}
+            <button type="button" onClick={onOpen} className="max-w-[60%] shrink-0 truncate font-bold" aria-label={`${author.name}'s profile`}>
+              {author.name}
+            </button>
+            {author.is_coach && <CoachBadge />}
+            <span className="shrink-0 text-muted-foreground">and</span>
+            {collabs.length === 1 ? (
+              <button type="button" onClick={() => onOpenPerson?.(collabs[0])} className="min-w-0 truncate font-bold" aria-label={`${collabs[0].name}'s profile`}>
+                {collabs[0].name}
+              </button>
+            ) : (
+              <button type="button" onClick={() => setListOpen(true)} className="shrink-0 font-bold">
+                {collabs.length} others
+              </button>
+            )}
+          </div>
+          {subLine}
+        </div>
+        <CollaboratorsSheet people={people} open={listOpen} onClose={() => setListOpen(false)} onOpen={(a) => (a.user_id === author.user_id ? onOpen?.() : onOpenPerson?.(a))} />
+      </div>
+    );
+  }
+
   const body = (
     <>
       <UserAvatar src={author.avatar_url} name={author.name} size={size} expandable={false} />
@@ -147,11 +212,7 @@ export function AuthorLine({ author, sub, onOpen, size = 40 }: { author: Communi
           <span className="truncate text-sm font-bold leading-tight">{author.name}</span>
           {author.is_coach && <CoachBadge />}
         </div>
-        {author.is_coach || sub ? (
-          <div className="truncate text-[11px] leading-tight text-muted-foreground">
-            {[author.is_coach ? author.title || "Coach · JF Effect" : null, sub].filter(Boolean).join(" · ")}
-          </div>
-        ) : null}
+        {subLine}
       </div>
     </>
   );
@@ -285,7 +346,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   return (
     <article className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm">
       <header className="flex items-center justify-between gap-2 px-3.5 py-3">
-        <AuthorLine author={post.author} sub={sub} onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined} />
+        <AuthorLine author={post.author} sub={sub} onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined} collaborators={post.collaborators} onOpenPerson={onOpenAuthor} />
         <div className="flex shrink-0 items-center gap-1">
           {post.visibility !== "community" && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : "Only visible to you"} />}
           <PostActions post={post} viewerIsStaff={viewerIsStaff} />
@@ -296,7 +357,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       <div role="button" tabIndex={0} onClick={onHeroTap} onKeyDown={(e) => e.key === "Enter" && onOpen(post)} className="relative cursor-pointer select-none" aria-label="Open workout">
         {isNote ? (
           <>
-            <NoteBody post={post} clamp />
+            <NoteBody post={post} clamp onOpenPerson={onOpenAuthor} />
             <NoteExtras post={post} unit={unit} className="mx-4 mb-1 mt-2" />
           </>
         ) : post.media_type ? (
@@ -352,7 +413,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {/* Every workout has more than the card shows: say so, plainly. */}
       {!isNote && s && <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />}
 
-      {post.caption && !isNote && <FeedCaption name={post.author.name} caption={post.caption} />}
+      {post.caption && !isNote && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} />}
 
       {(post.coach_reactions.length > 0 || post.coach_commented) && (
         <div className="px-3.5 pt-2.5">
@@ -549,7 +610,7 @@ function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide
     </div>
   ) : (
     <div data-pinch-zoom className="absolute inset-0">
-      {src ? <img src={src} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" /> : <div className="h-full w-full animate-pulse bg-muted" />}
+      {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
       {isVideo && (
         <button
           type="button"
@@ -566,6 +627,31 @@ function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide
         </button>
       )}
     </div>
+  );
+}
+
+/** A photo that fades in once it has loaded (cached ones show at once), over a soft shimmer. */
+function FadeImg({ src }: { src: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const ref = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    setLoaded(!!ref.current?.complete && (ref.current?.naturalWidth ?? 0) > 0);
+  }, [src]);
+  return (
+    <>
+      {!loaded && <div className="absolute inset-0 animate-pulse bg-muted" aria-hidden />}
+      <img
+        ref={ref}
+        src={src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        onLoad={() => setLoaded(true)}
+        data-loaded={loaded ? "" : undefined}
+        className="media-fade relative h-full w-full object-cover"
+      />
+    </>
   );
 }
 

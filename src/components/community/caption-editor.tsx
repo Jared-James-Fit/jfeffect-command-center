@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import { Check } from "lucide-react";
 import { CAPTION_MAX } from "@/lib/community";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
+import { MentionSuggestBar } from "@/components/community/mentions";
 
 /** A small picture of the post for the caption screen (null if it can't be drawn). */
 export function captionThumb(src: HTMLCanvasElement | null | undefined, extra?: (ctx: CanvasRenderingContext2D, w: number, h: number) => void): string | null {
@@ -84,10 +85,12 @@ export function CaptionEditor({ value, onChange, onDone, thumb }: { value: strin
         />
       </div>
       <div
-        className="flex shrink-0 justify-end px-4 pt-2 text-[12px] tabular-nums text-white/40"
+        className="flex shrink-0 items-center gap-2 px-4 pt-2"
         style={{ paddingBottom: view?.keyboard ? "0.5rem" : "max(env(safe-area-inset-bottom), 0.75rem)" }}
       >
-        {value.length > 0 && `${value.length}/${CAPTION_MAX}`}
+        {/* "@" brings up the crew, right above the keyboard */}
+        <MentionSuggestBar value={value} onChange={(v) => onChange(v.slice(0, CAPTION_MAX))} inputRef={ref} dark className="min-w-0 flex-1" />
+        <span className="ml-auto shrink-0 text-[12px] tabular-nums text-white/40">{value.length > 0 && `${value.length}/${CAPTION_MAX}`}</span>
       </div>
     </div>
   );

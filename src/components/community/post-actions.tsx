@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { NoteEditor } from "@/components/community/note-editor";
 import { EditPostSheet } from "@/components/community/edit-post-sheet";
 import type { CommunityPost } from "@/lib/community";
-import { useArchivePost, useDeletePost, useUpdateNote } from "@/lib/community.queries";
+import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useUpdateNote } from "@/lib/community.queries";
 
 /**
  * The "…" on a post, Instagram-style. Your own post: Edit, Archive (only you
  * see it, in Archived on your profile, until you restore it) or Delete.
  * Coaches can also remove anyone's post and edit coach notes.
+ * Named on someone else's post: Remove me (off the post and your profile).
  * `onGone` runs after an archive or delete (e.g. to close the detail view).
  */
 export function PostActions({ post, viewerIsStaff, onGone, className }: { post: CommunityPost; viewerIsStaff: boolean; onGone?: () => void; className?: string }) {
@@ -20,13 +21,16 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
   const del = useDeletePost();
   const archive = useArchivePost();
   const updateNote = useUpdateNote();
+  const leave = useLeavePost();
+  const me = useMyCommunityId();
 
   const mine = post.is_mine;
   const isNote = post.kind === "note";
   const archived = !!post.archived_at;
   const canEdit = mine || (isNote && viewerIsStaff);
   const canDelete = mine || viewerIsStaff;
-  if (!canEdit && !canDelete) return null;
+  const onIt = !mine && !!me && (post.mentions ?? []).some((m) => m.user_id === me);
+  if (!canEdit && !canDelete && !onIt) return null;
 
   const setArchived = (on: boolean) =>
     archive.mutate(
@@ -63,6 +67,19 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[180px]">
+          {onIt && (
+            <DropdownMenuItem
+              disabled={leave.isPending}
+              onSelect={() =>
+                leave.mutate(post.id, {
+                  onSuccess: () => toast.success("You're off this post", { description: "It's no longer on your profile." }),
+                  onError: (e: any) => toast.error(e?.message ?? "Couldn't do that"),
+                })
+              }
+            >
+              <UserMinus className="mr-2 h-4 w-4" /> Remove me from this post
+            </DropdownMenuItem>
+          )}
           {canEdit && (
             <DropdownMenuItem onSelect={() => setEditing(true)}>
               <Pencil className="mr-2 h-4 w-4" /> Edit
