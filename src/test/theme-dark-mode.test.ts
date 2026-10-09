@@ -4,8 +4,8 @@ import { THEMED_PATH_RE, THEME_BOOT_SCRIPT, THEME_STORAGE_KEY } from "@/lib/them
 
 describe("dark mode", () => {
   it("only themes the signed-in app; public pages stay light", () => {
-    for (const p of ["/portal", "/portal/progress", "/admin/clients", "/m", "/coach/x", "/notifications"]) expect(THEMED_PATH_RE.test(p)).toBe(true);
-    for (const p of ["/", "/membership", "/auth", "/selkirk", "/media-kit", "/my"]) expect(THEMED_PATH_RE.test(p)).toBe(false);
+    for (const p of ["/portal", "/portal/progress", "/admin/clients", "/m", "/coach/x", "/notifications", "/finance", "/finance/revenue"]) expect(THEMED_PATH_RE.test(p)).toBe(true);
+    for (const p of ["/", "/membership", "/auth", "/selkirk", "/media-kit", "/my", "/financial-literacy"]) expect(THEMED_PATH_RE.test(p)).toBe(false);
   });
 
   it("boot script reads the same key and path rule as the runtime", () => {
