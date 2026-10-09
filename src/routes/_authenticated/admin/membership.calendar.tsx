@@ -201,7 +201,7 @@ function MembershipCalendarPage() {
       ) : (
         <Link
           to="/admin/calendar"
-          search={{ tab: "google-calendar" } as any}
+          search={{ tab: "setup" } as any}
           className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
         >
           <CalIcon className="h-3 w-3" /> Connect Google

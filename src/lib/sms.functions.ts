@@ -191,7 +191,7 @@ export async function runReminderSweep(supabaseAdmin: any) {
 
   const { data: candidates, error } = await supabaseAdmin
     .from("messages")
-    .select("id, client_id, created_at, sender_role, is_internal_note, read_by_client_at, body")
+    .select("id, client_id, created_at, sender_role, is_internal_note, read_by_client_at, body, message_type, is_automated")
     .eq("sender_role", "admin")
     .eq("is_internal_note", false)
     .is("read_by_client_at", null)
@@ -205,7 +205,13 @@ export async function runReminderSweep(supabaseAdmin: any) {
   if (error) throw new Error(error.message);
 
   let processed = 0;
-  for (const msg of pickAnchorMessages((candidates ?? []) as any[])) {
+  // Automatic schedule notes ("Moved your session to ...") ride on their own
+  // texts (evening-before reminder, last-minute change text), so they never
+  // earn an extra "you have an unread message" text.
+  const nudgeable = ((candidates ?? []) as any[]).filter(
+    (m) => !(m.is_automated && m.message_type === "Scheduling"),
+  );
+  for (const msg of pickAnchorMessages(nudgeable)) {
     const ageMin = (now - new Date(msg.created_at).getTime()) / 60000;
     // Find highest eligible step (sorted ascending by delay)
     const sorted = [...enabledSteps].sort((a, b) => a.delay_minutes - b.delay_minutes);

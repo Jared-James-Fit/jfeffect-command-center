@@ -32,6 +32,7 @@ import {
 } from "@/lib/pt-session-manage";
 import { SESSION_TYPES, statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import { useAuth } from "@/lib/auth";
+import { SessionActionsSheet } from "@/components/schedule/session-actions-sheet";
 
 type TabKey = "upcoming" | "review" | "completed" | "cancelled" | "noshow" | "all";
 
@@ -56,6 +57,7 @@ export function PtCalendarPanel() {
   const [deleteFor, setDeleteFor] = useState<any>(null);
   const [cancelFor, setCancelFor] = useState<any>(null);
   const [adjustFor, setAdjustFor] = useState<any>(null);
+  const [moveFor, setMoveFor] = useState<any>(null);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min"],
@@ -221,6 +223,11 @@ export function PtCalendarPanel() {
             <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
           </Button>
           {scheduled && (
+            <Button size="sm" variant="outline" onClick={() => setMoveFor(s)}>
+              <CalendarClock className="mr-1.5 h-3.5 w-3.5" /> Move
+            </Button>
+          )}
+          {scheduled && (
             <Button
               size="sm" variant="outline"
               className="border-success/40 text-success hover:bg-success/10"
@@ -282,7 +289,7 @@ export function PtCalendarPanel() {
 
   return (
     <>
-      <PageHeader title="1:1 Calendar" subtitle="Quickly book and manage training sessions and meetings." actions={
+      <PageHeader title="Sessions" subtitle="Every 1:1 session in one list: book, move, close out." actions={
         <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setCardFor(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Quick Book
         </Button>
@@ -366,6 +373,14 @@ export function PtCalendarPanel() {
       </div>
 
       <PtSessionDialog open={open} onOpenChange={setOpen} clients={clients} initial={editing ?? undefined} initialCard={cardFor} />
+      <SessionActionsSheet
+        session={moveFor}
+        clientName={moveFor?.clients?.full_name}
+        open={!!moveFor}
+        initialMode="move"
+        onOpenChange={(o) => { if (!o) setMoveFor(null); }}
+        onEdit={(x) => openEdit(sessions.find((r: any) => r.id === x.id) ?? x)}
+      />
       <NoShowPtDialog open={!!noShowFor} onOpenChange={(o) => { if (!o) setNoShowFor(null); }} session={noShowFor} />
       <CancelPtSessionDialog
         open={!!cancelFor}

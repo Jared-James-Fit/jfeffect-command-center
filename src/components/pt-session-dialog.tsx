@@ -29,6 +29,9 @@ import {
 } from "@/components/pt-session-manage-dialogs";
 import { BookingCardDialog } from "@/components/booking-cards/booking-card-dialog";
 import { addMinutesToTime, cardAccent, fmtDuration, type BookingCard } from "@/lib/booking-cards";
+import { addDaysISO, deviceTodayISO } from "@/lib/schedule-time";
+import { ConflictNotice, useConflictCheck } from "@/components/schedule/use-conflict-check";
+import { kickGoogleSync, dayLabel } from "@/components/schedule/session-actions-sheet";
 
 type Props = {
   open: boolean;
@@ -37,6 +40,9 @@ type Props = {
   clients?: Array<{ id: string; full_name: string; timezone?: string | null; default_session_location?: string | null; package_tracking_enabled?: boolean | null; sessions_purchased?: number | null; sessions_used?: number | null }>;
   initial?: any;
   initialCard?: BookingCard | null;
+  /** Prefill for a new booking started from a day on the calendar (yyyy-mm-dd / HH:MM). */
+  initialDate?: string | null;
+  initialTime?: string | null;
 };
 
 const DOW = [
@@ -51,24 +57,18 @@ const DOW = [
 
 function computeRecurringDates(startISO: string, weekdays: number[], weeks: number, includeStart: boolean): string[] {
   if (!weekdays.length || weeks <= 0) return [];
-  const start = new Date(startISO + "T00:00:00");
-  const startDow = start.getDay();
-  const end = new Date(start);
-  end.setDate(end.getDate() + weeks * 7 - 1);
+  // Pure date arithmetic (no Date → UTC round trip), so no day can shift.
   const out: string[] = [];
-  const cur = new Date(start);
-  while (cur <= end) {
-    const dow = cur.getDay();
-    const isStart = cur.getTime() === start.getTime();
-    if (weekdays.includes(dow) && (includeStart || !isStart || dow !== startDow)) {
-      out.push(cur.toISOString().slice(0, 10));
-    }
-    cur.setDate(cur.getDate() + 1);
+  const startDow = new Date(`${startISO}T00:00:00Z`).getUTCDay();
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = addDaysISO(startISO, i);
+    const dow = (startDow + i) % 7;
+    if (weekdays.includes(dow) && (includeStart || i !== 0)) out.push(d);
   }
   return out;
 }
 
-export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], initial, initialCard }: Props) {
+export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], initial, initialCard, initialDate, initialTime }: Props) {
   const qc = useQueryClient();
   const { role } = useAuth();
   const isAdmin = role === "admin";
@@ -82,6 +82,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [, setStep] = useState<"pick" | "form">("form");
   const [templateEditOpen, setTemplateEditOpen] = useState(false);
+  const [conflictOverride, setConflictOverride] = useState(false);
 
   // Booking cards (templates) — used for the picker step and the edit-mode
   // template badge.
@@ -101,17 +102,18 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
   const applyCard = (card: BookingCard | null) => {
     const c = clients.find((x) => x.id === clientId);
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const dow = new Date(tomorrow + "T00:00:00").getDay();
+    const day = initialDate || addDaysISO(deviceTodayISO(), 1);
+    const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
     const duration = card?.duration_minutes ?? 60;
+    const startAt = initialTime || "09:00";
     setForm({
       client_id: clientId ?? "",
       title: card?.name || "Personal Training Session",
       session_type: card?.session_type || "Personal Training Session",
       custom_type: card?.custom_type ?? "",
-      session_date: tomorrow,
-      start_time: "09:00",
-      end_time: addMinutesToTime("09:00", duration),
+      session_date: day,
+      start_time: startAt,
+      end_time: addMinutesToTime(startAt, duration),
       timezone: c?.timezone ?? "America/Winnipeg",
       location: card?.location || c?.default_session_location || "Iron Image Gym",
       notes: card?.default_notes ?? "",
@@ -128,6 +130,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       _weekdays: [dow],
       _weeks: 4,
       _includeStartDate: true,
+      _skipDates: [],
     });
     setStep("form");
   };
@@ -138,6 +141,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     setShowAdvanced(false);
     setNoShowOpen(false); setCancelOpen(false); setDeleteOpen(false); setAdjustOpen(false);
     setTemplateEditOpen(false);
+    setConflictOverride(false);
     if (initial) {
       setForm({ ...initial, _isRecurring: false, _weekdays: [], _weeks: 4, _includeStartDate: true });
       return;
@@ -152,7 +156,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     // NOTE: `clients` is intentionally NOT a dependency — callers pass a fresh
     // array literal on every render, which would reset the form (and wipe the
     // just-picked booking card) the instant the parent re-rendered.
-  }, [open, initial, clientId, initialCard]);
+  }, [open, initial, clientId, initialCard, initialDate, initialTime]);
 
   const selectedClient = form ? clients.find((c) => c.id === form.client_id) : undefined;
   const tracking = !!selectedClient?.package_tracking_enabled;
@@ -182,8 +186,33 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
   const previewDates = useMemo(() => {
     if (!form || !form._isRecurring) return [form?.session_date].filter(Boolean) as string[];
-    return computeRecurringDates(form.session_date, form._weekdays, form._weeks, form._includeStartDate);
+    const skip = new Set<string>(form._skipDates ?? []);
+    return computeRecurringDates(form.session_date, form._weekdays, form._weeks, form._includeStartDate).filter((d) => !skip.has(d));
   }, [form]);
+
+  // Double-booking check: every date this booking would create, or the edited
+  // session when its date/time changed. App sessions + Google Calendar.
+  const editTimeChanged =
+    !!form?.id &&
+    !!initial &&
+    (form.session_date !== initial.session_date ||
+      String(form.start_time).slice(0, 5) !== String(initial.start_time).slice(0, 5) ||
+      String(form.end_time).slice(0, 5) !== String(initial.end_time).slice(0, 5));
+  const conflictSlots =
+    !form || form.status !== "Scheduled"
+      ? []
+      : form.id
+        ? editTimeChanged
+          ? [{ key: form.session_date, date: form.session_date, start: String(form.start_time), end: String(form.end_time) }]
+          : []
+        : previewDates.map((d) => ({ key: d, date: d, start: String(form.start_time), end: String(form.end_time) }));
+  const conflictCheck = useConflictCheck({
+    slots: conflictSlots,
+    timezone: form?.timezone || "America/Winnipeg",
+    excludeSessionIds: form?.id ? [form.id] : [],
+    enabled: open && conflictSlots.length > 0,
+  });
+  const conflictBlocked = conflictCheck.conflicts.length > 0 && !conflictOverride;
 
   if (!form) {
     // Card picker step (booking mode only).
@@ -235,7 +264,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           </div>
           {activeCards.length === 0 && (
             <p className="text-center text-[11px] text-muted-foreground">
-              No booking cards yet — create them under PT Calendar → Booking Cards.
+              No booking cards yet. Create them under Calendar → Sessions → Booking Cards.
             </p>
           )}
         </DialogContent>
@@ -270,6 +299,10 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (form._isRecurring && previewDates.length === 0) return toast.error("Pick at least one weekday");
     if (overbook && form.uses_credit !== false && !confirmOverbook) {
       toast.error(`Only ${remaining} session${remaining === 1 ? "" : "s"} available — add sessions or confirm overbooking`);
+      return;
+    }
+    if (conflictBlocked) {
+      toast.error("That time clashes with something on your calendar. Pick another time or switch on \"Book anyway\".");
       return;
     }
     setSaving(true);
@@ -316,6 +349,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           : "Session booked",
     );
     invalidatePtSessionCaches(qc, form.client_id);
+    kickGoogleSync();
     onOpenChange(false);
   };
 
@@ -588,8 +622,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             </div>
             <Toggle label="Show notes to client" checked={form.client_visible_notes} onChange={(v) => set("client_visible_notes", v)} />
             <Toggle label="Show session in client calendar" checked={form.visible_to_client} onChange={(v) => set("visible_to_client", v)} />
-            <Toggle label="Send 24h + 1h reminder emails" checked={form.reminders_enabled} onChange={(v) => set("reminders_enabled", v)} />
-            <Toggle label="Send booking confirmation email" checked={form.send_confirmation_email} onChange={(v) => set("send_confirmation_email", v)} />
+            <Toggle label="Text a reminder at 6 PM the evening before" checked={form.reminders_enabled} onChange={(v) => set("reminders_enabled", v)} />
           </CollapsibleContent>
         </Collapsible>
 
@@ -647,11 +680,35 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           </>
         )}
 
+        {conflictSlots.length > 0 && (
+          <div className="space-y-2">
+            <ConflictNotice
+              check={conflictCheck}
+              override={conflictOverride}
+              onOverride={setConflictOverride}
+              slotLabel={conflictSlots.length > 1 ? (k) => dayLabel(k) : undefined}
+            />
+            {isNewBooking && form._isRecurring && conflictCheck.conflicts.length > 0 && conflictCheck.conflicts.length < previewDates.length && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setForm({ ...form, _skipDates: [...(form._skipDates ?? []), ...conflictCheck.conflicts.map((c) => c.key)] });
+                  setConflictOverride(false);
+                }}
+              >
+                Skip the {conflictCheck.conflicts.length} clashing date{conflictCheck.conflicts.length === 1 ? "" : "s"}
+              </Button>
+            )}
+          </div>
+        )}
+
         <DialogFooter className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button
             onClick={save}
-            disabled={saving || (form.uses_credit !== false && overbook && !confirmOverbook)}
+            disabled={saving || (form.uses_credit !== false && overbook && !confirmOverbook) || conflictBlocked || conflictCheck.checking}
             className="bg-gradient-primary font-bold uppercase"
           >
             {saving

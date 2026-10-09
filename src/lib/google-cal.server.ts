@@ -2,13 +2,14 @@
 // Do not import this from client code.
 
 import { createHmac, timingSafeEqual } from "crypto";
+import { appSessionIdOf, type GoogleEventLike } from "@/lib/session-conflicts";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_API_BASE = "https://www.googleapis.com/calendar/v3";
-const GATEWAY_BASE = "https://connector-gateway.lovable.dev/google_calendar/calendar/v3";
+export const GATEWAY_BASE = "https://connector-gateway.lovable.dev/google_calendar/calendar/v3";
 
-function gatewayHeaders(extra: Record<string, string> = {}): Record<string, string> {
+export function gatewayHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const lov = process.env.LOVABLE_API_KEY;
   const key = process.env.GOOGLE_CALENDAR_API_KEY;
   if (!lov || !key) throw new Error("Google Calendar connector is not configured.");
@@ -23,7 +24,7 @@ export function workspaceCalendarConfigured(): boolean {
   return !!(process.env.LOVABLE_API_KEY && process.env.GOOGLE_CALENDAR_API_KEY);
 }
 
-async function selectedCalendarIdForCoach(coachId: string | null): Promise<string> {
+export async function selectedCalendarIdForCoach(coachId: string | null): Promise<string> {
   if (!coachId) return "primary";
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: conn } = await supabaseAdmin
@@ -257,14 +258,36 @@ export async function gcalFreeBusy(coachId: string, timeMinISO: string, timeMaxI
   return cal?.busy ?? [];
 }
 
-// Returns Google Calendar events for a range (read-only view).
-export async function gcalListEvents(
-  coachId: string | null,
-  timeMinISO: string,
-  timeMaxISO: string,
-): Promise<Array<{ id: string; summary: string; start: string; end: string; allDay: boolean; htmlLink?: string; location?: string; status?: string; hangoutLink?: string }>> {
-  if (!workspaceCalendarConfigured()) return [];
-  const calendarId = await selectedCalendarIdForCoach(coachId);
+/**
+ * Calendars that make up the coach's real schedule: the one the app writes to
+ * (selected in Google Calendar settings) plus their main calendar, where
+ * personal and other appointments usually live.
+ */
+export async function scheduleCalendarIds(coachId: string | null): Promise<string[]> {
+  const selected = await selectedCalendarIdForCoach(coachId);
+  return Array.from(new Set([selected, "primary"]));
+}
+
+export type GcalListedEvent = {
+  id: string;
+  calendarId: string;
+  summary: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  htmlLink?: string;
+  location?: string;
+  status?: string;
+  hangoutLink?: string;
+  transparency?: string | null;
+  /** Set when this event is the Google copy of an app PT session. */
+  appSessionId: string | null;
+  /** Raw shape for the double-booking rules. */
+  raw: GoogleEventLike;
+};
+
+/** Raw events of one calendar in a range (ok=false when that calendar can't be read). */
+async function listCalendarEvents(calendarId: string, timeMinISO: string, timeMaxISO: string): Promise<{ ok: boolean; items: any[] }> {
   const params = new URLSearchParams({
     timeMin: timeMinISO,
     timeMax: timeMaxISO,
@@ -275,19 +298,51 @@ export async function gcalListEvents(
   const res = await fetch(`${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, {
     headers: gatewayHeaders(),
   });
-  const data = await res.json();
-  if (!res.ok) return [];
-  return (data.items ?? [])
-    .filter((e: any) => e.status !== "cancelled" && (e.start?.dateTime || e.start?.date))
-    .map((e: any) => ({
-      id: e.id,
-      summary: e.summary || "(busy)",
-      start: e.start.dateTime || e.start.date,
-      end: e.end?.dateTime || e.end?.date,
-      allDay: !e.start.dateTime,
-      htmlLink: e.htmlLink,
-      location: e.location,
-      status: e.status,
-      hangoutLink: e.hangoutLink,
-    }));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, items: [] };
+  return { ok: true, items: (data.items ?? []) as any[] };
+}
+
+// Returns Google Calendar events for a range across the coach's schedule
+// calendars (read-only view). Same event in two calendars shows once.
+export async function gcalListEvents(
+  coachId: string | null,
+  timeMinISO: string,
+  timeMaxISO: string,
+  calendarIds?: string[],
+  opts: { strict?: boolean } = {},
+): Promise<GcalListedEvent[]> {
+  if (!workspaceCalendarConfigured()) return [];
+  const ids = calendarIds?.length ? calendarIds : await scheduleCalendarIds(coachId);
+  const lists = await Promise.all(
+    ids.map((id) => listCalendarEvents(id, timeMinISO, timeMaxISO).then((r) => ({ id, ...r }))),
+  );
+  // Strict callers (double-booking checks) must not mistake "Google unreachable" for "free".
+  if (opts.strict && lists.every((l) => !l.ok)) throw new Error("Google Calendar could not be read.");
+  const seen = new Set<string>();
+  const out: GcalListedEvent[] = [];
+  for (const { id: calendarId, items } of lists) {
+    for (const e of items) {
+      if (e.status === "cancelled" || !(e.start?.dateTime || e.start?.date)) continue;
+      const key = e.iCalUID || e.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        id: e.id,
+        calendarId,
+        summary: e.summary || "(busy)",
+        start: e.start.dateTime || e.start.date,
+        end: e.end?.dateTime || e.end?.date,
+        allDay: !e.start.dateTime,
+        htmlLink: e.htmlLink,
+        location: e.location,
+        status: e.status,
+        hangoutLink: e.hangoutLink,
+        transparency: e.transparency ?? null,
+        appSessionId: appSessionIdOf(e),
+        raw: e,
+      });
+    }
+  }
+  return out.sort((a, b) => a.start.localeCompare(b.start));
 }

@@ -172,9 +172,9 @@ export const clientNav: NavItem[] = [
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
   { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
   { to: "/portal/resources", label: "Resources", icon: FolderOpen },
-  { to: "/portal/calendar", label: "Calendar", icon: Calendar },
-  { to: "/portal/appointments", label: "Appointments", icon: Calendar },
-  { to: "/portal/events", label: "Events", icon: Calendar },
+  // One Schedule: sessions, calls, events, workouts and key dates (old
+  // Calendar / Appointments / Events pages redirect here).
+  { to: "/portal/calendar", label: "Schedule", icon: Calendar, keywords: ["schedule","calendar","appointments","sessions","events","booking","reschedule","cancel"] },
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 

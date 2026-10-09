@@ -18,7 +18,7 @@ function ClientEventDetailPage() {
   if (!data?.event) return <div className="p-6 text-sm text-muted-foreground">Event not found.</div>;
   return (
     <div className="space-y-4">
-      <PageHeader title="Event" backTo="/portal/events" backLabel="Events" />
+      <PageHeader title="Event" backTo="/portal/calendar" backLabel="Schedule" />
       <ClientEventDetail
         event={data.event}
         links={data.links}

@@ -649,7 +649,7 @@ function destinationFor(it: BellItem, role: string | null) {
     case "check_in_review": return isAdmin && it.clientId
       ? { to: "/admin/clients/$id", params: { id: it.clientId }, search: { tab: "check-ins" as any } }
       : { to: "/portal" } as const;
-    case "appointment": return { to: isAdmin ? "/admin/appointments" : "/portal/appointments" } as const;
+    case "appointment": return { to: isAdmin ? "/admin/calendar" : "/portal/calendar" } as const;
     case "group_message": return { to: isAdmin ? "/admin/messages" : "/portal/messages" } as const;
     default: return isAdmin
       ? { to: "/admin/messages", search: { client: it.clientId } }

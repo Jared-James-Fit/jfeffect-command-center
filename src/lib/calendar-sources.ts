@@ -150,8 +150,10 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     queryFn: async () => {
       const { data } = await supabase
         .from("pt_sessions")
-        .select("id,title,session_type,session_date,start_time,end_time,status,location,notes,client_visible_notes")
-        .eq("client_id", clientId!);
+        .select("id,client_id,title,session_type,session_date,start_time,end_time,starts_at,ends_at,timezone,status,location,notes,client_visible_notes")
+        .eq("client_id", clientId!)
+        // Explicit, not RLS-dependent: a coach in Client POV must see what the client sees.
+        .eq("visible_to_client", true);
       return (data ?? []) as any[];
     },
   });
@@ -291,7 +293,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         title: a.title || a.appointment_type || "Appointment",
         subtitle: [a.appointment_type, a.location].filter(Boolean).join(" · "),
         status: a.status,
-        href: { to: "/portal/appointments" },
+        href: null,
         raw: a,
       });
     }
@@ -301,10 +303,13 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         id: `pt:${s.id}`,
         kind: "pt_session",
         date: s.session_date,
+        startsAt: s.starts_at ?? null,
+        endsAt: s.ends_at ?? null,
         title: s.title || "PT Session",
-        subtitle: [s.session_type, timeFromTimeStr(s.start_time), s.location].filter(Boolean).join(" · "),
+        subtitle: [s.session_type, s.location?.split(",")[0]].filter(Boolean).join(" · "),
         status: s.status,
-        href: { to: "/portal/calendar" },
+        // The Schedule page adds "Need to change it?" to the sheet; no self-link.
+        href: null,
         raw: s,
       });
     }
@@ -530,7 +535,7 @@ export function useAdminCalendarSources(filters: AdminCalendarFilters) {
     queryFn: async () => {
       const { data } = await supabase
         .from("pt_sessions")
-        .select("id,title,session_type,session_date,start_time,end_time,status,location,client_id");
+        .select("id,title,session_type,session_date,start_time,end_time,starts_at,ends_at,timezone,status,location,client_id,uses_credit,google_event_id");
       return (data ?? []) as any[];
     },
   });
@@ -642,8 +647,10 @@ export function useAdminCalendarSources(filters: AdminCalendarFilters) {
         id: `pt:${s.id}`,
         kind: "pt_session",
         date: s.session_date,
+        startsAt: s.starts_at ?? null,
+        endsAt: s.ends_at ?? null,
         title: s.title || "PT Session",
-        subtitle: [s.session_type, timeFromTimeStr(s.start_time), s.location].filter(Boolean).join(" · "),
+        subtitle: [s.session_type, s.location?.split(",")[0]].filter(Boolean).join(" · "),
         status: s.status,
         clientId: s.client_id,
         clientName: c?.full_name ?? null,

@@ -72,7 +72,7 @@ export function SessionsCard({ clientId, nextAppointmentAt }: Props) {
       : "No upcoming sessions";
 
   return (
-    <Link to="/portal/appointments" className="block">
+    <Link to="/portal/calendar" className="block">
       <div className="rounded-2xl border border-border bg-card p-4 hover:bg-accent/40 transition">
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-primary/10 p-2 text-primary"><Ticket className="h-4 w-4" /></div>
