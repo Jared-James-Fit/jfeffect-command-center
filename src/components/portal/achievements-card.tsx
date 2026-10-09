@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Award, Calendar, Camera, ChartLine, ClipboardCheck, Clock, Crown, Droplet, Dumbbell, Flag, Flame, Gem, Hammer, Lock, Medal,
-  MessageSquare, NotebookPen, Ruler, Scale, Shield, Star, Target, Trophy, Video, X, type LucideIcon,
+  Megaphone, MessageSquare, NotebookPen, Ruler, Scale, Shield, Star, Target, Trophy, Users, Video, X, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
@@ -18,7 +18,7 @@ const ICONS: Record<string, LucideIcon> = {
   flag: Flag, dumbbell: Dumbbell, calendar: Calendar, flame: Flame, shield: Shield, hammer: Hammer, notebook: NotebookPen,
   chart: ChartLine, target: Target, medal: Medal, crown: Crown, clock: Clock, star: Star,
   message: MessageSquare, clipboard: ClipboardCheck, camera: Camera, video: Video, scale: Scale, droplet: Droplet,
-  ruler: Ruler, trophy: Trophy, gem: Gem,
+  ruler: Ruler, trophy: Trophy, gem: Gem, users: Users, megaphone: Megaphone,
 };
 
 // Each badge keeps a stable colour identity. Medallion colours are applied as

@@ -149,6 +149,9 @@ export function MonthBreakdown({ me }: { me: LeagueRow }) {
     me.month_start < LEAGUE_RECORDS_START
       ? ["Beat your best", me.improvement_points]
       : [recordLabel(me), me.improvement_points],
+    ...(me.month_start >= LEAGUE_RECORDS_START
+      ? [[`Community posts · ${me.community_posts ?? 0}`, me.community_points ?? 0] as [string, number]]
+      : []),
   ];
   return (
     <ul className="mt-2 space-y-1 text-xs">

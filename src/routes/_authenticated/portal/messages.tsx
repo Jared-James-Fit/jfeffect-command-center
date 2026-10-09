@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
@@ -33,7 +33,16 @@ export const Route = createFileRoute("/_authenticated/portal/messages")({
 
 function ClientMessages() {
   const portalUserId = usePortalUserId();
-  const [tab, setTab] = useState<"coach" | "groups">("coach");
+  // Push links land here as ?tab=groups#group=<id>: open Chats, not Coach Chat.
+  const [tab, setTab] = useState<"coach" | "groups">(() => {
+    if (typeof window === "undefined") return "coach";
+    return /(?:^|[?&])tab=groups\b/.test(window.location.search) || /group=/.test(window.location.hash) ? "groups" : "coach";
+  });
+  useEffect(() => {
+    const onHash = () => { if (/group=/.test(window.location.hash)) setTab("groups"); };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   const groupSummary = useMyGroupSummary();
   const [confirm, setConfirm] = useState<null | "call" | "sms">(null);
   const qc = useQueryClient();
@@ -164,7 +173,7 @@ function ClientMessages() {
         )}
       </header>
 
-      {/* Coach Chat | Group Chats toggle — only when the client has groups */}
+      {/* Coach Chat | Chats toggle: only when they're in a group or have a 1:1 chat / request */}
       {groupSummary.hasGroups && (
         <div className="flex items-center justify-center gap-2 border-b border-border bg-card/60 px-3 py-2">
           <div className="inline-flex rounded-full bg-secondary/60 p-0.5 text-xs">
@@ -184,7 +193,7 @@ function ClientMessages() {
                 tab === "groups" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
               )}
             >
-              Group Chats
+              Chats
               {groupSummary.unread > 0 && (
                 <Badge className="ml-1 h-4 min-w-[16px] rounded-full px-1 text-[10px]">
                   {groupSummary.unread}

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { prefilledBirthdayMessage } from "@/lib/birthday-templates";
+import { sendMessage } from "@/lib/messages";
 import { cn } from "@/lib/utils";
 import { todayLocalISO } from "@/lib/today";
 
@@ -466,14 +467,9 @@ function SendBirthdayMessageDialog({
     setSending(true);
     try {
       const { data: u } = await supabase.auth.getUser();
-      const { error } = await supabase.from("messages").insert({
-        client_id: clientId,
-        sender_id: u.user?.id ?? null,
-        sender_role: "admin",
-        body: body.trim(),
-        message_type: "General",
-      });
-      if (error) throw error;
+      if (!u.user?.id) throw new Error("Sign in again to send");
+      // The normal send path, so they get the push like any coach message.
+      await sendMessage({ clientId, senderId: u.user.id, senderRole: "admin", body: body.trim(), messageType: "General" });
       toast.success(`Birthday message sent to ${firstName || clientName || "client"}`);
       onSent?.();
       onOpenChange(false);

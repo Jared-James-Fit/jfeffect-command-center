@@ -234,7 +234,7 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     parent: "Admin → Sales", roles: ADMIN, icon: BarChart3, keywords: ["revenue", "pipeline"] },
   { id: "taxes-books", label: "Taxes & Books", to: "/admin/sales?tab=taxes", category: "Sales & Payments",
     parent: "Admin → Sales", roles: ADMIN, icon: Landmark,
-    keywords: ["tax", "gst", "hst", "cra", "bookkeeping", "expenses", "receipts", "accountant", "summer ledger"] },
+    keywords: ["tax", "gst", "hst", "cra", "bookkeeping", "expenses", "receipts", "accountant", "cleo", "assistant"] },
   { id: "payments", label: "Payments", to: "/admin/payments", category: "Sales & Payments",
     parent: "Admin → Sales", roles: ADMIN, icon: CreditCard, keywords: ["billing", "charges"] },
   { id: "purchases", label: "Purchases", to: "/admin/purchases", category: "Sales & Payments",

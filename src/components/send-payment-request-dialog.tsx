@@ -33,9 +33,10 @@ export function SendPaymentRequestDialog({
   const { data: groups } = useQuery({
     queryKey: ["payment-request-groups"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("chat_groups")
+      const { data, error } = await (supabase
+        .from("chat_groups") as any)
         .select("id, name, archived")
+        .eq("kind", "group")
         .eq("archived", false)
         .order("name");
       if (error) throw error;
