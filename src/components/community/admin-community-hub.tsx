@@ -15,6 +15,7 @@ import { CoachPostRow } from "@/components/community/community-entry";
 import { NoteEditor } from "@/components/community/note-editor";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
+import { StaffLeagueTab } from "@/components/community/staff-league-board";
 
 /** "Today 7:00 pm" · "Tomorrow 9:00 am" · "Mon 8:00 am", in the coach's own clock. */
 export function whenLabel(iso: string, now: Date = new Date()): string {
@@ -60,74 +61,29 @@ function birthdayPost(p: CommunityPulse): { title: string; when: string | null }
   return null;
 }
 
-/**
- * Dashboard: the community at a glance, always worth reading. How many
- * clients looked this week and how they engaged, then only what needs you
- * (comments to answer, workouts waiting on props, a birthday draft) and
- * what goes out next. The whole card opens the Community page.
- */
-export function CommunityPulseCard() {
-  const { data: p, isLoading } = useCommunityPulse();
-  if (isLoading) return <Skeleton className="h-[104px] w-full rounded-xl" />;
-  if (!p) return null;
-  const replies = groupReplies(p.to_reply).length;
-  const bday = birthdayPost(p);
-  const next = nextPost(p);
-  const lines: { icon: ReactNode; text: string; hot?: boolean }[] = [];
-  if (replies > 0) lines.push({ icon: <MessageCircle className="h-3.5 w-3.5" />, text: replies === 1 ? "1 post has comments to answer" : `${replies} posts have comments to answer`, hot: true });
-  if (p.waiting_props > 0) lines.push({ icon: <Flame className="h-3.5 w-3.5" />, text: `${p.waiting_props} shared ${p.waiting_props === 1 ? "workout" : "workouts"} waiting on your props`, hot: true });
-  if (bday) lines.push({ icon: <Cake className="h-3.5 w-3.5" />, text: p.birthday_review > 0 ? bday.title : `${bday.title} · ${whenLabel(p.birthday_next!.post_at)}`, hot: p.birthday_review > 0 });
-  lines.push({ icon: <CalendarClock className="h-3.5 w-3.5" />, text: next.when && !p.paused ? `${next.title} · ${next.when}` : next.title, hot: p.paused });
-
-  return (
-    <Link to="/admin/community" className="block rounded-xl border border-border bg-card p-4 transition hover:border-primary/40 active:scale-[0.995]" data-no-return>
-      <div className="flex items-center gap-2.5">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
-          <Flame className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-black leading-tight">
-            Community <span className="text-[11px] font-semibold text-muted-foreground">· last 7 days</span>
-          </div>
-          <div className="truncate text-[12px] text-muted-foreground">
-            {p.opened}/{p.roster} opened · {p.reactions} {p.reactions === 1 ? "reaction" : "reactions"} · {p.comments} {p.comments === 1 ? "comment" : "comments"}
-          </div>
-        </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-      </div>
-      <ul className="mt-2.5 space-y-1.5 border-t border-border/70 pt-2.5">
-        {lines.map((l, i) => (
-          <li key={i} className={cn("flex items-center gap-2 text-[12px]", l.hot ? "font-bold text-primary" : "text-muted-foreground")}>
-            <span className="shrink-0">{l.icon}</span>
-            <span className="truncate">{l.text}</span>
-          </li>
-        ))}
-      </ul>
-    </Link>
-  );
-}
-
-type HubTab = "feed" | "daily" | "birthdays";
+type HubTab = "league" | "feed" | "daily" | "birthdays";
 const HUB_TABS: { key: HubTab; label: string }[] = [
+  { key: "league", label: "League" },
   { key: "feed", label: "Feed" },
-  { key: "daily", label: "Daily posts" },
+  { key: "daily", label: "Daily" },
   { key: "birthdays", label: "Birthdays" },
 ];
 
 function tabFromHash(): HubTab {
-  if (typeof window === "undefined") return "feed";
+  if (typeof window === "undefined") return "league";
   const h = window.location.hash;
   if (/birthday=/.test(h) || /tab=birthdays/.test(h)) return "birthdays";
   if (/tab=daily/.test(h)) return "daily";
-  return "feed";
+  if (/tab=feed/.test(h) || /post=/.test(h)) return "feed";
+  return "league";
 }
 
 /**
- * The coach's Community page: the week at a glance with what needs you on
- * top, then three tabs. Feed (react and reply), Daily posts (the schedule,
- * on/off, post now, edit what's next) and Birthdays (drafts to review, who's
- * next, their Home birthday cards). "+ Post" writes to the crew from anywhere
- * on the page.
+ * The coach's League page, behind the raised centre button: League (the
+ * crew goal, this month's standings, the Hall of Strength and the tools to
+ * run them), Feed (the week at a glance, what needs you, then the feed),
+ * Daily (the schedule, on/off, post now, edit what's next) and Birthdays
+ * (drafts to review, who's next). "+ Post" writes to the crew from any tab.
  */
 export function AdminCommunityHub() {
   const [tab, setTab] = useState<HubTab>(tabFromHash);
@@ -137,7 +93,7 @@ export function AdminCommunityHub() {
   return (
     <div className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 sm:px-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-[22px] font-black tracking-tight">Community</h1>
+        <h1 className="text-[22px] font-black tracking-tight">League</h1>
         <button
           type="button"
           onClick={() => setWriting(true)}
@@ -147,10 +103,8 @@ export function AdminCommunityHub() {
         </button>
       </div>
 
-      <PulsePanel onGo={setTab} />
-
-      <div>
-        <div className="grid grid-cols-3 rounded-full bg-muted p-1" role="tablist" aria-label="Community sections">
+      <div className="sticky top-0 z-20 -mx-3 bg-background/95 px-3 py-1.5 md:top-[41px] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-4 sm:px-4">
+        <div className="grid grid-cols-4 rounded-full bg-muted p-1" role="tablist" aria-label="League sections">
           {HUB_TABS.map((t) => (
             <button
               key={t.key}
@@ -166,10 +120,17 @@ export function AdminCommunityHub() {
         </div>
       </div>
 
-      {tab === "feed" ? (
-        <div className="-mx-3 sm:-mx-4">
-          <CommunityScreen hideTabs />
-        </div>
+      {tab !== "feed" && <NeedsYouStrip onGo={setTab} />}
+
+      {tab === "league" ? (
+        <StaffLeagueTab />
+      ) : tab === "feed" ? (
+        <>
+          <PulsePanel onGo={setTab} />
+          <div className="-mx-3 sm:-mx-4">
+            <CommunityScreen hideTabs />
+          </div>
+        </>
       ) : tab === "daily" ? (
         <CoachWeeklyPosts />
       ) : (
@@ -195,7 +156,36 @@ export function AdminCommunityHub() {
   );
 }
 
-/** The top of the Community page: four numbers, then what needs you. */
+/**
+ * One line, only when something is waiting on the coach (comments to answer,
+ * workouts waiting on props, a birthday draft to approve). Tapping it opens
+ * the tab that has them, so nothing is missed from the League tab.
+ */
+function NeedsYouStrip({ onGo }: { onGo: (t: HubTab) => void }) {
+  const { data: p } = useCommunityPulse();
+  if (!p) return null;
+  const replies = groupReplies(p.to_reply).length;
+  const parts = [
+    replies > 0 && `${replies} to reply`,
+    p.waiting_props > 0 && `${p.waiting_props} waiting on props`,
+    p.birthday_review > 0 && `${p.birthday_review} birthday ${p.birthday_review === 1 ? "post" : "posts"} to approve`,
+  ].filter(Boolean) as string[];
+  if (!parts.length) return null;
+  const onlyBirthdays = replies === 0 && p.waiting_props === 0;
+  return (
+    <button
+      type="button"
+      onClick={() => onGo(onlyBirthdays ? "birthdays" : "feed")}
+      className="flex w-full items-center gap-2.5 rounded-2xl border border-primary/30 bg-primary/10 px-3.5 py-2.5 text-left text-[13px] font-bold text-primary active:scale-[0.99]"
+    >
+      <Flame className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">Needs you: {parts.join(" · ")}</span>
+      <ChevronRight className="h-4 w-4 shrink-0" />
+    </button>
+  );
+}
+
+/** The top of the Feed tab: four numbers, then what needs you. */
 function PulsePanel({ onGo }: { onGo: (t: HubTab) => void }) {
   const { user } = useAuth();
   const { data: unit = "lb" } = useViewerUnit(user?.id);

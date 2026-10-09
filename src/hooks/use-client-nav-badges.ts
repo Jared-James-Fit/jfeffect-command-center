@@ -138,13 +138,16 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   const { data: directs } = useDirectThreads(enabled);
   const { data: crews } = useCrewThreads(enabled);
   // New community posts since you last opened it (cleared server-side when you do).
-  const { data: community } = useCommunityActivity(enabled);
+  // Staff see the same count on their League button.
+  const { data: community } = useCommunityActivity(enabled || adminEnabled);
 
   // Admin/coach nav badges — shared single source of truth
   const { data: adminCounts } = useAdminNavBadgeCounts(adminEnabled);
 
   if (adminEnabled) {
-    return adminBadgeMap(adminCounts);
+    const map = adminBadgeMap(adminCounts);
+    if (community?.enabled && community.unseen > 0) map["/admin/community"] = { count: community.unseen };
+    return map;
   }
 
   if (!enabled || !data) return {};

@@ -48,7 +48,8 @@ export function CommunityNavButton({ className }: { className?: string }) {
   if (!eligible || hidden || !data?.enabled || data.unseen <= 0) return null;
   const n = data.unseen;
   return (
-    <Link to="/admin/community" aria-label={`Community, ${n} new`} className={cn("inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-black text-white shadow-sm", NEW_GRADIENT, className)}>
+    // Phones have the League button in the bar with the same count.
+    <Link to="/admin/community" aria-label={`Community, ${n} new`} className={cn("hidden h-9 shrink-0 md:inline-flex items-center gap-1 rounded-full px-3 text-[12px] font-black text-white shadow-sm", NEW_GRADIENT, className)}>
       <Flame className="h-3.5 w-3.5" /> {n > 9 ? "9+" : n} new
     </Link>
   );

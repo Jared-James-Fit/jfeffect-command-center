@@ -292,12 +292,15 @@ const REGISTRY: Entry[] = [
 ];
 
 /**
- * Every staff account's phone bar (admin, coach): four plain tabs, no
- * pop-ups. More opens from the header, as in the client app.
+ * Every staff account's phone bar (admin, coach), laid out like the client
+ * app: plain tabs with League as the raised centre button (the crew's
+ * league, the feed, daily and birthday posts, and the tools to run them).
+ * More opens from the header.
  */
 export const STAFF_BAR: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Users },
+  { to: "/admin/community", label: "League", icon: Trophy, featured: true },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
 ];
