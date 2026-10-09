@@ -7,10 +7,12 @@ import { buildInternalNav, buildInternalNavCollapsed, buildMembershipAdminNav, r
 import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
+import { SummerAssistant } from "@/components/summer/summer-assistant";
+import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
+import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
 import { ClipboardList, LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
-import { StaffMfaGate } from "@/components/staff-mfa-gate";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
@@ -59,11 +61,14 @@ function AdminLayout() {
   // Falls back to the legacy per-role registries if the role isn't yet
   // mapped (defensive — keeps existing behaviour for unknown future roles).
   const roleTag = resolveStaffRoleTag(role);
-  const nav = isMembership && roleTag === "admin"
+  const isOwner = useIsBusinessOwner();
+  const fullNav = isMembership && roleTag === "admin"
     ? buildMembershipAdminNav()
     : roleTag
       ? buildInternalNavCollapsed(roleTag, { mode: "coaching" })
       : (isCoach ? coachNav : coachingAdminNav);
+  // Owner-only pages (Taxes & Books) stay out of other admins' menus.
+  const nav = isOwner === false ? withoutOwnerOnly(fullNav) : fullNav;
   const title = isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
   // Use a dedicated "membership" bar scope when in membership mode so the
   // admin can customize a different floating bar for member-facing ops.
@@ -142,12 +147,12 @@ function AdminLayout() {
   }
 
   return (
-    <StaffMfaGate>
-      <AppShell items={nav} bottomItems={bottomItems} title={title}>
-        <AdminTopBar showDashboardMode={!isCoach} />
-        <Outlet />
-        <TaskPopupGate />
-      </AppShell>
-    </StaffMfaGate>
+    <AppShell items={nav} bottomItems={bottomItems} title={title}>
+      <AdminTopBar showDashboardMode={!isCoach} />
+      <Outlet />
+      <TaskPopupGate />
+      <ReturnToDashboardPill />
+      {role === "admin" && <SummerAssistant />}
+    </AppShell>
   );
 }

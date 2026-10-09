@@ -1,18 +1,17 @@
 -- Permissions on top of roles.
 --
 -- role_permissions maps an app_role to named permissions ("area.verb").
--- has_permission(uid, perm) answers "may this user do this?" and is what new
--- RLS policies and server code check, instead of hard-coding role names.
+-- has_permission(uid, perm) answers "may this user do this?" and is what RLS
+-- and server code check, instead of hard-coding role names.
 --
 -- Rules:
---   * admin has every permission (no seed row needed, so a new permission
---     can never lock the owner out).
---   * Checking your OWN permissions requires an MFA-verified session (aal2).
---     Every permission here is staff-level (finance.*, roles.*), and admin
---     and finance must use MFA. A password alone never satisfies a policy
---     that uses has_permission.
---   * The mapping is changed by migrations only. There are no write
---     policies, so nobody can grant themselves a permission from the app.
+--   * finance.* belongs to the business owner (business_owners, #339) plus
+--     whatever role_permissions grants. Admins who aren't the owner don't
+--     get the books, matching the owner-only Taxes & Books rule.
+--   * Any other permission: admins have it (no seed row needed).
+--   * Checking your OWN permissions requires an MFA-verified session (aal2),
+--     so a password alone never opens the books.
+--   * The mapping changes through migrations only (no write policies).
 
 CREATE TABLE IF NOT EXISTS public.role_permissions (
   role public.app_role NOT NULL,
@@ -52,11 +51,11 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT _uid IS NOT NULL
-    -- Your own permissions only count in an MFA-verified session.
     AND (_uid IS DISTINCT FROM auth.uid() OR public.session_mfa_verified())
     AND (
-      EXISTS (SELECT 1 FROM public.user_roles ur
-               WHERE ur.user_id = _uid AND ur.role = 'admin')
+      (_perm LIKE 'finance.%' AND public.is_business_owner(_uid))
+      OR (_perm NOT LIKE 'finance.%' AND EXISTS (
+            SELECT 1 FROM public.user_roles ur WHERE ur.user_id = _uid AND ur.role = 'admin'))
       OR EXISTS (SELECT 1 FROM public.user_roles ur
                    JOIN public.role_permissions rp ON rp.role = ur.role
                   WHERE ur.user_id = _uid AND rp.permission = _perm)

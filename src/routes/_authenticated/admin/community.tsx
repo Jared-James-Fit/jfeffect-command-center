@@ -1,19 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader } from "@/components/app-shell";
-import { CommunityScreen } from "@/components/community/community-screen";
-import { CoachWeeklyPosts } from "@/components/community/coach-weekly-posts";
+import { AdminCommunityHub } from "@/components/community/admin-community-hub";
 
+/**
+ * The coach's Community page: the week at a glance and what needs you, then
+ * Feed / Daily posts / Birthdays, and "+ Post". `#post=<id>` opens a post,
+ * `#birthday=<id>` or `#tab=birthdays` / `#tab=daily` opens that tab.
+ */
 export const Route = createFileRoute("/_authenticated/admin/community")({
   head: () => ({ meta: [{ title: "Community" }] }),
-  component: AdminCommunity,
+  component: AdminCommunityHub,
 });
-
-function AdminCommunity() {
-  return (
-    <>
-      <PageHeader title="Community" subtitle="Workouts clients chose to share. A reaction or comment from you shows as Coach recognition." />
-      <CoachWeeklyPosts />
-      <CommunityScreen />
-    </>
-  );
-}

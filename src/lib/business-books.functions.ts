@@ -1,13 +1,9 @@
 /**
  * business-books.functions.ts
  *
- * Server functions for Taxes & Books and Summer Ledger, for anyone with the
- * finance permissions (admin, finance) in an MFA-verified session:
- *   finance.read   – load the books, Summer
- *   finance.record – add/edit expenses, receipts, tax payments, settings
- *   finance.delete – delete books records (admin only)
+ * Admin-only server functions for Taxes & Books (Sales hub) and Cleo.
  * Reads and writes go through the caller's RLS-scoped client; the tables and
- * the receipts bucket enforce the same permissions (has_permission).
+ * the receipts bucket only admit admins.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -27,9 +23,8 @@ export const getBooksData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    const { loadBooksData } = await import("@/lib/business-books.server");
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.read");
+    const { assertBooksAccess, loadBooksData } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.read");
     return loadBooksData(supabase);
   });
 
@@ -57,8 +52,8 @@ export const saveExpense = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ExpenseInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.record");
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const row = {
       expense_date: data.expense_date,
       vendor: data.vendor || null,
@@ -93,8 +88,8 @@ export const deleteExpense = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.delete");
+    const { assertBusinessOwner } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     const { data: row } = await supabase.from("business_expenses").select("receipt_path").eq("id", data.id).maybeSingle();
     const { error } = await supabase.from("business_expenses").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -107,15 +102,15 @@ export const markExpensesReviewed = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.record");
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const { error } = await supabase.from("business_expenses").update({ status: "reviewed" }).in("id", data.ids);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
 // ---------------------------------------------------------------------------
-// Receipts: the owner uploads the photo/PDF to the private bucket, then Summer
+// Receipts: the owner uploads the photo/PDF to the private bucket, then Cleo
 // reads it and files an expense. The expense is created even if reading
 // fails, so a receipt is never lost; it is just flagged for review.
 
@@ -155,7 +150,7 @@ export const scanReceipt = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const server = await import("@/lib/business-books.server");
-    await (await import("@/lib/permissions.server")).assertPermission(context as any, "finance.record");
+    await server.assertBooksAccess(context as any, "finance.record");
     const today = businessToday();
 
     let read: import("@/lib/business-books.server").ReceiptRead | null = null;
@@ -221,8 +216,8 @@ export const saveTaxSettings = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SettingsInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.record");
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const { error } = await supabase
       .from("business_tax_settings")
       .upsert({ id: true, ...data, gst_number: data.gst_number || null, accountant_name: data.accountant_name || null, notes: data.notes || null, updated_at: new Date().toISOString(), updated_by: userId });
@@ -245,8 +240,8 @@ export const addTaxPayment = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => PaymentInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.record");
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const { error } = await supabase.from("business_tax_payments").insert({
       ...data,
       period_label: data.period_label || null,
@@ -262,8 +257,8 @@ export const deleteTaxPayment = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.delete");
+    const { assertBusinessOwner } = await import("@/lib/business-books.server");
+    await assertBusinessOwner(supabase, userId);
     const { error } = await supabase.from("business_tax_payments").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -277,8 +272,8 @@ export const syncStripeFees = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ year: z.number().int().min(2020).max(2100) }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.record");
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const { stripeFetch, getStripeKeyForMode } = await import("@/lib/stripe.server");
     const { aggregateStripeFees, stripeFeesExternalKey } = await import("@/lib/stripe-fees");
     const { MONTH_NAMES } = await import("@/lib/business-tax");
@@ -352,14 +347,14 @@ export const syncStripeFees = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
-// Summer Ledger
+// Cleo
 
 export const getSummerMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.read");
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
     const { data, error } = await supabase
       .from("summer_messages")
       .select("id, role, content, created_at")
@@ -370,51 +365,71 @@ export const getSummerMessages = createServerFn({ method: "GET" })
     return ((data ?? []) as Array<{ id: string; role: "user" | "assistant"; content: string; created_at: string }>).reverse();
   });
 
+const AskInput = z.object({
+  message: z.string().trim().min(1).max(4000),
+  year: z.number().int().min(2000).max(2100).optional(),
+  route: z.string().max(300).optional(),
+  voice: z.boolean().optional(),
+});
+
 export const askSummer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ message: z.string().trim().min(1).max(4000), year: z.number().int().min(2000).max(2100) }).parse(d))
+  .inputValidator((d: unknown) => AskInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const server = await import("@/lib/business-books.server");
-    await (await import("@/lib/permissions.server")).assertPermission(context as any, "finance.read");
-    const { buildSummerContext, summerSystemPrompt } = await import("@/lib/summer-context");
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
+    const { answerSummer } = await import("@/lib/summer.server");
+    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice });
+  });
 
-    const [books, history] = await Promise.all([
-      server.loadBooksData(supabase),
-      supabase
-        .from("summer_messages")
-        .select("role, content")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(16),
+const VoiceInput = z.object({
+  /** Base64 audio (webm/opus on most browsers, mp4/aac on iPhone). ~45s max. */
+  audio: z.string().min(16).max(4_000_000),
+  mime: z.string().max(80),
+  year: z.number().int().min(2000).max(2100).optional(),
+  route: z.string().max(300).optional(),
+});
+
+/** Talk to Cleo: hear the question, answer it in voice mode. */
+export const askSummerVoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => VoiceInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
+    const { answerSummer, transcribeAudio } = await import("@/lib/summer.server");
+    const transcript = await transcribeAudio(data.audio, data.mime);
+    if (!transcript) return { transcript: "", user: null, assistant: null };
+    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true });
+    return { transcript, ...res };
+  });
+
+/** Cleo's voice for a reply. ok:false means the browser should use a device voice. */
+export const summerSpeech = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ text: z.string().trim().min(1).max(1500) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
+    const { synthesizeSpeech } = await import("@/lib/summer.server");
+    return synthesizeSpeech(data.text);
+  });
+
+/** Light read for the global Cleo button: this admin's Cleo settings and whether they own the books. */
+export const getSummerProfile = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    const { assertAdmin, isBusinessOwner } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
+    const [{ data }, owner] = await Promise.all([
+      supabase.from("summer_profiles").select("tone, instructions").eq("user_id", userId).maybeSingle(),
+      isBusinessOwner(supabase, userId),
     ]);
-    const year = books.years.includes(data.year) ? data.year : Number(books.asOf.slice(0, 4));
-
-    const past = ((history.data ?? []) as Array<{ role: string; content: string }>).reverse();
-    const reply = await server.gatewayChat([
-      {
-        role: "system",
-        content: `${summerSystemPrompt({ tone: books.settings?.assistant_tone, instructions: books.settings?.assistant_instructions })}\n\nBOOKS\n${buildSummerContext(books, year)}`,
-      },
-      ...past.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
-      { role: "user", content: data.message },
-    ]);
-    const text = reply.trim() || "I couldn't come up with an answer to that. Try asking it another way.";
-
-    // Saved only once there is an answer, so a failed call leaves no orphan question.
-    const now = Date.now();
-    const { data: saved, error: saveErr } = await supabase
-      .from("summer_messages")
-      .insert([
-        { user_id: userId, role: "user", content: data.message, created_at: new Date(now).toISOString() },
-        { user_id: userId, role: "assistant", content: text, created_at: new Date(now + 1).toISOString() },
-      ])
-      .select("id, role, content, created_at");
-    if (saveErr) throw new Error(saveErr.message);
-    const rows = (saved ?? []) as Array<{ id: string; role: "user" | "assistant"; content: string; created_at: string }>;
-    const userMsg = rows.find((r) => r.role === "user")!;
-    const botMsg = rows.find((r) => r.role === "assistant")!;
-    return { user: userMsg, assistant: botMsg };
+    return { tone: (data?.tone as string | null) ?? null, instructions: (data?.instructions as string | null) ?? null, isOwner: owner };
   });
 
 const SummerSettingsInput = z.object({
@@ -422,17 +437,17 @@ const SummerSettingsInput = z.object({
   instructions: z.string().trim().max(2000).nullable(),
 });
 
-/** Customize Summer: her vibe and the owner's own instructions. */
+/** Customize Cleo: her vibe and this admin's own instructions. */
 export const saveSummerSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SummerSettingsInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.record");
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
     const { error } = await supabase
-      .from("business_tax_settings")
-      .upsert({ id: true, assistant_tone: data.tone, assistant_instructions: data.instructions || null, updated_at: new Date().toISOString(), updated_by: userId });
+      .from("summer_profiles")
+      .upsert({ user_id: userId, tone: data.tone, instructions: data.instructions || null, updated_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -441,8 +456,8 @@ export const clearSummer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    const { assertPermission } = await import("@/lib/permissions.server");
-    await assertPermission(context as any, "finance.read");
+    const { assertAdmin } = await import("@/lib/business-books.server");
+    await assertAdmin(supabase, userId);
     const { error } = await supabase.from("summer_messages").delete().eq("user_id", userId);
     if (error) throw new Error(error.message);
     return { ok: true };

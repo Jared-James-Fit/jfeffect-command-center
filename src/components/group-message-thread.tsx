@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -68,11 +68,23 @@ async function uploadGroupFile(
 
 export function GroupMessageThread({
   groupId, canPost, canManage, groupName,
+  canReact = true, textOnly = false, hidePresence = false, footer, placeholder, oneToOne = false,
 }: {
   groupId: string;
   canPost: boolean;
   canManage: boolean;
   groupName: string;
+  /** Direct chats before they're accepted: a heart would say "seen". */
+  canReact?: boolean;
+  /** A message request: words only, no photos, files or voice notes. */
+  textOnly?: boolean;
+  /** Previewing a request: don't show up as "active now" to the sender. */
+  hidePresence?: boolean;
+  /** Shown in place of the composer when you can't post (e.g. Accept / Delete). */
+  footer?: ReactNode;
+  placeholder?: string;
+  /** Two people: no name over every bubble, it's always them. */
+  oneToOne?: boolean;
 }) {
   const { user, role: authRole } = useAuth();
   // Admins can silently delete any group message (no placeholder for anyone).
@@ -158,7 +170,8 @@ export function GroupMessageThread({
   });
   const messages = Array.isArray(rawMessages) ? rawMessages : [];
   const reactions = Array.isArray(rawReactions) ? rawReactions : [];
-  const members = Array.isArray(rawMembers) ? rawMembers : [];
+  // Invitees haven't joined yet: they aren't "not seen" (and their read time is private anyway).
+  const members = (Array.isArray(rawMembers) ? rawMembers : []).filter((m: any) => m.status !== "invited");
   const memberProfiles = Array.isArray(rawMemberProfiles) ? rawMemberProfiles : [];
 
   const { data: chatSettings } = useQuery({
@@ -176,7 +189,7 @@ export function GroupMessageThread({
   const viewingAsClient = useViewingAsClient();
   // Coach "View as client": confirm before anything goes out under the member's name.
   const povGuard = usePovSendGuard();
-  const { others: livePeers } = useGroupPresence(viewingAsClient ? null : groupId, myPresenceRole);
+  const { others: livePeers } = useGroupPresence(viewingAsClient || hidePresence ? null : groupId, myPresenceRole);
   const liveUserIds = useMemo(() => new Set(livePeers.map((p) => p.user_id)), [livePeers]);
 
   /* ---------------- Realtime ---------------- */
@@ -229,6 +242,7 @@ export function GroupMessageThread({
         if (cancelled) return;
         qc.invalidateQueries({ queryKey: ["group-unread"] });
         qc.invalidateQueries({ queryKey: ["group-memberships"] });
+        qc.invalidateQueries({ queryKey: ["direct-threads"] });
       });
     };
     if (typeof document === "undefined" || document.visibilityState === "visible") {
@@ -333,7 +347,7 @@ export function GroupMessageThread({
   /* ---------------- Reactions (optimistic) ---------------- */
 
   const onToggleReaction = (messageId: string, emoji: string) => {
-    if (!user) return;
+    if (!user || !canReact) return;
     const key = ["group-reactions", groupId] as const;
     const prev = qc.getQueryData<GroupReaction[]>(key) ?? reactions;
     const mineOnMsg = prev.filter((r) => r.user_id === user.id && r.message_id === messageId);
@@ -729,7 +743,7 @@ export function GroupMessageThread({
                   }}
                 >
                   {/* Sender label (incoming only) */}
-                  {!mine && !isDeleted && (
+                  {!mine && !isDeleted && !oneToOne && (
                     <div className={cn(
                       "mb-0.5 flex items-center gap-1 text-[10px] font-semibold",
                       "text-muted-foreground",
@@ -870,6 +884,7 @@ export function GroupMessageThread({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align={mine ? "end" : "start"} className="w-44">
+                          {canReact && (<>
                           <div className="flex items-center justify-around px-1 py-1.5">
                             {GROUP_REACTION_EMOJIS.map((emoji) => (
                               <button
@@ -886,6 +901,7 @@ export function GroupMessageThread({
                             ))}
                           </div>
                           <DropdownMenuSeparator />
+                          </>)}
                           <DropdownMenuItem onClick={() => { setActionsForId(null); setSeenForId(m.id); }}>
                             <Eye className="mr-2 h-4 w-4" /> Seen by
                           </DropdownMenuItem>
@@ -940,7 +956,7 @@ export function GroupMessageThread({
       {(isAdmin || authRole === "coach") && <DeletedMessagesStrip groupId={groupId} />}
 
       {/* Composer */}
-      {canPost ? (
+      {!canPost && footer ? footer : canPost ? (
         <div
           className="space-y-2 border-t border-border bg-background/95 px-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:pt-3 pb-[max(env(safe-area-inset-bottom),0.5rem)]"
         >
@@ -1013,7 +1029,7 @@ export function GroupMessageThread({
             </div>
           ) : (
             <div className="flex items-end gap-1.5">
-              <ComposerPlusMenu
+              {!textOnly && <ComposerPlusMenu
                 role={canManage ? "admin" : "member"}
                 surface="group"
                 clientIds={memberClients}
@@ -1093,7 +1109,7 @@ export function GroupMessageThread({
                     setSending(false);
                   }
                 }}
-              />
+              />}
 
               {canManage && (
                 <MeetQuickAction
@@ -1111,7 +1127,7 @@ export function GroupMessageThread({
                   const el = scrollerRef.current;
                   if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
                 }}
-                placeholder={`Message ${groupName}…`}
+                placeholder={placeholder ?? `Message ${groupName}…`}
                 enterKeyHint="enter"
                 className="min-h-10 max-h-40 flex-1 resize-none rounded-[20px] border-input bg-background px-4 py-[9px] text-base leading-5 sm:text-sm sm:leading-5"
                 onFocus={() => {
@@ -1145,6 +1161,10 @@ export function GroupMessageThread({
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
+                </Button>
+              ) : textOnly ? (
+                <Button type="button" size="icon" disabled className="h-10 w-10 shrink-0 rounded-full bg-primary" aria-label="Send">
+                  <Send className="h-4 w-4" />
                 </Button>
               ) : (
                 <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-full"
@@ -1210,7 +1230,7 @@ export function GroupMessageThread({
             const mine = m.sender_id === user?.id;
             const canEdit = mine && !m.deleted_at && (m.body?.length ?? 0) > 0;
             const canDelete = deletableIds.has(m.id);
-            const canReact = !m.deleted_at;
+            const canReactHere = canReact && !m.deleted_at;
             return (
               <>
                 <SheetHeader className="text-left">
@@ -1219,7 +1239,7 @@ export function GroupMessageThread({
                     {m.deleted_at ? "This message was deleted." : m.body || (m.attachments?.length ? "Attachment" : "")}
                   </SheetDescription>
                 </SheetHeader>
-                {canReact && (
+                {canReactHere && (
                   <div className="mt-3 flex items-center justify-around rounded-full border border-border bg-secondary/40 px-2 py-2">
                     {GROUP_REACTION_EMOJIS.map((emoji) => {
                       const minePicked = myReactions.some((r) => r.message_id === m.id && r.emoji === emoji);

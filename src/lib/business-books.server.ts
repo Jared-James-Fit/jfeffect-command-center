@@ -1,9 +1,8 @@
 /**
- * Server-side loading for Taxes & Books and Summer Ledger. Every query runs on
- * the caller's (RLS-scoped) client, so only finance.read holders (admin,
- * finance) ever get rows back. Payer and offer names come from books_labels()
- * and open sales from books_open_sales(): finance can't read client, member or
- * purchase rows directly.
+ * Server-side loading for Taxes & Books and Cleo. Every query runs on
+ * the caller's (RLS-scoped) client, so only the owner and finance logins get
+ * rows back. Payer and offer names come from books_labels() and open sales
+ * from books_open_sales(): finance can't read client, member or purchase rows.
  */
 import type { BooksData, ExpenseRow, LedgerRowIn, MemberLedgerRowIn, OpenSaleRow, TaxPaymentRow, TaxSettingsRow } from "@/lib/business-books";
 import { booksYears, normalizeRevenue } from "@/lib/business-books";
@@ -12,9 +11,80 @@ import { businessToday } from "@/lib/billing-schedule";
 
 const OPEN_SALE_STATUSES = ["Unpaid", "Pending", "Pending Payment", "Payment Link Sent", "Partially Paid", "Not Sent"];
 
+export async function assertAdmin(supabase: any, userId: string) {
+  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const roles = (data ?? []).map((r: any) => r.role);
+  if (!roles.includes("admin")) throw new Error("Forbidden: admin only");
+}
+
+/**
+ * The books (Taxes & Books, expenses, receipts, tax settings) belong to the
+ * business owner, not every admin. Enforced by RLS too; this gives a clear
+ * error instead of empty results.
+ */
+export async function isBusinessOwner(supabase: any, userId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_business_owner", { _uid: userId });
+  return !error && data === true;
+}
+
+export async function assertBusinessOwner(supabase: any, userId: string) {
+  await assertAdmin(supabase, userId);
+  if (!(await isBusinessOwner(supabase, userId))) throw new Error("Taxes & Books is private to the business owner.");
+}
+
+/**
+ * Read or record in the books: the business owner, or a finance login with
+ * the permission (MFA-verified, see has_permission). Deleting stays with the
+ * owner (assertBusinessOwner). Returns who is acting.
+ */
+export async function assertBooksAccess(
+  ctx: { supabase: any; userId: string; claims?: Record<string, any> | null },
+  perm: "finance.read" | "finance.record",
+): Promise<"owner" | "finance"> {
+  if (await isBusinessOwner(ctx.supabase, ctx.userId)) return "owner";
+  const { data: roles } = await ctx.supabase.from("user_roles").select("role").eq("user_id", ctx.userId);
+  if (!(roles ?? []).some((r: any) => r.role === "finance")) {
+    throw new Error("Taxes & Books is private to the business owner.");
+  }
+  const { assertPermission } = await import("@/lib/permissions.server");
+  await assertPermission(ctx, perm);
+  return "finance";
+}
+
 function must<T>(res: { data: T; error: any }, what: string): T {
   if (res.error) throw new Error(`Could not load ${what}: ${res.error.message ?? res.error}`);
   return res.data;
+}
+
+/** Assigned sales that aren't fully paid (operational, not tax data). */
+export async function loadOpenSales(supabase: any): Promise<OpenSaleRow[]> {
+  const res = await supabase
+    .from("purchase_records")
+    .select("id, offer_name, payment_status, amount_outstanding_cents, full_payable_amount, amount_paid, created_at, clients(full_name)")
+    .in("payment_status", OPEN_SALE_STATUSES)
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  return toOpenSales(res.error ? [] : res.data ?? []);
+}
+
+function toOpenSales(rows: any[]): OpenSaleRow[] {
+  return rows
+    .map((p) => {
+      const outstanding =
+        p.amount_outstanding_cents != null
+          ? Number(p.amount_outstanding_cents)
+          : Math.max(0, Math.round((Number(p.full_payable_amount) || 0) * 100) - Math.round((Number(p.amount_paid) || 0) * 100));
+      return {
+        id: p.id,
+        client: p.clients?.full_name ?? null,
+        offer: p.offer_name ?? null,
+        status: p.payment_status ?? null,
+        outstandingMinor: outstanding,
+        createdOn: p.created_at ? String(p.created_at).slice(0, 10) : null,
+      };
+    })
+    .filter((o) => o.outstandingMinor > 0);
 }
 
 type BooksLabels = { clients: Record<string, string | null>; purchases: Record<string, string | null>; members: Record<string, string | null> };
@@ -111,8 +181,8 @@ export async function gatewayChat(messages: any[], opts: { model?: string } = {}
     headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
     body: JSON.stringify({ model: opts.model ?? BOOKS_AI_MODEL, messages }),
   });
-  if (resp.status === 429) throw new Error("Summer is getting too many requests. Try again in a minute.");
-  if (resp.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Summer.");
+  if (resp.status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
+  if (resp.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
     throw new Error(`AI request failed (${resp.status})${text ? `: ${text.slice(0, 200)}` : ""}`);
