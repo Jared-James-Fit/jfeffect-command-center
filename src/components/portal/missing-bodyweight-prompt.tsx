@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { latestLoggedUnit, useBodyweightUnit } from "@/lib/use-bodyweight-unit";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Scale, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -28,7 +29,6 @@ export function MissingBodyweightPrompt({ userId, defaultUnit = "lb" }: { userId
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [val, setVal] = useState("");
-  const [unit, setUnit] = useState<"kg" | "lb">(defaultUnit);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
 
@@ -38,6 +38,9 @@ export function MissingBodyweightPrompt({ userId, defaultUnit = "lb" }: { userId
     queryFn: () => getCombinedBodyweightSeries(userId, 200),
     staleTime: 30_000,
   });
+  // kg / lb is remembered on the account every time it's toggled
+  const lastLoggedUnit = useMemo(() => latestLoggedUnit(rows ?? []), [rows]);
+  const { unit, setUnit } = useBodyweightUnit(userId, { lastLogged: lastLoggedUnit, fallback: defaultUnit });
   const hasBodyweight = (rows ?? []).some((r) => Number.isFinite(r.value) && r.value > 0);
   const eligible = role === "client" && isSuccess && !hasBodyweight;
 
