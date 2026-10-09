@@ -19,8 +19,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
-import { BookingCardsPanel } from "@/components/booking-cards/booking-cards-panel";
-import type { BookingCard } from "@/lib/booking-cards";
 import {
   AdjustPtCreditDialog, CancelPtSessionDialog, DeletePtSessionDialog, NoShowPtDialog,
 } from "@/components/pt-session-manage-dialogs";
@@ -47,10 +45,8 @@ export function PtCalendarPanel() {
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const [tab, setTab] = useState<TabKey>("upcoming");
-  const [section, setSection] = useState<"sessions" | "cards">("sessions");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [cardFor, setCardFor] = useState<BookingCard | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({ client: "all", type: "all", location: "", from: "", to: "" });
   const [noShowFor, setNoShowFor] = useState<any>(null);
@@ -290,27 +286,12 @@ export function PtCalendarPanel() {
   return (
     <>
       <PageHeader title="Sessions" subtitle="Every 1:1 session in one list: book, move, close out." actions={
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setCardFor(null); setOpen(true); }}>
+        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Quick Book
         </Button>
       } />
       <div className="p-3 sm:p-6 md:p-8 space-y-4">
-        <Tabs value={section} onValueChange={(v) => setSection(v as "sessions" | "cards")}>
-          <TabsList className="flex w-full flex-wrap h-auto gap-1 sm:w-max">
-            <TabsTrigger value="sessions">Sessions</TabsTrigger>
-            <TabsTrigger value="cards">Booking Cards</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        {section === "cards" && (
-          <BookingCardsPanel
-            clients={clients}
-            onBook={(card) => { setCardFor(card); setEditing(null); setOpen(true); }}
-          />
-        )}
-
-        {section === "sessions" && (
-          <>
+        <>
             <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
               <TabsList className="flex w-full flex-wrap h-auto gap-1 sm:w-max">
                 <TabsTrigger value="upcoming">Upcoming ({groups.upcoming.length})</TabsTrigger>
@@ -368,11 +349,10 @@ export function PtCalendarPanel() {
                 <ul className="divide-y divide-border">{visible.map(sessionRow)}</ul>
               )}
             </Card>
-          </>
-        )}
+        </>
       </div>
 
-      <PtSessionDialog open={open} onOpenChange={setOpen} clients={clients} initial={editing ?? undefined} initialCard={cardFor} />
+      <PtSessionDialog open={open} onOpenChange={setOpen} clients={clients} initial={editing ?? undefined} />
       <SessionActionsSheet
         session={moveFor}
         clientName={moveFor?.clients?.full_name}

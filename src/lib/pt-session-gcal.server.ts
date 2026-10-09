@@ -57,7 +57,22 @@ type SessionRow = {
   google_event_id: string | null;
   google_calendar_id: string | null;
   gcal_attempts: number | null;
+  wants_meet?: boolean | null;
+  meet_link?: string | null;
 };
+
+// Unique per attempt: Google ignores a repeated requestId, so a restored
+// session would otherwise come back without a new Meet.
+const MEET_REQUEST = (sessionId: string) => ({
+  createRequest: {
+    requestId: `pt-${sessionId}-${Date.now().toString(36)}`,
+    conferenceSolutionKey: { type: "hangoutsMeet" },
+  },
+});
+
+function meetLinkOf(event: any): string | null {
+  return event?.hangoutLink || event?.conferenceData?.entryPoints?.find((e: any) => e.entryPointType === "video")?.uri || null;
+}
 
 export function sessionEventBody(s: SessionRow, clientName: string | null) {
   const tz = s.timezone || DEFAULT_TZ;
@@ -134,6 +149,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
     await runPool(rows, 4, async (row) => {
       let eventId = row.google_event_id;
       let calendarId = row.google_calendar_id;
+      let meetLink: string | null = row.meet_link ?? null;
       try {
         const client = clientById.get(row.client_id);
         const stale = new Date(row.ends_at).getTime() < Date.now() - HISTORY_CUTOFF_MS;
@@ -144,13 +160,26 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
           if (eventId) {
             const r = await gapi("PATCH", eventPath(target, eventId), body);
             if (r.ok) result.updated++;
-            else if (r.status === 404 || r.status === 410) eventId = null; // removed in Google: recreate
+            else if (r.status === 404 || r.status === 410) {
+              // Removed in Google: recreate (with a fresh Meet; the old one went with it).
+              eventId = null;
+              meetLink = null;
+            }
             else throw new Error(r.data?.error?.message || `Google update failed (${r.status})`);
           }
           if (!eventId) {
-            const r = await gapi("POST", eventPath(target), body);
+            // Video-call sessions get a Meet link made with the event. If the
+            // calendar won't add one, the session still goes in without it.
+            let r = row.wants_meet && !meetLink
+              ? await gapi("POST", `${eventPath(target)}&conferenceDataVersion=1`, { ...body, conferenceData: MEET_REQUEST(row.id) })
+              : null;
+            // Only a clear "no" (4xx) falls back to a plain event. A 5xx may have
+            // created the event anyway, so that retries later instead of doubling it.
+            if (r && !r.ok && r.status >= 500) throw new Error(r.data?.error?.message || `Google create failed (${r.status})`);
+            if (!r?.ok || !r.data?.id) r = await gapi("POST", eventPath(target), body);
             if (!r.ok || !r.data?.id) throw new Error(r.data?.error?.message || `Google create failed (${r.status})`);
             eventId = r.data.id as string;
+            meetLink = meetLink || meetLinkOf(r.data);
             result.created++;
           }
         } else if ((row.status === "Cancelled" || row.status === "Rescheduled") && eventId) {
@@ -159,6 +188,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
             throw new Error(r.data?.error?.message || `Google delete failed (${r.status})`);
           }
           eventId = null;
+          meetLink = null; // the Meet went with the event; a restored session gets a new one
           result.removed++;
         }
         // Completed / no-show / old sessions keep whatever is in Google as history.
@@ -174,6 +204,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
             gcal_attempts: 0,
             google_event_id: eventId,
             google_calendar_id: eventId ? calendarId : null,
+            meet_link: meetLink,
           } as any)
           .eq("id", row.id)
           .eq("updated_at", row.updated_at)
@@ -182,7 +213,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
           // Edited while we were syncing: keep the event link, stay dirty, next run catches up.
           const { data: still } = await admin
             .from("pt_sessions")
-            .update({ google_event_id: eventId, google_calendar_id: eventId ? calendarId : null, gcal_claimed_at: null } as any)
+            .update({ google_event_id: eventId, google_calendar_id: eventId ? calendarId : null, gcal_claimed_at: null, meet_link: meetLink } as any)
             .eq("id", row.id)
             .select("id");
           if (!still?.length && eventId && calendarId) {
@@ -201,6 +232,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
             // An event we just created must not be created again on retry.
             google_event_id: eventId,
             google_calendar_id: eventId ? calendarId : row.google_calendar_id,
+            meet_link: meetLink,
           } as any)
           .eq("id", row.id);
       }

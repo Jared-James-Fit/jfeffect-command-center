@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CalendarClock, CircleOff, Clock, MapPin, Video, ChevronDown, Loader2 } from "lucide-react";
+import { CalendarClock, CircleOff, Clock, MapPin, Phone, Video, ChevronDown, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,13 @@ type Session = {
   location: string | null;
   notes: string | null;
   client_visible_notes: boolean | null;
+  meet_link?: string | null;
 };
+
+/** Video and phone sessions have no address to map. */
+function isPlace(location: string): boolean {
+  return !/^(video call|phone call)/i.test(location.trim());
+}
 
 type Pending = { id: string; pt_session_id: string; kind: "move" | "cancel" };
 
@@ -71,7 +77,7 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
       const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
         .from("pt_sessions")
-        .select("id,title,session_type,session_date,start_time,end_time,starts_at,location,notes,client_visible_notes")
+        .select("id,title,session_type,session_date,start_time,end_time,starts_at,location,notes,client_visible_notes,meet_link")
         .eq("client_id", clientId)
         .eq("status", "Scheduled")
         .eq("visible_to_client", true)
@@ -79,7 +85,7 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
         .order("starts_at", { ascending: true })
         .limit(60);
       if (error) throw error;
-      return (data ?? []) as Session[];
+      return (data ?? []) as unknown as Session[];
     },
   });
   const { data: pending = [] } = useQuery<Pending[]>({
@@ -160,7 +166,18 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
                       <div className="mt-0.5 text-sm text-muted-foreground">{s.title || s.session_type || "Session"}</div>
                     </div>
                   </div>
-                  {s.location && (
+                  {s.meet_link && (
+                    <Button asChild className="h-11 w-full bg-gradient-primary font-bold">
+                      <a href={s.meet_link} target="_blank" rel="noreferrer"><Video className="mr-2 h-4 w-4" /> Join video call</a>
+                    </Button>
+                  )}
+                  {s.location && !isPlace(s.location) && !s.meet_link && (
+                    <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      {/^phone/i.test(s.location) ? <Phone className="h-3.5 w-3.5 shrink-0" /> : <Video className="h-3.5 w-3.5 shrink-0" />}
+                      <span className="truncate">{s.location}</span>
+                    </div>
+                  )}
+                  {s.location && isPlace(s.location) && (
                     <a
                       href={`https://maps.google.com/?q=${encodeURIComponent(s.location)}`}
                       target="_blank"

@@ -1,6 +1,7 @@
 // Server-only: everything that goes in a client's private calendar feed.
 //   - 1:1 sessions (timed, with a 1-hour phone alert; cancelled ones stay as
-//     CANCELLED so subscribed calendars remove them)
+//     CANCELLED so subscribed calendars remove them; video calls carry the link)
+//   - calls / appointments booked with them
 //   - scheduled workouts (all-day "free" events, no alert)
 //   - coach events they're part of
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -19,18 +20,19 @@ export async function buildClientFeedEvents(admin: Admin, clientId: string, orig
   const sinceDate = sinceISO.slice(0, 10);
   const today = new Date(now).toISOString().slice(0, 10);
 
-  const [sessions, workouts, events] = await Promise.all([
+  const [sessions, appointments, workouts, events] = await Promise.all([
     feedSessions(admin, clientId, sinceISO, origin),
+    feedAppointments(admin, clientId, sinceISO, origin),
     feedWorkouts(admin, clientId, sinceDate, origin),
     feedEvents(admin, clientId, today, origin),
   ]);
-  return [...sessions, ...workouts, ...events];
+  return [...sessions, ...appointments, ...workouts, ...events];
 }
 
 async function feedSessions(admin: Admin, clientId: string, sinceISO: string, origin: string): Promise<FeedEvent[]> {
   const { data } = await admin
     .from("pt_sessions")
-    .select("id, title, session_type, starts_at, ends_at, location, notes, client_visible_notes, status, updated_at")
+    .select("id, title, session_type, starts_at, ends_at, location, notes, client_visible_notes, status, updated_at, meet_link")
     .eq("client_id", clientId)
     .eq("visible_to_client", true)
     .gte("starts_at", sinceISO)
@@ -43,12 +45,35 @@ async function feedSessions(admin: Admin, clientId: string, sinceISO: string, or
       start: new Date(s.starts_at),
       end: new Date(s.ends_at),
       summary: s.title || s.session_type || "Training session",
-      location: s.location,
-      description: s.client_visible_notes && s.notes ? s.notes : null,
+      location: s.meet_link || s.location,
+      description: [s.meet_link ? `Join the video call: ${s.meet_link}` : null, s.client_visible_notes && s.notes ? s.notes : null]
+        .filter(Boolean)
+        .join("\n\n") || null,
       url: `${origin}/portal/calendar`,
       cancelled: s.status === "Cancelled",
       lastModified: s.updated_at ? new Date(s.updated_at) : null,
     }));
+}
+
+async function feedAppointments(admin: Admin, clientId: string, sinceISO: string, origin: string): Promise<FeedEvent[]> {
+  const { data } = await admin
+    .from("appointments")
+    .select("id, title, appointment_type, starts_at, ends_at, location, meet_link, status, updated_at")
+    .eq("client_id", clientId)
+    .gte("starts_at", sinceISO)
+    .order("starts_at", { ascending: true })
+    .limit(200);
+  return ((data ?? []) as any[]).map((a) => ({
+    uid: `appt-${a.id}@jfeffect.com`,
+    start: new Date(a.starts_at),
+    end: new Date(a.ends_at),
+    summary: a.appointment_type || a.title || "Call with your coach",
+    location: a.meet_link || a.location,
+    description: a.meet_link ? `Join: ${a.meet_link}` : null,
+    url: `${origin}/portal/calendar`,
+    cancelled: a.status === "Cancelled",
+    lastModified: a.updated_at ? new Date(a.updated_at) : null,
+  }));
 }
 
 /**

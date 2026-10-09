@@ -111,6 +111,39 @@ export function googleEventBlocksTime(e: GoogleEventLike): boolean {
   return true;
 }
 
+/**
+ * The time a Google event takes away from online booking, or null when it
+ * doesn't block. Unlike the in-app check (where the coach sees the clash and can
+ * book anyway), an all-day event marked Busy (a vacation, a comp day) blocks the
+ * whole day here: nobody should book into it unseen. All-day events Google
+ * creates as Free (the default) don't block.
+ */
+export function googleBusyForBooking(
+  e: GoogleEventLike,
+  toUtc: (dateISO: string) => number,
+): { start: number; end: number } | null {
+  if (e.status === "cancelled") return null;
+  if (e.transparency === "transparent") return null;
+  if (appSessionIdOf(e)) return null; // the app session itself is counted
+  const me = (e.attendees ?? []).find((a) => a.self);
+  if (me?.responseStatus === "declined") return null;
+  if (e.start?.dateTime && e.end?.dateTime) {
+    const start = Date.parse(e.start.dateTime);
+    const end = Date.parse(e.end.dateTime);
+    return Number.isNaN(start) || Number.isNaN(end) ? null : { start, end };
+  }
+  if (e.start?.date) {
+    const endDate = e.end?.date && e.end.date > e.start.date ? e.end.date : nextDateISO(e.start.date);
+    return { start: toUtc(e.start.date), end: toUtc(endDate) };
+  }
+  return null;
+}
+
+function nextDateISO(dateISO: string): string {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
 export function slotLabelKey(dateISO: string, startHM: string): string {
   return `${dateISO}T${startHM.slice(0, 5)}`;
 }
