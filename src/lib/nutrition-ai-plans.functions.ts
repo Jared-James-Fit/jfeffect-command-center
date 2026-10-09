@@ -30,12 +30,19 @@ async function admin(): Promise<any> {
   return supabaseAdmin;
 }
 
-async function isStaff(supabase: any, userId: string) {
+/** Admin, or the coach assigned to this client. Reads below use the service role. */
+async function isStaffFor(supabase: any, userId: string, clientId: string | null | undefined) {
+  if (!clientId) return false;
   const [{ data: a }, { data: c }] = await Promise.all([
     supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
-    supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
+    supabase.rpc("is_assigned_coach", { _client_id: clientId }),
   ]);
   return !!a || !!c;
+}
+
+async function submissionClientId(sb: any, submissionId: string): Promise<string | null> {
+  const { data } = await sb.from("nf_submissions").select("client_id").eq("id", submissionId).maybeSingle();
+  return (data?.client_id as string | undefined) ?? null;
 }
 
 function answerValue(a: any): string {
@@ -206,7 +213,7 @@ export const sendNutritionRequestFn = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await isStaffFor(context.supabase, context.userId, data.clientId))) throw new Error("Coach access required");
     const sb = await admin();
     const formId = NUTRITION_REQUEST_FORM_ID;
     const { data: form } = await sb.from("nf_forms").select("id, title").eq("id", formId).maybeSingle();
@@ -265,13 +272,13 @@ export const generateNutritionPlanFn = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const sb = await admin();
-    const staff = await isStaff(context.supabase, context.userId);
     const { data: sub } = await sb
       .from("nf_submissions")
-      .select("id, form_id, status, client:client_id(user_id)")
+      .select("id, form_id, status, client_id, client:client_id(user_id)")
       .eq("id", data.submissionId)
       .maybeSingle();
     if (!sub) throw new Error("Submission not found");
+    const staff = await isStaffFor(context.supabase, context.userId, sub.client_id);
     if (sub.form_id !== NUTRITION_REQUEST_FORM_ID) throw new Error("Not a nutrition request");
     if (!staff && sub.client?.user_id !== context.userId) throw new Error("Not allowed");
     if (sub.status === "in_progress") throw new Error("Submit the form first");
@@ -294,7 +301,7 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await isStaffFor(context.supabase, context.userId, data.clientId))) throw new Error("Coach access required");
     const sb = await admin();
     const { data: subs } = await sb
       .from("nf_submissions")
@@ -336,7 +343,7 @@ export const getClientTrainingPatternFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    if (!(await isStaffFor(context.supabase, context.userId, data.clientId))) throw new Error("Coach access required");
     return loadTrainingPattern(await admin(), data.clientId);
   });
 
@@ -345,8 +352,10 @@ export const markNutritionPlanAppliedFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ submissionId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
     const sb = await admin();
+    if (!(await isStaffFor(context.supabase, context.userId, await submissionClientId(sb, data.submissionId)))) {
+      throw new Error("Coach access required");
+    }
     const now = new Date().toISOString();
     await sb.from("nutrition_ai_plans").update({ applied_at: now, applied_by: context.userId, updated_at: now }).eq("submission_id", data.submissionId);
     await sb.from("nf_submissions").update({ status: "reviewed", reviewed_at: now, reviewed_by: context.userId }).eq("id", data.submissionId);
