@@ -17,6 +17,7 @@
 export type NotificationKind =
   | "message"
   | "group_message"
+  | "direct_message"
   | "workout_review"
   | "check_in"
   | "appointment"
@@ -33,6 +34,7 @@ export type PushCategoryKey =
 export const CATEGORY_BY_KIND: Record<NotificationKind, PushCategoryKey> = {
   message: "messages",
   group_message: "messages",
+  direct_message: "messages",
   workout_review: "lift_reviews",
   check_in: "check_ins",
   appointment: "workouts",
@@ -82,6 +84,7 @@ export function messageAction(attachments: AttachmentLike[] | null | undefined, 
   if (kinds.has("payment_request")) return `sent${you} a payment request`;
   if (kinds.has("recipe_share")) return `shared a recipe`;
   if (kinds.has("community_post")) return `sent${you} a post`;
+  if (kinds.has("staff_invite")) return `sent${you} a team account invite`;
   if (kinds.has("gif")) return `sent${you} a GIF`;
   if (kinds.has("sound")) return `sent${you} a sound`;
   // Auto-detected links ride along with ordinary text, so they don't count.
@@ -125,6 +128,9 @@ export function notificationDeepLink(
       return staff
         ? `/admin/communication?tab=groups${ids.groupId ? `#group=${ids.groupId}` : ""}`
         : `/portal/messages?tab=groups${ids.groupId ? `#group=${ids.groupId}` : ""}`;
+    case "direct_message":
+      // Member-to-member chats live with the client's group chats ("Chats").
+      return `/portal/messages?tab=groups${ids.groupId ? `#group=${ids.groupId}` : ""}`;
     case "workout_review":
       return staff ? "/admin/lift-videos" : "/portal/lift-videos";
     case "check_in":
@@ -152,6 +158,7 @@ export function notificationDeepLink(
 const SUMMARY: Record<NotificationKind, { staff: string; client: string }> = {
   message: { staff: "Sent you a new message.", client: "You have a new message." },
   group_message: { staff: "New message in a group chat.", client: "New message in a group chat." },
+  direct_message: { staff: "Sent you a message.", client: "Sent you a message." },
   workout_review: { staff: "New lift video to review.", client: "Your coach reviewed a lift." },
   check_in: { staff: "Submitted a check-in.", client: "A check-in is ready for you." },
   appointment: { staff: "Appointment update.", client: "Appointment update." },
@@ -164,6 +171,7 @@ const SUMMARY: Record<NotificationKind, { staff: string; client: string }> = {
 const TITLE: Record<NotificationKind, string> = {
   message: "New Message",
   group_message: "Group Chat",
+  direct_message: "Message",
   workout_review: "Coach Feedback",
   check_in: "Check-In",
   appointment: "Appointment",
@@ -199,6 +207,8 @@ export function buildNotificationPayload(input: {
   isTest?: boolean;
   /** Message/group kinds: the message's attachments, to say what was sent (never what it says). */
   attachments?: AttachmentLike[] | null;
+  /** direct_message: still a message request (the recipient hasn't accepted). */
+  request?: boolean;
 }): NormalizedNotification {
   const { kind, role, recipientUserId, sourceId } = input;
   const staff = isStaff(role);
@@ -212,6 +222,18 @@ export function buildNotificationPayload(input: {
     // Staff see the client's name; clients see "Coach Jared".
     title = name ?? (staff ? "New message" : "Your coach");
     body = capitalize(messageAction(input.attachments, true)) + ".";
+  } else if (kind === "direct_message") {
+    // A request says who and why, never what: "Dwayne replied to your post."
+    // Once they're chatting it reads like any 1:1 message.
+    const atts = (input.attachments ?? []).filter(Boolean) as Array<{ kind?: string | null }>;
+    const who = name ? firstName(name) : "Someone";
+    if (input.request) {
+      title = "Message request";
+      body = atts.some((a) => a.kind === "community_post") ? `${who} replied to your post.` : `${who} wants to send you a message.`;
+    } else {
+      title = name ?? "New message";
+      body = capitalize(messageAction(input.attachments, true)) + ".";
+    }
   } else if (kind === "group_message") {
     // Group name on top (that's what you'd open), sender + action below.
     title = context || "Group chat";

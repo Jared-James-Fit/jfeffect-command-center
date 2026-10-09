@@ -7,6 +7,7 @@
  * heaviest warm-up of the day (the "final" one) — see load-suggestion.ts, note 8.
  */
 import { classifyExercise, type MovementPattern } from "@/lib/exercise-classifier";
+import { percentOf1RM } from "@/lib/load-suggestion";
 
 export type WarmupUnit = "kg" | "lb";
 
@@ -94,4 +95,34 @@ export function offersLastWarmup(family: string, exerciseName: string | null | u
   // Squat / bench / deadlift families always ramp up.
   if (family !== "accessory") return true;
   return !!exerciseName && RAMP_PATTERNS.has(classifyExercise(exerciseName).pattern);
+}
+
+/** Lowest RPE a 1RM estimate is shown for — easier sets are rated too loosely to say much. */
+export const E1RM_MIN_RPE = 6;
+
+/**
+ * Rough 1RM from one set: load ÷ the RPE chart's %1RM for reps @ RPE (the same
+ * chart the load suggestions use), rounded to the nearest 5 lb / 2.5 kg. Null
+ * when one set can't support it: no RPE, easier than RPE 6, or over 10 reps.
+ */
+export function estimateOneRepMax(
+  set: { load: number; reps: number; rpe: number | null },
+  unit: WarmupUnit,
+): number | null {
+  const { load, reps, rpe } = set;
+  if (!(load > 0) || !Number.isInteger(reps) || reps < 1 || reps > 10) return null;
+  if (rpe == null || !Number.isFinite(rpe) || rpe < E1RM_MIN_RPE || rpe > 10) return null;
+  const pct = percentOf1RM(reps, 10 - rpe);
+  if (!pct) return null;
+  const step = unit === "kg" ? 2.5 : 5;
+  return Math.round(load / pct / step) * step;
+}
+
+/** "RPE 8" → "about 2 reps left"; halves read as a range. */
+export function repsLeftLabel(rpe: number): string {
+  const rir = 10 - rpe;
+  if (rir <= 0) return "nothing left";
+  if (rir >= 5) return "5+ reps left";
+  if (Number.isInteger(rir)) return `about ${rir} rep${rir === 1 ? "" : "s"} left`;
+  return `${Math.floor(rir)}–${Math.ceil(rir)} reps left`;
 }
