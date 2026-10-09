@@ -19,7 +19,7 @@ export const THEME_STORAGE_KEY = "jf-theme";
 export const THEME_CHANGE_EVENT = "jf-theme-change";
 
 /** Signed-in app areas that honour the dark preference. */
-export const THEMED_PATH_RE = /^\/(portal|admin|coach|m|media|notifications)(\/|$)/;
+export const THEMED_PATH_RE = /^\/(portal|admin|coach|m|media|notifications|finance)(\/|$)/;
 
 /** Browser chrome / PWA status bar colour (light keeps the original brand value). */
 export const THEME_COLOR: Record<Theme, string> = { light: "#0a0a0a", dark: "#111114" };

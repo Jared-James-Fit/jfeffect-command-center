@@ -3449,6 +3449,56 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const tunedWarmupId =
     warmupGauge && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
 
+  // Warm-up → working weight: what the card will suggest once this warm-up is
+  // saved, computed by the same engine (only while it can still tune: before
+  // the first working set, history loaded, a reps @ RPE target).
+  const previewWarmupTarget = useCallback(
+    (w: { load: number; reps: number; rpe: number | null }): LoadSuggestion | null => {
+      if (!warmupGauge || !loadHistory || !loadPlan) return null;
+      const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg });
+      return suggestSetLoad(model, loadPlan);
+    },
+    [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg],
+  );
+  const openSetCount = Array.from({ length: setCount }, (_, i) => i + 1)
+    .filter((i) => !existingResults.find((x: any) => x.set_index === i && x.completed_at)).length;
+  // Put one weight into every open set as a draft (never a confirmed set);
+  // each set keeps its own reps / RPE.
+  const fillLoadOnOpenSets = async (load: number): Promise<number> => {
+    if (!clientId || !(load > 0)) return 0;
+    beginWorkoutSession(dayId);
+    const tasks: Array<Promise<any>> = [];
+    for (let i = 1; i <= setCount; i++) {
+      const ex = existingResults.find((x: any) => x.set_index === i) as any;
+      if (ex?.completed_at) continue;
+      const body: Record<string, any> = withMemberWorkoutIndexes({
+        row_id: row.id,
+        client_id: clientId,
+        set_index: i,
+        actual_load: load,
+        actual_load_unit: activeUnit,
+        entered_value: load,
+        entered_unit: activeUnit,
+        actual_reps: ex?.actual_reps ?? null,
+        actual_rpe: ex?.actual_rpe ?? null,
+        actual_rpe_num: ex?.actual_rpe_num ?? null,
+        load_type: "external",
+        is_bodyweight: false,
+        completed_at: null,
+      }, adapter, dayId);
+      if (adapter) tasks.push(adapter.upsertPlRowResultRaw(body, ex?.id ?? null));
+      else if (ex?.id) tasks.push(sb.from("pl_row_results").update(body).eq("id", ex.id));
+      else tasks.push(sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" }));
+    }
+    if (!tasks.length) return 0;
+    await Promise.all(tasks);
+    onChange();
+    await qc.refetchQueries({ queryKey: ["pl-day-results", dayId] });
+    setFillSnapshot({ load: String(load), reps: "", rpe: "", unit: activeUnit, loadType: "external", includeFirst: true });
+    setFillToken((t) => t + 1);
+    return tasks.length;
+  };
+
   // "Apply to remaining" — runs from a completed SetRow, pushes Draft values
   // into all later un-completed sets of this same exercise. Never overwrites
   // a confirmed (completed_at != null) set.
@@ -3472,6 +3522,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     rpe: string;
     unit: "kg" | "lb";
     loadType: LoadType;
+    /** Also show the fill on set 1 (warm-up "use for all sets"); Fill All copies FROM set 1. */
+    includeFirst?: boolean;
   } | null>(null);
 
   // ── Smart downward cascade ────────────────────────────────────────────
@@ -4064,6 +4116,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             prompt={warmupPrompt}
             seed={warmupGauge?.suggested ?? null}
             tunedId={tunedWarmupId}
+            target={warmupGauge && loadPlan ? loadPlan : null}
+            preview={warmupGauge ? previewWarmupTarget : null}
+            openSets={openSetCount}
+            onUseForAllSets={fillLoadOnOpenSets}
           />
         )}
         {Array.from({ length: setCount }).map((_, i) => {
@@ -4491,7 +4547,7 @@ function SetRow({
   forceHydrateToken?: number;
   /** Snapshot of values just written by Fill All Sets — used to bypass
    *  the cache race when force-hydrating. */
-  forcedFill?: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType } | null;
+  forcedFill?: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType; includeFirst?: boolean } | null;
   /** Broadcast of a cascade the parent just applied + persisted. */
   cascade?: {
     token: number;
@@ -4772,7 +4828,7 @@ function SetRow({
     // shows the fill value (e.g. "330 lb") while the DB still holds the
     // original entry (e.g. "110 kg"), producing the history-vs-input
     // mismatch reported on Jared McIntyre's Block 1 / Wk 2 / Day 1.
-    if (forcedFill && setIndex !== 1 && !latest?.completed_at) {
+    if (forcedFill && (setIndex !== 1 || forcedFill.includeFirst) && !latest?.completed_at) {
       // forcedFill wins for uncompleted sets — it's the value just written to the DB
       const forcedLoad = Number(forcedFill.load);
       setLoadPaired(Number.isFinite(forcedLoad) ? fmtLoad(convertLoad(forcedLoad, forcedFill.unit, unit)) : forcedFill.load);

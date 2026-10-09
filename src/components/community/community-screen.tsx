@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { markCommunitySeen, useCommunityFeed, useHintsSeen, useMarkHintSeen, use
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
+import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
 
 type Tab = "feed" | "crew" | "you";
 type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
@@ -50,6 +51,10 @@ function personFromHash(): string | null {
  */
 /** The double-tap tip plays once per visit (app load), not on every feed render. */
 let tipShownThisVisit = false;
+/** "Swipe right to go back": asks on up to 5 visits, until it's been used once. */
+const SWIPE_TIP_VISITS = 5;
+export const swipeTipKeys = Array.from({ length: SWIPE_TIP_VISITS }, (_, i) => `swipe_back_shown_${i + 1}`);
+let swipeTipShownThisVisit = false;
 
 export function CommunityScreen({
   canShare = false, previewOnly = false, bell = false, backTo, hideTabs = false,
@@ -105,6 +110,45 @@ export function CommunityScreen({
 
   const { data: unit = "lb" } = useViewerUnit(user?.id);
 
+  // Swipe right from anywhere to go back: out of a profile to the list, else out of the community.
+  const navigate = useNavigate();
+  const router = useRouter();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const canSwipeBack = scope.kind === "author" || !!backTo;
+  const leaveAuthor = () => {
+    if (scope.kind !== "author") return;
+    setScope({ kind: scope.from });
+    if (window.location.hash.includes("person=")) history.replaceState(null, "", window.location.pathname + window.location.search);
+  };
+  const swipeBack = () => {
+    if (scope.kind === "author") return leaveAuthor();
+    if (!backTo) return;
+    if (router.history.canGoBack()) router.history.back();
+    else void navigate({ to: backTo });
+  };
+  const [swipeTip, setSwipeTip] = useState(false);
+  const swipeVisit = hints.data && !hints.data.includes("swipe_back") ? swipeTipKeys.find((k) => !hints.data!.includes(k)) : undefined;
+  const feedReady = feed.isSuccess || posts.length > 0;
+  useEffect(() => {
+    // after the double-tap tip (never both at once), once the feed is up
+    if (!canSwipeBack || !swipeVisit || swipeTipShownThisVisit || !feedReady || hintId) return;
+    const t = window.setTimeout(() => {
+      swipeTipShownThisVisit = true;
+      markHint(swipeVisit);
+      setSwipeTip(true);
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [canSwipeBack, swipeVisit, feedReady, hintId, markHint]);
+  useEffect(() => {
+    if (!swipeTip) return;
+    const t = window.setTimeout(() => setSwipeTip(false), 12_000);
+    return () => window.clearTimeout(t);
+  }, [swipeTip]);
+  const onSwipeUsed = useCallback(() => {
+    setSwipeTip(false);
+    markHint("swipe_back");
+  }, [markHint]);
+
   // Opened from Home on a post: scroll to it in the feed and flash it, so the rest of the
   // feed is right there. If it's older than what's loaded, open it on its own instead.
   useEffect(() => {
@@ -159,16 +203,14 @@ export function CommunityScreen({
   const notAllowed = (feed.error as any)?.code === "42501";
 
   return (
-    <div className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 sm:px-4">
+    <>
+    <div ref={rootRef} className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 sm:px-4">
       {scope.kind === "author" ? (
         <Button
           type="button"
           variant="ghost"
           className="-ml-2 h-10 rounded-full px-3"
-          onClick={() => {
-            setScope({ kind: scope.from });
-            if (window.location.hash.includes("person=")) history.replaceState(null, "", window.location.pathname + window.location.search);
-          }}
+          onClick={leaveAuthor}
         >
           <ArrowLeft className="mr-1.5 h-4 w-4" /> {scope.from === "crew" ? "Crew" : scope.from === "you" ? "You" : "Feed"}
         </Button>
@@ -255,6 +297,10 @@ export function CommunityScreen({
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} />
       <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} />
     </div>
+    {/* outside the page that slides, so they stay put */}
+    <SwipeBack enabled={canSwipeBack} target={rootRef} onBack={swipeBack} onUsed={onSwipeUsed} />
+    {swipeTip && <SwipeBackTip onDismiss={() => setSwipeTip(false)} />}
+    </>
   );
 }
 

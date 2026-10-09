@@ -1118,9 +1118,12 @@ describe("post what you see; rotate smooth and sharp; snap to centre", () => {
   const studio = read("src/components/community/share-studio.tsx");
   const layer = read("src/components/community/sticker-layer.tsx");
   it("the post is the look you're on (4:5), 'No filter' and Hide weights post just the photo", () => {
-    expect(studio).toContain('if (card.look === "plain" || (post?.showHideLoads && hideLoads)) return finalPhoto();');
-    expect(studio).toContain('paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot.src }, logo, 1);');
-    expect(studio).toContain("await post.onPost({ photo: await postPhoto(),");
+    expect(studio).toContain('const bare = card.look === "plain" || (post?.showHideLoads && hideLoads);');
+    expect(studio).toContain("if (shot && bare) return finalPhoto();");
+    expect(studio).toContain('paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);');
+    // no photo: nothing posted, unless it's a carousel (then slide 1 is the card itself)
+    expect(studio).toContain("if (!shot && (!carousel || bare)) return null;");
+    expect(studio).toContain("await post.onPost({ photo: await postPhoto(extras.length > 0),");
   });
   it("snaps to straight angles and to the centre lines (with a guide)", () => {
     expect(snapAngle(0.03).r).toBe(0);

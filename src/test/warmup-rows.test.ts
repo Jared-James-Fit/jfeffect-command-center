@@ -20,23 +20,28 @@ const set = { id: "a", load: 140, unit: "kg" as const, reps: 2, rpe: 7 };
 const render = (props: Record<string, unknown>) =>
   renderToStaticMarkup(createElement(WarmupRows, { ...base, sets: [], ...props } as any));
 
+const preview = (w: { load: number; reps: number; rpe: number | null }) =>
+  ({ low: Math.round(w.load * 1.5), high: Math.round(w.load * 1.6), target: Math.round(w.load * 1.55), unit: "kg" as const });
+const tuneProps = { target: { reps: 7, rpe: 4 }, preview, openSets: 3, onUseForAllSets: async () => 3 };
+
 describe("warm-up rows in the set table", () => {
-  it("before the first working set: asks for the last warm-up, with what to warm up to", () => {
+  it("before the first working set: 'Last warm-up → today's weight', with what to work up to", () => {
     const html = render({ prompt: { suggested: { load: 125, reps: 2 }, tunes: true } });
     expect(html).toContain('data-testid="warmup-prompt"');
     expect(html).toContain(">W<");
-    expect(html).toContain("~125 × 2");
-    expect(html).toContain("Tunes today&#x27;s weight · rough 1RM estimate");
+    expect(html).toContain("Last warm-up → today&#x27;s weight");
+    expect(html).toContain("Work up to ~125 × 2, log it, get your sets");
   });
 
   it("no history yet: says the warm-up is how to get a working weight", () => {
-    expect(render({ prompt: { suggested: null, tunes: true } })).toContain("Gets your working weight · rough 1RM estimate");
+    expect(render({ prompt: { suggested: null, tunes: true } })).toContain("Log it to get your working weight");
   });
 
-  it("after working sets it stays, as a rough 1RM check", () => {
+  it("after working sets it stays, as the e1RM calculator", () => {
     const html = render({ prompt: { suggested: { load: 125, reps: 2 }, tunes: false } });
-    expect(html).toContain("Log it for a rough 1RM estimate");
-    expect(html).not.toContain("~125 × 2");
+    expect(html).toContain("e1RM calculator");
+    expect(html).toContain("Any set · weight × reps @ RPE → rough 1RM");
+    expect(html).toContain(">Open<");
   });
 
   it("logged warm-ups show weight × reps @ RPE and a rough 1RM", () => {
@@ -55,34 +60,55 @@ describe("warm-up rows in the set table", () => {
     expect(render({ canEdit: false, prompt: { suggested: null, tunes: false } })).not.toContain("warmup-prompt");
   });
 
-  it("the add form shows the suggested warm-up faded, and RPE is typed (any value)", () => {
-    const html = render({ form: "new", seed: { load: 125, reps: 2 }, prompt: { suggested: { load: 125, reps: 2 }, tunes: true } });
-    expect(html).toContain("Add warm-up");
-    expect(html).toContain('placeholder="125"');
-    expect(html).toContain('placeholder="2"');
-    expect(html).toContain('aria-label="Warm-up RPE"');
+  it("'Set today's weight' mode: suggested warm-up faded, says it suggests today's sets, one tap for all sets", () => {
+    const html = render({ form: "new", seed: { load: 100, reps: 2 }, prompt: { suggested: { load: 100, reps: 2 }, tunes: true }, ...tuneProps });
+    expect(html).toContain("Last warm-up / e1RM");
+    expect(html).toContain("Set today&#x27;s weight");
+    expect(html).toContain("e1RM only");
+    expect(html).toContain("we&#x27;ll suggest your 7 reps @ RPE 4");
+    expect(html).toContain('placeholder="100"');
+    expect(html).toContain("Today: 7 @ RPE 4");
+    expect(html).toContain("150–160 kg");
+    expect(html).toContain("Use 155 kg for all 3 sets");
+    expect(html).toContain("Just log the warm-up");
     expect(html).toContain("not a tested max");
-    expect(html).toContain("Not counted in volume, records or points");
-    expect(html).not.toContain("warmup-prompt");
   });
 
-  it("editing opens in place of the row, with the stored RPE and the live 1RM read", () => {
+  it("no target (after working sets / coach load): just the calculator — nothing saved", () => {
+    const html = render({ form: "new", prompt: { suggested: null, tunes: false } });
+    expect(html).not.toContain("Set today&#x27;s weight");
+    expect(html).toContain("Nothing is saved or changed");
+    expect(html).toContain(">Done<");
+    expect(html).not.toContain("warmup-use-all");
+  });
+
+  it("editing opens in place of the row, with the stored RPE and the live e1RM", () => {
     const html = render({ sets: [set], form: "a" });
     expect(html).toContain("Save warm-up");
     expect(html).toContain(">Remove<");
     expect(html).toContain('value="7"');
     expect(html).toContain("RPE 7 · about 3 reps left");
-    expect(html).toContain("≈ 1RM 162.5 kg");
+    expect(html).toContain("≈ 162.5 kg");
     expect(html).not.toContain('data-testid="warmup-row"');
   });
 
-  it("sits in the set table above Set 1, and stays available after working sets", () => {
+  it("sits in the set table above Set 1, stays after working sets, and previews with the real engine", () => {
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
     const rows = wdv.indexOf("<WarmupRows");
     expect(rows).toBeGreaterThan(wdv.indexOf("<EffortScaleHeader rir={showRir} />"));
     expect(rows).toBeLessThan(wdv.indexOf("<SetRow\n"));
     expect(wdv).toContain('!hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;');
     expect(wdv).toContain("const warmupGauge = warmupPromptable && loadModel && !workedToday ?");
+    expect(wdv).toContain("const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg });");
+  });
+
+  it("'use for all sets' fills only open sets with the weight, keeping each set's reps / RPE, as drafts", () => {
+    const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    const fill = wdv.slice(wdv.indexOf("const fillLoadOnOpenSets"), wdv.indexOf("// \"Apply to remaining\""));
+    expect(fill).toContain("if (ex?.completed_at) continue;");
+    expect(fill).toContain("actual_reps: ex?.actual_reps ?? null,");
+    expect(fill).toContain("completed_at: null,");
+    expect(wdv).toContain("(setIndex !== 1 || forcedFill.includeFirst)");
   });
 });
 
