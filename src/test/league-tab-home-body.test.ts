@@ -60,9 +60,12 @@ describe("the League tab", () => {
     expect(swipe).toContain("if (!remember) return;");
     expect(card).toContain("data-standing={c.key}");
   });
-  it("the card shows the Top 5, plus you when you're outside it; every row opens that athlete", () => {
-    expect(card).toContain("Number(r.rank)<=5");
-    expect(card).toContain("[...top5.slice(3), ...(outside && leagueMe ? [leagueMe] : [])]");
+  it("the race is for the Top 10: the card shows 5, See top 10 opens 6-10 in place, you're always shown; every row opens that athlete", () => {
+    expect(card).toContain("Number(r.rank)<=10");
+    expect(card).toContain("const shownTo = showTen ? 10 : 5;");
+    expect(card).toContain("[...top10.slice(3, shownTo), ...(outside && leagueMe ? [leagueMe] : [])]");
+    expect(card).toContain('{showTen ? "Show top 5" : "See top 10"}');
+    expect(card).toContain("pts to Top 10");
     expect(card).toContain("onClick={() => openRankings(r.client_id)}");
   });
   it("every board still opens in full: standings, levels, competition records, the Hall of Strength, last month's recap", () => {
@@ -71,7 +74,8 @@ describe("the League tab", () => {
     expect(card).toContain('onClick={() => setOpen("powerlifting")}');
     expect(board).toContain("export function StrengthBoardSlide()");
     expect(board).toContain("<HallOfStrength />");
-    expect(board).toContain('pickBoard(data, mode, "total", "all", 5)');
+    expect(board).toContain("pickBoard(data, mode, lift, division, 5)");
+    expect(board).toContain("<HallOfStrength initialMode={mode} initialLift={lift} initialDivision={division} />");
     expect(card).toContain('<LeagueRecapHomeTile variant="mini" />');
     expect(recap).toContain("You finished ${ordinal(recap.me.rank)} place");
     expect(recap).toContain("{playing && <LeagueRecapStory recap={playing} open={!!playing} onClose={() => setPlaying(null)} />}");

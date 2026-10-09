@@ -146,13 +146,25 @@ export function countOf(r: StrengthRow, mode: BoardMode, division: Division): nu
  * the row ranked on it.
  */
 export function pickBoard(rows: StrengthRow[], mode: BoardMode, lift: BoardLift, division: Division, limit = TOP) {
-  const onBoard = rows
+  const onBoard = (mode === "p4p" && division !== "all" ? p4pDivision(rows, lift, division) : rows)
     .filter((r) => r.lift === lift && rankOf(r, mode, division) != null)
     .sort((a, b) => rankOf(a, mode, division)! - rankOf(b, mode, division)!);
   const top = onBoard.filter((r) => rankOf(r, mode, division)! <= limit);
   const me = onBoard.find((r) => r.is_me) ?? rows.find((r) => r.is_me && r.lift === lift) ?? null;
   const count = onBoard[0] ? countOf(onBoard[0], mode, division) : 0;
   return { top, me, count: count ?? onBoard.length };
+}
+
+/**
+ * Pound for pound for one sex: the database ranks everyone together, so keep
+ * that order and renumber within the sex (the boards return every athlete,
+ * so nobody is missing from the count).
+ */
+function p4pDivision(rows: StrengthRow[], lift: BoardLift, sex: Sex): StrengthRow[] {
+  const mine = rows
+    .filter((r) => r.lift === lift && r.p4p_rank != null && r.sex === sex)
+    .sort((a, b) => a.p4p_rank! - b.p4p_rank!);
+  return mine.map((r, i) => ({ ...r, p4p_rank: i + 1, p4p_count: mine.length }));
 }
 
 /** 250 kg → "551 lb" / "250 kg"; 52.16 kg → "115 lb" / "52.2 kg". */
@@ -220,7 +232,11 @@ export type MeStatus =
 export function meStatus(me: StrengthRow | null, mode: BoardMode, lift: BoardLift, division: Division): MeStatus {
   if (!me) return lift === "total" ? { kind: "no-total" } : { kind: "no-lift" };
   const rank = rankOf(me, mode, division);
-  if (rank != null) return { kind: "ranked", rank, count: countOf(me, mode, division) };
+  if (rank != null && (mode !== "p4p" || division === "all" || me.sex === division)) {
+    return { kind: "ranked", rank, count: countOf(me, mode, division) };
+  }
+  if (mode === "p4p" && division !== "all" && !me.sex) return { kind: "no-division" };
+  if (mode === "p4p" && division !== "all" && me.sex !== division) return { kind: "other-division" };
   if (mode === "p4p") return { kind: "no-bodyweight" };
   if (!me.sex) return { kind: "no-division" };
   return { kind: "other-division" };

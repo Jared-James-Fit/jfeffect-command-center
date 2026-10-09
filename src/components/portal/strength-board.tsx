@@ -225,17 +225,20 @@ export function StrengthBoardCard() {
 export function StrengthBoardSlide() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<BoardMode>("p4p");
+  const [lift, setLift] = useState<BoardLift>("total");
+  const [division, setDivision] = useState<Division>("all");
   const { data = [], isPending } = useStrengthBoard();
   const { unit } = useWeightUnit();
-  const myP4p = data.find((r) => r.is_me && r.lift === "total" && r.p4p_rank != null)?.p4p_rank ?? null;
-  const myAbs = data.find((r) => r.is_me && r.lift === "total" && r.all_rank != null)?.all_rank ?? null;
-  // The card's Top 5: total, pound for pound or heaviest; the sheet has every lift and everyone.
-  const top5 = pickBoard(data, mode, "total", "all", 5).top;
-  const myLine = myP4p || myAbs
-    ? `You: ${[myP4p && `#${myP4p} pound for pound`, myAbs && `#${myAbs} total`].filter(Boolean).join(" · ")}`
-    : data.some((r) => r.is_me)
-      ? "See where you rank"
-      : "Get on the board";
+  // The card's Top 5 for the board you pick; Open shows that same board in full.
+  const { top: top5, me, count } = pickBoard(data, mode, lift, division, 5);
+  const status = meStatus(me, mode, lift, division);
+  const myLine =
+    status.kind === "ranked" ? `You: #${status.rank} of ${status.count ?? count}`
+    : status.kind === "no-bodyweight" ? "Log your bodyweight to rank pound for pound"
+    : status.kind === "no-division" ? "Pick Men or Women in your profile to rank here"
+    : status.kind === "other-division" ? `${count} on this board`
+    : "You're not on this board yet";
+  const chip = (on: boolean) => cn("min-h-8 flex-1 rounded-full text-[12px] font-bold transition", on ? "bg-foreground text-background" : "text-muted-foreground active:bg-muted");
 
   return (
     <>
@@ -244,17 +247,33 @@ export function StrengthBoardSlide() {
           <span className="min-w-0">
             <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">All-time strength board</span>
             <span className="mt-0.5 block text-lg font-bold tracking-tight">Hall of Strength</span>
-            <span className="block text-[11px] text-muted-foreground">Total · every JF Effect athlete · gym + meets</span>
+            <span className="block text-[11px] text-muted-foreground">Every JF Effect athlete · gym + meets</span>
           </span>
           <Trophy className="h-6 w-6 shrink-0 text-amber-400" />
         </button>
-        <div className="mx-3 mt-2.5 grid grid-cols-2 rounded-full bg-muted/50 p-1 text-xs font-bold" role="tablist" aria-label="Hall of Strength board">
-          {([["p4p", "Pound for pound"], ["absolute", "Heaviest"]] as const).map(([k, label]) => (
-            <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => setMode(k)}
-              className={cn("min-h-8 rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
-              {label}
-            </button>
-          ))}
+        <div className="mx-3 mt-2.5 space-y-1.5">
+          <div className="grid grid-cols-2 rounded-full bg-muted/50 p-1 text-xs font-bold" role="tablist" aria-label="Ranked by">
+            {([["p4p", "Pound for pound"], ["absolute", "Heaviest"]] as const).map(([k, label]) => (
+              <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => setMode(k)}
+                className={cn("min-h-8 rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1" role="tablist" aria-label="Lift">
+            {BOARD_LIFTS.map((l) => (
+              <button key={l.key} type="button" role="tab" aria-selected={lift === l.key} onClick={() => setLift(l.key)} className={chip(lift === l.key)}>
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1" role="tablist" aria-label="Division">
+            {([["all", "All"], ["male", "Men"], ["female", "Women"]] as const).map(([d, label]) => (
+              <button key={d} type="button" role="tab" aria-selected={division === d} onClick={() => setDivision(d)} className={chip(division === d)}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         {isPending ? (
           <div className="mx-3 mt-2 h-48 animate-pulse rounded-xl bg-muted/40" />
@@ -265,7 +284,7 @@ export function StrengthBoardSlide() {
         ) : (
           <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
             {top5.map((r) => {
-              const rank = rankOf(r, mode, "all")!;
+              const rank = rankOf(r, mode, division)!;
               return (
                 <li key={r.key}>
                   <button type="button" onClick={() => setOpen(true)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left active:bg-muted", r.is_me && "bg-primary/10")}>
@@ -274,15 +293,18 @@ export function StrengthBoardSlide() {
                     </span>
                     <LifterAvatar row={r} size="h-7 w-7 shrink-0" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-semibold">{r.is_me ? "You" : r.display_name}</span>
+                      <span className="block truncate text-[13px] font-semibold">{r.display_name}{r.is_me ? " (You)" : ""}</span>
                       <span className="block truncate text-[10px] text-muted-foreground">
-                        {r.source === "meet" ? "Meet" : "Training"}{mode === "p4p" ? ` · ${formatLoad(r.kg, unit)}` : r.bw_multiple ? ` · ${formatMultiple(r.bw_multiple)} BW` : ""}
+                        {r.source === "meet" ? "Meet" : "Training"}
+                        {mode === "p4p"
+                          ? ` · ${formatLoad(r.kg, unit)}${r.reps && r.reps > 1 ? ` ×${r.reps}` : ""}`
+                          : r.bw_multiple ? ` · ${formatMultiple(r.bw_multiple)} BW` : ""}
                       </span>
                     </span>
                     <span className="shrink-0 text-[13px] font-black tabular-nums">
                       {mode === "p4p"
                         ? <>{formatMultiple(r.bw_multiple)}<span className="ml-0.5 text-[9px] text-muted-foreground">BW</span></>
-                        : formatLoad(r.kg, unit)}
+                        : <>{formatLoad(r.kg, unit)}{r.reps && r.reps > 1 ? <span className="ml-0.5 text-[10px] text-primary">×{r.reps}</span> : null}</>}
                     </span>
                   </button>
                 </li>
@@ -290,14 +312,14 @@ export function StrengthBoardSlide() {
             })}
           </ol>
         )}
-        <button type="button" onClick={() => setOpen(true)} className="mt-auto flex w-full items-center justify-between px-4 pb-3 pt-2.5 text-xs font-bold active:opacity-70">
-          <span className={cn(myP4p || myAbs ? "text-foreground" : "text-primary")}>{myLine}</span>
-          <span className="inline-flex items-center gap-0.5 text-primary">Open <ChevronRight className="h-4 w-4" /></span>
+        <button type="button" onClick={() => setOpen(true)} className="mt-auto flex w-full items-center justify-between gap-2 px-4 pb-3 pt-2.5 text-xs font-bold active:opacity-70">
+          <span className={cn("truncate", status.kind === "ranked" ? "text-foreground" : "text-muted-foreground")}>{myLine}</span>
+          <span className="inline-flex shrink-0 items-center gap-0.5 text-primary">Full board <ChevronRight className="h-4 w-4" /></span>
         </button>
       </div>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-safe-bottom">
-          <HallOfStrength />
+          <HallOfStrength initialMode={mode} initialLift={lift} initialDivision={division} />
         </SheetContent>
       </Sheet>
     </>
@@ -332,15 +354,17 @@ function KingTile({ label, row, value, loading, className }: {
 // ── The board ──────────────────────────────────────────────────────────────
 
 /** The full Hall of Strength: All-time (training + meets, everyone ever coached) and Competition (sanctioned meets). */
-export function HallOfStrength({ initialSource = "all" }: { initialSource?: BoardSource }) {
+export function HallOfStrength({ initialSource = "all", initialMode = "p4p", initialLift = "total", initialDivision = "all" }: {
+  initialSource?: BoardSource; initialMode?: BoardMode; initialLift?: BoardLift; initialDivision?: Division;
+}) {
   const { unit, setUnit } = useWeightUnit();
   const isStaff = useIsStaff();
   const allTime = useStrengthBoard();
   const meets = useMeetBoard();
   const [source, setSource] = useState<BoardSource>(initialSource);
-  const [mode, setMode] = useState<BoardMode>("p4p");
-  const [lift, setLift] = useState<BoardLift>("total");
-  const [division, setDivision] = useState<Division>("all");
+  const [mode, setMode] = useState<BoardMode>(initialMode);
+  const [lift, setLift] = useState<BoardLift>(initialLift);
+  const [division, setDivision] = useState<Division>(initialDivision);
   const [showAll, setShowAll] = useState(false);
   const active = source === "all" ? allTime : meets;
   const rows = active.data ?? [];
@@ -405,7 +429,7 @@ export function HallOfStrength({ initialSource = "all" }: { initialSource?: Boar
 
       {/* Board picker */}
       <div className="grid grid-cols-2 rounded-xl bg-muted/50 p-1 text-xs font-bold">
-        {([["p4p", "Pound for pound"], ["absolute", "Absolute"]] as const).map(([k, label]) => (
+        {([["p4p", "Pound for pound"], ["absolute", "Heaviest"]] as const).map(([k, label]) => (
           <button key={k} type="button" onClick={() => pick(setMode)(k)}
             className={cn("min-h-10 rounded-lg transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
             {label}
@@ -421,23 +445,21 @@ export function HallOfStrength({ initialSource = "all" }: { initialSource?: Boar
           </button>
         ))}
       </div>
-      {mode === "absolute" && (
-        <div className="flex gap-1.5">
-          {([["all", "All"], ["male", "Men"], ["female", "Women"]] as const).map(([d, label]) => (
-            <button key={d} type="button" onClick={() => pick(setDivision)(d)}
-              className={cn("min-h-9 flex-1 rounded-full border text-xs font-bold transition",
-                division === d ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex gap-1.5">
+        {([["all", "All"], ["male", "Men"], ["female", "Women"]] as const).map(([d, label]) => (
+          <button key={d} type="button" onClick={() => pick(setDivision)(d)}
+            className={cn("min-h-9 flex-1 rounded-full border text-xs font-bold transition",
+              division === d ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="flex items-start gap-3">
         <p className="flex flex-1 items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {mode === "p4p"
-            ? `Ranked by times bodyweight: ${what} ÷ bodyweight. Men and women on one board.`
+            ? `Ranked by times bodyweight: ${what} ÷ bodyweight.${division === "all" ? " Men and women on one board." : ""}`
             : source === "meets"
               ? `Heaviest ${what} passed by the referees at a meet.`
               : `Heaviest ${what} from training or a meet. ×3 = done for 3 reps.`}
