@@ -13,6 +13,8 @@ export type ChatGroup = {
   archived: boolean;
   created_at: string;
   updated_at: string;
+  /** "direct" = a member-to-member chat (see direct-chats.ts); everything here is "group". */
+  kind?: "group" | "direct";
 };
 
 export type ChatGroupMember = {
@@ -33,8 +35,11 @@ export type GroupAttachment = {
   storage_path?: string;
   duration?: number;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share";
+  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "community_post";
   fallback_emoji?: string;
+  post_id?: string;
+  reply?: boolean;
+  thumb_path?: string;
   category?: string;
   purchase_id?: string;
   payment_url?: string;
@@ -96,14 +101,15 @@ function normalizeGroupMessage(row: any): GroupMessage {
   } as GroupMessage;
 }
 
+// Coach-run groups only. Member-to-member chats come from listDirectThreads().
 export async function listMyGroups(): Promise<ChatGroup[]> {
-  const { data, error } = await db.from("chat_groups").select("*").eq("archived", false).order("updated_at", { ascending: false });
+  const { data, error } = await db.from("chat_groups").select("*").eq("kind", "group").eq("archived", false).order("updated_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
 
 export async function listAllGroupsForAdmin(): Promise<ChatGroup[]> {
-  const { data, error } = await db.from("chat_groups").select("*").order("updated_at", { ascending: false });
+  const { data, error } = await db.from("chat_groups").select("*").eq("kind", "group").order("updated_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }

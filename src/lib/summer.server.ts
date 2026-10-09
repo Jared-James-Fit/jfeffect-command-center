@@ -1,5 +1,5 @@
 /**
- * Server side of Summer as the admin assistant: what she can see across the
+ * Server side of Cleo as the admin assistant: what she can see across the
  * app, hearing the owner (speech to text), her voice (text to speech) and the
  * shared answer path used by both the chat and voice calls.
  *
@@ -138,7 +138,7 @@ export async function loadAppSnapshot(supabase: any): Promise<AppSnapshot> {
   };
 }
 
-/** Pages from the admin route registry, for Summer's link list. */
+/** Pages from the admin route registry, for Cleo's link list. */
 export async function summerLinkCatalog(): Promise<LinkEntry[]> {
   try {
     const { ADMIN_ROUTE_REGISTRY } = await import("@/lib/admin-route-registry");
@@ -175,7 +175,7 @@ export async function transcribeAudio(b64: string, mime: string): Promise<string
         {
           role: "system",
           content:
-            "You transcribe what a fitness coach says to their bookkeeping and business assistant, Summer. Return only the words spoken, with normal punctuation. Client names, dollar amounts and app words (GST, HST, CRA, check-in, Stripe) should be spelled normally. If nothing intelligible was said, return an empty string.",
+            "You transcribe what a fitness coach says to their bookkeeping and business assistant, Cleo. Return only the words spoken, with normal punctuation. Client names, dollar amounts and app words (GST, HST, CRA, check-in, Stripe) should be spelled normally. If nothing intelligible was said, return an empty string.",
         },
         {
           role: "user",
@@ -187,8 +187,8 @@ export async function transcribeAudio(b64: string, mime: string): Promise<string
       ],
     }),
   });
-  if (res.status === 429) throw new Error("Summer is getting too many requests. Try again in a minute.");
-  if (res.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Summer.");
+  if (res.status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
+  if (res.status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
   if (!res.ok) throw new Error(`Couldn't hear that (${res.status}).`);
   const json: any = await res.json();
   const text = json?.choices?.[0]?.message?.content;
@@ -296,7 +296,7 @@ export async function synthesizeSpeech(text: string): Promise<SpeechOk | SpeechF
 }
 
 /** For the health check: try every provider and report what each said. */
-export async function probeSpeechProviders(sample = "Bonjour bestie, it's Summer. Your books look cute today."): Promise<SpeechAttempt[]> {
+export async function probeSpeechProviders(sample = "Bonjour bestie, it's Cleo. Your books look cute today."): Promise<SpeechAttempt[]> {
   const out: SpeechAttempt[] = [];
   for (const p of providers()) {
     try {

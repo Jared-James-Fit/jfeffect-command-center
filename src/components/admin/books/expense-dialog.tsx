@@ -13,12 +13,13 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { PICKABLE_CATEGORIES, expenseCategory } from "@/lib/business-expense-categories";
-import { ASSISTANT_SHORT, PAYMENT_METHODS, RECEIPTS_BUCKET, minorToInput, parseMoneyToMinor, type ExpenseRow } from "@/lib/business-books";
+import { ASSISTANT_NAME, PAYMENT_METHODS, RECEIPTS_BUCKET, minorToInput, parseMoneyToMinor, type ExpenseRow } from "@/lib/business-books";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { expenseTaxView, fmtCad } from "@/lib/business-tax";
 import { businessToday } from "@/lib/billing-schedule";
 import { deleteExpense, saveExpense } from "@/lib/business-books.functions";
+import { useBooksMode } from "./books-mode";
 import { RECEIPT_ACCEPT, receiptSignedUrl, uploadReceiptFile } from "@/lib/receipt-upload";
 
 type Form = {
@@ -69,6 +70,7 @@ export function ExpenseDialog({
 }) {
   const save = useServerFn(saveExpense);
   const remove = useServerFn(deleteExpense);
+  const canDelete = useBooksMode() === "owner";
   const [form, setForm] = useState<Form>(() => toForm(expense));
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -195,10 +197,10 @@ export function ExpenseDialog({
             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
             <div className="space-y-1">
               {ai.read === false ? (
-                <p>{ASSISTANT_SHORT} couldn't read this one{ai.notes ? ` (${ai.notes})` : ""}. Fill in the details from the receipt.</p>
+                <p>{ASSISTANT_NAME} couldn't read this one{ai.notes ? ` (${ai.notes})` : ""}. Fill in the details from the receipt.</p>
               ) : (
                 <p>
-                  {ASSISTANT_SHORT} filed this{typeof ai.confidence === "number" ? ` (${Math.round(ai.confidence * 100)}% sure)` : ""}.
+                  {ASSISTANT_NAME} filed this{typeof ai.confidence === "number" ? ` (${Math.round(ai.confidence * 100)}% sure)` : ""}.
                   {ai.notes ? ` ${ai.notes}` : ""}
                 </p>
               )}
@@ -340,7 +342,7 @@ export function ExpenseDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">
-          {expense ? (
+          {expense && canDelete ? (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="ghost" className="text-destructive hover:text-destructive" disabled={busy}>
