@@ -17,9 +17,9 @@ begin
   insert into powerlifting_athletes (client_id, athlete_name, sex) values (kim, 'Kim Lee', 'female') returning id into a_kim;
   insert into powerlifting_athletes (athlete_name, sex, status) values ('Phillip Bennett', 'male', 'active') returning id into a_phil;
   insert into powerlifting_coaching_periods (athlete_id) values (a_kim), (a_phil);
-  insert into athlete_powerlifting_results (athlete_id, athlete_name, sex, bodyweight_kg, squat_kg, bench_kg, deadlift_kg, total_kg, meet_name, meet_location, meet_date) values
-    (a_kim, 'Kim Lee', 'female', 57, 95, 62.5, 115, 272.5, 'Provincials', 'Canada', '2025-05-01'),
-    (a_phil, 'Phillip Bennett', 'male', 98, 240, 160, 272.5, 672.5, 'Nationals', 'Canada', '2024-06-01');
+  insert into athlete_powerlifting_results (athlete_id, athlete_name, sex, bodyweight_kg, squat_kg, bench_kg, deadlift_kg, meet_name, meet_location, meet_date) values
+    (a_kim, 'Kim Lee', 'female', 57, 95, 62.5, 115, 'Provincials', 'Canada', '2025-05-01'),
+    (a_phil, 'Phillip Bennett', 'male', 98, 240, 160, 272.5, 'Nationals', 'Canada', '2024-06-01');
 
   -- Ollie left, but his lifts stay.
   perform t_bw(old, 200, '2026-06-01');

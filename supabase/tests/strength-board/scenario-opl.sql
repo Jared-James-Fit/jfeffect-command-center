@@ -52,9 +52,9 @@ begin
   insert into powerlifting_athletes (athlete_name, sex, status, country_filter, openpowerlifting_url, auto_sync)
     values ('Kenneth Morris', 'male', 'retired', 'Canada', 'https://www.openpowerlifting.org/u/kennethmorris', true) returning id into ken;
   insert into powerlifting_coaching_periods (athlete_id, end_date) values (ken, '2024-12-14');
-  insert into athlete_powerlifting_results (athlete_id, athlete_name, sex, bodyweight_kg, squat_kg, bench_kg, deadlift_kg, total_kg,
+  insert into athlete_powerlifting_results (athlete_id, athlete_name, sex, bodyweight_kg, squat_kg, bench_kg, deadlift_kg,
       meet_name, meet_location, meet_date, federation, competition_level, source, source_key)
-    values (ken, 'Kenneth Morris', 'male', 103.0, 240, 115, 230, 585, 'MPA Total Fortification V', 'Canada-MB', '2024-12-14', 'CPU', 'national', 'manual', null);
+    values (ken, 'Kenneth Morris', 'male', 103.0, 240, 115, 230, 'MPA Total Fortification V', 'Canada-MB', '2024-12-14', 'CPU', 'national', 'manual', null);
 
   res := powerlifting_opl_apply(ken, 'kennethmorris', (select csv from fx where slug = 'kennethmorris'));
   perform t_assert(res = '{"meets": 5, "added": 4, "updated": 1}', 'Kenneth: 4 meets added, the one on file updated');
