@@ -11,6 +11,7 @@ import { sendPaymentLinkBySms, postPaymentRequestInChat } from "@/lib/sms-links.
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CreditCard, MessageSquare, Send, Users } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 export function SendPaymentRequestDialog({
   open, onOpenChange, purchaseId, clientName, hasPhone, hasLink,
@@ -26,6 +27,8 @@ export function SendPaymentRequestDialog({
   const [note, setNote] = useState("");
   const [groupId, setGroupId] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  // The finance login sends to the client only (text or their own chat), never a group.
+  const { viewOnly } = useAuth();
 
   const smsFn = useServerFn(sendPaymentLinkBySms);
   const postFn = useServerFn(postPaymentRequestInChat);
@@ -91,10 +94,10 @@ export function SendPaymentRequestDialog({
         )}
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={`grid w-full ${viewOnly ? "grid-cols-2" : "grid-cols-3"}`}>
             <TabsTrigger value="sms"><MessageSquare className="mr-1 h-3 w-3" />SMS</TabsTrigger>
             <TabsTrigger value="dm"><Send className="mr-1 h-3 w-3" />DM</TabsTrigger>
-            <TabsTrigger value="group"><Users className="mr-1 h-3 w-3" />Group</TabsTrigger>
+            {!viewOnly && <TabsTrigger value="group"><Users className="mr-1 h-3 w-3" />Group</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="sms" className="space-y-2 pt-3 text-sm">

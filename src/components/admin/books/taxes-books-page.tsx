@@ -29,16 +29,16 @@ import {
 import { buildBooksSnapshot, expenseTaxView, fmtCad, MONTH_NAMES, type BooksSnapshot } from "@/lib/business-tax";
 import { businessToday } from "@/lib/billing-schedule";
 import {
-  addTaxPayment, deleteTaxPayment, getBooksData, getSummerProfile, markExpensesReviewed, saveTaxSettings, scanReceipt, syncStripeFees,
+  addTaxPayment, deleteTaxPayment, getBooksData, getSummerProfile, markExpensesReviewed, saveTaxSettings, syncStripeFees,
 } from "@/lib/business-books.functions";
-import { RECEIPT_ACCEPT, receiptSignedUrl, uploadReceiptFile } from "@/lib/receipt-upload";
+import { RECEIPT_ACCEPT, receiptSignedUrl } from "@/lib/receipt-upload";
 import { ExpenseDialog } from "./expense-dialog";
+import { BOOKS_KEY, useSnapReceipts } from "./use-snap-receipts";
 import { BooksModeContext, useBooksMode, type BooksMode } from "./books-mode";
 import { openSummer } from "@/components/summer/summer-assistant";
 import { SummerCustomizeDialog } from "./summer-customize";
 import { summerTone } from "@/lib/summer-persona";
 
-const BOOKS_KEY = ["books-data"];
 const STRIPE_FEE_STALE_MS = 12 * 60 * 60 * 1000;
 
 const money = fmtCad;
@@ -71,7 +71,7 @@ export function TaxesBooksPage({ mode = "owner" }: { mode?: BooksMode } = {}) {
 function TaxesBooksPageInner() {
   const qc = useQueryClient();
   const loadFn = useServerFn(getBooksData);
-  const scanFn = useServerFn(scanReceipt);
+  const { snap, scanning, label: snapLabel } = useSnapReceipts();
   const feesFn = useServerFn(syncStripeFees);
   const today = businessToday();
   const currentYear = Number(today.slice(0, 4));
@@ -87,7 +87,6 @@ function TaxesBooksPageInner() {
   const [editing, setEditing] = useState<ExpenseRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [expenseFilter, setExpenseFilter] = useState<string>("all");
-  const [scanState, setScanState] = useState<{ done: number; total: number } | null>(null);
   const [syncingFees, setSyncingFees] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -136,33 +135,16 @@ function TaxesBooksPageInner() {
   }, [data, year, currentYear]);
 
   const onFiles = async (files: FileList | null) => {
-    const list = Array.from(files ?? []);
-    if (!list.length) return;
-    setScanState({ done: 0, total: list.length });
-    let last: ExpenseRow | null = null;
-    let filed = 0;
-    let unread = 0;
-    for (const [i, file] of list.entries()) {
-      try {
-        const { path, mime } = await uploadReceiptFile(file);
-        const res: any = await scanFn({ data: { path, mime } });
-        last = res.expense as ExpenseRow;
-        if (res.read && last.status === "reviewed") filed++;
-        else unread++;
-      } catch (e: any) {
-        toast.error(`${file.name}: ${e?.message ?? "upload failed"}`);
-      }
-      setScanState({ done: i + 1, total: list.length });
-    }
-    setScanState(null);
-    await refresh();
+    const res = await snap(files);
+    if (!res) return;
+    const { count, last, filed, unread } = res;
     setTab("expenses");
-    if (list.length === 1 && last) {
+    if (count === 1 && last) {
       if (last.status === "reviewed") {
         toast.success(`${ASSISTANT_NAME} filed it: ${last.vendor ?? "Receipt"} ${money(Number(last.amount_minor))}, ${expenseCategory(last.category).label}`);
       }
       setEditing(last);
-    } else if (list.length > 1) {
+    } else if (count > 1) {
       toast.success(`${filed} filed${unread ? `, ${unread} to check` : ""}`);
       if (unread) setExpenseFilter("review");
     }
@@ -222,9 +204,9 @@ function TaxesBooksPageInner() {
             <SelectContent>{years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
           </Select>
           <input ref={fileRef} type="file" accept={RECEIPT_ACCEPT} multiple className="hidden" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
-          <Button size="sm" className="h-9" onClick={() => fileRef.current?.click()} disabled={!!scanState}>
-            {scanState ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Camera className="mr-1.5 h-4 w-4" />}
-            {scanState ? `Reading ${scanState.done + (scanState.done < scanState.total ? 1 : 0)} of ${scanState.total}` : "Snap receipt"}
+          <Button size="sm" className="h-9" onClick={() => fileRef.current?.click()} disabled={scanning}>
+            {scanning ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Camera className="mr-1.5 h-4 w-4" />}
+            {snapLabel}
           </Button>
           <Button size="sm" variant="outline" className="h-9" onClick={() => openSummer({ year })}>
             <Sparkles className="mr-1.5 h-4 w-4 text-amber-500" /> Ask {ASSISTANT_NAME}

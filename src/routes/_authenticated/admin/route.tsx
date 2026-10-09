@@ -10,7 +10,7 @@ import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { SummerAssistant } from "@/components/summer/summer-assistant";
 import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
-import { LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy, Landmark, Activity, Ticket } from "lucide-react";
+import { LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy, Landmark, Activity, Wallet } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
 import { StaffMfaGate } from "@/components/staff-mfa-gate";
@@ -86,13 +86,13 @@ function AdminLayout() {
     const pick = (to: string) =>
       nav.find((i) => i.to === to) ?? legacy.find((i) => i.to === to)!;
     if (viewOnly) {
-      // The finance login's phone bar: its daily work first, home last.
+      // The finance login's phone bar: its home (snap, record, collect, Cleo),
+      // the books, payments and clients; More holds the rest.
       return [
+        { to: "/admin/finance", label: "Home", icon: Wallet },
         { to: "/admin/sales?tab=taxes", label: "Books", icon: Landmark },
-        { to: "/admin/transactions", label: "Sales", icon: Activity },
-        { to: "/admin/discount-codes", label: "Discounts", icon: Ticket },
+        { to: "/admin/transactions", label: "Payments", icon: Activity },
         { ...pick("/admin/clients"), label: "Clients" },
-        { ...pick("/admin"), label: "Home" },
       ];
     }
     if (isCoach) {
