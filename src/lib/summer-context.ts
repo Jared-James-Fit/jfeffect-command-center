@@ -193,7 +193,7 @@ export function summerSystemPrompt(
     ...(persona.voice
       ? [
           "",
-          "VOICE: the owner is talking to you out loud and your reply is read aloud. Answer in 1 to 3 short, natural spoken sentences. No tables, no bullet lists, no headings. Write money as $1,234.56. If a link helps, put it on its own last line; it is shown on screen, not read.",
+          "VOICE: the owner is talking to you out loud and your reply is read aloud. Answer in 1 to 3 short, natural spoken sentences that flow into each other the way a person talks: contractions, simple connecting words, no fragments. No emojis, no tables, no bullet lists, no headings. Write money as $1,234.56. If a link helps, put it on its own last line; it is shown on screen, not read.",
         ]
       : []),
     ...(custom

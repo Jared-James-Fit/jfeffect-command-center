@@ -196,11 +196,16 @@ export async function transcribeAudio(b64: string, mime: string): Promise<string
 }
 
 // ---------------------------------------------------------------------------
-// Voice: text to speech. Tries the providers that can do a French-accented
-// English voice; the browser falls back to a device voice when none answers.
+// Voice: text to speech. Tries the server voices in order; the browser falls
+// back to a device voice when none answers.
 
 export const SUMMER_VOICE_STYLE =
-  "Speak English with a light, warm Parisian French accent. A young woman's voice: bright, playful, confident and friendly, like a stylish best friend who is great with money. Natural, quick pace. Keep numbers and names in English.";
+  "Voice: a calm, clear, warm woman's voice with a neutral North American accent, like a polished voice assistant. Delivery: smooth and even, relaxed conversational pace, never rushed. Let sentences flow into each other with natural, short pauses; no dramatic pitch swings, no sing-song, no breathiness. Read numbers and dollar amounts clearly and naturally.";
+
+/** OpenAI voices, best first. marin is the most natural; nova is the long-standing fallback. */
+const OPENAI_VOICES = ["marin", "nova"];
+/** Gemini's "smooth" prebuilt voice. */
+const GEMINI_VOICE = "Despina";
 
 type SpeechOk = { ok: true; audio: string; mime: string; provider: string };
 type SpeechFail = { ok: false; reason: string };
@@ -216,17 +221,24 @@ async function toBase64(buf: ArrayBuffer): Promise<string> {
 }
 
 async function speechEndpoint(url: string, headers: Record<string, string>, model: string, text: string) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({ model, voice: "coral", input: text, instructions: SUMMER_VOICE_STYLE, response_format: "mp3" }),
-  });
-  const type = res.headers.get("content-type") ?? "";
-  if (!res.ok || !type.startsWith("audio")) {
+  let last: { error: string; status?: number } = { error: "no voice" };
+  for (const voice of OPENAI_VOICES) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({ model, voice, input: text, instructions: SUMMER_VOICE_STYLE, response_format: "mp3" }),
+    });
+    const type = res.headers.get("content-type") ?? "";
+    if (res.ok && type.startsWith("audio")) {
+      return { audio: await toBase64(await res.arrayBuffer()), mime: type.split(";")[0] || "audio/mpeg" };
+    }
     const detail = (await res.text().catch(() => "")).slice(0, 160);
-    return { error: detail || `HTTP ${res.status}`, status: res.status };
+    last = { error: detail || `HTTP ${res.status}`, status: res.status };
+    // Only a rejected request is worth retrying with the next voice (an older
+    // gateway may not know the newest one); auth, quota and outages aren't.
+    if (res.status !== 400 && res.status !== 422) break;
   }
-  return { audio: await toBase64(await res.arrayBuffer()), mime: type.split(";")[0] || "audio/mpeg" };
+  return last;
 }
 
 function providers(): Provider[] {
@@ -246,7 +258,7 @@ function providers(): Provider[] {
           body: JSON.stringify({
             model: "google/gemini-2.5-flash-preview-tts",
             modalities: ["audio"],
-            audio: { voice: "Aoede", format: "wav" },
+            audio: { voice: GEMINI_VOICE, format: "wav" },
             messages: [{ role: "user", content: `${SUMMER_VOICE_STYLE}\n\nSay exactly this:\n${text}` }],
           }),
         });
@@ -296,7 +308,7 @@ export async function synthesizeSpeech(text: string): Promise<SpeechOk | SpeechF
 }
 
 /** For the health check: try every provider and report what each said. */
-export async function probeSpeechProviders(sample = "Bonjour bestie, it's Cleo. Your books look cute today."): Promise<SpeechAttempt[]> {
+export async function probeSpeechProviders(sample = "Hi, it's Cleo. Your books are up to date, and you've got two check-ins waiting."): Promise<SpeechAttempt[]> {
   const out: SpeechAttempt[] = [];
   for (const p of providers()) {
     try {

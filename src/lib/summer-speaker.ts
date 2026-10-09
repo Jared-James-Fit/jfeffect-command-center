@@ -1,6 +1,6 @@
 /**
- * Cleo's voice in the browser. Plays the server voice (French-accented
- * English) when a provider is available, otherwise a device voice. Browser
+ * Cleo's voice in the browser. Plays the server voice (calm, natural
+ * English) when a provider is available, otherwise the device's best voice. Browser
  * only; every storage and speech call is guarded.
  *
  * Autoplay: phones only allow audio that starts from a tap. unlock() runs on
@@ -44,7 +44,11 @@ export function saveVoicePrefs(p: SummerVoicePrefs) {
   }
 }
 
-const FEMALE = /am[ée]lie|audrey|aur[ée]lie|marie|c[ée]line|virginie|julie|hortense|denise|[ée]lo[ïi]se|chantal|sylvie|l[ée]a\b|samantha|karen|moira|tessa|serena|victoria|zira|aria|jenny|female|femme|google uk english female|google us english/i;
+const FEMALE = /samantha|ava\b|allison|susan|zoe|nicky|karen|moira|tessa|serena|victoria|zira|aria|jenny|michelle|emma|libby|sonia|natasha|female|google us english|google uk english female/i;
+/** Neural / downloaded voices: the ones that sound like an assistant, not a robot. */
+const NATURAL = /siri|premium|enhanced|natural|neural|online/i;
+/** Novelty and legacy voices nobody wants reading their books. */
+const NOVELTY = /\b(albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|fred|junior|ralph|kathy)\b/i;
 
 export function hasDeviceSpeech(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
@@ -59,27 +63,39 @@ export function deviceVoices(): SpeechSynthesisVoice[] {
   }
 }
 
-/**
- * Device voices for the picker: French feminine first (the accent the owner
- * asked for), then English feminine (clearest for numbers), then the rest.
- */
-export function rankVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
-  const score = (v: SpeechSynthesisVoice) => {
-    const fr = v.lang?.toLowerCase().startsWith("fr");
-    const en = v.lang?.toLowerCase().startsWith("en");
-    const fem = FEMALE.test(v.name);
-    return (fr && fem ? 0 : fr ? 1 : en && fem ? 2 : en ? 3 : 4) + (v.localService ? 0 : 0.5);
-  };
-  return [...voices].sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name));
+function voiceScore(v: SpeechSynthesisVoice): number {
+  const lang = v.lang?.toLowerCase() ?? "";
+  let score = lang.startsWith("en-us") ? 0 : lang.startsWith("en") ? 1 : 4;
+  if (!NATURAL.test(v.name)) score += 2;
+  if (!FEMALE.test(v.name)) score += 1;
+  if (NOVELTY.test(v.name)) score += 10;
+  return score;
 }
 
-/** Fallback when her own voice isn't available: a clear English feminine voice. */
+/** Device voices for the picker: natural-sounding English feminine voices first. */
+export function rankVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
+  return [...voices].sort((a, b) => voiceScore(a) - voiceScore(b) || a.name.localeCompare(b.name));
+}
+
+/** Fallback when her own voice isn't available: the most natural English voice on the device. */
 function fallbackVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
-  return (
-    voices.find((v) => v.lang?.toLowerCase().startsWith("en") && FEMALE.test(v.name)) ??
-    voices.find((v) => v.lang?.toLowerCase().startsWith("en")) ??
-    voices[0]
-  );
+  return rankVoices(voices)[0];
+}
+
+/**
+ * Sentences grouped into chunks of up to ~maxChars. Fewer, longer utterances
+ * flow like speech; one per sentence leaves an audible gap between each.
+ * Kept short enough that Chrome doesn't cut a long utterance off mid-way.
+ */
+export function speechChunks(text: string, maxChars = 220): string[] {
+  const sentences = text.match(/[^.!?]+[.!?]*/g)?.map((p) => p.trim()).filter(Boolean) ?? [text];
+  const chunks: string[] = [];
+  for (const sentence of sentences) {
+    const last = chunks.length - 1;
+    if (last >= 0 && chunks[last].length + 1 + sentence.length <= maxChars) chunks[last] += ` ${sentence}`;
+    else chunks.push(sentence);
+  }
+  return chunks;
 }
 
 type ServerVoice = (text: string) => Promise<{ ok: true; audio: string; mime: string } | { ok: false; reason?: string }>;
@@ -203,8 +219,7 @@ class SummerSpeaker {
     if (!hasDeviceSpeech()) return Promise.resolve();
     const voices = deviceVoices();
     const voice = voices.find((v) => v.voiceURI === prefs.voice) ?? fallbackVoice(voices);
-    // Sentence by sentence: some browsers cut long utterances off.
-    const parts = text.match(/[^.!?]+[.!?]*/g)?.map((p) => p.trim()).filter(Boolean) ?? [text];
+    const parts = speechChunks(text);
     return new Promise((resolve) => {
       let finished = false;
       const done = () => {
@@ -221,7 +236,7 @@ class SummerSpeaker {
           u.lang = voice.lang;
         }
         u.rate = prefs.rate;
-        u.pitch = 1.05;
+        u.pitch = 1;
         if (i === parts.length - 1) {
           u.onend = done;
           u.onerror = done;

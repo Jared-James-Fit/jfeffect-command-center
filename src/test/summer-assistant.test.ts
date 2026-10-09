@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractLinks, isSafeInternalHref, speechFromReply, tokenizeInline } from "@/lib/summer-voice-text";
+import { speechChunks } from "@/lib/summer-speaker";
 import { buildAppContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot } from "@/lib/summer-app";
 import { summerSystemPrompt } from "@/lib/summer-context";
 import { audioFormat } from "@/lib/summer.server";
@@ -53,6 +54,22 @@ describe("speechFromReply", () => {
     const said = speechFromReply(long, 120);
     expect(said.length).toBeLessThanOrEqual(120);
     expect(said.endsWith(".")).toBe(true);
+  });
+});
+
+describe("speechChunks", () => {
+  it("joins short sentences so the device voice doesn't pause after each one", () => {
+    expect(speechChunks("You owe $445. It's due April 30. Want the breakdown?")).toEqual([
+      "You owe $445. It's due April 30. Want the breakdown?",
+    ]);
+  });
+
+  it("splits at sentence boundaries when a chunk would get too long", () => {
+    const text = Array.from({ length: 12 }, (_, i) => `Sentence number ${i} is right here.`).join(" ");
+    const chunks = speechChunks(text, 100);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((c) => c.length <= 100 && c.endsWith("."))).toBe(true);
+    expect(chunks.join(" ")).toBe(text);
   });
 });
 
