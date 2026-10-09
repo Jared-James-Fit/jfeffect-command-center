@@ -147,6 +147,8 @@ export type CommunityPost = {
   series_data?: WinsStats | RecapStats | null;
   /** Tuesday / Thursday / Saturday: what the post shows besides its words. */
   series_extra?: SeriesExtra | null;
+  /** A note that is someone's comment, shared to the feed. */
+  shared_comment?: SharedComment | null;
   edited_at?: string | null;
   /** Set when the post was made while the session was still open ("Locked in"). */
   locked_in_at?: string | null;
@@ -237,13 +239,80 @@ export const BIO_MAX = 150;
 
 export type CommunityFeedPage = { posts: CommunityPost[]; has_more: boolean };
 
+export type CommentMedia = {
+  path: string;
+  thumb: string | null;
+  type: "image" | "video";
+  width: number | null;
+  height: number | null;
+};
+
 export type CommunityComment = {
   id: string;
+  /** The top-level comment this replies to (replies are one level deep). */
+  parent_id?: string | null;
   body: string;
   created_at: string;
   author: CommunityAuthor;
+  /** Who a reply is to, when it isn't the writer replying to themself. */
+  reply_to?: string | null;
+  media?: CommentMedia | null;
+  likes?: number;
+  liked?: boolean;
+  /** Hidden by the post's owner / a coach. Only they are told. */
+  hidden?: boolean;
+  is_mine?: boolean;
+  /** The writer, the post's owner and coaches. */
   can_delete: boolean;
+  /** The post's owner and coaches, on other people's comments. */
+  can_hide?: boolean;
+  /** Comments on community posts can be shared as their own post. */
+  can_share?: boolean;
+  /** Still sending (optimistic): shown dimmed, no actions yet. */
+  pending?: boolean;
+  /** A local preview while the photo / video uploads. */
+  local_preview?: string | null;
 };
+
+/** A comment someone shared as its own post. `gone` once it's deleted or hidden. */
+export type SharedComment =
+  | {
+      id: string;
+      post_id: string;
+      body: string;
+      created_at: string;
+      author: CommunityAuthor;
+      /** Whose post it was on. */
+      post_author: string | null;
+      media: CommentMedia | null;
+      gone?: undefined;
+    }
+  | { gone: true };
+
+/** A top-level comment followed by its replies, oldest first (how the thread reads). */
+export function threadComments(list: CommunityComment[]): { comment: CommunityComment; replies: CommunityComment[] }[] {
+  const tops: { comment: CommunityComment; replies: CommunityComment[] }[] = [];
+  const byId = new Map<string, { comment: CommunityComment; replies: CommunityComment[] }>();
+  for (const c of list) {
+    if (c.parent_id) continue;
+    const t = { comment: c, replies: [] as CommunityComment[] };
+    tops.push(t);
+    byId.set(c.id, t);
+  }
+  for (const c of list) {
+    if (!c.parent_id) continue;
+    const t = byId.get(c.parent_id);
+    if (t) t.replies.push(c);
+  }
+  return tops;
+}
+
+/** "1 like" / "12 likes" / null for none. */
+export function likesLabel(n: number | null | undefined): string | null {
+  const v = Number(n ?? 0);
+  if (!Number.isFinite(v) || v <= 0) return null;
+  return v === 1 ? "1 like" : `${v} likes`;
+}
 
 /* ------------------------------------------------------------------ */
 /*  What a card shows                                                  */

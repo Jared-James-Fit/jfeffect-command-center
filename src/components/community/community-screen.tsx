@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { PostCard } from "@/components/community/post-card";
 import { doubleTapTipKeys } from "@/components/community/reaction-button";
 import { CommentsSheet } from "@/components/community/comments-sheet";
+import { OPEN_POST_EVENT } from "@/components/community/shared-comment";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
@@ -117,6 +118,16 @@ export function CommunityScreen({
     } else setDetailId(jumpTo);
     setJumpTo(null);
   }, [jumpTo, feed.isSuccess, posts.length]);
+
+  // "See the post" on a shared comment opens the post it came from.
+  useEffect(() => {
+    const open = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (typeof id === "string" && id) setDetailId(id);
+    };
+    window.addEventListener(OPEN_POST_EVENT, open);
+    return () => window.removeEventListener(OPEN_POST_EVENT, open);
+  }, []);
 
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);

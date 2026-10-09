@@ -3,7 +3,7 @@
  * 20261006090000_community_sharing.sql. Row-level security and the RPCs are
  * the real gate; nothing here is trusted for permissions.
  */
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -31,7 +31,8 @@ import {
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
 import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
-import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, type UploadedMedia } from "@/lib/community-media";
+import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
+import { onRealtimeRejoin, useResyncOnResume } from "@/hooks/use-resync-on-resume";
 
 const db = supabase as any;
 
@@ -282,6 +283,10 @@ export function useMarkHintSeen() {
 
 /* ---- comments ------------------------------------------------------- */
 
+function setComments(qc: ReturnType<typeof useQueryClient>, postId: string, fn: (list: CommunityComment[]) => CommunityComment[]) {
+  qc.setQueryData<CommunityComment[]>(communityKeys.comments(postId), (old) => (old ? fn(old) : old));
+}
+
 export function useComments(postId: string, enabled: boolean) {
   return useQuery({
     queryKey: communityKeys.comments(postId),
@@ -295,32 +300,245 @@ export function useComments(postId: string, enabled: boolean) {
   });
 }
 
+/**
+ * Live comments: new comments, edits (hide / unhide), deletes and likes from
+ * anyone stream in while a thread is open. One channel per post however many
+ * threads show it. Hiding makes a comment unreadable to most people, which
+ * realtime can't tell them, so the hider also pings the post's channel.
+ * Returns that ping.
+ */
+const commentChannels = new Map<string, { ch: ReturnType<typeof supabase.channel>; users: number; refresh: () => void }>();
+
+export function useCommentsRealtime(postId: string, enabled = true) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!enabled) return;
+    const hit = commentChannels.get(postId);
+    if (hit) {
+      hit.users += 1;
+    } else {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      // a like burst or a cascade of deletes is one refetch, not ten
+      const refresh = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => void qc.invalidateQueries({ queryKey: communityKeys.comments(postId) }), 120);
+      };
+      const has = (id: unknown) => typeof id === "string" && (qc.getQueryData<CommunityComment[]>(communityKeys.comments(postId)) ?? []).some((c) => c.id === id);
+      const ch = supabase
+        .channel(`community-comments:${postId}`)
+        .on("postgres_changes" as any, { event: "INSERT", schema: "public", table: "community_comments", filter: `post_id=eq.${postId}` }, refresh)
+        .on("postgres_changes" as any, { event: "UPDATE", schema: "public", table: "community_comments", filter: `post_id=eq.${postId}` }, refresh)
+        // DELETE events only carry the id, so they can't be filtered by post
+        .on("postgres_changes" as any, { event: "DELETE", schema: "public", table: "community_comments" }, (payload: any) => {
+          const id = payload.old?.id;
+          if (!has(id)) return;
+          setComments(qc, postId, (l) => l.filter((c) => c.id !== id && c.parent_id !== id));
+          refresh();
+        })
+        .on("postgres_changes" as any, { event: "INSERT", schema: "public", table: "community_comment_likes", filter: `post_id=eq.${postId}` }, refresh)
+        .on("postgres_changes" as any, { event: "DELETE", schema: "public", table: "community_comment_likes" }, (payload: any) => {
+          if (has(payload.old?.comment_id)) refresh();
+        })
+        .on("broadcast", { event: "sync" }, refresh)
+        .subscribe(onRealtimeRejoin(refresh));
+      commentChannels.set(postId, { ch, users: 1, refresh });
+    }
+    return () => {
+      const cur = commentChannels.get(postId);
+      if (!cur) return;
+      cur.users -= 1;
+      if (cur.users <= 0) {
+        commentChannels.delete(postId);
+        void supabase.removeChannel(cur.ch);
+      }
+    };
+  }, [postId, enabled, qc]);
+  useResyncOnResume(() => void qc.invalidateQueries({ queryKey: communityKeys.comments(postId) }), enabled);
+  return useCallback(() => {
+    void commentChannels.get(postId)?.ch.send({ type: "broadcast", event: "sync", payload: {} });
+  }, [postId]);
+}
+
+export type NewComment = {
+  /** Temporary id for the instant (optimistic) row. */
+  tempId: string;
+  body: string;
+  /** The comment being replied to (a reply to a reply is still one level deep). */
+  parentId?: string | null;
+  /** The top-level comment it lands under, for the instant row. */
+  threadId?: string | null;
+  replyTo?: string | null;
+  media?: PickedMedia | null;
+  userId: string;
+  me: CommunityAuthor;
+  onProgress?: (pct: number) => void;
+};
+
+/** Post a comment or reply (words, a photo / video, or both). Shows instantly, uploads in the background. */
 export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine: boolean) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: string) => {
-      const { error } = await db.rpc("community_add_comment", { _post_id: postId, _body: body });
-      if (error) throw error;
+    mutationFn: async (c: NewComment): Promise<CommunityComment> => {
+      let media: { path: string; thumb: string | null; type: string; width: number; height: number } | null = null;
+      if (c.media) {
+        const up = await uploadPicked(c.media, c.userId, c.onProgress);
+        media = { path: up.media_path, thumb: up.media_thumb_path, type: up.media_type, width: up.media_width, height: up.media_height };
+      }
+      const { data, error } = await db.rpc("community_add_comment", { _post_id: postId, _body: c.body, _parent_id: c.parentId ?? null, _media: media });
+      if (error) {
+        if (media) await removeCommunityFiles([media.path, media.thumb]);
+        throw error;
+      }
       if (viewerIsCoach && !postIsMine) fireAppEvent("community_coach_recognition", postId);
+      return data as CommunityComment;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: communityKeys.comments(postId) });
-      qc.invalidateQueries({ queryKey: ["community-feed"] });
+    onMutate: async (c) => {
+      await qc.cancelQueries({ queryKey: communityKeys.comments(postId) });
+      const temp: CommunityComment = {
+        id: c.tempId,
+        parent_id: c.threadId ?? null,
+        body: c.body,
+        created_at: new Date().toISOString(),
+        author: c.me,
+        reply_to: c.replyTo ?? null,
+        media: c.media ? { path: "", thumb: null, type: c.media.kind, width: c.media.width, height: c.media.height } : null,
+        local_preview: c.media?.previewUrl ?? null,
+        likes: 0,
+        liked: false,
+        is_mine: true,
+        can_delete: false,
+        pending: true,
+      };
+      qc.setQueryData<CommunityComment[]>(communityKeys.comments(postId), (old) => [...(old ?? []), temp]);
+    },
+    onSuccess: (row, c) => {
+      // keep showing the local photo until the signed one has loaded
+      const done = { ...row, local_preview: c.media?.previewUrl ?? null };
+      setComments(qc, postId, (l) => (l.some((x) => x.id === row.id) ? l.filter((x) => x.id !== c.tempId) : l.map((x) => (x.id === c.tempId ? done : x))));
+      if (c.media) {
+        setTimeout(() => {
+          setComments(qc, postId, (l) => l.map((x) => (x.id === row.id ? { ...x, local_preview: null } : x)));
+          releasePicked(c.media!);
+        }, 30_000);
+      }
+      if (viewerIsCoach) patchPost(qc, postId, (p) => ({ ...p, coach_commented: true }));
+    },
+    onError: (_e, c) => {
+      setComments(qc, postId, (l) => l.filter((x) => x.id !== c.tempId));
     },
   });
 }
 
+/** Like / unlike a comment. Instant; the server catches up. */
+export function useLikeComment(postId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, liked }: { id: string; liked: boolean }) => {
+      const { error } = await db.rpc("community_like_comment", { _comment_id: id, _liked: liked });
+      if (error) throw error;
+    },
+    onMutate: async ({ id, liked }) => {
+      await qc.cancelQueries({ queryKey: communityKeys.comments(postId) });
+      const before = qc.getQueryData<CommunityComment[]>(communityKeys.comments(postId));
+      setComments(qc, postId, (l) =>
+        l.map((c) => (c.id === id && !!c.liked !== liked ? { ...c, liked, likes: Math.max(0, (c.likes ?? 0) + (liked ? 1 : -1)) } : c)),
+      );
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before) qc.setQueryData(communityKeys.comments(postId), ctx.before);
+    },
+  });
+}
+
+/** Delete a comment (yours, or any on your post; coaches any). Its replies go with it. */
 export function useDeleteComment(postId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (commentId: string) => {
-      const { error } = await db.rpc("community_delete_comment", { _comment_id: commentId });
+    mutationFn: async (c: Pick<CommunityComment, "id" | "is_mine" | "media">) => {
+      const { error } = await db.rpc("community_delete_comment", { _comment_id: c.id });
       if (error) throw error;
+      if (c.is_mine && c.media) await removeCommunityFiles([c.media.path, c.media.thumb]);
+    },
+    onMutate: async (c) => {
+      await qc.cancelQueries({ queryKey: communityKeys.comments(postId) });
+      const before = qc.getQueryData<CommunityComment[]>(communityKeys.comments(postId));
+      setComments(qc, postId, (l) => l.filter((x) => x.id !== c.id && x.parent_id !== c.id));
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before) qc.setQueryData(communityKeys.comments(postId), ctx.before);
+    },
+    onSuccess: () => {
+      // the share of a deleted comment goes with it
+      qc.invalidateQueries({ queryKey: ["community-feed"], refetchType: "none" });
+    },
+  });
+}
+
+/** Post owner / coach: hide a comment from everyone else (or put it back). */
+export function useHideComment(postId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, hidden }: { id: string; hidden: boolean }) => {
+      const { error } = await db.rpc("community_hide_comment", { _comment_id: id, _hidden: hidden });
+      if (error) throw error;
+    },
+    onMutate: async ({ id, hidden }) => {
+      await qc.cancelQueries({ queryKey: communityKeys.comments(postId) });
+      const before = qc.getQueryData<CommunityComment[]>(communityKeys.comments(postId));
+      setComments(qc, postId, (l) => l.map((c) => (c.id === id ? { ...c, hidden, can_share: hidden ? false : c.can_share } : c)));
+      return { before };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.before) qc.setQueryData(communityKeys.comments(postId), ctx.before);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: communityKeys.comments(postId) });
-      qc.invalidateQueries({ queryKey: ["community-feed"] });
+      qc.invalidateQueries({ queryKey: ["community-feed"], refetchType: "none" });
     },
+  });
+}
+
+/** Share a comment to the feed as its own post (once each; sharing again returns the same post). */
+export function useShareComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ commentId, caption }: { commentId: string; caption: string }): Promise<string> => {
+      const { data, error } = await db.rpc("community_share_comment", { _comment_id: commentId, _caption: caption.trim() || null });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => invalidateCommunity(qc),
+  });
+}
+
+/**
+ * Keep the comment count on the feed card in step with the open thread (new
+ * comments from anyone, deletes, hides) without refetching the feed.
+ */
+export function useSyncCommentCount(postId: string, comments: CommunityComment[] | undefined) {
+  const qc = useQueryClient();
+  const last = useRef<number | null>(null);
+  useEffect(() => {
+    if (!comments || comments.length >= 300) return;
+    const n = comments.filter((c) => !c.hidden).length;
+    if (last.current === n) return;
+    last.current = n;
+    patchPost(qc, postId, (p) => (p.comment_count === n ? p : { ...p, comment_count: n }));
+  }, [comments, postId, qc]);
+}
+
+/** Signed URLs for every photo / video thumbnail in a thread, in one storage call. */
+export function useCommentMediaUrls(comments: CommunityComment[]) {
+  const paths = comments.map((c) => (c.media ? c.media.thumb ?? (c.media.type === "image" ? c.media.path : null) : null)).filter((p): p is string => !!p);
+  const key = paths.join("|");
+  return useQuery({
+    queryKey: ["community-media-urls", key],
+    enabled: key.length > 0,
+    staleTime: 45 * 60 * 1000,
+    placeholderData: (prev) => prev,
+    queryFn: () => signCommunityPaths(paths),
   });
 }
 

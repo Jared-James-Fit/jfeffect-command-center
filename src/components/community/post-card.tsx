@@ -35,6 +35,7 @@ import { FeedCaption } from "@/components/community/feed-caption";
 import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
 import { useAuth } from "@/lib/auth";
 import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
+import { SharedCommentCard, openCommunityPost } from "@/components/community/shared-comment";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -128,6 +129,7 @@ export function NoteBody({ post, clamp = false }: { post: CommunityPost; clamp?:
 
 /** Whatever a series post carries under its words: Sunday's report card, Wednesday's numbers, Tuesday's / Thursday's card. */
 export function NoteExtras({ post, unit, className }: { post: CommunityPost; unit: "kg" | "lb"; className?: string }) {
+  if (post.shared_comment) return <SharedCommentCard shared={post.shared_comment} className={className} onOpenPost={openCommunityPost} />;
   if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return <SundayRecapCard stats={post.series_data} unit={unit} className={className} />;
   if (isWinsStats(post.series_data)) return <WinsStatsCard stats={post.series_data} unit={unit} className={className} />;
   return <SeriesExtraCard post={post} className={className} />;
