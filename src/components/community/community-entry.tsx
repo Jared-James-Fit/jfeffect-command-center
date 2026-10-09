@@ -193,69 +193,8 @@ export function CommunityHomeStrip() {
   );
 }
 
-/**
- * Coach dashboard: what clients shared this week, with a one-tap 🔥 per post.
- * Coach props are the strongest thing this community has ("my coach saw my
- * training"), so they're one tap from where the coach already starts the day.
- * Hidden when nobody has shared this week.
- */
-export function CommunityCoachCard() {
-  const { user } = useAuth();
-  const { data: unit = "lb" } = useViewerUnit(user?.id);
-  const { data: activity } = useCommunityActivity(true);
-  const feed = useCommunityFeed(null);
-  const posts = useMemo(() => {
-    const weekAgo = Date.now() - 7 * 86_400_000;
-    return (feed.data?.pages[0]?.posts ?? []).filter((p) => !p.is_mine && p.kind !== "note" && new Date(p.created_at).getTime() > weekAgo).slice(0, 4);
-  }, [feed.data]);
-
-  if (!activity?.enabled) return null;
-
-  // Always visible for coaches: it's their tool, and with nothing shared yet
-  // a hidden card meant the coach couldn't see the community existed at all.
-  if (posts.length === 0) {
-    const anyEver = (feed.data?.pages[0]?.posts?.length ?? 0) > 0;
-    return (
-      <Link to="/admin/community" className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition hover:border-primary/40">
-        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full text-white", NEW_GRADIENT)}>
-          <Flame className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-bold">Community</div>
-          <div className="truncate text-[12px] text-muted-foreground">
-            {anyEver ? "Nothing shared this week yet. Open the feed" : "No posts yet. Clients share from Home and after each workout"}
-          </div>
-        </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-      </Link>
-    );
-  }
-  const waiting = posts.filter((p) => !p.my_reaction).length;
-
-  return (
-    <section className="rounded-xl border border-border bg-card p-4">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-[13px] font-bold tracking-tight">
-          <Flame className="h-4 w-4 text-orange-500" /> Community
-          {activity.unseen > 0 && <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>}
-        </h2>
-        <Link to="/admin/community" className="flex items-center text-[12px] font-bold text-muted-foreground">
-          Open <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-      <p className="mb-2 text-[12px] text-muted-foreground">
-        {waiting > 0 ? `${waiting} ${waiting === 1 ? "workout is" : "workouts are"} waiting on your props. One tap tells them you saw it.` : "You've given props on everything shared this week."}
-      </p>
-      <div className="divide-y divide-border/70">
-        {posts.map((p) => (
-          <CoachPostRow key={p.id} post={p} unit={unit} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
+/** One shared workout with a one-tap 🔥 (the Community page's "waiting on your props"). */
+export function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
   const react = useReact(post, true);
   // any reaction counts as props given (a ❤️ from the feed too); props itself is 🔥
   const given = !!post.my_reaction;

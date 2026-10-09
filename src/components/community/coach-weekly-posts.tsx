@@ -3,7 +3,6 @@ import { CalendarClock, Check, ChevronDown, PenLine, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { SERIES_LABEL, TIP_KIND_LABEL, isRecapStats, postTimeLabel, type CommunitySeries, type CrewCompare } from "@/lib/community";
 import { useSeriesAction, useSeriesOverview, useSeriesPreview, useViewerUnit, type SeriesItem } from "@/lib/community.queries";
@@ -62,7 +61,6 @@ export function CoachWeeklyPosts() {
   const { data: unit = "lb" } = useViewerUnit(user?.id);
   const act = useSeriesAction();
   const [editing, setEditing] = useState<{ series: CommunitySeries; item: SeriesItem } | null>(null);
-  const [writing, setWriting] = useState(false);
   const [open, setOpen] = useState<CommunitySeries | null | undefined>(undefined);
 
   const isOpen = (s: CommunitySeries) => open === s;
@@ -70,7 +68,7 @@ export function CoachWeeklyPosts() {
   const thursday = useSeriesPreview("try_it_thursday", isOpen("try_it_thursday"));
   const sunday = useSeriesPreview("sunday_recap", isOpen("sunday_recap"));
 
-  if (isLoading) return <Skeleton className="mx-3 mt-3 h-40 rounded-2xl sm:mx-auto sm:max-w-[560px]" />;
+  if (isLoading) return <Skeleton className="h-40 w-full rounded-2xl" />;
   if (isError || !data) return null;
 
   // The next day that hasn't gone out yet starts open.
@@ -91,7 +89,7 @@ export function CoachWeeklyPosts() {
     });
 
   return (
-    <section className="mx-auto mt-3 w-full max-w-[560px] px-3 sm:px-4">
+    <section className="w-full">
       <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
         <header className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
           <CalendarClock className="h-5 w-5 shrink-0 text-primary" />
@@ -222,19 +220,9 @@ export function CoachWeeklyPosts() {
             </ul>
           </div>
         )}
-
-        <div className="flex items-center gap-3 border-t border-border/60 px-4 py-3">
-          {data.author && <UserAvatar src={data.author.avatar_url} name={data.author.name} size={30} expandable={false} />}
-          <button type="button" onClick={() => setWriting(true)} className="h-10 flex-1 rounded-full bg-muted px-4 text-left text-[13px] text-muted-foreground">
-            Write a post for the crew…
-          </button>
-        </div>
       </div>
       <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
-        Monday, Tuesday, Thursday, Friday and Saturday come from prepared libraries; quotes are only used where the wording and source are on record. Tuesday
-        swaps in something from the crew's own data when there's a real gap (never two weeks running), and Thursday adds a stat the same way. Numbers only
-        go out when both groups have 3+ people. Wednesday shouts people out from last week's logs; Sunday is the week's report card, and its top 3 count
-        toward Wednesday's rotation so more people get a mention.
+        Tap a day to see what goes out next. Numbers only go out when they're real (3+ people on each side).
       </p>
 
       <NoteEditor
@@ -248,17 +236,6 @@ export function CoachWeeklyPosts() {
           if (!editing) return;
           await act.mutateAsync({ kind: "item", id: editing.item.id, body });
           toast.success("Saved. It goes out like this.");
-        }}
-      />
-      <NoteEditor
-        open={writing}
-        title="Write a post"
-        initial=""
-        saving={act.isPending}
-        onClose={() => setWriting(false)}
-        onSave={async (body) => {
-          await act.mutateAsync({ kind: "note", body });
-          toast.success("Posted to the community");
         }}
       />
     </section>

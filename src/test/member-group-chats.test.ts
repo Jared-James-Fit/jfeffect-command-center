@@ -106,7 +106,7 @@ describe("birthday posts: the card says who's next", () => {
     expect(fn).toContain('r.role === "admin" || r.role === "coach"');
     expect(fn).toContain('rpc("community_birthday_draft_now"');
     const card = read("src/components/community/birthday-posts.tsx");
-    expect(card).toContain("if (items.length === 0 && next.length === 0) return null;");
+    expect(card).toContain("if (items.length === 0 && (actionableOnly || next.length === 0)) return null;");
     expect(card).toContain("Write now");
   });
 });

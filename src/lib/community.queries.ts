@@ -451,6 +451,7 @@ export function usePostPointsStatus(enabled = true) {
 
 export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-feed"] });
+  qc.invalidateQueries({ queryKey: ["community-pulse"] });
   qc.invalidateQueries({ queryKey: ["community-post-points"] });
   qc.invalidateQueries({ queryKey: ["athlete-rankings-monthly-view"] });
   qc.invalidateQueries({ queryKey: ["community-my-post"] });
@@ -548,6 +549,40 @@ export function useSeriesPreview(series: "sunday_recap" | "tuesday_tips" | "try_
       const { data, error } = await db.rpc("community_series_preview", { _series: series });
       if (error) throw error;
       return (data ?? null) as Record<string, any> | null;
+    },
+  });
+}
+
+/** The coach's week in the community (dashboard card + top of the Community page). */
+export type CommunityPulse = {
+  roster: number;
+  /** Clients who opened the community in the last 7 days. */
+  opened: number;
+  /** Everyone who hasn't looked this week, never-opened first. */
+  not_opened: { user_id: string; client_id: string; name: string; avatar_url: string | null; seen_at: string | null }[];
+  client_posts: number;
+  reactions: number;
+  comments: number;
+  /** Shared workouts (last 7 days) with no coach reaction or comment. */
+  waiting_props: number;
+  /** Client comments (last 2 weeks) with no coach comment after them on that post. */
+  to_reply: { post_id: string; comment_id: string; created_at: string; body: string; name: string; avatar_url: string | null }[];
+  top_post: { post_id: string; series: CommunitySeries | null; name: string; line: string; reactions: number; comments: number } | null;
+  paused: boolean;
+  next: { series: CommunitySeries; at: string } | null;
+  birthday_review: number;
+  birthday_next: { id: string; status: "ready" | "scheduled"; post_at: string; birthday: string; name: string } | null;
+};
+
+export function useCommunityPulse(enabled = true) {
+  return useQuery({
+    queryKey: ["community-pulse"],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<CommunityPulse> => {
+      const { data, error } = await db.rpc("community_admin_pulse");
+      if (error) throw error;
+      return data as CommunityPulse;
     },
   });
 }
