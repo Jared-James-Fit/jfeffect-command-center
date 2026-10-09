@@ -29,9 +29,10 @@ create table powerlifting_athletes (id uuid primary key default gen_random_uuid(
   athlete_name text, status text default 'active', country_filter text, openpowerlifting_url text, auto_sync boolean default false);
 create table powerlifting_coaching_periods (id uuid primary key default gen_random_uuid(), athlete_id uuid, start_date date, end_date date);
 create table athlete_powerlifting_results (id uuid primary key default gen_random_uuid(), athlete_id uuid, client_id uuid,
-  athlete_name text, sex text, bodyweight_kg numeric, squat_kg numeric, bench_kg numeric, deadlift_kg numeric, total_kg numeric,
+  athlete_name text not null, sex text not null, bodyweight_kg numeric not null,
+  squat_kg numeric not null default 0, bench_kg numeric not null default 0, deadlift_kg numeric not null default 0, total_kg numeric,
   gl_points numeric, meet_name text, meet_location text, meet_date date, federation text, weight_class_kg text,
-  dots_points numeric, competition_level text, source text, source_key text, created_at timestamptz default now());
+  dots_points numeric, competition_level text, source text not null default 'manual', source_key text, created_at timestamptz default now());
 
 -- Stand-in for pg_net: http_get queues the URL; tests write the responses.
 create schema net;
