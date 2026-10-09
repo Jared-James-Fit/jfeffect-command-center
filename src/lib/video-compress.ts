@@ -176,8 +176,18 @@ export async function compressVideoDetailed(
     conversion = conv;
     // Refuse anything that would lose a track: a silent or blank clip is worse than a slow one.
     if (!conv.isValid) return done("invalid");
-    if (conv.discardedTracks.length > 0) {
-      return done(`dropped:${conv.discardedTracks.map((d) => `${d.track.type}-${d.reason}`).join(",")}`);
+    // Refuse anything that would lose the picture or the sound. An extra track
+    // we can't read is fine to leave out as long as one audio track survives:
+    // newer iPhones record a normal AAC track AND a spatial-audio track
+    // (unknown codec), and refusing over the second one meant no clip from
+    // those phones was ever compressed.
+    const kept = conv.utilizedTracks;
+    const hadAudio = (await input.getAudioTracks()).length > 0;
+    const keptVideo = kept.some((t) => t.type === "video");
+    const keptAudio = kept.some((t) => t.type === "audio");
+    if (!keptVideo || (hadAudio && !keptAudio)) {
+      const tracks = [...kept.map((t) => `${t.type}-${t.codec ?? "?"}`), ...conv.discardedTracks.map((d) => `${d.track.type}-${d.track.codec ?? "?"}:${d.reason}`)];
+      return done(`dropped:${tracks.join(",")}`);
     }
     // Safety valve: if this device is slow at it, give up and send the original.
     // Decided early (~2.5s in) from the measured pace, so a slow phone never
