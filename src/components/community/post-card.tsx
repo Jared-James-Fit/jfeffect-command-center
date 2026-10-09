@@ -106,12 +106,8 @@ export function NoteBody({ post, clamp = false, onOpenPerson }: { post: Communit
       {post.quote && (
         <figure className="mb-3 border-l-[3px] border-primary pl-3.5">
           <blockquote className="whitespace-pre-line text-[18px] font-semibold leading-[1.32] tracking-[-0.01em]">“{post.quote}”</blockquote>
-          {post.quote_author && (
-            <figcaption className="mt-1.5 text-[12px] font-semibold text-muted-foreground">
-              {post.quote_author}
-              {post.quote_source ? <span className="font-normal">, {post.quote_source}</span> : null}
-            </figcaption>
-          )}
+          {/* just the name; where it was said stays on file (every quote is checked) */}
+          {post.quote_author && <figcaption className="mt-1.5 text-[12px] font-semibold text-muted-foreground">{post.quote_author}</figcaption>}
         </figure>
       )}
       {post.caption && (
