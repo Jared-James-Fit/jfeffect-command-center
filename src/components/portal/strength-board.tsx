@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ChevronRight, Crown, Dumbbell, Info, Landmark, Loader2, Medal, ShieldCheck, Trophy } from "lucide-react";
+import { ChevronRight, Crown, Dumbbell, Info, Landmark, Loader2, Medal, Scale, ShieldCheck, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -222,6 +222,18 @@ export function StrengthBoardCard() {
  * The Hall of Strength as a slide in Home's standings card: the two #1s and
  * where you stand. Tap for the full board.
  */
+/** "10.13× BW" or "765 kg ×3": the number a board ranks by, as text. */
+function boardValue(r: StrengthRow, mode: BoardMode, unit: WeightUnit) {
+  return mode === "p4p"
+    ? `${formatMultiple(r.bw_multiple) ?? "—"} BW`
+    : `${formatLoad(r.kg, unit)}${r.reps && r.reps > 1 ? ` ×${r.reps}` : ""}`;
+}
+
+/**
+ * Home card, laid out like the Performance League card: your rank top right, a podium
+ * for the Top 3, 4th and 5th as slim rows (then you, if you're further down), and Full
+ * standings. The board filters sit small above the podium so people come first.
+ */
 export function StrengthBoardSlide() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<BoardMode>("p4p");
@@ -232,88 +244,120 @@ export function StrengthBoardSlide() {
   // The card's Top 5 for the board you pick; Open shows that same board in full.
   const { top: top5, me, count } = pickBoard(data, mode, lift, division, 5);
   const status = meStatus(me, mode, lift, division);
-  const myLine =
-    status.kind === "ranked" ? `You're #${status.rank} of ${status.count ?? count} on this board`
-    : status.kind === "no-bodyweight" ? "Log your bodyweight to rank pound for pound"
+  const ranked = status.kind === "ranked";
+  const podium = top5.slice(0, 3);
+  const rest = top5.slice(3, 5);
+  const meBelow = ranked && me && status.rank > 5 ? me : null;
+  const hint =
+    status.kind === "no-bodyweight" ? "Log your bodyweight to rank pound for pound"
     : status.kind === "no-division" ? "Pick Men or Women in your profile to rank here"
-    : status.kind === "other-division" ? `${count} on this board`
-    : "You're not on this board yet";
-  const chip = (on: boolean) => cn("min-h-8 flex-1 rounded-full text-[12px] font-bold transition", on ? "bg-foreground text-background" : "text-muted-foreground active:bg-muted");
+    : status.kind === "other-division" ? null
+    : status.kind === "ranked" ? null
+    : "Log a heavy single to get on this board";
+  const chip = (on: boolean) => cn("min-h-7 flex-1 rounded-full text-[11px] font-bold transition", on ? "bg-foreground text-background" : "text-muted-foreground active:bg-muted");
+  const MEDAL = ["🥇", "🥈", "🥉"];
 
   return (
     <>
       <div className="flex h-full flex-col">
-        <button type="button" onClick={() => setOpen(true)} className="flex w-full items-start justify-between gap-3 px-4 pt-3 text-left active:opacity-70">
-          <span className="min-w-0">
+        {/* Same header as the League: what it is on the left, where you stand on the right */}
+        <button type="button" onClick={() => setOpen(true)} className="flex w-full items-start gap-3 px-4 pt-3 text-left active:opacity-70">
+          <span className="min-w-0 flex-1">
             <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">All-time strength board</span>
-            <span className="mt-0.5 block text-lg font-bold tracking-tight">Hall of Strength</span>
-            <span className="block text-[11px] text-muted-foreground">Every JF Effect athlete · gym + meets</span>
+            <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">
+              Hall of Strength <Trophy className="h-4 w-4 text-amber-400" />
+            </span>
+            <span className="block text-[11px] text-muted-foreground">{count > 0 ? `${count} athletes · gym + meets` : "Every JF Effect athlete · gym + meets"}</span>
           </span>
-          <Trophy className="h-6 w-6 shrink-0 text-amber-400" />
+          {!isPending && ranked && me && (
+            <span className="shrink-0 text-right">
+              <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Your rank</span>
+              <span className="block text-lg font-bold leading-tight text-primary">#{status.rank}</span>
+              <span className="block text-[11px] font-bold tabular-nums text-muted-foreground">{boardValue(me, mode, unit)}</span>
+            </span>
+          )}
         </button>
-        <div className="mx-3 mt-2.5 space-y-1.5">
-          <div className="grid grid-cols-2 rounded-full bg-muted/50 p-1 text-xs font-bold" role="tablist" aria-label="Ranked by">
+
+        <div className="mx-3 mt-2 space-y-1">
+          <div className="grid grid-cols-2 rounded-full bg-muted/50 p-0.5 text-[11px] font-bold" role="tablist" aria-label="Ranked by">
             {([["p4p", "Pound for pound"], ["absolute", "Heaviest"]] as const).map(([k, label]) => (
               <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => setMode(k)}
-                className={cn("min-h-8 rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
+                className={cn("min-h-7 rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
                 {label}
               </button>
             ))}
           </div>
-          <div className="flex gap-1" role="tablist" aria-label="Lift">
-            {BOARD_LIFTS.map((l) => (
-              <button key={l.key} type="button" role="tab" aria-selected={lift === l.key} onClick={() => setLift(l.key)} className={chip(lift === l.key)}>
-                {l.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1" role="tablist" aria-label="Division">
-            {([["all", "All"], ["male", "Men"], ["female", "Women"]] as const).map(([d, label]) => (
-              <button key={d} type="button" role="tab" aria-selected={division === d} onClick={() => setDivision(d)} className={chip(division === d)}>
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center gap-1">
+            <div className="flex flex-[4] gap-0.5" role="tablist" aria-label="Lift">
+              {BOARD_LIFTS.map((l) => (
+                <button key={l.key} type="button" role="tab" aria-selected={lift === l.key} onClick={() => setLift(l.key)} className={chip(lift === l.key)}>
+                  {l.label}
+                </button>
+              ))}
+            </div>
+            <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
+            <div className="flex flex-[2] gap-0.5" role="tablist" aria-label="Division">
+              {([["all", "All"], ["male", "M"], ["female", "W"]] as const).map(([d, label]) => (
+                <button key={d} type="button" role="tab" aria-selected={division === d} aria-label={d === "all" ? "All" : d === "male" ? "Men" : "Women"} onClick={() => setDivision(d)} className={chip(division === d)}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {hint && !isPending && (
+          <button type="button" onClick={() => setOpen(true)} className="mx-3 mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
+            <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="text-[11px] font-medium">{hint}</span>
+          </button>
+        )}
+
         {isPending ? (
-          <div className="mx-3 mt-2 h-48 animate-pulse rounded-xl bg-muted/40" />
+          <div className="mx-3 mt-2.5 grid grid-cols-3 gap-1.5">
+            {[0, 1, 2].map((i) => <div key={i} className="h-[88px] animate-pulse rounded-xl bg-muted/40" />)}
+          </div>
         ) : top5.length === 0 ? (
-          <button type="button" onClick={() => setOpen(true)} className="mx-3 mt-2 rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
+          <button type="button" onClick={() => setOpen(true)} className="mx-3 mt-2.5 rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
             Nobody's on this board yet. Be the first.
           </button>
         ) : (
-          <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
-            {top5.map((r) => {
-              const rank = rankOf(r, mode, division)!;
-              return (
-                <li key={r.key}>
-                  <button type="button" onClick={() => setOpen(true)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left active:bg-muted", r.is_me && "bg-primary/10")}>
-                    <span className="w-6 shrink-0 text-center text-sm leading-none">
-                      {rank <= 3 ? ["🥇", "🥈", "🥉"][rank - 1] : <span className="text-[12px] font-black tabular-nums text-muted-foreground">{rank}</span>}
-                    </span>
-                    <LifterAvatar row={r} size="h-7 w-7 shrink-0" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-semibold">{r.display_name}{r.is_me ? " (You)" : ""}</span>
-                      <span className="block truncate text-[10px] text-muted-foreground">
-                        {r.source === "meet" ? "Meet" : "Training"}
-                        {mode === "p4p"
-                          ? ` · ${formatLoad(r.kg, unit)}${r.reps && r.reps > 1 ? ` ×${r.reps}` : ""}`
-                          : r.bw_multiple ? ` · ${formatMultiple(r.bw_multiple)} BW` : ""}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-[13px] font-black tabular-nums">
-                      {mode === "p4p"
-                        ? <>{formatMultiple(r.bw_multiple)}<span className="ml-0.5 text-[9px] text-muted-foreground">BW</span></>
-                        : <>{formatLoad(r.kg, unit)}{r.reps && r.reps > 1 ? <span className="ml-0.5 text-[10px] text-primary">×{r.reps}</span> : null}</>}
-                    </span>
+          <>
+            {/* The podium: Top 3 as tiles, like the League */}
+            <div className="mt-2.5 grid grid-cols-3 gap-1.5 px-3">
+              {podium.map((r) => {
+                const place = rankOf(r, mode, division)!;
+                return (
+                  <button type="button" key={r.key} onClick={() => setOpen(true)}
+                    className={cn("min-w-0 rounded-xl bg-muted/40 px-1.5 py-2 text-center transition-colors active:bg-muted", r.is_me && "bg-primary/10 ring-1 ring-primary/30")}>
+                    <div className="text-base leading-none">{MEDAL[place - 1] ?? place}</div>
+                    <div className="mt-1 truncate text-xs font-semibold">{r.is_me ? "You" : r.display_name}</div>
+                    <div className="mt-0.5 truncate text-[12px] font-black tabular-nums text-primary">{boardValue(r, mode, unit)}</div>
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {r.source === "meet" ? "Meet" : "Training"}{mode === "p4p" ? ` · ${formatLoad(r.kg, unit)}` : ""}
+                    </div>
                   </button>
-                </li>
-              );
-            })}
-          </ol>
+                );
+              })}
+            </div>
+            {/* 4th and 5th, then you if you're below them */}
+            {(rest.length > 0 || meBelow) && (
+              <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
+                {[...rest, ...(meBelow ? [meBelow] : [])].map((r) => (
+                  <li key={r.key}>
+                    <button type="button" onClick={() => setOpen(true)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
+                      <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{rankOf(r, mode, division)}</span>
+                      <span className="min-w-0 flex-1 truncate font-semibold">{r.is_me ? "You" : r.display_name}</span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{r.source === "meet" ? "Meet" : "Training"}</span>
+                      <span className="shrink-0 text-[12px] font-bold tabular-nums text-primary">{boardValue(r, mode, unit)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </>
         )}
-        <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
-          <p className={cn("px-1 text-center text-[13px] font-semibold", status.kind === "ranked" ? "text-foreground" : "text-muted-foreground")}>{myLine}</p>
+        <div className="mt-auto px-3 pb-3 pt-2.5">
           {/* Same button as the League card: everyone on this board, the board you picked. */}
           <button type="button" onClick={() => setOpen(true)} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
             Full standings{count > 0 ? ` · ${count}` : ""} <ChevronRight className="h-4 w-4" />
