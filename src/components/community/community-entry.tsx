@@ -14,7 +14,12 @@ const NEW_GRADIENT = "bg-primary";
 
 /** One line that says what a post is: a coach note's first line, or the session and its best lift. */
 function postLine(post: CommunityPost, unit: "kg" | "lb"): string {
-  if (post.kind === "note") return (post.caption ?? "").split("\n").map((l) => l.trim()).find(Boolean) ?? "Posted";
+  if (post.kind === "note") {
+    const line = (post.caption ?? "").split("\n").map((l) => l.trim()).find(Boolean);
+    const shared = post.shared_comment && !post.shared_comment.gone ? post.shared_comment : null;
+    if (shared) return line ? `${line} · "${shared.body || "📷"}"` : `Shared ${shared.author.name}'s comment: "${shared.body || "📷"}"`;
+    return line ?? "Posted";
+  }
   const lift = post.stats ? featuredLift(post.stats) : null;
   return (
     (!post.stats && post.locked_in_at ? `🔒 Locked in · ${post.session_title ?? "Workout"}` : post.stats?.workout_title ?? post.session_title ?? "Workout") +
