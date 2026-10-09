@@ -26,7 +26,7 @@ import {
   meStatus,
   meetHistory,
   normalizeMeetRow,
-  normalizeRow,
+  normalizeAllRow,
   pickBoard,
   rankOf,
   totalClub,
@@ -42,12 +42,12 @@ const db = supabase as any;
 function useStrengthBoard() {
   const viewerId = usePortalUserId() ?? null;
   return useQuery({
-    queryKey: ["strength-board", viewerId],
+    queryKey: ["strength-board", "all", viewerId],
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await db.rpc("get_strength_board", viewerId ? { _as_user: viewerId } : {});
+      const { data, error } = await db.rpc("get_strength_board_all", viewerId ? { _as_user: viewerId } : {});
       if (error) throw error;
-      return ((data ?? []) as any[]).map(normalizeRow);
+      return ((data ?? []) as any[]).map(normalizeAllRow);
     },
   });
 }
@@ -119,8 +119,21 @@ function ClubBadge({ row }: { row: StrengthRow }) {
   );
 }
 
+/** All-time board only: where the number was made. */
+function SourceTag({ row }: { row: StrengthRow }) {
+  return row.source === "meet" ? (
+    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-black tracking-wider text-amber-600 dark:text-amber-400">
+      <Landmark className="h-2.5 w-2.5" /> MEET
+    </span>
+  ) : (
+    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-black tracking-wider text-muted-foreground">
+      <Dumbbell className="h-2.5 w-2.5" /> TRAINING
+    </span>
+  );
+}
+
 function AlumniTag({ row }: { row: StrengthRow }) {
-  if (!row.meet?.is_alumni) return null;
+  if (!row.is_alumni) return null;
   return (
     <span className="inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[8px] font-black tracking-wider text-muted-foreground">
       ALUMNI
@@ -150,15 +163,16 @@ export function StrengthBoardCard() {
   const { data = [], isPending } = useStrengthBoard();
   const { data: meets = [] } = useMeetBoard();
   const { unit } = useWeightUnit();
-  const myTotal = data.find((r) => r.is_me && r.lift === "total") ?? null;
+  const myP4p = data.find((r) => r.is_me && r.lift === "total" && r.p4p_rank != null)?.p4p_rank ?? null;
+  const myAbs = data.find((r) => r.is_me && r.lift === "total" && r.all_rank != null)?.all_rank ?? null;
   const p4pKing = pickBoard(data, "p4p", "total", "all").top[0] ?? null;
   const absKing = pickBoard(data, "absolute", "total", "all").top[0] ?? null;
   const history = meetHistory(meets);
 
   if (!isPending && data.length === 0 && meets.length === 0) return null;
 
-  const myLine = myTotal?.p4p_rank || myTotal?.all_rank
-    ? `You: ${[myTotal.p4p_rank && `#${myTotal.p4p_rank} pound for pound`, myTotal.all_rank && `#${myTotal.all_rank} total`].filter(Boolean).join(" · ")}`
+  const myLine = myP4p || myAbs
+    ? `You: ${[myP4p && `#${myP4p} pound for pound`, myAbs && `#${myAbs} total`].filter(Boolean).join(" · ")}`
     : data.some((r) => r.is_me)
       ? "See where you rank"
       : "Get on the board";
@@ -174,7 +188,7 @@ export function StrengthBoardCard() {
           <div className="min-w-0">
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">All-time strength board</div>
             <div className="mt-0.5 text-lg font-black leading-tight">Hall of Strength</div>
-            <div className="text-[11px] text-muted-foreground">Squat · Bench · Deadlift · Total</div>
+            <div className="text-[11px] text-muted-foreground">Every JF Effect athlete · gym + meets</div>
           </div>
           <Trophy className="h-7 w-7 shrink-0 text-amber-400" />
         </div>
@@ -187,11 +201,11 @@ export function StrengthBoardCard() {
         {history.athletes > 0 && (
           <div className="flex items-center gap-2 border-t bg-muted/30 px-4 py-2 text-[11px] text-muted-foreground">
             <Landmark className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-            <span className="truncate"><b className="text-foreground">Meet history:</b> {history.athletes} athletes · {history.meets} meets{history.since ? ` since ${history.since}` : ""}</span>
+            <span className="truncate"><b className="text-foreground">Competition:</b> {history.athletes} athletes · {history.meets} meets{history.since ? ` since ${history.since}` : ""}</span>
           </div>
         )}
         <div className="flex items-center justify-between border-t px-4 py-2.5 text-xs font-bold">
-          <span className={cn(myTotal?.p4p_rank || myTotal?.all_rank ? "text-foreground" : "text-primary")}>{myLine}</span>
+          <span className={cn(myP4p || myAbs ? "text-foreground" : "text-primary")}>{myLine}</span>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </div>
       </button>
@@ -231,18 +245,18 @@ function KingTile({ label, row, value, loading, className }: {
 
 // ── The board ──────────────────────────────────────────────────────────────
 
-/** The full Hall of Strength: training boards and JF Effect meet history. */
-export function HallOfStrength({ initialSource = "training" }: { initialSource?: BoardSource }) {
+/** The full Hall of Strength: All-time (training + meets, everyone ever coached) and Competition (sanctioned meets). */
+export function HallOfStrength({ initialSource = "all" }: { initialSource?: BoardSource }) {
   const { unit, setUnit } = useWeightUnit();
   const isStaff = useIsStaff();
-  const training = useStrengthBoard();
+  const allTime = useStrengthBoard();
   const meets = useMeetBoard();
   const [source, setSource] = useState<BoardSource>(initialSource);
   const [mode, setMode] = useState<BoardMode>("p4p");
   const [lift, setLift] = useState<BoardLift>("total");
   const [division, setDivision] = useState<Division>("all");
   const [showAll, setShowAll] = useState(false);
-  const active = source === "training" ? training : meets;
+  const active = source === "all" ? allTime : meets;
   const rows = active.data ?? [];
   const { top, me, count } = pickBoard(rows, mode, lift, division, showAll ? Infinity : TOP);
   const podium = top.slice(0, 3);
@@ -258,17 +272,17 @@ export function HallOfStrength({ initialSource = "training" }: { initialSource?:
       <SheetHeader className="text-left">
         <SheetTitle className="flex items-center gap-2"><Trophy className="h-5 w-5 shrink-0 text-amber-400" /> Hall of Strength</SheetTitle>
         <SheetDescription>
-          {source === "training"
-            ? "The heaviest squat, bench and deadlift ever logged in JF Effect."
-            : "Every JF Effect athlete who's stepped on the platform, past and present."}
+          {source === "all"
+            ? "Every athlete JF Effect has ever coached, current and former. Your best lift counts, whether you hit it in training or at a meet."
+            : "Official results only: lifts made at sanctioned powerlifting meets, where every lift is judged by referees."}
         </SheetDescription>
       </SheetHeader>
 
-      {/* Training or meets */}
+      {/* All-time or Competition */}
       <div className="grid grid-cols-2 gap-2">
         {([
-          ["training", "Training", "Logged in the app", Dumbbell],
-          ["meets", "Meet history", "Judged on the platform", Landmark],
+          ["all", "All-time", "Gym + meets", Trophy],
+          ["meets", "Competition", "Sanctioned meets only", Landmark],
         ] as const).map(([k, label, sub, Icon]) => (
           <button key={k} type="button" onClick={() => pick(setSource)(k)}
             className={cn("flex min-h-14 items-center gap-2 rounded-xl border px-3 text-left transition",
@@ -284,7 +298,7 @@ export function HallOfStrength({ initialSource = "training" }: { initialSource?:
 
       {source === "meets" && history.athletes > 0 && (
         <div className="rounded-2xl border border-amber-400/40 bg-gradient-to-br from-amber-400/15 via-transparent to-transparent p-3">
-          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">The JF Effect record book</div>
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Official competition record</div>
           <div className="mt-1 grid grid-cols-3 text-center">
             {[
               [history.athletes, "athletes"],
@@ -298,7 +312,7 @@ export function HallOfStrength({ initialSource = "training" }: { initialSource?:
             ))}
           </div>
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-            Best judged lifts from meets while coached by JF Effect. Current athletes and alumni, one record book.
+            Real competitions only: official weigh-in, three attempts, every lift passed by the referees. These are the best results from JF Effect athletes, current and alumni. No gym lifts.
           </p>
         </div>
       )}
@@ -339,8 +353,8 @@ export function HallOfStrength({ initialSource = "training" }: { initialSource?:
           {mode === "p4p"
             ? `Ranked by times bodyweight: ${what} ÷ bodyweight. Men and women on one board.`
             : source === "meets"
-              ? `Heaviest ${what} made on the platform.`
-              : `Heaviest ${what} actually lifted, any reps. ×3 = it was a set of 3.`}
+              ? `Heaviest ${what} passed by the referees at a meet.`
+              : `Heaviest ${what} from training or a meet. ×3 = done for 3 reps.`}
         </p>
         <ToggleGroup type="single" value={unit} onValueChange={(v) => v && setUnit(v as WeightUnit)} className="shrink-0 rounded-lg border bg-card p-0.5">
           {(["lb", "kg"] as const).map((u) => (
@@ -365,15 +379,15 @@ export function HallOfStrength({ initialSource = "training" }: { initialSource?:
         <>
           <div className="grid grid-cols-3 items-end gap-2">
             {[podium[1], podium[0], podium[2]].map((r, i) =>
-              r ? <PodiumSpot key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} /> : <div key={i} />,
+              r ? <PodiumSpot key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"} /> : <div key={i} />,
             )}
           </div>
           {rest.length > 0 && (
             <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
-              {rest.map((r) => <BoardLine key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} />)}
+              {rest.map((r) => <BoardLine key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"} />)}
             </ul>
           )}
-          {source === "meets" && count > TOP && (
+          {count > TOP && (
             <button type="button" onClick={() => setShowAll((s) => !s)}
               className="min-h-10 w-full rounded-xl border bg-card text-xs font-black text-primary">
               {showAll ? "Show top 10" : `Show all ${count} athletes`}
@@ -383,32 +397,34 @@ export function HallOfStrength({ initialSource = "training" }: { initialSource?:
       )}
 
       {/* You */}
-      {!active.isPending && !meOnBoard && (source === "training"
+      {!active.isPending && !meOnBoard && (source === "all"
         ? <YouCard me={me} top={top} mode={mode} lift={lift} division={division} unit={unit} />
         : <MeetYouCard me={me} mode={mode} division={division} />)}
 
       <details className="rounded-2xl border bg-muted/20 p-3 text-xs">
         <summary className="cursor-pointer font-black">How the board works</summary>
-        {source === "training" ? (
+        {source === "all" ? (
           <ul className="mt-2 space-y-1.5 text-muted-foreground">
-            <li><b className="text-foreground">What counts:</b> barbell squat, bench and deadlift logged in the app, including paused, tempo, touch-and-go, close-grip, high-bar, sumo and deficit. Not partials (pins, boxes, boards), machines, dumbbells, specialty bars or RDLs.</li>
-            <li><b className="text-foreground">Your number:</b> the heaviest weight you've completed, any reps. A set of 3 shows as ×3.</li>
-            <li><b className="text-foreground">Total:</b> your best squat + best bench + best deadlift.</li>
-            <li><b className="text-foreground">Pound for pound:</b> your number ÷ the bodyweight you logged closest to that lift. For a total, the heaviest of the three bodyweights, so cutting after a PR doesn't help. No bodyweight logged, no pound for pound.</li>
-            <li><b className="text-foreground">Absolute:</b> heaviest wins. All, or Men / Women.</li>
-            <li><b className="text-foreground">Typos:</b> lifts that look impossible (heavier than world records, or a huge jump over every other session) wait for your coach to check them.</li>
+            <li><b className="text-foreground">Who's on it:</b> everyone JF Effect has coached. Current clients, former clients (ALUMNI) and athletes who competed with us.</li>
+            <li><b className="text-foreground">Your number:</b> your heaviest lift from either place. <b className="text-foreground">TRAINING</b> = logged in the app, any reps (×3 = a set of 3). <b className="text-foreground">MEET</b> = made at a powerlifting meet.</li>
+            <li><b className="text-foreground">What counts in training:</b> barbell squat, bench and deadlift, including paused, tempo, touch-and-go, close-grip, high-bar, sumo and deficit. Not partials (pins, boxes, boards), machines, dumbbells, specialty bars or RDLs.</li>
+            <li><b className="text-foreground">Total:</b> in training, your best squat + best bench + best deadlift. At a meet, that day's total. Whichever is higher counts.</li>
+            <li><b className="text-foreground">Pound for pound:</b> the lift ÷ your bodyweight at the time (closest weigh-in you logged, or the meet's official weigh-in).</li>
+            <li><b className="text-foreground">Typos:</b> lifts that look impossible wait for your coach to check them.</li>
           </ul>
         ) : (
           <ul className="mt-2 space-y-1.5 text-muted-foreground">
-            <li><b className="text-foreground">What counts:</b> judged lifts from meets while coached by JF Effect. Totals only from full-power meets.</li>
-            <li><b className="text-foreground">Pound for pound:</b> the lift ÷ that meet's weigh-in bodyweight. Each board uses your best meet for that board.</li>
+            <li><b className="text-foreground">What counts:</b> only sanctioned powerlifting meets. Official weigh-in, three attempts per lift, and a lift only counts if the referees pass it. Training lifts never count here.</li>
+            <li><b className="text-foreground">Whose meets:</b> meets done while coached by JF Effect.</li>
+            <li><b className="text-foreground">Total:</b> squat + bench + deadlift made on the same day. A bench-only meet counts for bench.</li>
+            <li><b className="text-foreground">Pound for pound:</b> the lift ÷ the official weigh-in bodyweight.</li>
             <li><b className="text-foreground">Alumni:</b> athletes JF Effect coached in the past. Their records stand.</li>
-            <li><b className="text-foreground">Missing a meet?</b> Tell your coach and it goes in the book.</li>
+            <li><b className="text-foreground">Missing a meet?</b> Tell your coach and it goes on the record.</li>
           </ul>
         )}
       </details>
 
-      {isStaff && source === "training" && <StrengthBoardCoachTools />}
+      {isStaff && source === "all" && <StrengthBoardCoachTools />}
     </div>
   );
 }
@@ -419,7 +435,7 @@ function NameLine({ row }: { row: StrengthRow }) {
   ) : null;
 }
 
-function PodiumSpot({ row, rank, mode, unit }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit }) {
+function PodiumSpot({ row, rank, mode, unit, showSource }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean }) {
   const first = rank === 1;
   return (
     <div className={cn(
@@ -437,6 +453,7 @@ function PodiumSpot({ row, rank, mode, unit }: { row: StrengthRow; rank: number;
         <Headline row={row} mode={mode} unit={unit} />
       </div>
       <div className="mt-1 flex flex-wrap justify-center gap-1">
+        {showSource && <SourceTag row={row} />}
         {mode === "absolute" && <XBadge row={row} />}
         <ClubBadge row={row} />
         <AlumniTag row={row} />
@@ -451,7 +468,7 @@ function PodiumSpot({ row, rank, mode, unit }: { row: StrengthRow; rank: number;
   );
 }
 
-function BoardLine({ row, rank, mode, unit }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit }) {
+function BoardLine({ row, rank, mode, unit, showSource }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean }) {
   return (
     <li className={cn("flex items-center gap-3 px-3 py-2.5", row.is_me && "bg-primary/5")}>
       <span className="w-6 text-center text-sm font-black text-muted-foreground">#{rank}</span>
@@ -460,6 +477,7 @@ function BoardLine({ row, rank, mode, unit }: { row: StrengthRow; rank: number; 
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-bold">{row.display_name}{row.is_me ? " (You)" : ""}</span>
           {row.is_coach && <CoachTag />}
+          {showSource && <SourceTag row={row} />}
           <AlumniTag row={row} />
         </div>
         <NameLine row={row} />
@@ -513,10 +531,10 @@ function YouCard({ me, top, mode, lift, division, unit }: {
         </>
       )}
       {status.kind === "no-lift" && (
-        <p className="mt-1 text-sm font-bold">Log a barbell {liftName} to get on this board. Any reps count.</p>
+        <p className="mt-1 text-sm font-bold">Log a barbell {liftName} in the app (any reps) or compete at a meet to get on this board.</p>
       )}
       {status.kind === "no-total" && (
-        <p className="mt-1 text-sm font-bold">Log a squat, bench and deadlift to post a total. Any reps count.</p>
+        <p className="mt-1 text-sm font-bold">Log a squat, bench and deadlift in the app (any reps) or compete at a meet to post a total.</p>
       )}
       {status.kind === "no-bodyweight" && (
         <p className="mt-1 text-sm font-bold">Log your bodyweight to unlock pound for pound.</p>
@@ -540,9 +558,9 @@ function MeetYouCard({ me, mode, division }: { me: StrengthRow | null; mode: Boa
     <div className="rounded-2xl border-2 border-dashed border-amber-400/50 bg-amber-400/5 p-4">
       <div className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">You</div>
       {me ? (
-        <p className="mt-1 text-sm font-bold">#{rankOf(me, mode, division)} in JF Effect history. Next meet, move up.</p>
+        <p className="mt-1 text-sm font-bold">#{rankOf(me, mode, division)} on the official JF Effect competition record. Next meet, move up.</p>
       ) : (
-        <p className="mt-1 text-sm font-bold">Your name isn't in the record book yet. Step on the platform with JF Effect and write it in.</p>
+        <p className="mt-1 text-sm font-bold">You're not on the official record yet. Compete at a sanctioned powerlifting meet with JF Effect and your name goes here.</p>
       )}
     </div>
   );

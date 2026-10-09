@@ -1,15 +1,16 @@
 /**
- * Hall of Strength: shapes the get_strength_board() (training) and
- * get_strength_board_meets() (JF Effect meet history) rows into the boards
- * clients see, plus the copy and math that make them easy to read.
- * Ranking itself happens in the database
- * (20261017110000_strength_board_everyone.sql, 20261017120000_hall_of_strength_meets.sql).
+ * Hall of Strength: shapes the get_strength_board_all() (All-time: everyone
+ * ever coached, training + meets) and get_strength_board_meets()
+ * (Competition: sanctioned meets only) rows into the boards clients see,
+ * plus the copy and math that make them easy to read. Ranking itself happens
+ * in the database (20261023090000_hall_of_strength_all_time.sql).
  */
 import type { WeightUnit } from "@/lib/weight-lifted";
 
 export type BoardLift = "total" | "squat" | "bench" | "deadlift";
 export type BoardMode = "p4p" | "absolute";
-export type BoardSource = "training" | "meets";
+/** "all" = All-time (training + meets), "meets" = Competition (sanctioned meets only). */
+export type BoardSource = "all" | "meets";
 export type Sex = "male" | "female";
 /** Absolute boards: everyone, or one sex. Pound for pound is always everyone. */
 export type Division = "all" | Sex;
@@ -35,14 +36,17 @@ export type StrengthRow = {
   abs_count: number | null;
   p4p_count: number | null;
   all_count: number | null;
-  // Meet history only.
+  /** Former client / retired athlete: their records stand. */
+  is_alumni: boolean;
+  /** Where this number was made. */
+  source: "training" | "meet";
+  // Meet rows only.
   meet?: {
     name: string;
     federation: string | null;
     weight_class: string | null;
     gl_points: number | null;
     competed_as: string | null;
-    is_alumni: boolean;
     athlete_meets: number;
     first_meet: string | null;
   };
@@ -89,12 +93,27 @@ export function normalizeRow(r: any): StrengthRow {
     abs_count: num(r.abs_count),
     p4p_count: num(r.p4p_count),
     all_count: num(r.all_count),
+    is_alumni: !!r.is_alumni,
+    source: r.source === "meet" ? "meet" : "training",
+  };
+}
+
+/** A get_strength_board_all() row: one person's best from training or a meet. */
+export function normalizeAllRow(r: any): StrengthRow {
+  const meet = r.source === "meet";
+  return {
+    ...normalizeRow({ ...r, lifted_at: `${r.lifted_on}T12:00:00` }),
+    key: String(r.person),
+    client_id: r.client_id ?? null,
+    meet: meet
+      ? { name: r.meet_name ?? "Meet", federation: r.federation ?? null, weight_class: null, gl_points: null, competed_as: null, athlete_meets: 0, first_meet: null }
+      : undefined,
   };
 }
 
 export function normalizeMeetRow(r: any): StrengthRow {
   return {
-    ...normalizeRow({ ...r, reps: null, lifted_at: `${r.meet_date}T12:00:00` }),
+    ...normalizeRow({ ...r, reps: null, source: "meet", lifted_at: `${r.meet_date}T12:00:00` }),
     key: String(r.athlete_id),
     client_id: r.client_id ?? null,
     meet: {
@@ -103,7 +122,6 @@ export function normalizeMeetRow(r: any): StrengthRow {
       weight_class: r.weight_class ?? null,
       gl_points: num(r.gl_points),
       competed_as: r.competed_as ?? null,
-      is_alumni: !!r.is_alumni,
       athlete_meets: Number(r.athlete_meets ?? 0),
       first_meet: r.first_meet ?? null,
     },
