@@ -178,16 +178,16 @@ export const clientNav: NavItem[] = [
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 
-// Mobile bottom-tab nav for the client portal. Max 5 single-word labels so
-// nothing wraps and tap targets stay large. Everything else lives in the
-// side drawer (clientNav) via the "More" trigger in AppShell.
-// Nutrition is a main tab. Community lives on Home (the card under today's
-// training, one tap to the feed) and in More, so it never costs a tab.
+// Mobile bottom-tab nav for the client portal: five destinations, Community
+// as the raised centre button (with a ring and a count when there's something
+// new). "More" opens from the top bar instead (AppShell `moreInHeader`), so
+// Home, Workouts and Nutrition keep their places and Messages takes More's.
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
-  { to: "/portal/messages", label: "Messages", icon: MessageCircle },
+  { to: "/portal/community", label: "Community", icon: Flame, featured: true },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
+  { to: "/portal/messages", label: "Messages", icon: MessageCircle },
 ];
 
 // App Member portal navigation

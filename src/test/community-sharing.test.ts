@@ -350,18 +350,18 @@ describe("community is easy to find without taking over", () => {
   const shell = read("src/components/app-shell.tsx");
   const home = read("src/routes/_authenticated/portal/index.tsx");
   const entry = read("src/components/community/community-entry.tsx");
-  it("sits in the header next to notifications and on Home", () => {
+  it("is on Home, with a header nudge for coaches (clients have the centre tab)", () => {
     expect(shell).toContain("<CommunityNavButton />");
     expect(home).toContain("<CommunityHomeStrip />");
   });
   it("is always on Home (clients live there), with Share first and an invite instead of an empty widget", () => {
-    expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />');
+    expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share your session" variant="tile" previewOnly={isImpersonating} />');
     expect(entry).toContain("Be the first to share this week");
-    expect(entry).not.toContain("people.length === 0) return null");
+    expect(entry).not.toContain("shelf.length === 0) return null");
   });
 });
 
-describe("community lives on Home (and in More), Nutrition keeps its tab", () => {
+describe("community is the centre tab and a shelf on Home; Nutrition keeps its tab", () => {
   const workouts = read("src/routes/_authenticated/portal/workouts.index.tsx");
   const page = read("src/routes/_authenticated/portal/community.tsx");
   const entry = read("src/components/community/community-entry.tsx");
@@ -370,25 +370,26 @@ describe("community lives on Home (and in More), Nutrition keeps its tab", () =>
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("bottom bar is Home, Workouts, Messages, Nutrition; the feed opens from Home with Home still lit", () => {
+  it("bottom bar is Home, Workouts, Community (centre), Nutrition, Messages; More opens from the top bar", () => {
     const nav = read("src/lib/admin-nav.ts");
     const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
-    expect(bottom).toContain('{ to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },');
-    expect(bottom).not.toContain("/portal/community");
-    // still one tap away in More, with the new-posts count there
-    expect(nav).toContain('{ to: "/portal/community", label: "Community", icon: Users');
+    expect(bottom.match(/\{ to: "[^"]+"/g)).toEqual([
+      '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/community"', '{ to: "/portal/nutrition-targets"', '{ to: "/portal/messages"',
+    ]);
+    expect(bottom).toContain('{ to: "/portal/community", label: "Community", icon: Flame, featured: true },');
+    // the count of new posts rides on the centre button
     expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
-    expect(shellSrc).toContain('(item.to === "/portal" && pathname === "/portal/community") ||');
-    // the feed starts right under the app bar: a back arrow, not a page header
-    expect(page).toContain('<CommunityScreen canShare previewOnly={isImpersonating} bell backTo="/portal" />');
+    // its own tab now, so Home no longer lights up for it
+    expect(shellSrc).not.toContain('(item.to === "/portal" && pathname === "/portal/community")');
+    // a tab: no back arrow, no page header
+    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} bell />");
     expect(page).not.toContain("PageHeader");
-    expect(screen).toContain('<Link to={backTo} aria-label="Back to Home"');
   });
-  it("Home's card shows the two newest posts and a big 'Open the feed'; every tap lands in the feed", () => {
-    expect(entry).toContain("return (others.length ? others : recent).slice(0, 2)");
+  it("Home's card is a shelf of the week's posts; every tap lands in the feed", () => {
+    expect(entry).toContain("const rank = (t: { live: boolean; fresh: boolean; post: CommunityPost }) => (t.live ? 0 : t.fresh ? 1 : t.post.is_mine ? 3 : 2);");
     expect(entry).toContain("onClick={() => openAt(post.id)}");
-    expect(entry).toContain("{postLine(post, unit)}");
-    expect(entry).toContain("Open the feed");
+    expect(entry).toContain("<PostTileFace post={post}");
+    expect(entry).toContain("See all");
     expect(entry).not.toContain("PostDetailDialog");
     // the feed scrolls to the post you tapped (or opens it if it's older than what's loaded)
     expect(screen).toContain('const el = document.querySelector(`[data-post-id="${jumpTo}"]`);');
@@ -399,8 +400,8 @@ describe("community lives on Home (and in More), Nutrition keeps its tab", () =>
     expect(workouts).toContain('throw redirect({ to: "/portal/community"');
     expect(entry).not.toContain('to="/portal/workouts"');
   });
-  it("tapping a person opens the feed at their latest post (not a dead-end single post)", () => {
-    expect(entry).toContain("onClick={() => openAt(p.id)}");
+  it("tapping a post opens the feed at it (not a dead-end single post)", () => {
+    expect(entry).toContain("onClick={() => openAt(post.id)}");
     expect(entry).toContain('navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : undefined })');
   });
   it("only shows a header nudge when there is something new", () => {
@@ -421,7 +422,7 @@ describe("community lives on Home (and in More), Nutrition keeps its tab", () =>
   });
   it("never lets a coach in View-as-client share for the athlete", () => {
     expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating}");
-    expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />');
+    expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Share your session" variant="tile" previewOnly={isImpersonating} />');
   });
 });
 
@@ -526,7 +527,7 @@ describe("the crew: find anyone's profile", () => {
   it("is a Crew tab, and Home never dead-ends: a person opens the feed at their post", () => {
     expect(screen).toContain('(["feed", "crew", "you"] as const)');
     expect(screen).toContain("<CrewList onOpen={openAuthor} />");
-    expect(entry).toContain("onClick={() => openAt(p.id)}");
+    expect(entry).toContain("onClick={() => openAt(post.id)}");
   });
 });
 

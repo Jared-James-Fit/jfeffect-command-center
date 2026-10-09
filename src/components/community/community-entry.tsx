@@ -6,7 +6,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { featuredLift, formatTopSet, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
-import { useCommunityActivity, useCommunityFeed, useReact, useViewerUnit } from "@/lib/community.queries";
+import { useCommunityActivity, useCommunityFeed, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
+import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 
@@ -29,40 +30,34 @@ function postLine(post: CommunityPost, unit: "kg" | "lb"): string {
 }
 
 /**
- * Header nudge, only when there is something new ("🔥 3 new"). With nothing
- * new it renders nothing: the community is on Home (clients) and on the
- * dashboard (coaches), never as a mystery icon.
+ * Coaches' header nudge, only when there is something new ("🔥 3 new"). With
+ * nothing new it renders nothing. Clients don't need it: Community is the
+ * centre tab, with its own count.
  */
 export function CommunityNavButton({ className }: { className?: string }) {
   const { role } = useAuth();
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const inPortal = path.startsWith("/portal");
-  const inAdmin = path.startsWith("/admin");
   const staff = role === "admin" || role === "coach";
-  const eligible = inPortal || (inAdmin && staff);
+  const eligible = path.startsWith("/admin") && staff;
   const { data } = useCommunityActivity(eligible);
   // Pages that already surface the community themselves.
   const hidden = path === "/admin" || path === "/admin/" || path.endsWith("/community");
   if (!eligible || hidden || !data?.enabled || data.unseen <= 0) return null;
   const n = data.unseen;
-  return inAdmin ? (
+  return (
     <Link to="/admin/community" aria-label={`Community, ${n} new`} className={cn("inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-black text-white shadow-sm", NEW_GRADIENT, className)}>
-      <Flame className="h-3.5 w-3.5" /> {n > 9 ? "9+" : n} new
-    </Link>
-  ) : (
-    <Link to="/portal/community" aria-label={`Community, ${n} new`} className={cn("inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-black text-white shadow-sm", NEW_GRADIENT, className)}>
       <Flame className="h-3.5 w-3.5" /> {n > 9 ? "9+" : n} new
     </Link>
   );
 }
 
 /**
- * Home: the community, right under today's training. "+ Share" first,
- * Instagram-stories style, then who shared this week (ring = new to you),
- * the two newest posts, and a full-width "Open the feed". Every tap on a
- * person or a post opens the feed scrolled to that post (`#at=`), so you're
- * in the feed and can keep scrolling, never stuck on one post. With nothing
- * shared yet it's a single inviting line, never an empty widget.
+ * Home: the community, right under today's training, as a shelf of the
+ * week's posts you can see at a glance (the photo, the workout card, the
+ * lock-in, the note), Instagram style. Training right now first, then what's
+ * new to you (ringed), then the rest; yours last. "+ Share" leads. A tap
+ * opens the feed at that post, so you keep scrolling from there. With
+ * nothing shared this week it's one inviting line, never an empty widget.
  */
 export function CommunityHomeStrip() {
   const { user } = useAuth();
@@ -74,20 +69,16 @@ export function CommunityHomeStrip() {
   const navigate = useNavigate();
   const openAt = (postId?: string) => navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : undefined });
 
-  const people = useMemo(() => {
-    const posts = feed.data?.pages[0]?.posts ?? [];
+  const shelf = useMemo(() => {
     const weekAgo = Date.now() - 7 * 86_400_000;
-    const seen = new Set<string>();
-    const out: { id: string; userId: string; name: string; avatar: string | null; fresh: boolean; mine: boolean; live: boolean }[] = [];
-    for (const p of posts) {
-      const at = new Date(p.created_at).getTime();
-      if (at < weekAgo || seen.has(p.author.user_id)) continue;
-      seen.add(p.author.user_id);
-      out.push({ id: p.id, userId: p.author.user_id, name: p.author.name, avatar: p.author.avatar_url, fresh: !p.is_mine && at > seenAt, mine: p.author.user_id === user?.id, live: isTrainingNow(p) });
-    }
-    // Training right now goes first: that's the "hop in" moment.
-    return out.sort((a, b) => Number(b.live) - Number(a.live));
-  }, [feed.data, seenAt, user?.id]);
+    const rank = (t: { live: boolean; fresh: boolean; post: CommunityPost }) => (t.live ? 0 : t.fresh ? 1 : t.post.is_mine ? 3 : 2);
+    return (feed.data?.pages[0]?.posts ?? [])
+      .filter((p) => new Date(p.created_at).getTime() > weekAgo)
+      .map((post) => ({ post, live: isTrainingNow(post), fresh: !post.is_mine && new Date(post.created_at).getTime() > seenAt }))
+      .sort((a, b) => rank(a) - rank(b))
+      .slice(0, 8);
+  }, [feed.data, seenAt]);
+  const { data: urls } = usePostMediaUrls(shelf.map((t) => t.post));
   // "3 locked in today": people who showed up today (local day).
   const lockedToday = useMemo(() => {
     const start = new Date();
@@ -96,93 +87,78 @@ export function CommunityHomeStrip() {
     for (const p of feed.data?.pages[0]?.posts ?? []) if (p.locked_in_at && new Date(p.locked_in_at) >= start) ids.add(p.author.user_id);
     return ids.size;
   }, [feed.data]);
-  // The two newest posts from the last 3 days: other people's first (yours only if that's all there is).
-  const latest = useMemo(() => {
-    const cutoff = Date.now() - 3 * 86_400_000;
-    const recent = (feed.data?.pages[0]?.posts ?? []).filter((p) => new Date(p.created_at).getTime() > cutoff);
-    const others = recent.filter((p) => !p.is_mine);
-    return (others.length ? others : recent).slice(0, 2).map((post) => ({ post, fresh: !post.is_mine && new Date(post.created_at).getTime() > seenAt }));
-  }, [feed.data, seenAt]);
 
   if (!activity?.enabled || feed.isLoading) return null;
 
   return (
     <section className="rounded-2xl border border-border/80 bg-card px-3.5 pb-3 pt-3">
-      <Link to="/portal/community" className="-my-1 flex min-w-0 items-center gap-1.5 whitespace-nowrap py-1 text-[13px] font-black">
-        <Flame className="h-4 w-4 shrink-0 text-orange-500" /> Community
-        {/* Who showed up today beats "N new": it's the nudge to go train. */}
-        {lockedToday > 0 ? (
-          <span className="truncate rounded-full bg-red-500/15 px-1.5 py-px text-[10px] font-bold text-red-600 dark:text-red-400">🔒 {lockedToday} locked in today</span>
-        ) : activity.unseen > 0 ? (
-          <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>
-        ) : null}
-      </Link>
-      <div className="-mx-1 mt-2.5 flex items-start gap-3 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />
-        {people.map((p) => (
-          <button key={p.userId} type="button" onClick={() => openAt(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={p.live ? `${p.name} is training now` : `${p.name}'s latest post`}>
-            <span className={cn("relative rounded-full p-[2.5px]", p.live ? "bg-red-500" : p.fresh ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-border")}>
-              <span className="block rounded-full bg-card p-[2px]">
-                <UserAvatar src={p.avatar} name={p.name} size={52} expandable={false} />
+      <div className="flex items-center justify-between gap-2">
+        <Link to="/portal/community" className="-my-1 flex min-w-0 items-center gap-1.5 whitespace-nowrap py-1 text-[13px] font-black">
+          <Flame className="h-4 w-4 shrink-0 text-orange-500" /> Community
+          {/* Who showed up today beats "N new": it's the nudge to go train. */}
+          {lockedToday > 0 ? (
+            <span className="truncate rounded-full bg-red-500/15 px-1.5 py-px text-[10px] font-bold text-red-600 dark:text-red-400">🔒 {lockedToday} locked in today</span>
+          ) : activity.unseen > 0 ? (
+            <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen > 9 ? "9+" : activity.unseen} new</span>
+          ) : null}
+        </Link>
+        <button type="button" onClick={() => openAt()} className="-my-1 -mr-1 inline-flex shrink-0 items-center gap-0.5 rounded-full py-1 pl-2 pr-1 text-[12px] font-bold text-muted-foreground active:opacity-70">
+          See all <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="-mx-1 mt-2.5 flex snap-x items-start gap-2.5 overflow-x-auto px-1 pb-0.5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <ShareWorkoutButton unit={unit} label="Share your session" variant="tile" previewOnly={isImpersonating} />
+        {shelf.map(({ post, live, fresh }) => {
+          const name = post.is_mine ? "You" : post.author.name;
+          const likes = post.reaction_count ?? 0;
+          return (
+            <button
+              key={post.id}
+              type="button"
+              onClick={() => openAt(post.id)}
+              className="w-[112px] shrink-0 snap-start text-left active:scale-[0.97]"
+              aria-label={live ? `${name} is training now` : `${name}'s post${fresh ? ", new" : ""}`}
+            >
+              {/* new to you = the story ring (same as the Community tab's) */}
+              <span className={cn("block rounded-[18px] p-[2px]", live ? "bg-red-500" : fresh && "bg-[linear-gradient(135deg,#ffb054,#ef3340)]")}>
+              <span
+                data-shelf-tile
+                data-fresh={fresh ? "" : undefined}
+                className={cn("relative block h-[136px] w-full overflow-hidden rounded-2xl bg-muted", (live || fresh) && "border-2 border-card")}
+              >
+                <PostTileFace post={post} thumb={urls?.[postThumbPath(post) ?? ""] ?? null} unit={unit} footer={likes > 0 || post.comment_count > 0} />
+                {live && <span className="absolute left-1.5 top-1.5 rounded-[5px] bg-red-500 px-1 text-[8px] font-black uppercase leading-[13px] tracking-wide text-white">Live</span>}
+                {(likes > 0 || post.comment_count > 0) && (
+                  <span className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1.5 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+                    {likes > 0 && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <Heart className="h-3 w-3 fill-white" /> {likes}
+                      </span>
+                    )}
+                    {post.comment_count > 0 && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <MessageCircle className="h-3 w-3" /> {post.comment_count}
+                      </span>
+                    )}
+                  </span>
+                )}
               </span>
-              {p.live && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-[5px] border-2 border-card bg-red-500 px-1 text-[8px] font-black uppercase leading-[12px] tracking-wide text-white">Live</span>}
-            </span>
-            <span className="w-full truncate text-center text-[11px] font-semibold">{p.mine ? "You" : p.name}</span>
-          </button>
-        ))}
-        {people.length === 0 && (
-          <div className="flex min-h-[61px] flex-1 flex-col justify-center pr-1">
+              </span>
+              <span className="mt-1.5 flex min-w-0 items-center gap-1 text-[11px] leading-tight">
+                <UserAvatar src={post.author.avatar_url} name={post.author.name} size={18} expandable={false} />
+                <span className="min-w-0 truncate font-bold">{name}</span>
+                <span className="shrink-0 text-muted-foreground">{postTimeLabel(post.created_at)}</span>
+              </span>
+            </button>
+          );
+        })}
+        {shelf.length === 0 && (
+          <div className="flex min-h-[140px] flex-1 flex-col justify-center pr-1">
             <div className="text-[13px] font-bold leading-tight">Be the first to share this week</div>
             <div className="mt-0.5 text-[12px] leading-snug text-muted-foreground">Post a session for the crew. Your coach sees every one.</div>
           </div>
         )}
       </div>
-      {latest.length > 0 && (
-        <div className="mt-2.5 divide-y divide-border/70 border-t border-border/70">
-          {latest.map(({ post, fresh }) => (
-            <button
-              key={post.id}
-              type="button"
-              onClick={() => openAt(post.id)}
-              className="flex w-full items-center gap-2.5 py-2.5 text-left active:opacity-70"
-              aria-label={`${post.author.name}'s post`}
-            >
-              <UserAvatar src={post.author.avatar_url} name={post.author.name} size={32} expandable={false} />
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-1.5 text-[12px] leading-tight">
-                  {fresh && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="New" />}
-                  <span className="truncate font-bold">{post.is_mine ? "You" : post.author.name}</span>
-                  <span className="shrink-0 text-muted-foreground">· {postTimeLabel(post.created_at)}</span>
-                </div>
-                <div className="mt-0.5 truncate text-[13px] leading-snug text-foreground/85">{postLine(post, unit)}</div>
-              </div>
-              {((post.reaction_count ?? 0) > 0 || post.comment_count > 0) && (
-                <span className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-muted-foreground">
-                  {(post.reaction_count ?? 0) > 0 && (
-                    <span className="inline-flex items-center gap-0.5">
-                      <Heart className="h-3.5 w-3.5" /> {post.reaction_count}
-                    </span>
-                  )}
-                  {post.comment_count > 0 && (
-                    <span className="inline-flex items-center gap-0.5">
-                      <MessageCircle className="h-3.5 w-3.5" /> {post.comment_count}
-                    </span>
-                  )}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={() => openAt()}
-        className="mt-1.5 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-muted text-[13px] font-black active:scale-[0.99]"
-      >
-        Open the feed
-        {activity.unseen > 0 && <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-primary-foreground">{activity.unseen > 9 ? "9+" : activity.unseen} new</span>}
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-      </button>
     </section>
   );
 }

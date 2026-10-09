@@ -1,13 +1,14 @@
 import { useMemo, useRef, useState } from "react";
-import { Archive, Camera, Layers, Lock, Pencil, Play } from "lucide-react";
+import { Archive, Camera, Lock, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
-import { CoachBadge, LockInHero, WorkoutHero } from "@/components/community/post-card";
-import { BIO_MAX, SERIES_LABEL, trainingSinceLabel, type CommunityPost } from "@/lib/community";
+import { CoachBadge } from "@/components/community/post-card";
+import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
+import { BIO_MAX, trainingSinceLabel, type CommunityPost } from "@/lib/community";
 import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
 
 /**
@@ -161,28 +162,10 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
 
       <div className="mt-4 grid grid-cols-3 gap-1 overflow-hidden rounded-2xl">
         {posts.map((p) => {
-          const thumb = urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null;
+          const thumb = urls?.[postThumbPath(p) ?? ""] ?? null;
           return (
             <button key={p.id} type="button" onClick={() => onOpenPost(p)} className="relative aspect-square overflow-hidden bg-muted" aria-label={`Open ${p.stats?.workout_title ?? p.session_title ?? "workout"}`}>
-              {p.kind === "note" ? (
-                <div className="flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)] p-2.5 text-left">
-                  <span className="text-[8px] font-black uppercase tracking-[0.14em] text-primary">{p.series ? SERIES_LABEL[p.series]?.name.split(" ")[0] ?? "Note" : "Note"}</span>
-                  <span className="line-clamp-5 text-[11px] font-semibold leading-snug">{p.quote ? `“${p.quote}”` : p.caption}</span>
-                </div>
-              ) : p.media_type && thumb ? (
-                <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-              ) : p.stats ? (
-                <WorkoutHero stats={p.stats} unit={unit} size="tile" />
-              ) : p.locked_in_at ? (
-                <LockInHero post={p} size="tile" />
-              ) : (
-                <div className="h-full w-full bg-muted" />
-              )}
-              {(p.extra_media?.length ?? 0) > 0 ? (
-                <Layers className="absolute right-1.5 top-1.5 h-4 w-4 text-white drop-shadow" aria-label="Carousel" />
-              ) : (
-                p.media_type === "video" && <Play className="absolute right-1.5 top-1.5 h-4 w-4 fill-white text-white drop-shadow" />
-              )}
+              <PostTileFace post={p} thumb={thumb} unit={unit} />
               {p.visibility !== "community" && <Lock className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 text-white drop-shadow" />}
             </button>
           );

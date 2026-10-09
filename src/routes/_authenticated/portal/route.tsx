@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
 import { clientNav, clientBottomNav } from "@/lib/admin-nav";
 import { ClientPovBanner, PovFrame } from "@/components/client-pov-banner";
@@ -11,15 +12,22 @@ import { FormPopupGate } from "@/components/form-popup-gate";
 import { LegalAcceptanceGate } from "@/components/legal/legal-acceptance-gate";
 import { LeagueRecapGate } from "@/components/portal/league-recap";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useCommunityActivity } from "@/lib/community.queries";
 
 function PortalLayout() {
   useActivityHeartbeat();
   const { isImpersonating } = useClientImpersonation();
+  // No community for this account (not an active client): no centre button.
+  const { data: community } = useCommunityActivity(true);
+  const bottomNav = useMemo(
+    () => (community?.enabled === false ? clientBottomNav.filter((i) => i.to !== "/portal/community") : clientBottomNav),
+    [community?.enabled],
+  );
   return (
     <>
       <PovFrame />
       <ClientPovBanner />
-      <AppShell items={clientNav} bottomItems={clientBottomNav} title="Client Portal">
+      <AppShell items={clientNav} bottomItems={bottomNav} title="Client Portal" moreInHeader>
         {/* Onboarding requirements (profile photo, basic info, training schedule,
             Goals & Setup) are surfaced as a non-blocking checklist on the Home
             page — they must never lock the portal. See

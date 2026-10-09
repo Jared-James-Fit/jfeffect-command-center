@@ -126,6 +126,18 @@ export function CommunityScreen({
   // New posts from the crew while you're down the feed: a pill to jump up to them.
   const myId = useMyCommunityId();
   const newPosts = useNewPosts(scope.kind === "feed" && !previewOnly, myId);
+  // Tapping the Community tab while you're on it: back to the feed's top, fresh.
+  const showNew = useRef(newPosts.show);
+  showNew.current = newPosts.show;
+  useEffect(() => {
+    const onRetap = (e: Event) => {
+      if ((e as CustomEvent).detail !== window.location.pathname) return;
+      setScope({ kind: "feed" });
+      showNew.current();
+    };
+    window.addEventListener("nav-retap", onRetap);
+    return () => window.removeEventListener("nav-retap", onRetap);
+  }, []);
 
   // The page never zooms (pinch or double-tap); photos and videos pinch-zoom on their own.
   useMediaPinchZoom(true);

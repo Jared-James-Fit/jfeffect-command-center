@@ -56,10 +56,13 @@ export function withBarActionItems(nav: NavItem[]): NavItem[] {
  *
  * "More" is one of those five, never an extra sixth button. When a layout does
  * not configure More explicitly, the last position is reserved for it so the
- * overflow drawer stays reachable.
+ * overflow drawer stays reachable, unless the layout opens More from the top
+ * bar instead (`more: false`).
  */
-export function resolveVisibleBarItems(items: NavItem[]): NavItem[] {
+export function resolveVisibleBarItems(items: NavItem[], { more = true }: { more?: boolean } = {}): NavItem[] {
   const capped = items.slice(0, MAX_BAR_SLOTS);
+  // More opens from somewhere else (the top bar): five destinations.
+  if (!more) return capped.filter((i) => i.to !== MORE_BAR_TO);
   if (capped.some((i) => i.to === MORE_BAR_TO)) return capped;
   return [...capped.slice(0, MAX_BAR_SLOTS - 1), MORE_BAR_ITEM];
 }
