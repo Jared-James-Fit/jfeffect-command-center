@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { latestLoggedUnit, useBodyweightUnit } from "@/lib/use-bodyweight-unit";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,6 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
   const [open, setOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [val, setVal] = useState("");
-  const [unit, setUnit] = useState<"kg" | "lb">(defaultUnit);
   const [date, setDate] = useState(todayLocalISO());
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -45,6 +45,9 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
     queryFn: () => getCombinedBodyweightSeries(userId, 200),
     staleTime: 30_000,
   });
+  // kg / lb is remembered on the account every time it's toggled
+  const lastLoggedUnit = useMemo(() => latestLoggedUnit(rows), [rows]);
+  const { unit, setUnit } = useBodyweightUnit(userId, { lastLogged: lastLoggedUnit, fallback: defaultUnit });
 
   const points = useMemo(
     () => rows

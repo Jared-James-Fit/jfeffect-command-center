@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { latestLoggedUnit, useBodyweightUnit } from "@/lib/use-bodyweight-unit";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,6 @@ const COMPACT_RANGES: { value: RangeValue; label: string }[] = [
 export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const [unit, setUnit] = useState<WeightUnit>(defaultUnit);
   const [weight, setWeight] = useState("");
   const [date, setDate] = useState(todayLocalISO());
   const [saving, setSaving] = useState(false);
@@ -52,6 +52,9 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
     enabled: !!user?.id,
     queryFn: () => listBodyweight(user!.id),
   });
+  // kg / lb is remembered on the account every time it's toggled
+  const lastLoggedUnit = useMemo(() => latestLoggedUnit((rows as ProgressBodyweight[]).map((r) => ({ date: r.logged_date, unit: r.weight_unit }))), [rows]);
+  const { unit, setUnit } = useBodyweightUnit(user?.id, { lastLogged: lastLoggedUnit, fallback: defaultUnit });
 
   const metricRows = useMemo(
     () => (rows as ProgressBodyweight[]).map((row) => ({
