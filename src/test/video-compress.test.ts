@@ -51,7 +51,9 @@ describe("compressVideoForChat fallbacks", () => {
 
   it("refuses conversions that would drop a track, gives up when slow, and keeps only clearly smaller results", () => {
     const src = readFileSync("src/lib/video-compress.ts", "utf8");
-    expect(src).toContain("if (conv.discardedTracks.length > 0) {");
+    // Only refuse when the picture or ALL the sound would be lost; an extra unreadable track is fine.
+    expect(src).toContain("if (!keptVideo || (hadAudio && !keptAudio)) {");
+    expect(src).not.toContain("if (conv.discardedTracks.length > 0) {");
     expect(src).toContain("return done(`dropped:");
     expect(src).toContain("projectedTooSlow(Date.now() - startedAt, clamped, limitMs)");
     expect(src).toContain("if (buffer.byteLength > file.size * 0.8) return done(`not-smaller:");
