@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { TaxesBooksPage } from "@/components/admin/books/taxes-books-page";
 import { useAuth } from "@/lib/auth";
+import { MoneySwitcher } from "@/components/admin/finance/money-switcher";
 
 type Search = { tab?: string; filter?: string };
 
@@ -21,5 +22,10 @@ export const Route = createFileRoute("/_authenticated/admin/finance_/books")({
 function FinanceBooks() {
   const { viewOnly } = useAuth();
   const { tab, filter } = Route.useSearch();
-  return <TaxesBooksPage mode={viewOnly ? "finance" : "owner"} initialTab={tab} initialFilter={filter} />;
+  return (
+    <>
+      <MoneySwitcher page="books" />
+      <TaxesBooksPage mode={viewOnly ? "finance" : "owner"} initialTab={tab} initialFilter={filter} />
+    </>
+  );
 }

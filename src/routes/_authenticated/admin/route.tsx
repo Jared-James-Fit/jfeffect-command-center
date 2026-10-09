@@ -3,13 +3,12 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
-import { FINANCE_BOOKS, FINANCE_HOME, FINANCE_PAYMENTS, STAFF_BAR, buildFinanceNav, buildInternalNav, buildInternalNavCollapsed, resolveStaffRoleTag } from "@/lib/internal-nav";
+import { FINANCE_BAR, STAFF_BAR, buildFinanceNav, buildInternalNav, buildInternalNavCollapsed, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { SummerAssistant } from "@/components/summer/summer-assistant";
 import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
-import { Users } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
 import { StaffMfaGate } from "@/components/staff-mfa-gate";
@@ -52,17 +51,11 @@ function AdminLayout() {
   const barScope = isCoach ? "coach" : "admin";
   const customLayout = useBarLayout(barScope);
 
-  // Every staff phone bar has four plain tabs; More opens from the header
-  // (AppShell `moreInHeader`), the same as the client app.
-  const defaultBottom = useMemo(() => {
-    if (viewOnly) {
-      // The finance login's phone bar: its home (snap, record, collect, Cleo),
-      // the books, payments and clients. Every tab is a real path so it shows
-      // as selected.
-      return [FINANCE_HOME, FINANCE_BOOKS, FINANCE_PAYMENTS, { to: "/admin/clients", label: "Clients", icon: Users }];
-    }
-    return STAFF_BAR;
-  }, [viewOnly]);
+  // Every staff phone bar is five plain tabs with the League raised in the
+  // middle; More opens from the header (AppShell `moreInHeader`), the same as
+  // the client app.
+  // The finance login's bar starts on its home (snap, record, collect, Cleo).
+  const defaultBottom = viewOnly ? FINANCE_BAR : STAFF_BAR;
 
   const bottomItems = useMemo(() => {
     if (customLayout && customLayout.slots.length > 0) {

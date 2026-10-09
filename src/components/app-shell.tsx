@@ -36,7 +36,7 @@ import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
 import { useExerciseAliasIndex } from "@/hooks/use-exercise-alias-index";
 import { useSalesRealtime } from "@/hooks/use-sales-realtime";
-import { MORE_BAR_TO, barPrefixMatch, resolveVisibleBarItems } from "@/lib/floating-bar";
+import { MORE_BAR_TO, barPrefixMatch, onPages, resolveVisibleBarItems } from "@/lib/floating-bar";
 import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
 
 export interface NavItem {
@@ -58,6 +58,8 @@ export interface NavItem {
   section?: string;
   /** The bar's raised centre button (the client portal's Community). */
   featured?: boolean;
+  /** More pages (and their sub-pages) that light this bar tab, e.g. Money on Payments. */
+  activeOn?: string[];
 }
 
 function groupNavItems(items: NavItem[]) {
@@ -1539,6 +1541,7 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
     const active =
       pathname === item.to ||
       !!prefixActive ||
+      onPages(item.activeOn, pathname) ||
       (tabAlias != null &&
         pathname === tabAlias.path &&
         (search?.tab === tabAlias.tab ||

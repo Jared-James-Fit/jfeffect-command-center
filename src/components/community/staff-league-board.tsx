@@ -104,9 +104,9 @@ function Tool({ icon, title, sub, children }: { icon: React.ReactNode; title: st
 /**
  * The coach's League tab: what clients see (crew goal, this month's
  * standings, the Hall of Strength), then the tools to run it, folded away
- * until needed.
+ * until needed. A view-only login gets the boards without the tools.
  */
-export function StaffLeagueTab() {
+export function StaffLeagueTab({ tools = true }: { tools?: boolean }) {
   return (
     <div data-staff-league className="space-y-3">
       <CrewGoalCard />
@@ -114,7 +114,14 @@ export function StaffLeagueTab() {
       <section className="overflow-hidden rounded-2xl border bg-card">
         <StrengthBoardSlide />
       </section>
+      {tools && <LeagueTools />}
+    </div>
+  );
+}
 
+function LeagueTools() {
+  return (
+    <>
       <h2 className="px-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Run the league</h2>
       <Tool icon={<Zap className="h-4 w-4" />} title="Final-week boost" sub="Who's boosted, and excuse a session">
         <LeagueBoostAdmin />
@@ -130,6 +137,6 @@ export function StaffLeagueTab() {
         </span>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       </Link>
-    </div>
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { FINANCE_BAR, STAFF_BAR } from "@/lib/internal-nav";
 
 const thread = readFileSync("src/components/message-thread.tsx", "utf8");
 const plusMenu = readFileSync("src/components/composer-plus-menu.tsx", "utf8");
@@ -29,9 +30,10 @@ describe("lift reviews live inside Messages", () => {
     }
   });
 
-  it("no bottom-bar button for lifts (the staff bar is Dashboard, Clients, Messages, Tasks)", () => {
+  it("no bottom-bar button for lifts (the staff bar is Dashboard, Clients, League, Messages, Tasks)", () => {
     expect(adminShell).not.toContain('pick("/admin/lift-videos")');
-    expect(adminShell).toContain("return STAFF_BAR;");
+    expect(adminShell).toContain("const defaultBottom = viewOnly ? FINANCE_BAR : STAFF_BAR;");
+    expect([...STAFF_BAR, ...FINANCE_BAR].some((i) => i.to === "/admin/lift-videos")).toBe(false);
   });
 
   it("old admin links land in Messages", () => {

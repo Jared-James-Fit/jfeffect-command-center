@@ -1,6 +1,6 @@
 import { useRef, type TouchEvent } from "react";
 import { BadgeCheck, UserCog, Users, type LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { PageSwitcher } from "@/components/page-switcher";
 
 export type AccountKind = "clients" | "members" | "team";
 export const KINDS: AccountKind[] = ["clients", "members", "team"];
@@ -20,35 +20,8 @@ export function AccountsSwitcher({ kind, onChange, counts }: {
   onChange: (k: AccountKind) => void;
   counts: Partial<Record<AccountKind, number>>;
 }) {
-  return (
-    <div className="sticky top-0 z-30 bg-background/95 px-3 pb-2 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:px-4 md:top-[41px] md:px-6">
-      <div role="tablist" aria-label="Accounts" className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-card p-1 shadow-sm">
-        {KINDS.map((k) => {
-          const { label, icon: Icon } = META[k];
-          const active = k === kind;
-          return (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => onChange(k)}
-              className={cn(
-                "flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-xl px-1.5 text-[13px] font-semibold transition-colors sm:text-sm",
-                active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
-              )}
-            >
-              <Icon className="hidden h-4 w-4 shrink-0 sm:block" />
-              <span className="truncate">{label}</span>
-              {counts[k] != null && (
-                <span className={cn("rounded-full px-1.5 text-[11px] tabular-nums", active ? "bg-primary-foreground/20" : "bg-muted")}>{counts[k]}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+  const items = KINDS.map((k) => ({ key: k, ...META[k], count: counts[k] }));
+  return <PageSwitcher items={items} value={kind} onChange={onChange} label="Accounts" />;
 }
 
 function inSideScroller(el: HTMLElement | null): boolean {

@@ -14,7 +14,7 @@ describe("one staff app, laid out like the client app", () => {
 
   it("League rings and counts new posts for staff, like the client button", () => {
     const badges = read("src/hooks/use-client-nav-badges.ts");
-    expect(badges).toContain("useCommunityActivity(enabled || adminEnabled)");
+    expect(badges).toContain("useCommunityActivity(enabled || (adminEnabled && !viewOnly))");
     expect(badges).toContain('map["/admin/community"] = { count: community.unseen };');
   });
 

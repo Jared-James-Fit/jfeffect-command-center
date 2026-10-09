@@ -47,7 +47,7 @@ export function markNavSeen(userId: string | undefined, route: string) {
  *  - /portal/check-in       — coach feedback on check-in media, link updated, or due (dot)
  */
 export function useClientNavBadges(): Record<string, NavBadge> {
-  const { user, role } = useAuth();
+  const { user, role, viewOnly } = useAuth();
   const qc = useQueryClient();
   const [, setTick] = useState(0);
 
@@ -138,15 +138,16 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   const { data: directs } = useDirectThreads(enabled);
   const { data: crews } = useCrewThreads(enabled);
   // New community posts since you last opened it (cleared server-side when you do).
-  // Staff see the same count on their League button.
-  const { data: community } = useCommunityActivity(enabled || adminEnabled);
+  // Staff see the same count on their League button; a view-only login can't
+  // clear it, so it gets none.
+  const { data: community } = useCommunityActivity(enabled || (adminEnabled && !viewOnly));
 
   // Admin/coach nav badges — shared single source of truth
   const { data: adminCounts } = useAdminNavBadgeCounts(adminEnabled);
 
   if (adminEnabled) {
     const map = adminBadgeMap(adminCounts);
-    if (community?.enabled && community.unseen > 0) map["/admin/community"] = { count: community.unseen };
+    if (!viewOnly && community?.enabled && community.unseen > 0) map["/admin/community"] = { count: community.unseen };
     return map;
   }
 

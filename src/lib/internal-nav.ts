@@ -315,6 +315,18 @@ export const FINANCE_HOME: NavItem = { to: "/admin/finance", label: "Home", icon
 /** Real paths (no query string) so the sidebar and phone bar can show them as selected. */
 export const FINANCE_BOOKS: NavItem = { to: "/admin/finance/books", label: "Books", icon: Landmark, group: "Finance" };
 export const FINANCE_PAYMENTS: NavItem = { to: "/admin/finance/payments", label: "Payments", icon: CreditCard, group: "Finance" };
+
+/**
+ * The finance login's phone bar, laid out like every staff bar: its home,
+ * Money (Books and Payments, switched at the top of the page), the League as
+ * the raised centre button, Clients and Tasks. More opens from the header.
+ */
+export const FINANCE_BAR: NavItem[] = [
+  { to: FINANCE_HOME.to, label: "Home", icon: Wallet },
+  { to: FINANCE_BOOKS.to, label: "Money", icon: Landmark, activeOn: [FINANCE_PAYMENTS.to] },
+  ...STAFF_BAR.filter((i) => i.to === "/admin/community"),
+  ...STAFF_BAR.filter((i) => i.to === "/admin/clients" || i.to === "/admin/tasks"),
+];
 const FINANCE_PAGES: Array<{ to: string; label?: string }> = [
   { to: "/admin/transactions", label: "Stripe activity" },
   { to: "/admin/payments", label: "Revenue" },

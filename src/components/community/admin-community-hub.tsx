@@ -69,6 +69,12 @@ const HUB_TABS: { key: HubTab; label: string }[] = [
   { key: "birthdays", label: "Birthdays" },
 ];
 
+/**
+ * A view-only login (finance) gets the League boards, not the coach's queues.
+ * The feed reads (and its photos) still need the coach's rights.
+ */
+const VIEW_TABS: HubTab[] = ["league"];
+
 function tabFromHash(): HubTab {
   if (typeof window === "undefined") return "league";
   const h = window.location.hash;
@@ -86,26 +92,29 @@ function tabFromHash(): HubTab {
  * (drafts to review, who's next). "+ Post" writes to the crew from any tab.
  */
 export function AdminCommunityHub() {
-  const [tab, setTab] = useState<HubTab>(tabFromHash);
+  const { viewOnly } = useAuth();
+  const [picked, setTab] = useState<HubTab>(tabFromHash);
   const [writing, setWriting] = useState(false);
   const act = useSeriesAction();
+  const tabs = viewOnly ? HUB_TABS.filter((t) => VIEW_TABS.includes(t.key)) : HUB_TABS;
+  const tab = tabs.some((t) => t.key === picked) ? picked : "league";
 
   return (
     <div className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 sm:px-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-[22px] font-black tracking-tight">League</h1>
-        <button
+        {!viewOnly && <button
           type="button"
           onClick={() => setWriting(true)}
           className="inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-black text-primary-foreground shadow-sm active:scale-95"
         >
           <PenLine className="h-4 w-4" /> Post
-        </button>
+        </button>}
       </div>
 
-      <div className="sticky top-0 z-20 -mx-3 bg-background/95 px-3 py-1.5 md:top-[41px] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-4 sm:px-4">
-        <div className="grid grid-cols-4 rounded-full bg-muted p-1" role="tablist" aria-label="League sections">
-          {HUB_TABS.map((t) => (
+      {tabs.length > 1 && <div className="sticky top-0 z-20 -mx-3 bg-background/95 px-3 py-1.5 md:top-[41px] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-4 sm:px-4">
+        <div className={cn("grid rounded-full bg-muted p-1", tabs.length === 2 ? "grid-cols-2" : "grid-cols-4")} role="tablist" aria-label="League sections">
+          {tabs.map((t) => (
             <button
               key={t.key}
               type="button"
@@ -118,15 +127,15 @@ export function AdminCommunityHub() {
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
-      {tab !== "feed" && <NeedsYouStrip onGo={setTab} />}
+      {tab !== "feed" && !viewOnly && <NeedsYouStrip onGo={setTab} />}
 
       {tab === "league" ? (
-        <StaffLeagueTab />
+        <StaffLeagueTab tools={!viewOnly} />
       ) : tab === "feed" ? (
         <>
-          <PulsePanel onGo={setTab} />
+          {!viewOnly && <PulsePanel onGo={setTab} />}
           <div className="-mx-3 sm:-mx-4">
             <CommunityScreen hideTabs />
           </div>
@@ -141,7 +150,7 @@ export function AdminCommunityHub() {
       )}
 
       <NoteEditor
-        open={writing}
+        open={writing && !viewOnly}
         title="Write a post"
         initial=""
         saving={act.isPending}

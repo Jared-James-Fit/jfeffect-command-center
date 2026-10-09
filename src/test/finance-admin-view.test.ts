@@ -4,6 +4,7 @@ import { viewOnlyFetch, setAdminView } from "@/lib/admin-view";
 import { ADMIN_VIEW_HEADER, VIEW_ONLY_MESSAGE, RECORDABLE_PAYMENT_STATUSES } from "@/lib/permissions";
 import { assertAdminOr, withoutCredentials } from "@/lib/permissions.server";
 
+const read = (p: string) => readFileSync(p, "utf8");
 const API = "https://x.supabase.co/rest/v1";
 const json = (body: unknown, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" }, ...init });
@@ -192,8 +193,7 @@ describe("finance login's workspace", () => {
   it("lands on the books and gets a money-first phone bar", () => {
     const route = readFileSync("src/routes/_authenticated/admin/route.tsx", "utf8");
     expect(route).toMatch(/viewOnly\s*\?\s*\[\.\.\.buildFinanceNav\(\), \.\.\.fullNav\]/);
-    // Clients is a plain tab: no pop-up of client tools.
-    expect(route).toContain('return [FINANCE_HOME, FINANCE_BOOKS, FINANCE_PAYMENTS, { to: "/admin/clients", label: "Clients", icon: Users }];');
+    expect(route).toContain("const defaultBottom = viewOnly ? FINANCE_BAR : STAFF_BAR;");
     expect(readFileSync("src/routes/_authenticated/finance.tsx", "utf8")).toContain('to: "/admin/finance"');
     expect(readFileSync("src/routes/index.tsx", "utf8")).toContain('viewOnly ? "/finance"');
     expect(readFileSync("src/routes/auth.tsx", "utf8")).toContain('viewOnly ? "/finance"');
@@ -215,6 +215,49 @@ describe("phone bar selected tab", () => {
     expect(barPrefixMatch(bar, "/admin/clients/abc")).toBe("/admin/clients");
     expect(barPrefixMatch([{ to: "/admin", label: "Home", icon: Icon }], "/admin/tasks")).toBeNull();
     expect(barPrefixMatch([{ to: "/admin/sales?tab=taxes", label: "Books", icon: Icon }], "/admin/sales/x")).toBeNull();
+  });
+
+  it("Money stays lit on Payments, and Home doesn't light with it", async () => {
+    const { barPrefixMatch, onPages } = await import("@/lib/floating-bar");
+    const { FINANCE_BAR } = await import("@/lib/internal-nav");
+    const money = FINANCE_BAR.find((i) => i.label === "Money")!;
+    expect(onPages(money.activeOn, "/admin/finance/payments")).toBe(true);
+    expect(onPages(money.activeOn, "/admin/finance")).toBe(false);
+    expect(barPrefixMatch(FINANCE_BAR, "/admin/finance/payments")).toBeNull();
+    expect(barPrefixMatch(FINANCE_BAR, "/admin/clients/abc")).toBe("/admin/clients");
+    expect(read("src/components/app-shell.tsx")).toContain("onPages(item.activeOn, pathname) ||");
+  });
+});
+
+describe("the finance phone bar: Home, Money, League (raised), Clients, Tasks", () => {
+  it("has the same League and Tasks tabs as every staff bar", async () => {
+    const { FINANCE_BAR, STAFF_BAR } = await import("@/lib/internal-nav");
+    expect(FINANCE_BAR.map((i) => i.label)).toEqual(["Home", "Money", "League", "Clients", "Tasks"]);
+    expect(FINANCE_BAR.map((i) => i.to)).toEqual(["/admin/finance", "/admin/finance/books", "/admin/community", "/admin/clients", "/admin/tasks"]);
+    expect(FINANCE_BAR.filter((i) => i.featured).map((i) => i.label)).toEqual(["League"]);
+    for (const label of ["League", "Clients", "Tasks"]) {
+      expect(FINANCE_BAR.find((i) => i.label === label)).toBe(STAFF_BAR.find((i) => i.label === label));
+    }
+  });
+
+  it("Books and Payments switch at the top of both pages, without stacking history", () => {
+    expect(read("src/routes/_authenticated/admin/finance_.books.tsx")).toContain('<MoneySwitcher page="books" />');
+    expect(read("src/routes/_authenticated/admin/finance_.payments.tsx")).toContain('<MoneySwitcher page="payments" />');
+    expect(read("src/components/admin/finance/money-switcher.tsx")).toContain("navigate({ to: TO[p], replace: true })");
+  });
+
+  it("the League is the crew's boards, without the coach's queues and tools", () => {
+    const hub = read("src/components/community/admin-community-hub.tsx");
+    expect(hub).toContain('const VIEW_TABS: HubTab[] = ["league"];');
+    expect(hub).toContain("{tabs.length > 1 && <div");
+    expect(hub).toContain('const tab = tabs.some((t) => t.key === picked) ? picked : "league";');
+    expect(hub).toContain("{!viewOnly && <button");
+    expect(hub).toContain("<StaffLeagueTab tools={!viewOnly} />");
+    expect(hub).toContain("{!viewOnly && <PulsePanel onGo={setTab} />}");
+    expect(hub).toContain('{tab !== "feed" && !viewOnly && <NeedsYouStrip onGo={setTab} />}');
+    expect(read("src/components/community/staff-league-board.tsx")).toContain("{tools && <LeagueTools />}");
+    // A count it can never clear would sit on the button for good.
+    expect(read("src/hooks/use-client-nav-badges.ts")).toContain('if (!viewOnly && community?.enabled && community.unseen > 0) map["/admin/community"]');
   });
 });
 
