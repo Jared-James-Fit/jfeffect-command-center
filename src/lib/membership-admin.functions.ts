@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isMemberAccessActive } from "@/lib/memberAccess";
 import { z } from "zod";
+import { assertAdminView, withoutCredentials } from "@/lib/permissions.server";
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
@@ -17,7 +18,7 @@ async function assertAdmin(ctx: any) {
 export const getMembershipStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows, error } = await supabaseAdmin
       .from("app_members")
@@ -56,7 +57,7 @@ export const getMembershipStats = createServerFn({ method: "GET" })
 export const getMembershipActionNeeded = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    const { viewOnly } = await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows } = await supabaseAdmin
       .from("app_members")
@@ -74,13 +75,16 @@ export const getMembershipActionNeeded = createServerFn({ method: "GET" })
       cancelled_recent: list.filter((m) => m.cancelled_at && new Date(m.cancelled_at).getTime() > now - 1000 * 60 * 60 * 24 * 14),
       setup_link_not_opened: list.filter((m) => m.setup_token && !m.last_signed_in_at),
     };
+    if (viewOnly) {
+      for (const k of Object.keys(buckets) as (keyof typeof buckets)[]) buckets[k] = buckets[k].map(withoutCredentials);
+    }
     return { buckets };
   });
 
 export const getSignupStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows } = await supabaseAdmin
       .from("app_members")
@@ -102,7 +106,7 @@ export const getSignupStats = createServerFn({ method: "GET" })
 export const getRecentlyExpiredMembers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows } = await supabaseAdmin
       .from("app_members")

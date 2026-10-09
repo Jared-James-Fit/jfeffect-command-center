@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 /** Member dismisses the setup checklist on home for N hours. */
 export const dismissSetupChecklist = createServerFn({ method: "POST" })
@@ -53,9 +54,7 @@ export const listOnboardingMembers = createServerFn({ method: "POST" })
     }).parse(i),
   )
   .handler(async ({ data, context }) => {
-    const { data: isAdmin } = await context.supabase
-      .rpc("has_role", { _user_id: context.userId, _role: "admin" });
-    if (!isAdmin) throw new Error("Admin required");
+    await assertAdminView(context as any);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -105,9 +104,7 @@ export const listOnboardingMembers = createServerFn({ method: "POST" })
 export const onboardingCounts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: isAdmin } = await context.supabase
-      .rpc("has_role", { _user_id: context.userId, _role: "admin" });
-    if (!isAdmin) throw new Error("Admin required");
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     async function count(build: (q: any) => any): Promise<number> {

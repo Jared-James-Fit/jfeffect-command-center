@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
+import { assertAdminView, withoutCredentials } from "@/lib/permissions.server";
 
 function genToken(len = 32) {
   const arr = new Uint8Array(len);
@@ -60,26 +61,26 @@ export const listMembers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: { accountType?: string; status?: string } | undefined) => i ?? {})
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+    const { viewOnly } = await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin.from("app_members").select("*").order("created_at", { ascending: false });
     if (data.accountType) q = q.eq("account_type", data.accountType);
     if (data.status) q = q.eq("status", data.status);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return { members: rows ?? [] };
+    return { members: viewOnly ? (rows ?? []).map(withoutCredentials) : rows ?? [] };
   });
 
 export const getMember = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: { memberId: string }) => z.object({ memberId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+    const { viewOnly } = await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: member } = await supabaseAdmin.from("app_members").select("*").eq("id", data.memberId).maybeSingle();
     if (!member) throw new Error("Not found");
     const { data: access } = await supabaseAdmin.from("member_access").select("*").eq("member_id", data.memberId);
-    return { member, access: access ?? [] };
+    return { member: viewOnly ? withoutCredentials(member) : member, access: access ?? [] };
   });
 
 /* ---------- create / update ---------- */
@@ -212,7 +213,7 @@ export const listMemberDefaults = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: { accountType: string }) => z.object({ accountType: z.string() }).parse(i))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows } = await supabaseAdmin
       .from("member_access_defaults")

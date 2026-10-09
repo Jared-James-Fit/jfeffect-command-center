@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 async function assertAdmin(ctx: any) {
   const { supabase, userId } = ctx;
@@ -93,7 +94,7 @@ export const rejectItem = createServerFn({ method: "POST" })
 export const listApprovalQueue = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [b, e, s] = await Promise.all([
       supabaseAdmin.from("broadcasts").select("id, title, review_status, submitted_at, submitted_by").eq("review_status", "needs_review"),

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data, error } = await supabase
@@ -64,8 +65,8 @@ export const listArchived = createServerFn({ method: "POST" })
     }).parse(input ?? {}),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const wanted = data.types && data.types.length > 0

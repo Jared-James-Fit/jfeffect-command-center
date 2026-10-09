@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { assertAdminView } from "@/lib/permissions.server";
 
 /**
  * Admin/coach: fetch the active, client-visible meal plan for a specific
@@ -14,12 +15,16 @@ export const getClientMealPlanForCoach = createServerFn({ method: "GET" })
     z.object({ clientId: z.string().uuid() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+    let { supabase } = context as any;
+    const { userId } = context;
     const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
       supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
       supabase.rpc("has_role", { _user_id: userId, _role: "coach" }),
     ]);
-    if (!isAdmin && !isCoach) throw new Error("Forbidden");
+    if (!isAdmin && !isCoach) {
+      // A view-only login (finance) reads what the admin would.
+      supabase = (await assertAdminView(context as any).catch(() => { throw new Error("Forbidden"); })).db;
+    }
 
     const { data: client } = await supabase
       .from("clients")

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 // ------------------------- Types -------------------------
 
@@ -99,7 +100,7 @@ const SettingsSchema = z.object({
 export const getArchiveSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await requireAdmin(context.supabase, context.userId);
+    await assertAdminView(context as any);
     const db = await getAdmin();
     const { data } = await db.from("media_archive_settings").select("*").limit(1).maybeSingle();
     return data ?? null;
@@ -387,7 +388,7 @@ export const listMediaArchives = createServerFn({ method: "GET" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    await requireAdmin(context.supabase, context.userId);
+    await assertAdminView(context as any);
     const db = await getAdmin();
     let q = db.from("media_archives").select("*, clients!inner(id, full_name)").order("created_at", { ascending: false }).limit(data.limit ?? 200);
     if (data.status && data.status !== "all") q = q.eq("archive_status", data.status);

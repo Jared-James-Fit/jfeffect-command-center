@@ -3,6 +3,7 @@ import { z } from "zod";
 import { mintShareLinkForPurchase } from "@/lib/payment-share.server";
 import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertPermission } from "@/lib/permissions.server";
 
 /* ============================================================
  * Shared helpers (duplicated from sms.functions.ts to keep this
@@ -63,6 +64,22 @@ async function loadClientForSms(supabase: any, clientId: string) {
   const toPhone = normalizePhone(data.phone);
   if (!toPhone) throw new Error("Client has no valid phone number on file");
   return { client: data, toPhone };
+}
+
+/**
+ * A payments.request login (finance) sends payment links for existing
+ * purchases with the service client. Admins and coaches return null and keep
+ * their own client and checks.
+ */
+async function paymentRequestClient(context: any): Promise<any | null> {
+  const { data: roles } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId);
+  if ((roles ?? []).some((r: any) => r.role === "admin" || r.role === "coach")) return null;
+  try {
+    await assertPermission(context, "payments.request");
+  } catch {
+    return null;
+  }
+  return (await import("@/integrations/supabase/client.server")).supabaseAdmin;
 }
 
 async function assertAdminOrAssignedCoach(supabase: any, userId: string, clientId: string) {
@@ -200,7 +217,9 @@ export const sendPaymentLinkBySms = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SendPaymentSmsSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { userId } = context as any;
+    const financeDb = await paymentRequestClient(context);
+    const supabase = financeDb ?? (context as any).supabase;
     const { data: rec, error } = await supabase
       .from("purchase_records")
       .select("id, client_id, stripe_payment_link, offer_name, full_payable_amount, currency, payment_structure, payment_status")
@@ -208,7 +227,7 @@ export const sendPaymentLinkBySms = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!rec) throw new Error("Purchase not found");
-    await assertAdminOrAssignedCoach(supabase, userId, rec.client_id);
+    if (!financeDb) await assertAdminOrAssignedCoach(supabase, userId, rec.client_id);
     const shareLink = await mintShareLinkForPurchase(supabase, userId, rec.id, "https://jfeffect.com");
     const shareUrl = sanitizeShareUrl(shareLink.shareUrl);
     if (!shareUrl) throw new Error(shareLink.reason ?? "No valid Stripe payment link for this purchase yet.");
@@ -261,7 +280,9 @@ export const postPaymentRequestInChat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => PostPaymentSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
+    const { userId } = context as any;
+    const financeDb = await paymentRequestClient(context);
+    const supabase = financeDb ?? (context as any).supabase;
     const { data: rec, error } = await supabase
       .from("purchase_records")
       .select("id, client_id, stripe_payment_link, offer_name, full_payable_amount, currency, payment_structure, payment_status")
@@ -269,7 +290,10 @@ export const postPaymentRequestInChat = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!rec) throw new Error("Purchase not found");
-    await assertAdminOrAssignedCoach(supabase, userId, rec.client_id);
+    if (!financeDb) await assertAdminOrAssignedCoach(supabase, userId, rec.client_id);
+    // Finance posts in the client's own chat only, never into a group (member
+    // chats are private to their members; see AGENTS.md).
+    if (financeDb && data.target !== "dm") throw new Error("Payment requests from the finance login go in the client's own chat.");
     const shareLink = await mintShareLinkForPurchase(supabase, userId, rec.id, "https://jfeffect.com");
     const shareUrl = sanitizeShareUrl(shareLink.shareUrl);
     if (!shareUrl) throw new Error(shareLink.reason ?? "No valid Stripe payment link for this purchase yet.");
