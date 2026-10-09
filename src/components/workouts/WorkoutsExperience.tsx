@@ -1138,11 +1138,9 @@ function SelectedDayCard({
 
   // Reset = the server's instance-scoped, undoable "Not Started" (see
   // WorkoutStatusSheet / workout_set_status) — never a client-side delete.
-  const hasActivity = !!(
-    item?.completion?.completed_at || item?.completion?.in_progress_at || item?.completion?.started_at
-    || (item?.logged_sets_count ?? 0) > 0
-  );
-  const canReset = canChangeWorkoutStatus && hasActivity;
+  // Always offered: typed-but-unchecked sets and warm-ups don't show up as
+  // started/logged, and hiding Reset on a 0% workout made it look missing.
+  const canReset = canChangeWorkoutStatus;
   const hasMenuActions = canChangeWorkoutStatus || isCompleted
     || (canManageBackupLifecycle && (backupState?.lifecycle === "in_progress" || backupState?.lifecycle === "empty"));
 

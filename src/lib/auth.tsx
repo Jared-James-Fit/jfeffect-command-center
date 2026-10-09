@@ -7,7 +7,7 @@ import { markClientSignedIn } from "@/lib/activity";
 import { logPerf } from "@/lib/perf-timing";
 import { clearLastRoute } from "@/lib/route-persistence";
 
-export type AppRole = "admin" | "coach" | "media_manager" | "client" | "member";
+export type AppRole = "admin" | "coach" | "media_manager" | "finance" | "client" | "member";
 
 // ── Role cache helpers ────────────────────────────────────────────────────────
 // Persist the resolved role to localStorage so PWA resume is instant.
@@ -369,6 +369,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           roles.includes("admin") ? "admin"
           : roles.includes("coach") ? "coach"
           : roles.includes("media_manager") ? "media_manager"
+          : roles.includes("finance") ? "finance"
           : roles.includes("client") ? "client"
           : null;
 

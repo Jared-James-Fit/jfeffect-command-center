@@ -4,7 +4,7 @@ import { buildAppContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot } fr
 import { summerSystemPrompt } from "@/lib/summer-context";
 import { audioFormat } from "@/lib/summer.server";
 
-describe("Summer's links", () => {
+describe("Cleo's links", () => {
   it("only allows in-app admin paths or https", () => {
     expect(isSafeInternalHref("/admin/clients/7f0c2a52-3c2e-4f0e-9a51-1d2b3c4d5e6f?tab=purchases")).toBe(true);
     expect(isSafeInternalHref("/admin/communication?tab=messages&client=abc")).toBe(true);
@@ -56,7 +56,7 @@ describe("speechFromReply", () => {
   });
 });
 
-describe("Summer's app context", () => {
+describe("Cleo's app context", () => {
   const snap: AppSnapshot = {
     ...EMPTY_APP_SNAPSHOT,
     clients: [
@@ -91,7 +91,7 @@ describe("Summer's app context", () => {
   });
 });
 
-describe("Summer's prompt", () => {
+describe("Cleo's prompt", () => {
   it("knows she can link and look things up, and never invents ids", () => {
     const p = summerSystemPrompt();
     expect(p).toMatch(/rest of the app/);
@@ -104,7 +104,7 @@ describe("Summer's prompt", () => {
   });
 });
 
-describe("Summer for a team admin", () => {
+describe("Cleo for a team admin", () => {
   it("keeps the owner's books private and says whose they are", () => {
     const p = summerSystemPrompt({ owner: false, userName: "Fionna", ownerName: "Jared" });
     expect(p).toContain("You are talking with Fionna, an admin on Jared's team (not the owner)");

@@ -893,7 +893,7 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   outline: none;
 }
 
-/* Summer's floating button: above the mobile tab bar, and lifted over a
+/* Cleo's floating button: above the mobile tab bar, and lifted over a
    page's own floating button when one is showing (html[data-page-fab]). */
 .summer-fab { bottom: calc(max(env(safe-area-inset-bottom), 6px) + 84px); }
 html[data-page-fab] .summer-fab { bottom: calc(max(env(safe-area-inset-bottom), 6px) + 148px); }
