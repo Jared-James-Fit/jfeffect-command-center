@@ -33,6 +33,7 @@ import {
 } from "@/lib/business-books.functions";
 import { RECEIPT_ACCEPT, receiptSignedUrl, uploadReceiptFile } from "@/lib/receipt-upload";
 import { ExpenseDialog } from "./expense-dialog";
+import { BooksModeContext, useBooksMode, type BooksMode } from "./books-mode";
 import { openSummer } from "@/components/summer/summer-assistant";
 import { SummerCustomizeDialog } from "./summer-customize";
 import { summerTone } from "@/lib/summer-persona";
@@ -59,7 +60,16 @@ function Kpi({ label, value, sub, tone, compact }: { label: string; value: strin
   );
 }
 
-export function TaxesBooksPage() {
+export function TaxesBooksPage({ mode = "owner" }: { mode?: BooksMode } = {}) {
+  return (
+    <BooksModeContext.Provider value={mode}>
+      <TaxesBooksPageInner />
+    </BooksModeContext.Provider>
+  );
+}
+
+function TaxesBooksPageInner() {
+  const mode = useBooksMode();
   const qc = useQueryClient();
   const loadFn = useServerFn(getBooksData);
   const scanFn = useServerFn(scanReceipt);
@@ -217,9 +227,11 @@ export function TaxesBooksPage() {
             {scanState ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Camera className="mr-1.5 h-4 w-4" />}
             {scanState ? `Reading ${scanState.done + (scanState.done < scanState.total ? 1 : 0)} of ${scanState.total}` : "Snap receipt"}
           </Button>
-          <Button size="sm" variant="outline" className="h-9" onClick={() => openSummer({ year })}>
-            <Sparkles className="mr-1.5 h-4 w-4 text-amber-500" /> Ask {ASSISTANT_NAME}
-          </Button>
+          {mode === "owner" && (
+            <Button size="sm" variant="outline" className="h-9" onClick={() => openSummer({ year })}>
+              <Sparkles className="mr-1.5 h-4 w-4 text-amber-500" /> Ask {ASSISTANT_NAME}
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-9" disabled={!!exporting}>
@@ -654,6 +666,7 @@ function TaxPaymentDialog({ open, onClose, year, kind, onSaved }: { open: boolea
 
 function PaymentsList({ payments, year, kind, onChanged }: { payments: TaxPaymentRow[]; year: number; kind: "gst_hst" | "income_tax"; onChanged: () => void }) {
   const delFn = useServerFn(deleteTaxPayment);
+  const canDelete = useBooksMode() === "owner";
   const rows = payments.filter((p) => p.tax_year === year && p.kind === kind);
   if (!rows.length) return <p className="text-xs text-muted-foreground">No payments recorded for {year}.</p>;
   return (
@@ -663,10 +676,12 @@ function PaymentsList({ payments, year, kind, onChanged }: { payments: TaxPaymen
           <span>{p.paid_on}{p.period_label ? ` · ${p.period_label}` : ""}{p.reference ? <span className="text-xs text-muted-foreground"> · #{p.reference}</span> : null}</span>
           <span className="flex items-center gap-1">
             <span className="tabular-nums">{money(Number(p.amount_minor))}</span>
-            <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Delete payment" onClick={async () => {
-              if (!window.confirm("Delete this payment record?")) return;
-              try { await delFn({ data: { id: p.id } }); onChanged(); } catch (e: any) { toast.error(e?.message ?? "Could not delete"); }
-            }}><Trash2 className="h-3.5 w-3.5" /></Button>
+            {canDelete && (
+              <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Delete payment" onClick={async () => {
+                if (!window.confirm("Delete this payment record?")) return;
+                try { await delFn({ data: { id: p.id } }); onChanged(); } catch (e: any) { toast.error(e?.message ?? "Could not delete"); }
+              }}><Trash2 className="h-3.5 w-3.5" /></Button>
+            )}
           </span>
         </li>
       ))}
@@ -881,9 +896,10 @@ function SummerSettingsCard({ onSaved }: { onSaved: () => void }) {
 }
 
 function SettingsTab({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
+  const mode = useBooksMode();
   return (
     <div className="space-y-4">
-      <SummerSettingsCard onSaved={onSaved} />
+      {mode === "owner" && <SummerSettingsCard onSaved={onSaved} />}
       <TaxSettingsForm data={data} onSaved={onSaved} />
     </div>
   );

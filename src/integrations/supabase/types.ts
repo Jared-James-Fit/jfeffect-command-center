@@ -18069,6 +18069,9 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          delivered_at: string | null
+          delivery_client_id: string | null
+          delivery_method: string | null
           email: string
           first_name: string | null
           id: string
@@ -18085,6 +18088,9 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          delivered_at?: string | null
+          delivery_client_id?: string | null
+          delivery_method?: string | null
           email: string
           first_name?: string | null
           id?: string
@@ -18101,6 +18107,9 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          delivered_at?: string | null
+          delivery_client_id?: string | null
+          delivery_method?: string | null
           email?: string
           first_name?: string | null
           id?: string
@@ -20278,7 +20287,7 @@ export type Database = {
         | "complimentary"
         | "manual_admin"
       access_status_type: "active" | "paused" | "past_due" | "ending" | "ended"
-      app_role: "admin" | "client" | "coach" | "media_manager"
+      app_role: "admin" | "client" | "coach" | "media_manager" | "finance"
       appointment_source: "manual" | "booking_link" | "external"
       appointment_status: "Scheduled" | "Completed" | "Cancelled" | "NoShow"
       appointment_type:
@@ -20612,7 +20621,7 @@ export const Constants = {
         "manual_admin",
       ],
       access_status_type: ["active", "paused", "past_due", "ending", "ended"],
-      app_role: ["admin", "client", "coach", "media_manager"],
+      app_role: ["admin", "client", "coach", "media_manager", "finance"],
       appointment_source: ["manual", "booking_link", "external"],
       appointment_status: ["Scheduled", "Completed", "Cancelled", "NoShow"],
       appointment_type: [

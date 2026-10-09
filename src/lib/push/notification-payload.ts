@@ -84,6 +84,7 @@ export function messageAction(attachments: AttachmentLike[] | null | undefined, 
   if (kinds.has("payment_request")) return `sent${you} a payment request`;
   if (kinds.has("recipe_share")) return `shared a recipe`;
   if (kinds.has("community_post")) return `sent${you} a post`;
+  if (kinds.has("staff_invite")) return `sent${you} a team account invite`;
   if (kinds.has("gif")) return `sent${you} a GIF`;
   if (kinds.has("sound")) return `sent${you} a sound`;
   // Auto-detected links ride along with ordinary text, so they don't count.

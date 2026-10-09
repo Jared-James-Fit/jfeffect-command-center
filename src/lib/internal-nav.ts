@@ -196,7 +196,7 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "operations"] },
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team",
     visibleTo: ["admin", "operations"] },
-  { to: "/admin/staff", label: "Staff & Media Managers", icon: UserPlus, group: "Team",
+  { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team",
     visibleTo: ["admin", "operations"] },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team",
     visibleTo: ["admin", "media_manager", "operations"], section: "Media & Approvals" },
