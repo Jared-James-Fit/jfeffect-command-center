@@ -44,7 +44,7 @@ function personFromHash(): string | null {
 let tipShownThisVisit = false;
 
 export function CommunityScreen({
-  canShare = false, previewOnly = false, bell = false, backTo,
+  canShare = false, previewOnly = false, bell = false, backTo, hideTabs = false,
 }: {
   canShare?: boolean;
   previewOnly?: boolean;
@@ -52,6 +52,8 @@ export function CommunityScreen({
   bell?: boolean;
   /** A small back arrow at the start of the top row (instead of a page header). */
   backTo?: string;
+  /** Just the feed, no Feed / Crew / You row (the coach's Community page has its own tabs). */
+  hideTabs?: boolean;
 }) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
@@ -136,7 +138,7 @@ export function CommunityScreen({
         >
           <ArrowLeft className="mr-1.5 h-4 w-4" /> {scope.from === "crew" ? "Crew" : scope.from === "you" ? "You" : "Feed"}
         </Button>
-      ) : (
+      ) : hideTabs ? null : (
         <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
         {backTo && (

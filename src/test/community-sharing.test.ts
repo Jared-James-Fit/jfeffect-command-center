@@ -401,9 +401,9 @@ describe("community lives on Home (and in More), Nutrition keeps its tab", () =>
   it("only shows a header nudge when there is something new", () => {
     expect(entry).toContain("data.unseen <= 0) return null;");
   });
-  it("puts one-tap coach props on the coach dashboard, visible even before anyone posts", () => {
-    expect(admin).toContain("<CommunityCoachCard />");
-    expect(entry).toContain("No posts yet. Clients share from Home and after each workout");
+  it("puts the community on the coach dashboard, with one-tap props on the Community page", () => {
+    expect(admin).toContain("<CommunityPulseCard />");
+    expect(read("src/components/community/admin-community-hub.tsx")).toContain("<CoachPostRow key={x.id} post={x} unit={unit} />");
     expect(entry).toContain('react.mutate(given ? null : "fire"');
     // a ❤️ from the feed counts as props given
     expect(entry).toContain("const given = !!post.my_reaction;");

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
-import { CommunityCoachCard } from "@/components/community/community-entry";
+import { CommunityPulseCard } from "@/components/community/admin-community-hub";
 import { BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo, Suspense } from "react";
@@ -24,7 +24,6 @@ import {
   buildSnapshot, waitingOnMe, groupWins, winLine, revenueDelta, formatMoney, TIER_LABEL,
   type InboxRow, type SnapshotTile, type Overview, type OverviewSession, type OverviewWin,
 } from "@/lib/dashboard-feed";
-import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
 const PriceCardPickerDialog = lazyWithRetry(() =>
   import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
@@ -460,9 +459,9 @@ function AdminDashboard() {
         <DriveSetupBanner />
         <NotificationSetupPrompt problemsOnly />
 
-        {/* ---------------- BIRTHDAY POSTS: drafts to review, and who's next ---------------- */}
+        {/* ---------------- BIRTHDAY POSTS: only a draft that needs you (the rest is in Community > Birthdays) ---------------- */}
         <SectionErrorBoundary label="Birthday posts">
-          <BirthdayPostsCard />
+          <BirthdayPostsCard actionableOnly />
         </SectionErrorBoundary>
 
         {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
@@ -473,6 +472,11 @@ function AdminDashboard() {
 
         {/* ---------------- WINS: records this week, one tap to send props ---------------- */}
         <WinsCard wins={overview?.wins ?? []} />
+
+        {/* ---------------- COMMUNITY: the week at a glance + what needs you; opens the Community page ---------------- */}
+        <SectionErrorBoundary label="Community">
+          <CommunityPulseCard />
+        </SectionErrorBoundary>
 
         {/* ---------------- QUICK ACTIONS (deliberate moves: no "‹ Today" pill) ---------------- */}
         <div className="grid grid-cols-5 gap-2" data-no-return>
@@ -543,14 +547,8 @@ function AdminDashboard() {
         {/* ---------------- BUSINESS (admins only: the RPC returns no money for coaches) ---------------- */}
         {overview?.money && <BusinessCard overview={overview} />}
 
-        {/* ---------------- COMMUNITY: one-tap coach props (hidden when nothing was shared this week) */}
-        <SectionErrorBoundary label="Community">
-          <CommunityCoachCard />
-        </SectionErrorBoundary>
-
         {/* Empty schedule sections collapse instead of consuming dashboard space. */}
         <UpcomingAppointmentsCard mode="admin" limit={3} hideWhenEmpty />
-        <UpcomingBirthdaysWidget windowDays={7} />
       </div>
 
       {sellTo ? (
