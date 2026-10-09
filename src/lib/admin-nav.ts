@@ -167,7 +167,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
   { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
-  { to: "/portal/community", label: "League & Community", icon: Trophy, keywords: ["league","rank","leaderboard","level","hall of strength","community","shared workouts","feed","posts","photos","reactions","crew"] },
+  { to: "/portal/community", label: "League & Crew", icon: Trophy, keywords: ["league","rank","leaderboard","level","hall of strength","community","shared workouts","feed","posts","photos","reactions","crew"] },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
   { to: "/portal/agreements", label: "Agreements", icon: FileSignature },

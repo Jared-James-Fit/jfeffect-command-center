@@ -1274,3 +1274,55 @@ export function crewGoalStatus(g: CrewGoal, opts: { now?: Date; me?: string | nu
   const days = Math.max(1, Math.ceil((new Date(g.ends_at).getTime() - now.getTime()) / 86_400_000));
   return { pct, left, hit, line: `${left} to go · ${days === 1 ? "last day" : `${days} days left`}` };
 }
+
+/** How many posts Home's Crew feed shows before the card that opens the feed. */
+export const HOME_CREW_POSTS = 5;
+
+/**
+ * Home's Crew feed: the newest posts first (only the last two weeks, so it
+ * never looks stale), at most `max`. `more` is how many recent ones the feed
+ * has beyond these, for the card at the end.
+ */
+export function homeCrewPosts<T extends Pick<CommunityPost, "id" | "created_at">>(posts: T[], now = Date.now(), max = HOME_CREW_POSTS): { shown: T[]; more: number } {
+  const since = now - 14 * 86_400_000;
+  const recent = posts
+    .filter((p) => new Date(p.created_at).getTime() > since)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || (a.id < b.id ? 1 : -1));
+  return { shown: recent.slice(0, max), more: Math.max(0, recent.length - max) };
+}
+
+/**
+ * People are paying attention to it: three or more reactions and comments
+ * between them (about 2 in 7 of the crew's posts), so the pop stays special.
+ */
+export const ENGAGED_AT = 3;
+export function isEngaged(post: Pick<CommunityPost, "reaction_count" | "reactions" | "comment_count">): boolean {
+  return reactionTotal(post) + (post.comment_count ?? 0) >= ENGAGED_AT;
+}
+
+/** The engagement pop's words: "Nicole & Marc", "Nicole +3", "You +1", with "💬 2" when there are comments. */
+export function engagementLine(post: Pick<CommunityPost, "reaction_count" | "reactions" | "reactors" | "comment_count">): string {
+  const total = reactionTotal(post);
+  const names = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me)).map((r) => (r.is_me ? "You" : r.name.split(" ")[0]));
+  let who = "";
+  if (total > 0) {
+    if (names.length === 0) who = `${total} ${total === 1 ? "reaction" : "reactions"}`;
+    else if (total === 1) who = names[0];
+    else if (total === 2 && names.length >= 2) who = `${names[0]} & ${names[1]}`;
+    else who = `${names[0]} +${total - 1}`;
+  }
+  const c = post.comment_count ?? 0;
+  const comments = c > 0 ? `💬 ${c}` : "";
+  return [who, comments].filter(Boolean).join(" · ");
+}
+
+/** How many days apart the share nudge comes back (until the first post, then never). */
+export const SHARE_NUDGE_EVERY_DAYS = 3;
+/** Remembered on the account once they've posted: the nudge never comes back. */
+export const SHARE_NUDGE_DONE = "share_nudge_done";
+
+/** The account hint for the nudge's current window ("share_nudge:6852"); local days, so it turns over at midnight. */
+export function shareNudgeKey(now = new Date()): string {
+  const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000);
+  return `share_nudge:${Math.floor(day / SHARE_NUDGE_EVERY_DAYS)}`;
+}

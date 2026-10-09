@@ -875,6 +875,37 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   100% { opacity: 0; transform: translateY(4px); }
 }
 .community-hint { animation: community-hint-life 5.2s ease-out forwards; }
+/* A post people are reacting to: a capsule springs up, its reactions drift out of it, then it goes. */
+@keyframes engage-pop-life {
+  0% { opacity: 0; transform: translateY(10px) scale(0.82); }
+  9% { opacity: 1; transform: translateY(-2px) scale(1.04); }
+  14% { transform: none; }
+  84% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(4px) scale(0.98); }
+}
+.engage-pop { animation: engage-pop-life 3.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; transform-origin: left bottom; }
+@keyframes engage-float {
+  0% { opacity: 0; transform: translateY(4px) scale(0.5); }
+  18% { opacity: 1; transform: translateY(-6px) scale(1.05); }
+  100% { opacity: 0; transform: translateY(-52px) scale(1.15) rotate(-8deg); }
+}
+.engage-float { opacity: 0; animation: engage-float 1.7s ease-out forwards; }
+/* the feed: who reacted gets a small bounce and a warm glow while the reactions rise */
+@keyframes engage-chip {
+  0% { transform: scale(1); background-color: transparent; }
+  18% { transform: scale(1.06); background-color: color-mix(in oklab, var(--primary) 14%, transparent); }
+  32% { transform: scale(1); }
+  70% { background-color: color-mix(in oklab, var(--primary) 10%, transparent); }
+  100% { transform: scale(1); background-color: transparent; }
+}
+.engage-chip { animation: engage-chip 2.2s ease-out; }
+/* reduced motion: it just fades in and out, nothing moves */
+@keyframes engage-pop-calm { 0% { opacity: 0; } 8%, 84% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .engage-pop { animation: engage-pop-calm 3.6s linear forwards; }
+  .engage-float { display: none; }
+  .engage-chip { animation: none; }
+}
 /* The feed builds as you scroll: each post eases in the first time it's on screen. */
 .feed-item { opacity: 0; transform: translateY(14px); transition: opacity 420ms ease-out, transform 480ms cubic-bezier(.2,.8,.2,1); }
 .feed-item[data-shown] { opacity: 1; transform: none; }

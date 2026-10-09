@@ -53,15 +53,15 @@ describe("client tab bar: League in the centre", () => {
   });
 });
 
-describe("Home's community shelf", () => {
-  it("one tile per post from the last 7 days: live, then new to you, then the rest, yours last (max 8)", () => {
-    expect(entry).toContain("const weekAgo = Date.now() - 7 * 86_400_000;");
-    expect(entry).toContain(".sort((a, b) => rank(a) - rank(b))");
-    expect(entry).toContain(".slice(0, 8);");
+describe("Home's Crew feed", () => {
+  it("newest first (yours too), then a card that opens the feed", () => {
+    expect(entry).toContain("const { shown, more } = useMemo(() => homeCrewPosts(");
+    expect(entry).toContain("<SeeMoreCard posts=");
   });
 
-  it("new to you wears the same story ring as the tab", () => {
-    expect(entry).toContain('live ? "bg-red-500" : fresh && "bg-[linear-gradient(135deg,#ffb054,#ef3340)]"');
+  it("new to you: a dot by the time; training right now: Live", () => {
+    expect(entry).toContain('<span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff5a4e]" aria-hidden />');
+    expect(entry).toContain(">Live</span>");
   });
 
   it("the profile grid and the shelf draw posts the same way, from a small file (no feed card in the app shell)", () => {

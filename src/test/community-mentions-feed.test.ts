@@ -77,7 +77,7 @@ describe("feed that builds as you scroll", () => {
     expect(screen).toMatch(/rootMargin: "1400px 0px"/);
   });
   it("posts ease in as they arrive; a post-shaped placeholder while loading; a caught-up card at the end", () => {
-    expect(screen).toMatch(/<FeedItem key=\{p\.id\} index=\{i\}/);
+    expect(screen).toMatch(/<Fragment key=\{p\.id\}>\s*<FeedItem index=\{i\}/);
     expect(screen).toMatch(/\{isFetchingNextPage && <PostSkeleton \/>\}/);
     expect(screen).toMatch(/<CaughtUp /);
     expect(card).toMatch(/className="media-fade relative h-full w-full object-cover"/);

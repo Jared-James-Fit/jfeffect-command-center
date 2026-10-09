@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Dumbbell } from "lucide-react";
@@ -13,6 +13,7 @@ import { OPEN_POST_EVENT } from "@/components/community/shared-comment";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
+import { ShareNudge } from "@/components/community/share-nudge";
 import { CrewList } from "@/components/community/crew-list";
 import { LeagueHub } from "@/components/community/league-hub";
 import { communityKeys, markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
@@ -329,7 +330,8 @@ export function CommunityScreen({
       ) : (
         <>
           {posts.map((p, i) => (
-            <FeedItem key={p.id} index={i} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
+            <Fragment key={p.id}>
+            <FeedItem index={i} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
               post={p}
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
@@ -344,6 +346,9 @@ export function CommunityScreen({
               onTipDone={onTipDone}
             />
             </FeedItem>
+            {/* now and then, until their first post: an invite to lock in or share (after the second post) */}
+            {canShare && i === Math.min(1, posts.length - 1) && <ShareNudge surface="feed" unit={unit} />}
+            </Fragment>
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
           {isFetchingNextPage && <PostSkeleton />}

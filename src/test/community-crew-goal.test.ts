@@ -56,7 +56,7 @@ describe("where it shows", () => {
   it("leads the League tab, sits on Home's community card, and greets you after a workout", () => {
     expect(read("src/components/community/league-hub.tsx")).toContain("<CrewGoalCard />");
     expect(screen).not.toContain("<CrewGoalCard />");
-    expect(entry).toContain('<CrewGoalStrip className="mt-2" />');
+    expect(entry).toContain('<CrewGoalStrip className="mt-3 px-3.5" />');
     expect(recap).toContain('<CrewGoalAfterWorkout className="mb-2.5" />');
   });
   it("after a workout it's fresh (this session counted); posting refreshes it too", () => {
