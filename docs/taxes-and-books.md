@@ -101,6 +101,12 @@ Voice:
   time-stretching the audio. If none answers, the browser speaks with the
   device's most natural English voice. Voice, auto-play and speed are per
   device (Customize Cleo).
+- Giving her an accent: pick or design a voice that has it natively in
+  ElevenLabs (Voice Library, or Voice Design from a description) and put its
+  ID in `ELEVENLABS_VOICE_ID`. Don't prompt an accent into the OpenAI/Gemini
+  style; prompted accents drift and sound put on. The fallback voices stay
+  neutral on purpose. Keep `eleven_multilingual_v2`: it holds a voice's
+  accent better than the faster models.
 - Health check: `POST /api/public/hooks/summer-voice-check` with
   `x-hook-secret` reports which provider works.
 
