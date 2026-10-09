@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
-import { CommunityCoachCard } from "@/components/community/community-entry";
+import { CommunityPulseCard } from "@/components/community/admin-community-hub";
+import { BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo, Suspense } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
@@ -23,17 +24,16 @@ import {
   buildSnapshot, waitingOnMe, groupWins, winLine, revenueDelta, formatMoney, TIER_LABEL,
   type InboxRow, type SnapshotTile, type Overview, type OverviewSession, type OverviewWin,
 } from "@/lib/dashboard-feed";
-import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 import { UpcomingAppointmentsCard } from "@/components/appointments/upcoming-appointments-card";
 const PriceCardPickerDialog = lazyWithRetry(() =>
   import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
 );
 import { UserAvatar } from "@/components/user-avatar";
 import { getCoachIntel } from "@/lib/coach-intel";
-import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 import { cn } from "@/lib/utils";
+import { onDashboardClickCapture } from "@/components/return-to-dashboard";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -88,7 +88,7 @@ function ActionsSheet({ actions, trigger }: { actions: { label: string; to: stri
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent side="bottom" className="rounded-t-2xl">
+      <SheetContent side="bottom" className="rounded-t-2xl" data-no-return>
         <SheetHeader>
           <SheetTitle>More actions</SheetTitle>
         </SheetHeader>
@@ -452,14 +452,19 @@ function AdminDashboard() {
       />
 
       <div
+        onClickCapture={onDashboardClickCapture}
         className="w-full max-w-full space-y-4 overflow-x-hidden p-4 md:p-6"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}
       >
         <DriveSetupBanner />
         <NotificationSetupPrompt problemsOnly />
 
+        {/* ---------------- BIRTHDAY POSTS: only a draft that needs you (the rest is in Community > Birthdays) ---------------- */}
+        <SectionErrorBoundary label="Birthday posts">
+          <BirthdayPostsCard actionableOnly />
+        </SectionErrorBoundary>
+
         {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
-        <div className="flex justify-end -mb-2"><DashboardRefreshIndicator /></div>
         <SnapshotGrid tiles={snapshot} loading={directoryLoading} />
 
         {/* ---------------- TODAY: who trains today and who already has ---------------- */}
@@ -468,8 +473,13 @@ function AdminDashboard() {
         {/* ---------------- WINS: records this week, one tap to send props ---------------- */}
         <WinsCard wins={overview?.wins ?? []} />
 
-        {/* ---------------- QUICK ACTIONS ---------------- */}
-        <div className="grid grid-cols-5 gap-2">
+        {/* ---------------- COMMUNITY: the week at a glance + what needs you; opens the Community page ---------------- */}
+        <SectionErrorBoundary label="Community">
+          <CommunityPulseCard />
+        </SectionErrorBoundary>
+
+        {/* ---------------- QUICK ACTIONS (deliberate moves: no "‹ Today" pill) ---------------- */}
+        <div className="grid grid-cols-5 gap-2" data-no-return>
           {primaryActions.map((a) => (
             <Link key={a.label} to={a.to as any} className="block">
               <div className="flex h-full min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
@@ -537,14 +547,8 @@ function AdminDashboard() {
         {/* ---------------- BUSINESS (admins only: the RPC returns no money for coaches) ---------------- */}
         {overview?.money && <BusinessCard overview={overview} />}
 
-        {/* ---------------- COMMUNITY: one-tap coach props (hidden when nothing was shared this week) */}
-        <SectionErrorBoundary label="Community">
-          <CommunityCoachCard />
-        </SectionErrorBoundary>
-
         {/* Empty schedule sections collapse instead of consuming dashboard space. */}
         <UpcomingAppointmentsCard mode="admin" limit={3} hideWhenEmpty />
-        <UpcomingBirthdaysWidget windowDays={7} />
       </div>
 
       {sellTo ? (

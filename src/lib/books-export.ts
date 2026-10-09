@@ -44,7 +44,7 @@ function footer(doc: any, s: BooksSnapshot) {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(140);
-    doc.text(`${s.settings.businessName} · ${s.year} · Prepared with Summer Ledger`, 40, h - 20);
+    doc.text(`${s.settings.businessName} · ${s.year} · Prepared with Cleo`, 40, h - 20);
     doc.text(`Page ${i} of ${pages}`, w - 40, h - 20, { align: "right" });
   }
   doc.setTextColor(0);

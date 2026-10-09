@@ -45,6 +45,9 @@ export type LeagueRow = {
   program_pr_lifts?: number;
   block_pr_lifts?: number;
   last_record_at?: string | null;
+  /** Scoring Community posts this month (max 2 a week) and their points. */
+  community_posts?: number;
+  community_points?: number;
 };
 
 /** Today's date (YYYY-MM-DD) in the league timezone. */

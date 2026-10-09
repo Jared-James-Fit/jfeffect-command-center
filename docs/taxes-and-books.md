@@ -1,6 +1,10 @@
-# Taxes & Books and Summer Ledger
+# Taxes & Books and Cleo
 
-Admin only. Sales hub > Taxes & Books (`/admin/sales?tab=taxes`).
+Business owner only. Sales hub > Taxes & Books (`/admin/sales?tab=taxes`).
+Owners are listed in `business_owners` (`is_business_owner()`); RLS on the
+books tables and the receipts bucket uses it, and the section and its menu
+entry are hidden from other admins. Adding an admin does not make them an
+owner.
 
 ## Where the numbers come from
 
@@ -12,7 +16,7 @@ Admin only. Sales hub > Taxes & Books (`/admin/sales?tab=taxes`).
 | Province, GST number, filing frequency, other income | `business_tax_settings` (one row) |
 
 Revenue is counted when received. All figures run through one pure engine,
-`src/lib/business-tax.ts`, so the dashboard, the PDFs and Summer agree.
+`src/lib/business-tax.ts`, so the dashboard, the PDFs and Cleo agree.
 
 ## Rules baked in
 
@@ -45,9 +49,61 @@ per month and currency (`external_key = stripe-fees:YYYY-MM:cur`). The page
 syncs automatically when the last sync is older than 12 hours. Re-syncing
 updates amounts and keeps any category change.
 
-## Summer Ledger
+## Cleo
+
+Cleo is she/her. Her voice is a preset the owner picks (Girly pop by
+default, Chill, Straight business) plus optional custom instructions, both
+set in Customize Cleo (chat header or Settings tab) and stored per admin in
+`summer_profiles` (the old `business_tax_settings.assistant_*` columns are
+unused). The
+voice text lives in `src/lib/summer-persona.ts`. Custom instructions are
+placed after the facts rules and can't override them.
 
 `askSummer` builds a plain-text copy of the books for the selected year
-(`src/lib/summer-context.ts`) and sends it with the last 16 messages. Summer
-reads; it cannot write. Messages are saved per admin in `summer_messages`
+(`src/lib/summer-context.ts`) and sends it with the last 16 messages. Cleo
+reads; she cannot write. Messages are saved per admin in `summer_messages`
 only after a reply comes back.
+
+## Cleo as the admin assistant
+
+She is available on every admin page, admin role only (`SummerAssistant`,
+mounted in the admin layout):
+
+- Floating button: tap to open or close her chat, press and hold to start a
+  voice call. It sits above the mobile tab bar, moves up when a page has its
+  own floating button (`html[data-page-fab]`), and hides on chat screens so
+  it never covers the composer. There she is pinned at the top of the
+  Messages inbox instead (row plus a call button).
+- Top bar "Cleo" button and ⌘/Ctrl+Shift+S.
+- Other screens open her with `openSummer({ year?, call? })`
+  (`window` events `summer:open`, `summer:toggle`, `summer:close`).
+
+What she sees (read-only, `src/lib/summer.server.ts` + `src/lib/summer-app.ts`):
+the books plus clients (with ids), the next 14 days of calendar, check-ins
+waiting, unread client messages, latest applications, open tasks and open
+support alerts, the page the owner is on, and the admin pages she can link.
+Links are markdown `[label](/admin/...)`; the chat only opens `/admin` paths
+(and https in a new tab), so a made-up or unsafe link is shown as plain text.
+
+Voice:
+- Talking: the browser records (`useSummerMic`), stops by itself after a
+  pause, and `askSummerVoice` transcribes through the AI gateway and answers
+  in voice mode (short spoken answers). In a call she listens again after
+  each answer; two silent turns end the call.
+- Her voice: `summerSpeech` tries text-to-speech providers in order
+  (gateway `openai/gpt-4o-mini-tts`, gateway Gemini TTS, then `OPENAI_API_KEY`
+  if set) with a French-accented English style. If none answers, the
+  browser speaks with a device English voice. Voice, auto-play and speed are
+  per device (Customize Cleo).
+- Health check: `POST /api/public/hooks/summer-voice-check` with
+  `x-hook-secret` reports which provider works.
+
+Every admin gets their own Cleo: chat history (`summer_messages`) and
+vibe/instructions (`summer_profiles`) are per person. Only the owner's Cleo
+gets the BOOKS section; other admins get the app data plus unpaid sales, and
+she tells them the books are private to the owner.
+
+Staff invites (`/staff-setup?token=…`) create a separate login. Use an email
+that isn't on a client account (for example a `+admin` Gmail alias), because
+redeeming an invite for an existing email adds the role to that account.
+

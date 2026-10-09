@@ -73,7 +73,7 @@ describe("sanitizeReceiptRead", () => {
   });
 });
 
-describe("Summer context", () => {
+describe("Cleo context", () => {
   const data: BooksData = {
     asOf: "2026-10-08",
     settings: null,
@@ -102,7 +102,25 @@ describe("Summer context", () => {
 
   it("names the assistant and forbids invented numbers", () => {
     const p = summerSystemPrompt();
-    expect(p).toContain("Summer Ledger");
+    expect(p).toContain("Cleo");
     expect(p).toMatch(/Never invent/);
+    expect(p).toContain("she/her");
+  });
+
+  it("defaults to the girly pop voice and switches with the owner's pick", () => {
+    expect(summerSystemPrompt()).toMatch(/Gen Z girly pop/);
+    expect(summerSystemPrompt({ tone: "nonsense" })).toMatch(/Gen Z girly pop/);
+    const pro = summerSystemPrompt({ tone: "professional" });
+    expect(pro).toMatch(/no slang, no emojis/);
+    expect(pro).not.toMatch(/girly pop/);
+  });
+
+  it("adds the owner's custom instructions under the facts rules", () => {
+    const p = summerSystemPrompt({ tone: "chill", instructions: "  Call me Jared.  " });
+    expect(p).toContain("custom instructions");
+    expect(p).toContain("Call me Jared.");
+    expect(p.indexOf("Never invent")).toBeLessThan(p.indexOf("Call me Jared."));
+    expect(summerSystemPrompt({ instructions: "x".repeat(5000) }).length).toBeLessThan(summerSystemPrompt().length + 2200);
+    expect(summerSystemPrompt({ instructions: "   " })).not.toContain("custom instructions");
   });
 });

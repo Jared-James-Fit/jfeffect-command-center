@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Eraser } from "lucide-react";
+import { Check, ChevronDown, Eraser, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   WEIGHT_CAP,
@@ -43,6 +43,7 @@ export function WeightValueInput({
   focusMode = false,
   ariaLabel,
   referenceWeight = null,
+  suggested = null,
 }: {
   value: string;
   isBodyweight: boolean;
@@ -56,6 +57,12 @@ export function WeightValueInput({
   ariaLabel: string;
   /** Prescribed / Last Time / previous best reference value (display only). */
   referenceWeight?: number | null;
+  /**
+   * Today's suggested load for the next set to log. Shown faded in the empty
+   * cell (and as the placeholder while typing); keyboard Done on a blank draft
+   * uses it. Typing anything replaces it — it is never saved on its own.
+   */
+  suggested?: number | null;
 }) {
   /** Inline editing of the actual cell. */
   const [editing, setEditing] = useState(false);
@@ -80,6 +87,8 @@ export function WeightValueInput({
       // Blank reads "—" like the reps/RPE cells: it's typed, not picked from a list.
       : formatLoadDisplay(value, loadType, unit, { compact: true, empty: "—" });
   const isEmpty = loadType !== "bodyweight" && value === "";
+  // Faded suggestion only in a blank, plain-weight cell.
+  const ghost = isEmpty && loadType === "external" && suggested != null && suggested > 0 ? suggested : null;
 
   // Remembered values per load type — external weight and assistance never
   // borrow each other's number.
@@ -161,7 +170,14 @@ export function WeightValueInput({
 
   /** Keyboard Done / form submit. */
   const submitTyped = () => {
-    if (typed.trim() === "") { cancelEditing(); return; }
+    if (typed.trim() === "") {
+      if (ghost != null) {
+        commitWeight({ load: String(ghost), bodyweight: false, loadType: "external" });
+        return;
+      }
+      cancelEditing();
+      return;
+    }
     const res = validateTypedWeight(typed, unit);
     if (!res.ok) { setError(res.error); return; }
     if (res.aboveCap) {
@@ -300,10 +316,18 @@ export function WeightValueInput({
               value={typed}
               onChange={(e) => { setTyped(e.target.value.replace(/[^0-9.]/g, "")); setError(null); }}
               onBlur={handleBlur}
-              placeholder={draftType === "assisted" ? "assist" : ""}
+              placeholder={
+                draftType === "assisted"
+                  ? "assist"
+                  : !isEmpty && numeric != null
+                    ? String(numeric)
+                    : ghost != null
+                      ? String(ghost)
+                      : ""
+              }
               aria-label={`${ariaLabel} — ${draftType === "assisted" ? "assistance" : "weight"} in ${unit}`}
               className={cn(
-                "w-full rounded-md border border-primary bg-background px-2 text-center text-sm font-semibold tabular-nums text-foreground outline-none ring-2 ring-primary/30",
+                "w-full rounded-md border border-primary bg-background px-2 text-center text-sm font-semibold tabular-nums text-foreground outline-none ring-2 ring-primary/30 placeholder:text-muted-foreground/50",
                 cellHeight,
                 error && "border-destructive ring-destructive/30",
               )}
@@ -313,7 +337,7 @@ export function WeightValueInput({
           <button
             type="button"
             disabled={disabled}
-            aria-label={ariaLabel}
+            aria-label={ghost != null ? `${ariaLabel}, suggested ${ghost} ${unit}` : ariaLabel}
             onClick={() => startEditing()}
             className={cn(
               "flex w-full items-center justify-center whitespace-nowrap rounded-md border pl-2 pr-5 text-sm font-medium transition-colors",
@@ -326,7 +350,14 @@ export function WeightValueInput({
               !disabled && "cursor-pointer hover:bg-muted/60",
             )}
           >
-            {shown}
+            {ghost != null ? (
+              <span className="inline-flex items-center gap-1 tabular-nums text-muted-foreground/80" data-testid="weight-suggested">
+                <Target className="h-3 w-3 shrink-0" aria-hidden="true" />
+                {ghost}
+              </span>
+            ) : (
+              shown
+            )}
           </button>
         )}
         {/* Small secondary control — LOAD TYPE only (Weight / Bodyweight /
