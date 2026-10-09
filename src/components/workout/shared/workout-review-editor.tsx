@@ -333,24 +333,21 @@ export function WorkoutReviewEditor({
             </div>
           </Row>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold">Anything hurt?</span>
-              <div className="grid w-40 shrink-0 grid-cols-2 gap-1.5">
-                <Chip active={pain === false} onClick={() => setPain(false)} label="No pain">
-                  No
-                </Chip>
-                <Chip
-                  active={pain === true}
-                  onClick={() => {
-                    setPain(true);
-                    setNoteOpen(true);
-                  }}
-                  label="Yes, pain"
-                >
-                  Yes
-                </Chip>
-              </div>
+          <Row title="Anything hurt?">
+            <div className="grid grid-cols-2 gap-1.5">
+              <Chip active={pain === false} onClick={() => setPain(false)} label="No pain">
+                No
+              </Chip>
+              <Chip
+                active={pain === true}
+                onClick={() => {
+                  setPain(true);
+                  setNoteOpen(true);
+                }}
+                label="Yes, pain"
+              >
+                Yes
+              </Chip>
             </div>
             {pain && (
               <div className="space-y-2">
@@ -413,7 +410,7 @@ export function WorkoutReviewEditor({
                 </div>
               </div>
             )}
-          </div>
+          </Row>
 
           <Row title="Sleep last night">
             <div className="grid grid-cols-5 gap-1.5">

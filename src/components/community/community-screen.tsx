@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { CrewList } from "@/components/community/crew-list";
 import { markCommunitySeen, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notification-bell";
 
 type Tab = "feed" | "crew" | "you";
 type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
@@ -23,6 +25,13 @@ type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Ta
 function postFromHash(): string | null {
   if (typeof window === "undefined") return null;
   const m = window.location.hash.match(/post=([0-9a-f-]{36})/i);
+  return m ? m[1] : null;
+}
+
+/** `#at=<post id>`: open the feed scrolled to that post (Home's community card). */
+function atFromHash(): string | null {
+  if (typeof window === "undefined") return null;
+  const m = window.location.hash.match(/(?:^#|&)at=([0-9a-f-]{36})/i);
   return m ? m[1] : null;
 }
 
@@ -41,7 +50,18 @@ function personFromHash(): string | null {
 /** The double-tap tip plays once per visit (app load), not on every feed render. */
 let tipShownThisVisit = false;
 
-export function CommunityScreen({ canShare = false, previewOnly = false }: { canShare?: boolean; previewOnly?: boolean }) {
+export function CommunityScreen({
+  canShare = false, previewOnly = false, bell = false, backTo, hideTabs = false,
+}: {
+  canShare?: boolean;
+  previewOnly?: boolean;
+  /** The page has no header of its own: put the notifications bell in the top row. */
+  bell?: boolean;
+  /** A small back arrow at the start of the top row (instead of a page header). */
+  backTo?: string;
+  /** Just the feed, no Feed / Crew / You row (the coach's Community page has its own tabs). */
+  hideTabs?: boolean;
+}) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const viewerIsStaff = role === "admin" || role === "coach";
@@ -52,6 +72,8 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
   const tab: Tab = scope.kind === "author" ? scope.from : scope.kind;
   const [commentsFor, setCommentsFor] = useState<CommunityPost | null>(null);
   const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
+  const [jumpTo, setJumpTo] = useState<string | null>(() => atFromHash());
+  const [flash, setFlash] = useState<string | null>(null);
 
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
@@ -81,6 +103,20 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
   }, [feed.isSuccess, qc]);
 
   const { data: unit = "lb" } = useViewerUnit(user?.id);
+
+  // Opened from Home on a post: scroll to it in the feed and flash it, so the rest of the
+  // feed is right there. If it's older than what's loaded, open it on its own instead.
+  useEffect(() => {
+    if (!jumpTo || (!feed.isSuccess && posts.length === 0)) return;
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    const el = document.querySelector(`[data-post-id="${jumpTo}"]`);
+    if (el) {
+      requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
+      setFlash(jumpTo);
+      window.setTimeout(() => setFlash(null), 1800);
+    } else setDetailId(jumpTo);
+    setJumpTo(null);
+  }, [jumpTo, feed.isSuccess, posts.length]);
 
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
@@ -125,8 +161,14 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
         >
           <ArrowLeft className="mr-1.5 h-4 w-4" /> {scope.from === "crew" ? "Crew" : scope.from === "you" ? "You" : "Feed"}
         </Button>
-      ) : (
+      ) : hideTabs ? null : (
         <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1">
+        {backTo && (
+          <Link to={backTo} aria-label="Back to Home" className="-ml-1.5 inline-flex h-9 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-muted">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        )}
         <div className="inline-flex rounded-full bg-muted p-1" role="tablist" aria-label="Community view">
           {(["feed", "crew", "you"] as const).map((k) => (
             <button
@@ -135,13 +177,17 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
               role="tab"
               aria-selected={scope.kind === k}
               onClick={() => setScope({ kind: k })}
-              className={cn("h-9 rounded-full px-4 text-[13px] font-bold transition-colors", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+              className={cn("h-9 rounded-full px-3.5 text-[13px] font-bold transition-colors", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
             >
               {k === "feed" ? "Feed" : k === "crew" ? "Crew" : "You"}
             </button>
           ))}
         </div>
-        {canShare && <ShareWorkoutButton unit={unit} label="Share" previewOnly={previewOnly} />}
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          {bell && <NotificationBell />}
+          {canShare && <ShareWorkoutButton unit={unit} label="Share" previewOnly={previewOnly} />}
+        </div>
         </div>
       )}
 
@@ -175,8 +221,8 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
       ) : (
         <>
           {posts.map((p) => (
+            <div key={p.id} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
-              key={p.id}
               post={p}
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
               unit={unit}
@@ -188,6 +234,7 @@ export function CommunityScreen({ canShare = false, previewOnly = false }: { can
               onDoubleTap={onDoubleTap}
               onTipDone={onTipDone}
             />
+            </div>
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
           {isFetchingNextPage && <Skeleton className="h-64 w-full rounded-3xl" />}
