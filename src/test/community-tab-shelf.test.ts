@@ -81,7 +81,7 @@ describe("Home order: what you do today, then what you check", () => {
   const home = read("src/routes/_authenticated/portal/index.tsx");
   const at = (s: string) => home.indexOf(s);
   it("Today, the crew, the weigh-in, then the boards; water (few log it) below the coaching cards", () => {
-    const order = ["<UpcomingScheduleCard", "<CommunityHomeStrip", "<BodyweightSummaryCard", "<AthleteLevelCard", "<LeagueRecapHomeTile", "<StrengthBoardCard", "<ProgressSummaryCard", "<HomeWaterCard"];
+    const order = ["<UpcomingScheduleCard", "<CommunityHomeStrip", "<BodyweightSummaryCard", "<AthleteLevelCard", "<ProgressSummaryCard", "<HomeWaterCard"];
     const idx = order.map(at);
     expect(idx.every((i) => i > 0)).toBe(true);
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);
