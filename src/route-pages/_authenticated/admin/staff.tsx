@@ -376,8 +376,12 @@ function AddStaffDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent showBackButton={false} className="max-h-[92dvh] overflow-y-auto sm:max-w-lg [&>*]:min-w-0">
+        <button type="button" aria-label="Close" onClick={() => onOpenChange(false)}
+          className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground">
+          <X className="h-5 w-5" />
+        </button>
+        <DialogHeader className="min-h-0 pl-0 pr-10">
           <DialogTitle>
             {step === "role" ? "What will they do?" : step === "details" ? "Who are they?" : step === "send" ? "Send the setup link" : "Invite sent"}
           </DialogTitle>

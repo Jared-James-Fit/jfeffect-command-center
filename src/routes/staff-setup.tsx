@@ -26,7 +26,7 @@ function StaffSetupPage() {
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const { data: invite, isLoading } = useQuery({
+  const { data: invite, isError, refetch } = useQuery({
     queryKey: ["staff-invite-preview", token],
     queryFn: () => preview({ data: { token } }),
     enabled: token.length >= 20,
@@ -68,7 +68,13 @@ function StaffSetupPage() {
             <p className="text-sm text-muted-foreground">{invite && !invite.valid ? invite.reason : "The setup link is missing. Open it again from your message."}</p>
           </div>
         )}
-        {token && isLoading && (
+        {token && !invite && isError && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Couldn't check your invite. Check your connection and try again.</p>
+            <Button variant="outline" onClick={() => void refetch()}>Try again</Button>
+          </div>
+        )}
+        {token && !invite && !isError && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Checking your invite…</div>
         )}
         {invite?.valid && (
