@@ -119,7 +119,7 @@ export async function assertEmailFreeForStaffInvite(supabaseAdmin: any, email: s
 /**
  * After creating a staff-only user: leave it holding only its staff role.
  * handle_new_user skips the client role for app_metadata.account_kind =
- * 'staff' (migration 20261018090200); this also covers a database where that
+ * 'staff' (migration 20261018100200); this also covers a database where that
  * migration isn't applied yet.
  */
 export async function finalizeStaffOnlyUser(supabaseAdmin: any, userId: string, role: string): Promise<void> {
