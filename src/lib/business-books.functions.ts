@@ -409,13 +409,22 @@ export const askSummerVoice = createServerFn({ method: "POST" })
 /** Cleo's voice for a reply. ok:false means the browser should use a device voice. */
 export const summerSpeech = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ text: z.string().trim().min(1).max(1500) }).parse(d))
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        text: z.string().trim().min(1).max(1500),
+        rate: z.number().min(0.5).max(1.5).optional(),
+        prev: z.string().max(1500).optional(),
+        next: z.string().max(1500).optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const { assertAdmin } = await import("@/lib/business-books.server");
     await assertAdmin(supabase, userId);
     const { synthesizeSpeech } = await import("@/lib/summer.server");
-    return synthesizeSpeech(data.text);
+    return synthesizeSpeech(data);
   });
 
 /** Light read for the global Cleo button: this admin's Cleo settings and whether they own the books. */

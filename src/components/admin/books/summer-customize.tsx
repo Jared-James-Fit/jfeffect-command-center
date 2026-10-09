@@ -37,7 +37,7 @@ export function SummerCustomizeDialog({
 
   useEffect(() => {
     if (!open || !hasDeviceSpeech()) return;
-    const refresh = () => setVoices(rankVoices(deviceVoices().filter((v) => /^(fr|en)/i.test(v.lang))));
+    const refresh = () => setVoices(rankVoices(deviceVoices().filter((v) => /^en/i.test(v.lang))));
     refresh();
     window.speechSynthesis.addEventListener?.("voiceschanged", refresh);
     return () => window.speechSynthesis.removeEventListener?.("voiceschanged", refresh);
@@ -57,9 +57,9 @@ export function SummerCustomizeDialog({
     setTesting(true);
     try {
       await speaker.speak(
-        "Bonjour! It's Cleo. You've got $1,104.25 to set aside right now, and two check-ins waiting on you.",
+        "Hi, it's Cleo. You've got $1,104.25 to set aside right now, and two check-ins waiting on you.",
         voicePrefs,
-        (text) => speechFn({ data: { text } }) as any,
+        (text, ctx) => speechFn({ data: { text, ...ctx } }) as any,
       );
     } finally {
       setTesting(false);
@@ -180,7 +180,7 @@ export function SummerCustomizeDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              "Cleo" is her own voice, English with a French accent. If it isn't available, this device's English voice reads for her. Device French voices sound French but read numbers in French.
+              "Cleo" is her own voice: calm, clear and natural. If it isn't available, this device's best English voice reads for her.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">

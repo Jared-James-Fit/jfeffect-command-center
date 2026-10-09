@@ -91,10 +91,22 @@ Voice:
   in voice mode (short spoken answers). In a call she listens again after
   each answer; two silent turns end the call.
 - Her voice: `summerSpeech` tries text-to-speech providers in order
-  (gateway `openai/gpt-4o-mini-tts`, gateway Gemini TTS, then `OPENAI_API_KEY`
-  if set) with a French-accented English style. If none answers, the
-  browser speaks with a device English voice. Voice, auto-play and speed are
-  per device (Customize Cleo).
+  (ElevenLabs if `ELEVENLABS_API_KEY` is set, then gateway
+  `openai/gpt-4o-mini-tts` with the `marin` voice, gateway Gemini TTS, then
+  `OPENAI_API_KEY` if set) with a calm, neutral assistant style.
+  `ELEVENLABS_VOICE_ID` (default Sarah) and `ELEVENLABS_MODEL` (default
+  `eleven_multilingual_v2`) override the ElevenLabs voice. Longer replies are
+  generated as an opening sentence plus the rest in parallel, so she starts
+  talking sooner; the speed setting is sent to the voice instead of
+  time-stretching the audio. If none answers, the browser speaks with the
+  device's most natural English voice. Voice, auto-play and speed are per
+  device (Customize Cleo).
+- Giving her an accent: pick or design a voice that has it natively in
+  ElevenLabs (Voice Library, or Voice Design from a description) and put its
+  ID in `ELEVENLABS_VOICE_ID`. Don't prompt an accent into the OpenAI/Gemini
+  style; prompted accents drift and sound put on. The fallback voices stay
+  neutral on purpose. Keep `eleven_multilingual_v2`: it holds a voice's
+  accent better than the faster models.
 - Health check: `POST /api/public/hooks/summer-voice-check` with
   `x-hook-secret` reports which provider works.
 
