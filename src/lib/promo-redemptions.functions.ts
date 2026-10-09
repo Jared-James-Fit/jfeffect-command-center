@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
@@ -21,8 +22,8 @@ export const listPromoRedemptions = createServerFn({ method: "GET" })
     }).parse(d ?? {}),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
     let q = supabase
       .from("promo_code_redemptions")
       .select("*")

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 const MEDIA_TYPE_SUBFOLDERS = [
   "Chat Media",
@@ -46,8 +47,8 @@ async function requireAdmin(supabase: any, userId: string) {
 export const getDriveSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await requireAdmin(context.supabase, context.userId);
-    return (await loadSettings(context.supabase)) ?? null;
+    const { db } = await assertAdminView(context as any);
+    return (await loadSettings(db)) ?? null;
   });
 
 // Lightweight readiness check usable by any authenticated user (incl. clients)

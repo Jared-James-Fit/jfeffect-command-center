@@ -164,6 +164,20 @@ describe("Cleo for a team admin", () => {
   });
 });
 
+describe("Cleo for the finance login", () => {
+  it("knows the books, says she's view-only, and names what she can change", () => {
+    const p = summerSystemPrompt({ owner: false, finance: true, userName: "Fionna", ownerName: "Jared" });
+    expect(p).toContain("You are talking with Fionna, Jared's bookkeeper (the finance login). You know the books (BOOKS)");
+    expect(p).toMatch(/change only: the books .*recording a payment .*never a refund, comp or cancellation.*payment link.*discount codes/);
+    expect(p).toContain("For anything else, say Jared has to do it.");
+    expect(p).not.toMatch(/PRIVATE: /);
+  });
+
+  it("never applies to the owner", () => {
+    expect(summerSystemPrompt({ owner: true, finance: true, userName: "Jared" })).toContain("You are talking with Jared, the business owner");
+  });
+});
+
 describe("Owner-only menu items", () => {
   it("drops Taxes & Books from nested nav for other admins", async () => {
     const { withoutOwnerOnly } = await import("@/lib/business-owner");

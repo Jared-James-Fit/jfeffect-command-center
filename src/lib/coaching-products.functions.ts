@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { toStripeRecurring } from "@/lib/billing-frequency";
+import { assertAdminView } from "@/lib/permissions.server";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -56,8 +57,8 @@ async function assertAdmin(supabase: any, userId: string) {
 export const listCoachingProducts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
     const { data, error } = await supabase
       .from("coaching_products")
       .select("*")

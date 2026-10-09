@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useRouter } from "@tanstack/react-router";
@@ -6,6 +6,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { markClientSignedIn } from "@/lib/activity";
 import { logPerf } from "@/lib/perf-timing";
 import { clearLastRoute } from "@/lib/route-persistence";
+import { setAdminView } from "@/lib/admin-view";
+
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export type AppRole = "admin" | "coach" | "media_manager" | "finance" | "client" | "member";
 
@@ -73,7 +76,16 @@ function isRetryableAuthError(error: unknown): boolean {
 interface AuthState {
   user: User | null;
   session: Session | null;
+  /**
+   * The role the app is shown as. The finance login is shown the admin app,
+   * view-only (`viewOnly`); the database and server refuse what it may not
+   * change, whatever the screens offer.
+   */
   role: AppRole | null;
+  /** The account's own role (finance stays "finance"): MFA and sign-in routing. */
+  accountRole: AppRole | null;
+  /** The finance login looking at the admin app. */
+  viewOnly: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -82,6 +94,8 @@ const AuthCtx = createContext<AuthState>({
   user: null,
   session: null,
   role: null,
+  accountRole: null,
+  viewOnly: false,
   loading: true,
   signOut: async () => {},
 });
@@ -495,8 +509,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* best-effort */ }
   };
 
+  const viewOnly = role === "finance";
+  // Must run before any page queries as the finance login: a layout effect
+  // runs before its children's effects.
+  useIsomorphicLayoutEffect(() => {
+    setAdminView(supabase, viewOnly);
+  }, [viewOnly]);
+
   return (
-    <AuthCtx.Provider value={{ user, session, role, loading, signOut }}>
+    <AuthCtx.Provider value={{ user, session, role: viewOnly ? "admin" : role, accountRole: role, viewOnly, loading, signOut }}>
       {children}
     </AuthCtx.Provider>
   );

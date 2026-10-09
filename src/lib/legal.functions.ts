@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { assertAdminView } from "@/lib/permissions.server";
 
 // ============================================================================
 // Legal & Safety — server functions
@@ -149,8 +150,8 @@ export const listAcceptancesForVersion = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { versionId: string }) => d)
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
-    const { data: rows, error } = await context.supabase
+    const { db } = await assertAdminView(context as any);
+    const { data: rows, error } = await db
       .from("legal_acceptances")
       .select("id, user_id, client_id, context, signature_method, typed_name, accepted_at, ip_address, user_agent, revoked_at, client:clients(full_name, email)")
       .eq("version_id", data.versionId)

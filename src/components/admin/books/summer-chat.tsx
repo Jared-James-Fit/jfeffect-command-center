@@ -40,6 +40,15 @@ const TEAM_STARTERS = [
   "Open the client list.",
 ];
 
+const FINANCE_STARTERS = [
+  "How much should be set aside for taxes right now?",
+  "Who still owes money?",
+  "What were this month's sales?",
+  "Which expenses are missing a receipt?",
+  "When is the next GST/HST payment due?",
+  "Open Taxes & Books.",
+];
+
 /** Opens an in-app link from Cleo: router navigation, query string kept. */
 function useOpenLink(onNavigated: () => void) {
   const navigate = useNavigate();
@@ -155,7 +164,7 @@ function VoiceOrb({ state, level, onTap }: { state: VoiceState; level: number; o
 }
 
 export function SummerChat({
-  open, onOpenChange, year, persona, onPersonaSaved, route, isOwner = true, startCall, onCallStarted,
+  open, onOpenChange, year, persona, onPersonaSaved, route, isOwner = true, isFinance = false, startCall, onCallStarted,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -166,6 +175,8 @@ export function SummerChat({
   route?: string;
   /** Owner gets the books; other admins get team starters. */
   isOwner?: boolean;
+  /** The finance login: the books plus the app, read-only. */
+  isFinance?: boolean;
   /** Start a voice call as soon as the sheet opens (long-press on the button). */
   startCall?: boolean;
   onCallStarted?: () => void;
@@ -407,7 +418,7 @@ export function SummerChat({
             <div className="space-y-3">
               <p className="text-muted-foreground">{tone.greeting}</p>
               <div className="flex flex-wrap gap-2">
-                {(isOwner ? OWNER_STARTERS : TEAM_STARTERS).map((s) => (
+                {(isOwner ? OWNER_STARTERS : isFinance ? FINANCE_STARTERS : TEAM_STARTERS).map((s) => (
                   <button key={s} type="button" onClick={() => void send(s)} className="rounded-full border px-3 py-1.5 text-left text-xs hover:bg-accent">
                     {s}
                   </button>

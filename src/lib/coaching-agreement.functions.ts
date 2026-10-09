@@ -39,6 +39,7 @@ import {
   setExemptionSchema,
   requestResignSchema,
 } from "@/lib/coaching-agreement/schemas";
+import { assertAdminView } from "@/lib/permissions.server";
 
 export type AgreementStateResponse = {
   applicable: boolean;
@@ -701,8 +702,8 @@ async function loadRoster(supabase: any, clientIds?: string[]) {
 export const adminAgreementRoster = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
     const rows = await loadRoster(supabase);
     return { currentVersion: AGREEMENT_VERSION, rows, counts: summarizeRoster(rows) };
   });

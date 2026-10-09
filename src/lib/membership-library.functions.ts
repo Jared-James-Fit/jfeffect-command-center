@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertMemberCanReadProtected } from "@/lib/jf-access.server";
 import { isMemberAccessActive } from "@/lib/memberAccess";
+import { assertAdminView } from "@/lib/permissions.server";
 
 // Membership program-library access keys. A plan tagged with any of these
 // is reachable by a member that holds any other key in the set — they all
@@ -127,7 +128,7 @@ export const getLinkedLibraryPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ templateId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: plan } = await supabaseAdmin
       .from("member_plans").select("*")
@@ -339,7 +340,7 @@ export const unpublishLibraryListing = createServerFn({ method: "POST" })
 export const listAdminLibrary = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: plans } = await supabaseAdmin
       .from("member_plans").select("*").order("updated_at", { ascending: false });
@@ -350,7 +351,7 @@ export const getListingAnalytics = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => z.object({ planId: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [previews, downloads, imports, audit] = await Promise.all([
       supabaseAdmin.from("member_plan_events").select("id", { count: "exact", head: true }).eq("plan_id", data.planId).eq("event_type","preview"),

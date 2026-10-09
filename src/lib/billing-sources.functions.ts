@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 type BillingSource =
   | "trainerize_legacy"
@@ -53,8 +54,8 @@ export const listClientsWithBillingFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { billingSource?: BillingSource | "all"; accessStatus?: AccessStatus | "all"; search?: string }) => d)
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
 
     let query = supabase
       .from("clients")
@@ -117,8 +118,8 @@ export const getClientBillingDetailFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId: string }) => d)
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
 
     const { data: client, error } = await supabase
       .from("clients")
@@ -572,8 +573,8 @@ export const updateMigrationReviewFn = createServerFn({ method: "POST" })
 export const getBillingDashboardFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
 
     const { data: counts } = await supabase
       .from("clients")

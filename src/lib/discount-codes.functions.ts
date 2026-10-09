@@ -16,6 +16,7 @@ import {
   FIRST50_CODE,
 } from "@/lib/first50-policy";
 import { stripeFetch, getStripeKeyForMode, formEncode, type StripeMode } from "@/lib/stripe.server";
+import { assertAdminOr } from "@/lib/permissions.server";
 
 export type DiscountCode = {
   id: string;
@@ -142,6 +143,9 @@ export const upsertDiscountCodeFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => UpsertInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    // The admin, or a discounts.manage login (finance). Before this, only RLS
+    // stood between any signed-in caller and these writes (and the Stripe sync).
+    await assertAdminOr(context as any, "discounts.manage");
     const isUpdate = !!data.id;
     const payload: any = { ...data, updated_by: userId };
     delete payload.id;
@@ -173,6 +177,9 @@ export const setDiscountCodeStatusFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => StatusInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    // The admin, or a discounts.manage login (finance). Before this, only RLS
+    // stood between any signed-in caller and these writes (and the Stripe sync).
+    await assertAdminOr(context as any, "discounts.manage");
     const { data: row, error } = await (supabase as any)
       .from("discount_codes").update({ status: data.status, updated_by: userId }).eq("id", data.id).select().single();
     if (error) throw new Error(error.message);
@@ -582,6 +589,9 @@ export const syncDiscountCodeToStripeFn = createServerFn({ method: "POST" })
   }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    // The admin, or a discounts.manage login (finance). Before this, only RLS
+    // stood between any signed-in caller and these writes (and the Stripe sync).
+    await assertAdminOr(context as any, "discounts.manage");
     // RLS scopes the SELECT to admins; non-admins get no row.
     const { data: row, error } = await (supabase as any)
       .from("discount_codes").select("*").eq("id", data.id).single();

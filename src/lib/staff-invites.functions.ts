@@ -11,6 +11,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { INVITABLE_ROLES, INVITE_TTL_DAYS, STAFF_ROLE_INFO, isInvitableRole, type InviteDelivery } from "@/lib/staff-roles";
+import { assertAdminView } from "@/lib/permissions.server";
 
 async function assertAdmin(ctx: any) {
   const { data } = await ctx.supabase
@@ -51,7 +52,7 @@ export type TeamInvite = {
 export const listTeam = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const sb = await admin();
     const [{ data: roleRows }, { data: owners }, { data: invites }] = await Promise.all([
       sb.from("user_roles").select("user_id, role, created_at").in("role", TEAM_ROLES),

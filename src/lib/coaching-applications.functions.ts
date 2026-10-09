@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { upsertApplicantClient, normalizeEmail, normalizePhone } from "./crm.functions";
 import { resolveAttribution, DEFAULT_QUICK_APPLY_SOURCE } from "./application-attribution";
 import { toLeadScore5 } from "./lead-score-display";
+import { assertAdminView } from "@/lib/permissions.server";
 
 /* ─────────── Quick-Apply Quiz schema (v2) ─────────── */
 
@@ -325,7 +326,7 @@ async function assertAdmin(ctx: any) {
 export const listCoachingApplications = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("coaching_applications").select("*")
@@ -338,7 +339,7 @@ export const listCoachingApplications = createServerFn({ method: "GET" })
 export const getCoachingApplicationsMetrics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabaseAdmin
@@ -381,7 +382,7 @@ export const updateCoachingApplication = createServerFn({ method: "POST" })
 export const exportCoachingApplicationsCsv = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("coaching_applications").select("*")
@@ -412,7 +413,7 @@ export const exportCoachingApplicationsCsv = createServerFn({ method: "GET" })
 export const getWebsiteFormStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertAdmin(context);
+    await assertAdminView(context as any);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("coaching_applications")

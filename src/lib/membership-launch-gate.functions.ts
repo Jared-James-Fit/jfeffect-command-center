@@ -14,6 +14,7 @@
 // ============================================================================
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminView } from "@/lib/permissions.server";
 
 export type LaunchRequiredDoc = {
   document_id: string;
@@ -141,11 +142,6 @@ export const getMembershipLaunchGate = createServerFn({ method: "GET" }).handler
 export const getAdminMembershipLaunchGate = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: isAdmin, error } = await (context as any).supabase.rpc("has_role", {
-      _user_id: (context as any).userId,
-      _role: "admin",
-    });
-    if (error) throw new Error(error.message);
-    if (!isAdmin) throw new Error("Forbidden");
+    await assertAdminView(context as any);
     return resolveMembershipLaunchGate({ admin: true });
   });

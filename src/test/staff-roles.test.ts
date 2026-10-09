@@ -10,10 +10,13 @@ describe("staff roles", () => {
     expect(STAFF_ROLE_INFO.media_manager.setup).toBe("retired");
   });
 
-  it("finance can't see coaching data or delete, and needs an authenticator", () => {
+  it("finance sees everything view-only, changes only its own areas, and needs an authenticator", () => {
     const f = STAFF_ROLE_INFO.finance;
-    expect(f.cannot.join(" ")).toMatch(/training, nutrition, check-ins or messages/);
+    expect(f.can.join(" ")).toMatch(/everything in the admin app, view-only/);
+    expect(f.cannot.join(" ")).toMatch(/Change clients, programs, check-ins, messages or settings/);
+    expect(f.cannot.join(" ")).toMatch(/Refund, comp or cancel/);
     expect(f.cannot.join(" ")).toMatch(/Delete/);
+    expect(f.cannot.join(" ")).toMatch(/tokens or invite links/);
     expect(f.requiresAuthenticator).toBe(true);
   });
 

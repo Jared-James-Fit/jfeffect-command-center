@@ -6,6 +6,7 @@ import {
   assertSupportedNativeSignerRoles,
   requireKnownDateOfBirth,
 } from "@/lib/native-agreement-contract";
+import { assertAdminView } from "@/lib/permissions.server";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -27,8 +28,8 @@ function sha256(s: string): string {
 export const listNativeTemplates = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
     const { data, error } = await supabase
       .from("na_templates")
       .select("id, slug, internal_name, client_facing_title, service_type, requires_health_screening, countersignature_required, archived, na_template_versions(id, version, status, published_at)")
@@ -42,8 +43,8 @@ export const listNativePackages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId?: string | null } = {}) => d ?? {})
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
     let q = supabase
       .from("na_packages")
       .select("id, client_id, status, custom_title, contract_value_minor, currency, sent_at, completed_at, created_at, jurisdiction_supported, jurisdiction_block_reasons, clients!inner(id, first_name, last_name, email)")
@@ -59,8 +60,8 @@ export const getNativePackage = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { packageId: string }) => d)
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
     const { data: pkg, error } = await supabase
       .from("na_packages")
       .select("*, clients(id, first_name, last_name, email), na_template_versions(id, version, na_templates(id, slug, internal_name, client_facing_title, service_type)), jurisdiction_profiles(id, code, display_name, status)")
@@ -457,8 +458,8 @@ export const getPdfDownloadUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { documentId: string }) => d)
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
     const { getSignedPdfUrl } = await import("@/lib/native-agreements-pdf.server");
     return { url: await getSignedPdfUrl(data.documentId, 600) };
   });

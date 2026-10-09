@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdminOr } from "@/lib/permissions.server";
+import { RECORDABLE_PAYMENT_STATUSES, VIEW_ONLY_MESSAGE } from "@/lib/permissions";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -20,8 +22,17 @@ export const updatePurchasePayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => UpdatePayment.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    let { supabase } = context as any;
+    const { userId } = context as any;
+    // The admin, or a payments.record login (finance): it records money in or
+    // still owed, never a refund, cancellation or comp.
+    const { viewOnly } = await assertAdminOr(context as any, "payments.record");
+    if (viewOnly) {
+      if (!(RECORDABLE_PAYMENT_STATUSES as readonly string[]).includes(data.payment_status)) {
+        throw new Error(`${VIEW_ONLY_MESSAGE} (only ${RECORDABLE_PAYMENT_STATUSES.join(", ")})`);
+      }
+      supabase = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+    }
     const patch: any = {
       payment_status: data.payment_status,
       last_payment_update_source: "manual",
@@ -38,7 +49,7 @@ export const updatePurchasePayment = createServerFn({ method: "POST" })
       await supabase.from("client_activity_log").insert({
         client_id: (await supabase.from("purchase_records").select("client_id").eq("id", data.id).single()).data?.client_id,
         actor_user_id: userId,
-        actor_role: "admin",
+        actor_role: viewOnly ? "finance" : "admin",
         action: "purchase_payment_updated_manually",
         details: { purchase_id: data.id, status: data.payment_status, note: data.note },
       });
@@ -75,8 +86,11 @@ export const sendPaymentLinkEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SendLink.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    let { supabase } = context as any;
+    // The admin, or a payments.request login (finance) sending the link for
+    // an existing purchase.
+    const { viewOnly } = await assertAdminOr(context as any, "payments.request");
+    if (viewOnly) supabase = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
     const { data: rec } = await supabase
       .from("purchase_records")
       .select("*, clients(full_name, email)")

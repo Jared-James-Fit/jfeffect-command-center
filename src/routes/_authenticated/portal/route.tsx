@@ -1,7 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { useAuth } from "@/lib/auth";
-import { FullPageLoader } from "@/components/full-page-loader";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { clientNav, clientBottomNav } from "@/lib/admin-nav";
 import { ClientPovBanner, PovFrame } from "@/components/client-pov-banner";
@@ -18,13 +15,6 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 function PortalLayout() {
   useActivityHeartbeat();
   const { isImpersonating } = useClientImpersonation();
-  const { role } = useAuth();
-  const navigate = useNavigate();
-  // A finance login is staff-only: no client portal.
-  useEffect(() => {
-    if (role === "finance") navigate({ to: "/finance" as any, replace: true });
-  }, [role, navigate]);
-  if (role === "finance") return <FullPageLoader label="Redirecting…" />;
   return (
     <>
       <PovFrame />

@@ -69,7 +69,6 @@ export function TaxesBooksPage({ mode = "owner" }: { mode?: BooksMode } = {}) {
 }
 
 function TaxesBooksPageInner() {
-  const mode = useBooksMode();
   const qc = useQueryClient();
   const loadFn = useServerFn(getBooksData);
   const scanFn = useServerFn(scanReceipt);
@@ -227,11 +226,9 @@ function TaxesBooksPageInner() {
             {scanState ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Camera className="mr-1.5 h-4 w-4" />}
             {scanState ? `Reading ${scanState.done + (scanState.done < scanState.total ? 1 : 0)} of ${scanState.total}` : "Snap receipt"}
           </Button>
-          {mode === "owner" && (
-            <Button size="sm" variant="outline" className="h-9" onClick={() => openSummer({ year })}>
-              <Sparkles className="mr-1.5 h-4 w-4 text-amber-500" /> Ask {ASSISTANT_NAME}
-            </Button>
-          )}
+          <Button size="sm" variant="outline" className="h-9" onClick={() => openSummer({ year })}>
+            <Sparkles className="mr-1.5 h-4 w-4 text-amber-500" /> Ask {ASSISTANT_NAME}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-9" disabled={!!exporting}>
@@ -896,10 +893,9 @@ function SummerSettingsCard({ onSaved }: { onSaved: () => void }) {
 }
 
 function SettingsTab({ data, onSaved }: { data: BooksData; onSaved: () => void }) {
-  const mode = useBooksMode();
   return (
     <div className="space-y-4">
-      {mode === "owner" && <SummerSettingsCard onSaved={onSaved} />}
+      <SummerSettingsCard onSaved={onSaved} />
       <TaxSettingsForm data={data} onSaved={onSaved} />
     </div>
   );

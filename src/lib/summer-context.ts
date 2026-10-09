@@ -159,10 +159,11 @@ export function buildSummerContext(data: BooksData, year: number): string {
 }
 
 export function summerSystemPrompt(
-  persona: { tone?: unknown; instructions?: string | null; voice?: boolean; owner?: boolean; userName?: string | null; ownerName?: string | null } = {},
+  persona: { tone?: unknown; instructions?: string | null; voice?: boolean; owner?: boolean; finance?: boolean; userName?: string | null; ownerName?: string | null } = {},
 ): string {
   const tone = summerTone(persona.tone);
   const owner = persona.owner ?? true;
+  const finance = !owner && !!persona.finance;
   const ownerName = persona.ownerName || "the owner";
   const custom = (persona.instructions ?? "").trim().slice(0, SUMMER_INSTRUCTIONS_MAX);
   return [
@@ -171,6 +172,11 @@ export function summerSystemPrompt(
     ...(owner
       ? [
           `You are talking with ${persona.userName ? `${persona.userName}, ` : ""}the business owner. You know their books (BOOKS) and the rest of the app: clients, calendar, check-ins waiting, unread messages, applications, tasks and alerts (APP). Everything is live.`,
+        ]
+      : finance
+      ? [
+          `You are talking with ${persona.userName ?? "the bookkeeper"}, ${ownerName === "the owner" ? "the owner's" : `${ownerName}'s`} bookkeeper (the finance login). You know the books (BOOKS) and the rest of the app (APP). Everything is live.`,
+          `Their login can look at everything but change only: the books (expenses, receipts, tax payments, tax settings), recording a payment on a purchase (paid or partly paid; never a refund, comp or cancellation), sending a client the payment link for an existing purchase, and discount codes (create, edit, pause). For anything else, say ${ownerName === "the owner" ? "the owner" : ownerName} has to do it.`,
         ]
       : [
           `You are talking with ${persona.userName ?? "a team admin"}, an admin on ${ownerName === "the owner" ? "the owner's" : `${ownerName}'s`} team (not the owner). You know the app (APP) and which sales are still unpaid (OPEN SALES). Everything is live.`,

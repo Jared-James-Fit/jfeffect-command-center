@@ -13,13 +13,15 @@ import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
 import { ClipboardList, LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
+import { StaffMfaGate } from "@/components/staff-mfa-gate";
+import { ViewOnlyStrip } from "@/components/view-only-strip";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
 });
 
 function AdminLayout() {
-  const { role, loading } = useAuth();
+  const { role, viewOnly, loading } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as { tab?: string } | undefined });
@@ -47,10 +49,6 @@ function AdminLayout() {
       navigate({ to: "/m", replace: true });
       return;
     }
-    if (role === "finance") {
-      navigate({ to: "/finance" as any, replace: true });
-      return;
-    }
     // Any other role (client / unknown / the retired media_manager) → portal
     navigate({ to: "/portal", replace: true });
   }, [role, loading, navigate]);
@@ -67,8 +65,9 @@ function AdminLayout() {
     : roleTag
       ? buildInternalNavCollapsed(roleTag, { mode: "coaching" })
       : (isCoach ? coachNav : coachingAdminNav);
-  // Owner-only pages (Taxes & Books) stay out of other admins' menus.
-  const nav = isOwner === false ? withoutOwnerOnly(fullNav) : fullNav;
+  // Owner-only pages (Taxes & Books) stay out of other admins' menus; the
+  // finance login keeps them (it keeps the books).
+  const nav = isOwner === false && !viewOnly ? withoutOwnerOnly(fullNav) : fullNav;
   const title = isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
   // Use a dedicated "membership" bar scope when in membership mode so the
   // admin can customize a different floating bar for member-facing ops.
@@ -147,12 +146,15 @@ function AdminLayout() {
   }
 
   return (
-    <AppShell items={nav} bottomItems={bottomItems} title={title}>
-      <AdminTopBar showDashboardMode={!isCoach} />
-      <Outlet />
-      <TaskPopupGate />
-      <ReturnToDashboardPill />
-      {role === "admin" && <SummerAssistant />}
-    </AppShell>
+    <StaffMfaGate>
+      <AppShell items={nav} bottomItems={bottomItems} title={title}>
+        <AdminTopBar showDashboardMode={!isCoach} />
+        {viewOnly && <ViewOnlyStrip />}
+        <Outlet />
+        {!viewOnly && <TaskPopupGate />}
+        <ReturnToDashboardPill />
+        {role === "admin" && <SummerAssistant />}
+      </AppShell>
+    </StaffMfaGate>
   );
 }

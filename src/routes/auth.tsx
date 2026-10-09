@@ -19,7 +19,7 @@ function AuthPage() {
 
   useEffect(() => {
     if (!loading && user && role) {
-      const fallback = role === "member" ? "/m" : role === "client" ? "/portal" : role === "finance" ? "/finance" : "/admin";
+      const fallback = role === "member" ? "/m" : role === "client" ? "/portal" : "/admin";
       // Only honor in-app relative paths to prevent open-redirect.
       const safeNext =
         next && next.startsWith("/") && !next.startsWith("//") ? next : null;

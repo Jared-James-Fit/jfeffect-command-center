@@ -17,6 +17,7 @@ import {
   normalizePhoneE164,
   looksLikeEmail,
 } from "./account-recovery.constants";
+import { assertAdminView } from "@/lib/permissions.server";
 
 // ─────────────────────────────── helpers (server-only) ──────────────────────
 
@@ -642,12 +643,7 @@ export const listPasswordResetEvents = createServerFn({ method: "POST" })
     z.object({ target_user_id: z.string().uuid() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    const { data: isAdmin } = await supabase.rpc("has_role", {
-      _user_id: userId,
-      _role: "admin",
-    });
-    if (!isAdmin) throw new Error("Forbidden");
+    const { db: supabase } = await assertAdminView(context as any);
     const { data: rows } = await supabase
       .from("password_reset_events")
       .select("*")
