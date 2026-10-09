@@ -45,7 +45,7 @@ export function ShareWorkoutButton({
   unit: "kg" | "lb";
   className?: string;
   label?: string;
-  variant?: "pill" | "block" | "bubble";
+  variant?: "pill" | "block" | "bubble" | "tile";
   /** Coach viewing as a client: looks the same, but never posts as them. */
   previewOnly?: boolean;
 }) {
@@ -125,7 +125,15 @@ export function ShareWorkoutButton({
 
   return (
     <>
-      {variant === "bubble" ? (
+      {variant === "tile" ? (
+        // First in Home's shelf: quieter than the posts, but always there.
+        <button type="button" onClick={begin} className={cn("flex h-[140px] w-[84px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-muted/40 px-2 active:scale-95", className)} aria-label={label}>
+          <span className={cn("grid h-11 w-11 place-items-center rounded-full text-white shadow-md shadow-primary/25", SHARE_GRADIENT)}>
+            <Plus className="h-5 w-5" strokeWidth={3} />
+          </span>
+          <span className="text-center text-[11px] font-bold leading-tight">{label}</span>
+        </button>
+      ) : variant === "bubble" ? (
         // Instagram "your story" bubble: first item in the Home strip.
         <button type="button" onClick={begin} className={cn("flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95", className)} aria-label={label}>
           <span className={cn("grid h-[61px] w-[61px] place-items-center rounded-full text-white shadow-md shadow-primary/25", SHARE_GRADIENT)}>

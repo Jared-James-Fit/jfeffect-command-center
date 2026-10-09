@@ -54,21 +54,10 @@ export function TrainingNowPill({ className }: { className?: string }) {
  * A lock-in before its numbers exist: LOCKED IN, the session, the time.
  * Once the session is finished the post shows the workout instead.
  */
-export function LockInHero({ post, size = "feed" }: { post: CommunityPost; size?: "feed" | "detail" | "tile" }) {
+export function LockInHero({ post, size = "feed" }: { post: CommunityPost; size?: "feed" | "detail" }) {
   const now = isTrainingNow(post);
   const time = lockInTimeLabel(post.locked_in_at);
   const bg = "bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.55),rgba(127,29,29,0.16)_45%,#0a0a0d_75%)]";
-  if (size === "tile") {
-    return (
-      <div className={cn("flex h-full w-full flex-col justify-between p-2.5 text-white", bg)}>
-        {now ? <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /> : <span />}
-        <div>
-          <div className="font-display text-[17px] uppercase leading-none">Locked in</div>
-          <div className="mt-0.5 line-clamp-2 text-[10px] font-bold text-white/70">{post.session_title}</div>
-        </div>
-      </div>
-    );
-  }
   const big = size === "detail";
   return (
     <div className={cn("relative overflow-hidden px-5 text-white", big ? "py-8" : "py-6", bg)}>
@@ -230,22 +219,11 @@ export function AuthorLine({
  * detail header). Same look as the share card so the feed feels branded, but
  * every number is the live canonical stat.
  */
-export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShareStats; unit: "kg" | "lb"; size?: "feed" | "detail" | "tile" }) {
+export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShareStats; unit: "kg" | "lb"; size?: "feed" | "detail" }) {
   const lift = featuredLift(stats);
   const nums = pickCardStats(stats, unit);
   const pr = !!lift?.pr;
   const session = sessionLine(stats);
-  if (size === "tile") {
-    return (
-      <div className={cn("flex h-full w-full flex-col justify-between p-2.5 text-white", pr ? "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(245,158,11,0.45),#0b0b0e_60%)]" : "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.5),#0b0b0e_60%)]")}>
-        {pr ? <span className="w-max rounded-full bg-amber-400 px-1.5 text-[8px] font-black uppercase text-[#2b1700]">PR</span> : <span />}
-        <div>
-          <div className="font-display line-clamp-2 text-[15px] uppercase leading-[1.02]">{stats.workout_title}</div>
-          {lift && <div className={cn("font-display mt-0.5 text-[13px] uppercase", pr ? "text-amber-300" : "text-white/80")}>{formatTopSet(lift.detail, unit)}</div>}
-        </div>
-      </div>
-    );
-  }
   const big = size === "detail";
   return (
     <div

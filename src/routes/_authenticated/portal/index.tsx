@@ -29,7 +29,7 @@ import { LeagueRecapHomeTile } from "@/components/portal/league-recap";
 import { StrengthBoardCard } from "@/components/portal/strength-board";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
 import { SexPromptCard } from "@/components/athlete-sex";
-import { CommunityHomeStrip, CommunityNavButton } from "@/components/community/community-entry";
+import { CommunityHomeStrip } from "@/components/community/community-entry";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -484,7 +484,6 @@ function GreetingHeader({
         <p className="truncate text-xs text-muted-foreground">Here's what to focus on today.</p>
       </div>
       <div className="flex items-center gap-2">
-      <CommunityNavButton className="h-11 w-11" />
       <Link
         to="/portal/announcements"
         aria-label="Notifications"

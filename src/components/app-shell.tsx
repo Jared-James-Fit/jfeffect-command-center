@@ -3,7 +3,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
-  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal,
+  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal, Menu,
   ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard, Pin, PinOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,8 @@ export interface NavItem {
    * does not affect routing or permissions.
    */
   section?: string;
+  /** The bar's raised centre button (the client portal's Community). */
+  featured?: boolean;
 }
 
 function groupNavItems(items: NavItem[]) {
@@ -235,7 +237,24 @@ function useCollapsedSections() {
   return [collapsed, toggle, setAll] as const;
 }
 
-export function AppShell({ items, bottomItems: customBottomItems, title, children }: { items: NavItem[]; bottomItems?: NavItem[]; title: string; children: ReactNode }) {
+export function AppShell({
+  items,
+  bottomItems: customBottomItems,
+  title,
+  children,
+  moreInHeader = false,
+}: {
+  items: NavItem[];
+  bottomItems?: NavItem[];
+  title: string;
+  children: ReactNode;
+  /**
+   * On phones, "More" opens from the top bar (in place of the settings gear,
+   * which only repeated the avatar's menu), so all five bar slots are
+   * destinations.
+   */
+  moreInHeader?: boolean;
+}) {
   useKeyboardOpen();
   useExerciseLibraryRealtime();
   useExerciseAliasIndex();
@@ -869,17 +888,23 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
               </Button>
             )}
             <ThemeToggle className="mr-0.5" />
-            <SettingsMenu
-              items={items}
-              meName={me?.name ?? user?.email ?? ""}
-              mePic={me?.pic ?? null}
-              onSignOut={handleSignOut}
-              trigger={
-                <Button variant="ghost" size="sm" aria-label="Settings" className="h-8 w-8 shrink-0 px-0">
-                  <SettingsIcon className="h-4 w-4" />
-                </Button>
-              }
-            />
+            {moreInHeader ? (
+              <Button variant="ghost" size="sm" aria-label="More" onClick={() => setMoreOpen(true)} className="h-8 w-8 shrink-0 px-0">
+                <Menu className="h-[18px] w-[18px]" />
+              </Button>
+            ) : (
+              <SettingsMenu
+                items={items}
+                meName={me?.name ?? user?.email ?? ""}
+                mePic={me?.pic ?? null}
+                onSignOut={handleSignOut}
+                trigger={
+                  <Button variant="ghost" size="sm" aria-label="Settings" className="h-8 w-8 shrink-0 px-0">
+                    <SettingsIcon className="h-4 w-4" />
+                  </Button>
+                }
+              />
+            )}
             <SettingsMenu
               items={items}
               meName={me?.name ?? user?.email ?? ""}
@@ -903,7 +928,9 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         {(() => {
           // Canonical contract: five buttons TOTAL, with "More" occupying one
           // of the five positions (never a fixed sixth button).
-          const visible = resolveVisibleBarItems(bottomItems);
+          const visible = resolveVisibleBarItems(bottomItems, { more: !moreInHeader });
+          // A raised centre button pokes out of the bar, so the bar can't clip.
+          const raised = visible.some((i) => i.featured);
           const cols = visible.length;
           const gridCols =
             cols === 5 ? "grid-cols-5" : cols === 4 ? "grid-cols-4" : cols === 3 ? "grid-cols-3" : "grid-cols-2";
@@ -914,7 +941,8 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
         <nav
           data-mobile-bottom-nav
           className={cn(
-            "fixed left-3 right-3 z-50 grid overflow-hidden rounded-2xl border border-border bg-card/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
+            "fixed left-3 right-3 z-50 grid rounded-2xl border border-border bg-card/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
+            raised ? "overflow-visible" : "overflow-hidden",
             dense ? "px-0.5" : "px-1",
             gridCols,
           )}
@@ -1500,8 +1528,6 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }:
         : null;
     const active =
       pathname === item.to ||
-      // Community opens from Home, so Home stays lit while it's open.
-      (item.to === "/portal" && pathname === "/portal/community") ||
       (tabAlias != null &&
         pathname === tabAlias.path &&
         (search?.tab === tabAlias.tab ||
@@ -1524,15 +1550,34 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense }:
         style={{ WebkitTapHighlightColor: "transparent" }}
         className={cn(
           "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors touch-manipulation select-none",
+          item.featured && "justify-end active:scale-95",
           active ? "text-primary" : "text-muted-foreground hover:text-foreground",
         )}
+        aria-label={item.featured && badge?.count ? `${item.label}, ${badge.count} new` : undefined}
       >
-        <div className="relative">
-          <Icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
-          <BottomNavBadge badge={badge} />
-        </div>
-        <span className={"w-full px-0.5 text-center leading-tight tracking-tight " + (dense ? "text-[9px]" : "text-[9.5px]")}>{item.label}</span>
-        {active && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
+        {item.featured ? (
+          // Raised centre button. A ring means there's something new, like a story.
+          <span
+            data-featured-tab
+            data-new={badge?.count ? "" : undefined}
+            className={cn(
+              "absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[38%] rounded-full p-[2.5px] transition-transform",
+              badge?.count ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-card",
+            )}
+          >
+            <span className="relative grid h-[50px] w-[50px] place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/35 ring-[2.5px] ring-card">
+              <Icon className="h-6 w-6" />
+              <BottomNavBadge badge={badge} />
+            </span>
+          </span>
+        ) : (
+          <div className="relative">
+            <Icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+            <BottomNavBadge badge={badge} />
+          </div>
+        )}
+        <span className={cn("w-full px-0.5 text-center leading-tight tracking-tight", dense ? "text-[9px]" : "text-[9.5px]", item.featured && "font-bold")}>{item.label}</span>
+        {active && !item.featured && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
       </Link>
     );
   }
