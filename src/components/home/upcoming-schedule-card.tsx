@@ -9,6 +9,7 @@ import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { KIND_META, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
 import { isAppointmentItem, selectHomeUpcoming } from "@/lib/home-upcoming";
 import { WeekStrip, nextSevenDays } from "@/components/calendar/week-strip";
+import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 
 function isoToday() {
@@ -27,7 +28,7 @@ function dayLabel(date: string, today: string): string {
 
 function timeLabel(item: CalendarItem): string | null {
   if (!item.startsAt) return null;
-  return new Date(item.startsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return compactTimeRange(item.startsAt, item.endsAt);
 }
 
 /** Cardio rides on training days; counting it would double every dot. */

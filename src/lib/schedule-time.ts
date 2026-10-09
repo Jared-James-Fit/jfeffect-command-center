@@ -141,3 +141,39 @@ export function fmtWallClock(timeHM: string | null | undefined): string {
 export function overlaps(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
   return a.start < b.end && b.start < a.end;
 }
+
+function clockParts(at: Date, tz?: string | null): { h: number; m: number } {
+  if (tz) {
+    const p = partsIn(safeTz(tz), at);
+    return { h: p.hour, m: p.minute };
+  }
+  return { h: at.getHours(), m: at.getMinutes() };
+}
+
+function shortClock(h: number, m: number, withSuffix: boolean): string {
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}${m ? `:${String(m).padStart(2, "0")}` : ""}${withSuffix ? (h >= 12 ? " PM" : " AM") : ""}`;
+}
+
+/**
+ * Start and end of something on the calendar, short: "9 AM–5 PM", "10–11:30 AM",
+ * "12–1 PM". Device zone unless one is given.
+ */
+export function compactTimeRange(startISO: string, endISO: string | null | undefined, tz?: string | null): string {
+  const s = clockParts(new Date(startISO), tz);
+  if (!endISO) return shortClock(s.h, s.m, true);
+  const e = clockParts(new Date(endISO), tz);
+  const sameHalf = (s.h < 12) === (e.h < 12);
+  return `${shortClock(s.h, s.m, !sameHalf)}–${shortClock(e.h, e.m, true)}`;
+}
+
+/** "45 min", "1 hr", "1 hr 30 min", "8 hr". Null for nothing sensible. */
+export function durationLabel(startISO: string, endISO: string | null | undefined): string | null {
+  if (!endISO) return null;
+  const min = Math.round((Date.parse(endISO) - Date.parse(startISO)) / 60_000);
+  if (!Number.isFinite(min) || min <= 0) return null;
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h} hr ${m} min` : `${h} hr`;
+}
