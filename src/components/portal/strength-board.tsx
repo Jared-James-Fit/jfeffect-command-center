@@ -218,6 +218,54 @@ export function StrengthBoardCard() {
   );
 }
 
+/**
+ * The Hall of Strength as a slide in Home's standings card: the two #1s and
+ * where you stand. Tap for the full board.
+ */
+export function StrengthBoardSlide() {
+  const [open, setOpen] = useState(false);
+  const { data = [], isPending } = useStrengthBoard();
+  const { unit } = useWeightUnit();
+  const myP4p = data.find((r) => r.is_me && r.lift === "total" && r.p4p_rank != null)?.p4p_rank ?? null;
+  const myAbs = data.find((r) => r.is_me && r.lift === "total" && r.all_rank != null)?.all_rank ?? null;
+  const p4pKing = pickBoard(data, "p4p", "total", "all").top[0] ?? null;
+  const absKing = pickBoard(data, "absolute", "total", "all").top[0] ?? null;
+  const myLine = myP4p || myAbs
+    ? `You: ${[myP4p && `#${myP4p} pound for pound`, myAbs && `#${myAbs} total`].filter(Boolean).join(" · ")}`
+    : data.some((r) => r.is_me)
+      ? "See where you rank"
+      : "Get on the board";
+
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="flex h-full w-full flex-col text-left active:opacity-80">
+        <span className="flex w-full items-start justify-between gap-3 px-4 pt-3">
+          <span className="min-w-0">
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">All-time strength board</span>
+            <span className="mt-0.5 block text-lg font-bold tracking-tight">Hall of Strength</span>
+          </span>
+          <Trophy className="h-6 w-6 shrink-0 text-amber-400" />
+        </span>
+        <span className="mt-1 grid w-full grid-cols-2">
+          <KingTile label="Pound for pound #1" row={p4pKing} loading={isPending}
+            value={p4pKing ? <>{formatMultiple(p4pKing.bw_multiple)}<span className="ml-0.5 text-[10px] font-black text-muted-foreground">BW</span></> : null} />
+          <KingTile label="Heaviest total #1" row={absKing} loading={isPending}
+            value={absKing ? formatLoad(absKing.kg, unit) : null} />
+        </span>
+        <span className="mt-auto flex w-full items-center justify-between px-4 pb-3 pt-1 text-xs font-bold">
+          <span className={cn(myP4p || myAbs ? "text-foreground" : "text-primary")}>{myLine}</span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </span>
+      </button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">
+          <HallOfStrength />
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+
 function KingTile({ label, row, value, loading, className }: {
   label: string; row: StrengthRow | null; value: ReactNode; loading: boolean; className?: string;
 }) {

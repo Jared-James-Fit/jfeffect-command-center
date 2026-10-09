@@ -774,7 +774,7 @@ export function LeagueRecapButton({ className }: { className?: string }) {
  * Home-screen access point: last month's recap one tap away all month, plus
  * an archive of every past recap.
  */
-export function LeagueRecapHomeTile({ className }: { className?: string }) {
+export function LeagueRecapHomeTile({ className, variant = "tile" }: { className?: string; variant?: "tile" | "mini" }) {
   // The person whose portal this is (the client in coach "View as" mode).
   const userId = usePortalUserId() ?? null;
   const month = previousLeagueMonth();
@@ -802,6 +802,30 @@ export function LeagueRecapHomeTile({ className }: { className?: string }) {
 
   if (!recap) return null;
   const isNew = inRecapWindow();
+
+  // Inside Home's League slide: one chip that plays last month's recap (all of them live in the Top 10).
+  if (variant === "mini") {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setPlaying(recap)}
+          className={cn("relative inline-flex h-8 max-w-full items-center gap-1.5 overflow-hidden rounded-full pl-1 pr-3 text-left text-[11px] font-bold text-white shadow-sm active:scale-[0.98]", className)}
+          style={{ background: "linear-gradient(120deg, #450a0a 0%, #991b1b 45%, #3b0764 100%)" }}
+          aria-label={`Play your ${monthName(recap.month_start)} recap`}
+        >
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-black">
+            <span className="ml-0.5 text-[9px] font-black">▶</span>
+          </span>
+          <span className="truncate">
+            {monthName(recap.month_start, { month: "short" })} recap{recap.me.rank ? ` · #${recap.me.rank}` : ""}
+          </span>
+          {isNew && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 text-[9px] font-black uppercase text-black">New</span>}
+        </button>
+        {playing && <LeagueRecapStory recap={playing} open={!!playing} onClose={() => setPlaying(null)} />}
+      </>
+    );
+  }
 
   return (
     <>
