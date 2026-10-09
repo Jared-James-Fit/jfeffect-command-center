@@ -3,22 +3,43 @@ import { ChevronLeft, X } from "lucide-react";
 
 /** The phone's own edge swipe lives here: leave it to the phone. */
 const EDGE_PX = 24;
-/** How far a finger moves before we decide it's a sideways swipe. */
-const LOCK_PX = 10;
-/** Past this share of the screen, letting go goes back. */
-const COMMIT = 0.28;
-/** Or a quick flick (px per ms), once it's moved a little. */
-const FLICK = 0.45;
+/** How far a finger moves before we decide what kind of gesture it is (not twitchy). */
+const LOCK_PX = 12;
+/** Sideways must clearly beat up/down, so scrolling never turns into a swipe. */
+const DIRECTION = 1.4;
+/** Letting go past this goes back: a short, comfortable thumb move (~85px on a phone). */
+export const commitDistance = (w: number) => Math.min(110, Math.max(64, w * 0.22));
+/** Or a flick (px per ms) once it has moved a little. */
+const FLICK = 0.32;
+const FLICK_MIN_PX = 28;
+/** The page follows 1:1 up to the commit point, then with resistance, and never further than this. */
+const MAX_SHARE = 0.42;
 
 /**
- * Swipe right from anywhere on the screen to go back (not just the very
- * edge). The page follows your finger, an arrow fills in, and letting go
- * past about a quarter of the screen (or a quick flick) goes back.
+ * Finger travel → how far the page moves: 1:1 until it would go back, then it gets heavier
+ * (rubber band) and stops well before the edge, so there's never an empty screen beside it.
+ */
+export function swipeOffset(dx: number, w: number): number {
+  if (dx <= 0) return 0;
+  const c = commitDistance(w);
+  if (dx <= c) return dx;
+  return Math.min(w * MAX_SHARE, c + (dx - c) * 0.4);
+}
+
+/** Should letting go here go back? */
+export function shouldGoBack(dx: number, speed: number, w: number): boolean {
+  return dx >= commitDistance(w) || (speed > FLICK && dx > FLICK_MIN_PX);
+}
+
+/**
+ * Swipe right from anywhere on the screen to go back (not just the very edge). The page
+ * follows your thumb, a "Back" strip fills the space it opens up (never a black gap), and a
+ * short move or a quick flick is enough. Going back fades the page out and the next one in.
  *
- * Stays out of the way of everything else: vertical scrolling, open sheets
- * and dialogs, text fields, anything marked `data-no-swipe-back`, and a
- * sideways scroller that can still scroll back (a carousel past its first
- * photo swipes the carousel; on its first photo, it's a back swipe).
+ * Stays out of the way of everything else: vertical scrolling, open sheets and dialogs, text
+ * fields, anything marked `data-no-swipe-back`, and a sideways scroller that can still scroll
+ * back (a carousel past its first photo swipes the carousel; on its first photo, it's a back
+ * swipe). Every frame is a transform on the GPU, painted once per animation frame.
  */
 export function SwipeBack({
   enabled,
@@ -33,6 +54,7 @@ export function SwipeBack({
   /** Someone used it (for retiring the demo). */
   onUsed?: () => void;
 }) {
+  const strip = useRef<HTMLDivElement | null>(null);
   const arrow = useRef<HTMLDivElement | null>(null);
   const cb = useRef({ onBack, onUsed });
   cb.current = { onBack, onUsed };
@@ -42,11 +64,13 @@ export function SwipeBack({
     let start: { x: number; y: number } | null = null;
     let mode: "undecided" | "back" | "off" = "off";
     let dx = 0;
+    let y = 0;
     let lastX = 0;
     let lastT = 0;
     let speed = 0;
     let armed = false;
     let leaving = false;
+    let frame = 0;
 
     const blocked = (el: EventTarget | null) => {
       if (!(el instanceof Element)) return true;
@@ -57,34 +81,55 @@ export function SwipeBack({
       return false;
     };
     const sheetOpen = () => !!document.querySelector('[role="dialog"][data-state="open"],[role="alertdialog"][data-state="open"]');
+    const EASE = "cubic-bezier(.22,.9,.25,1)";
 
-    const paint = (x: number, y: number | null, animate: boolean) => {
+    const paint = (x: number, animate: number | false) => {
       const el = target.current;
-      const a = arrow.current;
       const w = window.innerWidth || 1;
+      const p = Math.min(1, x / commitDistance(w));
+      const t = animate ? `${animate}ms ${EASE}` : "none";
       if (el) {
-        el.style.transition = animate ? "transform 180ms cubic-bezier(.2,.8,.2,1)" : "none";
+        el.style.transition = animate ? `transform ${t}` : "none";
         el.style.transform = x ? `translate3d(${x}px,0,0)` : "";
-        el.style.boxShadow = x ? "-12px 0 28px rgba(0,0,0,.18)" : "";
-        el.style.willChange = x ? "transform" : "";
       }
-      if (a) {
-        const p = Math.min(1, x / (w * COMMIT));
-        a.style.transition = animate ? "opacity 180ms, transform 180ms" : "none";
-        a.style.opacity = String(p);
-        if (y != null) a.style.top = `${Math.max(80, Math.min(window.innerHeight - 140, y - 22))}px`;
-        a.style.transform = `translateX(${Math.min(x * 0.35, 28)}px) scale(${0.6 + 0.4 * p})`;
-        a.dataset.armed = p >= 1 ? "1" : "0";
+      if (strip.current) {
+        // the strip is as wide as the page could ever move; it slides in with the page
+        strip.current.style.transition = animate ? `transform ${t}, opacity ${t}` : "none";
+        strip.current.style.transform = `translate3d(${x - w * MAX_SHARE}px,0,0)`;
+        strip.current.style.opacity = x ? "1" : "0";
       }
+      if (arrow.current) {
+        arrow.current.style.transition = animate ? `transform ${t}, opacity ${t}` : "none";
+        arrow.current.style.top = `${Math.max(90, Math.min(window.innerHeight - 150, y - 22))}px`;
+        arrow.current.style.opacity = String(Math.min(1, p * 1.4));
+        arrow.current.style.transform = `translate3d(${Math.max(0, x / 2 - 22)}px,0,0) scale(${0.7 + 0.3 * p})`;
+        arrow.current.dataset.armed = p >= 1 ? "1" : "0";
+      }
+    };
+    const schedule = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (mode === "back") paint(swipeOffset(dx, window.innerWidth), false);
+      });
+    };
+    const lift = (on: boolean) => {
+      const el = target.current;
+      if (!el) return;
+      // one soft edge shadow for the whole gesture (not repainted every frame)
+      el.style.boxShadow = on ? "-10px 0 24px rgba(0,0,0,.16)" : "";
+      el.style.willChange = on ? "transform" : "";
     };
     const reset = () => {
       const el = target.current;
       if (el) {
         el.style.transition = "";
         el.style.transform = "";
+        el.style.opacity = "";
         el.style.boxShadow = "";
         el.style.willChange = "";
       }
+      if (strip.current) strip.current.style.opacity = "0";
       if (arrow.current) arrow.current.style.opacity = "0";
     };
 
@@ -97,6 +142,7 @@ export function SwipeBack({
       start = { x: t.clientX, y: t.clientY };
       mode = "undecided";
       dx = 0;
+      y = t.clientY;
       speed = 0;
       armed = false;
       lastX = t.clientX;
@@ -106,7 +152,8 @@ export function SwipeBack({
       if (!start || mode === "off") return;
       if (e.touches.length !== 1) {
         mode = "off";
-        paint(0, null, true);
+        lift(false);
+        paint(0, 200);
         return;
       }
       const t = e.touches[0];
@@ -114,20 +161,26 @@ export function SwipeBack({
       const ddy = t.clientY - start.y;
       if (mode === "undecided") {
         if (Math.abs(ddx) < LOCK_PX && Math.abs(ddy) < LOCK_PX) return;
-        if (ddx > 0 && ddx > Math.abs(ddy) * 1.3) mode = "back";
-        else {
+        if (ddx > 0 && ddx > Math.abs(ddy) * DIRECTION) {
+          mode = "back";
+          lift(true);
+          // start from where the finger is now, so the page doesn't jump by the lock distance
+          start = { x: t.clientX - LOCK_PX, y: start.y };
+        } else {
           mode = "off";
           return;
         }
       }
       // ours now: no scrolling underneath
       if (e.cancelable) e.preventDefault();
-      dx = Math.max(0, ddx);
+      dx = Math.max(0, t.clientX - start.x);
+      y = t.clientY;
       const dt = e.timeStamp - lastT;
-      if (dt > 0) speed = (t.clientX - lastX) / dt;
+      // smoothed velocity, so one jittery sample can't fire a flick
+      if (dt > 0) speed = speed * 0.4 + ((t.clientX - lastX) / dt) * 0.6;
       lastX = t.clientX;
       lastT = e.timeStamp;
-      const over = dx > window.innerWidth * COMMIT;
+      const over = dx >= commitDistance(window.innerWidth);
       if (over !== armed) {
         armed = over;
         if (over) {
@@ -138,7 +191,7 @@ export function SwipeBack({
           }
         }
       }
-      paint(dx, t.clientY, false);
+      schedule();
     };
     const onEnd = () => {
       if (!start || mode !== "back") {
@@ -146,25 +199,60 @@ export function SwipeBack({
         mode = "off";
         return;
       }
-      const go = dx > window.innerWidth * COMMIT || (speed > FLICK && dx > 40);
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+      const w = window.innerWidth;
+      const go = shouldGoBack(dx, speed, w);
       start = null;
       mode = "off";
       if (!go) {
-        paint(0, null, true);
+        paint(0, 220);
+        window.setTimeout(() => lift(false), 230);
         return;
       }
       leaving = true;
-      paint(window.innerWidth, null, true);
+      // glide a little further and fade (no empty screen), then go back
+      const el = target.current;
+      paint(Math.min(w * MAX_SHARE, Math.max(swipeOffset(dx, w), commitDistance(w)) + 40), 160);
+      if (el) {
+        el.style.transition = `transform 160ms ${EASE}, opacity 160ms ease-out`;
+        el.style.opacity = "0";
+      }
       window.setTimeout(() => {
-        leaving = false;
         cb.current.onUsed?.();
         cb.current.onBack();
-        // still here (went back within the page)? settle it
-        requestAnimationFrame(reset);
-      }, 170);
+        // went back inside the same page (profile → feed)? bring the new content in from the left
+        requestAnimationFrame(() => {
+          const node = target.current;
+          if (strip.current) strip.current.style.opacity = "0";
+          if (arrow.current) arrow.current.style.opacity = "0";
+          if (node && node.isConnected) {
+            node.style.transition = "none";
+            node.style.transform = "translate3d(-24px,0,0)";
+            node.style.opacity = "0";
+            node.style.boxShadow = "";
+            requestAnimationFrame(() => {
+              node.style.transition = `transform 220ms ${EASE}, opacity 180ms ease-out`;
+              node.style.transform = "";
+              node.style.opacity = "";
+              window.setTimeout(() => {
+                reset();
+                leaving = false;
+              }, 240);
+            });
+          } else {
+            leaving = false;
+          }
+        });
+      }, 150);
     };
     const onCancel = () => {
-      if (mode === "back") paint(0, null, true);
+      if (mode === "back") {
+        paint(0, 200);
+        window.setTimeout(() => lift(false), 210);
+      }
       start = null;
       mode = "off";
     };
@@ -178,20 +266,30 @@ export function SwipeBack({
       document.removeEventListener("touchmove", onMove);
       document.removeEventListener("touchend", onEnd);
       document.removeEventListener("touchcancel", onCancel);
+      if (frame) cancelAnimationFrame(frame);
       reset();
     };
   }, [enabled, target]);
 
   if (!enabled) return null;
   return (
-    <div
-      ref={arrow}
-      aria-hidden
-      className="pointer-events-none fixed left-2 z-[60] grid h-11 w-11 place-items-center rounded-full bg-foreground text-background opacity-0 shadow-lg data-[armed=1]:bg-primary data-[armed=1]:text-primary-foreground"
-      style={{ top: "45%" }}
-    >
-      <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
-    </div>
+    <>
+      {/* fills the space the page opens up with the app's own surface (never a black gap); under the top bar and tabs */}
+      <div
+        ref={strip}
+        aria-hidden
+        className="pointer-events-none fixed inset-y-0 left-0 z-30 bg-gradient-to-r from-muted to-background opacity-0"
+        style={{ width: "42vw", transform: "translate3d(-42vw,0,0)" }}
+      />
+      <div
+        ref={arrow}
+        aria-hidden
+        className="pointer-events-none fixed left-0 z-[60] grid h-11 w-11 place-items-center rounded-full bg-card text-foreground opacity-0 shadow-md ring-1 ring-border transition-colors data-[armed=1]:bg-primary data-[armed=1]:text-primary-foreground data-[armed=1]:ring-primary"
+        style={{ top: "45%" }}
+      >
+        <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
+      </div>
+    </>
   );
 }
 
