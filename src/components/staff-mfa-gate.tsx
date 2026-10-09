@@ -10,9 +10,10 @@ import { useAuth } from "@/lib/auth";
 import { getMfaState, roleRequiresMfa, startTotpEnrollment, verifyTotp, type MfaState, type TotpEnrollment } from "@/lib/mfa";
 
 /**
- * Wraps a staff area. For roles that need MFA (admin, finance) the area only
- * renders once the session is aal2: first visit enrolls an authenticator app,
- * later sign-ins ask for the 6-digit code. Other roles pass straight through.
+ * Wraps a staff area. For roles that need MFA (see MFA_REQUIRED_ROLES) the
+ * area only renders once the session is aal2: first visit enrolls an
+ * authenticator app, later sign-ins ask for the 6-digit code. Other roles
+ * pass straight through.
  */
 export function StaffMfaGate({ children }: { children: ReactNode }) {
   const { role, signOut } = useAuth();
@@ -70,12 +71,24 @@ export function StaffMfaGate({ children }: { children: ReactNode }) {
         {state?.status === "needs_enroll" && (
           <div className="space-y-3 text-sm">
             <p className="text-muted-foreground">
-              Staff accounts need an authenticator app (Google Authenticator, 1Password, Authy…). Scan this code, then enter the 6 digits it shows.
+              The books need a second step at sign-in. Use an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…).
             </p>
             {enrollment ? (
               <>
+                <ol className="space-y-1 text-xs text-muted-foreground list-decimal pl-4">
+                  <li>On this phone: tap <b>Add to authenticator app</b>. On a computer: scan the code with your phone.</li>
+                  <li>Type the 6 digits the app shows below.</li>
+                </ol>
+                <Button asChild variant="outline" className="w-full">
+                  <a href={enrollment.uri}>Add to authenticator app</a>
+                </Button>
                 <img src={enrollment.qrCode} alt="Authenticator QR code" className="mx-auto h-44 w-44 rounded-md bg-white p-2" />
-                <p className="text-xs text-muted-foreground break-all">Can't scan? Enter this key: <span className="font-mono">{enrollment.secret}</span></p>
+                <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+                  <span className="min-w-0 truncate font-mono text-xs">{enrollment.secret}</span>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => {
+                    void navigator.clipboard?.writeText(enrollment.secret).then(() => toast.success("Key copied"), () => {});
+                  }}>Copy key</Button>
+                </div>
               </>
             ) : (
               <div className="grid h-44 place-items-center"><Loader2 className="h-5 w-5 animate-spin" /></div>

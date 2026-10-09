@@ -9,8 +9,8 @@
 -- unlike user_metadata, can't be set by someone signing themselves up, so a
 -- public signup can't opt out of the client path.
 --
--- Body otherwise identical to 20260603210401. Before applying, compare with
--- the live definition:  SELECT pg_get_functiondef('public.handle_new_user'::regproc);
+-- Body otherwise identical to the live definition (checked 2026-10-09 with
+--   pg_get_functiondef). Redeem also strips any client role as a second check.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql

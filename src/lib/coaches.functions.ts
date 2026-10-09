@@ -27,9 +27,6 @@ export const inviteCoach = createServerFn({ method: "POST" })
     if (!coach?.email) throw new Error("Coach has no email");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // Coaches use a staff-only login, never a client's or member's account.
-    const { assertNoPersonalAccount } = await import("@/lib/setup-link-guard.server");
-    await assertNoPersonalAccount(supabaseAdmin, { email: coach.email, userId: coach.user_id });
 
     const { data: invited, error: inviteErr } =
       await supabaseAdmin.auth.admin.inviteUserByEmail(coach.email, {
@@ -69,8 +66,6 @@ export const getCoachSetupLink = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!coach?.email) throw new Error("Coach has no email");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { assertNoPersonalAccount } = await import("@/lib/setup-link-guard.server");
-    await assertNoPersonalAccount(supabaseAdmin, { email: coach.email, userId: coach.user_id });
     const linkType = coach.user_id ? "magiclink" : "invite";
     const { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
       type: linkType as any,
@@ -105,10 +100,6 @@ export const acceptCoachInvite = createServerFn({ method: "POST" })
       .from("coaches").select("id, email, user_id").eq("id", coachId).single();
     if (cErr) throw new Error(cErr.message);
     if (coach.email.toLowerCase() !== email) throw new Error("Coach email mismatch");
-
-    // A coach login must be staff-only: refuse before changing anything.
-    const { assertNoPersonalAccount } = await import("@/lib/setup-link-guard.server");
-    await assertNoPersonalAccount(supabaseAdmin, { userId });
 
     // Link + activate
     await supabaseAdmin.from("coaches").update({

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, Target, SlidersHorizontal, Repeat } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -307,6 +307,11 @@ export type WorkoutDayViewSearch = {
    * reads/writes by scheduled_workout_id.
    */
   instance?: string;
+  /**
+   * pl_exercise_rows.id to scroll to and briefly highlight on open, e.g. when a
+   * coach taps a client's exercise-note notification.
+   */
+  focus?: string;
 };
 
 /**
@@ -442,6 +447,7 @@ function WorkoutDay({
   children?: ReactNode;
 }) {
   const portalUserId = usePortalUserId();
+  useFocusExerciseRow(search.focus);
   // Phase B turn 2: day/rows/results reads route through the adapter when
   // provided. Other reads/writes still on sb.* for now (turns 3/4).
   const qc = useQueryClient();
@@ -3420,10 +3426,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const workedToday = existingResults.some(
     (r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external",
   );
-  // Warm-up sets can be logged on any external-load exercise (before the first
-  // working set); the heaviest one feeds the suggestion engine for that exercise.
+  // Warm-up sets can be logged on any external-load exercise, any time: before
+  // the first working set the heaviest one feeds the suggestion engine; after
+  // it, a warm-up is still a rough 1RM read (weight × reps @ RPE).
   const warmupAllowed =
-    !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId && !workedToday;
+    !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;
   const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
   const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
   const [warmupForm, setWarmupForm] = useState<string | null>(null);
@@ -3462,7 +3469,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     }
     return best?.id ?? null;
   }, [warmupSets]);
-  const warmupGauge = warmupPromptable && loadModel ? { suggested: warmupGaugeSuggested } : null;
+  // Tuning only happens before the first working set.
+  const warmupGauge = warmupPromptable && loadModel && !workedToday ? { suggested: warmupGaugeSuggested } : null;
+  // The W prompt row: on lifts that ramp up, offered any time — it tunes the
+  // weight while it still can, and always gives a rough 1RM estimate.
+  const warmupPrompt = warmupAllowed && rampsUp
+    ? { suggested: warmupGauge?.suggested ?? null, tunes: !!warmupGauge }
+    : null;
   const tunedWarmupId =
     warmupGauge && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
 
@@ -3732,7 +3745,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   };
 
   return (
-    <Card className="workout-card-surface relative overflow-hidden p-3.5 pl-4 transition-colors hover:border-builder-card-border-strong sm:p-5 sm:pl-6">
+    <Card
+      data-workout-exercise
+      data-workout-row={row?.id}
+      className="workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 pl-4 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5 sm:pl-6"
+    >
       {/* Left stripe: inset top/bottom so it doesn't visually connect between cards */}
       <div className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full opacity-90 ${accent}`} aria-hidden />
       {/* Row 1 — name + unit toggle */}
@@ -4064,7 +4081,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             </div>
           )}
         </div>
-        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupGauge))) && (
+        {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupPrompt))) && (
           <WarmupRows
             sets={warmupSets}
             unit={activeUnit}
@@ -4074,7 +4091,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             onFormChange={setWarmupForm}
             onSave={saveWarmup}
             onRemove={removeWarmup}
-            prompt={warmupGauge}
+            prompt={warmupPrompt}
             seed={warmupGauge?.suggested ?? null}
             tunedId={tunedWarmupId}
           />
@@ -4158,7 +4175,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setWarmupForm("new")} disabled={warmupAtLimit} className="rounded-lg">
                     Warm-up set
-                    <span className="ml-auto text-[10px] text-muted-foreground">sharpens suggestion</span>
+                    <span className="ml-auto text-[10px] text-muted-foreground">{workedToday ? "rough 1RM" : "sharpens suggestion"}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -5543,6 +5560,9 @@ function SetRow({
             ? Number(displayLoadInUnit(prevExisting, unit))
             : null) ?? loadHint?.target ?? lastTimeWeight ?? suggestedWeight ?? null
         }
+        // Today's suggestion sits faded in the next set's empty weight cell —
+        // where the athlete types — instead of a second box under the row.
+        suggested={!readonly && !isConfirmed && isNextSet && loadHint && loadType === "external" ? loadHint.target : null}
         disabled={readonly}
         focusMode={focusMode}
         onPick={({ load: nextLoad, bodyweight, loadType: nextType }: { load: string; bodyweight: boolean; loadType: LoadType }) => {
@@ -5670,27 +5690,11 @@ function SetRow({
       </div>
     )}
 
-    {/* Next-set helpers — one row, only on the set the athlete is about to log:
-        the suggested load (one tap fills it, never auto-confirms) and "Repeat
-        set N", which copies the last logged set into every open set below. */}
-    {!readonly && !isConfirmed && isNextSet && ((!hideWeight && loadHint && loadType === "external") || repeat) && (
+    {/* Next-set helper — only on the set the athlete is about to log:
+        "Same as set N" copies the last logged set into every open set below.
+        (The suggested load lives in the weight cell itself.) */}
+    {!readonly && !isConfirmed && isNextSet && repeat && (
       <div className="flex flex-wrap gap-1.5 px-2 pb-2">
-        {!hideWeight && loadHint && loadType === "external" && (
-          <button
-            type="button"
-            onClick={() => setLoad(fmtNum(loadHint.target))}
-            aria-label={`Use suggested ${fmtNum(loadHint.target)} ${loadHint.unit}`}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 active:scale-[0.98]"
-          >
-            <Target className="h-3.5 w-3.5" aria-hidden="true" />
-            {loadHint.low === loadHint.high
-              ? `${fmtNum(loadHint.target)} ${loadHint.unit}`
-              : `${fmtNum(loadHint.low)}–${fmtNum(loadHint.high)} ${loadHint.unit}`}
-            {Number(load) !== loadHint.target && loadHint.low !== loadHint.high && (
-              <span className="font-normal text-primary/80">· use {fmtNum(loadHint.target)}</span>
-            )}
-          </button>
-        )}
         {repeat && onApplyToRemaining && (
           <button
             type="button"
@@ -5897,6 +5901,36 @@ function WorkoutTopMenu() {
       <TrainingHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </>
   );
+}
+
+/**
+ * Scroll to the exercise card for `rowId` once it renders (rows load async) and
+ * ring it for a moment so the coach lands on the exact exercise a note is about.
+ */
+function useFocusExerciseRow(rowId: string | undefined) {
+  useEffect(() => {
+    if (!rowId || typeof document === "undefined") return;
+    let tries = 0;
+    let ringTimer: number | undefined;
+    const selector = `[data-workout-row="${CSS.escape(rowId)}"]`;
+    const timer = window.setInterval(() => {
+      const el = document.querySelector<HTMLElement>(selector);
+      tries += 1;
+      if (!el && tries < 40) return; // ~6s for slow cold loads
+      window.clearInterval(timer);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background");
+      ringTimer = window.setTimeout(
+        () => el.classList.remove("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background"),
+        2400,
+      );
+    }, 150);
+    return () => {
+      window.clearInterval(timer);
+      if (ringTimer) window.clearTimeout(ringTimer);
+    };
+  }, [rowId]);
 }
 
 function scrollToFirstIncompleteExercise() {

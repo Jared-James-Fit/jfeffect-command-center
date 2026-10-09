@@ -21,7 +21,7 @@ const TabFallback = () => (
 type TabKey = "people" | "staff-media" | "operations";
 const TABS: { value: TabKey; label: string }[] = [
   { value: "people", label: "People" },
-  { value: "staff-media", label: "Staff & Media" },
+  { value: "staff-media", label: "Staff access" },
   { value: "operations", label: "Operations" },
 ];
 const LAST_TAB_KEY = "jf-admin-team-last-tab";

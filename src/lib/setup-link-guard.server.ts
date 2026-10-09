@@ -8,9 +8,8 @@
  *   - a staff account never has a clients or app_members row.
  * One person's staff roles share one staff account.
  *
- * The database enforces the same rules for new grants and links (migration
- * 20261015090300_staff_personal_split.sql); these helpers give the admin a
- * clear error first.
+ * These helpers enforce it when staff are invited and accounts are set up,
+ * with a clear error for the admin.
  *
  * Server-only. Do NOT import from client modules.
  */
@@ -120,7 +119,7 @@ export async function assertEmailFreeForStaffInvite(supabaseAdmin: any, email: s
 /**
  * After creating a staff-only user: leave it holding only its staff role.
  * handle_new_user skips the client role for app_metadata.account_kind =
- * 'staff' (migration 20261015090200); this also covers a database where that
+ * 'staff' (migration 20261018100200); this also covers a database where that
  * migration isn't applied yet.
  */
 export async function finalizeStaffOnlyUser(supabaseAdmin: any, userId: string, role: string): Promise<void> {
