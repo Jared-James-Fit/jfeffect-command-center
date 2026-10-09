@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/app-shell";
 import { Search, Eye, MoreHorizontal } from "lucide-react";
 
-const KEY = "jf-floating-bar-v2";
+// v3: every staff bar was reset to Dashboard, Clients, Messages, Tasks (More
+// moved to the header), so bars saved before that start fresh.
+const KEY = "jf-floating-bar-v3";
 const EVT = "floating-bar-updated";
 
 /**

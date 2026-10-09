@@ -199,12 +199,9 @@ export const memberNav: NavItem[] = [
   { to: "/m/more", label: "More", icon: UserCog, keywords: ["account","billing","profile","settings","manage","receipts","agreements","announcements","tools","progress","install"] },
 ];
 
-// Mobile bottom-tab nav for the App Member portal. Five short labels max.
-// Coaching-style structure: Home / Workouts / Nutrition / Support.
-// "More" is intentionally excluded — the shared AppShell renders a "More"
-// drawer trigger as the trailing slot on mobile, which surfaces every
-// remaining section (Account, Billing, Progress, Tools, etc.) without
-// duplicating a bottom-bar item.
+// Mobile bottom-tab nav for the App Member portal: Home / Workouts /
+// Nutrition / Support. "More" (Account, Billing, Progress, Tools, etc.) opens
+// from the header (AppShell `moreInHeader`), the same as every other account.
 export const memberBottomNav: NavItem[] = [
   { to: "/m", label: "Home", icon: LayoutDashboard },
   { to: "/m/workouts", label: "Workouts", icon: Activity },

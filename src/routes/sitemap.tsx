@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { clientNav } from "@/lib/admin-nav";
 import { useAuth } from "@/lib/auth";
-import { useDashboardMode } from "@/lib/dashboard-mode";
 import { buildInternalNav, resolveStaffRoleTag, WORKSPACE_ORDER } from "@/lib/internal-nav";
 import type { NavItem } from "@/components/app-shell";
 
@@ -34,18 +33,15 @@ function Section({ title, items }: { title: string; items: NavItem[] }) {
 
 function SitemapPage() {
   const { role } = useAuth();
-  const [mode] = useDashboardMode();
   const roleTag = resolveStaffRoleTag(role);
 
-  // Internal nav, scoped to the active role + dashboard mode and grouped
+  // Internal nav, scoped to the active role and grouped
   // by workspace following the canonical WORKSPACE_ORDER. Empty groups
   // are omitted automatically because `buildInternalNav` only returns
   // entries the current role can see.
   const internalGroups = useMemo(() => {
     if (!roleTag) return [] as { label: string; items: NavItem[] }[];
-    const items = buildInternalNav(roleTag, {
-      mode: mode === "membership" ? "membership" : "coaching",
-    });
+    const items = buildInternalNav(roleTag);
     const byGroup = new Map<string, NavItem[]>();
     for (const it of items) {
       const key = (it.group as string) || "Other";
@@ -68,7 +64,7 @@ function SitemapPage() {
       ordered.push({ label, items: list });
     }
     return ordered;
-  }, [roleTag, mode]);
+  }, [roleTag]);
 
   const publicPages = [
     { to: "/", label: "Landing" },
@@ -86,8 +82,7 @@ function SitemapPage() {
           <h1 className="text-3xl font-black tracking-tight">All Pages</h1>
           <p className="text-sm text-muted-foreground">
             Quick access to every screen visible to your account. Listed pages
-            follow your role and dashboard mode — switching modes refreshes
-            this list. Other portals require the matching account type.
+            follow your role. Other portals require the matching account type.
           </p>
         </header>
 

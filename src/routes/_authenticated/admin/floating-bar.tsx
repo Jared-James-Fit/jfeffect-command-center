@@ -4,10 +4,8 @@ import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { FloatingBarCustomizer } from "@/components/floating-bar-customizer";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
-import { buildInternalNav, resolveStaffRoleTag } from "@/lib/internal-nav";
-import { useDashboardMode } from "@/lib/dashboard-mode";
+import { STAFF_BAR, buildInternalNav, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { withBarActionItems } from "@/lib/floating-bar";
-import { ClipboardList } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
 export const Route = createFileRoute("/_authenticated/admin/floating-bar")({
@@ -16,57 +14,15 @@ export const Route = createFileRoute("/_authenticated/admin/floating-bar")({
 
 function FloatingBarPage() {
   const { role } = useAuth();
-  const [mode] = useDashboardMode();
   const isCoach = role === "coach";
   // Drive the picker from the same shared role-aware registry the sidebar
-  // uses, scoped to the current dashboard mode — so hidden / forbidden
-  // destinations never appear in the customizer.
+  // uses, so hidden / forbidden destinations never appear in the customizer.
   const roleTag = resolveStaffRoleTag(role);
-  const nav = useMemo<NavItem[]>(() => {
-    const items = roleTag
-      ? buildInternalNav(roleTag, { mode: mode === "membership" ? "membership" : "coaching" })
-      : [];
-    return withBarActionItems(items);
-  }, [roleTag, mode]);
+  const nav = useMemo<NavItem[]>(() => withBarActionItems(roleTag ? buildInternalNav(roleTag) : []), [roleTag]);
   const scope = isCoach ? "coach" : "admin";
 
-  const defaults: NavItem[] = (() => {
-    const pick = (to: string) => nav.find((i) => i.to === to);
-    const safe = (items: (NavItem | undefined | null)[]) =>
-      items.filter((i): i is NavItem => Boolean(i && i.to));
-    if (isCoach) {
-      const clients = pick("/admin/clients");
-      const lifts = pick("/admin/lift-videos");
-      const tasks = pick("/admin/tasks");
-      return safe([
-        pick("/admin"),
-        clients ? { ...clients, label: "Clients" } : undefined,
-        pick("/admin/messages"),
-        lifts ? { ...lifts, label: "Lifts" } : undefined,
-        tasks ? { ...tasks, label: "Tasks" } : undefined,
-      ]);
-    }
-    const clients = pick("/admin/clients");
-    const tasks = pick("/admin/tasks");
-    const reviews = pick("/admin/check-in-reviews");
-    const lifts = pick("/admin/lift-videos");
-    const reviewChildren = safe([
-      reviews ? { ...reviews, label: "Check-Ins" } : undefined,
-      lifts ? { ...lifts, label: "Lifts" } : undefined,
-    ]);
-    return safe([
-      pick("/admin"),
-      clients ? { ...clients, label: "Clients" } : undefined,
-      pick("/admin/messages"),
-      {
-        to: "/admin/check-in-reviews",
-        label: "Reviews",
-        icon: ClipboardList,
-        children: reviewChildren.length ? reviewChildren : undefined,
-      },
-      tasks ? { ...tasks, label: "Tasks" } : undefined,
-    ]);
-  })();
+  // The standard bar every staff account starts with (More is in the header).
+  const defaults: NavItem[] = STAFF_BAR;
 
   return (
     <>

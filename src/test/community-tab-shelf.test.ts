@@ -22,7 +22,7 @@ describe("client tab bar: League in the centre", () => {
     expect(visible.some((i) => i.to === MORE_BAR_TO)).toBe(false);
   });
 
-  it("everyone else keeps More in the bar", () => {
+  it("a bar without a header More keeps More as its last slot", () => {
     const visible = resolveVisibleBarItems(["/a", "/b", "/c", "/d", "/e"].map(item));
     expect(visible).toHaveLength(5);
     expect(visible[4].to).toBe(MORE_BAR_TO);
@@ -30,7 +30,7 @@ describe("client tab bar: League in the centre", () => {
 
   it("More opens from the top bar, in place of the gear (the avatar has the same menu)", () => {
     expect(portal).toContain('title="Client Portal" moreInHeader>');
-    expect(shell).toContain('<Button variant="ghost" size="sm" aria-label="More" onClick={() => setMoreOpen(true)}');
+    expect(shell).toContain('<Button variant="outline" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-xl px-0">');
     expect(shell).toContain("resolveVisibleBarItems(bottomItems, { more: !moreInHeader })");
   });
 

@@ -1,16 +1,15 @@
-import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
-import { FINANCE_BOOKS, FINANCE_HOME, FINANCE_PAYMENTS, buildFinanceNav, buildInternalNav, buildInternalNavCollapsed, buildMembershipAdminNav, resolveStaffRoleTag } from "@/lib/internal-nav";
-import { useDashboardMode, setDashboardMode } from "@/lib/dashboard-mode";
+import { FINANCE_BOOKS, FINANCE_HOME, FINANCE_PAYMENTS, STAFF_BAR, buildFinanceNav, buildInternalNav, buildInternalNavCollapsed, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
 import { SummerAssistant } from "@/components/summer/summer-assistant";
 import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
-import { LayoutDashboard, Users, MessagesSquare, BookOpen, Library, Trophy } from "lucide-react";
+import { Users } from "lucide-react";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
 import { StaffMfaGate } from "@/components/staff-mfa-gate";
@@ -23,25 +22,6 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminLayout() {
   const { role, viewOnly, loading } = useAuth();
   const navigate = useNavigate();
-  const pathname = useRouterState({ select: (r) => r.location.pathname });
-  const search = useRouterState({ select: (r) => r.location.search as { tab?: string } | undefined });
-  const [mode] = useDashboardMode();
-  const isMembershipWorkspacePath =
-    pathname.startsWith("/admin/membership") ||
-    pathname.startsWith("/admin/members") ||
-    pathname.startsWith("/admin/member-plans") ||
-    pathname === "/admin/sales/membership" ||
-    pathname === "/admin/legal" ||
-    (pathname === "/admin/communication" && search?.tab === "support-inbox");
-  // Only auto-activate Membership mode when the user lands on a
-  // membership-scoped path. Do NOT auto-exit to Coaching on shared routes —
-  // the top mode switcher (and the sidebar's single "Back to Coaching"
-  // action) are the only ways out. This lets Membership mode persist across
-  // routes like /admin/messages or /admin/programming while an admin is
-  // running the membership workspace.
-  useEffect(() => {
-    if (isMembershipWorkspacePath && mode !== "membership") setDashboardMode("membership");
-  }, [isMembershipWorkspacePath, mode]);
   useEffect(() => {
     if (loading || !role) return;
     if (role === "admin" || role === "coach") return;
@@ -54,74 +34,34 @@ function AdminLayout() {
   }, [role, loading, navigate]);
 
   const isCoach = role === "coach";
-  const isMembership = !isCoach && mode === "membership";
   // Build the sidebar from the shared role-aware internal-nav registry.
   // Falls back to the legacy per-role registries if the role isn't yet
   // mapped (defensive — keeps existing behaviour for unknown future roles).
+  // Membership is a section of this one menu; there is no separate mode.
   const roleTag = resolveStaffRoleTag(role);
   const isOwner = useIsBusinessOwner();
-  const fullNav = isMembership && roleTag === "admin"
-    ? buildMembershipAdminNav()
-    : roleTag
-      ? buildInternalNavCollapsed(roleTag, { mode: "coaching" })
-      : (isCoach ? coachNav : coachingAdminNav);
+  const fullNav = roleTag ? buildInternalNavCollapsed(roleTag) : (isCoach ? coachNav : coachingAdminNav);
   // Owner-only pages (Taxes & Books) stay out of other admins' menus. The
   // finance login keeps them, with its money pages first and the whole admin
   // menu after.
   const nav = viewOnly
     ? [...buildFinanceNav(), ...fullNav]
     : isOwner === false ? withoutOwnerOnly(fullNav) : fullNav;
-  const title = viewOnly ? "Finance" : isCoach ? "Coach" : isMembership ? "Membership Admin" : "Admin";
-  // Use a dedicated "membership" bar scope when in membership mode so the
-  // admin can customize a different floating bar for member-facing ops.
-  const barScope = isCoach ? "coach" : (isMembership ? "admin" : "admin");
+  const title = viewOnly ? "Finance" : isCoach ? "Coach" : "Admin";
+  const barScope = isCoach ? "coach" : "admin";
   const customLayout = useBarLayout(barScope);
 
+  // Every staff phone bar has four plain tabs; More opens from the header
+  // (AppShell `moreInHeader`), the same as the client app.
   const defaultBottom = useMemo(() => {
-    // Derive the mobile bottom bar from the SAME role-aware registry that
-    // drives the sidebar — keeps desktop + mobile permission rules in sync.
-    // Falls back to the legacy registries only if a route isn't present
-    // (defensive — should not happen for these five core destinations).
-    const legacy = isCoach ? coachNav : coachingAdminNav;
-    const pick = (to: string) =>
-      nav.find((i) => i.to === to) ?? legacy.find((i) => i.to === to)!;
     if (viewOnly) {
       // The finance login's phone bar: its home (snap, record, collect, Cleo),
-      // the books, payments and clients; More holds the rest. Clients is a
-      // plain tab (no pop-up of client tools) and every tab is a real path so
-      // it shows as selected.
+      // the books, payments and clients. Every tab is a real path so it shows
+      // as selected.
       return [FINANCE_HOME, FINANCE_BOOKS, FINANCE_PAYMENTS, { to: "/admin/clients", label: "Clients", icon: Users }];
     }
-    if (isCoach) {
-      return [
-        pick("/admin"),
-        { ...pick("/admin/clients"), label: "Clients" },
-        pick("/admin/messages"),
-        { ...pick("/admin/check-in-reviews"), label: "Reviews" },
-        { ...pick("/admin/tasks"), label: "Tasks" },
-      ].filter(Boolean);
-    }
-    if (isMembership) {
-      // Membership-optimized quick bar: Home, Members, Support Inbox,
-      // Programs library, Plan library — the routes admins actually need
-      // when running the JF Membership day-to-day.
-      return [
-        { to: "/admin/membership", label: "Home", icon: LayoutDashboard },
-        { to: "/admin/members", label: "Members", icon: Users },
-        { to: "/admin/communication?tab=support-inbox", label: "Support", icon: MessagesSquare },
-        { to: "/admin/programming", label: "Programs", icon: BookOpen },
-        { to: "/admin/member-plans", label: "Plans", icon: Library },
-      ];
-    }
-    return [
-      pick("/admin"),
-      { ...pick("/admin/clients"), label: "Clients" },
-      { to: "/admin/athlete-records", label: "Records", icon: Trophy },
-      pick("/admin/messages"),
-      // lift reviews moved into the chat, so Reviews is just check-ins: one tap
-      { ...pick("/admin/check-in-reviews"), label: "Reviews" },
-    ];
-  }, [isCoach, isMembership, nav, viewOnly]);
+    return STAFF_BAR;
+  }, [viewOnly]);
 
   const bottomItems = useMemo(() => {
     if (customLayout && customLayout.slots.length > 0) {
@@ -130,13 +70,13 @@ function AdminLayout() {
       // against the collapsed nav alone dropped slots whose route is folded
       // into a workspace group (the real cause of the "5th slot won't save").
       const source = withBarActionItems(
-        mergeNavSources(nav, roleTag ? buildInternalNav(roleTag, { mode: isMembership ? "membership" : "coaching" }) : []),
+        mergeNavSources(nav, roleTag ? buildInternalNav(roleTag) : []),
       );
       const resolved = resolveLayout(customLayout, source);
       if (resolved.length) return resolved;
     }
     return defaultBottom;
-  }, [customLayout, nav, defaultBottom, roleTag, isMembership]);
+  }, [customLayout, nav, defaultBottom, roleTag]);
 
   if (loading || !role) {
     return <FullPageLoader />;
@@ -150,8 +90,8 @@ function AdminLayout() {
 
   return (
     <StaffMfaGate>
-      <AppShell items={nav} bottomItems={bottomItems} title={title}>
-        <AdminTopBar showDashboardMode={!isCoach} />
+      <AppShell items={nav} bottomItems={bottomItems} title={title} moreInHeader>
+        <AdminTopBar />
         {viewOnly && <ViewOnlyStrip />}
         <Outlet />
         {!viewOnly && <TaskPopupGate />}

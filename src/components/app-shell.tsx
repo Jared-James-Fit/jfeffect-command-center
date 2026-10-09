@@ -440,15 +440,14 @@ export function AppShell({
       toast.success(`Unpinned "${label}"`);
     }
   };
-  const isMembershipAdminShell = pinScope === "admin" && title.toLowerCase().includes("membership");
   const navByTo = useMemo(() => {
     const m = new Map<string, NavItem>();
     for (const it of items) m.set(it.to, it);
     return m;
   }, [items]);
   const pinnedItems = useMemo(
-    () => isMembershipAdminShell ? [] : pins.map((to) => navByTo.get(to)).filter(Boolean) as NavItem[],
-    [isMembershipAdminShell, pins, navByTo],
+    () => pins.map((to) => navByTo.get(to)).filter(Boolean) as NavItem[],
+    [pins, navByTo],
   );
   // Sections that contain the currently active route should auto-open.
   const activeGroupLabel = useMemo(() => {
@@ -890,8 +889,9 @@ export function AppShell({
             )}
             <ThemeToggle className="mr-0.5" />
             {moreInHeader ? (
-              <Button variant="ghost" size="sm" aria-label="More" onClick={() => setMoreOpen(true)} className="h-8 w-8 shrink-0 px-0">
-                <Menu className="h-[18px] w-[18px]" />
+              // Big enough to find and hit without looking: every account opens More here.
+              <Button variant="outline" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-xl px-0">
+                <Menu className="h-[22px] w-[22px]" />
               </Button>
             ) : (
               <SettingsMenu
@@ -1533,7 +1533,9 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
     const tabAlias =
       item.to === "/admin/messages"
         ? { path: "/admin/communication", tab: "messages" }
-        : null;
+        : item.to === "/admin/tasks"
+          ? { path: "/admin/content", tab: "tasks" }
+          : null;
     const active =
       pathname === item.to ||
       !!prefixActive ||
@@ -1747,7 +1749,7 @@ function MoreNavSlot({ active, onOpenMore, dense }: { active: boolean; onOpenMor
       )}
       aria-label="More"
     >
-      <MoreHorizontal className={dense ? "h-[18px] w-[18px]" : "h-5 w-5"} />
+      <MoreHorizontal className={dense ? "h-[22px] w-[22px]" : "h-6 w-6"} />
       <span className={cn("w-full px-0 text-center leading-tight tracking-tight", dense ? "text-[9px]" : "text-[9.5px]")}>More</span>
     </button>
   );
