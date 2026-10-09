@@ -76,7 +76,7 @@ function SharedMedia({ media }: { media: CommentMedia }) {
   });
   const ratio = media.width && media.height ? Math.min(Math.max(media.width / media.height, 0.6), 1.6) : 1;
   return (
-    <div className="relative mt-2 overflow-hidden rounded-xl bg-muted" style={{ width: ratio >= 1 ? 240 : Math.round(260 * ratio), maxWidth: "100%", aspectRatio: String(ratio) }}>
+    <div data-pinch-zoom className="relative mt-2 overflow-hidden rounded-xl bg-muted" style={{ width: ratio >= 1 ? 240 : Math.round(260 * ratio), maxWidth: "100%", aspectRatio: String(ratio) }}>
       {url && <img src={url} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" />}
       {media.type === "video" && (
         <span className="absolute inset-0 grid place-items-center">

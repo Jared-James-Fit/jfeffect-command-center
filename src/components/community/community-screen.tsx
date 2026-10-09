@@ -19,6 +19,7 @@ import type { CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/communit
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
+import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
 type Tab = "feed" | "crew" | "you";
 type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
@@ -121,6 +122,9 @@ export function CommunityScreen({
 
   const { data: unit = "lb" } = useViewerUnit(user?.id);
 
+  // The page never zooms (pinch or double-tap); photos and videos pinch-zoom on their own.
+  useMediaPinchZoom(true);
+
   // Swipe right from anywhere to go back: out of a profile to the list, else out of the community.
   const navigate = useNavigate();
   const router = useRouter();
@@ -215,7 +219,7 @@ export function CommunityScreen({
 
   return (
     <>
-    <div ref={rootRef} className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 sm:px-4">
+    <div ref={rootRef} className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 [touch-action:pan-x_pan-y] sm:px-4">
       {scope.kind === "author" ? (
         <Button
           type="button"

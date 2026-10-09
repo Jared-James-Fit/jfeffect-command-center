@@ -577,6 +577,7 @@ function CommentMedia({ c, url, onOpen }: { c: CommunityComment; url: string | n
   return (
     <button
       type="button"
+      data-pinch-zoom
       onClick={() => !c.pending && onOpen(c)}
       className="relative mt-1.5 block overflow-hidden rounded-2xl bg-muted"
       style={{ width: ratio >= 1 ? 200 : Math.round(220 * ratio), maxWidth: "100%", aspectRatio: String(ratio) }}
@@ -801,7 +802,7 @@ function MediaViewer({ c, thumbUrl, onClose }: { c: CommunityComment | null; thu
             </div>
           )
         ) : src ? (
-          <img src={src} alt="" className="max-h-[85dvh] w-full object-contain" />
+          <img data-pinch-zoom src={src} alt="" className="max-h-[85dvh] w-full object-contain" />
         ) : (
           <div className="grid h-64 place-items-center">
             <Loader2 className="h-6 w-6 animate-spin text-white" />
