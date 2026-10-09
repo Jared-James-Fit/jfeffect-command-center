@@ -105,4 +105,26 @@ describe("meal plan reader", () => {
     expect(panel).toContain("<MacroTargetsChart");
     expect(panel).toContain("<MealPlanReader");
   });
+
+  it("keeps coach workout-meal tags and custom labels in the reader", () => {
+    const cases: [string, string, string | undefined, string | undefined][] = [
+      ["Meal 2 (Pre-Workout)", "Meal 2", undefined, "pre"],
+      ["Meal 3 (Post-Workout)", "Meal 3", undefined, "post"],
+      ["Meal 3 (Pre/Post Workout Meal)", "Meal 3", undefined, "pre_post"],
+      ["Meal 4 - post workout", "Meal 4", undefined, "post"],
+      ["Breakfast (Pre-Workout)", "Breakfast", undefined, "pre"],
+      ["Meal 5 (Before bed)", "Meal 5", "Before bed", undefined],
+      ["Meal 2: Pre-Workout (7am)", "Meal 2", "7am", "pre"],
+    ];
+    for (const [header, title, subtitle, timing] of cases) {
+      const [meal] = parseMealPlanText(`${header}\n90 g chicken breast`);
+      expect(meal).toMatchObject({ kind: "meal", title });
+      expect((meal as { subtitle?: string }).subtitle).toBe(subtitle);
+      expect((meal as { timing?: string | null }).timing ?? undefined).toBe(timing);
+    }
+    const reader = readFileSync("src/components/nutrition/MealPlanReader.tsx", "utf8");
+    expect(reader).toContain("<MealTimingBadge");
+    expect(reader).toContain("MEAL_TIMING_HINT[meal.timing]");
+    expect(reader).toContain("TIMING_RING[m.timing]");
+  });
 });

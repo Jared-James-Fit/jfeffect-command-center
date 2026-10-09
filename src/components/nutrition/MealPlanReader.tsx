@@ -10,7 +10,11 @@ import {
   type MealPlanSection,
 } from "@/components/meal-plan-display";
 import { WorkoutMealInfo } from "@/components/nutrition/WorkoutMealInfo";
-import { MEAL_TIMING_HINT } from "@/lib/nutrition-targets/meal-timing";
+import {
+  MEAL_TIMING_HINT,
+  MEAL_TIMING_LABEL,
+  type MealTiming,
+} from "@/lib/nutrition-targets/meal-timing";
 import { useMealPlanView, type MealPlanView } from "@/lib/nutrition-targets/meal-plan-view";
 import { KCAL_PER_GRAM, MACRO_COLOR, formatKcal } from "./macro-palette";
 import { mealMacroNumbers, splitFoodLine } from "@/lib/nutrition-targets/meal-plan-reader";
@@ -215,28 +219,59 @@ function MealSwiper({ meals }: { meals: MealSection[] }) {
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-1.5">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         {meals.map((m, i) => (
           <button
             key={i}
             type="button"
             onClick={() => goTo(i)}
-            aria-label={`Show ${m.title}`}
+            aria-label={`Show ${m.title}${m.timing ? `, ${MEAL_TIMING_LABEL[m.timing]}` : ""}`}
             aria-current={i === active ? "true" : undefined}
             className={cn(
               "grid h-9 min-w-9 place-items-center rounded-full px-2 text-sm font-bold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               i === active
                 ? "bg-primary text-primary-foreground"
                 : "bg-secondary/70 text-muted-foreground hover:text-foreground",
+              m.timing && `ring-2 ring-offset-2 ring-offset-card ${TIMING_RING[m.timing]}`,
             )}
           >
             {i + 1}
           </button>
         ))}
       </div>
+
+      {meals.some((m) => m.timing) && (
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+          {meals.map((m, i) =>
+            m.timing ? (
+              <button
+                key={i}
+                type="button"
+                onClick={() => goTo(i)}
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span aria-hidden className={cn("h-2 w-2 rounded-full", TIMING_DOT[m.timing])} />
+                <span className="font-semibold text-foreground">{MEAL_TIMING_LABEL[m.timing]}</span>
+                <span>{m.title.replace(/\s+/g, " ").trim()}</span>
+              </button>
+            ) : null,
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
+const TIMING_RING: Record<Exclude<MealTiming, null>, string> = {
+  pre: "ring-amber-500",
+  post: "ring-emerald-500",
+  pre_post: "ring-sky-500",
+};
+const TIMING_DOT: Record<Exclude<MealTiming, null>, string> = {
+  pre: "bg-amber-500",
+  post: "bg-emerald-500",
+  pre_post: "bg-sky-500",
+};
 
 /* ---------- Meal card ---------- */
 
