@@ -164,3 +164,31 @@ describe("calendar feed", () => {
     expect(folded.replace(/\r\n /g, "")).toBe("DESCRIPTION:" + "x".repeat(200));
   });
 });
+
+describe("time ranges on the calendar", async () => {
+  const { compactTimeRange, durationLabel } = await import("@/lib/schedule-time");
+  const tz = "America/Winnipeg";
+  it("reads short", () => {
+    expect(compactTimeRange("2026-10-09T14:00:00Z", "2026-10-09T22:00:00Z", tz)).toBe("9 AM–5 PM");
+    expect(compactTimeRange("2026-10-09T15:00:00Z", "2026-10-09T16:30:00Z", tz)).toBe("10–11:30 AM");
+    expect(compactTimeRange("2026-10-09T17:00:00Z", "2026-10-09T18:00:00Z", tz)).toBe("12–1 PM");
+    expect(compactTimeRange("2026-10-09T17:00:00Z", null, tz)).toBe("12 PM");
+  });
+  it("says how long", () => {
+    expect(durationLabel("2026-10-09T14:00:00Z", "2026-10-09T22:00:00Z")).toBe("8 hr");
+    expect(durationLabel("2026-10-09T15:00:00Z", "2026-10-09T16:30:00Z")).toBe("1 hr 30 min");
+    expect(durationLabel("2026-10-09T15:00:00Z", "2026-10-09T15:45:00Z")).toBe("45 min");
+    expect(durationLabel("2026-10-09T15:00:00Z", null)).toBeNull();
+  });
+});
+
+describe("where, in a few words", async () => {
+  const { placeLabel } = await import("@/lib/calendar-sources");
+  it("keeps an address short and names call links", () => {
+    expect(placeLabel("800 Vaughan Ave Unit 404, Selkirk, Manitoba R1A 4R4, Canada")).toBe("800 Vaughan Ave Unit 404");
+    expect(placeLabel("https://meet.google.com/abc-defg-hij")).toBe("Google Meet");
+    expect(placeLabel("https://us02web.zoom.us/j/123")).toBe("Zoom");
+    expect(placeLabel("")).toBeNull();
+    expect(placeLabel(null)).toBeNull();
+  });
+});

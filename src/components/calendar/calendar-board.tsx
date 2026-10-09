@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink, MapPin, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { KIND_META, ctaLabel, type CalendarItem, type CalendarKind } from "@/lib/calendar-sources";
+import { KIND_META, ctaLabel, placeLabel, type CalendarItem, type CalendarKind } from "@/lib/calendar-sources";
+import { compactTimeRange, durationLabel } from "@/lib/schedule-time";
 import { CalendarEmptyState } from "./empty-state";
 
 type ViewMode = "month" | "week" | "day" | "upcoming";
@@ -327,9 +328,17 @@ function WeekGrid({
                     <button
                       type="button"
                       onClick={() => onSelectItem(it)}
-                      className={cn("w-full truncate rounded px-2 py-1 text-left text-[11px] border", KIND_META[it.kind].chip)}
+                      className={cn("w-full rounded px-2 py-1 text-left text-[11px] border", KIND_META[it.kind].chip)}
                     >
-                      {fmtTime(it.startsAt)} {fmtTime(it.startsAt) ? "· " : ""}{showNameFirst(it)}
+                      <span className="block truncate">
+                        {it.startsAt ? `${compactTimeRange(it.startsAt, it.endsAt)} · ` : ""}{showNameFirst(it)}
+                      </span>
+                      {placeLabel(it.location) && (
+                        <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] opacity-75">
+                          <MapPin className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate">{placeLabel(it.location)}</span>
+                        </span>
+                      )}
                     </button>
                   </li>
                 ))}
@@ -447,7 +456,12 @@ function ItemRow({ item, onClick, showClientName }: { item: CalendarItem; onClic
           <Badge variant="outline" className={cn("text-[10px]", KIND_META[item.kind].chip)}>{KIND_META[item.kind].label}</Badge>
           {item.status && <Badge variant="outline" className="text-[10px]">{item.status}</Badge>}
           {showClientName && item.clientName && <span className="text-[11px] text-muted-foreground">{item.clientName}</span>}
-          {item.startsAt && <span className="ml-auto text-xs text-muted-foreground">{fmtTime(item.startsAt)}</span>}
+          {item.startsAt && (
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+              {compactTimeRange(item.startsAt, item.endsAt)}
+              {durationLabel(item.startsAt, item.endsAt) ? ` · ${durationLabel(item.startsAt, item.endsAt)}` : ""}
+            </span>
+          )}
         </div>
         <div className="mt-1 truncate text-sm font-semibold">{item.title}</div>
         {item.subtitle && <div className="mt-0.5 truncate text-xs text-muted-foreground">{item.subtitle}</div>}
@@ -481,6 +495,7 @@ function EventDetailSheet({
                 {new Date(item.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
                 {item.startsAt && ` · ${fmtTime(item.startsAt)}`}
                 {item.endsAt && ` – ${fmtTime(item.endsAt)}`}
+                {item.startsAt && durationLabel(item.startsAt, item.endsAt) ? ` (${durationLabel(item.startsAt, item.endsAt)})` : ""}
               </SheetDescription>
             </SheetHeader>
             <div className="mt-4 space-y-3 text-sm">

@@ -31,6 +31,8 @@ export type CalendarItem = {
   endsAt?: string | null;
   title: string;
   subtitle?: string | null;
+  /** Where it happens (address, or "Google Meet"), for chips and rows. */
+  location?: string | null;
   importance?: "Low" | "Medium" | "High" | "Critical" | null;
   status?: string | null;
   clientId?: string | null;
@@ -44,6 +46,19 @@ export type CalendarItem = {
   } | null;
   raw?: any;
 };
+
+/** Where, in a few words: an address's first line, or the kind of call for a link. */
+export function placeLabel(location: string | null | undefined): string | null {
+  const loc = (location ?? "").trim();
+  if (!loc) return null;
+  if (/^https?:\/\//i.test(loc)) {
+    if (/zoom\./i.test(loc)) return "Zoom";
+    if (/meet\.google/i.test(loc)) return "Google Meet";
+    if (/teams\.microsoft/i.test(loc)) return "Teams";
+    return "Video link";
+  }
+  return loc.split(",")[0].trim() || null;
+}
 
 export const KIND_META: Record<CalendarKind, { label: string; chip: string; dot: string }> = {
   event:          { label: "Event",        chip: "bg-primary/15 text-primary border-primary/30",                dot: "bg-primary" },
@@ -264,6 +279,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         date: dt,
         title: e.name,
         subtitle: [e.event_type, timeFromTimeStr(e.start_time), e.location].filter(Boolean).join(" · "),
+        location: e.location ?? null,
         importance: e.importance,
         status: e.status,
         href: { to: "/portal/events/$id", params: { id: e.id } },
@@ -292,6 +308,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         endsAt: a.ends_at,
         title: a.title || a.appointment_type || "Appointment",
         subtitle: [a.appointment_type, a.location].filter(Boolean).join(" · "),
+        location: a.location || (a.meet_link ? "Google Meet" : null),
         status: a.status,
         href: null,
         raw: a,
@@ -307,6 +324,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
         endsAt: s.ends_at ?? null,
         title: s.title || "PT Session",
         subtitle: [s.session_type, s.location?.split(",")[0]].filter(Boolean).join(" · "),
+        location: s.location ?? null,
         status: s.status,
         // The Schedule page adds "Need to change it?" to the sheet; no self-link.
         href: null,
@@ -635,6 +653,7 @@ export function useAdminCalendarSources(filters: AdminCalendarFilters) {
         date: e.event_date,
         title: e.name,
         subtitle: [e.event_type, timeFromTimeStr(e.start_time), e.location].filter(Boolean).join(" · "),
+        location: e.location ?? null,
         importance: e.importance,
         status: e.status,
         clientId: cids[0] ?? null,
@@ -656,6 +675,7 @@ export function useAdminCalendarSources(filters: AdminCalendarFilters) {
         endsAt: a.ends_at,
         title: a.title || a.appointment_type || "Appointment",
         subtitle: [a.appointment_type, a.location].filter(Boolean).join(" · "),
+        location: a.location || (a.meet_link ? "Google Meet" : null),
         status: a.status,
         clientId: a.client_id,
         clientName: c?.full_name ?? a.external_name ?? null,
@@ -676,6 +696,7 @@ export function useAdminCalendarSources(filters: AdminCalendarFilters) {
         endsAt: s.ends_at ?? null,
         title: s.title || "PT Session",
         subtitle: [s.session_type, s.location?.split(",")[0]].filter(Boolean).join(" · "),
+        location: s.location ?? null,
         status: s.status,
         clientId: s.client_id,
         clientName: c?.full_name ?? null,
@@ -715,6 +736,7 @@ export function useAdminCalendarSources(filters: AdminCalendarFilters) {
           endsAt: g.allDay ? null : g.end,
           title: g.summary || "(busy)",
           subtitle: g.location || (g.allDay ? "All day" : null),
+          location: g.location || (g.hangoutLink ? "Google Meet" : null),
           status: null,
           clientId: null,
           clientName: "Google Calendar",
