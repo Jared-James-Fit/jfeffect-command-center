@@ -187,6 +187,8 @@ export type CommunityPost = {
   pinned_comment_id?: string | null;
   /** Up to 2 comments for the feed: the pinned one first, then the newest. */
   comment_preview?: CommentPreview[];
+  /** A poll on a coach's text post (null / missing = none). */
+  poll?: CommunityPoll | null;
 };
 
 /** A comment line under a post in the feed (Instagram style). */
@@ -1168,4 +1170,48 @@ export function postPointsHint(
   if (status.week_count >= status.week_cap)
     return { tone: "muted", text: `Post points maxed this week (${status.week_cap}/${status.week_cap}). They reset Monday.` };
   return { tone: "earn", text: opts.lockIn ? `+${status.points} league points when you finish 🔥` : `+${status.points} league points for posting 🔥` };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Polls                                                              */
+/* ------------------------------------------------------------------ */
+
+export const POLL_MIN_OPTIONS = 2;
+export const POLL_MAX_OPTIONS = 4;
+export const POLL_OPTION_MAX = 60;
+
+export type PollOption = { id: string; label: string; votes: number };
+export type CommunityPoll = {
+  options: PollOption[];
+  total: number;
+  my_vote: string | null;
+  /** Who picked what, by option id: only for the poster and the coach. */
+  voters?: Record<string, CommunityAuthor[]> | null;
+};
+
+/** The poll after the viewer votes for `optionId` (null takes the vote back): for the instant update. */
+export function votePoll(poll: CommunityPoll, optionId: string | null): CommunityPoll {
+  if (poll.my_vote === optionId) return poll;
+  const options = poll.options.map((o) => ({
+    ...o,
+    votes: Math.max(0, o.votes + (o.id === optionId ? 1 : 0) - (o.id === poll.my_vote ? 1 : 0)),
+  }));
+  const total = Math.max(0, poll.total + (optionId && !poll.my_vote ? 1 : !optionId && poll.my_vote ? -1 : 0));
+  return { ...poll, options, total, my_vote: optionId };
+}
+
+/** Whole-number percentages, 0s when nobody voted. Plain rounding: equal votes always show the same number. */
+export function pollPercents(poll: Pick<CommunityPoll, "options" | "total">): number[] {
+  if (poll.total <= 0) return poll.options.map(() => 0);
+  return poll.options.map((o) => Math.round((o.votes / poll.total) * 100));
+}
+
+/** The options a coach typed, ready to post: trimmed, blanks dropped; null when it isn't a valid poll yet. */
+export function cleanPollOptions(options: string[]): { ok: true; options: string[] } | { ok: false; reason: string } {
+  const opts = options.map((o) => o.trim()).filter(Boolean);
+  if (opts.length < POLL_MIN_OPTIONS) return { ok: false, reason: "Add at least 2 options" };
+  if (opts.length > POLL_MAX_OPTIONS) return { ok: false, reason: "Up to 4 options" };
+  if (opts.some((o) => o.length > POLL_OPTION_MAX)) return { ok: false, reason: `Keep each option to ${POLL_OPTION_MAX} characters` };
+  if (new Set(opts.map((o) => o.toLowerCase())).size < opts.length) return { ok: false, reason: "Each option needs to be different" };
+  return { ok: true, options: opts };
 }
