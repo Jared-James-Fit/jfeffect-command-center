@@ -83,6 +83,7 @@ import {
 import { groupFormHistory, planFormMessages } from "@/lib/form-message-presentation";
 import { playAppSound, registerOpenThread } from "@/lib/app-sounds";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
+import { StaffInviteChatCard } from "@/components/staff-invite-chat-card";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -462,6 +463,9 @@ function AttachmentView({
 }) {
   if (att.kind === "community_post" && att.post_id) {
     return <CommunityPostChatCard att={att as PostCardAttachment} mine={mine} staff={role !== "client"} />;
+  }
+  if (att.kind === "staff_invite") {
+    return <StaffInviteChatCard att={att as any} mine={mine} />;
   }
   if (att.kind === "checkin_request" && att.checkin_submission_id && att.checkin_task_type) {
     return (

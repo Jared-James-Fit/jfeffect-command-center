@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { expenseTaxView, fmtCad } from "@/lib/business-tax";
 import { businessToday } from "@/lib/billing-schedule";
 import { deleteExpense, saveExpense } from "@/lib/business-books.functions";
+import { useBooksMode } from "./books-mode";
 import { RECEIPT_ACCEPT, receiptSignedUrl, uploadReceiptFile } from "@/lib/receipt-upload";
 
 type Form = {
@@ -69,6 +70,7 @@ export function ExpenseDialog({
 }) {
   const save = useServerFn(saveExpense);
   const remove = useServerFn(deleteExpense);
+  const canDelete = useBooksMode() === "owner";
   const [form, setForm] = useState<Form>(() => toForm(expense));
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -340,7 +342,7 @@ export function ExpenseDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">
-          {expense ? (
+          {expense && canDelete ? (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="ghost" className="text-destructive hover:text-destructive" disabled={busy}>

@@ -241,7 +241,7 @@ export function AppShell({ items, bottomItems: customBottomItems, title, childre
   useExerciseAliasIndex();
   useSalesRealtime();
   const { signOut, user, role } = useAuth();
-  const isStaffRole = !!role && role !== "client" && role !== "member";
+  const isStaffRole = !!role && role !== "client" && role !== "member" && role !== "finance";
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });

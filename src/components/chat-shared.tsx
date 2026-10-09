@@ -26,6 +26,7 @@ import { chatUrlCache, useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
 import { keepChatVideo } from "@/lib/chat-video-store";
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
+import { StaffInviteChatCard } from "@/components/staff-invite-chat-card";
 
 /* ------------------------------- Attachment Types (shared shape) ------------------------------- */
 
@@ -43,7 +44,7 @@ export type SharedAttachment = {
   width?: number;
   height?: number;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "community_post";
+  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "community_post" | "staff_invite";
   fallback_emoji?: string;
   // community_post: the post it opens (a reply from the post's Message button)
   post_id?: string;
@@ -768,6 +769,9 @@ export function AttachmentView({
   }
   if (att.kind === "community_post" && att.post_id) {
     return <PostCardInChat att={att} mine={mine} />;
+  }
+  if (att.kind === "staff_invite") {
+    return <StaffInviteChatCard att={att as any} mine={mine} />;
   }
   if (att.kind === "sound") {
     return (

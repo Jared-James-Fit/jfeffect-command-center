@@ -23,8 +23,8 @@ export const getBooksData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
-    const { assertBusinessOwner, loadBooksData } = await import("@/lib/business-books.server");
-    await assertBusinessOwner(supabase, userId);
+    const { assertBooksAccess, loadBooksData } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.read");
     return loadBooksData(supabase);
   });
 
@@ -52,8 +52,8 @@ export const saveExpense = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ExpenseInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertBusinessOwner } = await import("@/lib/business-books.server");
-    await assertBusinessOwner(supabase, userId);
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const row = {
       expense_date: data.expense_date,
       vendor: data.vendor || null,
@@ -102,8 +102,8 @@ export const markExpensesReviewed = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertBusinessOwner } = await import("@/lib/business-books.server");
-    await assertBusinessOwner(supabase, userId);
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const { error } = await supabase.from("business_expenses").update({ status: "reviewed" }).in("id", data.ids);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -150,7 +150,7 @@ export const scanReceipt = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const server = await import("@/lib/business-books.server");
-    await server.assertBusinessOwner(supabase, userId);
+    await server.assertBooksAccess(context as any, "finance.record");
     const today = businessToday();
 
     let read: import("@/lib/business-books.server").ReceiptRead | null = null;
@@ -216,8 +216,8 @@ export const saveTaxSettings = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SettingsInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertBusinessOwner } = await import("@/lib/business-books.server");
-    await assertBusinessOwner(supabase, userId);
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const { error } = await supabase
       .from("business_tax_settings")
       .upsert({ id: true, ...data, gst_number: data.gst_number || null, accountant_name: data.accountant_name || null, notes: data.notes || null, updated_at: new Date().toISOString(), updated_by: userId });
@@ -240,8 +240,8 @@ export const addTaxPayment = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => PaymentInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertBusinessOwner } = await import("@/lib/business-books.server");
-    await assertBusinessOwner(supabase, userId);
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const { error } = await supabase.from("business_tax_payments").insert({
       ...data,
       period_label: data.period_label || null,
@@ -272,8 +272,8 @@ export const syncStripeFees = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ year: z.number().int().min(2020).max(2100) }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    const { assertBusinessOwner } = await import("@/lib/business-books.server");
-    await assertBusinessOwner(supabase, userId);
+    const { assertBooksAccess } = await import("@/lib/business-books.server");
+    await assertBooksAccess(context as any, "finance.record");
     const { stripeFetch, getStripeKeyForMode } = await import("@/lib/stripe.server");
     const { aggregateStripeFees, stripeFeesExternalKey } = await import("@/lib/stripe-fees");
     const { MONTH_NAMES } = await import("@/lib/business-tax");

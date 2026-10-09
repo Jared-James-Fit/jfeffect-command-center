@@ -1,6 +1,8 @@
 /**
  * Server-side loading for Taxes & Books and Cleo. Every query runs on
- * the caller's (RLS-scoped) client, so only admins ever get rows back.
+ * the caller's (RLS-scoped) client, so only the owner and finance logins get
+ * rows back. Payer and offer names come from books_labels() and open sales
+ * from books_open_sales(): finance can't read client, member or purchase rows.
  */
 import type { BooksData, ExpenseRow, LedgerRowIn, MemberLedgerRowIn, OpenSaleRow, TaxPaymentRow, TaxSettingsRow } from "@/lib/business-books";
 import { booksYears, normalizeRevenue } from "@/lib/business-books";
@@ -28,6 +30,25 @@ export async function isBusinessOwner(supabase: any, userId: string): Promise<bo
 export async function assertBusinessOwner(supabase: any, userId: string) {
   await assertAdmin(supabase, userId);
   if (!(await isBusinessOwner(supabase, userId))) throw new Error("Taxes & Books is private to the business owner.");
+}
+
+/**
+ * Read or record in the books: the business owner, or a finance login with
+ * the permission (MFA-verified, see has_permission). Deleting stays with the
+ * owner (assertBusinessOwner). Returns who is acting.
+ */
+export async function assertBooksAccess(
+  ctx: { supabase: any; userId: string; claims?: Record<string, any> | null },
+  perm: "finance.read" | "finance.record",
+): Promise<"owner" | "finance"> {
+  if (await isBusinessOwner(ctx.supabase, ctx.userId)) return "owner";
+  const { data: roles } = await ctx.supabase.from("user_roles").select("role").eq("user_id", ctx.userId);
+  if (!(roles ?? []).some((r: any) => r.role === "finance")) {
+    throw new Error("Taxes & Books is private to the business owner.");
+  }
+  const { assertPermission } = await import("@/lib/permissions.server");
+  await assertPermission(ctx, perm);
+  return "finance";
 }
 
 function must<T>(res: { data: T; error: any }, what: string): T {
@@ -66,6 +87,25 @@ function toOpenSales(rows: any[]): OpenSaleRow[] {
     .filter((o) => o.outstandingMinor > 0);
 }
 
+type BooksLabels = { clients: Record<string, string | null>; purchases: Record<string, string | null>; members: Record<string, string | null> };
+
+/** Payer and offer names for the ledger rows (books_labels, gated on finance.read). */
+async function loadBooksLabels(
+  supabase: any,
+  ledger: Array<{ client_id?: string | null; purchase_id?: string | null }>,
+  members: Array<{ member_id?: string | null }>,
+): Promise<BooksLabels> {
+  const uniq = (xs: Array<string | null | undefined>) => Array.from(new Set(xs.filter((x): x is string => !!x)));
+  const { data, error } = await supabase.rpc("books_labels", {
+    _client_ids: uniq(ledger.map((r) => r.client_id)),
+    _purchase_ids: uniq(ledger.map((r) => r.purchase_id)),
+    _member_ids: uniq(members.map((r) => r.member_id)),
+  });
+  // Names are a nicety: the numbers are still right without them.
+  if (error || !data) return { clients: {}, purchases: {}, members: {} };
+  return { clients: data.clients ?? {}, purchases: data.purchases ?? {}, members: data.members ?? {} };
+}
+
 export async function loadBooksData(supabase: any): Promise<BooksData> {
   const asOf = businessToday();
   const [settingsRes, ledgerRes, memberRes, expRes, payRes, openRes] = await Promise.all([
@@ -73,28 +113,32 @@ export async function loadBooksData(supabase: any): Promise<BooksData> {
     supabase
       .from("payment_ledger")
       .select(
-        "id, txn_type, method, amount_minor, tax_minor, currency, transaction_date, voided, reversal_of, stripe_mode, stripe_payment_intent_id, stripe_checkout_session_id, stripe_invoice_id, external_reference, receipt_number, clients(full_name), purchase_records(offer_name)",
+        "id, txn_type, method, amount_minor, tax_minor, currency, transaction_date, voided, reversal_of, stripe_mode, stripe_payment_intent_id, stripe_checkout_session_id, stripe_invoice_id, external_reference, receipt_number, client_id, purchase_id",
       )
       .order("transaction_date", { ascending: true })
       .limit(10000),
     supabase
       .from("member_payment_ledger")
-      .select("id, amount_cents, currency, payment_date, status, payment_method, stripe_mode, service_product, stripe_payment_intent_id, app_members(full_name)")
+      .select("id, amount_cents, currency, payment_date, status, payment_method, stripe_mode, service_product, stripe_payment_intent_id, member_id")
       .limit(5000),
     supabase.from("business_expenses").select("*").order("expense_date", { ascending: false }).order("created_at", { ascending: false }).limit(10000),
     supabase.from("business_tax_payments").select("*").order("paid_on", { ascending: false }).limit(1000),
-    supabase
-      .from("purchase_records")
-      .select("id, offer_name, payment_status, amount_outstanding_cents, full_payable_amount, amount_paid, created_at, clients(full_name)")
-      .in("payment_status", OPEN_SALE_STATUSES)
-      .is("archived_at", null)
-      .order("created_at", { ascending: false })
-      .limit(200),
+    supabase.rpc("books_open_sales", { _statuses: OPEN_SALE_STATUSES }),
   ]);
 
   const settings = must(settingsRes, "tax settings") as TaxSettingsRow | null;
-  const ledger = must(ledgerRes, "payments") as LedgerRowIn[];
-  const members = (memberRes.error ? [] : memberRes.data ?? []) as MemberLedgerRowIn[];
+  const ledgerRaw = (must(ledgerRes, "payments") ?? []) as Array<LedgerRowIn & { client_id?: string | null; purchase_id?: string | null }>;
+  const membersRaw = (memberRes.error ? [] : memberRes.data ?? []) as Array<MemberLedgerRowIn & { member_id?: string | null }>;
+  const labels = await loadBooksLabels(supabase, ledgerRaw, membersRaw);
+  const ledger: LedgerRowIn[] = ledgerRaw.map(({ client_id, purchase_id, ...r }) => ({
+    ...r,
+    clients: client_id ? { full_name: labels.clients[client_id] ?? null } : null,
+    purchase_records: purchase_id ? { offer_name: labels.purchases[purchase_id] ?? null } : null,
+  }));
+  const members: MemberLedgerRowIn[] = membersRaw.map(({ member_id, ...r }) => ({
+    ...r,
+    app_members: member_id ? { full_name: labels.members[member_id] ?? null } : null,
+  }));
   const expenses = ((must(expRes, "expenses") ?? []) as ExpenseRow[]).map((e) => ({
     ...e,
     amount_minor: Number(e.amount_minor),
@@ -102,7 +146,22 @@ export async function loadBooksData(supabase: any): Promise<BooksData> {
     business_use_pct: Number(e.business_use_pct),
   }));
   const taxPayments = ((must(payRes, "tax payments") ?? []) as TaxPaymentRow[]).map((p) => ({ ...p, amount_minor: Number(p.amount_minor) }));
-  const openSales = toOpenSales((openRes.error ? [] : openRes.data ?? []) as any[]);
+  const openSales: OpenSaleRow[] = ((openRes.error ? [] : openRes.data ?? []) as any[])
+    .map((p) => {
+      const outstanding =
+        p.amount_outstanding_cents != null
+          ? Number(p.amount_outstanding_cents)
+          : Math.max(0, Math.round((Number(p.full_payable_amount) || 0) * 100) - Math.round((Number(p.amount_paid) || 0) * 100));
+      return {
+        id: p.id,
+        client: p.client_full_name ?? null,
+        offer: p.offer_name ?? null,
+        status: p.payment_status ?? null,
+        outstandingMinor: outstanding,
+        createdOn: p.created_at ? String(p.created_at).slice(0, 10) : null,
+      };
+    })
+    .filter((o) => o.outstandingMinor > 0);
 
   const revenue = normalizeRevenue(ledger ?? [], members);
   const partial = { asOf, revenue, expenses, taxPayments };
