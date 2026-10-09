@@ -60,11 +60,11 @@ describe("the League tab", () => {
     expect(swipe).toContain("if (!remember) return;");
     expect(card).toContain("data-standing={c.key}");
   });
-  it("the race is for the Top 10: the card shows 5, See top 10 opens 6-10 in place, you're always shown; every row opens that athlete", () => {
+  it("the race is for the Top 10: the card shows the Top 5 and you; Full standings has everyone; every row opens that athlete", () => {
     expect(card).toContain("Number(r.rank)<=10");
-    expect(card).toContain("const shownTo = showTen ? 10 : 5;");
+    expect(card).toContain("const shownTo = 5;");
     expect(card).toContain("[...top10.slice(3, shownTo), ...(outside && leagueMe ? [leagueMe] : [])]");
-    expect(card).toContain('{showTen ? "Show top 5" : "See top 10"}');
+    expect(card).not.toContain("See top 10");
     expect(card).toContain("pts to Top 10");
     expect(card).toContain("onClick={() => openRankings(r.client_id)}");
   });

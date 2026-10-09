@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Info, Trophy, Medal, Zap, ChevronRight, ChevronDown, Scale, Crown } from "lucide-react";
+import { Info, Trophy, Medal, Zap, ChevronRight, Scale, Crown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { Button } from "@/components/ui/button";
@@ -78,11 +78,10 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [], le
   useEffect(() => { const h=()=>setOpen("levels"); window.addEventListener("jf-open-athlete-levels",h); return () => window.removeEventListener("jf-open-athlete-levels",h); }, []);
 
   const openRankings = (athlete: string | null = null) => { setSelectedLeagueAthlete(athlete); setOpen("rankings"); };
-  // The race is for the Top 10. The card shows the Top 5, "See top 10" opens 6–10 in
-  // place, and Full standings has everyone. You're always shown if you're below the list.
-  const [showTen, setShowTen] = useState(false);
+  // The race is for the Top 10. The card shows the Top 5 (and you, if you're below it);
+  // Full standings has everyone.
   const top10 = leagueRows.filter(r=>r.qualified && r.rank!=null && Number(r.rank)<=10).sort((a,b)=>Number(a.rank)-Number(b.rank));
-  const shownTo = showTen ? 10 : 5;
+  const shownTo = 5;
   const outside = !!leagueMe?.qualified && Number(leagueMe.rank) > shownTo;
   const outsideTen = !!leagueMe?.qualified && Number(leagueMe.rank) > 10;
   const gapToTen = outsideTen && top10.at(-1) ? Math.max(0, leagueScore(top10.at(-1)) - leagueScore(leagueMe)) : 0;
@@ -128,11 +127,11 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [], le
           })}
         </div>
       )}
-      {/* 4th–5th (or 4th–10th), then you if you're below the list */}
+      {/* 4th and 5th, then you if you're below them */}
       {(top10.length > 3 || outside) && (
         <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
           {[...top10.slice(3, shownTo), ...(outside && leagueMe ? [leagueMe] : [])].map((r) => (
-            <li key={r.client_id} className={cn(showTen && Number(r.rank) > 10 && "border-t-2 border-dashed border-primary/40")}>
+            <li key={r.client_id}>
               <button type="button" onClick={() => openRankings(r.client_id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
                 <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{r.rank}</span>
                 <span className="min-w-0 flex-1 truncate font-semibold">{r.is_me ? "You" : r.display_name}</span>
@@ -144,16 +143,9 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [], le
         </ol>
       )}
       <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
-        <div className={cn("grid gap-2", top10.length > 5 ? "grid-cols-2" : "grid-cols-1")}>
-          {top10.length > 5 && (
-            <button type="button" onClick={() => setShowTen((v) => !v)} aria-expanded={showTen} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold active:bg-muted">
-              {showTen ? "Show top 5" : "See top 10"} <ChevronDown className={cn("h-4 w-4 transition-transform", showTen && "rotate-180")} />
-            </button>
-          )}
-          <button type="button" onClick={() => openRankings()} className="flex min-h-11 items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
-            Full standings{rankedCount > 5 ? ` · ${rankedCount}` : ""} <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+        <button type="button" onClick={() => openRankings()} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
+          Full standings{rankedCount > 5 ? ` · ${rankedCount}` : ""} <ChevronRight className="h-4 w-4" />
+        </button>
         <LeagueRecapHomeTile variant="mini" />
       </div>
     </div>
