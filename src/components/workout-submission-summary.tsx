@@ -18,6 +18,7 @@ import { WorkoutPointsCard } from "@/components/records/workout-points-card";
 import { SCOPE_LABEL, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLabel, topScope, weightRecordLabel } from "@/lib/training-records";
 import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
+import { RecapPostFooter } from "@/components/community/recap-post";
 
 // The share studio (camera, cards, upload) is only fetched the first time
 // someone taps Share workout, so the recap itself stays light.
@@ -392,20 +393,14 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}
         >
           {completionId ? (
-            // Done is the main action after training; sharing stays one tap away.
-            <div className="grid w-full grid-cols-[1fr_1.35fr] gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-12 rounded-xl text-sm font-bold"
-                onClick={() => { setShareMounted(true); setShareOpen(true); }}
-              >
-                <Share2 className="mr-1.5 h-4 w-4" />Share
-              </Button>
-              <Button type="button" className="h-12 rounded-xl text-sm font-black" onClick={() => { onOpenChange(false); onClose?.(); }}>
-                Done
-              </Button>
-            </div>
+            // Right after training is when they're proudest: posting is one tap
+            // (with what it earns); the camera opens the full studio.
+            <RecapPostFooter
+              completionId={completionId}
+              completedAt={workoutDate ?? null}
+              onDone={() => { onOpenChange(false); onClose?.(); }}
+              onStudio={() => { setShareMounted(true); setShareOpen(true); }}
+            />
           ) : (
             <>
               <div className="grid w-full grid-cols-2 gap-2">

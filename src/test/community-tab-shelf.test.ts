@@ -76,3 +76,29 @@ describe("Home's community shelf", () => {
     expect(tile).not.toContain('<div className="h-full w-full bg-muted" />');
   });
 });
+
+describe("Home order: what you do today, then what you check", () => {
+  const home = read("src/routes/_authenticated/portal/index.tsx");
+  const at = (s: string) => home.indexOf(s);
+  it("Today, the crew, the weigh-in, then the boards; water (few log it) below the coaching cards", () => {
+    const order = ["<UpcomingScheduleCard", "<CommunityHomeStrip", "<BodyweightSummaryCard", "<AthleteLevelCard", "<LeagueRecapHomeTile", "<StrengthBoardCard", "<ProgressSummaryCard", "<HomeWaterCard"];
+    const idx = order.map(at);
+    expect(idx.every((i) => i > 0)).toBe(true);
+    expect([...idx].sort((a, b) => a - b)).toEqual(idx);
+  });
+});
+
+describe("the recap's one-tap post", () => {
+  const footer = read("src/components/community/recap-post.tsx");
+  it("posts the workout card to the crew, no caption needed", () => {
+    expect(footer).toContain('saveCommunityPost({ completionId, caption: "", visibility: "community", media: { action: "keep" } })');
+  });
+  it("says what it earns only when it really earns (DB rule: recent workout, 1 a day, 2 a week)", () => {
+    expect(footer).toContain('const earn = hint?.tone === "earn" && points ? points.points : 0;');
+    expect(footer).toContain("{earn > 0 && <span");
+  });
+  it("a lock-in or an earlier post: says where it is, Done takes over", () => {
+    expect(footer).toContain('"Your lock-in now has your numbers"');
+    expect(footer).toContain('existing.visibility === "coach"');
+  });
+});
