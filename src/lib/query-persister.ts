@@ -8,7 +8,8 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // data is mutable operational data; rehydrating a disk snapshot can hide a
 // newly created exercise until the stale snapshot expires.
 // v5 evicts persisted task lists (shared across devices, see below).
-export const QUERY_PERSIST_BUSTER = "v5";
+// v6 evicts persisted unread/thread lists that could light stale nav badges.
+export const QUERY_PERSIST_BUSTER = "v6";
 export const QUERY_PERSIST_KEY = "jfeffect-rq-cache";
 export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
@@ -26,6 +27,13 @@ const DO_NOT_PERSIST_PREFIXES = [
   "tasks",
   "messages",
   "thread",
+  // Unread state behind the nav badges. Keys aren't per-user and a disk
+  // snapshot is up to 24h old, so a restored copy could light a badge for
+  // another account on the same phone or for chats already read.
+  "direct-threads",
+  "crew-threads",
+  "community-activity",
+  "client-nav-badges",
   "conversation",
   "notifications",
   "event-popup-",
