@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SessionActionsSheet, type ActionSession } from "@/components/schedule/session-actions-sheet";
-import { useGoogleCalendarStatus } from "@/lib/calendar-sources";
+import { placeLabel, useGoogleCalendarStatus } from "@/lib/calendar-sources";
 import { listGoogleEventsRange } from "@/lib/google-cal.functions";
 import { addDaysISO, deviceTodayISO, fmtWallClock } from "@/lib/schedule-time";
 import { WeekStrip, nextSevenDays } from "@/components/calendar/week-strip";
@@ -20,13 +20,16 @@ type Session = ActionSession & { client: { full_name: string | null } | null };
 
 type Row =
   | { kind: "session"; key: string; sort: string; s: Session }
-  | { kind: "appointment"; key: string; sort: string; title: string; who: string | null; time: string }
-  | { kind: "event"; key: string; sort: string; title: string; time: string | null; id: string }
-  | { kind: "google"; key: string; sort: string; title: string; time: string | null; link?: string };
+  | { kind: "appointment"; key: string; sort: string; title: string; who: string | null; time: string; end: string | null; place: string | null }
+  | { kind: "event"; key: string; sort: string; title: string; time: string | null; end: string | null; id: string }
+  | { kind: "google"; key: string; sort: string; title: string; time: string | null; end: string | null; place: string | null; link?: string };
 
 function localDateOf(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function placeOf(location: string | null | undefined, meetLink?: string | null): string | null {
+  return placeLabel(location) ?? (meetLink ? "Google Meet" : null);
 }
 function clock(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -37,6 +40,16 @@ function readGooglePref() {
   } catch {
     return false;
   }
+}
+
+/** Start over end, the same for every row, so lengths are comparable at a glance. */
+function TimeColumn({ start, end, muted }: { start: string | null; end: string | null; muted?: boolean }) {
+  return (
+    <div className="w-[62px] shrink-0 text-right tabular-nums">
+      <div className={cn("text-xs", muted ? "font-semibold text-muted-foreground" : "font-bold")}>{start ?? "All day"}</div>
+      {start && end && <div className="text-[10px] text-muted-foreground">{end}</div>}
+    </div>
+  );
 }
 
 const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
@@ -91,7 +104,7 @@ export function DashboardScheduleCard() {
     queryFn: async () => {
       const { data } = await supabase
         .from("appointments")
-        .select("id, title, appointment_type, starts_at, external_name, client:clients(full_name)")
+        .select("id, title, appointment_type, starts_at, ends_at, location, meet_link, external_name, client:clients(full_name)")
         .eq("status", "Scheduled")
         .gte("starts_at", windowStart)
         .lt("starts_at", windowEnd);
@@ -104,7 +117,7 @@ export function DashboardScheduleCard() {
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data } = await (supabase.from("events") as any)
-        .select("id, name, event_date, start_time, status")
+        .select("id, name, event_date, start_time, end_time, status")
         .in("status", ["Active", "Draft"])
         .gte("event_date", today)
         .lte("event_date", lastDay);
@@ -166,6 +179,8 @@ export function DashboardScheduleCard() {
         title: a.title || a.appointment_type || "Appointment",
         who: a.client?.full_name ?? a.external_name ?? null,
         time: clock(a.starts_at),
+        end: a.ends_at ? clock(a.ends_at) : null,
+        place: placeOf(a.location, a.meet_link),
       });
     }
     for (const e of events) {
@@ -175,6 +190,7 @@ export function DashboardScheduleCard() {
         sort: e.start_time ?? "00:00",
         title: e.name,
         time: e.start_time ? fmtWallClock(e.start_time) : null,
+        end: e.start_time && e.end_time ? fmtWallClock(e.end_time) : null,
         id: e.id,
       });
     }
@@ -188,6 +204,8 @@ export function DashboardScheduleCard() {
           sort: allDay ? "00:00" : new Date(g.start).toTimeString().slice(0, 5),
           title: g.summary || "Busy",
           time: allDay ? null : clock(g.start),
+          end: allDay || !g.end ? null : clock(g.end),
+          place: placeOf(g.location, g.hangoutLink),
           link: g.htmlLink,
         });
       }
@@ -299,24 +317,40 @@ export function DashboardScheduleCard() {
                   </button>
                 ) : r.kind === "appointment" ? (
                   <Link to="/admin/calendar" search={{ tab: "upcoming" } as any} className="flex items-center gap-3 py-2.5">
-                    <div className="w-[62px] shrink-0 text-right text-xs font-bold tabular-nums">{r.time}</div>
+                    <TimeColumn start={r.time} end={r.end} />
                     <span className="h-8 w-1 shrink-0 rounded-full bg-blue-400" aria-hidden />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-bold">{r.who ?? r.title}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">{r.title}</div>
+                      <div className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+                        <span className="truncate">{r.title}</span>
+                        {r.place && (
+                          <>
+                            <MapPin className="ml-1 h-3 w-3 shrink-0" />
+                            <span className="truncate">{r.place}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </Link>
                 ) : r.kind === "event" ? (
                   <Link to="/admin/events/$id" params={{ id: r.id }} className="flex items-center gap-3 py-2.5">
-                    <div className="w-[62px] shrink-0 text-right text-xs font-bold tabular-nums">{r.time ?? "All day"}</div>
+                    <TimeColumn start={r.time} end={r.end} />
                     <span className="h-8 w-1 shrink-0 rounded-full bg-primary" aria-hidden />
                     <div className="min-w-0 flex-1 truncate text-sm font-bold">{r.title}</div>
                   </Link>
                 ) : (
-                  <a href={r.link} target="_blank" rel="noreferrer" className="flex items-center gap-3 py-2 opacity-80">
-                    <div className="w-[62px] shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{r.time ?? "All day"}</div>
-                    <span className="h-6 w-1 shrink-0 rounded-full bg-sky-400/70" aria-hidden />
-                    <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{r.title}</div>
+                  <a href={r.link} target="_blank" rel="noreferrer" className="flex items-center gap-3 py-2.5 opacity-80">
+                    <TimeColumn start={r.time} end={r.end} muted />
+                    <span className="h-8 w-1 shrink-0 rounded-full bg-sky-400/70" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-foreground/80">{r.title}</div>
+                      {r.place && (
+                        <div className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{r.place}</span>
+                        </div>
+                      )}
+                    </div>
                     <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
                   </a>
                 )}
