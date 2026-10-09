@@ -15,16 +15,17 @@ export const COMMENT_MAX = 300;
 export const FEED_PAGE_SIZE = 10;
 
 /**
- * The reaction is 🔥, one tap, one per person per post. A crew this size
- * reads better as one number with faces than four split counts. The other
- * three stay here only so anything saved under the old set still renders.
+ * Reactions: ❤️ is the one-tap default (tap the heart, or double-tap the
+ * post); hold the heart for the other four. One per person per post, and a
+ * post shows one number with faces, not split counts.
  */
-export const REACTION = { key: "fire", emoji: "🔥", label: "Fire" } as const;
+export const REACTION = { key: "heart", emoji: "❤️", label: "Love it" } as const;
 export const REACTIONS = [
-  { key: "fire", emoji: "🔥", label: "Fire" },
-  { key: "muscle", emoji: "💪", label: "Strong" },
-  { key: "clap", emoji: "👏", label: "Nice work" },
   { key: "heart", emoji: "❤️", label: "Love it" },
+  { key: "thumbs", emoji: "👍", label: "Like" },
+  { key: "bang", emoji: "‼️", label: "Big" },
+  { key: "fire", emoji: "🔥", label: "Fire" },
+  { key: "laugh", emoji: "😂", label: "Haha" },
 ] as const;
 export type ReactionKey = (typeof REACTIONS)[number]["key"];
 
@@ -95,13 +96,32 @@ export type CommunityAuthor = {
   title?: string | null;
 };
 
-export type CommunitySeries = "monday_motivation" | "wednesday_wins" | "finish_strong_friday";
+export type CommunitySeries =
+  | "monday_motivation"
+  | "tuesday_tips"
+  | "wednesday_wins"
+  | "try_it_thursday"
+  | "finish_strong_friday"
+  | "saturday_spirit"
+  | "sunday_recap";
 
-/** The weekly coach posts: name + the one-line idea behind each. */
+/** The daily coach posts, Monday first: name + the one-line idea behind each. */
 export const SERIES_LABEL: Record<CommunitySeries, { name: string; tagline: string; short: string }> = {
   monday_motivation: { name: "Monday Motivation", tagline: "Set the standard", short: "Mon" },
+  tuesday_tips: { name: "Tuesday Tips & Tricks", tagline: "Worth testing", short: "Tue" },
   wednesday_wins: { name: "Wednesday Wins", tagline: "Last week's work", short: "Wed" },
+  try_it_thursday: { name: "Try it Thursday", tagline: "Try a feature", short: "Thu" },
   finish_strong_friday: { name: "Finish Strong Friday", tagline: "Finish what you started", short: "Fri" },
+  saturday_spirit: { name: "Saturday Spirit", tagline: "Trust the process", short: "Sat" },
+  sunday_recap: { name: "Sunday Recap", tagline: "How the week went", short: "Sun" },
+};
+
+/** Tuesday's kinds of tip, as the little tag on the post. */
+export const TIP_KIND_LABEL: Record<string, string> = {
+  cue: "Cue to test",
+  habit: "Workout habit",
+  mindset: "Mindset",
+  externals: "Control what you can",
 };
 
 export type CommunityPost = {
@@ -123,8 +143,10 @@ export type CommunityPost = {
   quote?: string | null;
   quote_author?: string | null;
   quote_source?: string | null;
-  /** Wednesday Wins: the crew's numbers for the week, shown as a card. */
-  series_data?: WinsStats | null;
+  /** Wednesday Wins / Sunday Recap: the crew's numbers for the week, shown as a card. */
+  series_data?: WinsStats | RecapStats | null;
+  /** Tuesday / Thursday / Saturday: what the post shows besides its words. */
+  series_extra?: SeriesExtra | null;
   edited_at?: string | null;
   /** Set when the post was made while the session was still open ("Locked in"). */
   locked_in_at?: string | null;
@@ -154,6 +176,16 @@ export type CommunityPost = {
 };
 
 export type Reactor = CommunityAuthor & { is_me?: boolean };
+
+/** The kinds a post got, most given first (for the little ❤️🔥😂 beside the names). */
+export function reactionKinds(post: Pick<CommunityPost, "reactions">, max = 3): string[] {
+  return Object.entries(post.reactions ?? {})
+    .filter(([, n]) => (n ?? 0) > 0)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .map(([k]) => reactionEmoji(k))
+    .filter((e): e is string => !!e)
+    .slice(0, max);
+}
 
 export function reactionTotal(post: Pick<CommunityPost, "reaction_count" | "reactions">): number {
   if (typeof post.reaction_count === "number") return post.reaction_count;
@@ -433,6 +465,103 @@ export type WinsStats = {
   weeks_tracked?: number;
   history?: { wk: string; sessions: number }[];
 };
+
+/* ---- Sunday Recap: the week's report card ------------------------------ */
+
+/** Wednesday's numbers plus the plan, the days, logging, the top 3 and one thing to work on. */
+export type RecapStats = WinsStats & {
+  kind: "recap";
+  /** Sessions a week everyone training committed to, and how many got done (each person up to their own target). */
+  planned: number;
+  planned_done: number;
+  /** People who hit their own target, out of everyone training right now. */
+  hit: number;
+  active: number;
+  /** Workouts finished each day, Monday first. */
+  days: number[];
+  completed: number;
+  fully_logged: number;
+  top: { name: string; type: string; text: string }[];
+  improve: { kind: "plan" | "logging" | "checkins" | "day"; text: string } | null;
+};
+
+export function isRecapStats(s: unknown): s is RecapStats {
+  return !!s && typeof s === "object" && (s as { kind?: unknown }).kind === "recap" && Array.isArray((s as { days?: unknown }).days);
+}
+
+export function isWinsStats(s: unknown): s is WinsStats {
+  return !!s && typeof s === "object" && typeof (s as { sessions?: unknown }).sessions === "number" && typeof (s as { week_of?: unknown }).week_of === "string";
+}
+
+const DAY_LETTER = ["M", "T", "W", "T", "F", "S", "S"];
+
+/** The week's report card, said so anyone gets it. */
+export function recapSummary(s: RecapStats) {
+  const planPct = s.planned > 0 ? Math.round((s.planned_done / s.planned) * 100) : null;
+  const logPct = s.completed > 0 ? Math.round((s.fully_logged / s.completed) * 100) : null;
+  const maxDay = Math.max(1, ...s.days);
+  const best = s.days.indexOf(Math.max(...s.days));
+  const days = s.days.map((n, i) => ({ letter: DAY_LETTER[i], n, share: n / maxDay, best: i === best && n > 0 }));
+  const more = s.sessions - s.sessions_prev;
+  const vsLast =
+    s.sessions_prev > 0 ? (more > 0 ? `${more} more than last week` : more === 0 ? "Same as last week" : `${-more} fewer than last week`) : null;
+  return { planPct, logPct, days, vsLast };
+}
+
+/** 🥇🥈🥉 for the top 3. */
+export const MEDALS = ["🥇", "🥈", "🥉"];
+
+/* ---- Tuesday / Thursday / Saturday: what rides along with the words ----- */
+
+/** Habit vs no habit: a outnumbered by b people, x vs y on the outcome. */
+export type CrewCompare = { habit: string; outcome: "spw" | "prs" | "rating"; a: number; b: number; x: number; y: number; people?: number };
+
+export type SeriesExtra =
+  /** Saturday: one of the illustrated scenes. */
+  | { scene: string }
+  /** Tuesday from the library: what kind of tip it is. */
+  | { kind: string }
+  /** Tuesday from the crew's own data. */
+  | (CrewCompare & { observation: "frequency" | "consistency" | "sleep" })
+  /** Thursday: the feature, where to find it, and (when it says something) how the people who use it train. */
+  | { feature: string; title: string; where: string[]; stat?: CrewCompare | null };
+
+export function extraScene(e: SeriesExtra | null | undefined): string | null {
+  return e && "scene" in e && typeof e.scene === "string" ? e.scene : null;
+}
+export function extraFeature(e: SeriesExtra | null | undefined) {
+  return e && "feature" in e && typeof e.feature === "string" && Array.isArray((e as { where?: unknown }).where)
+    ? (e as { feature: string; title: string; where: string[]; stat?: CrewCompare | null })
+    : null;
+}
+export function extraObservation(e: SeriesExtra | null | undefined) {
+  return e && "observation" in e && typeof e.x === "number" && typeof e.y === "number" ? (e as CrewCompare & { observation: string }) : null;
+}
+export function extraTipKind(e: SeriesExtra | null | undefined): string | null {
+  return e && "kind" in e && typeof e.kind === "string" ? TIP_KIND_LABEL[e.kind] ?? null : null;
+}
+
+/**
+ * The two bars on a data post, labelled in plain words. Bars are scaled to
+ * the bigger number; ratings are out of 5 so the bars are too.
+ */
+export function compareBars(c: CrewCompare) {
+  const fmt = (v: number) => (c.outcome === "prs" ? `${Math.round(v)} PRs` : c.outcome === "rating" ? `${v.toFixed(1)} / 5` : `${v.toFixed(1)}x a week`);
+  const top = c.outcome === "rating" ? 5 : Math.max(c.x, c.y, 0.1);
+  const label =
+    c.habit === "sessions"
+      ? { a: "3+ sessions a week", b: "Fewer" }
+      : c.habit === "weeks"
+        ? { a: "Trained 7–8 of 8 weeks", b: "Missed 2+ weeks" }
+        : c.habit === "sleep"
+          ? { a: "Under 5h sleep", b: "5h or more" }
+          : { a: "Use it", b: "Everyone else" };
+  const count = (n: number) => (c.habit === "sleep" ? `${n} sessions` : `${n} ${n === 1 ? "person" : "people"}`);
+  return [
+    { label: label.a, count: count(c.a), value: fmt(c.x), share: c.x / top, lead: c.x >= c.y },
+    { label: label.b, count: count(c.b), value: fmt(c.y), share: c.y / top, lead: c.y > c.x },
+  ];
+}
 
 /** "Sep 28 – Oct 4" for the Monday the week starts on. */
 export function winsWeekLabel(weekOf: string): string {
@@ -769,4 +898,35 @@ export function pickLockInSession(items: WorkoutItem[], now: Date = new Date()):
       return !!sd && sd.getFullYear() === y && sd.getMonth() === m && sd.getDate() === d;
     }) ?? null
   );
+}
+
+/* ---- league points for posting -------------------------------------- */
+
+/** community_post_points_status(): null when the account isn't an athlete. */
+export type PostPointsStatus = { points: number; week_cap: number; today_earned: boolean; week_count: number };
+
+/** Only workouts completed within this many days of the post earn (DB: community_post_xp_sync). */
+export const POST_POINTS_RECENT_DAYS = 7;
+
+/**
+ * The line under the audience picker that tells an athlete what posting earns.
+ * Mirrors the DB rule: +15 for a Community post of a recent workout, 1 a day, 2 a week.
+ * A lock-in post earns once the session is finished, so it says so.
+ */
+export function postPointsHint(
+  status: PostPointsStatus | null | undefined,
+  visibility: CommunityVisibility,
+  alreadyInFeed: boolean,
+  opts: { completedAt?: string | null; lockIn?: boolean; now?: Date } = {},
+): { tone: "earn" | "muted"; text: string } | null {
+  if (!status || alreadyInFeed) return null;
+  const now = opts.now ?? new Date();
+  const done = opts.completedAt ? new Date(opts.completedAt).getTime() : NaN;
+  if (Number.isFinite(done) && now.getTime() - done > POST_POINTS_RECENT_DAYS * 86_400_000)
+    return { tone: "muted", text: `Post points are for workouts from the last ${POST_POINTS_RECENT_DAYS} days.` };
+  if (visibility !== "community") return { tone: "muted", text: `Post to Community to earn +${status.points} league points.` };
+  if (status.today_earned) return { tone: "muted", text: "Today's post points are banked. Post anyway, the crew wants to see it." };
+  if (status.week_count >= status.week_cap)
+    return { tone: "muted", text: `Post points maxed this week (${status.week_cap}/${status.week_cap}). They reset Monday.` };
+  return { tone: "earn", text: opts.lockIn ? `+${status.points} league points when you finish 🔥` : `+${status.points} league points for posting 🔥` };
 }
