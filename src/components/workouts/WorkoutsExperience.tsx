@@ -81,6 +81,8 @@ import {
   type CalendarDnd,
 } from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
+import { WeekStrip, statusDotClass } from "@/components/workouts/week-strip";
+import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 
 type Mode = "self" | "coach";
 
@@ -123,40 +125,8 @@ export function WorkoutsExperience({
   // actual schedule (e.g. Mon/Wed/Fri) when pl_weeks.training_days is not set.
   const committedDays = (client as any)?.committed_training_days ?? null;
 
-  // The calendar is a historical timeline: live (active/upcoming) blocks plus
-  // anchored workouts from previous/completed/archived programs. Old blocks are
-  // only rendered on dates they actually own (instance / legacy scheduled_date /
-  // completion) — never re-derived from the current committed cadence.
-  const liveBlockIds = useMemo(() => {
-    const blocks = new Map<string, any>();
-    for (const it of dayItems) if (it.block?.id && !blocks.has(it.block.id)) blocks.set(it.block.id, it.block);
-    return activeCalendarBlockIds([...blocks.values()]);
-  }, [dayItems]);
-  const calendarItems = useMemo(() => filterCalendarItemsWithHistory(dayItems), [dayItems]);
-
-  const byDate = useMemo(() => {
-    // Multiple workouts can land on the same calendar date (e.g. a
-    // reschedule stacks Day 2 onto Day 4's Friday). Group them so no
-    // workout is silently dropped from the calendar / selected-day view.
-    const map = new Map<string, WorkoutItem[]>();
-    for (const it of calendarItems) {
-      const historical = !!it.block?.id && !liveBlockIds.has(it.block.id);
-      let key: string;
-      if (historical) {
-        const anchor = historicalAnchorDate(it);
-        if (!anchor) continue;
-        key = anchor;
-      } else {
-        const d = dayScheduledDate(it, committedDays);
-        if (!d) continue;
-        key = toLocalISO(d);
-      }
-      const list = map.get(key) ?? [];
-      list.push(it);
-      map.set(key, list);
-    }
-    return map;
-  }, [calendarItems, committedDays, liveBlockIds]);
+  // Date → workouts (shared with the coach's messenger workout peek).
+  const byDate = useMemo(() => buildWorkoutDateMap(dayItems, committedDays), [dayItems, committedDays]);
 
   // Fetch priority-labelled rows for every visible scheduled day so the
   // month/week grids can render compact priority chips. Only pulls the
@@ -697,126 +667,8 @@ function DeferredAnalytics({ clientId }: { clientId: string }) {
 /* Week strip                                                             */
 /* ---------------------------------------------------------------------- */
 
-function statusDotClass(status: WorkoutStatus | "none"): string {
-  switch (status) {
-    case "completed_today":
-    case "completed_on_scheduled":
-    case "completed_different_day":
-      return "bg-emerald-500";
-    case "today": return "bg-primary";
-    case "in_progress":
-    case "review_pending":
-    case "incomplete":
-      return "bg-amber-500";
-    case "missed": return "bg-rose-500";
-    case "upcoming": return "bg-muted-foreground/60";
-    case "available":
-    case "not_started":
-      return "bg-muted-foreground/40";
-    default: return "bg-transparent";
-  }
-}
-
 export type { CalendarDnd } from "@/components/workouts/calendar-day-dnd";
 
-
-function WeekStrip({
-  selectedDate, onSelectDate, byDate, dnd,
-}: {
-  selectedDate: Date;
-  onSelectDate: (d: Date) => void;
-  byDate: Map<string, WorkoutItem[]>;
-  dnd?: CalendarDnd;
-}) {
-  // Week the selected date belongs to. Mon-first to match existing schedule UI.
-  const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const today = localStartOfToday();
-  return (
-    <Card className="p-2">
-      <div className="mb-1 flex items-center justify-between px-1">
-        <button
-          type="button"
-          onClick={() => onSelectDate(addWeeks(selectedDate, -1))}
-          aria-label="Previous week"
-          className="rounded p-1 hover:bg-secondary"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <div className="text-xs font-semibold text-muted-foreground">
-          {format(weekStart, isSameMonth(weekStart, days[6]) ? "MMMM yyyy" : "MMM d")}
-          {!isSameMonth(weekStart, days[6]) && ` – ${format(days[6], "MMM d")}`}
-        </div>
-        <button
-          type="button"
-          onClick={() => onSelectDate(addWeeks(selectedDate, 1))}
-          aria-label="Next week"
-          className="rounded p-1 hover:bg-secondary"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {days.map((d) => {
-          const iso = toLocalISO(d);
-          const list = byDate.get(iso) ?? [];
-          const item = list[0];
-          const extra = Math.max(0, list.length - 1);
-          const status: WorkoutStatus | "none" = item
-            ? getWorkoutStatus(item).status
-            : "none";
-          const isToday = isSameDay(d, today);
-          const isSelected = isSameDay(d, selectedDate);
-          return (
-            <CalendarDayCell key={iso} iso={iso} item={item} label={format(d, "MMM d")}>
-              {(cellDnd) => (
-            <button
-              type="button"
-              ref={cellDnd.setNodeRef as any}
-              onClick={() => onSelectDate(d)}
-              {...cellDnd.props}
-              className={cn(
-                cellDnd.className,
-                "flex flex-col items-center justify-between rounded-lg px-1 py-2 text-center transition",
-                "min-h-[64px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                isSelected
-                  ? "bg-primary text-primary-foreground"
-                  : isToday
-                    ? "border border-primary/60 bg-primary/10"
-                    : "hover:bg-secondary",
-              )}
-              aria-pressed={isSelected}
-              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}${extra ? ` (+${extra} more)` : ""}` : ", rest day"}`}
-            >
-              <span className={cn(
-                "text-[10px] font-bold uppercase tracking-wider",
-                isSelected ? "text-primary-foreground/80" : "text-muted-foreground",
-              )}>
-                {format(d, "EEE")}
-              </span>
-              <span className={cn(
-                "text-base font-black",
-                isSelected ? "" : isToday ? "text-primary" : "",
-              )}>
-                {format(d, "d")}
-              </span>
-              <span className={cn("mt-0.5 h-1.5 w-1.5 rounded-full", statusDotClass(status))} />
-              {extra > 0 && (
-                <span className={cn(
-                  "text-[9px] font-bold leading-none",
-                  isSelected ? "text-primary-foreground/80" : "text-muted-foreground",
-                )}>+{extra}</span>
-              )}
-            </button>
-              )}
-            </CalendarDayCell>
-          );
-
-        })}
-      </div>
-    </Card>
-  );
-}
 
 /* ---------------------------------------------------------------------- */
 /* Selected day card — single primary CTA                                 */

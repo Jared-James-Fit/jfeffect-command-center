@@ -97,8 +97,12 @@ describe("calendar history contract", () => {
   });
 
   it("12+13. one shared contract feeds every calendar surface, cadence never rebuilds history", () => {
-    const src = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
-    // Client portal and admin POV both render WorkoutsExperience → same byDate map.
+    const experience = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
+    const peek = readFileSync("src/components/messages/client-workout-peek.tsx", "utf8");
+    const src = readFileSync("src/lib/workout-calendar.ts", "utf8");
+    // Client portal, admin POV and the coach's messenger peek all use the same byDate map.
+    expect(experience).toContain("buildWorkoutDateMap(dayItems, committedDays)");
+    expect(peek).toContain("buildWorkoutDateMap(");
     expect(src).toContain("filterCalendarItemsWithHistory(dayItems)");
     expect(src).toContain("const anchor = historicalAnchorDate(it);");
     // Historical items must not fall through to committed-cadence derivation.

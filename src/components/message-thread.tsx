@@ -73,6 +73,7 @@ import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resum
 import { DraftUploadChips, DraftUploadStatus } from "@/components/messages/draft-upload-chips";
 import { ChatVideoTile } from "@/components/chat-video-tile";
 import { ReplyThumb } from "@/components/messages/reply-thumb";
+import { COMPOSER_INSERT_EVENT, type ComposerInsertDetail } from "@/lib/composer-insert";
 import {
   FormHistoryGroup,
   FormHistoryRow,
@@ -1412,6 +1413,20 @@ export function MessageThread({
     // itself to the inserted text on the next layout pass.
     focusComposerAtEnd(composerRef.current);
   }, []);
+
+  // "Reply about this workout" (coach's workout peek) drops a lead-in into this
+  // client's composer, after whatever is already typed.
+  useEffect(() => {
+    const onInsert = (e: Event) => {
+      const d = (e as CustomEvent<ComposerInsertDetail>).detail;
+      if (!d || d.clientId !== clientId || !d.text) return;
+      setBody((b) => (b.trim() ? `${b.trimEnd()}\n${d.text}` : d.text));
+      // After the sheet has closed, so its focus trap doesn't pull focus back.
+      window.setTimeout(() => focusComposerAtEnd(composerRef.current), 350);
+    };
+    window.addEventListener(COMPOSER_INSERT_EVENT, onInsert);
+    return () => window.removeEventListener(COMPOSER_INSERT_EVENT, onInsert);
+  }, [clientId]);
 
   const startReply = (message: Message, att: number | null = null) => {
     if (message.deleted_at || message.is_internal_note || message.id.startsWith("optimistic-")) return;
