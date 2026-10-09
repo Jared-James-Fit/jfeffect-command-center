@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
-  BookOpenCheck, Check, CheckCircle2, ChevronRight, Copy, Crown, Link2, Loader2, Lock, MessageCircle,
+  BookOpenCheck, Check, CheckCircle2, ChevronRight, Copy, Crown, Eye, Link2, Loader2, Lock, MessageCircle,
   RefreshCw, Search, Smartphone, UserPlus, Users, X, type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SectionLabel } from "@/components/ui/section-label";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
+import { startTeamPreview } from "@/lib/team-preview";
 import {
   getStaffInviteLink, inviteStaff, listTeam, removeStaffRole, resendStaffInvite, revokeStaffInvite,
   searchInviteRecipients, type TeamInvite, type TeamMember,
@@ -85,6 +87,7 @@ function deliveryLine(inv: TeamInvite): string {
 }
 
 export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { viewOnly } = useAuth();
   const list = useServerFn(listTeam);
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: TEAM_KEY, queryFn: () => list() });
@@ -104,7 +107,7 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
         </header>
       )}
 
-      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      {!viewOnly && <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="text-base font-bold">Give someone a team login</div>
           <p className="text-sm text-muted-foreground">
@@ -114,7 +117,7 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
         <Button className="shrink-0" onClick={() => setAdding(true)}>
           <UserPlus className="mr-1.5 h-4 w-4" /> Add person
         </Button>
-      </Card>
+      </Card>}
 
       {(data?.invites ?? []).length > 0 && (
         <section>
@@ -221,7 +224,17 @@ function PendingInviteCard({ inv, onChanged }: { inv: TeamInvite; onChanged: () 
 function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) {
   const remove = useServerFn(removeStaffRole);
   const navigate = useNavigate();
-  const removable = (["finance", "media_manager"] as const).find((r) => m.roles.includes(r));
+  const { role, viewOnly } = useAuth();
+  const removable = viewOnly ? undefined : (["finance", "media_manager"] as const).find((r) => m.roles.includes(r));
+  // The owner can look at a finance login's workspace exactly as it's laid
+  // out for them, with every change switched off (src/lib/team-preview.ts).
+  const canViewAs = role === "admin" && !viewOnly && m.roles.includes("finance");
+  const viewAs = () => {
+    const name = m.name || m.email || "Finance";
+    startTeamPreview({ role: "finance", name, userId: m.user_id });
+    toast.success(`Viewing as ${name}. Changes are off.`);
+    navigate({ to: "/admin/finance" as any });
+  };
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const isCoachOnly = m.roles.includes("coach") && !m.roles.includes("admin");
@@ -239,6 +252,11 @@ function MemberCard({ m, onChanged }: { m: TeamMember; onChanged: () => void }) 
           <div className="mt-0.5 text-xs text-muted-foreground">Media Manager is retired, so this login has nowhere to go.</div>
         )}
       </div>
+      {canViewAs && (
+        <Button size="sm" variant="outline" className="h-9 shrink-0 px-2.5" onClick={viewAs} aria-label={`View as ${m.name || m.email || "this team member"}`}>
+          <Eye className="h-4 w-4" /><span className="ml-1 text-xs">View as</span>
+        </Button>
+      )}
       {removable && (
         <Button size="sm" variant="outline" className="shrink-0" disabled={busy} onClick={() => setConfirm(true)}>Remove</Button>
       )}

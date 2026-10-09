@@ -76,7 +76,7 @@ function MembershipDashboard() {
     setPovBusy(true);
     try {
       await setPersona({ data: { persona: "app_member" } as any });
-      setPovFlag("app_member");
+      setPovFlag("app_member", "/admin/membership");
       await qc.invalidateQueries({ queryKey: ["m-me"] });
       await qc.invalidateQueries({ queryKey: ["current-member-access"] });
       toast.success("Viewing the member app as your test member");

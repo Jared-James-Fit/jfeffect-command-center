@@ -10,28 +10,49 @@ import { cn } from "@/lib/utils";
 
 const POV_FLAG_KEY = "jf-pov-active";
 const POV_PERSONA_KEY = "jf-pov-persona";
+const POV_RETURN_KEY = "jf-pov-return";
 
-export function setPovFlag(persona: string | null) {
+/** `returnTo` (path + query) is where "Back" goes when the preview ends. */
+export function setPovFlag(persona: string | null, returnTo?: string | null) {
   try {
     if (persona) {
       localStorage.setItem(POV_FLAG_KEY, "1");
       localStorage.setItem(POV_PERSONA_KEY, persona);
+      if (returnTo) localStorage.setItem(POV_RETURN_KEY, returnTo);
+      else localStorage.removeItem(POV_RETURN_KEY);
     } else {
       localStorage.removeItem(POV_FLAG_KEY);
       localStorage.removeItem(POV_PERSONA_KEY);
+      localStorage.removeItem(POV_RETURN_KEY);
     }
   } catch {}
 }
 
-export function getPovFlag(): { active: boolean; persona: string | null } {
+export function getPovFlag(): { active: boolean; persona: string | null; returnTo: string | null } {
   try {
     return {
       active: localStorage.getItem(POV_FLAG_KEY) === "1",
       persona: localStorage.getItem(POV_PERSONA_KEY),
+      returnTo: localStorage.getItem(POV_RETURN_KEY),
     };
   } catch {
-    return { active: false, persona: null };
+    return { active: false, persona: null, returnTo: null };
   }
+}
+
+/** Who the member app is showing, in words: "your test member", "Sam's access". */
+export function povLabel(persona: string | null): string {
+  if (!persona) return "a member";
+  if (persona.startsWith("as:")) return `${persona.slice(3)}'s access`;
+  if (persona === "app_member_premium") return "your test member (Premium)";
+  if (persona === "program_only") return "your test member (Program only)";
+  return "your test member";
+}
+
+/** Split "/admin/clients?kind=members" for router navigation. */
+export function splitHref(href: string): { to: string; search: Record<string, string> } {
+  const [to, qs = ""] = href.split("?");
+  return { to: to || "/admin", search: Object.fromEntries(new URLSearchParams(qs)) };
 }
 
 /**
@@ -57,10 +78,11 @@ export function PovQuickToggle({
     if (busy) return;
     setBusy(true);
     try {
+      const back = splitHref(getPovFlag().returnTo ?? "/admin");
       setPovFlag(null);
       await qc.invalidateQueries({ queryKey: ["m-me"] });
       toast.success("Back to Admin");
-      navigate({ to: "/admin" });
+      navigate({ to: back.to as any, search: back.search as any });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to switch");
     } finally {
@@ -151,8 +173,8 @@ export function PovQuickToggle({
     >
       <div className="flex items-center gap-2 text-sm font-medium">
         <ArrowRightLeft className={cn("h-4 w-4", isMemberView ? "text-emerald-600" : "text-primary")} />
-        <span className={isMemberView ? "text-emerald-900 dark:text-emerald-100" : "text-foreground"}>
-          {isMemberView ? "Viewing as Member" : "Admin Dashboard"}
+        <span className={cn("min-w-0 truncate", isMemberView ? "text-emerald-900 dark:text-emerald-100" : "text-foreground")}>
+          {isMemberView ? `Viewing as ${povLabel(pov.persona)}` : "Admin Dashboard"}
         </span>
       </div>
       <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-0.5">

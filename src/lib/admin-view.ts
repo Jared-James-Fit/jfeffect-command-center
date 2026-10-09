@@ -17,6 +17,7 @@
  * Nothing here is a security boundary; the database is.
  */
 import { ADMIN_VIEW_HEADER, VIEW_ONLY_MESSAGE } from "@/lib/permissions";
+import { PREVIEW_MESSAGE } from "@/lib/team-preview";
 
 type Fetch = typeof fetch;
 
@@ -27,8 +28,8 @@ function isScalar(v: unknown): v is string | number | boolean {
   return ["string", "number", "boolean"].includes(typeof v);
 }
 
-function viewOnlyResponse(status: number, details?: string): Response {
-  return new Response(JSON.stringify({ code: "42501", message: VIEW_ONLY_MESSAGE, details: details ?? null, hint: null }), {
+function viewOnlyResponse(status: number, details?: string, message = VIEW_ONLY_MESSAGE): Response {
+  return new Response(JSON.stringify({ code: "42501", message, details: details ?? null, hint: null }), {
     status,
     headers: { "Content-Type": "application/json" },
   });
@@ -41,8 +42,12 @@ async function plainRefusal(res: Response): Promise<Response> {
   return viewOnlyResponse(res.status === 401 ? 403 : res.status, body.message);
 }
 
-/** Wraps the API fetch for a view-only login. Exported for tests. */
-export function viewOnlyFetch(base: Fetch): Fetch {
+/**
+ * Wraps the API fetch for a view-only login. Exported for tests.
+ * `strict` (an owner previewing a team member's view): nothing but reads leaves
+ * the browser, since the owner's own rights would otherwise let a change through.
+ */
+export function viewOnlyFetch(base: Fetch, strict = false): Fetch {
   return async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     if (!url.pathname.includes("/rest/v1/")) return base(input, init);
@@ -73,8 +78,11 @@ export function viewOnlyFetch(base: Fetch): Fetch {
         const { body: _body, ...rest } = init;
         return plainRefusal(await base(url.href, { ...rest, method: "GET", headers }));
       }
+      if (strict) return viewOnlyResponse(403, "preview", PREVIEW_MESSAGE);
       return plainRefusal(await base(input, init));
     }
+
+    if (strict) return viewOnlyResponse(403, "preview", PREVIEW_MESSAGE);
 
     if (method === "PATCH" || method === "DELETE") {
       const prefer = headers.get("Prefer");
@@ -90,15 +98,37 @@ export function viewOnlyFetch(base: Fetch): Fetch {
 
 const originals = new WeakMap<object, Fetch>();
 
-/** Turn the admin view on or off for this browser's API client. */
-export function setAdminView(client: unknown, on: boolean): void {
-  const rest = (client as any)?.rest;
-  if (!rest || typeof rest.fetch !== "function") return;
-  if (on && !originals.has(rest)) {
-    originals.set(rest, rest.fetch);
-    rest.fetch = viewOnlyFetch(rest.fetch);
-  } else if (!on && originals.has(rest)) {
-    rest.fetch = originals.get(rest)!;
-    originals.delete(rest);
+/** File storage while previewing: downloads and signed links only. */
+function readOnlyStorageFetch(base: Fetch): Fetch {
+  return async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const method = (init.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    const path = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url).pathname;
+    // Signing a download link is a POST that changes nothing.
+    if (method === "GET" || method === "HEAD" || /\/object\/sign\//.test(path)) return base(input, init);
+    return viewOnlyResponse(403, "preview", PREVIEW_MESSAGE);
+  };
+}
+
+function swap(target: any, on: boolean, wrap: (f: Fetch) => Fetch) {
+  if (!target || typeof target.fetch !== "function") return;
+  if (on && !originals.has(target)) {
+    originals.set(target, target.fetch);
+    target.fetch = wrap(target.fetch);
+  } else if (!on && originals.has(target)) {
+    target.fetch = originals.get(target)!;
+    originals.delete(target);
   }
+}
+
+/**
+ * Turn the admin view on or off for this browser's API client. `preview` is
+ * the owner viewing as a team member: reads only, files included.
+ */
+export function setAdminView(client: unknown, on: boolean, preview = false): void {
+  const c = client as any;
+  // Re-wrap when switching between a view-only login and a preview.
+  swap(c?.rest, false, (f) => f);
+  swap(c?.storage, false, (f) => f);
+  swap(c?.rest, on, (f) => viewOnlyFetch(f, preview));
+  swap(c?.storage, on && preview, readOnlyStorageFetch);
 }

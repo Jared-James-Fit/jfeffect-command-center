@@ -14,13 +14,14 @@ import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from
 import { FullPageLoader } from "@/components/full-page-loader";
 import { StaffMfaGate } from "@/components/staff-mfa-gate";
 import { ViewOnlyStrip } from "@/components/view-only-strip";
+import { TeamPreviewBanner } from "@/components/team-preview-banner";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
 });
 
 function AdminLayout() {
-  const { role, viewOnly, loading } = useAuth();
+  const { role, viewOnly, preview, loading } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {
     if (loading || !role) return;
@@ -47,7 +48,7 @@ function AdminLayout() {
   const nav = viewOnly
     ? [...buildFinanceNav(), ...fullNav]
     : isOwner === false ? withoutOwnerOnly(fullNav) : fullNav;
-  const title = viewOnly ? "Finance" : isCoach ? "Coach" : "Admin";
+  const title = preview ? `${preview.name.split(" ")[0]} · Finance` : viewOnly ? "Finance" : isCoach ? "Coach" : "Admin";
   const barScope = isCoach ? "coach" : "admin";
   const customLayout = useBarLayout(barScope);
 
@@ -92,7 +93,8 @@ function AdminLayout() {
     <StaffMfaGate>
       <AppShell items={nav} bottomItems={bottomItems} title={title} moreInHeader>
         <AdminTopBar />
-        {viewOnly && <ViewOnlyStrip />}
+        <TeamPreviewBanner />
+        {viewOnly && !preview && <ViewOnlyStrip />}
         <Outlet />
         {!viewOnly && <TaskPopupGate />}
         <ReturnToDashboardPill />
