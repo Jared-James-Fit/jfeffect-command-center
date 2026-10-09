@@ -28,6 +28,13 @@ function postFromHash(): string | null {
   return m ? m[1] : null;
 }
 
+/** `#at=<post id>`: open the feed scrolled to that post (Home's community card). */
+function atFromHash(): string | null {
+  if (typeof window === "undefined") return null;
+  const m = window.location.hash.match(/(?:^#|&)at=([0-9a-f-]{36})/i);
+  return m ? m[1] : null;
+}
+
 /** `#person=<user id>` opens someone's profile (used from Home). */
 function personFromHash(): string | null {
   if (typeof window === "undefined") return null;
@@ -65,6 +72,8 @@ export function CommunityScreen({
   const tab: Tab = scope.kind === "author" ? scope.from : scope.kind;
   const [commentsFor, setCommentsFor] = useState<CommunityPost | null>(null);
   const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
+  const [jumpTo, setJumpTo] = useState<string | null>(() => atFromHash());
+  const [flash, setFlash] = useState<string | null>(null);
 
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
@@ -94,6 +103,20 @@ export function CommunityScreen({
   }, [feed.isSuccess, qc]);
 
   const { data: unit = "lb" } = useViewerUnit(user?.id);
+
+  // Opened from Home on a post: scroll to it in the feed and flash it, so the rest of the
+  // feed is right there. If it's older than what's loaded, open it on its own instead.
+  useEffect(() => {
+    if (!jumpTo || (!feed.isSuccess && posts.length === 0)) return;
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    const el = document.querySelector(`[data-post-id="${jumpTo}"]`);
+    if (el) {
+      requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
+      setFlash(jumpTo);
+      window.setTimeout(() => setFlash(null), 1800);
+    } else setDetailId(jumpTo);
+    setJumpTo(null);
+  }, [jumpTo, feed.isSuccess, posts.length]);
 
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
@@ -198,8 +221,8 @@ export function CommunityScreen({
       ) : (
         <>
           {posts.map((p) => (
+            <div key={p.id} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
-              key={p.id}
               post={p}
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
               unit={unit}
@@ -211,6 +234,7 @@ export function CommunityScreen({
               onDoubleTap={onDoubleTap}
               onTipDone={onTipDone}
             />
+            </div>
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
           {isFetchingNextPage && <Skeleton className="h-64 w-full rounded-3xl" />}

@@ -384,19 +384,24 @@ describe("community lives on Home (and in More), Nutrition keeps its tab", () =>
     expect(page).not.toContain("PageHeader");
     expect(screen).toContain('<Link to={backTo} aria-label="Back to Home"');
   });
-  it("Home's card shows the newest post worth a glance and opens it right there", () => {
-    expect(entry).toContain("const others = (feed.data?.pages[0]?.posts ?? []).filter((p) => !p.is_mine && new Date(p.created_at).getTime() > cutoff);");
-    expect(entry).toContain("onClick={() => setOpenPost(latest.post.id)}");
-    expect(entry).toContain("{postLine(latest.post, unit)}");
+  it("Home's card shows the two newest posts and a big 'Open the feed'; every tap lands in the feed", () => {
+    expect(entry).toContain("return (others.length ? others : recent).slice(0, 2)");
+    expect(entry).toContain("onClick={() => openAt(post.id)}");
+    expect(entry).toContain("{postLine(post, unit)}");
+    expect(entry).toContain("Open the feed");
+    expect(entry).not.toContain("PostDetailDialog");
+    // the feed scrolls to the post you tapped (or opens it if it's older than what's loaded)
+    expect(screen).toContain('const el = document.querySelector(`[data-post-id="${jumpTo}"]`);');
+    expect(screen).toContain("} else setDetailId(jumpTo);");
   });
   it("leaves Workouts as pure training and forwards old #community links", () => {
     expect(workouts).not.toContain("CommunityScreen");
     expect(workouts).toContain('throw redirect({ to: "/portal/community"');
     expect(entry).not.toContain('to="/portal/workouts"');
   });
-  it("opens a person's workout right on Home instead of navigating away", () => {
-    expect(entry).toContain("onClick={() => setOpenPost(p.id)}");
-    expect(entry).toContain("postId={openPost}");
+  it("tapping a person opens the feed at their latest post (not a dead-end single post)", () => {
+    expect(entry).toContain("onClick={() => openAt(p.id)}");
+    expect(entry).toContain('navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : undefined })');
   });
   it("only shows a header nudge when there is something new", () => {
     expect(entry).toContain("data.unseen <= 0) return null;");
@@ -518,10 +523,10 @@ describe("the crew: find anyone's profile", () => {
     expect(sql).toContain("WHERE m.user_id <> uid");
     expect(sql).not.toMatch(/community_follow|is_following/i);
   });
-  it("is a Crew tab, and Home opens a person's profile instead of dead-ending", () => {
+  it("is a Crew tab, and Home never dead-ends: a person opens the feed at their post", () => {
     expect(screen).toContain('(["feed", "crew", "you"] as const)');
     expect(screen).toContain("<CrewList onOpen={openAuthor} />");
-    expect(entry).toContain("hash: a.user_id === user?.id ? undefined : `person=${a.user_id}`");
+    expect(entry).toContain("onClick={() => openAt(p.id)}");
   });
 });
 
