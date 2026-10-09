@@ -37,3 +37,10 @@ describe("a lock-in and the finished-workout share are separate posts", () => {
     expect(read("src/components/community/lock-in-editor.tsx")).toContain("lockIn: true");
   });
 });
+
+describe("a failed save doesn't strand its photo", () => {
+  it("removes the just-uploaded photo when the database refuses the save, never on a network failure", () => {
+    const q = read("src/lib/community.queries.ts");
+    expect(q).toContain('if (m.action === "set" && error.code) await removeCommunityFiles([m.media_path, m.media_thumb_path]);');
+  });
+});

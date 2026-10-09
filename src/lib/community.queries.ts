@@ -721,7 +721,12 @@ export async function saveCommunityPost(input: SavePostInput): Promise<string> {
     _extra_media: input.extras === undefined ? null : input.extras,
     _lock_in: input.lockIn ?? null,
   });
-  if (error) throw error;
+  if (error) {
+    // A "set" photo was uploaded just for this save; if the database refused it, it belongs to
+    // nothing. Not on a network failure (no code): the save may have landed with it.
+    if (m.action === "set" && error.code) await removeCommunityFiles([m.media_path, m.media_thumb_path]);
+    throw error;
+  }
   return (data as { id: string }).id;
 }
 
