@@ -265,7 +265,9 @@ export const withdrawSessionChange = createServerFn({ method: "POST" })
 
 function feedUrls(token: string) {
   const origin = (process.env.PUBLIC_APP_URL || process.env.SITE_URL || "https://jfeffect.com").replace(/\/$/, "");
-  const https = `${origin}/api/public/calendar-feed?t=${token}`;
+  // Ends in .ics because some calendar apps refuse a link that doesn't; the
+  // feed route strips it before the token check.
+  const https = `${origin}/api/public/calendar-feed?t=${token}.ics`;
   const webcal = https.replace(/^https?:\/\//, "webcal://");
   const name = encodeURIComponent("JF Effect");
   return {
