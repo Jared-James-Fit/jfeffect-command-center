@@ -69,11 +69,8 @@ const HUB_TABS: { key: HubTab; label: string }[] = [
   { key: "birthdays", label: "Birthdays" },
 ];
 
-/**
- * A view-only login (finance) gets the League boards, not the coach's queues.
- * The feed reads (and its photos) still need the coach's rights.
- */
-const VIEW_TABS: HubTab[] = ["league"];
+/** A view-only login (finance) sees the League and the Feed, not the coach's queues. */
+const VIEW_TABS: HubTab[] = ["league", "feed"];
 
 function tabFromHash(): HubTab {
   if (typeof window === "undefined") return "league";

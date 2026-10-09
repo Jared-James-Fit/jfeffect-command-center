@@ -65,11 +65,12 @@ export function useCommunityFeed(authorUserId: string | null = null) {
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
+      // Unused arguments are left out (they default to null), so the call is
+      // all plain values and a view-only login can make it as a read.
       const { data, error } = await db.rpc("community_feed", {
         _limit: pageParam ? FEED_PAGE_SIZE : FIRST_FEED_PAGE,
-        _before_at: pageParam?.at ?? null,
-        _before_id: pageParam?.id ?? null,
-        _author_user_id: authorUserId,
+        ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
+        ...(authorUserId ? { _author_user_id: authorUserId } : {}),
       });
       if (error) throw error;
       return (data ?? { posts: [], has_more: false }) as CommunityFeedPage;

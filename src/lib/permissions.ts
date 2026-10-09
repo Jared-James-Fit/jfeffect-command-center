@@ -9,6 +9,7 @@
  *   payments.record   – mark a purchase paid / partly paid (no refunds or cancellations)
  *   payments.request  – send a client the payment link for an existing purchase
  *   discounts.manage  – create, edit and pause discount codes
+ *   tasks.manage      – add, edit, complete and remove tasks on the team board
  *
  * finance.* belongs to the business owner plus role grants (the finance role);
  * admins keep every other permission. Your own permissions need an
@@ -16,7 +17,7 @@
  */
 export const PERMISSIONS = [
   "finance.read", "finance.record", "finance.delete",
-  "admin.view", "payments.record", "payments.request", "discounts.manage",
+  "admin.view", "payments.record", "payments.request", "discounts.manage", "tasks.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
