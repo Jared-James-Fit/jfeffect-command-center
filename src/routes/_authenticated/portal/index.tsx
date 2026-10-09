@@ -42,6 +42,7 @@ import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/po
 import { DeferRender } from "@/components/defer-render";
 import { logPerf } from "@/lib/perf-timing";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
+import { CalendarSyncCard } from "@/components/schedule/calendar-sync-card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { GoalsSetupFlow } from "@/components/client-goals/GoalsSetupFlow";
@@ -443,6 +444,7 @@ function PortalHome() {
           <SectionGroup title="Setup" subtitle="Get the most out of JF Effect">
             <InstallAppCard />
             <NotificationSetupPrompt />
+            <CalendarSyncCard />
           </SectionGroup>
         )}
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { wallTimeToUtc } from "@/lib/schedule-time";
 import { findConflicts, type BusyItem, type SlotConflict } from "@/lib/session-conflicts";
+import { PovInput, resolvePovClientId } from "@/lib/client-pov.server";
 
 /**
  * Server functions behind the one Schedule (client) and the calendar quick
@@ -293,4 +294,28 @@ export const getMyCalendarFeed = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
     return feedUrls(token);
+  });
+
+/**
+ * Is this client's phone calendar subscribed? Read-only and POV-aware, so a
+ * coach viewing as the client sees the same green check the client sees.
+ */
+export const getMyCalendarSyncStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => PovInput.parse(d ?? {}))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const clientId = await resolvePovClientId(supabase, userId, data);
+    if (!clientId) return { isClient: false, lastFetchAt: null as string | null, app: null as string | null };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await (supabaseAdmin as any)
+      .from("client_calendar_sync")
+      .select("last_fetch_at, app")
+      .eq("client_id", clientId)
+      .maybeSingle();
+    return {
+      isClient: true,
+      lastFetchAt: (row?.last_fetch_at as string | null) ?? null,
+      app: (row?.app as string | null) ?? null,
+    };
   });
