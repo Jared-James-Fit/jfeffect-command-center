@@ -467,9 +467,11 @@ export const consumeRecoveryToken = createServerFn({ method: "POST" })
       .update({ consumed_at: new Date().toISOString() })
       .eq("id", row.id);
 
-    // Revoke other sessions
+    // Revoke other sessions. (auth.admin.signOut takes a session's access
+    // token, not a user id, so the old call here never signed anyone out.)
     try {
-      await supabaseAdmin.auth.admin.signOut(row.user_id, "global" as any);
+      const { error: revokeErr } = await (supabaseAdmin as any).rpc("revoke_user_sessions", { _uid: row.user_id });
+      if (revokeErr) console.warn("[account-recovery] session revoke failed", revokeErr.message);
     } catch {
       /* non-fatal */
     }
