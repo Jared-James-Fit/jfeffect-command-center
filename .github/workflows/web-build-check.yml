@@ -3,6 +3,7 @@ name: Web Build Check
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -20,6 +21,18 @@ jobs:
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
+
+      # vitest's own exit code is ignored here: main has known failures
+      # (scripts/known-test-failures.json). The next step fails the job on
+      # any failure that isn't on that list.
+      - name: Unit tests
+        run: npx vitest run --reporter=default --reporter=json --outputFile=vitest-results.json || true
+
+      - name: Fail on new test failures
+        run: node scripts/check-test-failures.mjs vitest-results.json
+
+      - name: Security gate
+        run: npm run security:gate
 
       - name: Build production app
         run: npm run build
