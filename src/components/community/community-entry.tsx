@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ChevronRight, Flame } from "lucide-react";
+import { ChevronRight, Flame, Heart, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
@@ -9,9 +9,19 @@ import { featuredLift, formatTopSet, isTrainingNow, postTimeLabel, reactionEmoji
 import { useCommunityActivity, useCommunityFeed, useReact, useViewerUnit } from "@/lib/community.queries";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
-import { PostDetailDialog } from "@/components/community/post-detail";
 
 const NEW_GRADIENT = "bg-primary";
+
+/** One line that says what a post is: a coach note's first line, or the session and its best lift. */
+function postLine(post: CommunityPost, unit: "kg" | "lb"): string {
+  if (post.kind === "note") return (post.caption ?? "").split("\n").map((l) => l.trim()).find(Boolean) ?? "Posted";
+  const lift = post.stats ? featuredLift(post.stats) : null;
+  return (
+    (!post.stats && post.locked_in_at ? `🔒 Locked in · ${post.session_title ?? "Workout"}` : post.stats?.workout_title ?? post.session_title ?? "Workout") +
+    (lift ? ` · ${lift.name} ${formatTopSet(lift.detail, unit)}` : "") +
+    (lift?.pr ? ` · ${SCOPE_WORD[lift.pr]}` : "")
+  );
+}
 
 /**
  * Header nudge, only when there is something new ("🔥 3 new"). With nothing
@@ -42,13 +52,12 @@ export function CommunityNavButton({ className }: { className?: string }) {
 }
 
 /**
- * Home: the community's front door, right under today's training. Always
- * there for clients (that's where they are: Home and the workout itself), so
- * it can't be missed — "+ Share" first, Instagram-stories style, then who
- * shared this week (ring = new to you). Tapping a person opens their workout
- * right here over Home; "See all" opens the community page, whose Back
- * returns to Home. With nothing shared yet it's a single inviting line,
- * never an empty widget.
+ * Home: the community, right under today's training. "+ Share" first,
+ * Instagram-stories style, then who shared this week (ring = new to you),
+ * the two newest posts, and a full-width "Open the feed". Every tap on a
+ * person or a post opens the feed scrolled to that post (`#at=`), so you're
+ * in the feed and can keep scrolling, never stuck on one post. With nothing
+ * shared yet it's a single inviting line, never an empty widget.
  */
 export function CommunityHomeStrip() {
   const { user } = useAuth();
@@ -57,8 +66,8 @@ export function CommunityHomeStrip() {
   const { data: activity } = useCommunityActivity(true);
   const feed = useCommunityFeed(null);
   const seenAt = activity?.seen_at ? new Date(activity.seen_at).getTime() : 0;
-  const [openPost, setOpenPost] = useState<string | null>(null);
   const navigate = useNavigate();
+  const openAt = (postId?: string) => navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : undefined });
 
   const people = useMemo(() => {
     const posts = feed.data?.pages[0]?.posts ?? [];
@@ -82,29 +91,31 @@ export function CommunityHomeStrip() {
     for (const p of feed.data?.pages[0]?.posts ?? []) if (p.locked_in_at && new Date(p.locked_in_at) >= start) ids.add(p.author.user_id);
     return ids.size;
   }, [feed.data]);
+  // The two newest posts from the last 3 days: other people's first (yours only if that's all there is).
+  const latest = useMemo(() => {
+    const cutoff = Date.now() - 3 * 86_400_000;
+    const recent = (feed.data?.pages[0]?.posts ?? []).filter((p) => new Date(p.created_at).getTime() > cutoff);
+    const others = recent.filter((p) => !p.is_mine);
+    return (others.length ? others : recent).slice(0, 2).map((post) => ({ post, fresh: !post.is_mine && new Date(post.created_at).getTime() > seenAt }));
+  }, [feed.data, seenAt]);
 
   if (!activity?.enabled || feed.isLoading) return null;
 
   return (
     <section className="rounded-2xl border border-border/80 bg-card px-3.5 pb-3 pt-3">
-      <div className="flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[13px] font-black">
-          <Flame className="h-4 w-4 shrink-0 text-orange-500" /> Community
-          {/* Who showed up today beats "N new": it's the nudge to go train. */}
-          {lockedToday > 0 ? (
-            <span className="truncate rounded-full bg-red-500/15 px-1.5 py-px text-[10px] font-bold text-red-600 dark:text-red-400">🔒 {lockedToday} locked in today</span>
-          ) : activity.unseen > 0 ? (
-            <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>
-          ) : null}
-        </div>
-        <Link to="/portal/community" className="-my-1 flex shrink-0 items-center whitespace-nowrap py-1 pl-3 text-[12px] font-bold text-muted-foreground">
-          {people.length ? "See all" : "Open"} <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
+      <Link to="/portal/community" className="-my-1 flex min-w-0 items-center gap-1.5 whitespace-nowrap py-1 text-[13px] font-black">
+        <Flame className="h-4 w-4 shrink-0 text-orange-500" /> Community
+        {/* Who showed up today beats "N new": it's the nudge to go train. */}
+        {lockedToday > 0 ? (
+          <span className="truncate rounded-full bg-red-500/15 px-1.5 py-px text-[10px] font-bold text-red-600 dark:text-red-400">🔒 {lockedToday} locked in today</span>
+        ) : activity.unseen > 0 ? (
+          <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>
+        ) : null}
+      </Link>
       <div className="-mx-1 mt-2.5 flex items-start gap-3 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <ShareWorkoutButton unit={unit} label="Share" variant="bubble" previewOnly={isImpersonating} />
         {people.map((p) => (
-          <button key={p.userId} type="button" onClick={() => setOpenPost(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={p.live ? `${p.name} is training now` : `${p.name}'s latest workout`}>
+          <button key={p.userId} type="button" onClick={() => openAt(p.id)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={p.live ? `${p.name} is training now` : `${p.name}'s latest post`}>
             <span className={cn("relative rounded-full p-[2.5px]", p.live ? "bg-red-500" : p.fresh ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-border")}>
               <span className="block rounded-full bg-card p-[2px]">
                 <UserAvatar src={p.avatar} name={p.name} size={52} expandable={false} />
@@ -121,85 +132,59 @@ export function CommunityHomeStrip() {
           </div>
         )}
       </div>
-      <PostDetailDialog
-        postId={openPost}
-        unit={unit}
-        viewerIsStaff={false}
-        onClose={() => setOpenPost(null)}
-        onOpenAuthor={(a) => {
-          setOpenPost(null);
-          navigate({ to: "/portal/community", hash: a.user_id === user?.id ? undefined : `person=${a.user_id}` });
-        }}
-      />
-    </section>
-  );
-}
-
-/**
- * Coach dashboard: what clients shared this week, with a one-tap 🔥 per post.
- * Coach props are the strongest thing this community has ("my coach saw my
- * training"), so they're one tap from where the coach already starts the day.
- * Hidden when nobody has shared this week.
- */
-export function CommunityCoachCard() {
-  const { user } = useAuth();
-  const { data: unit = "lb" } = useViewerUnit(user?.id);
-  const { data: activity } = useCommunityActivity(true);
-  const feed = useCommunityFeed(null);
-  const posts = useMemo(() => {
-    const weekAgo = Date.now() - 7 * 86_400_000;
-    return (feed.data?.pages[0]?.posts ?? []).filter((p) => !p.is_mine && p.kind !== "note" && new Date(p.created_at).getTime() > weekAgo).slice(0, 4);
-  }, [feed.data]);
-
-  if (!activity?.enabled) return null;
-
-  // Always visible for coaches: it's their tool, and with nothing shared yet
-  // a hidden card meant the coach couldn't see the community existed at all.
-  if (posts.length === 0) {
-    const anyEver = (feed.data?.pages[0]?.posts?.length ?? 0) > 0;
-    return (
-      <Link to="/admin/community" className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition hover:border-primary/40">
-        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full text-white", NEW_GRADIENT)}>
-          <Flame className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-bold">Community</div>
-          <div className="truncate text-[12px] text-muted-foreground">
-            {anyEver ? "Nothing shared this week yet. Open the feed" : "No posts yet. Clients share from Home and after each workout"}
-          </div>
+      {latest.length > 0 && (
+        <div className="mt-2.5 divide-y divide-border/70 border-t border-border/70">
+          {latest.map(({ post, fresh }) => (
+            <button
+              key={post.id}
+              type="button"
+              onClick={() => openAt(post.id)}
+              className="flex w-full items-center gap-2.5 py-2.5 text-left active:opacity-70"
+              aria-label={`${post.author.name}'s post`}
+            >
+              <UserAvatar src={post.author.avatar_url} name={post.author.name} size={32} expandable={false} />
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5 text-[12px] leading-tight">
+                  {fresh && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-label="New" />}
+                  <span className="truncate font-bold">{post.is_mine ? "You" : post.author.name}</span>
+                  <span className="shrink-0 text-muted-foreground">· {postTimeLabel(post.created_at)}</span>
+                </div>
+                <div className="mt-0.5 truncate text-[13px] leading-snug text-foreground/85">{postLine(post, unit)}</div>
+              </div>
+              {((post.reaction_count ?? 0) > 0 || post.comment_count > 0) && (
+                <span className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-muted-foreground">
+                  {(post.reaction_count ?? 0) > 0 && (
+                    <span className="inline-flex items-center gap-0.5">
+                      <Heart className="h-3.5 w-3.5" /> {post.reaction_count}
+                    </span>
+                  )}
+                  {post.comment_count > 0 && (
+                    <span className="inline-flex items-center gap-0.5">
+                      <MessageCircle className="h-3.5 w-3.5" /> {post.comment_count}
+                    </span>
+                  )}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-      </Link>
-    );
-  }
-  const waiting = posts.filter((p) => !p.my_reaction).length;
-
-  return (
-    <section className="rounded-xl border border-border bg-card p-4">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-[13px] font-bold tracking-tight">
-          <Flame className="h-4 w-4 text-orange-500" /> Community
-          {activity.unseen > 0 && <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold text-white", NEW_GRADIENT)}>{activity.unseen} new</span>}
-        </h2>
-        <Link to="/admin/community" className="flex items-center text-[12px] font-bold text-muted-foreground">
-          Open <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-      <p className="mb-2 text-[12px] text-muted-foreground">
-        {waiting > 0 ? `${waiting} ${waiting === 1 ? "workout is" : "workouts are"} waiting on your props. One tap tells them you saw it.` : "You've given props on everything shared this week."}
-      </p>
-      <div className="divide-y divide-border/70">
-        {posts.map((p) => (
-          <CoachPostRow key={p.id} post={p} unit={unit} />
-        ))}
-      </div>
+      )}
+      <button
+        type="button"
+        onClick={() => openAt()}
+        className="mt-1.5 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-muted text-[13px] font-black active:scale-[0.99]"
+      >
+        Open the feed
+        {activity.unseen > 0 && <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-primary-foreground">{activity.unseen > 9 ? "9+" : activity.unseen} new</span>}
+        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+      </button>
     </section>
   );
 }
 
-function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
+/** One shared workout with a one-tap 🔥 (the Community page's "waiting on your props"). */
+export function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
   const react = useReact(post, true);
-  const lift = post.stats ? featuredLift(post.stats) : null;
   // any reaction counts as props given (a ❤️ from the feed too); props itself is 🔥
   const given = !!post.my_reaction;
   return (
@@ -209,11 +194,7 @@ function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }
         <div className="truncate text-[14px] font-bold">
           {post.author.name} <span className="font-normal text-muted-foreground">· {postTimeLabel(post.created_at)}</span>
         </div>
-        <div className="truncate text-[12px] text-muted-foreground">
-          {!post.stats && post.locked_in_at ? `🔒 Locked in · ${post.session_title ?? "Workout"}` : post.stats?.workout_title ?? post.session_title ?? "Workout"}
-          {lift ? ` · ${lift.name} ${formatTopSet(lift.detail, unit)}` : ""}
-          {lift?.pr ? ` · ${SCOPE_WORD[lift.pr]}` : ""}
-        </div>
+        <div className="truncate text-[12px] text-muted-foreground">{postLine(post, unit)}</div>
       </Link>
       <button
         type="button"
