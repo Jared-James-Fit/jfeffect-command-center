@@ -42,3 +42,12 @@ describe("post views", () => {
     expect(ui).toContain("View posts privately");
   });
 });
+
+import { shouldPersistQueryKey } from "@/lib/query-persister";
+describe("community photo links", () => {
+  it("are never restored from the saved cache (they expire in an hour)", () => {
+    expect(shouldPersistQueryKey(["community-media-urls", "a|b"])).toBe(false);
+    expect(shouldPersistQueryKey(["community-media-full", "a"])).toBe(false);
+    expect(shouldPersistQueryKey(["community-thumb", "a"])).toBe(false);
+  });
+});

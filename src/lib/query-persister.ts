@@ -11,7 +11,9 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // v6 evicts persisted unread/thread lists that could light stale nav badges.
 // v7 evicts every saved copy after a phone's admin app kept failing on a
 // snapshot from an older build (a fresh browser loaded the same pages fine).
-export const QUERY_PERSIST_BUSTER = "v7";
+// v8 evicts saved community photo links (signed for an hour, kept for 24h:
+// broken images on reopen).
+export const QUERY_PERSIST_BUSTER = "v8";
 export const QUERY_PERSIST_KEY = "jfeffect-rq-cache";
 export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
@@ -65,6 +67,10 @@ const DO_NOT_PERSIST_PREFIXES = [
   // device/tab until the pool refetches. They're cheap to refetch.
   "exercise-search-pool",
   "quick-swap-suggestions",
+  // Signed photo / video links for the community expire after an hour; a
+  // restored copy (up to 24h old) paints broken images until it refetches.
+  "community-media",
+  "community-thumb",
 ];
 
 export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
