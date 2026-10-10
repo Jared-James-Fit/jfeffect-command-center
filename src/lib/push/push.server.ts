@@ -11,7 +11,8 @@ export type PushCategory =
   | "billing"
   | "coaching_apps"
   | "wins"
-  | "reminders";
+  | "reminders"
+  | "community";
 
 export type PushPayload = {
   title: string;

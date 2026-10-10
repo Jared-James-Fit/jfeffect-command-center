@@ -18,6 +18,7 @@ const Input = z.object({
     "checkin_reviewed",
     "nutrition_targets_updated",
     "community_coach_recognition",
+    "community_activity",
   ]),
   /** Record id (submission / video / comment / review / community post), or client id for targets. */
   id: z.string().uuid(),
@@ -41,6 +42,12 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
       ]);
       return !!a || !!c;
     };
+
+    // Crew activity: whatever this person just caused (claimed once, by them).
+    if (data.event === "community_activity") {
+      const { pushCommunityActivity } = await import("@/lib/push/community-push.server");
+      return pushCommunityActivity(sb, userId);
+    }
 
     let clientId: string | null = null;
     let sourceId = data.id;

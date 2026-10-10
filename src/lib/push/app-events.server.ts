@@ -140,7 +140,8 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     url: () => "/portal/nutrition-targets", rateMinutes: 360,
   },
   // The coach reacted to / commented on a workout the athlete chose to share.
-  // The only push the community ever sends: no likes, no peer activity.
+  // Crew activity (everyone else's reactions, comments, replies) goes out
+  // from community-push.server.ts, which skips what this already covers.
   community_coach_recognition: {
     to: "client", category: "lift_reviews",
     title: () => "Props from your coach",
