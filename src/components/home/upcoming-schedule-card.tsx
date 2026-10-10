@@ -8,7 +8,7 @@ import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { KIND_META, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
 import { isAppointmentItem, selectHomeUpcoming } from "@/lib/home-upcoming";
-import { WeekStrip, nextSevenDays } from "@/components/calendar/week-strip";
+import { WeekStrip } from "@/components/calendar/week-strip";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +23,7 @@ function dayLabel(date: string, today: string): string {
   );
   if (diff === 0) return "Today";
   if (diff === 1) return "Tomorrow";
+  if (diff === -1) return "Yesterday";
   return new Date(date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
@@ -62,7 +63,6 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   });
   const today = isoToday();
   const [selected, setSelected] = useState(today);
-  const days = useMemo(() => nextSevenDays(today), [today]);
 
   const summary = useMemo(() => selectHomeUpcoming(items ?? [], { today }), [items, today]);
   const countByDay = useMemo(() => {
@@ -118,7 +118,6 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
       </div>
 
       <WeekStrip
-        days={days}
         today={today}
         selected={selected}
         onSelect={setSelected}

@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { CalendarDays, CheckCircle2, ChevronRight, Dumbbell } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { WeekStrip, nextSevenDays } from "@/components/calendar/week-strip";
+import { WeekStrip, weekDays } from "@/components/calendar/week-strip";
 import { getEnrollmentSchedule } from "@/lib/member-plans.functions";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +22,7 @@ function dayLabel(date: string, today: string) {
   const diff = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
   if (diff === 0) return "today";
   if (diff === 1) return "tomorrow";
+  if (diff === -1) return "yesterday";
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 }
 
@@ -36,8 +37,8 @@ export function MemberWeekCard({ memberId }: { memberId: string | null | undefin
   const fetchSchedule = useServerFn(getEnrollmentSchedule);
   const tz = typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined;
   const today = todayIn(tz);
-  const days = useMemo(() => nextSevenDays(today), [today]);
   const [selected, setSelected] = useState(today);
+  const thisWeek = useMemo(() => weekDays(selected).includes(today), [selected, today]);
 
   // Same query (and cache) as the Workouts page.
   const { data: enrollment } = useQuery({
@@ -110,7 +111,7 @@ export function MemberWeekCard({ memberId }: { memberId: string | null | undefin
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
         <h3 className="flex min-w-0 items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">
           <CalendarDays className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <span className="truncate">This week</span>
+          <span className="truncate">{thisWeek ? "This week" : "Week"}</span>
         </h3>
         <Link to="/m/workouts" className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary">
           Workouts <ChevronRight className="h-3.5 w-3.5" />
@@ -118,7 +119,6 @@ export function MemberWeekCard({ memberId }: { memberId: string | null | undefin
       </div>
 
       <WeekStrip
-        days={days}
         today={today}
         selected={selected}
         onSelect={setSelected}
@@ -128,7 +128,7 @@ export function MemberWeekCard({ memberId }: { memberId: string | null | undefin
 
       {rows.length === 0 ? (
         <div className="space-y-1.5">
-          <p className="text-sm text-muted-foreground">Rest day {dayLabel(selected, today)}.</p>
+          <p className="text-sm text-muted-foreground">{selected < today ? "Nothing scheduled" : "Rest day"} {dayLabel(selected, today)}.</p>
           {nextUp && (
             <Link {...workoutLink(nextUp)} className="flex items-center gap-2 rounded-lg border border-border bg-secondary/20 px-3 py-2">
               <Dumbbell className="h-4 w-4 shrink-0 text-primary" />
