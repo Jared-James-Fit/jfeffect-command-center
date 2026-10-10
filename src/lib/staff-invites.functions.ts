@@ -331,7 +331,6 @@ export const getStaffInvitePreview = createServerFn({ method: "POST" })
       role: inv.role as string,
       roleLabel: info?.label ?? "Staff",
       welcome: info?.welcome ?? null,
-      requiresAuthenticator: !!info?.requiresAuthenticator,
     };
   });
 

@@ -12,21 +12,13 @@
  *   tasks.manage      – add, edit, complete and remove tasks on the team board
  *
  * finance.* belongs to the business owner plus role grants (the finance role);
- * admins keep every other permission. Your own permissions need an
- * MFA-verified session.
+ * admins keep every other permission.
  */
 export const PERMISSIONS = [
   "finance.read", "finance.record", "finance.delete",
   "admin.view", "payments.record", "payments.request", "discounts.manage", "tasks.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
-
-/** Thrown when the session isn't MFA-verified; the UI sends the user to verify. */
-export const MFA_REQUIRED = "MFA_REQUIRED";
-
-export function isMfaRequiredError(e: unknown): boolean {
-  return String((e as any)?.message ?? e ?? "").includes(MFA_REQUIRED);
-}
 
 /** What a view-only login sees when it tries to change something it can't. */
 export const VIEW_ONLY_MESSAGE = "View only: your login can look but can't change this.";

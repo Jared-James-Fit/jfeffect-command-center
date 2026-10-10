@@ -390,9 +390,6 @@ function RoleDetail({ role }: { role: StaffRoleKey }) {
           </ul>
         </div>
       )}
-      {info.requiresAuthenticator && (
-        <p className="text-xs text-muted-foreground sm:col-span-2">Signs in with a password plus an authenticator app code.</p>
-      )}
     </div>
   );
 }
@@ -612,10 +609,7 @@ function AddStaffDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenC
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">What happens next</div>
               <ol className="space-y-2 text-sm">
                 <li className="flex gap-2"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-bold">1</span>They tap the link and create a password for {form.email.trim().toLowerCase()}.</li>
-                {STAFF_ROLE_INFO[role].requiresAuthenticator && (
-                  <li className="flex gap-2"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-bold">2</span>They connect an authenticator app (one tap on their phone).</li>
-                )}
-                <li className="flex gap-2"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-bold">{STAFF_ROLE_INFO[role].requiresAuthenticator ? 3 : 2}</span>They land straight in {role === "finance" ? "the admin app, view-only" : "their area"}. You'll see them under Team.</li>
+                <li className="flex gap-2"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary text-[11px] font-bold">2</span>They land straight in {role === "finance" ? "the admin app, view-only" : "their area"}. You'll see them under Team.</li>
               </ol>
             </div>
             <div className="flex gap-2">

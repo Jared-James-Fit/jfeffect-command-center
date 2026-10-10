@@ -1,6 +1,6 @@
 -- Minimal stand-ins for the tables and helpers 20261028090000_finance_tasks_and_feed.sql
 -- touches. auth.uid() reads the test.uid setting and auth.jwt() the test.aal
--- setting (aal2 = MFA-verified). Roles are rows in user_roles; community staff
+-- setting (the sign-in level; nothing here asks for a second step). Roles are rows in user_roles; community staff
 -- are admins and coaches, as in the app.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon; END IF;
@@ -17,12 +17,10 @@ CREATE TABLE public.role_permissions (role text NOT NULL, permission text NOT NU
 INSERT INTO public.role_permissions VALUES ('finance', 'admin.view'), ('finance', 'finance.read'), ('finance', 'discounts.manage');
 CREATE TABLE public.coaches (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid, archived boolean DEFAULT false, status text DEFAULT 'Active');
 
--- the real ones (20261018100100_role_permissions, 20261020093700_finance_admin_view)
-CREATE FUNCTION public.session_mfa_verified() RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT coalesce(auth.jwt() ->> 'aal', '') = 'aal2' $$;
+-- the real ones (20261018100100_role_permissions, 20261020093700_finance_admin_view, as changed by 20261102090000_finance_login_password_only)
 CREATE FUNCTION public.is_business_owner(_uid uuid) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT false $$;
 CREATE FUNCTION public.has_permission(_uid uuid, _perm text) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT _uid IS NOT NULL
-    AND (_uid IS DISTINCT FROM auth.uid() OR public.session_mfa_verified())
     AND (
       (_perm LIKE 'finance.%' AND public.is_business_owner(_uid))
       OR (_perm NOT LIKE 'finance.%' AND EXISTS (
@@ -32,7 +30,6 @@ CREATE FUNCTION public.has_permission(_uid uuid, _perm text) RETURNS boolean LAN
                   WHERE ur.user_id = _uid AND rp.permission = _perm)) $$;
 CREATE FUNCTION public.is_admin_viewer() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT auth.uid() IS NOT NULL
-    AND public.session_mfa_verified()
     AND EXISTS (SELECT 1 FROM public.user_roles ur
                   JOIN public.role_permissions rp ON rp.role = ur.role
                  WHERE ur.user_id = auth.uid() AND rp.permission = 'admin.view')

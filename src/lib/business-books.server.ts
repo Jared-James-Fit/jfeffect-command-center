@@ -34,7 +34,7 @@ export async function assertBusinessOwner(supabase: any, userId: string) {
 
 /**
  * Read or record in the books: the business owner, or a finance login with
- * the permission (MFA-verified, see has_permission). Deleting stays with the
+ * the permission (see has_permission). Deleting stays with the
  * owner (assertBusinessOwner). Returns who is acting.
  */
 export async function assertBooksAccess(

@@ -25,7 +25,6 @@ export type StaffRoleInfo = {
   setup: "invite" | "people" | "owner_only" | "retired";
   /** Shown on the setup page and in the invite message. */
   welcome?: string;
-  requiresAuthenticator?: boolean;
 };
 
 export const STAFF_ROLE_INFO: Record<StaffRoleKey, StaffRoleInfo> = {
@@ -49,7 +48,6 @@ export const STAFF_ROLE_INFO: Record<StaffRoleKey, StaffRoleInfo> = {
     ],
     setup: "invite",
     welcome: "You'll see the whole app, view-only, and keep the books: revenue, expenses, receipts, taxes and payments.",
-    requiresAuthenticator: true,
   },
   coach: {
     key: "coach",

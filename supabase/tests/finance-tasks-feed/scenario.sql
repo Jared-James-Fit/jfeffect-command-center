@@ -45,8 +45,9 @@ SELECT t.fails($$INSERT INTO public.tasks (title, scope) VALUES ('sneaky', 'medi
 SELECT t.fails($$UPDATE public.tasks SET scope = 'media' WHERE id = '00000000-0000-0000-0000-000000000071'$$, 'row-level security', 'or move a task onto it');
 
 SET test.aal = 'aal1';
-SELECT t.ok((SELECT count(*) FROM public.tasks) = 0, 'not before MFA');
-SELECT t.fails($$INSERT INTO public.tasks (title) VALUES ('no mfa')$$, 'row-level security', 'no adding before MFA');
+SELECT t.ok((SELECT count(*) FROM public.tasks) = 1, 'a password sign-in alone is enough to see the board');
+INSERT INTO public.tasks (title) VALUES ('Password only');
+SELECT t.ok(t.touched($$DELETE FROM public.tasks WHERE title = 'Password only'$$) = 1, 'and to work it');
 
 SET test.uid = '00000000-0000-0000-0000-0000000000a1';
 SET test.aal = 'aal2';
@@ -79,7 +80,7 @@ SELECT t.ok(public.community_comment_media_readable('a1/comment.jpg'), 'and phot
 SELECT t.ok(NOT public.community_post_media_readable('ad/cake.jpg'), 'not a birthday draft that hasn''t gone out');
 SELECT t.ok(NOT public.community_post_media_readable('a1/nothing.jpg'), 'not a file on no post');
 SET test.aal = 'aal1';
-SELECT t.ok(NOT public.community_post_media_readable('a1/squat.mp4'), 'not before MFA');
+SELECT t.ok(public.community_post_media_readable('a1/squat.mp4'), 'a password sign-in alone is enough for the photos');
 
 SET test.uid = '00000000-0000-0000-0000-0000000000a1';
 SET test.aal = 'aal1';

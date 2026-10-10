@@ -1,6 +1,6 @@
 /**
  * requirePermission(perm): server-function middleware that authenticates the
- * caller (requireSupabaseAuth) and then checks the permission, MFA included.
+ * caller (requireSupabaseAuth) and then checks the permission.
  *
  *   createServerFn({ method: "GET" })
  *     .middleware([requirePermission("finance.read")])
