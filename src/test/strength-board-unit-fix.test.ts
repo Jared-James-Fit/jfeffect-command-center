@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 // Hall of Strength, Oct 2026: the review held back "305 kg ×5" squats that were
 // 305 lb typed into a kg card. Count it / Remove were both wrong answers.
-const sql = readFileSync("supabase/migrations/20261031090000_strength_board_unit_fix.sql", "utf8");
+const sql = readFileSync("supabase/migrations/20261031130000_strength_board_unit_fix.sql", "utf8");
 const board = readFileSync("src/components/portal/strength-board.tsx", "utf8");
 const tools = board.slice(board.indexOf("export function StrengthBoardCoachTools"), board.indexOf("/** Remove a lift that passed"));
 
