@@ -25,12 +25,14 @@ import { useServerFn } from "@tanstack/react-start";
  *   4. One-time phone calendar setup (Google, Apple, Outlook, any app).
  */
 export const Route = createFileRoute("/_authenticated/portal/calendar")({
+  validateSearch: (s: Record<string, unknown>): { sync?: 1 } => (s.sync === 1 || s.sync === "1" ? { sync: 1 } : {}),
   head: () => ({ meta: [{ title: "Schedule" }] }),
   component: SchedulePage,
 });
 
 function SchedulePage() {
   const portalUserId = usePortalUserId();
+  const { sync } = Route.useSearch();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -91,7 +93,7 @@ function SchedulePage() {
           />
         </section>
 
-        {client?.id && <CalendarSyncCard />}
+        {client?.id && <CalendarSyncCard autoOpen={sync === 1 && !isImpersonating} />}
         {client?.id && (
           <RequestChangeSheet clientId={client.id} session={changing} onClose={() => setChanging(null)} isPov={isImpersonating} />
         )}

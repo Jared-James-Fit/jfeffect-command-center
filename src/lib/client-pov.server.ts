@@ -21,7 +21,7 @@ export function isPovRequest(userId: string, pov?: PovArgs | null) {
   return !!pov && ((!!pov.viewAsUserId && pov.viewAsUserId !== userId) || !!pov.viewAsClientId);
 }
 
-async function canViewClient(supabase: any, userId: string, clientId: string) {
+export async function canViewClient(supabase: any, userId: string, clientId: string) {
   const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
     supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
     supabase.rpc("is_assigned_coach", { _client_id: clientId }),

@@ -41,8 +41,8 @@ export function MyCalendarCard() {
   return (
     <div data-my-calendar className="space-y-2">
       <UpcomingScheduleCard clientId={mine.id} links={false} />
-      {/* Their own Google subscription; the owner previewing can't set it up for them. */}
-      {!preview && <CalendarSyncCard />}
+      {/* Their own Google subscription; the owner previewing sees it read-only. */}
+      <CalendarSyncCard viewAsClientId={preview ? mine.id : null} />
     </div>
   );
 }

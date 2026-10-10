@@ -11,6 +11,7 @@ import {
   getMyCalendarFeed,
   getMyCalendarSyncStatus,
   startGoogleCalendarConnect,
+  syncMyGoogleCalendarNow,
 } from "@/lib/schedule.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import {
@@ -74,16 +75,27 @@ function cardState(data: any, startedAt: number | null): CalendarSyncState {
  * calendar. Green only once it really works: Google Calendar connected, or
  * Google / Apple / Outlook has actually pulled the feed (recorded server-side).
  */
-export function CalendarSyncCard({ className }: { className?: string }) {
+export function CalendarSyncCard({
+  className,
+  viewAsClientId,
+  autoOpen,
+}: {
+  className?: string;
+  /** Read-only preview of another client's status (team preview). */
+  viewAsClientId?: string | null;
+  /** Open the setup sheet on mount (?sync=1 link). */
+  autoOpen?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [started, setStarted] = useState<Started>(() => (typeof window === "undefined" ? { at: null, app: null } : readStarted()));
   const pov = usePovArgs();
-  const isPov = !!pov.viewAsClientId;
+  const previewId = viewAsClientId ?? null;
+  const isPov = !!pov.viewAsClientId || !!previewId;
   const statusFn = usePovFn(useServerFn(getMyCalendarSyncStatus));
 
   const { data: status, isLoading } = useQuery({
-    queryKey: ["my-calendar-sync", pov.viewAsClientId ?? null],
-    queryFn: () => statusFn({ data: {} }),
+    queryKey: ["my-calendar-sync", previewId ?? pov.viewAsClientId ?? null],
+    queryFn: () => statusFn({ data: previewId ? { viewAsClientId: previewId } : {} }),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     // While waiting for the calendar to connect, check back often so the card
@@ -103,6 +115,14 @@ export function CalendarSyncCard({ className }: { className?: string }) {
     }
     prevState.current = state;
   }, [state, app]);
+
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (autoOpen && !isPov && status?.isClient && !autoOpened.current) {
+      autoOpened.current = true;
+      setOpen(true);
+    }
+  }, [autoOpen, isPov, status?.isClient]);
 
   if (isLoading || !status?.isClient) return null;
 
@@ -195,6 +215,31 @@ function CalendarSyncSheet({
   const feedFn = useServerFn(getMyCalendarFeed);
   const startGoogleFn = useServerFn(startGoogleCalendarConnect);
   const disconnectGoogleFn = useServerFn(disconnectGoogleCalendar);
+  const syncNowFn = useServerFn(syncMyGoogleCalendarNow);
+  const [syncing, setSyncing] = useState(false);
+  const [lastManualSync, setLastManualSync] = useState(0);
+  const syncNow = async () => {
+    if (Date.now() - lastManualSync < 60_000) {
+      toast.message("Synced less than a minute ago. Try again in a moment.");
+      return;
+    }
+    setSyncing(true);
+    try {
+      const r: any = await syncNowFn();
+      setLastManualSync(Date.now());
+      if (r?.skipped === "revoked") toast.error("Google access was removed. Reconnect Google Calendar.");
+      else if (r?.skipped) toast.message("Nothing to sync yet.");
+      else
+        toast.success(
+          `Synced ${r?.events ?? 0} item${r?.events === 1 ? "" : "s"}: ${r?.inserted ?? 0} added, ${r?.updated ?? 0} updated, ${r?.removed ?? 0} removed${r?.failed ? `, ${r.failed} failed` : ""}.`,
+        );
+      await qc.invalidateQueries({ queryKey: ["my-calendar-sync"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't sync.");
+    } finally {
+      setSyncing(false);
+    }
+  };
   const [resetting, setResetting] = useState(false);
   const [openingGoogle, setOpeningGoogle] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -324,6 +369,25 @@ function CalendarSyncSheet({
               {google?.error && (
                 <p className="text-xs leading-snug text-amber-300">The last update didn't fully go through. It tries again every 5 minutes.</p>
               )}
+              <p className="text-xs leading-snug text-muted-foreground">
+                Your JF Effect sessions, appointments and scheduled workouts are added to a separate "JF Effect" calendar in your
+                Google account. Workouts show as all-day items.
+              </p>
+              <p className="text-xs leading-snug text-muted-foreground">
+                <b>If you don't see them:</b> in the Google Calendar app make sure "JF Effect" is ticked; on iPhone's Calendar app,
+                enable it at{" "}
+                <a href="https://calendar.google.com/calendar/syncselect" target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                  calendar.google.com/calendar/syncselect
+                </a>
+                .
+              </p>
+              <p className="text-xs leading-snug text-muted-foreground">
+                One-way sync: the app adds its schedule to Google. It doesn't import your personal Google events.
+              </p>
+              <Button type="button" size="sm" variant="outline" className="h-10 w-full sm:w-auto" disabled={isPov || syncing} onClick={syncNow}>
+                {syncing ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                {syncing ? "Syncing…" : "Sync now"}
+              </Button>
               {!isPov && (
                 <button
                   type="button"

@@ -141,7 +141,7 @@ const SEEN_TONE = {
   muted: "border-border bg-muted/40",
 } as const;
 
-export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void }) {
+export function ClientRow({ r, onArchive, calSync }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void; calSync?: "google" | "feed" | null }) {
   const badges = rowStatusChips(r);
   const seen = lastSeenChip(r);
   // The status row already carries "N Missed" when it fits, so the tag by the name only fills in
@@ -221,6 +221,18 @@ export function ClientRow({ r, onArchive }: { r: DirectoryRow; onArchive?: (r: D
             </ClientNameLink>
             <div className="truncate text-xs text-muted-foreground">{r.email || "—"}</div>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+              {calSync !== undefined && (
+                <StatusTip
+                  title="Calendar sync"
+                  body={calSync === "google" ? "Google Calendar connected." : calSync === "feed" ? "Calendar feed subscribed and fetched recently." : "Calendar sync not set up."}
+                  className={TAG}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays className={"h-3 w-3 " + (calSync ? "text-emerald-500" : "opacity-50")} />
+                    {calSync === "google" ? "Google" : calSync === "feed" ? "Feed" : "No sync"}
+                  </span>
+                </StatusTip>
+              )}
               {r.coaching_type && (
                 <StatusTip
                   title="Coaching type"

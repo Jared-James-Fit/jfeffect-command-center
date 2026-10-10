@@ -5976,6 +5976,7 @@ export type Database = {
           hidden_at: string | null
           hidden_by: string | null
           id: string
+          media_duration: number | null
           media_height: number | null
           media_path: string | null
           media_thumb_path: string | null
@@ -5992,6 +5993,7 @@ export type Database = {
           hidden_at?: string | null
           hidden_by?: string | null
           id?: string
+          media_duration?: number | null
           media_height?: number | null
           media_path?: string | null
           media_thumb_path?: string | null
@@ -6008,6 +6010,7 @@ export type Database = {
           hidden_at?: string | null
           hidden_by?: string | null
           id?: string
+          media_duration?: number | null
           media_height?: number | null
           media_path?: string | null
           media_thumb_path?: string | null
@@ -6051,6 +6054,57 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      community_notifications: {
+        Row: {
+          actor_user_id: string
+          comment_id: string | null
+          created_at: string
+          emoji: string | null
+          id: string
+          kind: string
+          post_id: string
+          pushed_at: string | null
+          recipient_user_id: string
+        }
+        Insert: {
+          actor_user_id: string
+          comment_id?: string | null
+          created_at?: string
+          emoji?: string | null
+          id?: string
+          kind: string
+          post_id: string
+          pushed_at?: string | null
+          recipient_user_id: string
+        }
+        Update: {
+          actor_user_id?: string
+          comment_id?: string | null
+          created_at?: string
+          emoji?: string | null
+          id?: string
+          kind?: string
+          post_id?: string
+          pushed_at?: string | null
+          recipient_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_notifications_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "community_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_notifications_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       community_poll_options: {
         Row: {
@@ -6152,17 +6206,47 @@ export type Database = {
           },
         ]
       }
+      community_post_views: {
+        Row: {
+          post_id: string
+          viewed_at: string
+          viewer_user_id: string
+        }
+        Insert: {
+          post_id: string
+          viewed_at?: string
+          viewer_user_id: string
+        }
+        Update: {
+          post_id?: string
+          viewed_at?: string
+          viewer_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_views_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_posts: {
         Row: {
           archived_at: string | null
           archived_from: string | null
+          audio_duration: number | null
+          audio_path: string | null
           author_user_id: string
+          auto_shared: boolean
           caption: string | null
           client_id: string | null
           completion_id: string | null
           created_at: string
           edited_at: string | null
           extra_media: Json
+          gif_url: string | null
           hide_loads: boolean
           id: string
           kind: string
@@ -6187,13 +6271,17 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           archived_from?: string | null
+          audio_duration?: number | null
+          audio_path?: string | null
           author_user_id: string
+          auto_shared?: boolean
           caption?: string | null
           client_id?: string | null
           completion_id?: string | null
           created_at?: string
           edited_at?: string | null
           extra_media?: Json
+          gif_url?: string | null
           hide_loads?: boolean
           id?: string
           kind?: string
@@ -6218,13 +6306,17 @@ export type Database = {
         Update: {
           archived_at?: string | null
           archived_from?: string | null
+          audio_duration?: number | null
+          audio_path?: string | null
           author_user_id?: string
+          auto_shared?: boolean
           caption?: string | null
           client_id?: string | null
           completion_id?: string | null
           created_at?: string
           edited_at?: string | null
           extra_media?: Json
+          gif_url?: string | null
           hide_loads?: boolean
           id?: string
           kind?: string
@@ -6293,24 +6385,30 @@ export type Database = {
       }
       community_profiles: {
         Row: {
+          auto_share_workouts: boolean
           avatar_path: string | null
           bio: string | null
+          private_views: boolean
           same_person_as: string | null
           title: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          auto_share_workouts?: boolean
           avatar_path?: string | null
           bio?: string | null
+          private_views?: boolean
           same_person_as?: string | null
           title?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          auto_share_workouts?: boolean
           avatar_path?: string | null
           bio?: string | null
+          private_views?: boolean
           same_person_as?: string | null
           title?: string | null
           updated_at?: string
@@ -23159,6 +23257,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      community_claim_pushes: { Args: { _actor: string }; Returns: Json }
       community_clean_media: {
         Args: { _keep?: Json; _media: Json; _uid: string }
         Returns: Json
@@ -23289,6 +23388,7 @@ export type Database = {
       }
       community_main_account: { Args: { _user_id: string }; Returns: string }
       community_mark_seen: { Args: never; Returns: undefined }
+      community_mark_viewed: { Args: { _post_ids: string[] }; Returns: number }
       community_member_directory: {
         Args: never
         Returns: {
@@ -23302,6 +23402,24 @@ export type Database = {
         Returns: Json
       }
       community_my_archived: { Args: never; Returns: Json }
+      community_my_completion_title: {
+        Args: { _completion_id: string }
+        Returns: string
+      }
+      community_my_notifications: { Args: never; Returns: Json }
+      community_my_session_title: { Args: { _day_id: string }; Returns: string }
+      community_my_settings: { Args: never; Returns: Json }
+      community_notify: {
+        Args: {
+          _actor: string
+          _comment_id: string
+          _emoji: string
+          _kind: string
+          _post_id: string
+          _recipient: string
+        }
+        Returns: undefined
+      }
       community_pin_comment: {
         Args: { _comment_id: string; _pinned?: boolean }
         Returns: undefined
@@ -23330,6 +23448,11 @@ export type Database = {
       }
       community_post_points_status: { Args: never; Returns: Json }
       community_post_reactors: { Args: { _post_id: string }; Returns: Json }
+      community_post_viewers: { Args: { _post_id: string }; Returns: Json }
+      community_post_views_summary: {
+        Args: { _post_id: string }
+        Returns: Json
+      }
       community_post_visible: {
         Args: { _author: string; _client: string; _visibility: string }
         Returns: boolean
@@ -23339,6 +23462,10 @@ export type Database = {
         Returns: undefined
       }
       community_profile: { Args: { _user_id: string }; Returns: Json }
+      community_public_session_title: {
+        Args: { _at: string; _client_id: string; _day_id: string }
+        Returns: string
+      }
       community_publish_series: {
         Args: { _at?: string; _force?: boolean; _series?: string }
         Returns: Json
@@ -23348,6 +23475,10 @@ export type Database = {
         Returns: undefined
       }
       community_recent_completions: { Args: { _limit?: number }; Returns: Json }
+      community_remove_note_scene: {
+        Args: { _post_id: string }
+        Returns: undefined
+      }
       community_save_post: {
         Args: {
           _caption?: string
@@ -23400,11 +23531,25 @@ export type Database = {
         Args: { _active?: boolean; _body: string; _id: string; _media?: Json }
         Returns: undefined
       }
+      community_set_auto_share: { Args: { _on: boolean }; Returns: undefined }
       community_set_avatar: { Args: { _path: string }; Returns: Json }
       community_set_bio: { Args: { _bio: string }; Returns: undefined }
+      community_set_post_extras: {
+        Args: {
+          _audio_duration: number
+          _audio_path: string
+          _gif_url: string
+          _post_id: string
+        }
+        Returns: undefined
+      }
       community_set_post_media: {
         Args: { _media: Json; _post_id: string }
         Returns: Json
+      }
+      community_set_private_views: {
+        Args: { _on: boolean }
+        Returns: undefined
       }
       community_share_comment: {
         Args: { _caption?: string; _comment_id: string }
@@ -24637,6 +24782,15 @@ export type Database = {
         Returns: undefined
       }
       reopen_checkin_review: { Args: { _checkin_id: string }; Returns: boolean }
+      report_page_error: {
+        Args: {
+          _device?: Json
+          _message: string
+          _route: string
+          _stack?: string
+        }
+        Returns: undefined
+      }
       reserve_session_for_pt: {
         Args: { _pt_session_id: string }
         Returns: undefined
