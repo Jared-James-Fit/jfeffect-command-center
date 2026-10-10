@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { describeWarmup, estimateOneRepMax, normalizeWarmupRow, repsLeftLabel, type WarmupSetRow, type WarmupUnit } from "@/lib/final-warmup";
 import { validateSetField } from "@/lib/set-input-cascade";
-import { WARMUP_MAX_REPS, type LoadSuggestion } from "@/lib/load-suggestion";
+import { WARMUP_MAX_REPS, percentOf1RM, type LoadSuggestion } from "@/lib/load-suggestion";
 
 const sb = supabase as any;
 const MAX_WARMUPS = 8;
@@ -302,7 +302,12 @@ function WarmupForm({
   const cell =
     "h-11 w-full rounded-lg border border-input bg-background px-1 text-center text-lg font-bold tabular-nums text-foreground placeholder:text-muted-foreground/40";
   const label = "mb-1 block text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground";
-  const range = hint ? (hint.low === hint.high ? `${fmt(hint.target)}` : `${fmt(hint.low)}–${fmt(hint.high)}`) : null;
+  const range = hint && hint.low !== hint.high ? `${fmt(hint.low)}–${fmt(hint.high)} ${unit}` : null;
+  // What this warm-up alone says (the e1RM shown × today's %). When the
+  // suggestion differs, say why instead of showing numbers that don't add up.
+  const pct = tuning ? percentOf1RM(target!.reps, 10 - target!.rpe) : null;
+  const fromWarmup = max != null && pct ? Math.round((max * pct) / (unit === "kg" ? 2.5 : 5)) * (unit === "kg" ? 2.5 : 5) : null;
+  const blended = hint != null && fromWarmup != null && Math.abs(fromWarmup - hint.target) >= (unit === "kg" ? 2.5 : 5);
 
   return (
     <div className="space-y-2.5 border-t border-orange-500/30 bg-orange-500/[0.05] p-2.5" data-testid="warmup-form">
@@ -406,12 +411,22 @@ function WarmupForm({
       {/* The answer, in one box. */}
       <div className="rounded-lg border border-border bg-background px-3 py-2" aria-live="polite" data-testid="warmup-read">
         {tuning && hint ? (
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-xs text-muted-foreground">
-              Today: {target!.reps} @ RPE {fmt(target!.rpe)}
-            </span>
-            <span className="text-base font-black tabular-nums text-foreground">{range} {unit}</span>
-          </div>
+          <>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
+                Today: {target!.reps} @ RPE {fmt(target!.rpe)}
+              </span>
+              <span className="text-lg font-black tabular-nums text-foreground" data-testid="warmup-target">{fmt(hint.target)} {unit}</span>
+            </div>
+            {range && (
+              <div className="text-right text-[11px] tabular-nums text-muted-foreground">range {range}</div>
+            )}
+            {blended && (
+              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground" data-testid="warmup-blended">
+                Warm-up alone says ~{fmt(fromWarmup!)} {unit}. Below RPE 8 it's blended with your recent sessions.
+              </p>
+            )}
+          </>
         ) : null}
         <div className={cn("flex items-baseline justify-between gap-2", tuning && hint && "mt-0.5")}>
           <span className="text-xs text-muted-foreground">e1RM <span className="text-[10px]">· rough estimate</span></span>
@@ -442,7 +457,11 @@ function WarmupForm({
               className="h-11 min-w-0 flex-1 truncate rounded-lg bg-primary px-3 text-sm font-bold text-primary-foreground transition active:scale-[0.99] disabled:opacity-40"
               data-testid="warmup-use-all"
             >
-              {hint ? `Use ${fmt(hint.target)} ${unit} for all ${openSets} set${openSets === 1 ? "" : "s"}` : "Use for all sets"}
+              {hint
+                ? openSets > 1
+                  ? `Use ${fmt(hint.target)} ${unit} for all ${openSets} sets`
+                  : `Use ${fmt(hint.target)} ${unit}`
+                : "Use this weight"}
             </button>
           </div>
           <button

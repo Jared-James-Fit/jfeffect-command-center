@@ -138,3 +138,18 @@ describe("reset is always in the workout menu", () => {
     expect(src).toContain("const canReset = canChangeWorkoutStatus;");
   });
 });
+
+describe("the warm-up card shows one answer that adds up", () => {
+  it("leads with the weight to use, range underneath, and a single set reads 'Use 155 kg'", () => {
+    const html = render({ form: "new", seed: { load: 100, reps: 2 }, prompt: { suggested: null, tunes: true }, ...tuneProps, openSets: 1 });
+    expect(html).toMatch(/data-testid="warmup-target"[^>]*>155 kg</);
+    expect(html).toContain("range 150–160 kg");
+    expect(html).toContain(">Use 155 kg<");
+    expect(html).not.toContain("for all 1 set");
+  });
+
+  it("the set row's ghost hides while the warm-up form is setting the weight", () => {
+    const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    expect(view).toContain("loadHint={warmupForm && warmupGauge ? null : loadHint}");
+  });
+});

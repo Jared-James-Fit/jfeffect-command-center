@@ -4177,7 +4177,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               targetRpe={row.rpe}
               targetRir={row.rir}
               suggestedWeight={suggestedWeight}
-              loadHint={loadHint}
+              // While the warm-up form is setting today's weight, its answer is
+              // the only suggestion on screen (no stale ghost in the set row).
+              loadHint={warmupForm && warmupGauge ? null : loadHint}
               autoFillSuggestedWeight={row.percentage_basis === "top_set" && percentageBackoffWeight != null}
               lastTimeWeight={activeUnit === "kg" ? (previousLift?.normalizedKg ?? null) : (previousLift?.normalizedLb ?? null)}
               repTarget={repTarget}
