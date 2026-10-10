@@ -105,9 +105,9 @@ export function CommunityHomeStrip() {
         </Link>
         <ShareWorkoutButton unit={unit} label="Post" previewOnly={isImpersonating} className="h-8 px-3 text-[12px]" />
       </div>
-      <div className="mt-2.5 flex h-[200px] snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain scroll-px-3.5 px-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mt-2.5 flex h-[200px] snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain px-[9%] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {shown.length === 0 && (
-          <div className="flex h-full w-[74%] shrink-0 snap-start flex-col justify-center rounded-[20px] border border-dashed border-border bg-muted/30 p-4">
+          <div className="flex h-full w-[82%] shrink-0 snap-center snap-always flex-col justify-center rounded-[20px] border border-dashed border-border bg-muted/30 p-4">
             <div className="text-[15px] font-black leading-tight">Be the first to share this week</div>
             <div className="mt-1 text-[12.5px] leading-snug text-muted-foreground">Post a session for the crew. Your coach sees every one.</div>
           </div>
@@ -137,7 +137,7 @@ function CrewCard({ post, unit, thumb, fresh, onOpen }: { post: CommunityPost; u
       data-crew-card
       data-fresh={fresh ? "" : undefined}
       onClick={onOpen}
-      className="relative h-full w-[74%] shrink-0 snap-start overflow-hidden rounded-[20px] bg-muted text-left transition-transform active:scale-[0.98]"
+      className="relative h-full w-[82%] shrink-0 snap-center snap-always overflow-hidden rounded-[20px] bg-muted text-left transition-transform active:scale-[0.98]"
       aria-label={live ? `${name} is training now` : `${name}'s post${fresh ? ", new" : ""}`}
     >
       <PostTileFace post={post} thumb={thumb} unit={unit} footer={counts} large />
@@ -191,7 +191,7 @@ function SeeMoreCard({ posts, shown, more, onOpen }: { posts: CommunityPost[]; s
     return out;
   }, [posts, shown]);
   return (
-    <button type="button" data-crew-more onClick={onOpen} className="flex h-full w-[42%] shrink-0 snap-start flex-col items-center justify-center gap-2.5 rounded-[20px] border border-border/80 bg-muted/40 px-3 text-center active:scale-[0.98]">
+    <button type="button" data-crew-more onClick={onOpen} className="flex h-full w-[42%] shrink-0 snap-center snap-always flex-col items-center justify-center gap-2.5 rounded-[20px] border border-border/80 bg-muted/40 px-3 text-center active:scale-[0.98]">
       {faces.length > 0 && (
         <span className="flex -space-x-2">
           {faces.map((a) => (
