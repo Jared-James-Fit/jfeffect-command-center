@@ -34,6 +34,7 @@ type Prefs = {
   coaching_apps: boolean;
   wins: boolean;
   reminders: boolean;
+  community: boolean;
   quiet_hours_enabled: boolean;
   quiet_start: number;
   quiet_end: number;
@@ -48,6 +49,7 @@ const CATEGORY_LABELS: Array<{ key: BoolPref; label: string; help: string }> = [
   { key: "lift_reviews", label: "Lift Reviews", help: "New videos and coach feedback" },
   { key: "workouts", label: "Workouts", help: "Assigned workouts and program updates" },
   { key: "wins", label: "Wins & Milestones", help: "Your monthly recap and big moments" },
+  { key: "community", label: "Crew Activity", help: "Reactions, comments and replies on your posts" },
   { key: "reminders", label: "Daily Reminder", help: "One morning nudge max — only if something's due" },
   { key: "billing", label: "Billing", help: "Failed payments and subscription alerts" },
   { key: "coaching_apps", label: "Coaching Applications", help: "Admin only — new applications" },
@@ -113,7 +115,7 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
 
   const prefs: Prefs = useMemo(() => ({
     master_enabled: true, messages: true, check_ins: true, lift_reviews: true,
-    workouts: true, billing: true, coaching_apps: true, wins: true, reminders: true,
+    workouts: true, billing: true, coaching_apps: true, wins: true, reminders: true, community: true,
     quiet_hours_enabled: true, quiet_start: 22, quiet_end: 7, timezone: null,
     ...(prefsQ.data ?? {}),
   }), [prefsQ.data]);

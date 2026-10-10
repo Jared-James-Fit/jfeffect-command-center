@@ -8,11 +8,7 @@ import { cn } from "@/lib/utils";
 import type { CommentMedia, CommunityAuthor, SharedComment } from "@/lib/community";
 
 /** Ask the community screen to open a post (a shared comment's original). */
-export const OPEN_POST_EVENT = "community:open-post";
-
-export function openCommunityPost(postId: string) {
-  window.dispatchEvent(new CustomEvent(OPEN_POST_EVENT, { detail: postId }));
-}
+export { OPEN_POST_EVENT, openCommunityPost } from "@/lib/community-notifications";
 
 /**
  * Someone's comment, shared as its own post: who said it, on whose post, and

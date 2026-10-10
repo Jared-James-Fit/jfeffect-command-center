@@ -33,6 +33,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { communityNoticeText, fetchCommunityNotices, openCommunityPost } from "@/lib/community-notifications";
 import { initialNotificationView, notificationListScrollClass } from "@/lib/notifications-page-layout";
 import { listenChannel } from "@/lib/realtime-channel";
 
@@ -42,7 +43,7 @@ import { listenChannel } from "@/lib/realtime-channel";
 
 export type BellKind =
   | "message" | "lift_video" | "agreement" | "exercise_note"
-  | "group_message" | "check_in_review" | "appointment";
+  | "group_message" | "check_in_review" | "appointment" | "community";
 
 export type BellItem = {
   /** Stable per-user id: `${kind}:${sourceId}` */
@@ -62,6 +63,8 @@ export type BellItem = {
   reviewId?: string;
   appointmentId?: string;
   meetLink?: string | null;
+  /** community: the post it's about. */
+  postId?: string;
   name: string;
   title: string;
   body: string;
@@ -92,6 +95,7 @@ function sourceIdOf(kind: BellKind, raw: Partial<BellItem>): string {
     case "group_message": return raw.groupId ?? "";
     case "check_in_review": return raw.reviewId ?? "";
     case "appointment": return raw.appointmentId ?? "";
+    case "community": return raw.sourceId ?? "";
   }
 }
 
@@ -520,6 +524,17 @@ export function useNotificationFeed() {
         } catch { /* ignore */ }
       }
 
+      // Crew activity on your posts (reactions, comments, replies, comment likes), grouped.
+      for (const n of await fetchCommunityNotices()) {
+        const t = communityNoticeText(n);
+        raw.push({
+          id: makeId("community", n.anchor),
+          kind: "community", sourceId: n.anchor, clientId: "", postId: n.post_id,
+          name: n.actors?.[0]?.name ?? "Crew",
+          title: t.title, body: t.body, created_at: n.at,
+        });
+      }
+
       // Deduplicate by id, keep newest.
       const byId = new Map<string, typeof raw[number]>();
       for (const r of raw) {
@@ -651,6 +666,7 @@ function destinationFor(it: BellItem, role: string | null) {
       : { to: "/portal" } as const;
     case "appointment": return { to: isAdmin ? "/admin/calendar" : "/portal/calendar" } as const;
     case "group_message": return { to: isAdmin ? "/admin/messages" : "/portal/messages" } as const;
+    case "community": return { to: isAdmin ? "/admin/community" : "/portal/community", hash: `post=${it.postId ?? ""}` } as const;
     default: return isAdmin
       ? { to: "/admin/messages", search: { client: it.clientId } }
       : { to: "/portal/messages" } as const;
@@ -685,6 +701,7 @@ function kindLabel(k: string): string {
     case "group_message": return "Group chat";
     case "check_in_review": return "Check-in reviews";
     case "appointment": return "Appointments";
+    case "community": return "Crew activity";
     default: return k;
   }
 }
@@ -699,6 +716,7 @@ const CATEGORY_BUCKETS: { id: string; label: string; kinds: string[] }[] = [
   { id: "agreements", label: "Agreements", kinds: ["agreement"] },
   { id: "account",    label: "Account",    kinds: [] },
   { id: "coaching",   label: "Coaching",   kinds: ["appointment"] },
+  { id: "crew",       label: "Crew",       kinds: ["community"] },
   { id: "system",     label: "System",     kinds: [] },
 ];
 
@@ -1033,6 +1051,8 @@ export function NotificationPanel({
       }
       const dest = destinationFor(it, role);
       try { navigate(dest as any); } catch { /* ignore */ }
+      // already on the community screen: the hash alone won't reopen a post
+      if (it.kind === "community" && it.postId) window.setTimeout(() => openCommunityPost(it.postId!), 0);
       onNavigate?.();
     },
     [markReadMut, navigate, onNavigate, role, impersonation],

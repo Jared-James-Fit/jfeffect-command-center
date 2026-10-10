@@ -19622,6 +19622,7 @@ export type Database = {
           billing: boolean
           check_ins: boolean
           coaching_apps: boolean
+          community: boolean
           created_at: string
           lift_reviews: boolean
           master_enabled: boolean
@@ -19640,6 +19641,7 @@ export type Database = {
           billing?: boolean
           check_ins?: boolean
           coaching_apps?: boolean
+          community?: boolean
           created_at?: string
           lift_reviews?: boolean
           master_enabled?: boolean
@@ -19658,6 +19660,7 @@ export type Database = {
           billing?: boolean
           check_ins?: boolean
           coaching_apps?: boolean
+          community?: boolean
           created_at?: string
           lift_reviews?: boolean
           master_enabled?: boolean

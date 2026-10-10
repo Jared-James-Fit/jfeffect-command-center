@@ -111,12 +111,16 @@ describe("comments UI", () => {
     expect(sheet).toMatch(/\.then\(\(\) => \{\s*sync\(\);/);
   });
 
-  it("comment likes and shares never send a push", () => {
-    for (const hook of ["useLikeComment", "useShareComment", "useHideComment"]) {
+  it("shares and hides never send a push; a like only goes through crew activity (grouped, rate limited)", () => {
+    for (const hook of ["useShareComment", "useHideComment"]) {
       const start = queries.indexOf(`export function ${hook}(`);
       const body = queries.slice(start, queries.indexOf("\nexport ", start + 10));
       expect(body, hook).not.toMatch(/fireAppEvent/);
     }
+    const start = queries.indexOf("export function useLikeComment(");
+    const like = queries.slice(start, queries.indexOf("\nexport ", start + 10));
+    expect(like).toContain('if (liked) fireAppEvent("community_activity", id);');
+    expect(like).not.toContain("community_coach_recognition");
   });
 
   it("a shared comment shows on its post and opens the original", () => {

@@ -175,8 +175,9 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
     mutationFn: async (next: ReactionKey | null) => {
       const { error } = await db.rpc("community_react", { _post_id: post.id, _emoji: next });
       if (error) throw error;
-      // The one nudge the community ever sends: "your coach saw your training".
+      // "Your coach saw your training" from the coach; otherwise the author hears about it (grouped, rate limited).
       if (next && viewerIsCoach && !post.is_mine) fireAppEvent("community_coach_recognition", post.id);
+      if (next && !post.is_mine) fireAppEvent("community_activity", post.id);
     },
     onMutate: async (next) => {
       await qc.cancelQueries({ queryKey: ["community-feed"] });
@@ -472,6 +473,8 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
         throw error;
       }
       if (viewerIsCoach && !postIsMine) fireAppEvent("community_coach_recognition", postId);
+      // the post's author / whoever this replies to
+      fireAppEvent("community_activity", postId);
       return data as CommunityComment;
     },
     onMutate: async (c) => {
@@ -524,6 +527,7 @@ export function useLikeComment(postId: string) {
     mutationFn: async ({ id, liked }: { id: string; liked: boolean }) => {
       const { error } = await db.rpc("community_like_comment", { _comment_id: id, _liked: liked });
       if (error) throw error;
+      if (liked) fireAppEvent("community_activity", id);
     },
     onMutate: async ({ id, liked }) => {
       await qc.cancelQueries({ queryKey: communityKeys.comments(postId) });

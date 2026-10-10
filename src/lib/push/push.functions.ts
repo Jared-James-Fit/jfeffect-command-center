@@ -78,6 +78,7 @@ const PrefsInput = z.object({
   coaching_apps: z.boolean().optional(),
   wins: z.boolean().optional(),
   reminders: z.boolean().optional(),
+  community: z.boolean().optional(),
   quiet_hours_enabled: z.boolean().optional(),
   quiet_start: z.number().int().min(0).max(23).optional(),
   quiet_end: z.number().int().min(0).max(23).optional(),

@@ -562,6 +562,7 @@ export function ReactionBar({
   // People are reacting to this one: a moment after it's on screen, its
   // reactions float up out of the heart and who reacted pops (never over the post).
   const pop = useEngagementPop<HTMLDivElement>(post);
+  const celebrate = !post.is_mine && !post.my_reaction && !post.auto && (post.stats?.pr_count ?? 0) > 0;
   const { on, done } = pop;
   useEffect(() => {
     if (!on) return;
@@ -592,6 +593,19 @@ export function ReactionBar({
           <span className="truncate text-[12px] text-muted-foreground">
             <span className="font-bold text-foreground">{who}</span>
           </span>
+        </button>
+      )}
+      {/* someone else's PR, not celebrated yet: one tap (Pulse cards carry their own Props) */}
+      {celebrate && (
+        <button
+          type="button"
+          data-celebrate
+          onClick={() => onReact(post, "fire")}
+          aria-label="Celebrate their PR"
+          // beside who reacted, just the trophy (room for the names)
+          className={cn("ml-1 h-8 shrink-0 rounded-full bg-amber-500/15 text-[12px] font-black text-amber-700 active:scale-95 dark:text-amber-300", who ? "w-8" : "px-3")}
+        >
+          {who ? "🏆" : "🏆 Celebrate"}
         </button>
       )}
       {onOpenComments && (
