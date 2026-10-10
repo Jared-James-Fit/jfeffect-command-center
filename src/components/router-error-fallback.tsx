@@ -3,6 +3,7 @@ import { useRouter } from "@tanstack/react-router";
 import { isChunkLoadError, attemptChunkReload } from "@/lib/chunk-recovery";
 import { reportLovableError } from "@/lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
+import { clearPersistedQueryCache } from "@/lib/query-persister";
 
 type Props = {
   error: Error;
@@ -10,6 +11,8 @@ type Props = {
 };
 
 const MAX_AUTO_RETRIES = 2;
+/** Once per app session: a failing page clears the saved data and reloads fresh. */
+const CACHE_RESET_KEY = "jf:route-error-cache-reset";
 
 /**
  * Default error UI for route/loader failures. Most failures on the published
@@ -73,8 +76,26 @@ export function RouterErrorFallback({ error, reset }: Props) {
   // alert, deduped per user/route/message by the database) so the cause can be
   // read in Support instead of guessed. Best effort; never blocks the screen.
   const showing = !chunkError && retryCount >= MAX_AUTO_RETRIES;
+  // The page still fails after the quiet retries. If a fresh browser would load
+  // it, the culprit is what this device saved (an offline snapshot from an
+  // older build the new screen trips over), which survives every reload. Clear
+  // it and reload once per session; the guard means a real outage still lands
+  // on the screen below instead of reload-looping.
+  const [resetting, setResetting] = useState(false);
   useEffect(() => {
     if (!showing || typeof window === "undefined") return;
+    let done = false;
+    try { done = window.sessionStorage.getItem(CACHE_RESET_KEY) === "1"; } catch { done = true; }
+    if (done) return;
+    try { window.sessionStorage.setItem(CACHE_RESET_KEY, "1"); } catch { return; }
+    setResetting(true);
+    clearPersistedQueryCache();
+    try { window.sessionStorage.removeItem(retryKey); } catch {}
+    window.location.reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showing]);
+  useEffect(() => {
+    if (!showing || resetting || typeof window === "undefined") return;
     const nav = window.navigator as Navigator & { standalone?: boolean };
     void (supabase as any)
       .rpc("report_page_error", {
@@ -85,7 +106,7 @@ export function RouterErrorFallback({ error, reset }: Props) {
       })
       .then(() => {}, () => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showing]);
+  }, [showing, resetting]);
 
   if (chunkError) {
     return (
