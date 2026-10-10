@@ -135,5 +135,19 @@ describe("a lifter's career has one Back", () => {
     expect(level).toContain("<HallOfStrengthSheet");
     expect(level).not.toContain("<HallOfStrength ");
     expect(board.match(/<HallOfStrengthSheet /g)?.length).toBe(2); // the Home card and the League slide
+describe("Athlete Records opened from the League tab", () => {
+  const page = readFileSync("src/routes/_authenticated/admin/athlete-records.tsx", "utf8");
+  const league = readFileSync("src/components/community/staff-league-board.tsx", "utf8");
+
+  it("has a Back to the League tab on a phone", () => {
+    expect(page).toContain('backTo="/admin/community" backLabel="League"');
+    expect(league).toContain('<Link to="/admin/athlete-records"');
+  });
+
+  it("doesn't repeat the League tab's own tools (Final-week boost, Hall of Strength review)", () => {
+    expect(page).not.toContain("LeagueBoostAdmin");
+    expect(page).not.toContain("StrengthBoardCoachTools");
+    expect(league).toContain("<LeagueBoostAdmin />");
+    expect(league).toContain("<StrengthBoardCoachTools />");
   });
 });
