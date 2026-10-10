@@ -90,13 +90,14 @@ async function clientCallback(args: {
   if (!args.decoded?.client_id || !args.decoded?.user_id || !args.code) {
     return resultPage({ ok: false, message: connectErrorMessage("invalid_state"), back });
   }
-  const { clientGoogleConfigured, completeClientConnect, ConnectError } = await import("@/lib/client-gcal.server");
+  const { clientGoogleConfigured, completeClientConnect, ConnectError, oauthOrigin } = await import("@/lib/client-gcal.server");
   if (!clientGoogleConfigured()) return resultPage({ ok: false, message: connectErrorMessage("not_configured"), back });
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { email } = await completeClientConnect(supabaseAdmin as any, {
       code: args.code,
-      origin: args.origin,
+      // The same fixed address the sign-in started with (Google requires an exact match).
+      origin: oauthOrigin(),
       clientId: String(args.decoded.client_id),
       userId: String(args.decoded.user_id),
     });

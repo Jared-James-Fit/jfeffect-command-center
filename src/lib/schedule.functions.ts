@@ -348,14 +348,17 @@ export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
     const { userId } = context as any;
     const mine = await ownOrLinkedClient(userId);
     if (!mine) throw new Error("Only clients can connect a calendar.");
-    const { clientGoogleConfigured, clientAuthorizeUrl } = await import("@/lib/client-gcal.server");
-    if (!clientGoogleConfigured()) throw new Error("Google Calendar isn't set up for this app yet.");
+    const { clientGoogleReady, clientAuthorizeUrl, oauthOrigin } = await import("@/lib/client-gcal.server");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Never send anyone to Google's error page: only start when Google has
+    // accepted the app's keys (a broken setup alerts the admin instead).
+    if (!(await clientGoogleReady(supabaseAdmin as any))) {
+      throw new Error("Google sign-in isn't available right now. Use Apple Calendar or copy the link for now.");
+    }
     const { signOAuthState } = await import("@/lib/google-cal.server");
     const { safeReturnPath } = await import("@/lib/client-gcal");
-    const { getRequest } = await import("@tanstack/react-start/server");
-    const origin = new URL(getRequest().url).origin;
     const state = signOAuthState({ kind: "client_cal", client_id: mine.id, user_id: userId, ret: safeReturnPath(data.returnTo) });
-    return { url: await clientAuthorizeUrl(origin, state) };
+    return { url: await clientAuthorizeUrl(oauthOrigin(), state) };
   });
 
 /** Disconnect Google Calendar: removes the JF Effect calendar from their Google account. */

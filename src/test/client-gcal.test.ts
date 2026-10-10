@@ -244,3 +244,32 @@ describe("wiring", () => {
     }
   });
 });
+
+describe("reading Google's answers about the sign-in setup", () => {
+  it("decodes the reason from Google's error page address", async () => {
+    const { authErrorCode } = await import("@/lib/client-gcal");
+    // Real addresses Google returned for an unknown client and a wrong redirect URI.
+    expect(
+      authErrorCode("https://accounts.google.com/signin/oauth/error?authError=Cg5pbnZhbGlkX2NsaWVudBIfVGhlIE9BdXRoIGNsaWVudCB3YXMgbm90IGZvdW5kLiCRAw&flowName=GeneralOAuthFlow"),
+    ).toBe("invalid_client");
+    expect(
+      authErrorCode(
+        "https://accounts.google.com/signin/oauth/error?authError=ChVyZWRpcmVjdF91cmlfbWlzbWF0Y2gSsAEKWW91IGNhbid0IHNpZ24gaW4gdG8gdGhpcyBhcHAgYmVjYXVzZSBpdCBkb2Vzbid0IGNvbXBseSB3aXRoIEdvb2dsZSdzIE9BdXRoIDIuMCBwb2xpY3kuCgpJZiB5b3U&flowName=GeneralOAuthFlow",
+      ),
+    ).toBe("redirect_uri_mismatch");
+    expect(authErrorCode("https://accounts.google.com/v3/signin/identifier?client_id=x")).toBeNull();
+    expect(authErrorCode(null)).toBeNull();
+  });
+
+  it("knows a Google client ID when it sees one, and always uses the real site for the redirect", async () => {
+    const { looksLikeGoogleClientId, canonicalOrigin, setupProblemMessage } = await import("@/lib/client-gcal");
+    expect(looksLikeGoogleClientId("1234567890-abc123def.apps.googleusercontent.com")).toBe(true);
+    expect(looksLikeGoogleClientId("GOCSPX-secretlooking")).toBe(false);
+    expect(canonicalOrigin(undefined)).toBe("https://jfeffect.com");
+    expect(canonicalOrigin("https://jfeffect-command-center.lovable.app")).toBe("https://jfeffect.com");
+    expect(canonicalOrigin("https://jfeffect.com/")).toBe("https://jfeffect.com");
+    expect(setupProblemMessage({ problem: "redirect_uri_mismatch", redirectUri: "https://jfeffect.com/api/public/google/oauth/callback" })).toContain(
+      "https://jfeffect.com/api/public/google/oauth/callback",
+    );
+  });
+});

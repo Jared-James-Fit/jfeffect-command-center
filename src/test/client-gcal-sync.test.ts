@@ -19,22 +19,29 @@ function fakeAdmin() {
       const filters: Array<(r: any) => boolean> = [];
       let op: "select" | "update" | "delete" = "select";
       let payload: any = null;
+      const keyOf = (r: any) => r.key ?? r.client_id ?? r.id;
       const rows = () => Array.from(t(name).values()).filter((r) => filters.every((f) => f(r)));
       const run = () => {
         if (op === "update") rows().forEach((r) => Object.assign(r, payload));
-        if (op === "delete") rows().forEach((r) => t(name).delete(r.client_id));
+        if (op === "delete") rows().forEach((r) => t(name).delete(keyOf(r)));
         return { data: op === "select" ? rows().map((r) => ({ ...r })) : null, error: null };
       };
       const q: any = {
         select: () => q,
         eq: (c: string, v: any) => (filters.push((r) => r[c] === v), q),
         neq: (c: string, v: any) => (filters.push((r) => r[c] !== v), q),
+        in: (c: string, vs: any[]) => (filters.push((r) => vs.includes(r[c])), q),
         order: () => q,
         limit: () => q,
         update: (p: any) => ((op = "update"), (payload = p), q),
         delete: () => ((op = "delete"), q),
         upsert: async (p: any) => {
-          t(name).set(p.client_id, { ...(t(name).get(p.client_id) ?? {}), ...p });
+          t(name).set(keyOf(p), { ...(t(name).get(keyOf(p)) ?? {}), ...p });
+          return { data: null, error: null };
+        },
+        insert: async (p: any) => {
+          const row = { id: `id-${t(name).size + 1}`, status: "open", ...p };
+          t(name).set(keyOf(row), row);
           return { data: null, error: null };
         },
         maybeSingle: async () => ({ data: run().data?.[0] ?? null, error: null }),
@@ -54,6 +61,13 @@ function fakeGoogle() {
     calls: [] as string[],
     nextCal: 1,
     grantedScope: "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.app.created",
+    clientId: "123-abc.apps.googleusercontent.com",
+    clientSecret: "secret",
+    redirectUris: ["https://jfeffect.com/api/public/google/oauth/callback"],
+  };
+  const authError = (code: string) => {
+    const bytes = [0x0a, code.length, ...Buffer.from(code)];
+    return Buffer.from(bytes).toString("base64url");
   };
   const json = (status: number, body: unknown) =>
     new Response(body === null ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -88,8 +102,19 @@ function fakeGoogle() {
     const url = new URL(String(input));
     const method = (init.method ?? "GET").toUpperCase();
     g.calls.push(`${method} ${url.pathname}`);
+    if (url.href.startsWith("https://accounts.google.com/o/oauth2/v2/auth")) {
+      const id = url.searchParams.get("client_id");
+      const err = id !== g.clientId ? "invalid_client" : !g.redirectUris.includes(url.searchParams.get("redirect_uri") ?? "") ? "redirect_uri_mismatch" : null;
+      const location = err
+        ? `https://accounts.google.com/signin/oauth/error?authError=${authError(err)}&client_id=${id}`
+        : "https://accounts.google.com/v3/signin/identifier?client_id=x";
+      return new Response(null, { status: 302, headers: { location } });
+    }
     if (url.href.startsWith("https://oauth2.googleapis.com/token")) {
       const p = new URLSearchParams(String(init.body));
+      if (p.get("client_id") !== g.clientId) return json(401, { error: "invalid_client", error_description: "The OAuth client was not found." });
+      if (p.get("client_secret") !== g.clientSecret) return json(401, { error: "invalid_client", error_description: "The provided client secret is invalid." });
+      if (p.get("code") === "jf-setup-check") return json(400, { error: "invalid_grant", error_description: "Malformed auth code." });
       if (p.get("grant_type") === "authorization_code") {
         return json(200, {
           access_token: "at-1",
@@ -167,8 +192,10 @@ describe("Connect Google Calendar, end to end against a fake Google", () => {
     google = fakeGoogle();
     admin = fakeAdmin();
     globalThis.fetch = google.fetchImpl as any;
-    process.env.GOOGLE_OAUTH_CLIENT_ID = "cid";
+    process.env.GOOGLE_OAUTH_CLIENT_ID = "123-abc.apps.googleusercontent.com";
     process.env.GOOGLE_OAUTH_CLIENT_SECRET = "secret";
+    delete process.env.PUBLIC_APP_URL;
+    delete process.env.SITE_URL;
     feed = [sessionAt("a", 2), sessionAt("b", 5), workoutOn("w1", 1), { ...sessionAt("c", 3), cancelled: true }];
   });
   afterEach(() => {
@@ -278,5 +305,50 @@ describe("Connect Google Calendar, end to end against a fake Google", () => {
     expect(google.g.calendars.has(cal)).toBe(false);
     expect(admin.tables.get("client_google_calendars")!.get("client-1")).toBeUndefined();
     expect(google.g.calls).toContain("POST /revoke");
+  });
+
+  it("checks the Google keys before offering sign-in, alerts the admin once, and clears when fixed", async () => {
+    const { clientGoogleReady, clientGoogleStatus } = await import("@/lib/client-gcal.server");
+    // Keys left over from an old setup: Google doesn't know the client.
+    process.env.GOOGLE_OAUTH_CLIENT_ID = "999-old.apps.googleusercontent.com";
+    expect(await clientGoogleReady(admin as any)).toBe(false);
+    expect((await clientGoogleStatus(admin as any, "client-1")).available).toBe(false);
+    const alerts = () => Array.from(admin.tables.get("support_alerts")?.values() ?? []);
+    expect(alerts()).toHaveLength(1);
+    expect(alerts()[0]).toMatchObject({ error_type: "google_calendar_setup", status: "open" });
+    expect(alerts()[0].error_message).toMatch(/doesn't recognise the client ID/);
+    expect(JSON.parse(admin.tables.get("app_settings")!.get("client_google_calendar_check").value)).toMatchObject({
+      ok: false,
+      problem: "invalid_client",
+      redirectUri: "https://jfeffect.com/api/public/google/oauth/callback",
+    });
+
+    // Asking again soon doesn't call Google again or add another alert.
+    const calls = google.g.calls.length;
+    expect(await clientGoogleReady(admin as any)).toBe(false);
+    expect(google.g.calls.length).toBe(calls);
+    expect(alerts()).toHaveLength(1);
+
+    // Fixed in Lovable (with a stray space pasted in): rechecked straight away, alert resolved.
+    process.env.GOOGLE_OAUTH_CLIENT_ID = " 123-abc.apps.googleusercontent.com\n";
+    expect(await clientGoogleReady(admin as any)).toBe(true);
+    expect(alerts()[0].status).toBe("resolved");
+  });
+
+  it("tells a wrong secret and a missing redirect URI apart", async () => {
+    const { runGoogleSetupCheck } = await import("@/lib/client-gcal.server");
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = "wrong";
+    expect(await runGoogleSetupCheck(admin as any)).toMatchObject({ ok: false, problem: "bad_secret" });
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = "secret";
+    google.g.redirectUris = ["https://example.com/cb"];
+    expect(await runGoogleSetupCheck(admin as any)).toMatchObject({ ok: false, problem: "redirect_uri_mismatch" });
+    google.g.redirectUris = ["https://jfeffect.com/api/public/google/oauth/callback"];
+    expect(await runGoogleSetupCheck(admin as any)).toMatchObject({ ok: true, problem: null });
+  });
+
+  it("the 5-minute job does nothing while the keys are broken", async () => {
+    const { syncDueClientCalendars } = await import("@/lib/client-gcal.server");
+    process.env.GOOGLE_OAUTH_CLIENT_ID = "not-a-client-id";
+    expect(await syncDueClientCalendars(admin as any)).toEqual({ skipped: "setup_problem", problem: "client_id_format" });
   });
 });
