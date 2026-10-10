@@ -365,13 +365,14 @@ export const updateMyMarketingPrefs = createServerFn({ method: "POST" })
 
 const RedeemInput = z.object({
   token: z.string().min(20).max(128),
-  password: z.string().min(1).max(72),
+  password: z.string().min(8).max(72),
 });
 
 export const redeemSetupToken = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => RedeemInput.parse(i))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { findAuthUserByEmail, assertNotPrivilegedUser } = await import("@/lib/setup-link-guard.server");
     const { data: member, error } = await supabaseAdmin
       .from("app_members")
       .select("*")
@@ -389,9 +390,9 @@ export const redeemSetupToken = createServerFn({ method: "POST" })
     let userId = member.user_id as string | null;
     if (!userId) {
       // Look up existing user by email
-      const { data: list } = await supabaseAdmin.auth.admin.listUsers();
-      const existing = list.users.find((u: any) => (u.email || "").toLowerCase() === member.email.toLowerCase());
+      const existing = await findAuthUserByEmail(supabaseAdmin, member.email);
       if (existing) {
+        await assertNotPrivilegedUser(supabaseAdmin, existing.id);
         userId = existing.id;
         await supabaseAdmin.auth.admin.updateUserById(existing.id, { password: data.password });
       } else {
@@ -405,6 +406,7 @@ export const redeemSetupToken = createServerFn({ method: "POST" })
         userId = created.user.id;
       }
     } else {
+      await assertNotPrivilegedUser(supabaseAdmin, userId);
       await supabaseAdmin.auth.admin.updateUserById(userId, { password: data.password });
     }
 
