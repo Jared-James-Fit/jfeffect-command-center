@@ -106,13 +106,27 @@ function useSetPrivateViews() {
 }
 
 /**
- * Your own post: who's seen it, quietly ("3 faces · 24 views"). Only you
- * see this; tap for the list. Nothing shows until someone has.
+ * How many have seen a post, quietly ("24 views"), on every post. Your own
+ * also shows who (3 faces); tap for the list, which only you can open.
+ * Nothing shows until someone has.
  */
 export function PostViewsRow({ post, onOpenAuthor }: { post: CommunityPost; onOpenAuthor?: (a: CommunityAuthor) => void }) {
   const [open, setOpen] = useState(false);
   const v = post.views;
-  if (!post.is_mine || !v || v.count <= 0) return null;
+  if (!v || v.count <= 0) return null;
+  const label = (
+    <span>
+      <span className="font-bold text-foreground">{v.count}</span> {v.count === 1 ? "view" : "views"}
+    </span>
+  );
+  // someone else's post: just the number
+  if (!post.is_mine)
+    return (
+      <div data-post-views className="mx-3.5 mb-2 flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
+        <Eye className="h-4 w-4 shrink-0" />
+        {label}
+      </div>
+    );
   return (
     <>
       <button
@@ -133,9 +147,7 @@ export function PostViewsRow({ post, onOpenAuthor }: { post: CommunityPost; onOp
         ) : (
           <Eye className="h-4 w-4 shrink-0" />
         )}
-        <span>
-          <span className="font-bold text-foreground">{v.count}</span> {v.count === 1 ? "view" : "views"}
-        </span>
+        {label}
       </button>
       <ViewersSheet postId={open ? post.id : null} onClose={() => setOpen(false)} onOpenAuthor={onOpenAuthor} />
     </>

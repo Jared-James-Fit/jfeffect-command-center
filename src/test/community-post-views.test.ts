@@ -5,6 +5,7 @@ import { VIEW_DWELL_MS, VIEW_VISIBLE } from "@/components/community/post-views";
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const sql = read("supabase/migrations/20261029090000_community_post_views.sql");
 const ui = read("src/components/community/post-views.tsx");
+const everywhere = read("supabase/migrations/20261030120000_community_views_everywhere.sql");
 
 describe("post views", () => {
   it("a view = half the post on screen for two seconds, or opening it", () => {
@@ -25,11 +26,16 @@ describe("post views", () => {
     expect(ui).toContain("const skip = post.is_mine || isImpersonating;");
     expect(ui).toContain("if (sent.has(postId)) return;");
   });
-  it("who viewed is the author's alone: the feed carries views only on your own posts; the list refuses anyone else", () => {
-    expect(sql).toContain("'views', CASE WHEN n.author_user_id = public.community_main_account(_viewer) THEN public.community_post_views_summary(n.id) END,");
+  it("every post shows its count; who viewed (faces, the list) is the author's alone", () => {
+    expect(everywhere).toContain("ELSE jsonb_build_object('count', (SELECT count(*) FROM public.community_post_views v WHERE v.post_id = n.id), 'faces', '[]'::jsonb) END,");
     expect(sql).toContain("IF NOT EXISTS (SELECT 1 FROM public.community_posts p WHERE p.id = _post_id AND p.author_user_id = v_me) THEN");
     expect(sql).toContain("ALTER TABLE public.community_post_views ENABLE ROW LEVEL SECURITY;");
-    expect(ui).toContain("if (!post.is_mine || !v || v.count <= 0) return null;");
+    expect(ui).toContain("if (!v || v.count <= 0) return null;");
+    expect(ui).toContain("// someone else's post: just the number");
+  });
+  it("older posts: only people who certainly saw them (reacted, commented, liked a comment, voted), never the author", () => {
+    expect(everywhere).toContain("FROM public.community_poll_votes v");
+    expect(everywhere).toContain("WHERE x.viewer IS NOT NULL AND x.viewer IS DISTINCT FROM p.author_user_id");
   });
   it("you can view privately: still counted, never named", () => {
     expect(sql).toContain("AND NOT coalesce(cp.private_views, false)");
