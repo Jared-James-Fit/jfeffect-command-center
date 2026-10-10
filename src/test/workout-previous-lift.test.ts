@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  matchHistoryLogs,
   normalizeExerciseHistoryName,
   selectPreviousLifts,
   type PreviousLiftLog,
@@ -54,5 +56,39 @@ describe("workout previous lift selection", () => {
       "instance:current",
     ).get("row");
     expect(selected?.match).toBe("name");
+  });
+});
+describe("same lift twice in a workout: each card keeps its own role", () => {
+  // Oct 2026: a sumo back-off card showed last week's 224.5 kg top set as
+  // "Last time" and was offered a "last warm-up" after the top set was done.
+  const log = (id: string, session: string, day: string, kg: number, rpe: number, purposeLabel: string) => ({
+    id, exerciseId: "dl", exerciseName: "Competition Deadlift", sessionKey: session, occurredAt: `${day}T18:00:00Z`,
+    reps: 5, rpe, rir: null, enteredValue: kg, enteredUnit: "kg" as const, normalizedKg: kg, normalizedLb: kg * 2.2046,
+    isWorkingSet: null, purposeLabel,
+  });
+  const logs = [
+    log("t1", "a", "2026-09-25", 215, 4, "Primary Deadlift"), log("b1", "a", "2026-09-25", 140, 6, "Primary Deadlift Backoff"),
+    log("t2", "b", "2026-10-02", 224.5, 4, "Primary Deadlift"), log("b2", "b", "2026-10-02", 143, 6, "Primary Deadlift Backoff"),
+  ];
+  const ids = [
+    { rowId: "top", exerciseId: "dl", exerciseName: "Competition Deadlift", purposeLabel: "Primary Deadlift" },
+    { rowId: "back", exerciseId: "dl", exerciseName: "Competition Deadlift", purposeLabel: "Primary Deadlift Backoff" },
+  ];
+
+  it("Last Time is the same card last session", () => {
+    const m = selectPreviousLifts(ids, logs, "today");
+    expect(m.get("top")?.normalizedKg).toBe(224.5);
+    expect(m.get("back")?.normalizedKg).toBe(143);
+  });
+
+  it("the back-off's suggestion learns from back-offs once there are 2 sessions of them", () => {
+    expect(matchHistoryLogs(ids[1], logs, "today").map((l) => l.id)).toEqual(["b1", "b2"]);
+    expect(matchHistoryLogs(ids[1], logs.filter((l) => l.id !== "b1"), "today")).toHaveLength(3);
+  });
+
+  it("only the first card of a lift asks for the last warm-up", () => {
+    const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    expect(view).toContain("if (seen.has(key)) later.add(r.id);");
+    expect(view).toContain("const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name)");
   });
 });

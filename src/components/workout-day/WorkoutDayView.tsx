@@ -827,6 +827,7 @@ function WorkoutDay({
         exerciseId: row.exercises?.id ?? row.exercise_id ?? null,
         exerciseName: name,
         repsOnly: tracking === "reps",
+        purposeLabel: row.purpose_label ?? null,
       };
     }),
     [rows],
@@ -906,7 +907,7 @@ function WorkoutDay({
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
           is_bodyweight, load_type,
-          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, exercises(name))`;
+          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, exercises(name))`;
       // Confirmed sets only (drafts from "apply to remaining" are not history),
       // newest first, paged past the 1,000-row response cap so long-term
       // clients keep their full rep-max baselines.
@@ -947,6 +948,7 @@ function WorkoutDay({
           normalizedLb: log.normalized_lb ?? null,
           isWorkingSet: log.is_working_set ?? null,
           loadType: resolveLoadType(log.load_type, log.is_bodyweight),
+          purposeLabel: historyRow?.purpose_label ?? null,
         };
       });
     },
@@ -955,6 +957,19 @@ function WorkoutDay({
     () => selectPreviousLifts(previousLiftIdentities, previousLiftLogs, currentHistorySessionKey),
     [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey],
   );
+  // Cards after the first one of a lift (back-offs, a variation after the
+  // top set): the athlete is already warm, so no "last warm-up" ask there.
+  const warmedUpRowIds = useMemo(() => {
+    const seen = new Set<string>();
+    const later = new Set<string>();
+    for (const r of rows as any[]) {
+      const family = r.exercises?.movement_family;
+      const key = isMainLiftFamily(family) ? `family:${family}` : `exercise:${r.exercises?.id ?? r.exercise_id ?? r.id}`;
+      if (seen.has(key)) later.add(r.id);
+      seen.add(key);
+    }
+    return later;
+  }, [rows]);
 
   // Bodyweight (smoothed) — strength scales with it, so past sets are adjusted
   // for any change since they were lifted. See load-suggestion.ts.
@@ -2310,6 +2325,7 @@ function WorkoutDay({
                       dayIndex={day?.day_index ?? null}
                       clientId={client?.id}
                       previousLift={previousLiftByRow.get(r.id) ?? null}
+                      warmedUp={warmedUpRowIds.has(r.id)}
                       repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
                       bodyweightKg={bodyweightNowKg}
@@ -2616,6 +2632,7 @@ function WorkoutDay({
                     dayIndex={day?.day_index ?? null}
                     clientId={client?.id}
                     previousLift={previousLiftByRow.get(r.id) ?? null}
+                      warmedUp={warmedUpRowIds.has(r.id)}
                     repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
                       bodyweightKg={bodyweightNowKg}
@@ -3051,7 +3068,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, warmedUp = false, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; warmedUp?: boolean; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3428,7 +3445,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
   const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
   const [warmupForm, setWarmupForm] = useState<string | null>(null);
-  const rampsUp = useMemo(() => offersLastWarmup(family, name), [family, name]);
+  // Only the first card of a lift asks for the last warm-up (see warmedUpRowIds).
+  const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name), [warmedUp, family, name]);
   const warmupPromptable = warmupEligible && rampsUp;
   const warmupForModel = warmupEligible ? pickFinalWarmup(warmupSets, activeUnit) : null;
   const loadModel = useMemo<LoadModel | null>(() => {
