@@ -60,7 +60,7 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
-import { resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
+import { isMainLiftFamily, resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
 import {
   convertLoad,
   displayLoadInUnit,
@@ -1395,6 +1395,27 @@ function WorkoutDay({
       .limit(50)).data ?? [],
   });
 
+  // The unit the athlete uses for squat / bench / deadlift across every
+  // variation, so a lift they've never logged opens in that unit instead of
+  // the competition-lift kg default (see resolveWorkoutRowUnits).
+  const hasMainLiftRow = useMemo(
+    () => (rows as any[]).some((r) => isMainLiftFamily(r.exercises?.movement_family)),
+    [rows],
+  );
+  const { data: familyHistoryRows = [] } = useQuery({
+    queryKey: ["client-lift-family-unit-history", client?.id],
+    enabled: secondaryHydrationReady && !!client?.id && hasMainLiftRow,
+    staleTime: 5 * 60_000,
+    queryFn: async () => (await sb
+      .from("pl_row_results")
+      .select("actual_load_unit, actual_load, pl_exercise_rows(exercises(movement_family))")
+      .eq("client_id", client!.id)
+      .not("actual_load_unit", "is", null)
+      .gt("actual_load", 0)
+      .order("created_at", { ascending: false })
+      .limit(150)).data ?? [],
+  });
+
   // Map exercise_id -> resolved unit, recomputed when inputs change.
   const [unitOverrides, setUnitOverrides] = useState<Record<string, WUnit>>({});
   // One unit per exercise per workout — see resolveWorkoutRowUnits.
@@ -1403,9 +1424,10 @@ function WorkoutDay({
       rows: rows as any[],
       prefRows: prefRows as any[],
       historyRows: historyRows as any[],
+      familyHistoryRows: familyHistoryRows as any[],
       overrides: unitOverrides,
     }),
-    [rows, prefRows, historyRows, unitOverrides],
+    [rows, prefRows, historyRows, familyHistoryRows, unitOverrides],
   );
 
   const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
