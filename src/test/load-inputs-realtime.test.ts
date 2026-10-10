@@ -4,7 +4,7 @@ import { applyOptimisticSetResult, optimisticNormalizedLoads } from "@/lib/optim
 import { smoothedBodyweightKgAt } from "@/lib/bodyweight";
 
 describe("optimistic set results (instant suggestion updates)", () => {
-  const rows = [{ id: "a", row_id: "r1", set_index: 1, actual_load: 100, entered_value: 100, entered_unit: "kg", normalized_kg: 100, normalized_lb: 220.46, actual_reps: 5, completed_at: "x" }];
+  const rows = [{ id: "a", row_id: "r1", set_index: 1, actual_load: 100, entered_value: 100, entered_unit: "kg", normalized_kg: 100, normalized_lb: 220.46, actual_reps: 5, completed_at: "x", actual_rpe_num: null }];
   it("patches an existing set and recomputes normalized loads like the DB trigger", () => {
     const out = applyOptimisticSetResult(rows, { row_id: "r1", set_index: 1, entered_value: 225, entered_unit: "lb", actual_load: 225, actual_load_unit: "lb", actual_reps: 5, actual_rpe_num: 7 }, "a")!;
     expect(out).toHaveLength(1);

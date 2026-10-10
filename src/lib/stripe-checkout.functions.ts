@@ -587,6 +587,8 @@ export async function createAssignmentCheckout(
       "Stripe created checkout, but the app could not save it to this sale. No payment link was shared. Retry once.",
     );
   }
+
+  return { url: session.url as string, sessionId: session.id as string, mode: checkoutMode };
 }
 
 // ─── Admin Preview Checkout Session ──────────────────────────────────────────

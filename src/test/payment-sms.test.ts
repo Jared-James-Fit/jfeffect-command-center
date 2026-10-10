@@ -37,11 +37,12 @@ function fake(opts: {
 const SETTINGS = { enabled: true, from_phone: "+18145550100", brand_name: "Jared James Coaching", rate_limit_per_hour: 3 };
 const ROW: Row = { o_purchase_id: "p1", o_client_id: "c1", o_first_name: "Jarrett", o_phone: "2045551234", o_offer: "Online Coaching" };
 
-let sendSms: ReturnType<typeof vi.fn>;
+const smsSenderImpl = async (_toPhone: string, _fromPhone: string, _body: string) => ({ sid: "SM123" });
+let sendSms = vi.fn(smsSenderImpl);
 const normalizePhone = (raw: string | null | undefined) => (raw ? "+1" + String(raw).replace(/\D/g, "") : null);
 
 beforeEach(() => {
-  sendSms = vi.fn(async () => ({ sid: "SM123" }));
+  sendSms = vi.fn(smsSenderImpl);
 });
 
 describe("payment setup SMS copy", () => {
