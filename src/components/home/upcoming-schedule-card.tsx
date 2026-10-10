@@ -123,7 +123,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
         selected={selected}
         onSelect={setSelected}
         count={(d) => countByDay.get(d) ?? 0}
-        dotClass="bg-emerald-400"
+        dotClass="bg-cyan-400"
       />
 
       {rows.length === 0 ? (
