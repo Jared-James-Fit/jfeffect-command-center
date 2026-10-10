@@ -189,6 +189,10 @@ export type CommunityPost = {
   comment_preview?: CommentPreview[];
   /** A poll on a coach's text post (null / missing = none). */
   poll?: CommunityPoll | null;
+  /** A GIF from the library on the post (its public link). */
+  gif_url?: string | null;
+  /** A voice memo on the post. */
+  audio?: { path: string; duration: number | null } | null;
   /** Pulse: posted by itself when the workout was finished (until the author adds to it). */
   auto?: boolean;
   /** Your own posts only: how many have seen it, and the three latest (named) faces. */
@@ -379,11 +383,14 @@ export const BIO_MAX = 150;
 export type CommunityFeedPage = { posts: CommunityPost[]; has_more: boolean };
 
 export type CommentMedia = {
+  /** A GIF's is its public link (from the GIF library). */
   path: string;
   thumb: string | null;
-  type: "image" | "video";
+  type: "image" | "video" | "gif" | "audio";
   width: number | null;
   height: number | null;
+  /** A voice memo's length in seconds. */
+  duration?: number | null;
 };
 
 export type CommunityComment = {

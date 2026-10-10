@@ -38,6 +38,7 @@ import { ReactionsRise, useEngagementPop } from "@/components/community/engageme
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
+import { PostExtras } from "@/components/community/post-attach";
 import { PollCard } from "@/components/community/poll";
 import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
 import { useAuth } from "@/lib/auth";
@@ -114,6 +115,7 @@ export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: C
           <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenPerson} />
         </p>
       )}
+      <PostExtras post={post} className="mt-3" />
       {post.poll && <PollCard post={post} onOpenPerson={onOpenPerson} className="mb-2" />}
     </div>
   );
@@ -447,6 +449,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {!isNote && s && <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />}
 
       {post.caption && !isNote && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} />}
+      {!isNote && <PostExtras post={post} className="px-3.5 pt-2.5" />}
 
       {(post.coach_reactions.length > 0 || post.coach_commented) && (
         <div className="px-3.5 pt-2.5">

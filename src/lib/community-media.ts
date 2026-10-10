@@ -200,7 +200,7 @@ export async function uploadCommunityAvatar(file: File, userId: string): Promise
 /** Best-effort cleanup of files no post points at any more. */
 export async function removeCommunityFiles(paths: (string | null | undefined)[]) {
   // a picture shipped with the app isn't in the bucket
-  const list = paths.filter((p): p is string => !!p && !p.startsWith(APP_MEDIA));
+  const list = paths.filter((p): p is string => !!p && !p.startsWith(APP_MEDIA) && !/^https?:\/\//.test(p));
   if (!list.length) return;
   try {
     await supabase.storage.from(COMMUNITY_BUCKET).remove(list);
@@ -226,6 +226,11 @@ export async function signCommunityPaths(paths: (string | null | undefined)[]): 
       out[p] = `/${p.slice(APP_MEDIA.length)}`;
       continue;
     }
+    // a GIF from the library is already a public link
+    if (/^https:\/\//.test(p)) {
+      out[p] = p;
+      continue;
+    }
     const hit = urlCache.get(p);
     if (hit && hit.expiresAt > now) out[p] = hit.url;
     else missing.push(p);
@@ -240,4 +245,15 @@ export async function signCommunityPaths(paths: (string | null | undefined)[]): 
     }
   }
   return out;
+}
+
+/** Voice memos are kept short: two minutes at most. */
+export const VOICE_MAX_SECONDS = 120;
+
+/** Upload a voice memo under `${userId}/…` in the community bucket. */
+export async function uploadVoiceMemo(blob: Blob, userId: string, onProgress?: (pct: number) => void): Promise<string> {
+  const ext = blob.type.includes("mp4") || blob.type.includes("m4a") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
+  const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type || "audio/webm" });
+  const up = await uploadLiftFileToStorage({ file, userId, bucket: COMMUNITY_BUCKET, onProgress });
+  return up.path;
 }

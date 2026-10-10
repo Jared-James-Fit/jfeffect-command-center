@@ -40,7 +40,7 @@ import {
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
 import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
-import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
+import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
 import { onRealtimeRejoin, useResyncOnResume } from "@/hooks/use-resync-on-resume";
 
 const db = supabase as any;
@@ -442,6 +442,10 @@ export type NewComment = {
   threadId?: string | null;
   replyTo?: string | null;
   media?: PickedMedia | null;
+  /** A GIF from the library instead of a photo. */
+  gif?: { url: string; thumb: string | null } | null;
+  /** A recorded voice memo instead of a photo. */
+  voice?: { blob: Blob; duration: number; url: string } | null;
   userId: string;
   me: CommunityAuthor;
   onProgress?: (pct: number) => void;
@@ -452,10 +456,15 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (c: NewComment): Promise<CommunityComment> => {
-      let media: { path: string; thumb: string | null; type: string; width: number; height: number } | null = null;
+      let media: { path: string; thumb: string | null; type: string; width: number | null; height: number | null; duration?: number } | null = null;
       if (c.media) {
         const up = await uploadPicked(c.media, c.userId, c.onProgress);
         media = { path: up.media_path, thumb: up.media_thumb_path, type: up.media_type, width: up.media_width, height: up.media_height };
+      } else if (c.gif) {
+        media = { path: c.gif.url, thumb: c.gif.thumb, type: "gif", width: null, height: null };
+      } else if (c.voice) {
+        const path = await uploadVoiceMemo(c.voice.blob, c.userId, c.onProgress);
+        media = { path, thumb: null, type: "audio", width: null, height: null, duration: Math.round(c.voice.duration * 10) / 10 };
       }
       const { data, error } = await db.rpc("community_add_comment", { _post_id: postId, _body: c.body, _parent_id: c.parentId ?? null, _media: media });
       if (error) {
@@ -474,8 +483,14 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
         created_at: new Date().toISOString(),
         author: c.me,
         reply_to: c.replyTo ?? null,
-        media: c.media ? { path: "", thumb: null, type: c.media.kind, width: c.media.width, height: c.media.height } : null,
-        local_preview: c.media?.previewUrl ?? null,
+        media: c.media
+          ? { path: "", thumb: null, type: c.media.kind, width: c.media.width, height: c.media.height }
+          : c.gif
+            ? { path: c.gif.url, thumb: c.gif.thumb, type: "gif", width: null, height: null }
+            : c.voice
+              ? { path: "", thumb: null, type: "audio", width: null, height: null, duration: c.voice.duration }
+              : null,
+        local_preview: c.media?.previewUrl ?? c.voice?.url ?? null,
         likes: 0,
         liked: false,
         is_mine: true,
@@ -486,7 +501,7 @@ export function useAddComment(postId: string, viewerIsCoach: boolean, postIsMine
     },
     onSuccess: (row, c) => {
       // keep showing the local photo until the signed one has loaded
-      const done = { ...row, local_preview: c.media?.previewUrl ?? null };
+      const done = { ...row, local_preview: c.media?.previewUrl ?? c.voice?.url ?? null };
       setComments(qc, postId, (l) => (l.some((x) => x.id === row.id) ? l.filter((x) => x.id !== c.tempId) : l.map((x) => (x.id === c.tempId ? done : x))));
       if (c.media) {
         setTimeout(() => {
@@ -632,7 +647,8 @@ export function usePinComment(postId: string) {
 
 /** Signed URLs for every photo / video thumbnail in a thread, in one storage call. */
 export function useCommentMediaUrls(comments: CommunityComment[]) {
-  const paths = comments.map((c) => (c.media ? c.media.thumb ?? (c.media.type === "image" ? c.media.path : null) : null)).filter((p): p is string => !!p);
+  // a photo's thumb (or itself), a GIF's link, a voice memo's file
+  const paths = comments.map((c) => (c.media ? (c.media.type === "audio" || c.media.type === "gif" ? c.media.path : c.media.thumb ?? (c.media.type === "image" ? c.media.path : null)) : null)).filter((p): p is string => !!p);
   const key = paths.join("|");
   return useQuery({
     queryKey: ["community-media-urls", key],
@@ -672,6 +688,9 @@ export type MyPostRow = {
   hide_loads: boolean;
   /** Pulse posted it by itself; a caption or photo makes it theirs. */
   auto_shared?: boolean;
+  gif_url?: string | null;
+  audio_path?: string | null;
+  audio_duration?: number | null;
 };
 
 /**
@@ -690,7 +709,7 @@ export function useMyPostForCompletion(completionId: string | null | undefined, 
     queryFn: async (): Promise<MyPostRow | null> => {
       let q = db
         .from("community_posts")
-        .select("id, caption, visibility, media_path, media_thumb_path, media_type, extra_media, locked_in_at, hide_loads, auto_shared")
+        .select("id, caption, visibility, media_path, media_thumb_path, media_type, extra_media, locked_in_at, hide_loads, auto_shared, gif_url, audio_path, audio_duration")
         .eq("completion_id", completionId);
       q = slot === "lockin" ? q.not("locked_in_at", "is", null) : q.is("locked_in_at", null);
       const { data, error } = await q.maybeSingle();
@@ -741,10 +760,10 @@ export async function saveCommunityPost(input: SavePostInput): Promise<string> {
 export function useDeletePost() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (post: { id: string; media_path: string | null; media_thumb_path: string | null; extra_media?: PostSlide[] | null; is_mine: boolean }) => {
+    mutationFn: async (post: { id: string; media_path: string | null; media_thumb_path: string | null; extra_media?: PostSlide[] | null; audio?: { path: string } | null; is_mine: boolean }) => {
       const { error } = await db.from("community_posts").delete().eq("id", post.id);
       if (error) throw error;
-      if (post.is_mine) await removeCommunityFiles(postFiles(post));
+      if (post.is_mine) await removeCommunityFiles([...postFiles(post), post.audio?.path]);
     },
     onSuccess: () => {
       invalidateCommunity(qc);
@@ -772,8 +791,10 @@ export async function shareToCommunity(
     extras?: PostSlide[];
     /** Lock-in screens: save to the lock-in post, never the finish post. */
     lockIn?: boolean;
+    /** The GIF / voice memo, put on the post once it's saved. */
+    attach?: (postId: string) => Promise<void>;
   },
-): Promise<void> {
+): Promise<string> {
   let media: SavePostInput["media"] = { action: "keep" };
   if (i.photo) {
     const res = await pickMedia(i.photo);
@@ -784,7 +805,14 @@ export async function shareToCommunity(
       releasePicked(res.media);
     }
   }
-  await saveCommunityPost({ completionId: i.completionId, caption: i.caption, visibility: i.visibility, media, hideLoads: i.hideLoads, extras: i.extras, lockIn: i.lockIn });
+  const postId = await saveCommunityPost({ completionId: i.completionId, caption: i.caption, visibility: i.visibility, media, hideLoads: i.hideLoads, extras: i.extras, lockIn: i.lockIn });
+  try {
+    await i.attach?.(postId);
+  } catch (e) {
+    // the post is up; only the GIF / voice memo didn't go
+    invalidateCommunity(qc);
+    throw new Error((e as any)?.message ? `Posted, but the GIF or voice memo didn't attach: ${(e as any).message}` : "Posted, but the GIF or voice memo didn't attach. Edit the post to add it.");
+  }
   // tidy up whatever the post no longer points at
   const old = i.existing;
   if (old) {
@@ -794,6 +822,7 @@ export async function shareToCommunity(
     if (gone.length) await removeCommunityFiles(gone);
   }
   invalidateCommunity(qc);
+  return postId;
 }
 
 /** What a Community post earns right now (today banked? weekly cap?). */
@@ -995,7 +1024,7 @@ export function useSeriesAction() {
                 });
       const { data, error } = await call;
       if (error) throw error;
-      return data as { status?: string } | null;
+      return data as { status?: string; id?: string } | null;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["community-series"] });

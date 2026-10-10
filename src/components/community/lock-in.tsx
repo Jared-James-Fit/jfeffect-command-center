@@ -137,12 +137,13 @@ export function LockInBar({
               caption: existing?.caption,
               visibility: existing?.visibility,
               extras: existing?.extra_media ?? null,
+              attach: existing,
               onPost: async (a) => {
                 if (!user?.id) throw new Error("Sign in again to post");
                 // Always through the start path: the row can exist without being started.
                 const id = await ensureStarted();
                 if (!id) throw new Error("Couldn't start your session. Try again.");
-                await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing, extras: a.extras, lockIn: true });
+                await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing, extras: a.extras, lockIn: true, attach: a.attach });
                 toast.success(
                   a.visibility === "community" ? (existing ? "Lock in updated 🔒" : "You're locked in 🔒") : a.visibility === "coach" ? "Sent to your coach 🔒" : "Saved to your profile",
                   {

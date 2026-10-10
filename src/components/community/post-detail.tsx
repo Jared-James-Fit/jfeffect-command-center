@@ -23,6 +23,7 @@ import {
   type ReactionKey,
 } from "@/lib/community";
 import { PostViewsRow, useViewOnOpen } from "@/components/community/post-views";
+import { PostExtras } from "@/components/community/post-attach";
 import { useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { formatTonnage } from "@/lib/training-records";
 
@@ -174,6 +175,7 @@ function Detail({
           <span className="font-bold">{post.author.name}</span> <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenAuthor} />
         </p>
       )}
+      {post.kind !== "note" && <PostExtras post={post} className="px-4 pt-3" />}
 
       {s && post.media_type && <h2 className="font-display px-4 pt-4 text-[28px] uppercase leading-none">{s.workout_title}</h2>}
 
