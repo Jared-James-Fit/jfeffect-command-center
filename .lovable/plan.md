@@ -1,21 +1,17 @@
-# Production database outage: what I found and how to recover
+# Admin "Something went wrong loading this page" — diagnosis
 
-## What I found (read-only checks, nothing changed)
-1. **Status:** The database is **DOWN**. The backend's health check reports "data plane responded 503", so the server is up but nothing behind it is answering.
-2. **Crash loop:** The database has restarted **77 times** since it booted. It keeps starting, crashing and starting again. That's why connections are refused and the app sits on "Updating..." forever.
-3. **Not disk, memory or connections:**
-   - Data disk: 47% used, so it isn't full.
-   - Memory: 33% used.
-   - Connection pool: 1 of 200, so it isn't "too many connections".
-   - No out-of-memory or other exhaustion alerts in the last 48 hours.
-   - The last metrics check itself failed, because the database is unreachable.
-4. **Logs:** The database log query came back completely empty. A crashing database often can't write logs, so the last error before the outage isn't visible from here. The cause is still unconfirmed.
-5. **Not caused by app changes:** No migrations or database changes were run around this time. The only recent change was the coach day notes, which touched the app only.
+## Findings so far (nothing changed)
+- Build log: last build carries two type errors, `src/components/sms-personal-dialog.tsx(34,33)` and `src/lib/onboarding-admin.functions.ts(107,46)` (TS2589 "Type instantiation is excessively deep"). These are type-check only and do not stop the page from running.
+- Preview/published browser logs: none captured for this message (no console, runtime or network log files exist).
+- Server function logs (published, last hour): empty — no server-side errors recorded.
+- Backend: database and login both reachable and healthy.
+- Local reproduction signed in as jaredjamesfit@gmail.com: /admin stays on "Loading your dashboard… Checking your account…" without reaching the error screen; no console or network errors fired.
 
-## Recovery plan
-1. **Restart the backend.** I can trigger this from here once you approve it. It may be unavailable for a few minutes. (Bigger disk or bigger instance won't help, because neither is under pressure.)
-2. Re-check status and health until the database reports healthy and the restart count stops rising.
-3. Confirm a client profile loads again in the live app.
-4. If it crash-loops again after the restart, this isn't something you can fix yourself. Contact Lovable support with these facts: database down, 77 restarts, disk 47%, memory 33%, no exhaustion alerts, empty logs.
+The exact error message and file/line are therefore not yet confirmed.
 
-If you'd rather do it yourself, open Cloud settings and restart the backend.
+## Next steps (read-only)
+1. Open the published /admin pages signed in, expand "Error details" on the error screen and capture the message and stack.
+2. Capture failed server calls on those pages and match them to the server function logs.
+3. Report the exact error and the file/line it points to. No code edits or migrations.
+
+Fastest help from you: on the error screen, tap "Error details" and paste the text here.
