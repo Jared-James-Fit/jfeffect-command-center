@@ -166,7 +166,11 @@ export function audioFormat(mime: string): string {
   return "webm";
 }
 
-export async function transcribeAudio(b64: string, mime: string): Promise<string> {
+/**
+ * `names`: the people they might mention (clients), so they're spelled the
+ * way the app spells them.
+ */
+export async function transcribeAudio(b64: string, mime: string, names: string[] = []): Promise<string> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("AI is not configured (LOVABLE_API_KEY missing).");
   const res = await fetch(`${GATEWAY}/chat/completions`, {
@@ -178,7 +182,13 @@ export async function transcribeAudio(b64: string, mime: string): Promise<string
         {
           role: "system",
           content:
-            "You transcribe what a fitness coach says to their bookkeeping and business assistant, Cleo. Return only the words spoken, with normal punctuation. Client names, dollar amounts and app words (GST, HST, CRA, check-in, Stripe) should be spelled normally. If nothing intelligible was said, return an empty string.",
+            [
+              "You transcribe what a strength and physique coach says to their assistant, Cleo: questions and instructions about clients, training, programs, the calendar and the business. It can be long, with pauses and restarts.",
+              "Return every word spoken, in order, with normal punctuation and sentence breaks. Drop filler (um, uh) and false starts, but never shorten, summarize or skip content.",
+              "Spell coaching terms the way coaches write them: RPE, RIR, e1RM, 1RM, AMRAP, PR, deload, high bar, low bar, RDL, SSB, top set, back-off sets, kg, lb. Business words: GST, HST, CRA, check-in, Stripe. Write numbers and dollar amounts as digits.",
+              ...(names.length ? [`People they may mention (spell exactly like this): ${names.slice(0, 300).join(", ")}.`] : []),
+              "If nothing intelligible was said, return an empty string.",
+            ].join(" "),
         },
         {
           role: "user",

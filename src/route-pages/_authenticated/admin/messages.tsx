@@ -36,7 +36,7 @@ import { formatReadReceipt } from "@/lib/read-receipt";
 import { applyMessageChange, INBOX_MESSAGE_COLUMNS } from "@/lib/inbox-cache";
 import { waitingState, type WaitingState } from "@/lib/inbox-waiting";
 import { deriveRequests, latestToReview, oldestPending, requestChip, type RequestChip } from "@/lib/inbox-requests";
-import { Check, Sparkles } from "lucide-react";
+import { Check, Mic, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { openSummer } from "@/components/summer/summer-assistant";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
@@ -684,17 +684,19 @@ export function MessagesInbox({
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">Cleo</span>
-                  <span className="block truncate text-xs text-muted-foreground">Ask anything, or tap the phone to talk</span>
+                  <span className="block truncate text-xs text-muted-foreground">Ask anything, or tap the mic and talk</span>
                 </span>
               </button>
               <button
                 type="button"
-                onClick={() => openSummer({ call: true })}
-                className="flex w-12 shrink-0 items-center justify-center text-muted-foreground transition hover:bg-secondary/40 hover:text-foreground"
-                aria-label="Call Cleo"
-                title="Call Cleo"
+                onClick={() => openSummer({ dictate: true })}
+                className="flex w-14 shrink-0 items-center justify-center transition hover:bg-secondary/40"
+                aria-label="Talk to Cleo"
+                title="Talk to Cleo"
               >
-                <Phone className="h-4 w-4" />
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white shadow-sm">
+                  <Mic className="h-4 w-4" />
+                </span>
               </button>
             </div>
           )}

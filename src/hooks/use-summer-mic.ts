@@ -1,16 +1,32 @@
 /**
- * Hands-free mic for Cleo: records one spoken question and stops by itself
- * when the owner stops talking (or taps). Resolves null when nothing was said.
+ * Cleo's mic. Two ways to listen:
  *
- * Voice activity is a simple loudness gate calibrated on the first moments of
- * room noise: good enough for "talk, pause, she answers", no extra library.
+ * - dictate (what the app uses): records everything until the person taps to
+ *   send. Pauses never end it. Capped at `maxMs`, where it sends what it has
+ *   rather than losing it. The screen is kept awake while it listens.
+ * - hands-free: stops by itself when the person stops talking (a loudness gate
+ *   calibrated on the first moments of room noise). Resolves null when
+ *   nothing was said.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getMicStream } from "@/lib/audio-session";
 
 export type MicTake = { blob: Blob; mime: string; durationMs: number };
 
-type Opts = { silenceMs?: number; maxMs?: number; noSpeechMs?: number };
+type Opts = { silenceMs?: number; maxMs?: number; noSpeechMs?: number; dictate?: boolean };
+
+/** Long dictations stay small: speech needs nothing like music bitrates. */
+const SPEECH_BITS_PER_SECOND = 48_000;
+
+/** Keeps the phone from locking mid-sentence; silently does nothing where unsupported. */
+async function keepAwake(): Promise<() => void> {
+  try {
+    const lock = await (navigator as any).wakeLock?.request?.("screen");
+    return () => void lock?.release?.().catch(() => {});
+  } catch {
+    return () => {};
+  }
+}
 
 function pickMime(): string {
   if (typeof MediaRecorder === "undefined") return "";
@@ -28,9 +44,10 @@ export function micSupported(): boolean {
   return typeof window !== "undefined" && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== "undefined";
 }
 
-export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_000 }: Opts = {}) {
+export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_000, dictate = false }: Opts = {}) {
   const [listening, setListening] = useState(false);
   const [level, setLevel] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const finishRef = useRef<((keep: boolean) => void) | null>(null);
 
   const cleanupRef = useRef<() => void>(() => {});
@@ -44,7 +61,13 @@ export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_
     // can't record; getMicStream switches it for the capture and restores it.
     const { stream, restore } = await getMicStream({ echoCancellation: true, noiseSuppression: true, autoGainControl: true });
     const mime = pickMime();
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: SPEECH_BITS_PER_SECOND });
+    } catch {
+      rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    }
+    const release = dictate ? await keepAwake() : () => {};
     const chunks: BlobPart[] = [];
     rec.ondataavailable = (e) => {
       if (e.data.size > 0) chunks.push(e.data);
@@ -53,6 +76,7 @@ export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_
     let ctx: AudioContext | null = null;
     let raf = 0;
     let timer = 0;
+    let clock = 0;
     const startedAt = performance.now();
     let heardAt = 0;
     let lastLoud = 0;
@@ -67,16 +91,22 @@ export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_
         settled = true;
         cancelAnimationFrame(raf);
         window.clearTimeout(timer);
+        window.clearInterval(clock);
         const stopAll = () => {
           stream.getTracks().forEach((t) => t.stop());
           restore();
+          release();
+          setElapsedMs(0);
           void ctx?.close().catch(() => {});
           setListening(false);
           setLevel(0);
           finishRef.current = null;
           cleanupRef.current = () => {};
         };
-        if (!keep || !heardAt) {
+        // Dictation keeps anything longer than a blip: the transcriber decides
+        // whether words were said, not a loudness guess (quiet voices count).
+        const said = dictate ? performance.now() - startedAt > 700 : !!heardAt;
+        if (!keep || !said) {
           rec.onstop = () => {
             stopAll();
             resolve(null);
@@ -100,6 +130,8 @@ export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_
 
       rec.start(250);
       setListening(true);
+      setElapsedMs(0);
+      clock = window.setInterval(() => setElapsedMs(performance.now() - startedAt), 250);
       timer = window.setTimeout(() => finish(true), maxMs);
 
       try {
@@ -132,8 +164,8 @@ export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_
             } else {
               loudFrames = 0;
             }
-            if (heardAt && now - lastLoud > silenceMs) return finish(true);
-            if (!heardAt && now - startedAt > noSpeechMs) return finish(false);
+            if (!dictate && heardAt && now - lastLoud > silenceMs) return finish(true);
+            if (!dictate && !heardAt && now - startedAt > noSpeechMs) return finish(false);
           }
           raf = requestAnimationFrame(tick);
         };
@@ -143,14 +175,14 @@ export function useSummerMic({ silenceMs = 1300, maxMs = 45_000, noSpeechMs = 7_
         heardAt = performance.now();
       }
     });
-  }, [silenceMs, maxMs, noSpeechMs]);
+  }, [silenceMs, maxMs, noSpeechMs, dictate]);
 
   /** Send what was said so far. */
   const stop = useCallback(() => finishRef.current?.(true), []);
   /** Throw it away. */
   const cancel = useCallback(() => finishRef.current?.(false), []);
 
-  return { listening, level, start, stop, cancel };
+  return { listening, level, elapsedMs, start, stop, cancel };
 }
 
 export async function blobToBase64(blob: Blob): Promise<string> {

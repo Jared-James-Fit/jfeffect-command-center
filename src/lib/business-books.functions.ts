@@ -385,8 +385,8 @@ export const askSummer = createServerFn({ method: "POST" })
   });
 
 const VoiceInput = z.object({
-  /** Base64 audio (webm/opus on most browsers, mp4/aac on iPhone). ~45s max. */
-  audio: z.string().min(16).max(4_000_000),
+  /** Base64 audio (webm/opus on most browsers, mp4/aac on iPhone). Dictation runs up to 5 minutes. */
+  audio: z.string().min(16).max(9_000_000),
   mime: z.string().max(80),
   year: z.number().int().min(2000).max(2100).optional(),
   route: z.string().max(300).optional(),
@@ -401,7 +401,9 @@ export const askSummerVoice = createServerFn({ method: "POST" })
     // The admin, or the finance login (view-only: its own Cleo, nothing else).
     const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { answerSummer, transcribeAudio } = await import("@/lib/summer.server");
-    const transcript = await transcribeAudio(data.audio, data.mime);
+    const { data: people } = await supabase.from("clients").select("full_name").not("full_name", "is", null).limit(400);
+    const names = ((people ?? []) as Array<{ full_name: string | null }>).map((c) => (c.full_name ?? "").trim()).filter(Boolean);
+    const transcript = await transcribeAudio(data.audio, data.mime, names);
     if (!transcript) return { transcript: "", user: null, assistant: null };
     const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly, own: (context as any).supabase });
     return { transcript, ...res };

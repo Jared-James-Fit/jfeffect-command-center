@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  ArrowUp, ArrowUpRight, Check, Copy, Loader2, Mic, Phone, PhoneOff, RotateCcw, SlidersHorizontal, Sparkles, Square, Volume2,
+  ArrowUp, ArrowUpRight, Check, Copy, Loader2, Mic, RotateCcw, SlidersHorizontal, Sparkles, Square, Volume2, X,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -145,31 +145,80 @@ function SummerText({ text, onLink, hideLinkOnlyLines = true }: { text: string; 
   return <div className="space-y-2">{blocks}</div>;
 }
 
-function VoiceOrb({ state, level, onTap }: { state: VoiceState; level: number; onTap: () => void }) {
-  const scale = state === "listening" ? 1 + Math.min(0.35, level * 0.6) : 1;
-  const label =
-    state === "listening" ? "Listening… tap when you're done" : state === "thinking" ? `${ASSISTANT_NAME} is thinking…` : state === "speaking" ? "Speaking… tap to cut in" : "";
+const DICTATION_MAX_MS = 5 * 60_000;
+
+function clock(ms: number): string {
+  const t = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+}
+
+/**
+ * While dictating: a live level meter, the running time, and one obvious
+ * Send. Nothing stops it but a tap (or the 5-minute cap, which sends).
+ */
+function DictationPanel({ state, level, elapsedMs, onSend, onCancel }: { state: VoiceState; level: number; elapsedMs: number; onSend: () => void; onCancel: () => void }) {
+  const listening = state === "listening";
+  const left = DICTATION_MAX_MS - elapsedMs;
+  const bars = [0.45, 0.75, 1, 0.8, 0.55, 0.9, 0.65];
   return (
-    <button type="button" onClick={onTap} className="flex flex-col items-center gap-3 focus:outline-none" aria-label={label}>
-      <span className="relative flex h-24 w-24 items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <button
+        type="button"
+        onClick={onSend}
+        disabled={!listening && state !== "speaking"}
+        className="relative flex h-24 w-24 items-center justify-center rounded-full focus:outline-none"
+        aria-label={listening ? "Send to Cleo" : state === "speaking" ? "Stop" : "Working"}
+      >
         <span
-          className={cn("absolute inset-0 rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 opacity-30 transition-transform duration-100", state !== "idle" && "animate-pulse")}
-          style={{ transform: `scale(${scale * 1.15})` }}
+          className={cn("absolute inset-0 rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 opacity-25 transition-transform duration-100", listening && "animate-pulse")}
+          style={{ transform: `scale(${listening ? 1.1 + Math.min(0.3, level * 0.5) : 1.05})` }}
         />
-        <span
-          className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white shadow-lg transition-transform duration-100"
-          style={{ transform: `scale(${scale})` }}
-        >
-          {state === "thinking" ? <Loader2 className="h-8 w-8 animate-spin" /> : state === "speaking" ? <Volume2 className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
+        <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white shadow-lg">
+          {listening ? (
+            <span className="flex h-8 items-center gap-[3px]" aria-hidden>
+              {bars.map((b, i) => (
+                <span key={i} className="w-[3px] rounded-full bg-white transition-[height] duration-100" style={{ height: `${Math.max(12, Math.min(100, 12 + level * 140 * b))}%` }} />
+              ))}
+            </span>
+          ) : state === "thinking" ? (
+            <Loader2 className="h-8 w-8 animate-spin" />
+          ) : (
+            <Volume2 className="h-8 w-8" />
+          )}
         </span>
-      </span>
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-    </button>
+      </button>
+      {listening ? (
+        <>
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" aria-hidden />
+            Listening {clock(elapsedMs)}
+          </p>
+          <p className="-mt-2 text-center text-xs text-muted-foreground">
+            {left < 30_000 ? `Sends by itself in ${Math.ceil(left / 1000)}s` : "Take your time. Pauses are fine. Tap Send when you're done."}
+          </p>
+          <div className="flex w-full max-w-xs gap-2">
+            <Button variant="outline" className="h-11 flex-1" onClick={onCancel}>
+              <X className="mr-1.5 h-4 w-4" /> Cancel
+            </Button>
+            <Button className="h-11 flex-[2]" onClick={onSend}>
+              <ArrowUp className="mr-1.5 h-4 w-4" /> Send to {ASSISTANT_NAME}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">{state === "thinking" ? `${ASSISTANT_NAME} is on it…` : "Speaking… tap to stop"}</p>
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            {state === "speaking" ? "Stop" : "Cancel"}
+          </Button>
+        </>
+      )}
+    </div>
   );
 }
 
 export function SummerChat({
-  open, onOpenChange, year, persona, onPersonaSaved, route, isOwner = true, isFinance = false, startCall, onCallStarted,
+  open, onOpenChange, year, persona, onPersonaSaved, route, isOwner = true, isFinance = false, startDictating, onDictationStarted,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -182,9 +231,9 @@ export function SummerChat({
   isOwner?: boolean;
   /** The finance login: the books plus the app, read-only. */
   isFinance?: boolean;
-  /** Start a voice call as soon as the sheet opens (long-press on the button). */
-  startCall?: boolean;
-  onCallStarted?: () => void;
+  /** Start dictating as soon as the sheet opens (long-press on the button, the mic in Messages). */
+  startDictating?: boolean;
+  onDictationStarted?: () => void;
 }) {
   const qc = useQueryClient();
   const load = useServerFn(getSummerMessages);
@@ -197,12 +246,10 @@ export function SummerChat({
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
-  const [inCall, setInCall] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
-  const inCallRef = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
-  const { level: micLevel, start: micStart, stop: micStop, cancel: micCancel } = useSummerMic();
+  const { level: micLevel, elapsedMs: micElapsed, start: micStart, stop: micStop, cancel: micCancel } = useSummerMic({ dictate: true, maxMs: DICTATION_MAX_MS });
   const speaker = summerSpeaker();
   const prefsRef = useRef<SummerVoicePrefs>(loadVoicePrefs());
   const canTalk = typeof window !== "undefined" && micSupported();
@@ -236,102 +283,99 @@ export function SummerChat({
     [speaker, serverVoice],
   );
 
-  const endCall = useCallback(() => {
-    inCallRef.current = false;
-    setInCall(false);
+  /** Throw away what's being said, or stop her talking. */
+  const turnRef = useRef(0);
+  const stopVoice = useCallback(() => {
+    turnRef.current += 1; // a reply that lands after this stays quiet
     micCancel();
     speaker.stop();
     setVoiceState("idle");
   }, [micCancel, speaker]);
 
-  /** One spoken turn: listen, answer, speak. Loops while a call is on. */
-  const talk = useCallback(async () => {
-    let misses = 0;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      setVoiceState("listening");
-      let take;
-      try {
-        take = await micStart();
-      } catch (e: any) {
-        toast.error(
-          e?.name === "NotAllowedError"
-            ? "Allow the microphone to talk to Cleo."
-            : isAudioSessionError(e)
-              ? "Your phone's audio is busy (music or a call?). Pause it and tap the mic again."
-              : e?.message ?? "Couldn't use the microphone",
-        );
-        endCall();
-        return;
-      }
-      if (!take) {
-        if (inCallRef.current && ++misses < 2) continue;
-        if (inCallRef.current) toast.message("Call ended. Tap the phone to talk again.");
-        endCall();
-        return;
-      }
-      misses = 0;
-      setVoiceState("thinking");
-      let res: any;
-      try {
-        res = await askVoice({ data: { audio: await blobToBase64(take.blob), mime: take.mime, year, route } });
-      } catch (e: any) {
-        toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
-        endCall();
-        return;
-      }
-      if (!res?.transcript || !res.assistant) {
-        toast.message("Didn't catch that. Try again?");
-        if (inCallRef.current) continue;
-        setVoiceState("idle");
-        return;
-      }
-      append([res.user, res.assistant]);
-      void cleo.refresh();
-      prefsRef.current = loadVoicePrefs();
-      if (prefsRef.current.autoplay || inCallRef.current) {
-        setVoiceState("speaking");
-        await speak(res.assistant);
-      }
-      if (!inCallRef.current) {
-        setVoiceState("idle");
-        return;
-      }
+  /** Dictate: listen until the tap, then she answers (and speaks it if auto-play is on). */
+  const dictate = useCallback(async () => {
+    const turn = ++turnRef.current;
+    setVoiceState("listening");
+    let take;
+    try {
+      take = await micStart();
+    } catch (e: any) {
+      toast.error(
+        e?.name === "NotAllowedError"
+          ? "Allow the microphone to talk to Cleo."
+          : isAudioSessionError(e)
+            ? "Your phone's audio is busy (music or a call?). Pause it and tap the mic again."
+            : e?.message ?? "Couldn't use the microphone",
+      );
+      stopVoice();
+      return;
     }
+    if (!take || turn !== turnRef.current) {
+      if (turn === turnRef.current) setVoiceState("idle");
+      return;
+    }
+    setVoiceState("thinking");
+    let res: any;
+    try {
+      res = await askVoice({ data: { audio: await blobToBase64(take.blob), mime: take.mime, year, route } });
+    } catch (e: any) {
+      if (turn === turnRef.current) {
+        toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
+        setVoiceState("idle");
+      }
+      return;
+    }
+    if (!res?.transcript || !res.assistant) {
+      if (turn === turnRef.current) {
+        toast.message("Didn't catch any words. Tap the mic and try again.");
+        setVoiceState("idle");
+      }
+      return;
+    }
+    // Saved either way: the question was asked and answered.
+    append([res.user, res.assistant]);
+    void cleo.refresh();
+    if (turn !== turnRef.current) return;
+    prefsRef.current = loadVoicePrefs();
+    if (prefsRef.current.autoplay) {
+      setVoiceState("speaking");
+      await speak(res.assistant);
+    }
+    if (turn === turnRef.current) setVoiceState("idle");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [micStart, askVoice, year, route, speak, endCall]);
+  }, [micStart, askVoice, year, route, speak, stopVoice]);
 
-  const startTalking = (call: boolean) => {
+  const startDictation = () => {
     if (!canTalk) {
       toast.error("Voice isn't supported in this browser. Type to Cleo instead.");
       return;
     }
     speaker.unlock(); // this tap is what lets her reply play by itself
     speaker.stop();
-    inCallRef.current = call;
-    setInCall(call);
-    void talk();
+    try { navigator.vibrate?.(10); } catch { /* not supported */ }
+    void dictate();
   };
 
-  // Long-press on the Cleo button: open straight into a call.
+  // Long-press on the Cleo button, or the mic on her row in Messages: open straight into dictation.
   useEffect(() => {
-    if (open && startCall && voiceState === "idle") {
-      onCallStarted?.();
-      startTalking(true);
+    if (open && startDictating && voiceState === "idle") {
+      onDictationStarted?.();
+      startDictation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, startCall]);
+  }, [open, startDictating]);
 
-  // Closing the sheet hangs up.
+  // Closing the sheet drops whatever was being said.
   useEffect(() => {
-    if (!open && (inCallRef.current || voiceState !== "idle")) endCall();
+    if (!open && voiceState !== "idle") stopVoice();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const tapOrb = () => {
-    if (voiceState === "listening") micStop();
-    else if (voiceState === "speaking") speaker.stop();
-    else if (voiceState === "idle") startTalking(inCall);
+  const sendDictation = () => {
+    if (voiceState === "listening") {
+      try { navigator.vibrate?.(10); } catch { /* not supported */ }
+      micStop();
+    } else if (voiceState === "speaking") speaker.stop();
   };
 
   const send = async (text: string) => {
@@ -374,10 +418,10 @@ export function SummerChat({
     useCallback(() => {
       // On a phone the sheet covers the page, so step aside; on desktop keep chatting.
       if (window.innerWidth < 768) {
-        endCall();
+        stopVoice();
         onOpenChange(false);
       }
-    }, [endCall, onOpenChange]),
+    }, [stopVoice, onOpenChange]),
   );
 
   return (
@@ -398,14 +442,15 @@ export function SummerChat({
             <div className="flex shrink-0 items-center">
               {canTalk && (
                 <Button
-                  variant={inCall ? "destructive" : "ghost"}
+                  variant="ghost"
                   size="sm"
-                  className={cn("h-8 text-xs", !inCall && "text-muted-foreground")}
-                  onClick={() => (inCall ? endCall() : startTalking(true))}
-                  aria-label={inCall ? "End call" : "Call Cleo"}
+                  className="h-8 text-xs text-muted-foreground"
+                  onClick={() => (voiceState === "idle" ? startDictation() : sendDictation())}
+                  disabled={!!pending || voiceState === "thinking"}
+                  aria-label="Talk to Cleo"
                 >
-                  {inCall ? <PhoneOff className="h-3.5 w-3.5 sm:mr-1" /> : <Phone className="h-3.5 w-3.5 sm:mr-1" />}
-                  <span className="sr-only sm:not-sr-only">{inCall ? "End" : "Call"}</span>
+                  <Mic className="h-3.5 w-3.5 sm:mr-1" />
+                  <span className="sr-only sm:not-sr-only">Talk</span>
                 </Button>
               )}
               <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setCustomizing(true)} aria-label="Customize Cleo">
@@ -501,16 +546,9 @@ export function SummerChat({
           <div ref={endRef} />
         </div>
 
-        {voiceState !== "idle" || inCall ? (
+        {voiceState !== "idle" ? (
           <div className="border-t px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
-            <div className="flex flex-col items-center gap-3">
-              <VoiceOrb state={voiceState} level={micLevel} onTap={tapOrb} />
-              {inCall ? (
-                <Button variant="destructive" size="sm" onClick={endCall}><PhoneOff className="mr-1.5 h-4 w-4" /> End call</Button>
-              ) : (
-                <Button variant="outline" size="sm" onClick={endCall}>Cancel</Button>
-              )}
-            </div>
+            <DictationPanel state={voiceState} level={micLevel} elapsedMs={micElapsed} onSend={sendDictation} onCancel={stopVoice} />
           </div>
         ) : (
           <form
@@ -524,7 +562,7 @@ export function SummerChat({
                   size="icon"
                   variant="outline"
                   className="h-10 w-10 shrink-0 rounded-full"
-                  onClick={() => startTalking(false)}
+                  onClick={startDictation}
                   disabled={!!pending}
                   aria-label="Talk to Cleo"
                 >
@@ -546,7 +584,7 @@ export function SummerChat({
                 <ArrowUp className="h-4 w-4" />
               </Button>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Mic to talk, phone for a hands-free call. {ASSISTANT_NAME} can look anything up, and does things only after you tap Confirm.</p>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Tap the mic and talk as long as you like; tap Send when you're done. {ASSISTANT_NAME} can look anything up, and does things only after you tap Confirm.</p>
           </form>
         )}
         <SummerCustomizeDialog open={customizing} onClose={() => setCustomizing(false)} persona={persona} onSaved={onPersonaSaved} />
