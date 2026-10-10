@@ -290,18 +290,18 @@ export function StrengthBoardSlide() {
             ))}
           </div>
           <div className="flex items-center gap-1">
-            <div className="flex flex-[4] gap-0.5" role="tablist" aria-label="Lift">
-              {BOARD_LIFTS.map((l) => (
-                <button key={l.key} type="button" role="tab" aria-selected={lift === l.key} onClick={() => setLift(l.key)} className={chip(lift === l.key)}>
-                  {l.label}
-                </button>
-              ))}
-            </div>
-            <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
             <div className="flex flex-[2] gap-0.5" role="tablist" aria-label="Division">
               {([["male", "M"], ["female", "W"], ["all", "All"]] as const).map(([d, label]) => (
                 <button key={d} type="button" role="tab" aria-selected={division === d} aria-label={d === "all" ? "All" : d === "male" ? "Men" : "Women"} onClick={() => setDivision(d)} className={chip(division === d)}>
                   {label}
+                </button>
+              ))}
+            </div>
+            <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
+            <div className="flex flex-[4] gap-0.5" role="tablist" aria-label="Lift">
+              {BOARD_LIFTS.map((l) => (
+                <button key={l.key} type="button" role="tab" aria-selected={lift === l.key} onClick={() => setLift(l.key)} className={chip(lift === l.key)}>
+                  {l.label}
                 </button>
               ))}
             </div>
@@ -512,21 +512,21 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-4 gap-1.5">
-        {BOARD_LIFTS.map((l) => (
-          <button key={l.key} type="button" onClick={() => pick(setLift)(l.key)}
-            className={cn("min-h-10 rounded-xl border text-xs font-black transition",
-              lift === l.key ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}>
-            {l.label}
-          </button>
-        ))}
-      </div>
       <div className="flex gap-1.5">
         {([["male", "Men"], ["female", "Women"], ["all", "All"]] as const).map(([d, label]) => (
           <button key={d} type="button" onClick={() => pick(setDivision)(d)}
             className={cn("min-h-9 flex-1 rounded-full border text-xs font-bold transition",
               division === d ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>
             {label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {BOARD_LIFTS.map((l) => (
+          <button key={l.key} type="button" onClick={() => pick(setLift)(l.key)}
+            className={cn("min-h-10 rounded-xl border text-xs font-black transition",
+              lift === l.key ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}>
+            {l.label}
           </button>
         ))}
       </div>
