@@ -26,3 +26,17 @@ describe("a page that fails tells us what broke", () => {
     expect(read("src/lib/support-alert-text.ts")).toContain('page_error: "A page failed to load"');
   });
 });
+
+describe("a page that keeps failing heals itself once", () => {
+  it("clears the device's saved data and reloads, once per session, before the error screen", () => {
+    expect(fallback).toContain('const CACHE_RESET_KEY = "jf:route-error-cache-reset";');
+    expect(fallback).toContain("clearPersistedQueryCache();");
+    expect(fallback).toContain('try { done = window.sessionStorage.getItem(CACHE_RESET_KEY) === "1"; } catch { done = true; }');
+    expect(fallback).toContain('try { window.sessionStorage.setItem(CACHE_RESET_KEY, "1"); } catch { return; }');
+    expect(fallback.indexOf("clearPersistedQueryCache();")).toBeLessThan(fallback.indexOf("if (chunkError) {\n    return ("));
+  });
+
+  it("every device starts from a fresh saved cache after this publish", () => {
+    expect(read("src/lib/query-persister.ts")).toContain('export const QUERY_PERSIST_BUSTER = "v7";');
+  });
+});

@@ -9,7 +9,9 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // newly created exercise until the stale snapshot expires.
 // v5 evicts persisted task lists (shared across devices, see below).
 // v6 evicts persisted unread/thread lists that could light stale nav badges.
-export const QUERY_PERSIST_BUSTER = "v6";
+// v7 evicts every saved copy after a phone's admin app kept failing on a
+// snapshot from an older build (a fresh browser loaded the same pages fine).
+export const QUERY_PERSIST_BUSTER = "v7";
 export const QUERY_PERSIST_KEY = "jfeffect-rq-cache";
 export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
