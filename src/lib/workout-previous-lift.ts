@@ -3,6 +3,8 @@ export type PreviousLiftIdentity = {
   exerciseId: string | null;
   exerciseName: string;
   repsOnly?: boolean;
+  /** The card's role in the workout ("Primary Deadlift Backoff"), when the program names one. */
+  purposeLabel?: string | null;
 };
 
 export type PreviousLiftLog = {
@@ -23,6 +25,8 @@ export type PreviousLiftLog = {
   loadType?: "external" | "bodyweight" | "assisted";
   /** Athlete's smoothed bodyweight (kg) when this set was logged, when known. */
   bodyweightKg?: number | null;
+  /** Role of the card it was logged on, when the program named one. */
+  purposeLabel?: string | null;
 };
 
 export type PreviousLift = PreviousLiftLog & { match: "exercise_id" | "name" };
@@ -120,6 +124,9 @@ function bestSet(logs: PreviousLiftLog[]): PreviousLiftLog | null {
   })[0] ?? null;
 }
 
+const normalizeRole = (label: string | null | undefined): string =>
+  (label ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
 /**
  * This exercise's logs from OTHER sessions: canonical exercise id first,
  * conservative normalized-name fallback only when no id match exists.
@@ -136,7 +143,14 @@ export function matchHistoryLogs(
     : normalizedName
       ? logs.filter((log) => normalizeExerciseHistoryName(log.exerciseName) === normalizedName)
       : [];
-  return matches.filter((log) => log.sessionKey !== currentSessionKey && occurredAtMs(log) > 0);
+  const other = matches.filter((log) => log.sessionKey !== currentSessionKey && occurredAtMs(log) > 0);
+  // A named role (a back-off, a primer) learns from the same role when there's
+  // enough of it (2+ sessions): a sumo back-off isn't predicted from the
+  // conventional top set it follows.
+  const role = normalizeRole(identity.purposeLabel);
+  if (!role) return other;
+  const sameRole = other.filter((log) => normalizeRole(log.purposeLabel) === role);
+  return new Set(sameRole.map((log) => log.sessionKey)).size >= 2 ? sameRole : other;
 }
 
 /** Select one Last Time set per current workout row from a single history batch. */
@@ -165,7 +179,13 @@ export function selectPreviousLifts(
     if (valid.length === 0) continue;
     const latestSession = valid.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0]?.sessionKey;
     if (!latestSession) continue;
-    const top = bestSet(valid.filter((log) => log.sessionKey === latestSession));
+    // Same lift twice in a workout (top set + back-off): Last Time is the same
+    // card last session, not the heaviest set of the lift (a back-off showed
+    // last week's 224.5 kg top set instead of its own 143 kg).
+    const role = normalizeRole(identity.purposeLabel);
+    const lastSession = valid.filter((log) => log.sessionKey === latestSession);
+    const sameRole = role ? lastSession.filter((log) => normalizeRole(log.purposeLabel) === role) : [];
+    const top = bestSet(sameRole.length > 0 ? sameRole : lastSession);
     if (!top) continue;
     result.set(identity.rowId, {
       ...top,
