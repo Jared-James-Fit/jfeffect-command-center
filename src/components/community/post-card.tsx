@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
-import { BadgeCheck, ChevronLeft, ChevronRight, Lock, MessageCircle, Pin, Play, Send } from "lucide-react";
+import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Play, Send, Trophy } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import {
@@ -10,7 +10,9 @@ import {
   isRecapStats,
   isWinsStats,
   formatTopSet,
+  formatWorkoutDuration,
   isTrainingNow,
+  pickWorkoutWin,
   lockInTimeLabel,
   pickCardStats,
   postSlides,
@@ -25,6 +27,7 @@ import {
   type PostSlide,
   type ReactionKey,
   type WorkoutShareStats,
+  type WorkoutWin,
 } from "@/lib/community";
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
 import { WinsStatsCard } from "@/components/community/wins-stats";
@@ -208,6 +211,58 @@ export function AuthorLine({
   );
 }
 
+const WIN_STYLE: Record<WorkoutWin["kind"], { tint: string; text: string; Icon: typeof Trophy }> = {
+  pr: { tint: "bg-[radial-gradient(120%_100%_at_100%_0%,rgba(245,158,11,0.32),transparent_60%)]", text: "text-amber-400", Icon: Trophy },
+  month: { tint: "bg-[radial-gradient(120%_100%_at_100%_0%,rgba(56,189,248,0.24),transparent_60%)]", text: "text-sky-400", Icon: CalendarCheck },
+  week: { tint: "bg-[radial-gradient(120%_100%_at_100%_0%,rgba(249,115,22,0.28),transparent_60%)]", text: "text-orange-400", Icon: Flame },
+  top: { tint: "bg-[radial-gradient(120%_100%_at_100%_0%,rgba(239,51,64,0.28),transparent_60%)]", text: "text-red-400", Icon: Dumbbell },
+  done: { tint: "bg-[radial-gradient(120%_100%_at_100%_0%,rgba(255,255,255,0.08),transparent_60%)]", text: "text-white/70", Icon: CheckCircle2 },
+};
+
+/**
+ * Pulse: a finished workout, posted by itself. It leads with the session's
+ * one real win (pickWorkoutWin: a PR, a milestone, the top set), tinted to
+ * match, and the crew can give props in one tap.
+ */
+export function PulseHero({ post, stats, unit, onReact }: { post: CommunityPost; stats: WorkoutShareStats; unit: "kg" | "lb"; onReact?: (p: CommunityPost, next: ReactionKey | null) => void }) {
+  const win = pickWorkoutWin(stats, unit);
+  const style = WIN_STYLE[win.kind];
+  const nums = [formatWorkoutDuration(stats.duration_min), stats.working_sets > 0 && win.kind !== "done" ? `${stats.working_sets} sets` : null, win.kind !== "pr" && stats.pr_count > 0 ? `${stats.pr_count} PR${stats.pr_count === 1 ? "" : "s"}` : null].filter(Boolean);
+  const canProps = !!onReact && !post.is_mine;
+  return (
+    <div data-pulse={win.kind} className={cn("mx-3.5 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b0e] p-4 text-white", style.tint)}>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10", style.text)}>
+          <style.Icon className="h-4 w-4" />
+        </span>
+        <span className={cn("truncate text-[10px] font-black uppercase tracking-[0.16em]", style.text)}>{win.label}</span>
+        <span className="ml-auto shrink-0 text-[11px] font-semibold text-white/50">{stats.workout_title}</span>
+      </div>
+      <div className="font-display mt-3 text-[28px] uppercase leading-[1.02]">{win.headline}</div>
+      {win.detail && (
+        <div className={cn("font-display mt-0.5 text-[24px] uppercase leading-none", win.kind === "pr" ? "bg-[linear-gradient(90deg,#fde68a,#f59e0b)] bg-clip-text text-transparent" : "text-white/85")}>{win.detail}</div>
+      )}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-[11px] font-semibold text-white/55">{nums.join(" · ")}</span>
+        {canProps && (
+          <button
+            type="button"
+            data-props
+            onClick={(e) => {
+              e.stopPropagation();
+              onReact?.(post, post.my_reaction ? null : "fire");
+            }}
+            aria-pressed={!!post.my_reaction}
+            className={cn("h-8 shrink-0 rounded-full px-3 text-[12px] font-black transition active:scale-95", post.my_reaction ? "bg-orange-500/20 text-orange-300" : "bg-white text-black")}
+          >
+            {post.my_reaction ? `${reactionEmoji(post.my_reaction) ?? "🔥"} Sent` : "🔥 Props"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Workout "card" drawn in the DOM (posts without a photo, profile tiles,
  * detail header). Same look as the share card so the feed feels branded, but
@@ -296,7 +351,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const stats = s ? pickCardStats(s, unit) : [];
   const isNote = post.kind === "note";
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
-  const sub = [postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
+  const sub = [post.auto && s ? "Finished a session" : null, postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
 
   // Tap opens the workout; double-tap gives ❤️ (Instagram muscle memory).
   // Already reacted? It stays as it is (a double-tap never takes one back).
@@ -338,6 +393,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           </>
         ) : post.media_type ? (
           <PostMedia post={post} thumbUrl={thumbUrl} />
+        ) : s && post.auto ? (
+          <PulseHero post={post} stats={s} unit={unit} onReact={onReact} />
         ) : s ? (
           <WorkoutHero stats={s} unit={unit} />
         ) : post.locked_in_at ? (

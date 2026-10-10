@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge } from "@/components/community/post-card";
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
 import { BIO_MAX, trainingSinceLabel, type CommunityPost } from "@/lib/community";
-import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
+import { useCommunityFeed, useCommunityProfile, useMyArchived, useMyCommunitySettings, usePostMediaUrls, useSetAutoShare, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
 
 /**
  * A person's corner of the community: photo, name, a short bio and a grid of
@@ -139,6 +141,8 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
         ) : null}
       </div>
 
+      {profile.is_me && <PulseSwitch />}
+
       {profile.is_me && ((profile.archived ?? 0) > 0 || showArchived) && (
         <div className="mt-4 flex items-center gap-1.5" role="tablist" aria-label="Your posts">
           {([[false, "Posts"], [true, `Archived${profile.archived ? ` · ${profile.archived}` : ""}`]] as const).map(([arch, label]) => (
@@ -182,5 +186,22 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
         </Button>
       )}
     </div>
+  );
+}
+
+/** Your own profile: Pulse on or off (finished workouts post themselves). */
+function PulseSwitch() {
+  const { isImpersonating } = useClientImpersonation();
+  const { data } = useMyCommunitySettings(!isImpersonating);
+  const set = useSetAutoShare();
+  if (isImpersonating || !data) return null;
+  return (
+    <label data-pulse-switch className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-3.5 py-3">
+      <span className="min-w-0">
+        <span className="block text-[13px] font-bold">Pulse</span>
+        <span className="block text-[11.5px] leading-snug text-muted-foreground">Post my finished workouts to the crew automatically, with the session's best win</span>
+      </span>
+      <Switch checked={data.auto_share_workouts} disabled={set.isPending} onCheckedChange={(on) => set.mutate(on, { onError: () => toast.error("Couldn't save that") })} />
+    </label>
   );
 }

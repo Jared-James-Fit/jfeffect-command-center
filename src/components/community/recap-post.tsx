@@ -98,6 +98,8 @@ export function RecapPostFooter({
             </button>
           )}
         </div>
+        {/* Pulse posted it by itself: a photo or caption makes it theirs (and earns the share) */}
+        {existing.auto_shared && <p className="-mt-1 mb-2 text-center text-[11px] text-muted-foreground">Posted by Pulse. Add a photo or caption to make it yours.</p>}
         <div className="grid w-full grid-cols-[1fr_1.35fr] gap-2">
           <Button type="button" variant="outline" className="h-12 rounded-xl text-sm font-bold" onClick={() => onStudio("")}>
             <Camera className="mr-1.5 h-4 w-4" />
