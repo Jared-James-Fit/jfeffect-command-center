@@ -18,9 +18,14 @@ export interface TaskRow {
   completed_by: string | null;
   position: number;
   scope: TaskScope;
+  /** Set ⇒ a personal task, private to this user. Null ⇒ on the shared team board. */
+  owner_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
+
+/** Someone a team task can be assigned to (auth user id + display name). */
+export type TeamMember = { user_id: string; full_name: string };
 
 export type TaskScope = "admin" | "media";
 
@@ -47,7 +52,14 @@ export async function getMyCoachId(): Promise<string | null> {
 }
 
 /** Inserts a task and resolves to its id. */
-export async function createTask(input: { title: string; quadrant?: TaskQuadrant; assigned_to?: string | null; assignee_name?: string | null; due_at?: string | null; notes?: string | null; scope?: TaskScope }): Promise<string> {
+export type NewTask = {
+  title: string; quadrant?: TaskQuadrant; assigned_to?: string | null; assignee_name?: string | null;
+  due_at?: string | null; notes?: string | null; scope?: TaskScope;
+  /** Pass the caller's user id for a personal task; omit for the team board. */
+  owner_user_id?: string | null;
+};
+
+export async function createTask(input: NewTask): Promise<string> {
   const me = await getMyCoachId();
   const { data, error } = await (supabase.from("tasks") as any).insert({
     title: input.title,
@@ -57,13 +69,14 @@ export async function createTask(input: { title: string; quadrant?: TaskQuadrant
     due_at: input.due_at ?? null,
     notes: input.notes ?? null,
     scope: input.scope ?? "admin",
+    owner_user_id: input.owner_user_id ?? null,
     created_by: me,
   }).select("id").single();
   if (error) throw error;
   return data.id as string;
 }
 
-export async function updateTask(id: string, patch: Partial<Pick<TaskRow, "title" | "notes" | "quadrant" | "due_at" | "assigned_to" | "assignee_name" | "priority" | "position">>): Promise<void> {
+export async function updateTask(id: string, patch: Partial<Pick<TaskRow, "title" | "notes" | "quadrant" | "due_at" | "assigned_to" | "assignee_name" | "priority" | "position" | "owner_user_id">>): Promise<void> {
   const { error } = await (supabase.from("tasks") as any).update(patch).eq("id", id);
   if (error) throw error;
 }
@@ -102,12 +115,41 @@ export async function bulkMoveTasks(ids: string[], quadrant: TaskQuadrant): Prom
   if (error) throw error;
 }
 
-/** Bulk: assign many tasks in one statement. */
-export async function bulkAssignTasks(ids: string[], assignee_name: string | null): Promise<void> {
+/** Bulk: assign many team tasks to one teammate (null = unassigned) in one statement. */
+export async function bulkAssignTasks(ids: string[], member: TeamMember | null): Promise<void> {
   if (!ids.length) return;
-  const { error } = await (supabase.from("tasks") as any).update({ assignee_name }).in("id", ids);
+  const { error } = await (supabase.from("tasks") as any)
+    .update({ assigned_to: member?.user_id ?? null, assignee_name: member?.full_name ?? null }).in("id", ids);
   if (error) throw error;
 }
+
+/** Everyone who works the team board, for assigning. Empty for anyone who doesn't. */
+export async function fetchTeamMembers(): Promise<TeamMember[]> {
+  const { data, error } = await (supabase as any).rpc("task_team_members");
+  if (error) throw error;
+  return (data ?? []) as TeamMember[];
+}
+
+/** A personal task (private to its owner). */
+export const isPersonalTask = (t: Pick<TaskRow, "owner_user_id">) => !!t.owner_user_id;
+
+/**
+ * "My tasks": my personal tasks plus team tasks assigned to me.
+ * "Team": every task on the shared board.
+ */
+export function splitTasks<T extends Pick<TaskRow, "owner_user_id" | "assigned_to">>(tasks: T[], me: string | null) {
+  const mine: T[] = [];
+  const team: T[] = [];
+  for (const t of tasks) {
+    if (t.owner_user_id) { if (t.owner_user_id === me) mine.push(t); continue; }
+    team.push(t);
+    if (me && t.assigned_to === me) mine.push(t);
+  }
+  return { mine, team };
+}
+
+/** First name, for compact chips. */
+export const firstName = (name: string | null | undefined) => (name ?? "").trim().split(/\s+/)[0] || "";
 
 /** Bulk: delete many tasks in one statement. */
 export async function bulkDeleteTasksByIds(ids: string[]): Promise<void> {

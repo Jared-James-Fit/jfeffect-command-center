@@ -11,7 +11,7 @@ import {
   LayoutDashboard, Users, ClipboardList, Video, Activity, ClipboardCheck,
   Dumbbell, Heart, Flame, ChefHat, BookOpen, FileEdit, HelpCircle,
   MessageCircle, Megaphone, Phone, Sparkles, MessagesSquare,
-  UserCheck, CreditCard, DollarSign, Ticket, Calendar, Film, FolderOpen,
+  UserCheck, CreditCard, DollarSign, Ticket, Calendar, Film,
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
   Link as LinkIcon, Trophy, Tag, ShieldCheck, Home as HomeIcon, ListChecks,
@@ -308,16 +308,13 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     category: "Quick Actions", isAction: true, parent: "Admin → Membership", roles: ADMIN, icon: Plus, hidden: true },
 
   // ── CONTENT & MEDIA ─────────────────────────────────────────────────
-  { id: "content", label: "Content", to: "/admin/content",
-    category: "Content & Media", parent: "Admin → Content", roles: ALL, icon: Film },
+  // /admin/content is the Task Manager now (listed as "Tasks" below).
+  { id: "content", label: "Task Manager", to: "/admin/content",
+    category: "Content & Media", parent: "Admin → Content", roles: ALL, icon: Film, hidden: true },
   { id: "content-ideas", label: "Content Ideas", to: "/admin/content-ideas",
     category: "Content & Media", parent: "Admin → Content", roles: ALL, icon: Sparkles, hidden: true },
-  { id: "media-archives", label: "Media Archives", to: "/admin/media-archives",
-    category: "Content & Media", parent: "Admin → Content", roles: ALL, icon: Archive, hidden: true },
   { id: "testimonials", label: "Testimonials", to: "/admin/testimonials",
     category: "Content & Media", parent: "Admin → Content", roles: ADMIN, icon: Star, hidden: true },
-  { id: "resources", label: "Resources", to: "/admin/resources",
-    category: "Content & Media", parent: "Admin → Content", roles: ALL, icon: FolderOpen, hidden: true },
   { id: "archives", label: "Archives", to: "/admin/archives",
     category: "Content & Media", parent: "Admin → Content", roles: ALL, icon: Archive, hidden: true },
 
