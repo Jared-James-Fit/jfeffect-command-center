@@ -109,3 +109,13 @@ describe("the recap's one-tap post", () => {
     expect(footer).toContain('useMyPostForCompletion(completionId, true, "lockin")');
   });
 });
+
+describe("crew feed shelf swipe", () => {
+  it("snaps one card at a time, centred", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/components/community/community-entry.tsx", "utf8");
+    expect(src).toMatch(/snap-x snap-mandatory[^"]*px-\[9%\]/);
+    expect(src).toMatch(/w-\[82%\] shrink-0 snap-center snap-always/);
+    expect(src).not.toMatch(/snap-start/);
+  });
+});
