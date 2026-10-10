@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLoadModel,
+  warmupTrust,
   estimateFor,
   loadStep,
   percentOf1RM,
@@ -180,8 +181,8 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
       expect(s.target).toBeLessThanOrEqual(hist.target);
     });
 
-    it("a heavy-feeling / weak warm-up backs the suggestion off by at most ~3%", () => {
-      const s = suggestSetLoad(withWarm({ load: 90, reps: 3, rpe: 9 }), plan)!;
+    it("a weak normal (RPE ≤ 7) warm-up backs the suggestion off by at most ~3%", () => {
+      const s = suggestSetLoad(withWarm({ load: 70, reps: 3, rpe: 7 }), plan)!;
       expect(s.target).toBeLessThanOrEqual(hist.target);
       expect(s.target / hist.target).toBeGreaterThanOrEqual(0.97 - 0.02); // −3% + rounding
     });
@@ -189,11 +190,19 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
     it("backing off is allowed more than pushing up (asymmetric, safety first) — on the unrounded estimate", () => {
       const raw = (w: { load: number; reps: number; rpe: number }) => estimateFor(withWarm(w), 5, 8)!.load;
       const h = estimateFor(base(), 5, 8)!.load;
-      const down = raw({ load: 60, reps: 1, rpe: 9 }); // implausibly weak -> clamped
+      const down = raw({ load: 60, reps: 1, rpe: 7 }); // implausibly weak -> clamped
       const up = raw({ load: 300, reps: 1, rpe: 6 }); // implausibly strong -> clamped
       expect(down / h).toBeCloseTo(0.97, 3); // −3%
       expect(up / h).toBeCloseTo(1.015, 3); // +1.5%
       expect(h - down).toBeGreaterThan(up - h);
+    });
+
+    it("a hard (RPE 8+) warm-up is read like a set: down as far as it says, up by at most 7.5%", () => {
+      const h = estimateFor(base(), 5, 8)!.load;
+      const weak = estimateFor(withWarm({ load: 90, reps: 3, rpe: 9 }), 5, 8)!.load;
+      expect(weak).toBeCloseTo(warmupE1rm({ load: 90, reps: 3, rpe: 9 })! * percentOf1RM(5, 2)!, 6);
+      const strong = estimateFor(withWarm({ load: 300, reps: 1, rpe: 8 }), 5, 8)!.load;
+      expect(strong / h).toBeLessThanOrEqual(1.015 * 1.075 + 1e-9);
     });
 
     it("keeps the readiness trim instead of cancelling it", () => {
@@ -312,5 +321,36 @@ describe("bodyweight-adjusted history", () => {
     expect(up.bodyweightScale).toBeGreaterThan(1.02);
     expect(estimateFor(up, 5, 8)!.load).toBeGreaterThan(estimateFor(buildLoadModel({ history: at(90), today: [], unit: "kg", now: NOW, bodyweightKg: 90 }), 5, 8)!.load);
     expect(same.target).toBeGreaterThan(0);
+  });
+});
+
+describe("a hard last warm-up sets today's weight", () => {
+  // Oct 2026: 210 kg × 1 @ 8 (e1RM ≈ 227.5) → 5 @ RPE 4.5 suggested 185 kg
+  // because recent sessions were heavier; the chart says ~165.
+  const now = new Date("2026-10-10T12:00:00Z");
+  const history = [3, 10].flatMap((d) => [1, 2, 3].map(() => ({
+    sessionKey: `s${d}`, occurredAt: new Date(now.getTime() - d * 864e5).toISOString(),
+    normalizedKg: 195, normalizedLb: 430, loadUnit: "kg", load: 195, reps: 5, rpe: "6", loadType: "external",
+  } as any)));
+  const at = (rpe: number | null) =>
+    suggestSetLoad(buildLoadModel({ history, today: [], unit: "kg", warmup: { load: 210, reps: 1, rpe }, now }), { reps: 5, rpe: 4.5 });
+
+  it("RPE 8 single: the warm-up's own chart math wins", () => {
+    expect(at(8)).toEqual({ low: 157.5, high: 172.5, target: 165, unit: "kg" });
+  });
+
+  it("easier or unrated warm-ups still only nudge recent sessions", () => {
+    expect(at(6)!.target).toBe(185);
+    expect(at(null)!.target).toBe(185);
+    expect(at(7)!.target).toBe(185);
+    expect(at(7.5)!.target).toBeGreaterThan(165);
+    expect(at(7.5)!.target).toBeLessThan(185);
+  });
+
+  it("trust ramps from RPE 7 to 8", () => {
+    expect(warmupTrust(7)).toBe(0);
+    expect(warmupTrust(8)).toBe(1);
+    expect(warmupTrust(9)).toBe(1);
+    expect(warmupTrust(null)).toBe(0);
   });
 });
