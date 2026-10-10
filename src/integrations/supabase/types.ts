@@ -6152,6 +6152,32 @@ export type Database = {
           },
         ]
       }
+      community_post_views: {
+        Row: {
+          post_id: string
+          viewed_at: string
+          viewer_user_id: string
+        }
+        Insert: {
+          post_id: string
+          viewed_at?: string
+          viewer_user_id: string
+        }
+        Update: {
+          post_id?: string
+          viewed_at?: string
+          viewer_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_views_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_posts: {
         Row: {
           archived_at: string | null
@@ -6295,6 +6321,7 @@ export type Database = {
         Row: {
           avatar_path: string | null
           bio: string | null
+          private_views: boolean
           same_person_as: string | null
           title: string | null
           updated_at: string
@@ -6303,6 +6330,7 @@ export type Database = {
         Insert: {
           avatar_path?: string | null
           bio?: string | null
+          private_views?: boolean
           same_person_as?: string | null
           title?: string | null
           updated_at?: string
@@ -6311,6 +6339,7 @@ export type Database = {
         Update: {
           avatar_path?: string | null
           bio?: string | null
+          private_views?: boolean
           same_person_as?: string | null
           title?: string | null
           updated_at?: string
@@ -23286,6 +23315,7 @@ export type Database = {
       }
       community_main_account: { Args: { _user_id: string }; Returns: string }
       community_mark_seen: { Args: never; Returns: undefined }
+      community_mark_viewed: { Args: { _post_ids: string[] }; Returns: number }
       community_member_directory: {
         Args: never
         Returns: {
@@ -23299,6 +23329,11 @@ export type Database = {
         Returns: Json
       }
       community_my_archived: { Args: never; Returns: Json }
+      community_my_completion_title: {
+        Args: { _completion_id: string }
+        Returns: string
+      }
+      community_my_session_title: { Args: { _day_id: string }; Returns: string }
       community_pin_comment: {
         Args: { _comment_id: string; _pinned?: boolean }
         Returns: undefined
@@ -23327,6 +23362,11 @@ export type Database = {
       }
       community_post_points_status: { Args: never; Returns: Json }
       community_post_reactors: { Args: { _post_id: string }; Returns: Json }
+      community_post_viewers: { Args: { _post_id: string }; Returns: Json }
+      community_post_views_summary: {
+        Args: { _post_id: string }
+        Returns: Json
+      }
       community_post_visible: {
         Args: { _author: string; _client: string; _visibility: string }
         Returns: boolean
@@ -23336,6 +23376,10 @@ export type Database = {
         Returns: undefined
       }
       community_profile: { Args: { _user_id: string }; Returns: Json }
+      community_public_session_title: {
+        Args: { _at: string; _client_id: string; _day_id: string }
+        Returns: string
+      }
       community_publish_series: {
         Args: { _at?: string; _force?: boolean; _series?: string }
         Returns: Json
@@ -23345,6 +23389,10 @@ export type Database = {
         Returns: undefined
       }
       community_recent_completions: { Args: { _limit?: number }; Returns: Json }
+      community_remove_note_scene: {
+        Args: { _post_id: string }
+        Returns: undefined
+      }
       community_save_post: {
         Args: {
           _caption?: string
@@ -23402,6 +23450,10 @@ export type Database = {
       community_set_post_media: {
         Args: { _media: Json; _post_id: string }
         Returns: Json
+      }
+      community_set_private_views: {
+        Args: { _on: boolean }
+        Returns: undefined
       }
       community_share_comment: {
         Args: { _caption?: string; _comment_id: string }
