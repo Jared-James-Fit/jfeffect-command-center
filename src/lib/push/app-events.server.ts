@@ -20,6 +20,7 @@ export type AppEvent =
   | "birthday_post_ready"
   | "birthday_post_reminder"
   | "chat_reported"
+  | "session_requested"
   // → client
   | "agreement_requested"
   | "checkin_requested"
@@ -27,7 +28,8 @@ export type AppEvent =
   | "checkin_reviewed"
   | "lift_reviewed"
   | "nutrition_targets_updated"
-  | "community_coach_recognition";
+  | "community_coach_recognition"
+  | "session_request_answered";
 
 type EventSpec = {
   to: "staff" | "client";
@@ -66,6 +68,13 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: (n) => `🚩 ${n} reported a chat`,
     body: () => "Tap to see what was said. They've blocked the other person.",
     url: (id) => `/admin/messages?client=${id}`, rateMinutes: 60,
+  },
+  // A client asked for a session from their Schedule; the request card is in their chat.
+  session_requested: {
+    to: "staff", category: "messages",
+    title: (n) => `📅 ${n} requested a session`,
+    body: () => "Tap to approve it or suggest another time.",
+    url: (id) => `/admin/messages?client=${id}`, rateMinutes: 10,
   },
   checkin_submitted: {
     to: "staff", category: "check_ins",
@@ -142,6 +151,12 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
   // The coach reacted to / commented on a workout the athlete chose to share.
   // Crew activity (everyone else's reactions, comments, replies) goes out
   // from community-push.server.ts, which skips what this already covers.
+  session_request_answered: {
+    to: "client", category: "messages",
+    title: () => "Your session request",
+    body: (coach) => `${coach} answered your session request. Tap to see it.`,
+    url: () => "/portal/messages", rateMinutes: 5,
+  },
   community_coach_recognition: {
     to: "client", category: "lift_reviews",
     title: () => "Props from your coach",

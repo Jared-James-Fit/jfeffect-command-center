@@ -12,6 +12,7 @@ import { useClientCalendarSources } from "@/lib/calendar-sources";
 import { ClientSessionList, RequestChangeSheet } from "@/components/schedule/client-session-list";
 import { CalendarSyncCard } from "@/components/schedule/calendar-sync-card";
 import { ClientBookCard } from "@/components/schedule/client-book-card";
+import { MySessionRequests } from "@/components/schedule/request-session-sheet";
 import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { useServerFn } from "@tanstack/react-start";
@@ -19,7 +20,8 @@ import { useServerFn } from "@tanstack/react-start";
 /**
  * The client's one Schedule (this replaced separate Calendar, Appointments and
  * Events pages, which showed the same things three ways):
- *   1. Book: the booking types the coach opened to them (no form, signed in).
+ *   1. Book: the booking types the coach opened to them (no form, signed in), and
+ *      "Request a session" for anything else (the coach approves it in chat).
  *   2. Your sessions: what's booked, where, and "Need to change it?"
  *   3. The calendar: sessions, workouts, cardio, check-ins, events, key dates.
  *   4. One-time phone calendar setup (Google, Apple, Outlook, any app).
@@ -68,6 +70,7 @@ function SchedulePage() {
         )}
 
         {client?.id && <ClientBookCard />}
+        {client?.id && <MySessionRequests clientId={client.id} isPov={isImpersonating} />}
         {client?.id && <ClientSessionList clientId={client.id} />}
 
         <section className="space-y-2">

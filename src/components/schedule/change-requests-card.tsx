@@ -1,10 +1,12 @@
 import { useEffect, useId, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { SessionActionsSheet, whenLabel, type ActionSession, type ChangeRequest } from "@/components/schedule/session-actions-sheet";
 import { listenChannel } from "@/lib/realtime-channel";
+import { requestTypeLabel, requestWhen, type SessionRequest } from "@/lib/session-requests";
 
 type Row = ChangeRequest & {
   session: ActionSession | null;
@@ -12,7 +14,8 @@ type Row = ChangeRequest & {
 };
 
 /**
- * Client requests to move or cancel a session, waiting on the coach. Shown at
+ * Client requests waiting on the coach: new sessions they asked for (answered in chat) and
+ * requests to move or cancel a session. Shown at
  * the top of the calendar and on the client's Sessions tab; tapping one opens
  * the session with the answer buttons ready. Hidden when there's nothing to do.
  */
@@ -40,10 +43,31 @@ export function ChangeRequestsCard({ clientId, onEdit }: { clientId?: string; on
     },
   });
 
+  // New sessions clients asked for: answered from the request card in their chat.
+  const { data: asks = [] } = useQuery<Array<SessionRequest & { client: { full_name: string | null } | null }>>({
+    queryKey: ["pending-session-requests", clientId ?? "all"],
+    staleTime: 15_000,
+    queryFn: async () => {
+      let q = (supabase as any)
+        .from("session_requests")
+        .select("*, client:clients(full_name)")
+        .eq("status", "pending")
+        .order("created_at", { ascending: true })
+        .limit(50);
+      if (clientId) q = q.eq("client_id", clientId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   useEffect(() => {
     const ch = listenChannel(`schedule-requests-${clientId ?? "all"}-${channelId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "pt_session_change_requests" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule-change-requests"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "session_requests" }, () => {
+        qc.invalidateQueries({ queryKey: ["pending-session-requests"] });
       })
       .subscribe();
     return () => {
@@ -51,15 +75,33 @@ export function ChangeRequestsCard({ clientId, onEdit }: { clientId?: string; on
     };
   }, [clientId, qc, channelId]);
 
-  if (!rows.length) return null;
+  if (!rows.length && !asks.length) return null;
+  const total = rows.length + asks.length;
 
   return (
     <>
       <Card className="space-y-2 border-amber-500/40 bg-amber-500/5 p-3 sm:p-4">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300">
-          <CalendarClock className="h-4 w-4" /> {rows.length} schedule request{rows.length === 1 ? "" : "s"}
+          <CalendarClock className="h-4 w-4" /> {total} schedule request{total === 1 ? "" : "s"}
         </div>
         <ul className="divide-y divide-border/60">
+          {asks.map((a) => (
+            <li key={`ask:${a.id}`}>
+              <Link
+                to="/admin/communication"
+                search={{ tab: "messages", client: a.client_id } as any}
+                className="flex w-full items-center gap-3 py-2.5 text-left"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">
+                    {clientId ? "" : `${a.client?.full_name ?? "Client"} · `}asked for {requestTypeLabel(a.request_type)}
+                  </div>
+                  <div className="truncate text-xs text-muted-foreground">{requestWhen(a)} · approve in chat</div>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Link>
+            </li>
+          ))}
           {rows.map((r) => (
             <li key={r.id}>
               <button

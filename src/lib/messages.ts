@@ -18,7 +18,9 @@ export type MessageAttachment = {
   width?: number;
   height?: number;
   peaks?: number[];
-  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "checkin_request" | "checkin_submission" | "community_post" | "staff_invite";
+  kind?: "sound" | "gif" | "payment_request" | "form_request" | "signature_request" | "recipe_share" | "checkin_request" | "checkin_submission" | "community_post" | "staff_invite" | "session_request";
+  /** kind "session_request": the client's request the card shows (session_requests.id). */
+  session_request_id?: string;
   /** kind "community_post": the post it opens (e.g. a birthday post). */
   post_id?: string;
   fallback_emoji?: string;

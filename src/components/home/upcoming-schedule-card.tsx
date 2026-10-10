@@ -11,6 +11,7 @@ import { isAppointmentItem, selectHomeUpcoming } from "@/lib/home-upcoming";
 import { WeekStrip } from "@/components/calendar/week-strip";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
+import { RequestSessionSheet } from "@/components/schedule/request-session-sheet";
 
 function isoToday() {
   const d = new Date();
@@ -63,6 +64,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   });
   const today = isoToday();
   const [selected, setSelected] = useState(today);
+  const [requesting, setRequesting] = useState(false);
 
   const summary = useMemo(() => selectHomeUpcoming(items ?? [], { today }), [items, today]);
   const countByDay = useMemo(() => {
@@ -108,11 +110,18 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
               </Link>
             )
           )}
+          <button
+            type="button"
+            onClick={() => setRequesting(true)}
+            className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary"
+          >
+            <Plus className="h-3.5 w-3.5" /> Request
+          </button>
           <Link
             to="/portal/calendar"
             className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary"
           >
-            View calendar <ChevronRight className="h-3.5 w-3.5" />
+            Calendar <ChevronRight className="h-3.5 w-3.5" />
           </Link>
         </div>}
       </div>
@@ -191,6 +200,9 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
           <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">+{moreCount} more</p>
         )
       ) : null}
+      {links && (
+        <RequestSessionSheet open={requesting} onOpenChange={setRequesting} isPov={!!pov.viewAsClientId} initialDate={selected} />
+      )}
     </Card>
   );
 }
