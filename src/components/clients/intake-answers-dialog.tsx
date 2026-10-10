@@ -341,7 +341,7 @@ function FilloutAnswers({
   );
 }
 
-function NativeAnswers({
+export function NativeAnswers({
   submissionId,
   formId,
 }: {
