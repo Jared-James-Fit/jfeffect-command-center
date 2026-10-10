@@ -10,7 +10,7 @@ import { SessionActionsSheet, type ActionSession } from "@/components/schedule/s
 import { placeLabel, useGoogleCalendarStatus } from "@/lib/calendar-sources";
 import { listGoogleEventsRange } from "@/lib/google-cal.functions";
 import { addDaysISO, deviceTodayISO, fmtWallClock } from "@/lib/schedule-time";
-import { WeekStrip, nextSevenDays } from "@/components/calendar/week-strip";
+import { WeekStrip, weekDays } from "@/components/calendar/week-strip";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
 
@@ -77,19 +77,22 @@ export function DashboardScheduleCard() {
   const { data: gcal } = useGoogleCalendarStatus();
   const googleOn = withGoogle && !!gcal?.connected;
 
-  const days = useMemo(() => nextSevenDays(today), [today]);
+  // The Mon–Sun week the picked day is in (same week as the Workouts calendar).
+  const days = useMemo(() => weekDays(day), [day]);
+  const firstDay = days[0];
   const lastDay = days[days.length - 1];
-  const windowStart = new Date(`${today}T00:00:00`).toISOString();
+  const windowStart = new Date(`${firstDay}T00:00:00`).toISOString();
   const windowEnd = new Date(`${addDaysISO(lastDay, 1)}T00:00:00`).toISOString();
 
   const { data: sessions = [], isLoading } = useQuery<Session[]>({
-    queryKey: ["dash-schedule-sessions", today],
+    queryKey: ["dash-schedule-sessions", firstDay],
+    placeholderData: (prev) => prev,
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pt_sessions")
         .select("id, client_id, title, session_type, session_date, start_time, end_time, timezone, location, status, uses_credit, google_event_id, client:clients(full_name)")
-        .gte("session_date", today)
+        .gte("session_date", firstDay)
         .lte("session_date", lastDay)
         .neq("status", "Rescheduled")
         .order("session_date")
@@ -100,7 +103,8 @@ export function DashboardScheduleCard() {
   });
 
   const { data: appts = [] } = useQuery<any[]>({
-    queryKey: ["dash-schedule-appts", today],
+    queryKey: ["dash-schedule-appts", firstDay],
+    placeholderData: (prev) => prev,
     staleTime: 60_000,
     queryFn: async () => {
       const { data } = await supabase
@@ -114,20 +118,22 @@ export function DashboardScheduleCard() {
   });
 
   const { data: events = [] } = useQuery<any[]>({
-    queryKey: ["dash-schedule-events", today],
+    queryKey: ["dash-schedule-events", firstDay],
+    placeholderData: (prev) => prev,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data } = await (supabase.from("events") as any)
         .select("id, name, event_date, start_time, end_time, status")
         .in("status", ["Active", "Draft"])
-        .gte("event_date", today)
+        .gte("event_date", firstDay)
         .lte("event_date", lastDay);
       return (data ?? []) as any[];
     },
   });
 
   const { data: googleEvents = [] } = useQuery<any[]>({
-    queryKey: ["dash-schedule-google", today],
+    queryKey: ["dash-schedule-google", firstDay],
+    placeholderData: (prev) => prev,
     enabled: googleOn,
     staleTime: 5 * 60_000,
     queryFn: () => listGoogleEventsRange({ data: { timeMin: windowStart, timeMax: windowEnd } }) as Promise<any[]>,
@@ -136,7 +142,7 @@ export function DashboardScheduleCard() {
   // When nothing's booked this week, still say when the next session is.
   const { data: nextSession } = useQuery<Session | null>({
     queryKey: ["dash-schedule-next", lastDay],
-    enabled: !isLoading && !sessions.some((s) => s.status === "Scheduled"),
+    enabled: !isLoading && !sessions.some((s) => s.status === "Scheduled" && s.session_date >= today),
     queryFn: async () => {
       const { data } = await supabase
         .from("pt_sessions")
@@ -219,7 +225,9 @@ export function DashboardScheduleCard() {
   const coachingCount = (d: string) =>
     (rowsByDay.get(d) ?? []).filter((r) => (r.kind === "session" ? r.s.status === "Scheduled" : r.kind !== "google")).length;
   const googleCount = (d: string) => (rowsByDay.get(d) ?? []).filter((r) => r.kind === "google").length;
-  const dayName = day === today ? "today" : new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: "long" });
+  const dayName = day === today
+    ? "today"
+    : `on ${new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`;
 
   const toggleGoogle = () => {
     const next = !withGoogle;
@@ -260,9 +268,8 @@ export function DashboardScheduleCard() {
         </div>
       </div>
 
-      {/* 7-day strip: violet dots for coaching, sky for Google, today highlighted */}
+      {/* Mon–Sun week strip: violet dots for coaching, sky for Google, today outlined */}
       <WeekStrip
-        days={days}
         today={today}
         selected={day}
         onSelect={setDay}
@@ -277,7 +284,7 @@ export function DashboardScheduleCard() {
         ) : rows.length === 0 ? (
           <div className="rounded-lg bg-secondary/30 px-3 py-3 text-sm text-muted-foreground">
             Nothing booked {dayName}.
-            {nextSession && day === today && !sessions.some((s) => s.status === "Scheduled") && (
+            {nextSession && day === today && !sessions.some((s) => s.status === "Scheduled" && s.session_date >= today) && (
               <button type="button" className="mt-1 block text-left text-xs text-foreground/90" onClick={() => setActing(nextSession)}>
                 Next: <span className="font-semibold">{nextSession.client?.full_name ?? "Client"}</span> ·{" "}
                 {new Date(`${nextSession.session_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} at {fmtWallClock(nextSession.start_time)}
