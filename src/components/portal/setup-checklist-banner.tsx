@@ -18,7 +18,7 @@ import { useCoachingAgreement } from "@/components/coaching-agreement/agreement-
 
 type Props = { clientId: string; userId: string };
 type ItemKey = "calendar" | "agreement" | "profile_picture" | "basic_info" | "training_schedule" | "goals_setup";
-type Item = { key: ItemKey; label: string; description: string; to?: string; search?: Record<string, unknown>; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean };
+type Item = { key: ItemKey; label: string; description: string; to?: string; search?: Record<string, unknown>; sheet?: SetupStepKey; onClick?: () => void; icon: typeof Camera; done: boolean; optional?: boolean };
 
 export function SetupChecklistBanner({ clientId, userId }: Props) {
   const [openStep, setOpenStep] = useState<SetupStepKey | null>(null);
@@ -55,8 +55,8 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
       { key: "profile_picture", label: "Add a profile photo", description: "A clear headshot helps your coach personalise feedback.", sheet: "profile_picture", icon: Camera, done: !!c?.profile_picture_url && !c?.profile_picture_needs_update },
       { key: "basic_info", label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard, done: !!c && isBasicInfoComplete(c) },
       { key: "training_schedule", label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock, done: !!c?.training_schedule_completed },
-      { key: "calendar", label: "Sync your calendar", description: "Put your sessions and workouts in Google, Apple or Outlook.", to: "/portal/calendar", search: { sync: 1 }, icon: CalendarPlus, done: calendarDone },
       { key: "goals_setup", label: "Finish Goals & Setup", description: "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null) },
+      { key: "calendar", label: "Sync your calendar", description: "Optional: add your sessions and workouts to Google, Apple or Outlook.", to: "/portal/calendar", search: { sync: 1 }, icon: CalendarPlus, done: calendarDone, optional: true },
     ];
     // The Coaching Agreement is the one mandatory step, so it leads the list. It only
     // appears once its status has loaded and applies to this account.
@@ -73,25 +73,27 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
     return base;
   }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow]);
 
-  const done = items.filter((i) => i.done).length;
-  if (!clientId || !userId || clientPending || goalsPending || !clientFetched || !goalsFetched || done === items.length) return null;
-  const nextItem = items.find((i) => !i.done) ?? items[0];
+  // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
+  const required = items.filter((i) => !i.optional);
+  const done = required.filter((i) => i.done).length;
+  if (!clientId || !userId || clientPending || goalsPending || !clientFetched || !goalsFetched || done === required.length) return null;
+  const nextItem = required.find((i) => !i.done) ?? required[0];
 
   return (
     <>
       <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2"><h2 className="text-base font-black tracking-tight sm:text-lg">Complete your setup</h2><Badge variant="secondary" className="text-[10px]">{done}/{items.length}</Badge></div>
+            <div className="flex items-center gap-2"><h2 className="text-base font-black tracking-tight sm:text-lg">Complete your setup</h2><Badge variant="secondary" className="text-[10px]">{done}/{required.length}</Badge></div>
             <p className="text-xs text-muted-foreground sm:text-sm">Each detail has one home, so you won't be asked the same onboarding questions in multiple setup steps.</p>
           </div>
         </div>
-        <div className="mt-3"><Progress value={Math.round((done / items.length) * 100)} /></div>
+        <div className="mt-3"><Progress value={Math.round((done / required.length) * 100)} /></div>
         <ul className="mt-4 space-y-2">
           {items.map((it) => {
             const Icon = it.icon;
             const rowClass = "flex w-full items-center gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2.5 text-left text-sm transition hover:bg-background " + (it.done ? "opacity-60" : "");
-            const inner = <><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>{it.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground" />}</div><div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div></div>{!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}</>;
+            const inner = <><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>{it.optional && <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Optional</Badge>}{it.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground" />}</div><div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div></div>{!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}</>;
             return <li key={it.key}>{it.onClick || it.key === "agreement" ? <button type="button" className={rowClass} onClick={it.onClick} disabled={it.done || !it.onClick}>{inner}</button> : it.sheet ? <button type="button" className={rowClass} onClick={() => setOpenStep(it.sheet!)} disabled={it.done}>{inner}</button> : <Link to={it.to!} search={it.search as any} className={rowClass}>{inner}</Link>}</li>;
           })}
         </ul>
