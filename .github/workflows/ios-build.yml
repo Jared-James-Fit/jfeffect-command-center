@@ -228,6 +228,12 @@ jobs:
               pl = plistlib.load(f)
           pl["NSHealthShareUsageDescription"] = "JF Effect reads your sleep, heart rate, HRV, steps and active energy so your coach can program around your recovery."
           pl["NSHealthUpdateUsageDescription"] = "JF Effect does not write to Apple Health. This permission is listed because the health library supports it."
+          # Microphone and camera: the website asks for them inside the app (talking
+          # to Cleo, voice notes, recording lift videos). Capacitor approves the
+          # page's request itself, so iOS asks the person once, ever, instead of a
+          # website prompt every time. Without these strings iOS refuses the mic.
+          pl["NSMicrophoneUsageDescription"] = "JF Effect uses the microphone when you talk to Cleo or record a voice note."
+          pl["NSCameraUsageDescription"] = "JF Effect uses the camera when you record a lift video or take a progress photo."
           with open(info, "wb") as f:
               plistlib.dump(pl, f)
 
@@ -240,7 +246,7 @@ jobs:
           c, n = re.subn(r"(INFOPLIST_FILE = App/Info\.plist;)", r"CODE_SIGN_ENTITLEMENTS = App/App.entitlements;\n\t\t\t\t\1", c)
           assert n >= 1, "App target build settings not found"
           open(pbx, "w").write(c)
-          print(f"✅ HealthKit enabled (pod linked, purpose strings, entitlement on {n} configs)")
+          print(f"✅ HealthKit enabled (pod linked, purpose strings, entitlement on {n} configs); microphone and camera purpose strings set")
           PYEOF
           grep -n "CapgoCapacitorHealth" ios/App/Podfile
 
