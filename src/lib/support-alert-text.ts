@@ -10,6 +10,7 @@ const ERROR_TYPE_LABELS: Record<string, string> = {
   missing_client_maxes: "Missing maxes",
   scheduled_jobs_failing: "Scheduled jobs failing",
   google_calendar_setup: "Google Calendar setup needs fixing",
+  page_error: "A page failed to load",
 };
 
 const STATUS_BREAKDOWN_LABELS: Record<string, string> = {
