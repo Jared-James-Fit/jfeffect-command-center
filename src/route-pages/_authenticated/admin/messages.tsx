@@ -127,7 +127,8 @@ type Filter = typeof FILTERS[number];
 export function MessagesInbox({
   initialClient,
   embedded = false,
-}: { initialClient?: string; embedded?: boolean } = {}) {
+  view,
+}: { initialClient?: string; embedded?: boolean; view?: "chats" | "groups" } = {}) {
   const selectedFromUrl = initialClient;
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -136,7 +137,9 @@ export function MessagesInbox({
   const [filter, setFilter] = useState<Filter>("Inbox");
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
   const [smsOpen, setSmsOpen] = useState(false);
-  const [tab, setTab] = useState<"chats" | "groups">("chats");
+  const [ownTab, setTab] = useState<"chats" | "groups">("chats");
+  // The Communication page drives 1:1 vs Groups from its own top tabs.
+  const tab = view ?? ownTab;
   const [massOpen, setMassOpen] = useState(false);
   const { role } = useAuth();
 
@@ -595,7 +598,7 @@ export function MessagesInbox({
     >
       {tab === "groups" ? (
         <div className="flex min-h-0 flex-1 w-full flex-col">
-          <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />
+          {!view && <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />}
           <div className="min-h-0 flex-1">
             <GroupChatErrorBoundary key="groups-pane">
               <GroupChatsPane asAdmin />
@@ -605,7 +608,7 @@ export function MessagesInbox({
         </div>
       ) : (
       <div className="flex min-h-0 flex-1 w-full flex-col">
-        <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />
+        {!view && <TabsHeader tab={tab} setTab={setTab} onMass={() => setMassOpen(true)} />}
         <div className="flex min-h-0 flex-1">
       {/* Inbox sidebar */}
       <aside
@@ -627,6 +630,12 @@ export function MessagesInbox({
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
               {conversations.length}
             </span>
+            {view && (
+              <Button size="sm" variant="ghost" onClick={() => setMassOpen(true)} className="ml-auto h-8 px-2 text-xs" aria-label="Mass message">
+                <Megaphone className="h-3.5 w-3.5 md:mr-1" />
+                <span className="hidden md:inline">Mass message</span>
+              </Button>
+            )}
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

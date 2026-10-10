@@ -7,6 +7,7 @@ import {
   reminderLookbackMs,
   SMS_CLIENT_COOLDOWN_MS,
 } from "@/lib/sms-reminder-rules";
+import { CLIENT_COACH_EMBED, renderSmsTemplate, resolveCoachName, smsSender } from "@/lib/sms-identity";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
@@ -21,9 +22,7 @@ export function normalizePhone(raw: string | null | undefined): string | null {
   return "+" + cleaned;
 }
 
-function renderTemplate(tpl: string, vars: Record<string, string>) {
-  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
-}
+const renderTemplate = renderSmsTemplate;
 
 async function assertCanMessage(supabase: any, userId: string, clientId: string) {
   const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -130,6 +129,7 @@ const UpdateSettings = z.object({
   from_phone: z.string().trim().max(40).nullable().optional(),
   admin_notify_phone: z.string().trim().max(40).nullable().optional(),
   brand_name: z.string().trim().min(1).max(80).optional(),
+  default_coach_name: z.string().trim().max(40).optional(),
   manual_default_template: z.string().trim().min(1).max(1000).optional(),
   rate_limit_per_hour: z.number().int().min(1).max(20).optional(),
   reminder_steps: z.array(z.object({
@@ -166,7 +166,7 @@ export const sendTestSms = createServerFn({ method: "POST" })
     if (!settings?.from_phone) throw new Error("Set a Twilio From phone number first");
     const to = normalizePhone(data.to);
     if (!to) throw new Error("Invalid phone number");
-    const body = `Test SMS from ${settings.brand_name}. If you got this, your setup works.`;
+    const body = `Test text from ${smsSender(settings.default_coach_name, settings.brand_name)}. If you got this, your setup works.`;
     const { sid } = await sendViaTwilio(to, settings.from_phone, body);
     return { ok: true, sid };
   });
@@ -230,7 +230,7 @@ export async function runReminderSweep(supabaseAdmin: any) {
 
     // Get client
     const { data: client } = await supabaseAdmin
-      .from("clients").select("id, phone, sms_opt_out, first_name, full_name, timezone").eq("id", msg.client_id).maybeSingle();
+      .from("clients").select(`id, phone, sms_opt_out, first_name, full_name, timezone, ${CLIENT_COACH_EMBED}`).eq("id", msg.client_id).maybeSingle();
     if (!client) continue;
     if (client.sms_opt_out) {
       await supabaseAdmin.from("sms_log").insert({
@@ -275,6 +275,7 @@ export async function runReminderSweep(supabaseAdmin: any) {
     const body = renderTemplate(next.template, {
       first_name: client.first_name ?? client.full_name?.split(" ")[0] ?? "there",
       full_name: client.full_name ?? "",
+      coach: resolveCoachName((client as any).coach, settings.default_coach_name),
       brand: settings.brand_name,
     });
 
@@ -338,7 +339,7 @@ export const sendBulkSms = createServerFn({ method: "POST" })
 
     const { data: clients, error: cErr } = await supabase
       .from("clients")
-      .select("id, first_name, full_name, phone, sms_opt_out")
+      .select(`id, first_name, full_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`)
       .in("id", data.client_ids);
     if (cErr) throw new Error(cErr.message);
 
@@ -358,6 +359,7 @@ export const sendBulkSms = createServerFn({ method: "POST" })
       const body = renderTemplate(data.body, {
         first_name: c.first_name ?? c.full_name?.split(" ")[0] ?? "there",
         full_name: c.full_name ?? "",
+        coach: resolveCoachName((c as any).coach, settings.default_coach_name),
         brand: settings.brand_name,
       });
 
@@ -448,7 +450,8 @@ export const testSmsAutomation = createServerFn({ method: "POST" })
     const rendered = renderTemplate(data.body, {
       first_name: "Alex",
       full_name: "Alex Sample",
-      brand: settings.brand_name ?? "Your coach",
+      coach: settings.default_coach_name ?? "",
+      brand: settings.brand_name ?? "",
       setup_link: `${process.env.PUBLIC_APP_URL || process.env.SITE_URL || ""}/member-setup?token=SAMPLE`,
     });
     const { sid } = await sendViaTwilio(to, settings.from_phone, rendered);

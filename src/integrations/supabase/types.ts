@@ -20967,6 +20967,7 @@ export type Database = {
         Row: {
           admin_notify_phone: string | null
           brand_name: string
+          default_coach_name: string
           enabled: boolean
           from_phone: string | null
           id: string
@@ -20980,6 +20981,7 @@ export type Database = {
         Insert: {
           admin_notify_phone?: string | null
           brand_name?: string
+          default_coach_name?: string
           enabled?: boolean
           from_phone?: string | null
           id?: string
@@ -20993,6 +20995,7 @@ export type Database = {
         Update: {
           admin_notify_phone?: string | null
           brand_name?: string
+          default_coach_name?: string
           enabled?: boolean
           from_phone?: string | null
           id?: string

@@ -2,6 +2,7 @@ import { useRouter, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
+import { ChatMediaHeader } from "@/components/settings/chat-media-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,12 +19,14 @@ import {
   GIF_CATEGORIES, type ChatGif,
 } from "@/lib/chat-gifs";
 
-export function ChatGifsRedirect() {
-  const nav = useNavigate();
-  useEffect(() => {
-    nav({ to: "/admin/communication", search: { tab: "media-libraries", sub: "gifs" } as any, replace: true });
-  }, [nav]);
-  return null;
+/** Settings → Chat media → Gifs (moved out of Communication). */
+export function ChatGifsSettingsPage() {
+  return (
+    <>
+      <ChatMediaHeader active="gifs" />
+      <ChatGifsPage embedded />
+    </>
+  );
 }
 
 type FormState = {

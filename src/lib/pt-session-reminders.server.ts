@@ -9,6 +9,7 @@ import {
   type ReminderSession,
 } from "@/lib/pt-session-reminders";
 import { appOrigin } from "@/lib/pt-session-gcal.server";
+import { CLIENT_COACH_EMBED, resolveCoachName } from "@/lib/sms-identity";
 
 type Admin = SupabaseClient<any, any, any>;
 
@@ -21,10 +22,10 @@ export function scheduleLinkForSms(): string {
 }
 
 async function smsConfig(admin: Admin) {
-  const { data } = await admin.from("sms_settings").select("enabled, from_phone, brand_name").eq("singleton", true).maybeSingle();
+  const { data } = await admin.from("sms_settings").select("enabled, from_phone, brand_name, default_coach_name").eq("singleton", true).maybeSingle();
   const s = data as any;
   if (!s?.enabled || !s.from_phone) return null;
-  return { from: s.from_phone as string, brand: (s.brand_name as string) || "your coach" };
+  return { from: s.from_phone as string, brand: (s.brand_name as string) || "", coach: (s.default_coach_name as string) || "" };
 }
 
 async function logSms(admin: Admin, row: Record<string, unknown>) {
@@ -55,7 +56,7 @@ export async function runPtSessionReminders(admin: Admin, now: Date = new Date()
 
   const { data: clients } = await admin
     .from("clients")
-    .select("id, first_name, full_name, phone, sms_opt_out")
+    .select(`id, first_name, full_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`)
     .in("id", Array.from(new Set(due.map((r) => r.client_id))));
   const clientById = new Map(((clients ?? []) as any[]).map((c) => [c.id, c]));
   const { normalizePhone, sendViaTwilio } = await import("@/lib/sms.functions");
@@ -93,6 +94,7 @@ export async function runPtSessionReminders(admin: Admin, now: Date = new Date()
     const body = buildSessionReminderSms({
       firstName: c.first_name ?? c.full_name?.split(" ")[0],
       brand: cfg.brand,
+      coach: resolveCoachName(c.coach, cfg.coach),
       title: s.title,
       startsAt: new Date(s.starts_at),
       tz: s.timezone,
@@ -147,7 +149,7 @@ export async function textSessionChange(
   if (!cfg) return { texted: false, reason: "sms_disabled" };
   const { data: c } = await admin
     .from("clients")
-    .select("id, first_name, full_name, phone, sms_opt_out")
+    .select(`id, first_name, full_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`)
     .eq("id", (s as any).client_id)
     .maybeSingle();
   const { normalizePhone, sendViaTwilio } = await import("@/lib/sms.functions");
@@ -158,6 +160,7 @@ export async function textSessionChange(
     kind,
     firstName: (c as any).first_name ?? (c as any).full_name?.split(" ")[0],
     brand: cfg.brand,
+    coach: resolveCoachName((c as any).coach, cfg.coach),
     title: (s as any).title,
     tz: (s as any).timezone,
     startsAt: new Date((s as any).starts_at),

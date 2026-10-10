@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +20,8 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { SmsPersonalDialog } from "@/components/sms-personal-dialog";
 import { SmsAutomationDialog, type AutomationRow } from "@/components/sms-automation-dialog";
+import { SmsTemplateField } from "@/components/sms-template-field";
+import { smsSender } from "@/lib/sms-identity";
 
 export const Route = createFileRoute("/_authenticated/admin/settings_/sms")({ component: SmsSettings });
 
@@ -101,7 +102,8 @@ function SmsSettings() {
     enabled: !!f.enabled,
     from_phone: f.from_phone ?? null,
     admin_notify_phone: f.admin_notify_phone ?? null,
-    brand_name: f.brand_name ?? "",
+    brand_name: (f.brand_name ?? "").trim() || "JF Effect",
+    default_coach_name: (f.default_coach_name ?? "").trim(),
     manual_default_template: f.manual_default_template ?? "",
     rate_limit_per_hour: Number(f.rate_limit_per_hour) || 3,
     reminder_steps: Array.isArray(f.reminder_steps) ? f.reminder_steps : [],
@@ -156,6 +158,34 @@ function SmsSettings() {
         </div>
       </div>
 
+      <Card className="p-5 space-y-4 border-primary/30">
+        <div>
+          <div className="font-bold">Who texts are from</div>
+          <div className="text-xs text-muted-foreground">
+            Every text introduces itself with the client's own coach + your business. Change these any time — every
+            automatic and manual text uses them right away.
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Business name</Label>
+            <Input value={f.brand_name ?? ""} placeholder="JF Effect" onChange={(e) => setVal("brand_name", e.target.value)} className="text-[16px] md:text-sm" />
+            <p className="text-[11px] text-muted-foreground">Fills <code>{"{brand}"}</code>.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Coach name when a client has no coach</Label>
+            <Input value={f.default_coach_name ?? ""} placeholder="Jared" onChange={(e) => setVal("default_coach_name", e.target.value)} className="text-[16px] md:text-sm" />
+            <p className="text-[11px] text-muted-foreground">
+              Fills <code>{"{coach}"}</code>. Clients with an assigned coach get that coach's first name automatically.
+            </p>
+          </div>
+        </div>
+        <div className="rounded-xl bg-secondary/40 p-3 text-sm">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Sounds like</span>
+          <div className="mt-1">Hi Alex, this is <b>{smsSender(f.default_coach_name, f.brand_name)}</b>. …</div>
+        </div>
+      </Card>
+
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -181,18 +211,14 @@ function SmsSettings() {
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label>Brand name in messages</Label>
-            <Input value={f.brand_name ?? ""} onChange={(e) => setVal("brand_name", e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
             <Label>Hourly rate limit (per client)</Label>
             <Input type="number" min={1} max={20} value={f.rate_limit_per_hour ?? 3} onChange={(e) => setVal("rate_limit_per_hour", Number(e.target.value))} />
           </div>
         </div>
         <div className="space-y-1.5">
           <Label>Default manual SMS template</Label>
-          <Textarea rows={3} value={f.manual_default_template ?? ""} onChange={(e) => setVal("manual_default_template", e.target.value)} />
-          <div className="text-[11px] text-muted-foreground">Available tags: <code>{"{first_name}"}</code> <code>{"{full_name}"}</code> <code>{"{brand}"}</code></div>
+          <SmsTemplateField value={f.manual_default_template ?? ""} onChange={(v) => setVal("manual_default_template", v)}
+            coach={f.default_coach_name} brand={f.brand_name} />
         </div>
       </Card>
 
@@ -202,7 +228,7 @@ function SmsSettings() {
             <div className="font-bold">Automatic unread reminders</div>
             <div className="text-xs text-muted-foreground">Sends after admin message has been unread for this many minutes. Reminders stop once the client reads the message or after the last step.</div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => setSteps([...steps, { delay_minutes: 60, enabled: true, template: `Hi {first_name}, this is ${f.brand_name}. You still have an unread message from your coach. Reply STOP to opt out.` }])}>
+          <Button size="sm" variant="outline" onClick={() => setSteps([...steps, { delay_minutes: 60, enabled: true, template: "Hi {first_name}, it's {coach} from {brand}. You still have an unread message from me in the app. Reply STOP to opt out." }])}>
             <Plus className="mr-1 h-4 w-4" /> Add step
           </Button>
         </div>
@@ -222,7 +248,8 @@ function SmsSettings() {
                   </Button>
                 </div>
               </div>
-              <Textarea rows={3} value={s.template} onChange={(e) => { const v = [...steps]; v[i] = { ...s, template: e.target.value }; setSteps(v); }} />
+              <SmsTemplateField value={s.template} coach={f.default_coach_name} brand={f.brand_name}
+                onChange={(t) => { const v = [...steps]; v[i] = { ...s, template: t }; setSteps(v); }} />
             </div>
           ))}
         </div>

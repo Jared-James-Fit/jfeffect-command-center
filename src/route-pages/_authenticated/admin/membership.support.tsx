@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 export function SupportInboxRedirect() {
   const nav = useNavigate();
   useEffect(() => {
-    nav({ to: "/admin/communication", search: { tab: "support-inbox" } as any, replace: true });
+    nav({ to: "/admin/communication", search: { tab: "support" } as any, replace: true });
   }, [nav]);
   return null;
 }

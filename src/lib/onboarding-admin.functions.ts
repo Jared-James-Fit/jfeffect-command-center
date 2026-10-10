@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { CLIENT_COACH_EMBED, resolveCoachName } from "@/lib/sms-identity";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
@@ -63,7 +64,7 @@ export const sendSetupReminder = createServerFn({ method: "POST" })
 
     const { data: member, error: mErr } = await supabaseAdmin
       .from("app_members")
-      .select("id,email,full_name,phone,sms_opt_out")
+      .select("id,user_id,email,full_name,phone,sms_opt_out")
       .eq("id", data.memberId)
       .maybeSingle();
     if (mErr) throw new Error(mErr.message);
@@ -101,7 +102,14 @@ export const sendSetupReminder = createServerFn({ method: "POST" })
           } else {
             const first = member.full_name?.split(" ")[0] ?? "there";
             const brand = settings.brand_name || "JF Effect";
-            const body = `${first}, finish setting up your ${brand} app: ${origin}/install — Jared`;
+            let coachRow: any = null;
+            if (member.user_id) {
+              const { data: linked } = await supabaseAdmin
+                .from("clients").select(CLIENT_COACH_EMBED).eq("user_id", member.user_id).limit(1).maybeSingle();
+              coachRow = (linked as any)?.coach ?? null;
+            }
+            const coach = resolveCoachName(coachRow, settings.default_coach_name);
+            const body = `${first}, finish setting up your ${brand} app: ${origin}/install${coach ? ` — ${coach}` : ""}`;
             try {
               const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
               await supabaseAdmin.from("sms_log").insert({

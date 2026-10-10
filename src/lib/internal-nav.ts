@@ -76,7 +76,7 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support", "operations", "staff"] },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks, group: "Overview",
     visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations"] },
-  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Overview",
+  { to: "/admin/support-alerts", label: "Support", icon: AlertCircle, group: "Overview",
     visibleTo: ["admin", "coach", "support"] },
 
   // ── MESSAGES ─────────────────────────────────────────────────────────
@@ -268,7 +268,7 @@ const REGISTRY: Entry[] = [
   { to: "/admin/onboarding", label: "Onboarding", icon: ClipboardCheck, group: "Settings",
     visibleTo: ["admin"] },
   { to: "/admin/automations", label: "Automations", icon: RefreshCw, group: "Settings",
-    visibleTo: ["admin"] },
+    visibleTo: ["admin", "coach"] },
   { to: "/admin/sops", label: "SOPs", icon: FileText, group: "Settings",
     visibleTo: ["admin", "operations"] },
   { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Settings",

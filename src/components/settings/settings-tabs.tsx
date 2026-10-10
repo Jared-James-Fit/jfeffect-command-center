@@ -8,18 +8,20 @@ import { cn } from "@/lib/utils";
  * Tabs are real routes (not query params) so OAuth callbacks, deep links,
  * and existing settings forms keep working. Visibility is role-aware.
  */
-type Tab = { to: string; label: string; roles: Array<"admin" | "coach"> };
+type Tab = { to: string; label: string; roles: Array<"admin" | "coach">; also?: string[] };
 
 const TABS: Tab[] = [
   { to: "/admin/account",       label: "Account",      roles: ["admin", "coach"] },
   { to: "/admin/voice",         label: "My Voice",     roles: ["admin", "coach"] },
+  { to: "/admin/automations",   label: "Automations",  roles: ["admin", "coach"] },
   { to: "/admin/settings",      label: "Workspace",    roles: ["admin"] },
   { to: "/admin/apps",          label: "Integrations", roles: ["admin"] },
   { to: "/admin/legal",         label: "Legal & Disclaimers", roles: ["admin"] },
   { to: "/admin/floating-bar",  label: "Floating Bar", roles: ["admin", "coach"] },
   { to: "/admin/faqs",          label: "FAQ",          roles: ["admin", "coach"] },
   { to: "/admin/archives",      label: "Archive",      roles: ["admin"] },
-  { to: "/admin/automations",   label: "Automations",  roles: ["admin"] },
+  { to: "/admin/popups",        label: "Popups",       roles: ["admin"] },
+  { to: "/admin/chat-gifs",     label: "Chat media",   roles: ["admin"], also: ["/admin/chat-sounds"] },
   { to: "/admin/sops",          label: "SOPs",         roles: ["admin"] },
 ];
 
@@ -32,7 +34,7 @@ export function SettingsTabs() {
     <div className="border-b border-border bg-card/50">
       <div className="mx-auto max-w-7xl flex items-center gap-1 overflow-x-auto px-4 md:px-6">
         {visible.map((t) => {
-          const active = pathname === t.to || pathname.startsWith(t.to + "/");
+          const active = [t.to, ...(t.also ?? [])].some((p) => pathname === p || pathname.startsWith(p + "/"));
           return (
             <Link
               key={t.to}

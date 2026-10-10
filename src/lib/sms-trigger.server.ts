@@ -8,6 +8,8 @@
  * Safe to import from server routes and server functions only.
  */
 
+import { CLIENT_COACH_EMBED, renderSmsTemplate, resolveCoachName } from "@/lib/sms-identity";
+
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
 /**
@@ -74,9 +76,7 @@ function normalizePhone(raw: string | null | undefined): string | null {
   return "+" + cleaned;
 }
 
-function renderTemplate(tpl: string, vars: Record<string, string>) {
-  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
-}
+const renderTemplate = renderSmsTemplate;
 
 async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
   const lovableKey = process.env.LOVABLE_API_KEY;
@@ -105,7 +105,7 @@ export type AutomationContext = {
   clientId?: string | null;
   /** phone to send to; if omitted we look it up on the member/client */
   phone?: string | null;
-  /** template variables — merged with auto-resolved {first_name},{full_name},{brand},{setup_link} */
+  /** template variables — merged with auto-resolved {first_name},{full_name},{coach},{brand},{setup_link} */
   vars?: Record<string, string>;
 };
 
@@ -139,10 +139,16 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
     let fullName = "";
     let optOut = false;
     let memberEmail: string | null = null;
+    let coachRow: any = null;
 
     if (ctx.memberId) {
       const { data: m } = await supabaseAdmin
-        .from("app_members").select("id, full_name, email, phone, sms_opt_out").eq("id", ctx.memberId).maybeSingle();
+        .from("app_members").select("id, user_id, full_name, email, phone, sms_opt_out").eq("id", ctx.memberId).maybeSingle();
+      if (m?.user_id) {
+        const { data: linked } = await supabaseAdmin
+          .from("clients").select(CLIENT_COACH_EMBED).eq("user_id", m.user_id).limit(1).maybeSingle();
+        coachRow = (linked as any)?.coach ?? null;
+      }
       if (m) {
         if (!toPhone) toPhone = normalizePhone(m.phone);
         fullName = m.full_name ?? "";
@@ -152,8 +158,9 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
       }
     } else if (ctx.clientId) {
       const { data: c } = await supabaseAdmin
-        .from("clients").select("id, first_name, full_name, phone, sms_opt_out").eq("id", ctx.clientId).maybeSingle();
+        .from("clients").select(`id, first_name, full_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`).eq("id", ctx.clientId).maybeSingle();
       if (c) {
+        coachRow = (c as any).coach ?? null;
         if (!toPhone) toPhone = normalizePhone(c.phone);
         fullName = c.full_name ?? "";
         firstName = c.first_name ?? c.full_name?.split(" ")[0] ?? "there";
@@ -164,7 +171,8 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
     const baseVars: Record<string, string> = {
       first_name: firstName,
       full_name: fullName,
-      brand: settings.brand_name ?? "Your coach",
+      coach: resolveCoachName(coachRow, settings.default_coach_name),
+      brand: settings.brand_name ?? "",
       setup_link: "",
       ...(ctx.vars ?? {}),
     };

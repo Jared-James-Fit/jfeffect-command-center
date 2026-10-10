@@ -1,9 +1,9 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { ChatSoundsRedirect } from "@/route-pages/_authenticated/admin/chat-sounds";
+import { ChatSoundsSettingsPage } from "@/route-pages/_authenticated/admin/chat-sounds";
 
 export const Route = createFileRoute("/_authenticated/admin/chat-sounds")({
-  component: ChatSoundsRedirect,
+  component: ChatSoundsSettingsPage,
   errorComponent: ({ error, reset }) => {
     const router = useRouter();
     return (

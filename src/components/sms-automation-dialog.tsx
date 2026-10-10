@@ -12,6 +12,24 @@ import { toast } from "sonner";
 import { Zap, Send } from "lucide-react";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
+import { SmsTemplateField } from "@/components/sms-template-field";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+/** Extra tags a trigger fills in, on top of first name / coach / business. */
+const TRIGGER_TAGS: Record<string, Array<{ tag: string; label: string; sample: string }>> = {
+  account_created: [{ tag: "{setup_link}", label: "Setup link", sample: "jfeffect.com/member-setup?token=…" }],
+  subscription_purchased: [{ tag: "{setup_link}", label: "Setup link", sample: "jfeffect.com/member-setup?token=…" }],
+  email_change_requested: [
+    { tag: "{new_email}", label: "New email", sample: "alex@new.com" },
+    { tag: "{old_email}", label: "Old email", sample: "alex@old.com" },
+  ],
+  subscription_cancelled: [{ tag: "{period_end}", label: "End date", sample: "Nov 3" }, { tag: "{billing_link}", label: "Billing link", sample: "jfeffect.com/billing" }],
+  subscription_trial_ending: [{ tag: "{days_left}", label: "Days left", sample: "3" }, { tag: "{billing_link}", label: "Billing link", sample: "jfeffect.com/billing" }],
+  subscription_grace_warning: [{ tag: "{days_left}", label: "Days left", sample: "3" }, { tag: "{billing_link}", label: "Billing link", sample: "jfeffect.com/billing" }],
+  subscription_payment_failed: [{ tag: "{billing_link}", label: "Billing link", sample: "jfeffect.com/billing" }],
+  subscription_ended: [{ tag: "{restart_link}", label: "Restart link", sample: "jfeffect.com/restart" }],
+};
 
 export type AutomationRow = {
   id?: string;
@@ -69,7 +87,7 @@ const CATEGORIES = ["Check-In Reminder","Missed Check-In","Workout Reminder","Mi
 const empty: AutomationRow = {
   name: "", category: "Custom", trigger_type: "unread_message", trigger_config: {},
   delay_minutes: 60, audience_type: "all_active", audience_config: {},
-  body: "Hi {first_name}, this is {brand}. Quick reminder — open the app when you can.",
+  body: "Hi {first_name}, this is {coach} from {brand}. Quick reminder — open the app when you can.",
   active: true, max_per_client_per_day: 1,
   quiet_hours_start: "21:00", quiet_hours_end: "08:00", respect_quiet_hours: true,
   internal_note: "",
@@ -88,6 +106,11 @@ export function SmsAutomationDialog({
   const [testTo, setTestTo] = useState("");
   const [testing, setTesting] = useState(false);
   const [savedId, setSavedId] = useState<string | undefined>(undefined);
+  const { data: identity } = useQuery({
+    queryKey: ["sms-identity"],
+    enabled: open,
+    queryFn: async () => (await supabase.from("sms_settings").select("brand_name, default_coach_name").eq("singleton", true).maybeSingle()).data as any,
+  });
 
   useEffect(() => {
     if (open) {
@@ -159,6 +182,7 @@ export function SmsAutomationDialog({
               <div className="text-muted-foreground">
                 Fires when a client, member, or coach requests an email change from their gear-menu Settings.
                 Available tags: <code className="px-1 rounded bg-background">{"{first_name}"}</code>,{" "}
+                <code className="px-1 rounded bg-background">{"{coach}"}</code>,{" "}
                 <code className="px-1 rounded bg-background">{"{brand}"}</code>,{" "}
                 <code className="px-1 rounded bg-background">{"{old_email}"}</code>,{" "}
                 <code className="px-1 rounded bg-background">{"{new_email}"}</code>.
@@ -243,11 +267,9 @@ export function SmsAutomationDialog({
 
           <div className="space-y-1.5">
             <Label>SMS message body</Label>
-            <Textarea rows={4} value={f.body} onChange={(e) => upd("body", e.target.value)} maxLength={1000} />
-            <div className="flex justify-between text-[11px] text-muted-foreground">
-              <span>Tags: {"{first_name}"} {"{full_name}"} {"{brand}"} {"{setup_link}"}</span>
-              <span>{f.body.length}/1000</span>
-            </div>
+            <SmsTemplateField rows={4} value={f.body} onChange={(v) => upd("body", v)}
+              coach={identity?.default_coach_name} brand={identity?.brand_name}
+              extraTags={TRIGGER_TAGS[f.trigger_type] ?? []} />
           </div>
 
           <div className="rounded-md border border-border p-3 space-y-2">

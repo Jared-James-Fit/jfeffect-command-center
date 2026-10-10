@@ -123,7 +123,19 @@ export const listSupportThreads = createServerFn({ method: "GET" })
     if (data?.status) q = q.eq("status", data.status);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return { threads: rows ?? [] };
+    // Last message per thread, for the inbox preview line.
+    const ids = (rows ?? []).map((r: any) => r.id);
+    const last = new Map<string, { body: string; category: string | null; sender_role: string; created_at: string }>();
+    if (ids.length) {
+      const { data: msgs } = await supabaseAdmin
+        .from("member_support_messages")
+        .select("thread_id, body, category, sender_role, created_at")
+        .in("thread_id", ids)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      for (const m of (msgs ?? []) as any[]) if (!last.has(m.thread_id)) last.set(m.thread_id, m);
+    }
+    return { threads: (rows ?? []).map((r: any) => ({ ...r, last_message: last.get(r.id) ?? null })) };
   });
 
 export const getSupportThread = createServerFn({ method: "GET" })

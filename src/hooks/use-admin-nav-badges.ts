@@ -28,6 +28,8 @@ export type AdminBadgeCounts = {
   liftUrgent: number;
   checkIns: number;
   supportAlerts: number;
+  /** Member support tickets waiting on a reply. */
+  supportTickets: number;
 };
 
 export type NavBadge = { count?: number; dot?: boolean };
@@ -50,7 +52,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
     refetchIntervalInBackground: false,
     placeholderData: (prev) => prev, // keep last known count while refetching
     queryFn: async (): Promise<AdminBadgeCounts> => {
-      const [clientMessages, liftPending, liftUrgent, mediaPending, supportAlerts] = await Promise.all([
+      const [clientMessages, liftPending, liftUrgent, mediaPending, supportAlerts, supportTickets] = await Promise.all([
         // Conversations that need *me*: Needs Response or new inbound activity I
         // haven't seen. Outbound/automated reminders never count.
         (supabase as any).rpc("staff_inbox_state"),
@@ -69,6 +71,9 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
         (supabase.from("support_alerts") as any)
           .select("id", { count: "exact", head: true })
           .in("status", ["open", "in_progress"]),
+        (supabase.from("member_support_threads") as any)
+          .select("id", { count: "exact", head: true })
+          .eq("status", "open"),
       ]);
       return {
         messages: new Set<string>([
@@ -81,6 +86,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
         liftUrgent: liftUrgent.count ?? 0,
         checkIns: mediaPending.count ?? 0,
         supportAlerts: supportAlerts.count ?? 0,
+        supportTickets: supportTickets.count ?? 0,
       };
     },
   });
@@ -96,6 +102,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_alerts" }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "member_support_threads" }, bump)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [enabled, user, qc]);
@@ -131,6 +138,7 @@ export function adminBadgeMap(counts: AdminBadgeCounts | undefined): Record<stri
     r["/admin/messages"] = { dot: true };
   }
   if (counts.checkIns > 0) r["/admin/check-ins"] = { count: counts.checkIns };
-  if (counts.supportAlerts > 0) r["/admin/support-alerts"] = { count: counts.supportAlerts };
+  const support = counts.supportAlerts + (counts.supportTickets ?? 0);
+  if (support > 0) r["/admin/support-alerts"] = { count: support };
   return r;
 }

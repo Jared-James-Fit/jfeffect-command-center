@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
@@ -298,47 +300,9 @@ function OverviewPanel({ onJumpToTab }: { onJumpToTab: (tab: string) => void }) 
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {(Object.keys(TYPE_META) as PopupType[]).map((t) => {
-          const Icon = TYPE_META[t].icon;
-          const c = TYPE_META[t].color;
-          return (
-            <Card key={t} className="p-4" style={{ borderColor: `${c}55`, backgroundColor: `${c}0d` }}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icon className="h-4 w-4" style={{ color: c }} />
-                  <span className="text-xs font-bold uppercase tracking-widest" style={{ color: c }}>
-                    {TYPE_META[t].label}s
-                  </span>
-                </div>
-                <Badge variant="outline" className="text-[10px]">{stats[t].active} live</Badge>
-              </div>
-              <div className="mt-2 text-3xl font-black">{stats[t].total}</div>
-            </Card>
-          );
-        })}
-      </div>
-
-      <Card className="p-4">
-        <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick create</div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => navigate({ to: "/admin/broadcasts" })}>
-            <Plus className="mr-1 h-3.5 w-3.5" /><Megaphone className="mr-1 h-3.5 w-3.5" /> New Broadcast
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => navigate({ to: "/admin/events" })}>
-            <Plus className="mr-1 h-3.5 w-3.5" /><CalendarIcon className="mr-1 h-3.5 w-3.5" /> New Event
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => navigate({ to: "/admin/tasks" })}>
-            <Plus className="mr-1 h-3.5 w-3.5" /><ListChecks className="mr-1 h-3.5 w-3.5" /> New Task
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => navigate({ to: "/admin/clients" })}>
-            <Plus className="mr-1 h-3.5 w-3.5" /><Cake className="mr-1 h-3.5 w-3.5" /> Birthday Card
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => onJumpToTab("install")}>
-            <Plus className="mr-1 h-3.5 w-3.5" /><Smartphone className="mr-1 h-3.5 w-3.5" /> New Install Prompt
-          </Button>
-        </div>
-      </Card>
+      <p className="text-xs text-muted-foreground">
+        Everything that pops up in the app. Flip a switch to turn one off; tap a row to edit it.
+      </p>
 
       <Card className="p-3">
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
@@ -373,79 +337,42 @@ function OverviewPanel({ onJumpToTab }: { onJumpToTab: (tab: string) => void }) 
         </div>
       </Card>
 
-      <Card className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[120px]">Type</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead className="w-[160px]">Audience</TableHead>
-                <TableHead className="w-[120px]">Status</TableHead>
-                <TableHead className="w-[100px] text-center"><Eye className="mx-auto h-3.5 w-3.5" /></TableHead>
-                <TableHead className="w-[100px] text-center">Enabled</TableHead>
-                <TableHead className="w-[120px] text-right">Edit</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">Loading…</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">No popups match your filters.</TableCell></TableRow>
-              ) : filtered.map((r) => {
-                const Icon = TYPE_META[r.popupType].icon;
-                const color = TYPE_META[r.popupType].color;
-                return (
-                  <TableRow key={`${r.popupType}:${r.id}`}>
-                    <TableCell>
-                      <Badge variant="outline" className="gap-1.5" style={{ borderColor: `${color}80`, color }}>
-                        <Icon className="h-3 w-3" />
-                        {TYPE_META[r.popupType].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[280px] truncate font-medium" title={r.title}>{r.title}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{r.audience}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={toneClass(r.statusTone)}>{r.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-center text-sm tabular-nums">
-                      {r.seenCount == null ? <span className="text-muted-foreground">—</span> : r.seenCount}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {r.canToggle ? (
-                        <Switch checked={r.enabled} onCheckedChange={(v) => handleToggle(r, v)} />
-                      ) : r.popupType === "task" ? (
-                        <Switch
-                          checked={r.id === "system:mm" ? taskMmOn : taskAdminOn}
-                          onCheckedChange={(v) => toggleTaskPopup(r.id === "system:mm", v)}
-                        />
-                      ) : (
-                        <Badge variant="outline" className="text-[10px]">system</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {r.popupType === "task" ? (
-                        <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="outline" onClick={openQuadEditor}>
-                            <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleEdit(r)}>
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button size="sm" variant="outline" onClick={() => handleEdit(r)}>
-                          <ExternalLink className="mr-1 h-3.5 w-3.5" />
-                          {r.popupType === "install" ? "Edit" : "Open"}
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+      <Card className="divide-y divide-border overflow-hidden p-0">
+        {isLoading ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">No popups match.</div>
+        ) : filtered.map((r) => {
+          const Icon = TYPE_META[r.popupType].icon;
+          const color = TYPE_META[r.popupType].color;
+          const isTask = r.popupType === "task";
+          const on = isTask ? (r.id === "system:mm" ? taskMmOn : taskAdminOn) : r.enabled;
+          return (
+            <div key={`${r.popupType}:${r.id}`} className="flex items-center gap-3 px-3 py-3 md:px-4">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ backgroundColor: `${color}1f`, color }}>
+                <Icon className="h-4 w-4" />
+              </span>
+              <button type="button" onClick={() => (isTask ? openQuadEditor() : handleEdit(r))} className="min-w-0 flex-1 text-left">
+                <div className="truncate text-sm font-semibold" title={r.title}>{r.title}</div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                  <span style={{ color }}>{TYPE_META[r.popupType].label}</span>
+                  <span>· {r.audience}</span>
+                  <Badge variant="outline" className={cn("h-4 px-1.5 text-[10px]", toneClass(r.statusTone))}>{r.status}</Badge>
+                  {r.seenCount != null && <span className="inline-flex items-center gap-0.5"><Eye className="h-3 w-3" />{r.seenCount}</span>}
+                </div>
+              </button>
+              {r.canToggle ? (
+                <Switch checked={r.enabled} onCheckedChange={(v) => handleToggle(r, v)} aria-label={`Turn ${r.title} ${r.enabled ? "off" : "on"}`} />
+              ) : isTask ? (
+                <Switch checked={on} onCheckedChange={(v) => toggleTaskPopup(r.id === "system:mm", v)} aria-label="Daily task summary" />
+              ) : null}
+              <button type="button" onClick={() => (isTask ? openQuadEditor() : handleEdit(r))} aria-label="Edit"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
       </Card>
 
       <Dialog open={quadEditorOpen} onOpenChange={setQuadEditorOpen}>
@@ -1062,13 +989,23 @@ function SetupGatesPanel() {
 /* ============================================================
    PAGE
    ============================================================ */
-export function PopupsRedirect() {
-  const nav = useNavigate();
-  useEffect(() => {
-    nav({ to: "/admin/communication", search: { tab: "popups" } as any, replace: true });
-  }, [nav]);
-  return null;
+/** Settings → Popups (moved out of Communication). */
+export function PopupsSettingsPage() {
+  return (
+    <>
+      <SettingsTabs />
+      <PopupsManager />
+    </>
+  );
 }
+
+const POPUP_SECTIONS = [
+  { value: "overview", label: "All popups", icon: LayoutGrid },
+  { value: "events", label: "Events", icon: CalendarIcon },
+  { value: "birthdays", label: "Birthdays", icon: Cake },
+  { value: "install", label: "Install prompt", icon: Smartphone },
+  { value: "setup", label: "Setup gates", icon: ClipboardCheck },
+] as const;
 
 export function PopupsManager({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<string>(() => {
@@ -1077,7 +1014,8 @@ export function PopupsManager({ embedded = false }: { embedded?: boolean } = {})
     // When embedded under a workspace, the outer ?tab= belongs to the workspace.
     // Use ?sub= for the inner Popups tab to avoid collision.
     const sub = new URLSearchParams(window.location.search).get("sub");
-    return sub ?? (p && !["messages","broadcasts","support-inbox","support-alerts","media-libraries","popups"].includes(p) ? p : "overview");
+    const want = sub ?? p;
+    return POPUP_SECTIONS.some((t) => t.value === want) ? (want as string) : "overview";
   });
 
   return (
@@ -1088,23 +1026,27 @@ export function PopupsManager({ embedded = false }: { embedded?: boolean } = {})
           subtitle="Every popup, load-screen, and setup prompt that shows in the app — in one place."
         />
       )}
-      <div className="space-y-5 p-4 pb-32 md:p-6 md:pb-8">
-        <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6">
-            <TabsTrigger value="overview" className="text-xs sm:text-sm"><LayoutGrid className="mr-1 h-3.5 w-3.5" />Overview</TabsTrigger>
-            <TabsTrigger value="broadcasts" className="text-xs sm:text-sm"><Megaphone className="mr-1 h-3.5 w-3.5" />Broadcasts</TabsTrigger>
-            <TabsTrigger value="events" className="text-xs sm:text-sm"><CalendarIcon className="mr-1 h-3.5 w-3.5" />Events</TabsTrigger>
-            <TabsTrigger value="birthdays" className="text-xs sm:text-sm"><Cake className="mr-1 h-3.5 w-3.5" />Birthdays</TabsTrigger>
-            <TabsTrigger value="install" className="text-xs sm:text-sm"><Smartphone className="mr-1 h-3.5 w-3.5" />Install</TabsTrigger>
-            <TabsTrigger value="setup" className="text-xs sm:text-sm"><ClipboardCheck className="mr-1 h-3.5 w-3.5" />Setup Gates</TabsTrigger>
-          </TabsList>
-          <TabsContent value="overview"><OverviewPanel onJumpToTab={setTab} /></TabsContent>
-          <TabsContent value="broadcasts"><BroadcastsPanel /></TabsContent>
-          <TabsContent value="events"><EventsPanel /></TabsContent>
-          <TabsContent value="birthdays"><BirthdaysPanel /></TabsContent>
-          <TabsContent value="install"><InstallPromptsPanel /></TabsContent>
-          <TabsContent value="setup"><SetupGatesPanel /></TabsContent>
-        </Tabs>
+      <div className="space-y-4 p-4 pb-32 md:p-6 md:pb-8">
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {POPUP_SECTIONS.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setTab(t.value)}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition active:scale-95",
+                tab === t.value ? "bg-foreground text-background" : "bg-secondary/60 text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <t.icon className="h-3.5 w-3.5" />{t.label}
+            </button>
+          ))}
+        </div>
+        {tab === "overview" && <OverviewPanel onJumpToTab={setTab} />}
+        {tab === "events" && <EventsPanel />}
+        {tab === "birthdays" && <BirthdaysPanel />}
+        {tab === "install" && <InstallPromptsPanel />}
+        {tab === "setup" && <SetupGatesPanel />}
       </div>
     </>
   );

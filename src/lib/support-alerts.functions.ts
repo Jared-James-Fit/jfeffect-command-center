@@ -113,11 +113,13 @@ export const notifyCoachOfWorkoutFailure = createServerFn({ method: "POST" })
 
     // Build SMS body.
     const clientName = clientRow?.full_name || clientRow?.first_name || "A client";
-    const smsBody = `App emergency: ${clientName} could not load their workout plan. Please contact them and check the workout logger issue.`;
 
     // Resolve SMS sender.
     const { data: settings } = await supabaseAdmin
       .from("sms_settings").select("*").eq("singleton", true).maybeSingle();
+    // Staff-only text (goes to the coach, never the client).
+    const brandTag = (settings?.brand_name ?? "").trim() ? `${settings!.brand_name.trim()} app alert` : "App alert";
+    const smsBody = `${brandTag}: ${clientName} couldn't load their workout plan. Open Communication → Support in the app to see it and message them.`;
 
     const notified: string[] = ["in_app"];
     const errors: string[] = [];

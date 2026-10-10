@@ -4,6 +4,7 @@ import { mintShareLinkForPurchase } from "@/lib/payment-share.server";
 import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertPermission } from "@/lib/permissions.server";
+import { CLIENT_COACH_EMBED, resolveCoachName, smsSender } from "@/lib/sms-identity";
 
 /* ============================================================
  * Shared helpers (duplicated from sms.functions.ts to keep this
@@ -55,7 +56,7 @@ async function loadSmsSettings(supabase: any) {
 async function loadClientForSms(supabase: any, clientId: string) {
   const { data, error } = await supabase
     .from("clients")
-    .select("id, email, phone, sms_opt_out, first_name, full_name, user_id, assigned_coach_id")
+    .select(`id, email, phone, sms_opt_out, first_name, full_name, user_id, assigned_coach_id, ${CLIENT_COACH_EMBED}`)
     .eq("id", clientId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -172,7 +173,7 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
     });
 
     const first = client.first_name ?? client.full_name?.split(" ")[0] ?? "there";
-    const brand = settings.brand_name ?? "Coaching";
+    const brand = smsSender(resolveCoachName((client as any).coach, settings.default_coach_name), settings.brand_name);
     const label =
       data.kind === "reset" ? "reset your password"
       : data.kind === "magic" ? "sign in to your coaching app"
@@ -235,7 +236,7 @@ export const sendPaymentLinkBySms = createServerFn({ method: "POST" })
     const { client, toPhone } = await loadClientForSms(supabase, rec.client_id);
 
     const first = client.first_name ?? client.full_name?.split(" ")[0] ?? "there";
-    const brand = settings.brand_name ?? "Coaching";
+    const brand = smsSender(resolveCoachName((client as any).coach, settings.default_coach_name), settings.brand_name);
     const amount = `${rec.currency ?? "USD"} ${Number(rec.full_payable_amount ?? 0).toLocaleString()}`;
     const body = `Hi ${first}, this is ${brand}. Your payment link for ${rec.offer_name} (${amount}) is ready: ${shareUrl}\n\nReply STOP to opt out.`;
 

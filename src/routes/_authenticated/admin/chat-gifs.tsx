@@ -1,9 +1,9 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { ChatGifsRedirect } from "@/route-pages/_authenticated/admin/chat-gifs";
+import { ChatGifsSettingsPage } from "@/route-pages/_authenticated/admin/chat-gifs";
 
 export const Route = createFileRoute("/_authenticated/admin/chat-gifs")({
-  component: ChatGifsRedirect,
+  component: ChatGifsSettingsPage,
   errorComponent: ({ error, reset }) => {
     const router = useRouter();
     return (
