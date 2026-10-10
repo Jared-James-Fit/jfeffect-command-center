@@ -88,3 +88,13 @@ describe("Saturday's drawn scene is an editable cover", () => {
     expect(sql).toContain("REVOKE ALL ON FUNCTION public.community_remove_note_scene(uuid) FROM public, anon;");
   });
 });
+
+describe("no day labels on posts", () => {
+  it("posts and tiles never show the series name (Saturday Spirit, Wednesday Wins…): only the coach's screens do", () => {
+    const card = read("src/components/community/post-card.tsx");
+    const tile = read("src/components/community/post-tile.tsx");
+    expect(card).not.toContain("SERIES_LABEL");
+    expect(card).not.toContain("series.tagline");
+    expect(tile).not.toContain("SERIES_LABEL");
+  });
+});
