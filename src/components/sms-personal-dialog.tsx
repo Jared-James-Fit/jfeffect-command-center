@@ -31,7 +31,7 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   const { data: clients } = useQuery({
     queryKey: ["sms-personal-clients"],
-    queryFn: async () => (await supabase.from("clients")
+    queryFn: async () => (await (supabase as any).from("clients")
       .select(`id, full_name, first_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`)
       .eq("archived", false).order("full_name")).data ?? [],
     enabled: open,
