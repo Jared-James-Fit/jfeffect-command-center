@@ -10,6 +10,8 @@ import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
 import { buildAppContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot, type LinkEntry } from "@/lib/summer-app";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
+/** Used when the main model refuses a tool step (see answerSummer). */
+const CLEO_FALLBACK_MODEL = "google/gemini-2.5-flash";
 
 function settle<T>(res: { data: T | null; error: any }, fallback: T): T {
   return res.error || res.data == null ? fallback : res.data;
@@ -47,7 +49,7 @@ export async function loadAppSnapshot(supabase: any): Promise<AppSnapshot> {
       .limit(20),
     supabase
       .from("tasks")
-      .select("title, due_at, priority_label, status_label, completed_at, archived_at")
+      .select("id, title, due_at, priority_label, status_label, completed_at, archived_at")
       .is("completed_at", null)
       .is("archived_at", null)
       .order("due_at", { ascending: true, nullsFirst: false })
@@ -125,6 +127,7 @@ export async function loadAppSnapshot(supabase: any): Promise<AppSnapshot> {
       followUpAt: a.follow_up_at ?? null,
     })),
     tasks: settle<any[]>(tasks, []).map((t) => ({
+      id: t.id,
       title: t.title,
       dueAt: t.due_at ?? null,
       priority: t.priority_label ?? null,
@@ -390,10 +393,15 @@ export async function probeSpeechProviders(sample = "Hi, it's Cleo. Your books a
 
 export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string };
 
+/**
+ * `supabase` is what she reads with (the finance login's read-only admin
+ * view); `own` is the caller's own client, which proposals and their checks
+ * use. Lookups and proposals are tools she calls mid-answer.
+ */
 export async function answerSummer(
   supabase: any,
   userId: string,
-  input: { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean },
+  input: { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; own?: any },
 ): Promise<{ user: SummerMsg; assistant: SummerMsg }> {
   const books = await import("@/lib/business-books.server");
   const { buildSummerContext, summerSystemPrompt } = await import("@/lib/summer-context");
@@ -441,17 +449,86 @@ export async function answerSummer(
     "",
     booksSection,
     "",
+    `NOW: ${new Date().toLocaleString("en-CA", { timeZone: BUSINESS_TZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })} (${BUSINESS_TZ}). Today is ${businessToday()}.`,
+    "",
     "APP",
     buildAppContext(app, links, { tz: BUSINESS_TZ, route: input.route ?? null }),
   ].join("\n");
 
   const past = ((history.data ?? []) as Array<{ role: string; content: string }>).reverse();
-  const reply = await books.gatewayChat([
-    { role: "system", content: system },
-    ...past.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
-    { role: "user", content: input.message },
-  ]);
-  const text = reply.trim() || "I couldn't come up with an answer to that. Try asking it another way.";
+  const own = input.own ?? supabase;
+  const { cleoReadTools } = await import("@/lib/cleo-tools.server");
+  const { loadCaller, proposeAction } = await import("@/lib/cleo-actions.server");
+  const { CLEO_ACTION_INFO, CLEO_ACTION_KINDS, CLEO_ACTION_PARAMS } = await import("@/lib/cleo-actions");
+  const { generateText, stepCountIs, tool } = await import("ai");
+
+  const caller = await loadCaller(own, userId);
+  const boss = ownerName ?? "the owner";
+  const proposed: string[] = [];
+  const actionTools = Object.fromEntries(
+    CLEO_ACTION_KINDS.map((kind) => [
+      `propose_${kind}`,
+      tool({
+        description: `${CLEO_ACTION_INFO[kind].tool} Puts a card on screen; nothing happens until the person taps it.`,
+        inputSchema: CLEO_ACTION_PARAMS[kind] as any,
+        execute: async (params: unknown) => {
+          if (proposed.length >= 3) return "Too many cards in one answer. Ask which one they want first.";
+          try {
+            const r = await proposeAction({ supabase: own, db: supabase, userId }, caller, kind, params);
+            proposed.push(r.id);
+            return r.route === "run"
+              ? `Card is on screen: ${r.summary}\nTell them to tap Confirm. It hasn't happened yet.`
+              : `Card is on screen: ${r.summary}\nThis isn't in their role, so it needs ${boss}'s OK. Tell them "I'll have to ask ${boss} for permission" and that tapping "Ask ${boss}" sends the request.`;
+          } catch (e: any) {
+            return `Couldn't set that up: ${String(e?.message ?? e).slice(0, 300)}`;
+          }
+        },
+      }),
+    ]),
+  );
+  const tz = BUSINESS_TZ;
+  const { cleoProgramTools } = await import("@/lib/cleo-program.server");
+  const tools = { ...cleoReadTools({ db: supabase, tz, today: businessToday() }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools };
+
+  // Gemini 3 needs its "thought signature" echoed back on every tool step.
+  // The SDK keeps it under the provider's name but only sends back what's
+  // under "google", so Cleo's provider is named "google". If the gateway
+  // still refuses, the answer is retried once on a model that doesn't need it.
+  const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("AI is not configured (LOVABLE_API_KEY missing).");
+  const gateway = createOpenAICompatible({ name: "google", baseURL: GATEWAY, headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" } });
+  const run = (model: string) =>
+    generateText({
+      model: gateway(model),
+      system,
+      messages: [
+        ...past.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content })),
+        { role: "user" as const, content: input.message },
+      ],
+      tools,
+      stopWhen: stepCountIs(14),
+    });
+
+  let text = "";
+  try {
+    try {
+      text = (await run(books.BOOKS_AI_MODEL)).text.trim();
+    } catch (e: any) {
+      const status = e?.statusCode ?? e?.status ?? e?.lastError?.statusCode;
+      if (status !== 400) throw e;
+      console.warn("[cleo] retrying on the fallback model", String(e?.message ?? e).slice(0, 200));
+      const { discardProposals } = await import("@/lib/cleo-actions.server");
+      await discardProposals(userId, proposed.splice(0));
+      text = (await run(CLEO_FALLBACK_MODEL)).text.trim();
+    }
+  } catch (e: any) {
+    const status = e?.statusCode ?? e?.status ?? e?.lastError?.statusCode;
+    if (status === 429) throw new Error("Cleo is getting too many requests. Try again in a minute.");
+    if (status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
+    throw new Error(`AI request failed${status ? ` (${status})` : ""}: ${String(e?.message ?? e).slice(0, 200)}`);
+  }
+  if (!text) text = proposed.length ? "It's ready for you below. Tap to confirm." : "I couldn't come up with an answer to that. Try asking it another way.";
 
   // Saved only once there is an answer, so a failed call leaves no orphan question.
   const now = Date.now();
@@ -464,7 +541,12 @@ export async function answerSummer(
     .select("id, role, content, created_at");
   if (error) throw new Error(error.message);
   const rows = (saved ?? []) as SummerMsg[];
-  return { user: rows.find((r) => r.role === "user")!, assistant: rows.find((r) => r.role === "assistant")! };
+  const assistant = rows.find((r) => r.role === "assistant")!;
+  if (proposed.length) {
+    const { attachToMessage } = await import("@/lib/cleo-actions.server");
+    await attachToMessage(userId, proposed, assistant.id);
+  }
+  return { user: rows.find((r) => r.role === "user")!, assistant };
 }
 
 function firstName(full: string | null | undefined): string | null {

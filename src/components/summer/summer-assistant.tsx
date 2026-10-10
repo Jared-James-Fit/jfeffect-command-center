@@ -39,6 +39,7 @@ export function SummerAssistant() {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> | undefined });
   const href = useRouterState({ select: (r) => r.location.href });
+  const hash = useRouterState({ select: (r) => r.location.hash });
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState<number | undefined>(undefined);
   const [startCall, setStartCall] = useState(false);
@@ -87,6 +88,18 @@ export function SummerAssistant() {
       window.removeEventListener("keydown", onKey);
     };
   }, [show]);
+
+  // "/admin#cleo" (Cleo's approval and decision pushes) opens her chat.
+  useEffect(() => {
+    if (hash !== "cleo" && hash !== "#cleo") return;
+    setOpen(true);
+    void qc.invalidateQueries({ queryKey: ["cleo-actions"] });
+    try {
+      history.replaceState(history.state, "", window.location.pathname + window.location.search);
+    } catch {
+      // ignore
+    }
+  }, [hash, qc]);
 
   // Year from Taxes & Books applies while she's open from there; reset after.
   useEffect(() => {

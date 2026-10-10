@@ -27,7 +27,7 @@ export type AppSnapshot = {
   appointments: Array<{ startsAt: string; endsAt: string | null; title: string | null; type: string | null; who: string | null; clientId: string | null; location: string | null; meetLink: string | null; status: string | null }>;
   reviews: Array<{ clientId: string | null; source: string | null; submittedAt: string | null; status: string | null; priority: string | null }>;
   applications: Array<{ name: string | null; email: string | null; phone: string | null; status: string | null; temperature: string | null; submittedAt: string | null; offer: string | null; callStatus: string | null; followUpAt: string | null }>;
-  tasks: Array<{ title: string; dueAt: string | null; priority: string | null; status: string | null }>;
+  tasks: Array<{ id?: string; title: string; dueAt: string | null; priority: string | null; status: string | null }>;
   unread: Array<{ clientId: string; count: number; lastAt: string }>;
   alerts: { open: number; latest: Array<{ type: string | null; message: string | null; at: string }> };
 };
@@ -116,8 +116,8 @@ export function buildAppContext(s: AppSnapshot, links: LinkEntry[], opts: { tz: 
   if (!s.applications.length) push("- none");
   push("");
 
-  push("OPEN TASKS");
-  for (const t of s.tasks) push(`- ${t.title}${t.dueAt ? ` | due ${fmtDay(t.dueAt, tz)}` : ""}${t.priority ? ` | ${t.priority}` : ""}${t.status ? ` | ${t.status}` : ""}`);
+  push("OPEN TASKS (team board)");
+  for (const t of s.tasks) push(`- ${t.title}${t.id ? ` (task id ${t.id})` : ""}${t.dueAt ? ` | due ${fmtDay(t.dueAt, tz)}` : ""}${t.priority ? ` | ${t.priority}` : ""}${t.status ? ` | ${t.status}` : ""}`);
   if (!s.tasks.length) push("- none");
   push("");
 
