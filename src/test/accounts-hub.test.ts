@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { setAdminView, viewOnlyFetch } from "@/lib/admin-view";
 import { ADMIN_VIEW_HEADER } from "@/lib/permissions";
 import { isPreviewSafeFn, PREVIEW_MESSAGE } from "@/lib/team-preview";
+import { withoutCoachingClients } from "@/lib/membership";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const API = "https://x.supabase.co/rest/v1";
@@ -106,7 +107,7 @@ describe("Clients page: every account in one place", () => {
     expect(page).toContain('kind:          fallback(z.enum(["clients","members","team"]),');
     expect(page).toContain('const kind: AccountKind = isAdmin ? search.kind ?? "clients" : "clients";');
     expect(page).toContain("<AccountsSwitcher");
-    expect(page).toContain("<MembersDirectory />");
+    expect(page).toContain("<MembersDirectory showTest={false} />");
     expect(page).toContain("<StaffPage embedded />");
   });
 
@@ -124,7 +125,30 @@ describe("Clients page: every account in one place", () => {
     expect(dir).toContain("all.filter((m) => !m.is_admin_sandbox)");
     expect(dir).toContain("m.is_admin_sandbox && m.user_id === user?.id");
     expect(dir).toContain('const canPreview = role === "admin" && !viewOnly;');
+    expect(dir).toContain('if (role !== "admin" || viewOnly) return null;');
     expect(read("src/routes/_authenticated/admin/members.index.tsx")).toContain("<MembersDirectory");
+  });
+
+  it("coaching clients are never members (their Nutrition record isn't a membership)", () => {
+    const fn = read("src/lib/members.functions.ts");
+    expect(fn).toContain('supabaseAdmin.from("clients").select("user_id, email")');
+    expect(fn).toContain("const members = withoutCoachingClients(rows ?? [], clientRows ?? []);");
+    const rows = [
+      { id: "client", user_id: "u1", email: "a@x.com", is_admin_sandbox: false },
+      { id: "client-by-email", user_id: null, email: " B@X.com ", is_admin_sandbox: false },
+      { id: "member", user_id: "u9", email: "m@x.com", is_admin_sandbox: false },
+      { id: "sandbox", user_id: "u1", email: "pov@admin.local", is_admin_sandbox: true },
+    ];
+    const clients = [{ user_id: "u1", email: "a@x.com" }, { user_id: null, email: "b@x.com" }, { user_id: null, email: null }];
+    expect(withoutCoachingClients(rows, clients).map((m) => m.id)).toEqual(["member", "sandbox"]);
+  });
+
+  it("Members only shows while there are members; the one test account sits on Team", () => {
+    expect(page).toContain('const kinds: AccountKind[] = (memberCount ?? 0) > 0 || kind === "members" ? KINDS : KINDS.filter((k) => k !== "members");');
+    expect(page).toContain("const swipe = useSwipeBetween(kinds.indexOf(kind), (i) => goKind(kinds[i]), kinds.length);");
+    expect(page).toContain("kinds={kinds}");
+    expect(page).toContain('<TestAccountCard returnTo="/admin/clients?kind=team" />');
+    expect(page.match(/<TestAccountCard/g)?.length).toBe(1);
   });
 
   it("View as on a team card is the owner's, for a finance login only", () => {

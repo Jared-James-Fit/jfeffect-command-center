@@ -9,7 +9,7 @@ import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
-const blank:any={id:"",client_id:"",athlete_name:"",sex:"male",status:"active",openpowerlifting_url:"",arenapl_url:"",country_filter:"",jf_start_date:"",jf_end_date:"",tracking_notes:"",admin_notes:"",auto_sync:false};
+const blank:any={id:"",client_id:"",athlete_name:"",sex:"male",status:"active",openpowerlifting_url:"",arenapl_url:"",country_filter:"",jf_start_date:"",jf_end_date:"",tracking_notes:"",admin_notes:"",auto_sync:true};
 export function PowerliftingAthleteProfiles({clients=[]}:{clients:any[]}){
  const qc=useQueryClient(); const [p,setP]=useState<any>(blank); const [period,setPeriod]=useState<any>({start_date:"",end_date:"",notes:""});
  const {data:athletes=[]}=useQuery({queryKey:["powerlifting-athletes-admin"],queryFn:async()=>{const {data,error}=await (supabase as any).from("powerlifting_athletes").select("*").order("athlete_name");if(error)throw error;return data??[]}});
@@ -24,15 +24,30 @@ export function PowerliftingAthleteProfiles({clients=[]}:{clients:any[]}){
  <F l="Athlete name"><Input value={p.athlete_name} onChange={e=>setP({...p,athlete_name:e.target.value})}/></F>
  <F l="Sex"><Select value={p.sex} onValueChange={v=>setP({...p,sex:v})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem></SelectContent></Select></F>
  <F l="Status"><Select value={p.status||"active"} onValueChange={v=>setP({...p,status:v})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="retired">Retired</SelectItem><SelectItem value="paused">Paused</SelectItem></SelectContent></Select></F>
- <F l="OpenPowerlifting URL"><Input value={p.openpowerlifting_url||""} onChange={e=>setP({...p,openpowerlifting_url:e.target.value})} placeholder="https://openpowerlifting.org/u/..."/></F>
+ <F l="OpenPowerlifting URL"><Input value={p.openpowerlifting_url||""} onChange={e=>setP({...p,openpowerlifting_url:e.target.value})} placeholder="https://openpowerlifting.org/u/..."/><label className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground"><input type="checkbox" checked={!!p.auto_sync} onChange={e=>setP({...p,auto_sync:e.target.checked})}/> Sync meets from this profile daily</label></F>
  <F l="ArenaPL URL"><Input value={p.arenapl_url||""} onChange={e=>setP({...p,arenapl_url:e.target.value})} placeholder="https://arenapowerlifting.com/search?..."/></F>
  <F l="Country restriction"><Input value={p.country_filter||""} onChange={e=>setP({...p,country_filter:e.target.value})} placeholder="e.g. Canada only"/></F>
  </div>
  <div className="mt-3 grid gap-3 sm:grid-cols-2"><F l="Tracking rules / eligibility notes"><Textarea className="min-h-24" value={p.tracking_notes||""} onChange={e=>setP({...p,tracking_notes:e.target.value})} placeholder="Example: only 2024 Canadian meets count; retired after Dec 14, 2024; exclude USA namesake."/></F><F l="Private coach/admin notes"><Textarea className="min-h-24" value={p.admin_notes||""} onChange={e=>setP({...p,admin_notes:e.target.value})} placeholder="Anything coaches should remember when reviewing or updating this athlete."/></F></div>
- <Button className="mt-4" onClick={save}>Save athlete profile</Button>
+ <div className="mt-4 flex flex-wrap items-center gap-3"><Button onClick={save}>Save athlete profile</Button>{p.id&&p.openpowerlifting_url&&<OplSyncNow athlete={p} onDone={(a:any)=>setP((old:any)=>({...old,...a}))}/>}</div>
  {p.id&&<div className="mt-5 rounded-xl border p-3"><div className="font-bold">JF coaching periods</div><div className="mb-3 text-xs text-muted-foreground">Add another period if an athlete returns from retirement. Only meets inside at least one period count.</div>
  <div className="grid gap-2 sm:grid-cols-3"><F l="Start"><Input type="date" value={period.start_date} onChange={e=>setPeriod({...period,start_date:e.target.value})}/></F><F l="End"><Input type="date" value={period.end_date} onChange={e=>setPeriod({...period,end_date:e.target.value})}/></F><F l="Period note"><Input value={period.notes} onChange={e=>setPeriod({...period,notes:e.target.value})} placeholder="Why this period counts"/></F></div><Button variant="outline" className="mt-2" onClick={addPeriod}>Add coaching period</Button>
  <div className="mt-3 divide-y">{periods.map((x:any)=><div key={x.id} className="flex items-start justify-between py-2 text-xs"><div><b>{x.start_date||"Career start"} → {x.end_date||"Current"}</b><div className="text-muted-foreground">{x.notes||"JF coached period"}</div></div><Button variant="ghost" size="sm" onClick={()=>delPeriod(x.id)}>Remove</Button></div>)}</div></div>}
- <div className="mt-4 divide-y rounded-xl border">{athletes.map((a:any)=><button type="button" key={a.id} onClick={()=>edit(a)} className="flex w-full items-center justify-between gap-3 p-3 text-left"><span className="min-w-0"><b className="block truncate text-sm">{a.athlete_name}</b><span className="text-[11px] text-muted-foreground">{a.status||"active"} · {a.openpowerlifting_url?"OPL linked":"manual tracking"}{a.country_filter?` · ${a.country_filter}`:""}</span></span><span className="text-xs text-primary">Manage</span></button>)}</div></Card>
+ <div className="mt-4 divide-y rounded-xl border">{athletes.map((a:any)=><button type="button" key={a.id} onClick={()=>edit(a)} className="flex w-full items-center justify-between gap-3 p-3 text-left"><span className="min-w-0"><b className="block truncate text-sm">{a.athlete_name}</b><span className="text-[11px] text-muted-foreground">{a.status||"active"} · {a.openpowerlifting_url?`OPL linked${a.opl_synced_at?` · synced ${new Date(a.opl_synced_at).toLocaleDateString()} · ${a.opl_meet_count??0} meets`:""}${a.opl_sync_status&&a.opl_sync_status!=="ok"?` · ${a.opl_sync_status}`:""}`:"manual tracking"}{a.country_filter?` · ${a.country_filter}`:""}</span></span><span className="text-xs text-primary">Manage</span></button>)}</div></Card>
+}
+/** Pull this athlete's meets from OpenPowerlifting now (the daily sync does it on its own). */
+function OplSyncNow({athlete,onDone}:{athlete:any;onDone:(a:any)=>void}){
+ const qc=useQueryClient(); const [busy,setBusy]=useState(false);
+ const run=async()=>{setBusy(true);try{
+  const {data:req,error}=await (supabase as any).rpc("powerlifting_opl_sync_now",{_athlete:athlete.id});if(error)throw error;
+  let res:any={state:"pending"};
+  for(let i=0;i<15&&res?.state==="pending";i++){await new Promise(r=>setTimeout(r,2000));const {data,error:e}=await (supabase as any).rpc("powerlifting_opl_sync_status",{_request:req});if(e)throw e;res=data}
+  if(res?.state==="done"){toast.success(`Synced: ${res.meets} meets · ${res.added} new`)}
+  else if(res?.state==="error"){toast.error("Sync failed",{description:res.error})}
+  else toast.message("Still downloading. It'll finish on its own in a few minutes.");
+  const {data:fresh}=await (supabase as any).from("powerlifting_athletes").select("*").eq("id",athlete.id).maybeSingle();if(fresh)onDone(fresh);
+  ["powerlifting-athletes-admin","strength-board","powerlifting-career","athlete-powerlifting-results-admin"].forEach(k=>qc.invalidateQueries({queryKey:[k]}));
+ }catch(e:any){toast.error(e.message)}finally{setBusy(false)}};
+ return <div className="flex flex-wrap items-center gap-2"><Button variant="outline" disabled={busy} onClick={run}>{busy?"Syncing…":"Sync from OpenPowerlifting"}</Button><span className="text-[11px] text-muted-foreground">{athlete.opl_synced_at?`Last synced ${new Date(athlete.opl_synced_at).toLocaleString()} · ${athlete.opl_meet_count??0} meets`:"Not synced yet"}{athlete.opl_sync_status&&athlete.opl_sync_status!=="ok"?` · ${athlete.opl_sync_status}`:""}{athlete.auto_sync?" · auto sync on (daily)":" · auto sync off"}</span></div>
 }
 function F({l,children}:{l:string;children:any}){return <div className="space-y-1.5"><Label className="text-xs">{l}</Label>{children}</div>}

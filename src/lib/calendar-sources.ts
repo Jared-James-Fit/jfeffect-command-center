@@ -65,9 +65,10 @@ export const KIND_META: Record<CalendarKind, { label: string; chip: string; dot:
   important_date: { label: "Key Date",     chip: "bg-amber-500/15 text-amber-300 border-amber-500/30",          dot: "bg-amber-400" },
   appointment:    { label: "Appointment",  chip: "bg-blue-500/15 text-blue-300 border-blue-500/30",             dot: "bg-blue-400" },
   pt_session:     { label: "PT Session",   chip: "bg-violet-500/15 text-violet-300 border-violet-500/30",       dot: "bg-violet-400" },
-  workout:        { label: "Workout",      chip: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",    dot: "bg-emerald-400" },
+  // Cyan: not green/red, which read as done/missed elsewhere (completion, compliance).
+  workout:        { label: "Workout",      chip: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",             dot: "bg-cyan-400" },
   check_in:       { label: "Check-In",     chip: "bg-amber-500/15 text-amber-300 border-amber-500/30",           dot: "bg-amber-400" },
-  google_event:   { label: "Google",       chip: "bg-sky-500/15 text-sky-300 border-sky-500/30",                dot: "bg-sky-400" },
+  google_event:   { label: "Google",       chip: "bg-slate-500/15 text-slate-300 border-slate-500/30",          dot: "bg-slate-400" },
   membership_event: { label: "Membership", chip: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30",    dot: "bg-fuchsia-400" },
   cardio:           { label: "Cardio",      chip: "bg-rose-500/15 text-rose-300 border-rose-500/30",              dot: "bg-rose-400" },
 };

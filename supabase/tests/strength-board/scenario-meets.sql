@@ -15,15 +15,15 @@ begin
   insert into powerlifting_coaching_periods (athlete_id, start_date, end_date) values
     (a_nic, null, null), (a_old, '2020-01-01', '2022-12-31'), (a_us, null, null), (a_bench, null, null);
 
-  insert into athlete_powerlifting_results (athlete_id, athlete_name, sex, bodyweight_kg, squat_kg, bench_kg, deadlift_kg, total_kg, meet_name, meet_location, meet_date, gl_points) values
+  insert into athlete_powerlifting_results (athlete_id, athlete_name, sex, bodyweight_kg, squat_kg, bench_kg, deadlift_kg, meet_name, meet_location, meet_date, gl_points) values
     -- Lighter meet: more x bodyweight; heavier meet: heavier total.
-    (a_nic, 'Nicole Carta', 'female', 52, 80, 50, 100, 230, 'Provincials', 'Canada-MB', '2024-03-01', 70),
-    (a_nic, 'Nicole Carta', 'female', 58, 85, 52.5, 102.5, 240, 'Nationals', 'Canada-ON', '2025-03-01', 68),
-    (a_old, 'Old Timer', 'male', 90, 200, 140, 250, 590, 'Inside', 'Canada', '2021-06-01', 80),
-    (a_old, 'Old Timer', 'male', 90, 300, 200, 350, 850, 'After he left', 'Canada', '2023-06-01', 99),
-    (a_us, 'Border Guy', 'male', 80, 200, 150, 250, 600, 'Away meet', 'USA-TX', '2024-01-01', 90),
-    (a_us, 'Border Guy', 'male', 80, 190, 140, 240, 570, 'Home meet', 'Canada-MB', '2024-06-01', 85),
-    (a_bench, 'Bench Only', 'male', 100, null, 180, null, 180, 'Bench meet', 'Canada', '2024-06-01', null);
+    (a_nic, 'Nicole Carta', 'female', 52, 80, 50, 100, 'Provincials', 'Canada-MB', '2024-03-01', 70),
+    (a_nic, 'Nicole Carta', 'female', 58, 85, 52.5, 102.5, 'Nationals', 'Canada-ON', '2025-03-01', 68),
+    (a_old, 'Old Timer', 'male', 90, 200, 140, 250, 'Inside', 'Canada', '2021-06-01', 80),
+    (a_old, 'Old Timer', 'male', 90, 300, 200, 350, 'After he left', 'Canada', '2023-06-01', 99),
+    (a_us, 'Border Guy', 'male', 80, 200, 150, 250, 'Away meet', 'USA-TX', '2024-01-01', 90),
+    (a_us, 'Border Guy', 'male', 80, 190, 140, 240, 'Home meet', 'Canada-MB', '2024-06-01', 85),
+    (a_bench, 'Bench Only', 'male', 100, 0, 180, 0, 'Bench meet', 'Canada', '2024-06-01', null);
 
   delete from auth_ctx;
   perform t_assert(not exists (select 1 from get_strength_board_meets(null)), 'signed out: no meet board');

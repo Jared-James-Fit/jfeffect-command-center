@@ -43,10 +43,12 @@ export const GOOGLE_SCOPES = [
 
 function signingSecret(): string {
   const s = process.env.GOOGLE_OAUTH_STATE_SECRET;
-  if (!s || s.length < 32) {
-    throw new Error("GOOGLE_OAUTH_STATE_SECRET is not configured (must be at least 32 chars).");
-  }
-  return s;
+  if (s && s.length >= 32) return s;
+  // No dedicated secret: derive one from the service role key (server-only),
+  // so connecting Google only needs the client id and secret.
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (service && service.length >= 32) return createHmac("sha256", service).update("jf-google-oauth-state").digest("base64url");
+  throw new Error("GOOGLE_OAUTH_STATE_SECRET is not configured (must be at least 32 chars).");
 }
 
 export function signOAuthState(payload: Record<string, unknown>): string {

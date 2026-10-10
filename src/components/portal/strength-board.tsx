@@ -15,6 +15,8 @@ import { ATHLETE_SEX_KEYS, SexChoice } from "@/components/athlete-sex";
 import { saveMySexFn } from "@/lib/athlete-sex.functions";
 import type { AthleteSex } from "@/lib/athlete-sex";
 import { useWeightUnit } from "@/lib/use-weight-unit";
+import { LevelBadge, PowerliftingCareer } from "@/components/portal/powerlifting-career";
+import type { MeetLevel } from "@/lib/powerlifting-career";
 import type { WeightUnit } from "@/lib/weight-lifted";
 import {
   BOARD_LIFTS,
@@ -236,6 +238,9 @@ function boardValue(r: StrengthRow, mode: BoardMode, unit: WeightUnit) {
  */
 export function StrengthBoardSlide() {
   const [open, setOpen] = useState(false);
+  // Tapping a powerlifter opens their career; anything else opens the standings.
+  const [careerId, setCareerId] = useState<string | null>(null);
+  const show = (athleteId: string | null = null) => { setCareerId(athleteId); setOpen(true); };
   const [mode, setMode] = useState<BoardMode>("p4p");
   const [lift, setLift] = useState<BoardLift>("total");
   const [division, setDivision] = useState<Division>("all");
@@ -261,7 +266,7 @@ export function StrengthBoardSlide() {
     <>
       <div className="flex h-full flex-col">
         {/* Same header as the League: what it is on the left, where you stand on the right */}
-        <button type="button" onClick={() => setOpen(true)} className="flex w-full items-start gap-3 px-4 pt-3 text-left active:opacity-70">
+        <button type="button" onClick={() => show()} className="flex w-full items-start gap-3 px-4 pt-3 text-left active:opacity-70">
           <span className="min-w-0 flex-1">
             <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">All-time strength board</span>
             <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">
@@ -307,7 +312,7 @@ export function StrengthBoardSlide() {
         </div>
 
         {hint && !isPending && (
-          <button type="button" onClick={() => setOpen(true)} className="mx-3 mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
+          <button type="button" onClick={() => show()} className="mx-3 mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
             <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-[11px] font-medium">{hint}</span>
           </button>
@@ -318,7 +323,7 @@ export function StrengthBoardSlide() {
             {[0, 1, 2].map((i) => <div key={i} className="h-[88px] animate-pulse rounded-xl bg-muted/40" />)}
           </div>
         ) : top5.length === 0 ? (
-          <button type="button" onClick={() => setOpen(true)} className="mx-3 mt-2.5 rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
+          <button type="button" onClick={() => show()} className="mx-3 mt-2.5 rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
             Nobody's on this board yet. Be the first.
           </button>
         ) : (
@@ -328,7 +333,7 @@ export function StrengthBoardSlide() {
               {podium.map((r) => {
                 const place = rankOf(r, mode, division)!;
                 return (
-                  <button type="button" key={r.key} onClick={() => setOpen(true)}
+                  <button type="button" key={r.key} onClick={() => show(r.athlete_id)}
                     className={cn("min-w-0 rounded-xl bg-muted/40 px-1.5 py-2 text-center transition-colors active:bg-muted", r.is_me && "bg-primary/10 ring-1 ring-primary/30")}>
                     <div className="text-base leading-none">{MEDAL[place - 1] ?? place}</div>
                     <div className="mt-1 truncate text-xs font-semibold">{r.is_me ? "You" : r.display_name}</div>
@@ -345,7 +350,7 @@ export function StrengthBoardSlide() {
               <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
                 {[...rest, ...(meBelow ? [meBelow] : [])].map((r) => (
                   <li key={r.key}>
-                    <button type="button" onClick={() => setOpen(true)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
+                    <button type="button" onClick={() => show(r.athlete_id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
                       <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{rankOf(r, mode, division)}</span>
                       <span className="min-w-0 flex-1 truncate font-semibold">{r.is_me ? "You" : r.display_name}</span>
                       <span className="shrink-0 text-[10px] text-muted-foreground">{r.source === "meet" ? "Meet" : "Training"}</span>
@@ -359,14 +364,14 @@ export function StrengthBoardSlide() {
         )}
         <div className="mt-auto px-3 pb-3 pt-2.5">
           {/* Same button as the League card: everyone on this board, the board you picked. */}
-          <button type="button" onClick={() => setOpen(true)} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
+          <button type="button" onClick={() => show()} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
             Full standings{count > 0 ? ` · ${count}` : ""} <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-safe-bottom">
-          <HallOfStrength initialMode={mode} initialLift={lift} initialDivision={division} />
+          <HallOfStrength initialMode={mode} initialLift={lift} initialDivision={division} initialCareer={careerId} />
         </SheetContent>
       </Sheet>
     </>
@@ -401,8 +406,8 @@ function KingTile({ label, row, value, loading, className }: {
 // ── The board ──────────────────────────────────────────────────────────────
 
 /** The full Hall of Strength: All-time (training + meets, everyone ever coached) and Competition (sanctioned meets). */
-export function HallOfStrength({ initialSource = "all", initialMode = "p4p", initialLift = "total", initialDivision = "all" }: {
-  initialSource?: BoardSource; initialMode?: BoardMode; initialLift?: BoardLift; initialDivision?: Division;
+export function HallOfStrength({ initialSource = "all", initialMode = "p4p", initialLift = "total", initialDivision = "all", initialCareer = null }: {
+  initialSource?: BoardSource; initialMode?: BoardMode; initialLift?: BoardLift; initialDivision?: Division; initialCareer?: string | null;
 }) {
   const { unit, setUnit } = useWeightUnit();
   const isStaff = useIsStaff();
@@ -413,6 +418,9 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   const [lift, setLift] = useState<BoardLift>(initialLift);
   const [division, setDivision] = useState<Division>(initialDivision);
   const [showAll, setShowAll] = useState(false);
+  // A lifter's powerlifting career, opened from the board (rows with a meet record).
+  const [career, setCareer] = useState<string | null>(initialCareer);
+  const { data: tiers } = useTiers();
   const active = source === "all" ? allTime : meets;
   const rows = active.data ?? [];
   const { top, me, count } = pickBoard(rows, mode, lift, division, showAll ? Infinity : TOP);
@@ -423,6 +431,8 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   const history = meetHistory(meets.data ?? []);
   const what = lift === "total" ? "squat + bench + deadlift" : LIFT_NAME[lift];
   const pick = <T,>(set: (v: T) => void) => (v: T) => { set(v); setShowAll(false); };
+
+  if (career) return <PowerliftingCareer athleteId={career} onBack={() => setCareer(null)} backLabel="Hall of Strength" />;
 
   return (
     <div className="space-y-4">
@@ -510,6 +520,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
             : source === "meets"
               ? `Heaviest ${what} passed by the referees at a meet.`
               : `Heaviest ${what} from training or a meet. ×3 = done for 3 reps.`}
+          {source === "meets" ? " Tap a lifter to see every meet of their career." : ""}
         </p>
         <ToggleGroup type="single" value={unit} onValueChange={(v) => v && setUnit(v as WeightUnit)} className="shrink-0 rounded-lg border bg-card p-0.5">
           {(["lb", "kg"] as const).map((u) => (
@@ -534,12 +545,14 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
         <>
           <div className="grid grid-cols-3 items-end gap-2">
             {[podium[1], podium[0], podium[2]].map((r, i) =>
-              r ? <PodiumSpot key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"} /> : <div key={i} />,
+              r ? <PodiumSpot key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"}
+                tier={r.athlete_id ? tiers?.get(r.athlete_id) : undefined} onOpen={r.athlete_id ? () => setCareer(r.athlete_id) : undefined} /> : <div key={i} />,
             )}
           </div>
           {rest.length > 0 && (
             <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
-              {rest.map((r) => <BoardLine key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"} />)}
+              {rest.map((r) => <BoardLine key={r.key} row={r} rank={rankOf(r, mode, division)!} mode={mode} unit={unit} showSource={source === "all"}
+                tier={r.athlete_id ? tiers?.get(r.athlete_id) : undefined} onOpen={r.athlete_id ? () => setCareer(r.athlete_id) : undefined} />)}
             </ul>
           )}
           {count > TOP && (
@@ -584,17 +597,36 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   );
 }
 
+type Tier = { top_level: MeetLevel; top_place: number | null };
+
+/** Each meet athlete's highest level and best finish there, for the badge by their name. */
+function useTiers() {
+  return useQuery({
+    queryKey: ["strength-board", "tiers"],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await db.rpc("get_powerlifting_athlete_tiers");
+      if (error) throw error;
+      return new Map(((data ?? []) as any[]).map((t) => [String(t.athlete_id), { top_level: t.top_level, top_place: t.top_place == null ? null : Number(t.top_place) } as Tier]));
+    },
+  });
+}
+
 function NameLine({ row }: { row: StrengthRow }) {
   return row.meet?.competed_as ? (
     <div className="truncate text-[9px] text-muted-foreground">competed as {row.meet.competed_as}</div>
   ) : null;
 }
 
-function PodiumSpot({ row, rank, mode, unit, showSource }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean }) {
+function PodiumSpot({ row, rank, mode, unit, showSource, tier, onOpen }: {
+  row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean; tier?: Tier; onOpen?: () => void;
+}) {
   const first = rank === 1;
+  const Tag = onOpen ? "button" : "div";
   return (
-    <div className={cn(
+    <Tag type={onOpen ? "button" : undefined} onClick={onOpen} className={cn(
       "flex flex-col items-center rounded-2xl border p-2 text-center shadow-sm",
+      onOpen && "transition active:scale-[0.98]",
       first ? "bg-gradient-to-b from-amber-400/20 to-card pb-4 ring-2 ring-amber-400/60" : "bg-card",
       row.is_me && "ring-2 ring-primary",
     )}>
@@ -608,6 +640,7 @@ function PodiumSpot({ row, rank, mode, unit, showSource }: { row: StrengthRow; r
         <Headline row={row} mode={mode} unit={unit} />
       </div>
       <div className="mt-1 flex flex-wrap justify-center gap-1">
+        {tier && <LevelBadge level={tier.top_level} place={tier.top_place} />}
         {showSource && <SourceTag row={row} />}
         {mode === "absolute" && <XBadge row={row} />}
         <ClubBadge row={row} />
@@ -619,13 +652,18 @@ function PodiumSpot({ row, rank, mode, unit, showSource }: { row: StrengthRow; r
         </div>
       )}
       {row.meet && <div className="w-full truncate text-[9px] text-muted-foreground">{row.meet.name} · {format(new Date(row.lifted_at), "yyyy")}</div>}
-    </div>
+      {onOpen && <div className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">Career ›</div>}
+    </Tag>
   );
 }
 
-function BoardLine({ row, rank, mode, unit, showSource }: { row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean }) {
+function BoardLine({ row, rank, mode, unit, showSource, tier, onOpen }: {
+  row: StrengthRow; rank: number; mode: BoardMode; unit: WeightUnit; showSource: boolean; tier?: Tier; onOpen?: () => void;
+}) {
+  const Tag = onOpen ? "button" : "div";
   return (
-    <li className={cn("flex items-center gap-3 px-3 py-2.5", row.is_me && "bg-primary/5")}>
+    <li className={cn(row.is_me && "bg-primary/5")}>
+    <Tag type={onOpen ? "button" : undefined} onClick={onOpen} className={cn("flex w-full items-center gap-3 px-3 py-2.5 text-left", onOpen && "active:bg-muted")}>
       <span className="w-8 shrink-0 text-center text-sm font-black text-muted-foreground">#{rank}</span>
       <LifterAvatar row={row} size="h-9 w-9 shrink-0" />
       <div className="min-w-0 flex-1">
@@ -636,6 +674,7 @@ function BoardLine({ row, rank, mode, unit, showSource }: { row: StrengthRow; ra
         </div>
         <NameLine row={row} />
         <div className="mt-0.5 flex flex-wrap items-center gap-1">
+          {tier && <LevelBadge level={tier.top_level} place={tier.top_place} />}
           {showSource && <SourceTag row={row} />}
           <AlumniTag row={row} />
         </div>
@@ -646,6 +685,8 @@ function BoardLine({ row, rank, mode, unit, showSource }: { row: StrengthRow; ra
         {mode === "absolute" && <XBadge row={row} />}
         <ClubBadge row={row} />
       </div>
+      {onOpen && <ChevronRight className="-mr-1 h-4 w-4 shrink-0 text-muted-foreground" />}
+    </Tag>
     </li>
   );
 }
@@ -729,7 +770,20 @@ function MeetYouCard({ me, mode, division }: { me: StrengthRow | null; mode: Boa
 type ReviewRow = {
   result_id: string; client_id: string; display_name: string; lift: string; load_kg: number; reps: number;
   sets: number; lift_day: string; bw_kg: number | null; flag: string | null; review: string | null; counted_best_kg: number | null;
+  /** What the athlete typed and the unit it was saved in (305, "kg"). */
+  entered_value?: number | null; entered_unit?: string | null;
+  /** Saved in kg, but as lb it passes the typo checks and fits their other sessions. */
+  likely_lb?: boolean | null;
 };
+
+/** 305 → "305 kg"; 755.3467 → "755.3 lb". */
+function typedLoad(value: number, unit: WeightUnit): string {
+  const v = Math.round(Number(value) * 10) / 10;
+  return `${Number.isInteger(v) ? v.toLocaleString() : v.toFixed(1)} ${unit}`;
+}
+
+const typedUnit = (r: ReviewRow): WeightUnit | null =>
+  r.entered_unit === "kg" || r.entered_unit === "lb" ? r.entered_unit : null;
 
 /** Coach review for the board; also shown on the admin Athlete Records page. */
 export function StrengthBoardCoachTools() {
@@ -764,6 +818,35 @@ export function StrengthBoardCoachTools() {
     },
     onError: (e: unknown) => toast.error("Couldn't save", { description: (e as Error)?.message }),
   });
+  // lb typed into a kg card: keep the number, fix the unit on every set of that card that day.
+  const undoFix = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await db.rpc("strength_board_unfix_unit", { _result_ids: ids });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Back to kg");
+      await qc.invalidateQueries({ queryKey: ["strength-board"] });
+    },
+    onError: (e: unknown) => toast.error("Couldn't undo", { description: (e as Error)?.message }),
+  });
+  const fixUnit = useMutation({
+    mutationFn: async (r: ReviewRow) => {
+      const { data, error } = await db.rpc("strength_board_fix_unit", { _result_id: r.result_id });
+      if (error) throw error;
+      return (data ?? []) as string[];
+    },
+    onSuccess: async (ids, r) => {
+      await qc.invalidateQueries({ queryKey: ["strength-board"] });
+      toast.success(`Fixed: ${r.display_name} · ${r.lift} ${typedLoad(Number(r.entered_value), "lb")}`, {
+        description: `${ids.length} set${ids.length === 1 ? "" : "s"} now saved in lb`,
+        duration: 8000,
+        action: { label: "Undo", onClick: () => undoFix.mutate(ids) },
+      });
+    },
+    onError: (e: unknown) => toast.error("Couldn't fix the unit", { description: (e as Error)?.message }),
+  });
+  const busy = decide.isPending || fixUnit.isPending || undoFix.isPending;
   const pending = review.filter((r) => !r.review);
   const decided = review.filter((r) => r.review);
 
@@ -779,13 +862,18 @@ export function StrengthBoardCoachTools() {
           <p className="mt-1 text-xs text-muted-foreground">Nothing waiting. Every top lift passed the typo check.</p>
         ) : (
           <ul className="mt-1 divide-y">
-            {pending.map((r) => (
-              <ReviewLine key={r.result_id} r={r} unit={unit} busy={decide.isPending}
-                actions={[
-                  { label: "Count it", onClick: () => decide.mutate({ id: r.result_id, status: "approved" }) },
-                  { label: "Remove", onClick: () => decide.mutate({ id: r.result_id, status: "excluded" }), danger: true },
-                ]} />
-            ))}
+            {pending.map((r) => {
+              const lbFix = r.likely_lb === true && typedUnit(r) === "kg" && r.entered_value != null;
+              return (
+                <ReviewLine key={r.result_id} r={r} unit={unit} busy={busy}
+                  hint={lbFix ? `Looks like lb typed into a kg card. As ${typedLoad(Number(r.entered_value), "lb")} it fits their other ${r.lift} sessions.` : null}
+                  actions={[
+                    ...(lbFix ? [{ label: `It was ${typedLoad(Number(r.entered_value), "lb")}`, onClick: () => fixUnit.mutate(r), primary: true }] : []),
+                    { label: lbFix ? "Count as kg" : "Count it", onClick: () => decide.mutate({ id: r.result_id, status: "approved" }) },
+                    { label: "Remove", onClick: () => decide.mutate({ id: r.result_id, status: "excluded" }), danger: true },
+                  ]} />
+              );
+            })}
           </ul>
         )}
       </div>
@@ -795,14 +883,14 @@ export function StrengthBoardCoachTools() {
           <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Your decisions</div>
           <ul className="mt-1 divide-y">
             {decided.map((r) => (
-              <ReviewLine key={r.result_id} r={r} unit={unit} busy={decide.isPending}
+              <ReviewLine key={r.result_id} r={r} unit={unit} busy={busy}
                 actions={[{ label: "Undo", onClick: () => decide.mutate({ id: r.result_id, status: "clear" }) }]} />
             ))}
           </ul>
         </div>
       )}
 
-      <RemoveFromBoard unit={unit} busy={decide.isPending} onRemove={(id) => decide.mutate({ id, status: "excluded" })} />
+      <RemoveFromBoard unit={unit} busy={busy} onRemove={(id) => decide.mutate({ id, status: "excluded" })} />
 
       {unranked.length > 0 && (
         <div>
@@ -821,27 +909,33 @@ export function StrengthBoardCoachTools() {
   );
 }
 
-function ReviewLine({ r, unit, busy, actions }: {
-  r: ReviewRow; unit: WeightUnit; busy: boolean;
-  actions: { label: string; onClick: () => void; danger?: boolean }[];
+function ReviewLine({ r, unit, busy, actions, hint }: {
+  r: ReviewRow; unit: WeightUnit; busy: boolean; hint?: string | null;
+  actions: { label: string; onClick: () => void; danger?: boolean; primary?: boolean }[];
 }) {
   const verdict = r.review === "approved" ? "Counted" : r.review === "excluded" ? "Removed" : r.flag;
+  // Show the number as it was typed, in the unit it was saved in ("305 kg"),
+  // so a unit slip reads as one; the viewer's unit follows when it differs.
+  const savedIn = typedUnit(r);
+  const typed = savedIn && r.entered_value != null ? typedLoad(Number(r.entered_value), savedIn) : null;
   return (
     <li className="py-2.5">
       <div className="text-xs font-bold">
-        {r.display_name} · {r.lift} {formatLoad(Number(r.load_kg), unit)} ×{r.reps}
-        {r.sets > 1 ? <span className="font-normal text-muted-foreground"> ({r.sets} sets)</span> : null}
+        {r.display_name} · {r.lift} {typed ?? formatLoad(Number(r.load_kg), unit)} ×{r.reps}
+        {typed && savedIn !== unit ? <span className="font-normal text-muted-foreground"> (= {formatLoad(Number(r.load_kg), unit)})</span> : null}
+        {r.sets > 1 ? <span className="font-normal text-muted-foreground"> · {r.sets} sets</span> : null}
       </div>
       <div className="text-[11px] text-muted-foreground">
         <span className="font-semibold text-foreground/80">{verdict}</span> · {format(new Date(r.lift_day + "T12:00:00"), "MMM d")}
         {r.bw_kg ? ` · BW ${formatLoad(Number(r.bw_kg), unit)}` : ""}
         {` · counted best ${r.counted_best_kg ? formatLoad(Number(r.counted_best_kg), unit) : "none yet"}`}
       </div>
-      <div className="mt-1.5 flex gap-2">
+      {hint ? <p className="mt-1 text-[11px] font-semibold text-foreground">{hint}</p> : null}
+      <div className="mt-1.5 flex flex-wrap gap-2">
         {actions.map((a) => (
           <button key={a.label} type="button" disabled={busy} onClick={a.onClick}
             className={cn("min-h-9 flex-1 rounded-lg border px-2.5 text-xs font-black disabled:opacity-50",
-              a.danger ? "border-destructive/40 text-destructive" : "")}>
+              a.primary ? "basis-full border-primary bg-primary text-primary-foreground" : a.danger ? "border-destructive/40 text-destructive" : "")}>
             {a.label}
           </button>
         ))}

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { normalizePhoneToE164 } from "@/lib/phone-e164";
 import { assertAdminView, withoutCredentials } from "@/lib/permissions.server";
+import { withoutCoachingClients } from "@/lib/membership";
 
 function genToken(len = 32) {
   const arr = new Uint8Array(len);
@@ -66,9 +67,14 @@ export const listMembers = createServerFn({ method: "GET" })
     let q = supabaseAdmin.from("app_members").select("*").order("created_at", { ascending: false });
     if (data.accountType) q = q.eq("account_type", data.accountType);
     if (data.status) q = q.eq("status", data.status);
-    const { data: rows, error } = await q;
+    const [{ data: rows, error }, { data: clientRows, error: clientErr }] = await Promise.all([
+      q,
+      supabaseAdmin.from("clients").select("user_id, email"),
+    ]);
     if (error) throw new Error(error.message);
-    return { members: viewOnly ? (rows ?? []).map(withoutCredentials) : rows ?? [] };
+    if (clientErr) throw new Error(clientErr.message);
+    const members = withoutCoachingClients(rows ?? [], clientRows ?? []);
+    return { members: viewOnly ? members.map(withoutCredentials) : members };
   });
 
 export const getMember = createServerFn({ method: "GET" })

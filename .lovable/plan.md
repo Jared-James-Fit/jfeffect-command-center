@@ -1,29 +1,21 @@
-# Admin Client Setup & Access Cleanup
+# Production database outage: what I found and how to recover
 
-## Goal
-Replace the overlapping “Coaching Setup” and “Login & Access” experiences with a clear client setup workflow that shows what is complete, what is waiting on the client, and the single next action an admin should take.
+## What I found (read-only checks, nothing changed)
+1. **Status:** The database is **DOWN**. The backend's health check reports "data plane responded 503", so the server is up but nothing behind it is answering.
+2. **Crash loop:** The database has restarted **77 times** since it booted. It keeps starting, crashing and starting again. That's why connections are refused and the app sits on "Updating..." forever.
+3. **Not disk, memory or connections:**
+   - Data disk: 47% used, so it isn't full.
+   - Memory: 33% used.
+   - Connection pool: 1 of 200, so it isn't "too many connections".
+   - No out-of-memory or other exhaustion alerts in the last 48 hours.
+   - The last metrics check itself failed, because the database is unreachable.
+4. **Logs:** The database log query came back completely empty. A crashing database often can't write logs, so the last error before the outage isn't visible from here. The cause is still unconfirmed.
+5. **Not caused by app changes:** No migrations or database changes were run around this time. The only recent change was the coach day notes, which touched the app only.
 
-## What will change
-- Turn Coaching Setup into a task-oriented overview with grouped statuses for coach assignment, client details/intake, training schedule, program, nutrition, and account access.
-- Keep each setup capability in its existing specialist section; this overview will link to the canonical editor instead of duplicating controls.
-- Separate account authentication from service/feature access so login health, portal availability, and coaching access cannot be confused.
-- Make one context-aware account action primary: send setup for no account, resend for an expired setup link, or password recovery for an existing account.
-- Keep manual copy/send choices available through one secondary menu, and move password setting, help flags, client POV, deactivation, and deletion into clearly labeled advanced areas.
-- Remove duplicate setup/reset controls from the page header, Summary, and Login & Access while retaining status references where useful.
+## Recovery plan
+1. **Restart the backend.** I can trigger this from here once you approve it. It may be unavailable for a few minutes. (Bigger disk or bigger instance won't help, because neither is under pressure.)
+2. Re-check status and health until the database reports healthy and the restart count stops rising.
+3. Confirm a client profile loads again in the live app.
+4. If it crash-loops again after the restart, this isn't something you can fix yourself. Contact Lovable support with these facts: database down, 77 restarts, disk 47%, memory 33%, no exhaustion alerts, empty logs.
 
-## Link and status reliability
-- Establish one shared account-status model for the Summary and Login & Access views.
-- Stop treating a stale stored invite expiry as meaningful after an account exists or has signed in.
-- Ensure sending or copying a setup link records and refreshes the current link status consistently.
-- Avoid presenting a fabricated validity window as authoritative; show only status that the app can support accurately.
-- Preserve the current secure, prefetch-resistant setup and password-recovery link formats.
-
-## Technical details
-- Refactor the large client workspace into focused setup/access presentation components while preserving existing server authorization and client data.
-- Reuse existing program, schedule, goals/intake, nutrition, billing, communication, and account functions; no parallel setup system or schema is planned.
-- Add regression tests for account-state derivation, valid/expired setup presentation, canonical action visibility, and removal of duplicate entry points.
-- Test representative existing client states in the signed-in admin workspace on desktop and mobile, including send/copy behavior without delivering messages to real clients.
-- Run focused tests, typecheck, and the production build; report unrelated failures separately.
-
-## Scope boundary
-The Marc Asugui sale/payment-link reconciliation is already present in the current code and data. This cleanup will not perform financial mutations, alter billing terms, or change unrelated client-management areas.
+If you'd rather do it yourself, open Cloud settings and restart the backend.

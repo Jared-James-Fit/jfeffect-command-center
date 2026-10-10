@@ -13,14 +13,17 @@ const META: Record<AccountKind, { label: string; icon: LucideIcon }> = {
 
 /**
  * Clients · Members · Team: every account the business has, one tap (or one
- * swipe) apart. Stays pinned under the header while the list scrolls.
+ * swipe) apart. Members only shows while there are members (coaching
+ * clients never count). Stays pinned under the header while the list scrolls.
  */
-export function AccountsSwitcher({ kind, onChange, counts }: {
+export function AccountsSwitcher({ kind, onChange, counts, kinds = KINDS }: {
   kind: AccountKind;
   onChange: (k: AccountKind) => void;
   counts: Partial<Record<AccountKind, number>>;
+  /** The tabs to show (Members only when there are members). */
+  kinds?: AccountKind[];
 }) {
-  const items = KINDS.map((k) => ({ key: k, ...META[k], count: counts[k] }));
+  const items = kinds.map((k) => ({ key: k, ...META[k], count: counts[k] }));
   return <PageSwitcher items={items} value={kind} onChange={onChange} label="Accounts" />;
 }
 

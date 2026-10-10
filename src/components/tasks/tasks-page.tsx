@@ -1,3 +1,16 @@
+/**
+ * Task Manager.
+ *
+ * - Two boards. "My tasks" is the person's own list: their private tasks plus
+ *   team tasks assigned to them. "Team" is the shared board everyone on the
+ *   team works together. Private tasks (tasks.owner_user_id) are enforced by
+ *   the database, so nobody else ever sees them, "view as" included.
+ * - Quick Notes sit above both, private to the person, and can be sent to
+ *   either board (see quick-notes.tsx).
+ * - List view groups tasks by category. Matrix view is a 2×2 overview: each
+ *   quadrant shows a short preview and opens into its full list.
+ * - Tapping a task opens it: title, notes, category, who it's for, who sees it.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app-shell";
@@ -5,25 +18,26 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import {
-  Plus, MoreHorizontal, Trash2, Settings2, StickyNote, RotateCcw, X, Users, Pencil, Check,
-  Search, ListChecks, LayoutGrid, ChevronRight, ChevronDown, CheckCheck, ArrowRightLeft, Copy, ListTodo,
+  Plus, MoreHorizontal, Trash2, Settings2, RotateCcw, Users, Check, Lock,
+  Search, ListChecks, LayoutGrid, ChevronRight, ChevronDown, CheckCheck, ArrowRightLeft, Maximize2, UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 import {
-  QUADRANTS, fetchTasks, createTask, toggleTaskDone,
+  QUADRANTS, fetchTasks, createTask, toggleTaskDone, fetchTeamMembers, splitTasks, firstName,
   updateTask, deleteTask, bulkSetTaskStatus, bulkMoveTasks, bulkAssignTasks, bulkDeleteTasksByIds,
-  type TaskRow, type TaskQuadrant, type TaskScope,
+  type TaskRow, type TaskQuadrant, type TaskScope, type TeamMember,
 } from "@/lib/tasks";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
@@ -61,30 +75,32 @@ function tintStyle(color: string) {
   return { backgroundColor: `${color}14`, borderColor: `${color}66` } as React.CSSProperties;
 }
 
-// ---------- Custom Assignees (localStorage) ----------
-type Assignee = { id: string; name: string };
-
-function useAssignees(storageKey: string) {
-  const [assignees, setAssignees] = useState<Assignee[]>([]);
-  const loadedRef = useRef(false);
+/** A small UI choice remembered on this device. */
+function useRemembered<T extends string>(key: string, initial: T, allowed: readonly T[]) {
+  const [v, setV] = useState<T>(initial);
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) setAssignees(JSON.parse(raw));
+      const s = localStorage.getItem(key) as T | null;
+      if (s && allowed.includes(s)) setV(s);
     } catch {}
-    loadedRef.current = true;
-  }, [storageKey]);
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    try { localStorage.setItem(storageKey, JSON.stringify(assignees)); } catch {}
-  }, [assignees, storageKey]);
-  return [assignees, setAssignees] as const;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  const set = useCallback((next: T) => {
+    setV(next);
+    try { localStorage.setItem(key, next); } catch {}
+  }, [key]);
+  return [v, set] as const;
 }
 
 const newId = () =>
   (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
-type FilterKey = "all" | "unassigned" | "assigned" | TaskQuadrant;
+type Board = "mine" | "team";
+/** Team board filter: everyone, me, unassigned, or one teammate's user id. */
+type PersonFilter = "all" | "me" | "none" | string;
+
+/** Tasks shown in a matrix quadrant before "Open". */
+const PREVIEW_ROWS = 3;
 
 export interface TasksPageProps {
   title?: string;
@@ -101,10 +117,16 @@ export function TasksPage({
 }: TasksPageProps = {}) {
   const qc = useQueryClient();
   const isMobile = useIsMobile();
+  const { user, preview } = useAuth();
+  const me = user?.id ?? null;
+  /** Viewing as someone else: their private tasks and notes stay private. */
+  const privateTo = preview?.name ?? null;
+
   const queryKey = useMemo(() => ["tasks", scope] as const, [scope]);
   const { data: tasks = [] } = useQuery({ queryKey, queryFn: () => fetchTasks(scope) });
-  const [assignees, setAssignees] = useAssignees(`${storagePrefix}-task-assignees`);
-  const [assigneesOpen, setAssigneesOpen] = useState(false);
+  const { data: teamMembers = [] } = useQuery({
+    queryKey: ["task-team-members"], queryFn: fetchTeamMembers, staleTime: 5 * 60_000,
+  });
   const { styles: quadStyles, update: updateQuadStyle, reset: resetQuadStyle } =
     useQuadrantStyles(`${storagePrefix}-quadrant-styles`);
 
@@ -127,60 +149,70 @@ export function TasksPage({
   }, [qc, queryKey]);
   const refresh = useCallback(() => { qc.invalidateQueries({ queryKey: ["tasks", scope] }); }, [qc, scope]);
 
-  // ---- view / filter state ----
-  const [view, setView] = useState<"list" | "matrix">("list");
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem(`${storagePrefix}-tasks-view`);
-      if (v === "matrix" || v === "list") setView(v);
-    } catch {}
-  }, [storagePrefix]);
-  const switchView = (v: "list" | "matrix") => {
-    setView(v);
-    try { localStorage.setItem(`${storagePrefix}-tasks-view`, v); } catch {}
-  };
-
-  const [filter, setFilter] = useState<FilterKey>("all");
+  // ---- board / view / filter state ----
+  const [board, setBoard] = useRemembered<Board>(`${storagePrefix}-tasks-board`, "mine", ["mine", "team"]);
+  const [view, setView] = useRemembered<"list" | "matrix">(`${storagePrefix}-tasks-view`, "list", ["list", "matrix"]);
+  const [person, setPerson] = useState<PersonFilter>("all");
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [openQuadrant, setOpenQuadrant] = useState<TaskQuadrant | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   // ---- quick add ----
   const [newTitle, setNewTitle] = useState("");
   const addRef = useRef<HTMLInputElement | null>(null);
-  const [defaultQuadrant, setDefaultQuadrant] = useState<TaskQuadrant>("do");
-  useEffect(() => {
-    try {
-      const q = localStorage.getItem(`${storagePrefix}-tasks-default-quadrant`) as TaskQuadrant | null;
-      if (q && ["do", "schedule", "delegate", "eliminate"].includes(q)) setDefaultQuadrant(q);
-    } catch {}
-  }, [storagePrefix]);
-  const pickDefaultQuadrant = (q: TaskQuadrant) => {
-    setDefaultQuadrant(q);
-    try { localStorage.setItem(`${storagePrefix}-tasks-default-quadrant`, q); } catch {}
+  const [defaultQuadrant, setDefaultQuadrant] = useRemembered<TaskQuadrant>(
+    `${storagePrefix}-tasks-default-quadrant`, "do", ["do", "schedule", "delegate", "eliminate"],
+  );
+
+  const memberById = useMemo(() => new Map(teamMembers.map((m) => [m.user_id, m])), [teamMembers]);
+  const nameOf = useCallback(
+    (t: Pick<TaskRow, "assigned_to" | "assignee_name">) =>
+      (t.assigned_to && memberById.get(t.assigned_to)?.full_name) || t.assignee_name || null,
+    [memberById],
+  );
+
+  /** Who a new team task is for: whoever the board is filtered to. */
+  const filterAssignee = (): TeamMember | null => {
+    if (board !== "team") return null;
+    if (person === "me") return me ? memberById.get(me) ?? { user_id: me, full_name: "" } : null;
+    if (person === "all" || person === "none") return null;
+    return memberById.get(person) ?? null;
   };
 
-  const quickAdd = useCallback(async (raw: string, quadrant: TaskQuadrant) => {
+  const addTask = useCallback(async (raw: string, quadrant: TaskQuadrant, opts?: { keepFocus?: boolean; board?: Board; assignee?: TeamMember | null }) => {
     const t = raw.trim();
     if (!t) return;
-    setNewTitle("");
-    addRef.current?.focus();
+    const target = opts?.board ?? board;
+    const assignee = target === "team" ? (opts?.assignee ?? null) : null;
+    const owner = target === "mine" ? me : null;
     const temp: TaskRow = {
       id: `temp-${newId()}`, title: t, notes: null, quadrant, status: "open", priority: 0,
-      due_at: null, created_by: null, assigned_to: null, assignee_name: null,
-      completed_at: null, completed_by: null, position: 0, scope,
+      due_at: null, created_by: null, assigned_to: assignee?.user_id ?? null, assignee_name: assignee?.full_name || null,
+      completed_at: null, completed_by: null, position: 0, scope, owner_user_id: owner,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
     patchLocal((rows) => [temp, ...rows]);
     try {
-      await createTask({ title: t, quadrant, scope });
+      await createTask({
+        title: t, quadrant, scope, owner_user_id: owner,
+        assigned_to: assignee?.user_id ?? null, assignee_name: assignee?.full_name || null,
+      });
     } catch (e: any) {
       patchLocal((rows) => rows.filter((r) => r.id !== temp.id));
       toast.error(e?.message ?? "Could not add task");
       return;
     }
     refresh();
-  }, [patchLocal, refresh, scope]);
+  }, [board, me, patchLocal, refresh, scope]);
+
+  const quickAdd = (raw: string, quadrant: TaskQuadrant) => {
+    if (!raw.trim()) return;
+    setNewTitle("");
+    addRef.current?.focus();
+    void addTask(raw, quadrant, { assignee: filterAssignee() });
+  };
 
   // ---- selection ----
   const [selectMode, setSelectMode] = useState(false);
@@ -188,27 +220,45 @@ export function TasksPage({
   const clearSelection = () => setSelected(new Set());
   const exitSelect = () => { setSelectMode(false); clearSelection(); };
   const toggleSelected = (id: string) =>
-    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  // Switching boards starts fresh: selection and person filter belong to one board.
+  const switchBoard = (b: Board) => {
+    if (b === board) return;
+    setBoard(b);
+    setPerson("all");
+    exitSelect();
+  };
 
   // ---- derived collections ----
-  const openTasks = useMemo(() => tasks.filter((t) => t.status === "open"), [tasks]);
-  const doneTasks = useMemo(() => tasks.filter((t) => t.status === "done"), [tasks]);
+  const { mine, team } = useMemo(() => splitTasks(tasks, me), [tasks, me]);
+  const boardTasks = board === "mine" ? mine : team;
+  const mineOpenCount = useMemo(() => mine.filter((t) => t.status === "open").length, [mine]);
+  const teamOpenCount = useMemo(() => team.filter((t) => t.status === "open").length, [team]);
+  /** The Mine board while viewing as someone else: theirs is private. */
+  const boardHidden = board === "mine" && !!privateTo;
 
   const matchesSearch = useCallback((t: TaskRow) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    return [t.title, t.notes ?? "", t.assignee_name ?? ""].join(" ").toLowerCase().includes(q);
-  }, [search]);
+    return [t.title, t.notes ?? "", nameOf(t) ?? ""].join(" ").toLowerCase().includes(q);
+  }, [search, nameOf]);
 
-  const visibleOpen = useMemo(() => openTasks.filter((t) => {
-    if (!matchesSearch(t)) return false;
-    if (filter === "all") return true;
-    if (filter === "assigned") return !!t.assignee_name;
-    if (filter === "unassigned") return !t.assignee_name;
-    return t.quadrant === filter;
-  }), [openTasks, filter, matchesSearch]);
+  const matchesPerson = useCallback((t: TaskRow) => {
+    if (board !== "team" || person === "all") return true;
+    if (person === "me") return !!me && t.assigned_to === me;
+    if (person === "none") return !t.assigned_to;
+    return t.assigned_to === person;
+  }, [board, person, me]);
 
-  const visibleDone = useMemo(() => doneTasks.filter(matchesSearch), [doneTasks, matchesSearch]);
+  const visibleOpen = useMemo(
+    () => boardHidden ? [] : boardTasks.filter((t) => t.status === "open" && matchesSearch(t) && matchesPerson(t)),
+    [boardTasks, boardHidden, matchesSearch, matchesPerson],
+  );
+  const visibleDone = useMemo(
+    () => boardHidden ? [] : boardTasks.filter((t) => t.status === "done" && matchesSearch(t) && matchesPerson(t)),
+    [boardTasks, boardHidden, matchesSearch, matchesPerson],
+  );
 
   const byQuadrant = useMemo(() => {
     const m: Record<TaskQuadrant, TaskRow[]> = { do: [], schedule: [], delegate: [], eliminate: [] };
@@ -237,6 +287,7 @@ export function TasksPage({
   };
   const deleteOne = async (t: TaskRow) => {
     patchLocal((rows) => rows.filter((r) => r.id !== t.id));
+    if (detailId === t.id) setDetailId(null);
     try { await deleteTask(t.id); } catch (e: any) { toast.error(e?.message ?? "Failed"); }
     refresh();
   };
@@ -244,6 +295,19 @@ export function TasksPage({
     patchLocal((rows) => rows.map((r) => (r.id === t.id ? { ...r, ...patch } : r)));
     try { await updateTask(t.id, patch as any); } catch (e: any) { toast.error(e?.message ?? "Failed"); }
     refresh();
+  };
+  const assignOne = (t: TaskRow, m: TeamMember | null) =>
+    patchOne(t, { assigned_to: m?.user_id ?? null, assignee_name: m?.full_name ?? null });
+  /** Personal → team board (optionally assigned). */
+  const shareOne = (t: TaskRow, m: TeamMember | null) => {
+    void patchOne(t, { owner_user_id: null, assigned_to: m?.user_id ?? null, assignee_name: m?.full_name ?? null });
+    toast.success(m ? `On the team board for ${firstName(m.full_name)}` : "On the team board");
+  };
+  /** Team board → my private tasks. */
+  const makePrivate = (t: TaskRow) => {
+    if (!me) return;
+    void patchOne(t, { owner_user_id: me, assigned_to: null, assignee_name: null });
+    toast.success("Moved to your private tasks");
   };
 
   // ---- bulk actions ----
@@ -277,13 +341,13 @@ export function TasksPage({
     catch (e: any) { toast.error(e?.message ?? "Failed"); }
     refresh();
   };
-  const bulkAssign = async (name: string | null) => {
+  const bulkAssign = async (m: TeamMember | null) => {
     const ids = effectiveSelected;
     if (!ids.length) return;
     const set = new Set(ids);
-    patchLocal((rows) => rows.map((r) => (set.has(r.id) ? { ...r, assignee_name: name } : r)));
+    patchLocal((rows) => rows.map((r) => (set.has(r.id) ? { ...r, assigned_to: m?.user_id ?? null, assignee_name: m?.full_name ?? null } : r)));
     exitSelect();
-    try { await bulkAssignTasks(ids, name); } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+    try { await bulkAssignTasks(ids, m); } catch (e: any) { toast.error(e?.message ?? "Failed"); }
     refresh();
   };
   const runDelete = async (ids: string[]) => {
@@ -296,20 +360,25 @@ export function TasksPage({
     refresh();
   };
 
-  const rowProps = {
-    selectMode, selected, toggleSelected, quadStyles, assignees,
-    onComplete: completeOne, onDelete: deleteOne, onPatch: patchOne, isMobile,
+  const rowProps: RowProps = {
+    selectMode, selected, toggleSelected, quadStyles, teamMembers, me, board, nameOf,
+    onComplete: completeOne, onDelete: deleteOne, onPatch: patchOne, onAssign: assignOne,
+    onShare: shareOne, onMakePrivate: makePrivate, onOpen: (t) => setDetailId(t.id), isMobile,
   };
 
-  const FILTERS: { key: FilterKey; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "do", label: quadStyles.do.title },
-    { key: "schedule", label: quadStyles.schedule.title },
-    { key: "delegate", label: quadStyles.delegate.title },
-    { key: "eliminate", label: quadStyles.eliminate.title },
-    { key: "assigned", label: "Assigned" },
-    { key: "unassigned", label: "Mine" },
+  const detailTask = detailId ? tasks.find((t) => t.id === detailId) ?? null : null;
+  useEffect(() => { if (detailId && !detailTask) setDetailId(null); }, [detailId, detailTask]);
+
+  const PERSONS: { key: PersonFilter; label: string }[] = [
+    { key: "all", label: "Everyone" },
+    { key: "me", label: "Me" },
+    { key: "none", label: "Unassigned" },
+    ...teamMembers.filter((m) => m.user_id !== me).map((m) => ({ key: m.user_id, label: firstName(m.full_name) })),
   ];
+
+  const emptyText = search || person !== "all"
+    ? "No matching tasks."
+    : board === "mine" ? "Nothing on your list. Type above to add one." : "Nothing on the team board. Type above to add one.";
 
   return (
     <>
@@ -318,27 +387,51 @@ export function TasksPage({
         subtitle={subtitle}
         actions={
           <div className="flex items-center gap-1.5">
-            <Button variant="ghost" size="sm" onClick={() => setAssigneesOpen(true)}>
-              <Users className="mr-1 h-4 w-4" />Assignees
-            </Button>
             <Button
-              variant={selectMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+              variant="ghost" size="icon" className="h-9 w-9"
+              aria-label="Search tasks and notes"
+              onClick={() => { setSearchOpen((o) => !o); if (searchOpen) setSearch(""); }}
             >
-              {selectMode ? "Cancel" : "Select"}
+              <Search className="h-4 w-4" />
             </Button>
+            {!boardHidden && (
+              <Button
+                variant={selectMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+              >
+                {selectMode ? "Cancel" : "Select"}
+              </Button>
+            )}
           </div>
         }
       />
 
       <div className="space-y-3 p-3 pb-40 md:p-6 md:pb-10">
-        {/* Quick Notes */}
+        {searchOpen && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              autoFocus value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tasks & quick notes…" className="h-9 pl-8 text-sm"
+            />
+          </div>
+        )}
+
+        {/* Quick Notes — private to each person */}
         <QuickNotesPanel
           storageKey={`${storagePrefix}-task-notes`}
+          userId={me}
+          privateTo={privateTo}
           quadStyles={quadStyles}
+          teamMembers={teamMembers}
           onCreateTask={async (input) => {
-            const id = await createTask({ ...input, scope });
+            const assignee = input.team ? input.assignee ?? null : null;
+            const id = await createTask({
+              title: input.title, notes: input.notes, quadrant: input.quadrant, scope,
+              owner_user_id: input.team ? null : me,
+              assigned_to: assignee?.user_id ?? null, assignee_name: assignee?.full_name ?? null,
+            });
             refresh();
             return id;
           }}
@@ -350,164 +443,194 @@ export function TasksPage({
           hideComposeButton={selectMode}
         />
 
-        {/* Quick add */}
-        <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2 py-1.5">
-          <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <Input
-            ref={addRef}
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); quickAdd(newTitle, defaultQuadrant); } }}
-            placeholder="Add task…"
-            enterKeyHint="done"
-            className="h-9 flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-          />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-[11px] font-semibold">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: quadStyles[defaultQuadrant].color }} />
-                <span className="hidden sm:inline">{quadStyles[defaultQuadrant].title}</span>
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel className="text-[10px] uppercase tracking-widest">Default category</DropdownMenuLabel>
-              {QUADRANTS.map((q) => (
-                <DropdownMenuItem key={q.key} onClick={() => pickDefaultQuadrant(q.key)}>
-                  <span className="mr-2 h-2 w-2 rounded-full" style={{ backgroundColor: quadStyles[q.key].color }} />
-                  {quadStyles[q.key].title}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {/* View switch + counts + search */}
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-border bg-card p-0.5">
-            <Button size="sm" variant={view === "list" ? "default" : "ghost"} className="h-7 px-2.5 text-xs" onClick={() => switchView("list")}>
-              <ListChecks className="mr-1 h-3.5 w-3.5" />List
-            </Button>
-            <Button size="sm" variant={view === "matrix" ? "default" : "ghost"} className="h-7 px-2.5 text-xs" onClick={() => switchView("matrix")}>
-              <LayoutGrid className="mr-1 h-3.5 w-3.5" />Matrix
-            </Button>
-          </div>
-          <span className="text-xs font-semibold text-muted-foreground">{visibleOpen.length} open</span>
-          <Button
-            variant="ghost" size="icon" className="ml-auto h-8 w-8"
-            aria-label="Search tasks"
-            onClick={() => { setSearchOpen((o) => !o); if (searchOpen) setSearch(""); }}
-          >
-            <Search className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {searchOpen && (
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              autoFocus value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search tasks & quick notes…" className="h-9 pl-8 text-sm"
-            />
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-0.5 md:mx-0 md:px-0">
-          {FILTERS.map((f) => {
-            const active = filter === f.key;
+        {/* Board switch: my list on top, the shared team board next to it */}
+        <div className="grid grid-cols-2 rounded-xl border border-border bg-card p-1" role="tablist" aria-label="Task board">
+          {([
+            { key: "mine" as const, label: "My tasks", icon: UserRound, count: privateTo ? null : mineOpenCount },
+            { key: "team" as const, label: "Team", icon: Users, count: teamOpenCount },
+          ]).map((b) => {
+            const active = board === b.key;
+            const Icon = b.icon;
             return (
               <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
+                key={b.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => switchBoard(b.key)}
                 className={cn(
-                  "shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                  active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                  "flex h-10 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-colors",
+                  active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {f.label}
+                <Icon className="h-4 w-4" />
+                {b.label}
+                {b.count != null && (
+                  <span className={cn("tabular-nums text-xs", active ? "opacity-80" : "opacity-70")}>{b.count}</span>
+                )}
               </button>
             );
           })}
         </div>
 
-        {/* Selection header */}
-        {selectMode && (
-          <div className="flex items-center justify-between rounded-lg border border-primary/50 bg-primary/5 px-3 py-1.5">
-            <span className="text-xs font-bold">{effectiveSelected.length} selected</span>
-            <Button
-              variant="ghost" size="sm" className="h-7 px-2 text-xs"
-              onClick={() => setSelected(allSelected ? new Set() : new Set(selectableIds))}
-            >
-              {allSelected ? "Deselect all" : "Select all"}
-            </Button>
+        {boardHidden ? (
+          <div className="flex items-start gap-2.5 rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{firstName(privateTo)}&apos;s own tasks are private to them. The Team board is shared.</span>
           </div>
-        )}
-
-        {/* LIST */}
-        {view === "list" && (
-          <Card className="overflow-hidden border-border bg-card p-0">
-            {visibleOpen.length === 0 ? (
-              <div className="p-6 text-center text-xs text-muted-foreground">
-                {search || filter !== "all" ? "No matching tasks." : "Nothing open. Type above to add one."}
-              </div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {visibleOpen.map((t) => <TaskRow key={t.id} task={t} {...rowProps} />)}
-              </ul>
-            )}
-          </Card>
-        )}
-
-        {/* MATRIX */}
-        {view === "matrix" && (
-          <div className="grid gap-2 md:grid-cols-2">
-            {QUADRANTS.map((q) => (
-              <QuadrantPanel
-                key={q.key}
-                quadrant={q.key}
-                style={quadStyles[q.key]}
-                tasks={byQuadrant[q.key]}
-                defaultOpen={!isMobile || q.key === "do"}
-                onCustomize={(p) => updateQuadStyle(q.key, p)}
-                onResetStyle={() => resetQuadStyle(q.key)}
-                onSelectAllHere={(ids) => { setSelectMode(true); setSelected(new Set(ids)); }}
-                rowProps={rowProps}
+        ) : (
+          <>
+            {/* Quick add */}
+            <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2 py-1.5">
+              <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <Input
+                ref={addRef}
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); quickAdd(newTitle, defaultQuadrant); } }}
+                placeholder={board === "mine" ? "Add to my tasks…" : person !== "all" && person !== "none" ? `Add for ${PERSONS.find((p) => p.key === person)?.label ?? "them"}…` : "Add to the team board…"}
+                enterKeyHint="done"
+                className="h-9 flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
               />
-            ))}
-          </div>
-        )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-[11px] font-semibold">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: quadStyles[defaultQuadrant].color }} />
+                    <span className="hidden sm:inline">{quadStyles[defaultQuadrant].title}</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest">Default category</DropdownMenuLabel>
+                  {QUADRANTS.map((q) => (
+                    <DropdownMenuItem key={q.key} onClick={() => setDefaultQuadrant(q.key)}>
+                      <span className="mr-2 h-2 w-2 rounded-full" style={{ backgroundColor: quadStyles[q.key].color }} />
+                      {quadStyles[q.key].title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
-        {/* Completed */}
-        {doneTasks.length > 0 && (
-          <Card className="overflow-hidden border-border bg-card p-0">
-            <button
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
-              onClick={() => setShowCompleted((o) => !o)}
-            >
-              {showCompleted ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                Completed ({visibleDone.length})
-              </span>
-              {showCompleted && visibleDone.length > 0 && (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className="ml-auto text-[11px] font-semibold text-destructive"
-                  onClick={(e) => { e.stopPropagation(); setConfirmDelete({ ids: visibleDone.map((t) => t.id), label: `all ${visibleDone.length} completed tasks` }); }}
-                >
-                  Clear completed
-                </span>
-              )}
-            </button>
-            {showCompleted && (
-              <ul className="divide-y divide-border border-t border-border">
-                {visibleDone.map((t) => <TaskRow key={t.id} task={t} {...rowProps} />)}
-              </ul>
+            {/* View switch + count */}
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg border border-border bg-card p-0.5">
+                <Button size="sm" variant={view === "list" ? "default" : "ghost"} className="h-7 px-2.5 text-xs" onClick={() => setView("list")}>
+                  <ListChecks className="mr-1 h-3.5 w-3.5" />List
+                </Button>
+                <Button size="sm" variant={view === "matrix" ? "default" : "ghost"} className="h-7 px-2.5 text-xs" onClick={() => setView("matrix")}>
+                  <LayoutGrid className="mr-1 h-3.5 w-3.5" />Matrix
+                </Button>
+              </div>
+              <span className="ml-auto text-xs font-semibold text-muted-foreground">{visibleOpen.length} open</span>
+            </div>
+
+            {/* Team board: whose tasks */}
+            {board === "team" && (
+              <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-0.5 md:mx-0 md:px-0">
+                {PERSONS.map((f) => {
+                  const active = person === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setPerson(f.key)}
+                      className={cn(
+                        "shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                        active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  );
+                })}
+              </div>
             )}
-          </Card>
-        )}
 
+            {/* Selection header */}
+            {selectMode && (
+              <div className="flex items-center justify-between rounded-lg border border-primary/50 bg-primary/5 px-3 py-1.5">
+                <span className="text-xs font-bold">{effectiveSelected.length} selected</span>
+                <Button
+                  variant="ghost" size="sm" className="h-7 px-2 text-xs"
+                  onClick={() => setSelected(allSelected ? new Set() : new Set(selectableIds))}
+                >
+                  {allSelected ? "Deselect all" : "Select all"}
+                </Button>
+              </div>
+            )}
+
+            {/* LIST — grouped by category */}
+            {view === "list" && (
+              visibleOpen.length === 0 ? (
+                <Card className="border-border bg-card p-6 text-center text-xs text-muted-foreground">{emptyText}</Card>
+              ) : (
+                <div className="space-y-2">
+                  {QUADRANTS.filter((q) => byQuadrant[q.key].length > 0).map((q) => {
+                    const st = quadStyles[q.key];
+                    return (
+                      <Card key={q.key} className="overflow-hidden border-border bg-card p-0">
+                        <div className="flex items-center gap-2 border-b border-border/70 px-3 py-1.5">
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: st.color }} />
+                          <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: st.color }}>{st.title}</span>
+                          <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">{byQuadrant[q.key].length}</span>
+                        </div>
+                        <ul className="divide-y divide-border">
+                          {byQuadrant[q.key].map((t) => <TaskRowItem key={t.id} task={t} showQuadrant={false} {...rowProps} />)}
+                        </ul>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {/* MATRIX — 2×2 preview, each quadrant opens into its full list */}
+            {view === "matrix" && (
+              <div className="grid grid-cols-2 gap-2">
+                {QUADRANTS.map((q) => (
+                  <QuadrantPreview
+                    key={q.key}
+                    style={quadStyles[q.key]}
+                    tasks={byQuadrant[q.key]}
+                    isMobile={isMobile}
+                    nameOf={board === "team" ? nameOf : undefined}
+                    onOpen={() => setOpenQuadrant(q.key)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Completed */}
+            {visibleDone.length > 0 && (
+              <Card className="overflow-hidden border-border bg-card p-0">
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+                  onClick={() => setShowCompleted((o) => !o)}
+                >
+                  {showCompleted ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Completed ({visibleDone.length})
+                  </span>
+                  {showCompleted && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="ml-auto text-[11px] font-semibold text-destructive"
+                      onClick={(e) => { e.stopPropagation(); setConfirmDelete({ ids: visibleDone.map((t) => t.id), label: `all ${visibleDone.length} completed tasks` }); }}
+                    >
+                      Clear completed
+                    </span>
+                  )}
+                </button>
+                {showCompleted && (
+                  <ul className="divide-y divide-border border-t border-border">
+                    {visibleDone.map((t) => <TaskRowItem key={t.id} task={t} showQuadrant {...rowProps} />)}
+                  </ul>
+                )}
+              </Card>
+            )}
+          </>
+        )}
       </div>
 
       {/* Sticky bulk action bar (sits above the mobile bottom nav) */}
@@ -545,45 +668,77 @@ export function TasksPage({
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="More bulk actions"><MoreHorizontal className="h-4 w-4" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="top">
                 <DropdownMenuItem onClick={() => bulkReopen(effectiveSelected)}>
                   <RotateCcw className="mr-2 h-4 w-4" />Reopen
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-widest">Assign to</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => bulkAssign(null)}>Unassigned</DropdownMenuItem>
-                {assignees.map((a) => (
-                  <DropdownMenuItem key={a.id} onClick={() => bulkAssign(a.name)}>{a.name}</DropdownMenuItem>
-                ))}
+                {board === "team" && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-[10px] uppercase tracking-widest">Assign to</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => bulkAssign(null)}>Unassigned</DropdownMenuItem>
+                    {teamMembers.map((m) => (
+                      <DropdownMenuItem key={m.user_id} onClick={() => bulkAssign(m)}>
+                        {m.user_id === me ? "Me" : m.full_name}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
       )}
 
+      <QuadrantSheet
+        quadrant={openQuadrant}
+        style={openQuadrant ? quadStyles[openQuadrant] : null}
+        tasks={openQuadrant ? byQuadrant[openQuadrant] : []}
+        board={board}
+        onClose={() => setOpenQuadrant(null)}
+        onAdd={(text) => openQuadrant && void addTask(text, openQuadrant, { assignee: filterAssignee() })}
+        onCustomize={(p) => openQuadrant && updateQuadStyle(openQuadrant, p)}
+        onResetStyle={() => openQuadrant && resetQuadStyle(openQuadrant)}
+        rowProps={{ ...rowProps, selectMode: false }}
+      />
+
+      <TaskDetailSheet
+        task={detailTask}
+        quadStyles={quadStyles}
+        teamMembers={teamMembers}
+        me={me}
+        nameOf={nameOf}
+        onClose={() => setDetailId(null)}
+        onPatch={patchOne}
+        onComplete={completeOne}
+        onDelete={(t) => setConfirmDelete({ ids: [t.id], label: `“${t.title}”` })}
+        onShare={shareOne}
+        onMakePrivate={makePrivate}
+      />
+
       <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete {confirmDelete?.label}?</DialogTitle>
+            <DialogTitle className="break-words">Delete {confirmDelete?.label}?</DialogTitle>
             <DialogDescription>This cannot be undone.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => confirmDelete && runDelete(confirmDelete.ids)}>
-              Delete {confirmDelete?.ids.length}
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!confirmDelete) return;
+                if (detailId && confirmDelete.ids.includes(detailId)) setDetailId(null);
+                void runDelete(confirmDelete.ids);
+              }}
+            >
+              Delete{confirmDelete && confirmDelete.ids.length > 1 ? ` ${confirmDelete.ids.length}` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AssigneesDialog
-        open={assigneesOpen}
-        onOpenChange={setAssigneesOpen}
-        assignees={assignees}
-        setAssignees={setAssignees}
-      />
     </>
   );
 }
@@ -595,26 +750,62 @@ type RowProps = {
   selected: Set<string>;
   toggleSelected: (id: string) => void;
   quadStyles: Record<TaskQuadrant, QuadStyle>;
-  assignees: Assignee[];
+  teamMembers: TeamMember[];
+  me: string | null;
+  board: Board;
+  nameOf: (t: Pick<TaskRow, "assigned_to" | "assignee_name">) => string | null;
   onComplete: (t: TaskRow, done: boolean) => void;
   onDelete: (t: TaskRow) => void;
   onPatch: (t: TaskRow, patch: Partial<TaskRow>) => void;
+  onAssign: (t: TaskRow, m: TeamMember | null) => void;
+  onShare: (t: TaskRow, m: TeamMember | null) => void;
+  onMakePrivate: (t: TaskRow) => void;
+  onOpen: (t: TaskRow) => void;
   isMobile: boolean;
 };
 
-function TaskRow({ task, ...p }: { task: TaskRow } & RowProps) {
+/** Who a team task is for, as a menu: Unassigned + every teammate. */
+function PeopleItems({ members, me, current, onPick }: { members: TeamMember[]; me: string | null; current?: string | null; onPick: (m: TeamMember | null) => void }) {
+  return (
+    <>
+      <DropdownMenuItem onClick={() => onPick(null)}>
+        {current === null ? <Check className="mr-2 h-4 w-4" /> : <span className="mr-2 w-4" />}Unassigned
+      </DropdownMenuItem>
+      {members.map((m) => (
+        <DropdownMenuItem key={m.user_id} onClick={() => onPick(m)}>
+          {current === m.user_id ? <Check className="mr-2 h-4 w-4" /> : <span className="mr-2 w-4" />}
+          {m.user_id === me ? "Me" : m.full_name}
+        </DropdownMenuItem>
+      ))}
+    </>
+  );
+}
+
+function TaskRowItem({ task, showQuadrant = true, ...p }: { task: TaskRow; showQuadrant?: boolean } & RowProps) {
   const isDone = task.status === "done";
   const qs = p.quadStyles[task.quadrant];
   const isSelected = p.selected.has(task.id);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(task.title);
+  const personal = !!task.owner_user_id;
+  const assignee = p.nameOf(task);
+  const notesLine = (task.notes ?? "").split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+
+  const meta: React.ReactNode[] = [];
+  if (showQuadrant) {
+    meta.push(
+      <span key="q" className="inline-flex items-center gap-1">
+        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: qs.color }} />
+        {qs.title}
+      </span>,
+    );
+  }
+  if (!personal && p.board === "mine") meta.push(<span key="team" className="inline-flex items-center gap-0.5"><Users className="h-2.5 w-2.5" />Team</span>);
+  if (!personal && p.board === "team" && assignee) {
+    meta.push(<span key="who" className="font-semibold text-foreground/70">{task.assigned_to === p.me ? "Me" : firstName(assignee)}</span>);
+  }
 
   const body = (
     <li
-      className={cn(
-        "flex items-start gap-2.5 px-3 py-2",
-        isSelected && "bg-primary/5",
-      )}
+      className={cn("flex items-start gap-2.5 px-3 py-2", isSelected && "bg-primary/5")}
       onClick={p.selectMode ? () => p.toggleSelected(task.id) : undefined}
     >
       <Checkbox
@@ -624,36 +815,28 @@ function TaskRow({ task, ...p }: { task: TaskRow } & RowProps) {
         className="mt-0.5 h-[18px] w-[18px]"
         aria-label={p.selectMode ? "Select task" : "Complete task"}
       />
-      <div className="min-w-0 flex-1">
-        {editing ? (
-          <Input
-            autoFocus value={draft} onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => { setEditing(false); if (draft.trim() && draft !== task.title) p.onPatch(task, { title: draft.trim() }); }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              if (e.key === "Escape") { setDraft(task.title); setEditing(false); }
-            }}
-            className="h-7 text-sm"
-          />
-        ) : (
-          <div className={cn("text-sm leading-snug", isDone && "text-muted-foreground line-through")}>{task.title}</div>
+      <button
+        type="button"
+        className="min-w-0 flex-1 text-left"
+        onClick={(e) => { if (p.selectMode) return; e.stopPropagation(); p.onOpen(task); }}
+        tabIndex={p.selectMode ? -1 : 0}
+      >
+        <div className={cn("line-clamp-2 text-sm leading-snug", isDone && "text-muted-foreground line-through")}>{task.title}</div>
+        {notesLine && <div className="truncate text-xs leading-snug text-muted-foreground">{notesLine}</div>}
+        {meta.length > 0 && (
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground">
+            {meta.map((m, i) => <span key={i} className="inline-flex items-center gap-1.5">{i > 0 && <span aria-hidden>·</span>}{m}</span>)}
+          </div>
         )}
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: qs.color }} />
-            {qs.title}
-          </span>
-          {task.assignee_name && <span>· {task.assignee_name}</span>}
-        </div>
-      </div>
+      </button>
       {!p.selectMode && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0"><MoreHorizontal className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Task actions"><MoreHorizontal className="h-4 w-4" /></Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem onClick={() => { setDraft(task.title); setEditing(true); }}>
-              <Pencil className="mr-2 h-4 w-4" />Edit
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onClick={() => p.onOpen(task)}>
+              <Maximize2 className="mr-2 h-4 w-4" />Open
             </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger><ArrowRightLeft className="mr-2 h-4 w-4" />Move</DropdownMenuSubTrigger>
@@ -666,18 +849,21 @@ function TaskRow({ task, ...p }: { task: TaskRow } & RowProps) {
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger><Users className="mr-2 h-4 w-4" />Assign</DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuItem onClick={() => p.onPatch(task, { assignee_name: null })}>Unassigned</DropdownMenuItem>
-                {p.assignees.length === 0 && (
-                  <div className="px-2 py-1.5 text-[11px] text-muted-foreground">Add names in “Assignees”.</div>
-                )}
-                {p.assignees.map((a) => (
-                  <DropdownMenuItem key={a.id} onClick={() => p.onPatch(task, { assignee_name: a.name })}>{a.name}</DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+            {personal ? (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger><Users className="mr-2 h-4 w-4" />Send to team</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <PeopleItems members={p.teamMembers} me={p.me} onPick={(m) => p.onShare(task, m)} />
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger><UserRound className="mr-2 h-4 w-4" />Assign</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <PeopleItems members={p.teamMembers} me={p.me} current={task.assigned_to} onPick={(m) => p.onAssign(task, m)} />
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
             <DropdownMenuItem onClick={() => p.onComplete(task, !isDone)}>
               {isDone ? <><RotateCcw className="mr-2 h-4 w-4" />Restore</> : <><Check className="mr-2 h-4 w-4" />Complete</>}
             </DropdownMenuItem>
@@ -691,7 +877,7 @@ function TaskRow({ task, ...p }: { task: TaskRow } & RowProps) {
     </li>
   );
 
-  if (!p.isMobile || p.selectMode || editing) return body;
+  if (!p.isMobile || p.selectMode) return body;
   return (
     <TaskSwipeRow
       onSwipeRight={() => p.onComplete(task, !isDone)}
@@ -702,50 +888,131 @@ function TaskRow({ task, ...p }: { task: TaskRow } & RowProps) {
   );
 }
 
-// ---------------------------------------------------------------- matrix quadrant
+// ---------------------------------------------------------------- matrix
 
-function QuadrantPanel({
-  quadrant, style, tasks, defaultOpen, onCustomize, onResetStyle, onSelectAllHere, rowProps,
+/** One quadrant of the 2×2 overview: count, the first few tasks, and a way in. */
+function QuadrantPreview({
+  style, tasks, isMobile, nameOf, onOpen,
 }: {
-  quadrant: TaskQuadrant;
   style: QuadStyle;
   tasks: TaskRow[];
-  defaultOpen: boolean;
+  isMobile: boolean;
+  /** Team board: show who each task is for. */
+  nameOf?: (t: Pick<TaskRow, "assigned_to" | "assignee_name">) => string | null;
+  onOpen: () => void;
+}) {
+  const rows = isMobile ? PREVIEW_ROWS : PREVIEW_ROWS + 2;
+  const shown = tasks.slice(0, rows);
+  const more = tasks.length - shown.length;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex min-h-[148px] flex-col rounded-xl border p-2.5 text-left transition-transform active:scale-[0.99] md:min-h-[188px] md:p-3"
+      style={tintStyle(style.color)}
+      aria-label={`${style.title}: ${tasks.length} open. Open the full list.`}
+    >
+      <div className="flex w-full items-center gap-1.5">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-black tracking-tight md:text-sm" style={{ color: style.color }}>{style.title}</span>
+        <span
+          className="shrink-0 rounded-full border px-1.5 text-[10px] font-bold tabular-nums"
+          style={{ borderColor: `${style.color}80`, color: style.color }}
+        >
+          {tasks.length}
+        </span>
+      </div>
+      <div className="mb-1.5 truncate text-[10px] text-muted-foreground">{style.subtitle}</div>
+      {shown.length === 0 ? (
+        <div className="flex flex-1 items-center text-[11px] text-muted-foreground/80">Nothing here.</div>
+      ) : (
+        <ul className="flex-1 space-y-1">
+          {shown.map((t) => {
+            const who = nameOf?.(t);
+            return (
+              <li key={t.id} className="flex min-w-0 items-start gap-1.5 text-xs leading-snug">
+                <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: style.color }} />
+                <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                {who && <span className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline">{firstName(who)}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="mt-1.5 flex w-full items-center text-[11px] font-semibold" style={{ color: style.color }}>
+        <span>{more > 0 ? `+${more} more` : tasks.length > 0 ? "Open" : "Add"}</span>
+        <ChevronRight className="ml-auto h-3.5 w-3.5" />
+      </div>
+    </button>
+  );
+}
+
+/** A quadrant opened in full: every task, with add and all the row actions. */
+function QuadrantSheet({
+  quadrant, style, tasks, board, onClose, onAdd, onCustomize, onResetStyle, rowProps,
+}: {
+  quadrant: TaskQuadrant | null;
+  style: QuadStyle | null;
+  tasks: TaskRow[];
+  board: Board;
+  onClose: () => void;
+  onAdd: (text: string) => void;
   onCustomize: (p: Partial<QuadStyle>) => void;
   onResetStyle: () => void;
-  onSelectAllHere: (ids: string[]) => void;
   rowProps: RowProps;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
-  useEffect(() => { setOpen(defaultOpen); }, [defaultOpen]);
+  const [draft, setDraft] = useState("");
+  useEffect(() => { setDraft(""); }, [quadrant]);
+  const add = () => { if (draft.trim()) { onAdd(draft); setDraft(""); } };
   return (
-    <Card className="overflow-hidden border p-0" style={tintStyle(style.color)}>
-      <div className="flex items-center gap-2 px-2.5 py-2">
-        <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setOpen((o) => !o)}>
-          {open ? <ChevronDown className="h-4 w-4 shrink-0 opacity-60" /> : <ChevronRight className="h-4 w-4 shrink-0 opacity-60" />}
-          <span className="truncate text-sm font-black tracking-tight" style={{ color: style.color }}>{style.title}</span>
-          <Badge variant="outline" className="ml-auto shrink-0 text-[10px]" style={{ borderColor: `${style.color}80`, color: style.color }}>
-            {tasks.length}
-          </Badge>
-        </button>
-        {tasks.length > 0 && (
-          <Button variant="ghost" size="sm" className="h-7 px-1.5 text-[10px]" onClick={() => onSelectAllHere(tasks.map((t) => t.id))}>
-            Select
-          </Button>
+    <Sheet open={!!quadrant} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent
+        side="bottom"
+        hideCloseButton
+        className="flex max-h-[88dvh] flex-col gap-0 rounded-t-2xl p-0 md:inset-x-0 md:bottom-6 md:mx-auto md:max-w-xl md:rounded-2xl md:border"
+      >
+        {style && (
+          <>
+            <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 pb-2.5 pt-3">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: style.color }} />
+              <div className="min-w-0 flex-1">
+                <SheetTitle className="truncate text-base font-black tracking-tight" style={{ color: style.color }}>
+                  {style.title} <span className="text-sm font-semibold tabular-nums text-muted-foreground">{tasks.length}</span>
+                </SheetTitle>
+                <SheetDescription className="truncate text-[11px]">
+                  {style.subtitle} · {board === "mine" ? "My tasks" : "Team"}
+                </SheetDescription>
+              </div>
+              <QuadrantCustomizer style={style} onChange={onCustomize} onReset={onResetStyle} />
+              <Button variant="ghost" className="h-9 px-2.5 text-sm font-semibold text-primary hover:text-primary" onClick={onClose}>
+                Done
+              </Button>
+            </div>
+            <div className="shrink-0 border-b border-border px-3 py-1.5">
+              <div className="flex items-center gap-1.5">
+                <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <Input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+                  placeholder={`Add to ${style.title}…`}
+                  enterKeyHint="done"
+                  className="h-9 flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                />
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {tasks.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted-foreground">Nothing here.</div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {tasks.map((t) => <TaskRowItem key={t.id} task={t} showQuadrant={false} {...rowProps} />)}
+                </ul>
+              )}
+            </div>
+          </>
         )}
-        <QuadrantCustomizer style={style} onChange={onCustomize} onReset={onResetStyle} />
-      </div>
-      {open && (
-        tasks.length === 0 ? (
-          <div className="px-3 pb-3 text-[11px] text-muted-foreground">Nothing here.</div>
-        ) : (
-          <ul className="divide-y divide-border/60 border-t border-border/60 bg-card/60">
-            {tasks.map((t) => <TaskRow key={t.id} task={t} {...rowProps} />)}
-          </ul>
-        )
-      )}
-      <span className="sr-only">{quadrant}</span>
-    </Card>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -753,8 +1020,8 @@ function QuadrantCustomizer({ style, onChange, onReset }: { style: QuadStyle; on
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Customize quadrant">
-          <Settings2 className="h-3.5 w-3.5" />
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Customize quadrant">
+          <Settings2 className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 space-y-3">
@@ -784,128 +1051,192 @@ function QuadrantCustomizer({ style, onChange, onReset }: { style: QuadStyle; on
   );
 }
 
-// ---------------------------------------------------------------- assignees
+// ---------------------------------------------------------------- task detail
 
-function AssigneesDialog({
-  open, onOpenChange, assignees, setAssignees,
+/** A task opened in full: edit title and notes, category, who it's for, who sees it. */
+function TaskDetailSheet({
+  task, quadStyles, teamMembers, me, nameOf, onClose, onPatch, onComplete, onDelete, onShare, onMakePrivate,
 }: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  assignees: Assignee[];
-  setAssignees: React.Dispatch<React.SetStateAction<Assignee[]>>;
+  task: TaskRow | null;
+  quadStyles: Record<TaskQuadrant, QuadStyle>;
+  teamMembers: TeamMember[];
+  me: string | null;
+  nameOf: (t: Pick<TaskRow, "assigned_to" | "assignee_name">) => string | null;
+  onClose: () => void;
+  onPatch: (t: TaskRow, patch: Partial<TaskRow>) => void;
+  onComplete: (t: TaskRow, done: boolean) => void;
+  onDelete: (t: TaskRow) => void;
+  onShare: (t: TaskRow, m: TeamMember | null) => void;
+  onMakePrivate: (t: TaskRow) => void;
 }) {
-  const [name, setName] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
+  const openId = task?.id ?? null;
+  // Reset drafts only when a different task opens, so realtime refreshes never wipe typing.
+  useEffect(() => {
+    setTitle(task?.title ?? "");
+    setNotes(task?.notes ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId]);
 
-  const add = () => {
-    const n = name.trim();
-    if (!n) return;
-    setAssignees((arr) => [...arr, { id: newId(), name: n }]);
-    setName("");
+  const commitText = () => {
+    if (!task) return;
+    const patch: Partial<TaskRow> = {};
+    const t = title.trim();
+    if (t && t !== task.title) patch.title = t;
+    const n = notes.trim() ? notes : null;
+    if ((n ?? null) !== (task.notes ?? null)) patch.notes = n;
+    if (Object.keys(patch).length) onPatch(task, patch);
   };
-  const startEdit = (a: Assignee) => { setEditingId(a.id); setEditingName(a.name); };
-  const saveEdit = () => {
-    const n = editingName.trim();
-    if (n) setAssignees((arr) => arr.map((a) => (a.id === editingId ? { ...a, name: n } : a)));
-    setEditingId(null);
-  };
-  const deleteOne = (id: string) => {
-    setAssignees((arr) => arr.filter((a) => a.id !== id));
-    setSelected((s) => { const x = new Set(s); x.delete(id); return x; });
-  };
-  const toggleSelect = (id: string, on: boolean) =>
-    setSelected((s) => { const x = new Set(s); on ? x.add(id) : x.delete(id); return x; });
-  const allSelected = assignees.length > 0 && selected.size === assignees.length;
-  const someSelected = selected.size > 0 && !allSelected;
-  const toggleAll = (on: boolean) => setSelected(on ? new Set(assignees.map((a) => a.id)) : new Set());
-  const deleteSelected = () => {
-    setAssignees((arr) => arr.filter((a) => !selected.has(a.id)));
-    setSelected(new Set());
-  };
+  const close = () => { commitText(); onClose(); };
+
+  const isDone = task?.status === "done";
+  const personal = !!task?.owner_user_id;
+  const assignedName = task ? nameOf(task) : null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Manage assignees</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <Input
-              value={name} onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") add(); }}
-              placeholder="Add a name" className="h-9"
-            />
-            <Button onClick={add} className="h-9"><Plus className="mr-1 h-4 w-4" />Add</Button>
-          </div>
-
-          {assignees.length > 0 && (
-            <div className="flex items-center justify-between border-t border-border pt-2">
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Checkbox
-                  checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                  onCheckedChange={(v) => toggleAll(!!v)}
-                />
-                Select all
-              </label>
-              {selected.size > 0 && (
-                <Button variant="destructive" size="sm" onClick={deleteSelected}>
-                  <Trash2 className="mr-1 h-3.5 w-3.5" />Delete ({selected.size})
-                </Button>
-              )}
+    <Sheet open={!!task} onOpenChange={(o) => !o && close()}>
+      <SheetContent
+        side="bottom"
+        hideCloseButton
+        className="flex max-h-[92dvh] flex-col gap-0 rounded-t-2xl p-0 md:inset-x-0 md:bottom-6 md:mx-auto md:max-w-xl md:rounded-2xl md:border"
+      >
+        {task && (
+          <>
+            <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 pb-2 pt-3">
+              <SheetTitle className="flex-1 truncate text-sm font-bold text-muted-foreground">
+                {personal ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />My task · only you</span>
+                  : <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />Team task{assignedName ? ` · ${task.assigned_to === me ? "Me" : firstName(assignedName)}` : ""}</span>}
+              </SheetTitle>
+              <SheetDescription className="sr-only">Edit this task</SheetDescription>
+              <Button variant="ghost" className="h-9 px-2.5 text-sm font-semibold text-primary hover:text-primary" onClick={close}>
+                Done
+              </Button>
             </div>
-          )}
 
-          <div className="max-h-72 space-y-1 overflow-y-auto">
-            {assignees.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                No names yet. Add your first assignee above.
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 pb-4 pt-3">
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  checked={isDone}
+                  onCheckedChange={(v) => onComplete(task, !!v)}
+                  className="mt-1.5 h-5 w-5"
+                  aria-label={isDone ? "Mark open" : "Complete task"}
+                />
+                <AutoGrowTextarea
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
+                  onBlur={commitText}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
+                  rows={1}
+                  maxHeight={140}
+                  placeholder="Task"
+                  className={cn("min-h-0 flex-1 resize-none border-0 bg-transparent p-0 text-lg font-bold leading-snug shadow-none focus-visible:ring-0", isDone && "text-muted-foreground line-through")}
+                />
               </div>
-            ) : (
-              assignees.map((a) => {
-                const isEditing = editingId === a.id;
-                const isSelected = selected.has(a.id);
-                return (
-                  <div
-                    key={a.id}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md border px-2 py-1.5",
-                      isSelected ? "border-primary/60 bg-primary/5" : "border-border/60",
-                    )}
-                  >
-                    <Checkbox checked={isSelected} onCheckedChange={(v) => toggleSelect(a.id, !!v)} />
-                    {isEditing ? (
-                      <Input
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingId(null); }}
-                        autoFocus className="h-8 flex-1"
-                      />
-                    ) : (
-                      <span className="flex-1 truncate text-sm">{a.name}</span>
-                    )}
-                    {isEditing ? (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={saveEdit} aria-label="Save">
-                        <Check className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(a)} aria-label="Edit">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => deleteOne(a.id)} aria-label="Delete">
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
+
+              <AutoGrowTextarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                onBlur={commitText}
+                rows={3}
+                maxHeight={320}
+                placeholder="Notes"
+                className="min-h-[84px] resize-none rounded-lg bg-muted/40 text-[15px] leading-6"
+              />
+
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Category</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {QUADRANTS.map((q) => {
+                    const st = quadStyles[q.key];
+                    const on = task.quadrant === q.key;
+                    return (
+                      <button
+                        key={q.key}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => !on && onPatch(task, { quadrant: q.key })}
+                        className="min-h-10 rounded-md border px-1.5 text-xs font-bold"
+                        style={{
+                          color: st.color,
+                          borderColor: on ? st.color : `color-mix(in srgb, ${st.color} 40%, transparent)`,
+                          backgroundColor: `color-mix(in srgb, ${st.color} ${on ? 24 : 8}%, transparent)`,
+                          boxShadow: on ? `inset 0 0 0 1px ${st.color}` : undefined,
+                        }}
+                      >
+                        {st.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {personal ? (
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Send to team</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[null, ...teamMembers].map((m) => (
+                      <button
+                        key={m?.user_id ?? "none"}
+                        type="button"
+                        onClick={() => onShare(task, m)}
+                        className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                      >
+                        {m ? (m.user_id === me ? "Me" : firstName(m.full_name)) : "Team (unassigned)"}
+                      </button>
+                    ))}
                   </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+                  <p className="text-[11px] text-muted-foreground">Only you can see this until you send it.</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Assigned to</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[null, ...teamMembers].map((m) => {
+                      const on = (task.assigned_to ?? null) === (m?.user_id ?? null);
+                      return (
+                        <button
+                          key={m?.user_id ?? "none"}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => !on && onPatch(task, { assigned_to: m?.user_id ?? null, assignee_name: m?.full_name ?? null })}
+                          className={cn(
+                            "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                            on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {m ? (m.user_id === me ? "Me" : firstName(m.full_name)) : "Unassigned"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onMakePrivate(task)}
+                    className="inline-flex items-center gap-1 pt-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    <Lock className="h-3 w-3" />Make it my private task
+                  </button>
+                </div>
+              )}
+
+              <p className="text-[11px] text-muted-foreground">
+                Added {new Date(task.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                {isDone && task.completed_at ? ` · Done ${new Date(task.completed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : ""}
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2 border-t border-border px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5">
+              <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => onDelete(task)}>
+                <Trash2 className="mr-1.5 h-4 w-4" />Delete
+              </Button>
+              <Button className="ml-auto" variant={isDone ? "outline" : "default"} onClick={() => { commitText(); onComplete(task, !isDone); if (!isDone) onClose(); }}>
+                {isDone ? <><RotateCcw className="mr-1.5 h-4 w-4" />Reopen</> : <><Check className="mr-1.5 h-4 w-4" />Complete</>}
+              </Button>
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

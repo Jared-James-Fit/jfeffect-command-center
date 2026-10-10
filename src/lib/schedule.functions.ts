@@ -265,7 +265,9 @@ export const withdrawSessionChange = createServerFn({ method: "POST" })
 
 function feedUrls(token: string) {
   const origin = (process.env.PUBLIC_APP_URL || process.env.SITE_URL || "https://jfeffect.com").replace(/\/$/, "");
-  const https = `${origin}/api/public/calendar-feed?t=${token}`;
+  // Ends in .ics because some calendar apps refuse a link that doesn't; the
+  // feed route strips it before the token check.
+  const https = `${origin}/api/public/calendar-feed?t=${token}.ics`;
   const webcal = https.replace(/^https?:\/\//, "webcal://");
   const name = encodeURIComponent("JF Effect");
   return {
@@ -319,18 +321,53 @@ export const getMyCalendarSyncStatus = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const clientId = (await resolvePovClientId(supabase, userId, data))
       ?? (isPovRequest(userId, data) ? null : (await ownOrLinkedClient(userId))?.id ?? null);
-    if (!clientId) return { isClient: false, lastFetchAt: null as string | null, app: null as string | null };
+    if (!clientId) return { isClient: false, lastFetchAt: null as string | null, app: null as string | null, google: null };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row } = await (supabaseAdmin as any)
-      .from("client_calendar_sync")
-      .select("last_fetch_at, app")
-      .eq("client_id", clientId)
-      .maybeSingle();
+    const { clientGoogleStatus } = await import("@/lib/client-gcal.server");
+    const [{ data: row }, google] = await Promise.all([
+      (supabaseAdmin as any).from("client_calendar_sync").select("last_fetch_at, app").eq("client_id", clientId).maybeSingle(),
+      clientGoogleStatus(supabaseAdmin as any, clientId).catch(() => null),
+    ]);
     return {
       isClient: true,
       lastFetchAt: (row?.last_fetch_at as string | null) ?? null,
       app: (row?.app as string | null) ?? null,
+      google,
     };
+  });
+
+/**
+ * Connect Google Calendar, step 1: the Google sign-in address for the
+ * signed-in client (or the staff login linked to their client account).
+ * Google comes back to /api/public/google/oauth/callback.
+ */
+export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ returnTo: z.string().max(300).optional() }).parse(d ?? {}))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as any;
+    const mine = await ownOrLinkedClient(userId);
+    if (!mine) throw new Error("Only clients can connect a calendar.");
+    const { clientGoogleConfigured, clientAuthorizeUrl } = await import("@/lib/client-gcal.server");
+    if (!clientGoogleConfigured()) throw new Error("Google Calendar isn't set up for this app yet.");
+    const { signOAuthState } = await import("@/lib/google-cal.server");
+    const { safeReturnPath } = await import("@/lib/client-gcal");
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const origin = new URL(getRequest().url).origin;
+    const state = signOAuthState({ kind: "client_cal", client_id: mine.id, user_id: userId, ret: safeReturnPath(data.returnTo) });
+    return { url: await clientAuthorizeUrl(origin, state) };
+  });
+
+/** Disconnect Google Calendar: removes the JF Effect calendar from their Google account. */
+export const disconnectGoogleCalendar = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId } = context as any;
+    const mine = await ownOrLinkedClient(userId);
+    if (!mine) throw new Error("Only clients can connect a calendar.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { disconnectClientCalendar } = await import("@/lib/client-gcal.server");
+    return disconnectClientCalendar(supabaseAdmin as any, mine.id);
   });
 
 /**

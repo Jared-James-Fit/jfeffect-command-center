@@ -75,7 +75,7 @@ describe("the League tab", () => {
     expect(board).toContain("export function StrengthBoardSlide()");
     expect(board).toContain("<HallOfStrength />");
     expect(board).toContain("pickBoard(data, mode, lift, division, 5)");
-    expect(board).toContain("<HallOfStrength initialMode={mode} initialLift={lift} initialDivision={division} />");
+    expect(board).toContain("<HallOfStrength initialMode={mode} initialLift={lift} initialDivision={division} initialCareer={careerId} />");
     expect(card).toContain('<LeagueRecapHomeTile variant="mini" />');
     expect(recap).toContain("You finished ${ordinal(recap.me.rank)} place");
     expect(recap).toContain("{playing && <LeagueRecapStory recap={playing} open={!!playing} onClose={() => setPlaying(null)} />}");
