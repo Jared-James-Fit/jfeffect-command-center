@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { isChunkLoadError, attemptChunkReload } from "@/lib/chunk-recovery";
 import { reportLovableError } from "@/lib/lovable-error-reporting";
+import { supabase } from "@/integrations/supabase/client";
 
 type Props = {
   error: Error;
@@ -68,6 +69,24 @@ export function RouterErrorFallback({ error, reset }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryCount, chunkError, retryKey]);
 
+  // Retries are spent and the error screen is up: record what broke (support
+  // alert, deduped per user/route/message by the database) so the cause can be
+  // read in Support instead of guessed. Best effort; never blocks the screen.
+  const showing = !chunkError && retryCount >= MAX_AUTO_RETRIES;
+  useEffect(() => {
+    if (!showing || typeof window === "undefined") return;
+    const nav = window.navigator as Navigator & { standalone?: boolean };
+    void (supabase as any)
+      .rpc("report_page_error", {
+        _route: window.location.pathname,
+        _message: error?.message ?? String(error),
+        _stack: error?.stack ?? null,
+        _device: { ua: nav.userAgent, standalone: !!nav.standalone, w: window.innerWidth, h: window.innerHeight },
+      })
+      .then(() => {}, () => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showing]);
+
   if (chunkError) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
@@ -97,6 +116,7 @@ export function RouterErrorFallback({ error, reset }: Props) {
     );
   }
 
+
   if (retryCount < MAX_AUTO_RETRIES) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
@@ -122,7 +142,7 @@ export function RouterErrorFallback({ error, reset }: Props) {
             : "Please try again in a moment."}
         </p>
         {error?.message && (
-          <details className="mt-3 rounded-md border border-border bg-muted/30 p-2 text-left text-[11px] text-muted-foreground">
+          <details open className="mt-3 rounded-md border border-border bg-muted/30 p-2 text-left text-[11px] text-muted-foreground">
             <summary className="cursor-pointer select-none font-medium">
               Error details
             </summary>
