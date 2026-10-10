@@ -143,8 +143,7 @@ function Detail({
 
       {post.kind === "note" ? (
         <>
-          <NoteBody post={post} onOpenPerson={onOpenAuthor} />
-          {post.media_type && <div className="mt-2"><PostMedia post={post} thumbUrl={thumb} full /></div>}
+          <NoteBody post={post} onOpenPerson={onOpenAuthor} cover={post.media_type ? <PostMedia post={post} thumbUrl={thumb} full /> : undefined} />
           <NoteExtras post={post} unit={unit} className="mx-4 mb-2 mt-2" />
         </>
       ) : post.media_type || s || post.locked_in_at ? (

@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { BadgeCheck, ChevronLeft, ChevronRight, Lock, MessageCircle, Pin, Play, Send } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
@@ -91,10 +91,11 @@ export function CoachBadge({ className }: { className?: string }) {
  * a quiet series label, the featured quote with its speaker, then the words.
  * `clamp` keeps long notes tidy in the feed; the detail shows everything.
  */
-export function NoteBody({ post, clamp = false, onOpenPerson }: { post: CommunityPost; clamp?: boolean; onOpenPerson?: (a: CommunityAuthor) => void }) {
+export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: CommunityPost; clamp?: boolean; onOpenPerson?: (a: CommunityAuthor) => void; cover?: ReactNode }) {
   const series = post.series ? SERIES_LABEL[post.series] ?? null : null;
-  // Saturday: the picture says it, the words just sit under it
-  const scene = post.series === "saturday_spirit" ? extraScene(post.series_extra) : null;
+  // Saturday: the picture says it, the words just sit under it. A photo of
+  // the coach's own (the note's cover) takes the drawn scene's place.
+  const scene = post.series === "saturday_spirit" && !cover ? extraScene(post.series_extra) : null;
   return (
     <div className="px-4 pb-1 pt-1">
       {series && (
@@ -103,6 +104,7 @@ export function NoteBody({ post, clamp = false, onOpenPerson }: { post: Communit
           <span className="truncate text-muted-foreground/70">· {extraTipKind(post.series_extra) ?? series.tagline}</span>
         </div>
       )}
+      {cover && <div className="-mx-1 mb-3 overflow-hidden rounded-2xl">{cover}</div>}
       {scene && isSpiritScene(scene) && <SpiritScene scene={scene} className="mb-3 rounded-2xl" />}
       {post.quote && (
         <figure className="mb-3 border-l-[3px] border-primary pl-3.5">
@@ -112,7 +114,7 @@ export function NoteBody({ post, clamp = false, onOpenPerson }: { post: Communit
         </figure>
       )}
       {post.caption && (
-        <p className={cn("whitespace-pre-line leading-[1.45]", scene ? "text-[17px] font-semibold" : "text-[15px]", clamp && "line-clamp-[8]")}>
+        <p className={cn("whitespace-pre-line leading-[1.45]", scene || cover ? "text-[17px] font-semibold" : "text-[15px]", clamp && "line-clamp-[8]")}>
           <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenPerson} />
         </p>
       )}
@@ -334,9 +336,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       <div role="button" tabIndex={0} onClick={onHeroTap} onKeyDown={(e) => e.key === "Enter" && onOpen(post)} className="relative cursor-pointer select-none" aria-label="Open workout">
         {isNote ? (
           <>
-            <NoteBody post={post} clamp onOpenPerson={onOpenAuthor} />
+            <NoteBody post={post} clamp onOpenPerson={onOpenAuthor} cover={post.media_type ? <PostMedia post={post} thumbUrl={thumbUrl} /> : undefined} />
             {/* a coach post's photos / videos, under its words */}
-            {post.media_type && <div className="mt-2"><PostMedia post={post} thumbUrl={thumbUrl} /></div>}
             <NoteExtras post={post} unit={unit} className="mx-4 mb-1 mt-2" />
           </>
         ) : post.media_type ? (

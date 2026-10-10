@@ -546,7 +546,7 @@ describe("Monday Motivation + Finish Strong Friday: real coach posts", () => {
     expect(sql).toContain("CHECK ((kind = 'workout') = (completion_id IS NOT NULL))");
     expect(sql).toContain("'note', 'community', v_item.body");
     expect(sql).toContain("LEFT JOIN public.pl_day_completions pc ON pc.id = n.completion_id");
-    expect(card).toContain("<NoteBody post={post} clamp onOpenPerson={onOpenAuthor} />");
+    expect(card).toContain("<NoteBody post={post} clamp onOpenPerson={onOpenAuthor} cover=");
   });
   it("publish once per theme per week, Winnipeg time, never twice even after a delete", () => {
     expect(sql).toContain("AT TIME ZONE 'America/Winnipeg'");
