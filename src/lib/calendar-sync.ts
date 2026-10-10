@@ -53,13 +53,25 @@ export type CalendarChoice = {
    * web: the provider's phone app can't add a calendar from a link at all
    *   (Google, Outlook), so the client gets the steps that do work: send the
    *   link to a computer, or use the provider's desktop site on the phone.
+   * connect: sign in with Google once; the app keeps a JF Effect calendar in
+   *   their account itself (client-gcal.server.ts). Same on every device.
    */
-  how: "subscribe" | "link" | "web";
+  how: "subscribe" | "link" | "web" | "connect";
 };
 
 /** The calendars worth offering on this device, the one it most likely uses first. */
-export function calendarChoices(p: DevicePlatform): CalendarChoice[] {
+export function calendarChoices(p: DevicePlatform, opts: { googleConnect?: boolean } = {}): CalendarChoice[] {
   const phone = p === "ios" || p === "android";
+  if (opts.googleConnect) {
+    const list = calendarChoices(p);
+    return list.map((c) =>
+      c.id === "google"
+        ? { ...c, hint: "Sign in with Google, done", how: "connect" }
+        : c.id === "apple" && p === "ios"
+          ? { ...c, hint: "One tap, built into iPhone" }
+          : c,
+    );
+  }
   const apple: CalendarChoice = {
     id: "apple",
     label: "Apple Calendar",
@@ -86,6 +98,7 @@ export function calendarChoices(p: DevicePlatform): CalendarChoice[] {
 /** Card copy while waiting for the first fetch, by the calendar the client picked. */
 export function connectingMessage(app: string | null | undefined): string {
   if (app === "Apple Calendar") return "Tap Subscribe when your phone asks. This turns green as soon as it checks in.";
+  if (app === "Google sign-in") return "Finish signing in with Google. This turns green as soon as your calendar is connected.";
   if (app === "Google Calendar") return "Finish on Google's website. This turns green a few minutes after you tap Add.";
   if (app === "Outlook") return "Finish on Outlook's website. This turns green once Outlook checks in.";
   return "Waiting for your calendar app to check in.";
