@@ -364,7 +364,6 @@ export function ChatImageAttachment({
             });
             tryNextCandidate(httpCategory);
           }}
-          draggable={false}
         />
       )}
     </button>

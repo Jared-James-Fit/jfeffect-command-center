@@ -44,7 +44,7 @@ describe("typed reps / RPE validation", () => {
 
 describe("partial optimistic patches", () => {
   it("an RPE-only patch never wipes the set's load", () => {
-    const rows = [{ id: "a", row_id: "r", set_index: 2, actual_load: 315, entered_value: 315, normalized_lb: 315, normalized_kg: 142.88 }];
+    const rows = [{ id: "a", row_id: "r", set_index: 2, actual_load: 315, entered_value: 315, normalized_lb: 315, normalized_kg: 142.88, actual_rpe_num: null }];
     const out = applyOptimisticSetResult(rows, { row_id: "r", set_index: 2, actual_rpe: "7", actual_rpe_num: 7 }, "a")!;
     expect(out[0].normalized_lb).toBe(315);
     expect(out[0].normalized_kg).toBe(142.88);

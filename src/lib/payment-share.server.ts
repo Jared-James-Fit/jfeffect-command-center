@@ -279,8 +279,9 @@ export async function resolveShareToken(token: string): Promise<ResolvedTokenDes
   }
 
   // Links never expire on their own. They only stop at an explicit expiry date.
-  if (isPastExplicitExpiry(purchase.payment_link_expires_at)) {
-    const when = new Date(purchase.payment_link_expires_at).toLocaleDateString("en-CA", {
+  const explicitExpiry = purchase.payment_link_expires_at;
+  if (explicitExpiry && isPastExplicitExpiry(explicitExpiry)) {
+    const when = new Date(explicitExpiry).toLocaleDateString("en-CA", {
       year: "numeric", month: "long", day: "numeric", timeZone: "America/Winnipeg",
     });
     return {
