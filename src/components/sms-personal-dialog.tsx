@@ -13,10 +13,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { sendBulkSms } from "@/lib/sms.functions";
 import { toast } from "sonner";
 import { Search, Send, Users, AlertTriangle } from "lucide-react";
-
-function render(tpl: string, vars: Record<string, string>) {
-  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
-}
+import { CLIENT_COACH_EMBED, renderSmsTemplate as render, resolveCoachName } from "@/lib/sms-identity";
 
 export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const send = useServerFn(sendBulkSms);
@@ -28,14 +25,14 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   const { data: settings } = useQuery({
     queryKey: ["sms-settings"],
-    queryFn: async () => (await supabase.from("sms_settings").select("brand_name,from_phone,enabled").eq("singleton", true).maybeSingle()).data,
+    queryFn: async () => (await supabase.from("sms_settings").select("brand_name,default_coach_name,from_phone,enabled").eq("singleton", true).maybeSingle()).data,
     enabled: open,
   });
 
   const { data: clients } = useQuery({
     queryKey: ["sms-personal-clients"],
     queryFn: async () => (await supabase.from("clients")
-      .select("id, full_name, first_name, phone, sms_opt_out")
+      .select(`id, full_name, first_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`)
       .eq("archived", false).order("full_name")).data ?? [],
     enabled: open,
   });
@@ -57,6 +54,7 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
     ? render(body, {
         first_name: previewClient.first_name ?? previewClient.full_name?.split(" ")[0] ?? "there",
         full_name: previewClient.full_name ?? "",
+        coach: resolveCoachName((previewClient as any).coach, (settings as any)?.default_coach_name),
         brand: settings?.brand_name ?? "",
       })
     : body;
@@ -129,7 +127,7 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
               <Textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} maxLength={1000}
                 placeholder={"Hey {first_name}, quick reminder…"} />
               <div className="flex justify-between text-[11px] text-muted-foreground">
-                <span>Tags: {"{first_name}"} {"{full_name}"} {"{brand}"}</span>
+                <span>Tags: {"{first_name}"} {"{coach}"} {"{brand}"} {"{full_name}"}</span>
                 <span>{body.length}/1000</span>
               </div>
 

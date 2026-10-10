@@ -2,6 +2,7 @@ import { useRouter, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/app-shell";
+import { ChatMediaHeader } from "@/components/settings/chat-media-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,12 +20,14 @@ import {
 } from "@/lib/chat-sounds";
 import { playSound, stopSound, subscribeSound } from "@/lib/sound-player";
 
-export function ChatSoundsRedirect() {
-  const nav = useNavigate();
-  useEffect(() => {
-    nav({ to: "/admin/communication", search: { tab: "media-libraries", sub: "sounds" } as any, replace: true });
-  }, [nav]);
-  return null;
+/** Settings → Chat media → Sounds (moved out of Communication). */
+export function ChatSoundsSettingsPage() {
+  return (
+    <>
+      <ChatMediaHeader active="sounds" />
+      <ChatSoundsPage embedded />
+    </>
+  );
 }
 
 type FormState = {

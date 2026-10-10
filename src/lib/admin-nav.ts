@@ -68,7 +68,7 @@ export const adminNav: NavItem[] = [
   // TEAM / OPS
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
   { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team / Ops" },
-  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Team / Ops" },
+  { to: "/admin/support-alerts", label: "Support", icon: AlertCircle, group: "Team / Ops" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team / Ops" },
   { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Team / Ops" },
   { to: "/admin/business-systems", label: "Operations", icon: Briefcase, group: "Team / Ops" },
@@ -126,7 +126,7 @@ export const coachingAdminNav: NavItem[] = [
   // TEAM / OPS
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team / Ops" },
   { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team / Ops" },
-  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle, group: "Team / Ops" },
+  { to: "/admin/support-alerts", label: "Support", icon: AlertCircle, group: "Team / Ops" },
   { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team / Ops" },
   { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Team / Ops" },
   { to: "/admin/business-systems", label: "Operations", icon: Briefcase, group: "Team / Ops" },
@@ -147,7 +147,7 @@ export const coachNav: NavItem[] = [
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardList },
   { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck },
-  { to: "/admin/support-alerts", label: "Support Alerts", icon: AlertCircle },
+  { to: "/admin/support-alerts", label: "Support", icon: AlertCircle },
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone },
   { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat },
   { to: "/admin/calendar", label: "Calendar", icon: Calendar, keywords: ["calendar", "appointments", "booking", "booking links", "pt calendar", "google calendar", "availability", "schedule"] },

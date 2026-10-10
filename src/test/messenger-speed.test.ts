@@ -116,9 +116,13 @@ describe("messages first open", () => {
   it("only bundles the Messages tab with the communication page", () => {
     const pages = "@/route-pages/_authenticated/admin";
     expect(communication).toContain(`import { MessagesInbox } from "${pages}/messages";`);
-    for (const mod of ["broadcasts", "membership.support", "support-alerts", "chat-gifs", "chat-sounds", "popups"].map((m) => `${pages}/${m}`)) {
+    for (const mod of [`${pages}/broadcasts`, "@/components/support/support-messenger"]) {
       expect(communication).not.toContain(`from "${mod}"`);
       expect(communication).toContain(`import("${mod}")`);
+    }
+    // Popups and chat media moved to Settings: never bundled here.
+    for (const mod of ["membership.support", "support-alerts", "chat-gifs", "chat-sounds", "popups"].map((m) => `${pages}/${m}`)) {
+      expect(communication).not.toContain(`"${mod}"`);
     }
   });
 

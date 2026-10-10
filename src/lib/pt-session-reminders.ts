@@ -15,6 +15,7 @@
  *   session is still 2+ hours out),
  * - the client turned texts off, has no phone, or the session is hidden.
  */
+import { smsSender } from "@/lib/sms-identity";
 import { addDaysISO, fmtClock, fmtDayLabel, localDateISO, localHour, wallTimeToUtc } from "@/lib/schedule-time";
 
 export const REMINDER_LOCAL_TIME = "18:00";
@@ -100,6 +101,8 @@ function sessionName(title: string | null | undefined): string {
 export type ReminderTextInput = {
   firstName: string | null | undefined;
   brand: string | null | undefined;
+  /** Assigned coach's first name: "this is Jared from JF Effect". */
+  coach?: string | null;
   title: string | null | undefined;
   startsAt: Date;
   tz: string | null | undefined;
@@ -111,7 +114,7 @@ export type ReminderTextInput = {
 
 export function buildSessionReminderSms(i: ReminderTextInput): string {
   const name = (i.firstName ?? "").trim() || "there";
-  const brand = (i.brand ?? "").trim() || "your coach";
+  const brand = smsSender(i.coach, i.brand);
   const word = relativeDayWord(i.startsAt, i.now, i.tz);
   const day = fmtDayLabel(i.startsAt, i.tz);
   const when = word ? `${word} (${day})` : `on ${day}`;
@@ -126,6 +129,7 @@ export type ChangeTextInput = {
   kind: "moved" | "cancelled";
   firstName: string | null | undefined;
   brand: string | null | undefined;
+  coach?: string | null;
   title: string | null | undefined;
   tz: string | null | undefined;
   /** For "moved": the new start. For "cancelled": the cancelled start. */
@@ -136,7 +140,7 @@ export type ChangeTextInput = {
 
 export function buildSessionChangeSms(i: ChangeTextInput): string {
   const name = (i.firstName ?? "").trim() || "there";
-  const brand = (i.brand ?? "").trim() || "your coach";
+  const brand = smsSender(i.coach, i.brand);
   const when = `${fmtDayLabel(i.startsAt, i.tz)} at ${fmtClock(i.startsAt, i.tz)}`;
   if (i.kind === "cancelled") {
     return gsmSafe(`Hi ${name}, this is ${brand}. Your ${sessionName(i.title)} on ${when} is cancelled. Your schedule: ${i.link}`);

@@ -11,10 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MessageSquare } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-
-function render(tpl: string, vars: Record<string, string>) {
-  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
-}
+import { CLIENT_COACH_EMBED, renderSmsTemplate as render, resolveCoachName } from "@/lib/sms-identity";
 
 export function SendSmsDialog({
   open, onOpenChange, clientId, clientName, firstName, phone,
@@ -34,17 +31,26 @@ export function SendSmsDialog({
     },
     enabled: open,
   });
+  const { data: coachRow, isFetched: coachFetched } = useQuery({
+    queryKey: ["sms-client-coach", clientId],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("clients").select(CLIENT_COACH_EMBED).eq("id", clientId).maybeSingle();
+      return (data as any)?.coach ?? null;
+    },
+    enabled: open && !!clientId,
+  });
 
   useEffect(() => {
-    if (open && settings && !body) {
+    if (open && settings && coachFetched && !body) {
       setBody(render(settings.manual_default_template ?? "", {
         first_name: firstName ?? clientName?.split(" ")[0] ?? "there",
         full_name: clientName ?? "",
-        brand: settings.brand_name ?? "Jared James Coaching",
+        coach: resolveCoachName(coachRow, (settings as any).default_coach_name),
+        brand: settings.brand_name ?? "",
       }));
     }
     if (!open) setBody("");
-  }, [open, settings, firstName, clientName, body]);
+  }, [open, settings, coachRow, coachFetched, firstName, clientName, body]);
 
   const doSend = async () => {
     if (!body.trim()) return toast.error("Message is empty");

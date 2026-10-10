@@ -1,20 +1,17 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, Zap } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { MessagesInbox } from "@/route-pages/_authenticated/admin/messages";
+import { useAdminNavBadgeCounts } from "@/hooks/use-admin-nav-badges";
 
 // Only the Messages tab ships with this page. The rest load on first visit so
-// opening Messages doesn't download and parse five unrelated admin screens.
+// opening Messages doesn't download and parse unrelated admin screens.
 const AdminBroadcasts = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/broadcasts").then((m) => ({ default: m.AdminBroadcasts })));
-const SupportInbox = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/membership.support").then((m) => ({ default: m.SupportInbox })));
-const SupportAlertsPage = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/support-alerts").then((m) => ({ default: m.SupportAlertsPage })));
-const ChatGifsPage = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/chat-gifs").then((m) => ({ default: m.ChatGifsPage })));
-const ChatSoundsPage = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/chat-sounds").then((m) => ({ default: m.ChatSoundsPage })));
-const PopupsManager = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/popups").then((m) => ({ default: m.PopupsManager })));
+const SupportMessenger = lazyWithRetry(() => import("@/components/support/support-messenger").then((m) => ({ default: m.SupportMessenger })));
 
 function TabFallback() {
   return (
@@ -25,14 +22,19 @@ function TabFallback() {
 }
 
 const TABS = [
-  { value: "messages", label: "Messages" },
+  { value: "messages", label: "1:1 Chats" },
+  { value: "groups", label: "Groups" },
+  { value: "support", label: "Support" },
   { value: "broadcasts", label: "Broadcasts" },
-  { value: "support-inbox", label: "Support Inbox" },
-  { value: "support-alerts", label: "Support Alerts" },
-  { value: "media-libraries", label: "Media Libraries" },
-  { value: "popups", label: "Popups" },
 ] as const;
 type TabKey = typeof TABS[number]["value"];
+
+/** Old tab names (bookmarks, notifications, redirects) → where that lives now. */
+const LEGACY_TABS: Record<string, TabKey> = { "support-inbox": "support", "support-alerts": "support" };
+const MOVED_TO_SETTINGS: Record<string, string> = {
+  popups: "/admin/popups",
+  "media-libraries": "/admin/chat-gifs",
+};
 
 const LAST_TAB_KEY = "jf-admin-communication-last-tab";
 
@@ -44,7 +46,7 @@ type Search = { tab: TabKey; client?: string; sub?: string };
 
 export const Route = createFileRoute("/_authenticated/admin/communication")({
   validateSearch: (raw: Record<string, unknown>): Search => {
-    const t = raw?.tab;
+    const t = typeof raw?.tab === "string" && LEGACY_TABS[raw.tab] ? LEGACY_TABS[raw.tab] : raw?.tab;
     const client = typeof raw?.client === "string" ? (raw.client as string) : undefined;
     const sub = typeof raw?.sub === "string" ? (raw.sub as string) : undefined;
     if (isTab(t)) return { tab: t, client, sub };
@@ -56,13 +58,22 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
     }
     return { tab: "messages", client, sub };
   },
+  beforeLoad: ({ location }) => {
+    const raw = (location.search as Record<string, unknown>)?.tab;
+    if (typeof raw === "string" && MOVED_TO_SETTINGS[raw]) {
+      const to = raw === "media-libraries" && (location.search as any)?.sub === "sounds" ? "/admin/chat-sounds" : MOVED_TO_SETTINGS[raw];
+      throw redirect({ to: to as any, replace: true });
+    }
+  },
   component: CommunicationWorkspace,
 });
 
 function CommunicationWorkspace() {
   const { tab, client, sub } = Route.useSearch();
   const navigate = useNavigate();
-  const viewportLockedTab = tab === "messages" || tab === "support-inbox";
+  const viewportLockedTab = tab === "messages" || tab === "groups" || tab === "support";
+  const { data: badgeCounts } = useAdminNavBadgeCounts();
+  const supportCount = (badgeCounts?.supportAlerts ?? 0) + (badgeCounts?.supportTickets ?? 0);
 
   // Tabs scroll sideways on phones: fade whichever edge has more tabs, and
   // keep the active tab in view.
@@ -162,14 +173,14 @@ function CommunicationWorkspace() {
       <div className="hidden md:block">
         <PageHeader
           title="Communication"
-          subtitle="Manage messages, broadcasts, support, chat assets, and in-app communication."
+          subtitle="Chats, group chats, support and broadcasts. Popups and chat media live in Settings."
         />
       </div>
-      <div className="shrink-0 border-b border-border bg-background/50">
+      <div className="flex shrink-0 items-center border-b border-border bg-background/50">
         <div
           ref={tabsRef}
           onScroll={updateTabFade}
-          className="-mb-px flex overflow-x-auto px-1.5 md:gap-1 md:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="-mb-px flex min-w-0 flex-1 overflow-x-auto px-1.5 md:gap-1 md:px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           style={tabFade ? { WebkitMaskImage: tabFade, maskImage: tabFade } : undefined}
         >
           {TABS.map((t) => {
@@ -189,50 +200,45 @@ function CommunicationWorkspace() {
                 aria-current={active ? "page" : undefined}
               >
                 {t.label}
+                {t.value === "support" && supportCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-destructive px-1.5 align-[1px] text-[10px] font-bold leading-4 text-destructive-foreground">
+                    {supportCount}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
+        <Link
+          to="/admin/automations"
+          aria-label="Automations"
+          title="Automated texts, messages and posts"
+          className="mr-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground md:mr-4 md:w-auto md:gap-1 md:px-3 md:inline-flex md:text-xs md:font-semibold"
+        >
+          <Zap className="h-4 w-4" />
+          <span className="hidden md:inline">Automations</span>
+        </Link>
       </div>
       {/* Chat-like tabs own their own scroll (inbox list + thread).
           Page-style tabs scroll the whole panel. Mixing the two causes the
           messenger header/sidebar to drift as the outer container scrolls. */}
       {viewportLockedTab ? (
         <div className="min-h-0 flex-1 overflow-hidden">
-          {tab === "messages" && <MessagesInbox initialClient={client} embedded />}
-          {tab === "support-inbox" && <Suspense fallback={<TabFallback />}><SupportInbox embedded /></Suspense>}
+          {tab === "messages" && <MessagesInbox key="chats" initialClient={client} embedded view="chats" />}
+          {tab === "groups" && <MessagesInbox key="groups" embedded view="groups" />}
+          {tab === "support" && (
+            <Suspense fallback={<TabFallback />}>
+              <SupportMessenger sub={sub} onOpen={(next) => navigate({ to: "/admin/communication", search: { tab: "support", ...(next ? { sub: next } : {}) } as any })} />
+            </Suspense>
+          )}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
           <Suspense fallback={<TabFallback />}>
-            {tab === "support-alerts" && <SupportAlertsPage embedded />}
             {tab === "broadcasts" && <AdminBroadcasts embedded />}
-            {tab === "media-libraries" && <MediaLibrariesPanel sub={sub} />}
-            {tab === "popups" && <PopupsManager embedded />}
           </Suspense>
         </div>
       )}
-    </div>
-  );
-}
-
-function MediaLibrariesPanel({ sub }: { sub?: string }) {
-  const navigate = useNavigate();
-  const active = sub === "sounds" ? "sounds" : "gifs";
-  const setSub = (next: "gifs" | "sounds") => {
-    navigate({
-      to: "/admin/communication",
-      search: { tab: "media-libraries", sub: next } as any,
-      replace: false,
-    });
-  };
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2 px-4 pt-4 md:px-6">
-        <Button size="sm" variant={active === "gifs" ? "default" : "outline"} onClick={() => setSub("gifs")}>GIFs</Button>
-        <Button size="sm" variant={active === "sounds" ? "default" : "outline"} onClick={() => setSub("sounds")}>Sounds</Button>
-      </div>
-      {active === "gifs" ? <ChatGifsPage embedded /> : <ChatSoundsPage embedded />}
     </div>
   );
 }

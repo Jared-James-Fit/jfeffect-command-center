@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Users, Calendar, DollarSign, Plus, Video, ShoppingCart,
-  HardDrive, ChefHat, FileText, Megaphone, ClipboardList, Mic,
+  HardDrive, ChefHat, FileText, Megaphone, ClipboardList, Mic, Zap,
   MessageCircle, MoreHorizontal, Activity, Sparkles, Check, Dumbbell, Trophy, TrendingUp,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
@@ -438,6 +438,7 @@ function AdminDashboard() {
     { label: "Add Product",    to: "/admin/payment-links", icon: ShoppingCart },
     { label: "Apps & Tools",   to: "/admin/apps",          icon: Sparkles },
     { label: "My Voice",       to: "/admin/voice",         icon: Mic },
+    { label: "Automations",    to: "/admin/automations",   icon: Zap },
   ];
 
   if (offlineNoCache) return <DashboardOfflineEmpty />;
