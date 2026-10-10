@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowRight, ChevronRight, Flame, Heart, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -122,7 +122,10 @@ export function CommunityHomeStrip() {
 }
 
 /** One post on Home, big enough to read: who and when along the top, the post, its likes and comments. */
-function CrewCard({ post, unit, thumb, fresh, onOpen }: { post: CommunityPost; unit: "kg" | "lb"; thumb: string | null; fresh: boolean; onOpen: () => void }) {
+function CrewCard({ post, unit, thumb: signed, fresh, onOpen }: { post: CommunityPost; unit: "kg" | "lb"; thumb: string | null; fresh: boolean; onOpen: () => void }) {
+  // a picture that failed to load is shown (and dressed) as the card instead
+  const [broken, setBroken] = useState<string | null>(null);
+  const thumb = signed && signed !== broken ? signed : null;
   // on screen (half of it) for two seconds = a view, here too
   const ref = useRef<HTMLButtonElement | null>(null);
   usePostViewTracker(ref, post);
@@ -145,7 +148,7 @@ function CrewCard({ post, unit, thumb, fresh, onOpen }: { post: CommunityPost; u
       className="relative h-full w-[82%] shrink-0 snap-center snap-always overflow-hidden rounded-[20px] bg-muted text-left transition-transform active:scale-[0.98]"
       aria-label={live ? `${name} is training now` : `${name}'s post${fresh ? ", new" : ""}`}
     >
-      <PostTileFace post={post} thumb={thumb} unit={unit} footer={counts} large />
+      <PostTileFace post={post} thumb={thumb} unit={unit} footer={counts} large onBroken={setBroken} />
       {/* who and when: over a soft shade on a photo; a note card is light or dark with the theme */}
       <span className={cn("absolute inset-x-0 top-0 flex items-center gap-1.5 px-3 pb-5 pt-2.5", photo ? "bg-gradient-to-b from-black/55 to-transparent text-white" : post.kind === "note" ? "text-foreground" : "text-white")}>
         <UserAvatar src={post.author.avatar_url} name={post.author.name} size={24} expandable={false} />
