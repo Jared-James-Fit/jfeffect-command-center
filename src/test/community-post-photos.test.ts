@@ -69,3 +69,22 @@ describe("photos on every post, same rules as sharing a workout", () => {
     expect(read("src/components/community/admin-community-hub.tsx")).toContain('media={{ initial: null, key: "new-post" }}');
   });
 });
+
+describe("Saturday's drawn scene is an editable cover", () => {
+  const editor = read("src/components/community/note-editor.tsx");
+  const actions = read("src/components/community/post-actions.tsx");
+  const sql = read("supabase/migrations/20261028090000_community_remove_note_scene.sql");
+  it("the editor shows it as the cover, with Remove, until a photo replaces it", () => {
+    expect(editor).toContain("{scene && !dropScene && draft.tray.items.length === 0 && (");
+    expect(editor).toContain("Cover: drawn scene");
+    expect(actions).toContain('const drawn = post.series === "saturday_spirit" && !post.media_type ? extraScene(post.series_extra) : null;');
+  });
+  it("removing it, or putting a photo on, takes the drawing off for good (removing the photo later leaves no picture)", () => {
+    expect(editor).toContain("const offScene = scene && (dropScene || (media && draft.changed && draft.tray.items.length > 0)) ? scene.onRemove : null;");
+    expect(sql).toContain("nullif(p.series_data - 'scene', '{}'::jsonb)");
+  });
+  it("only the note's author or staff, signed in", () => {
+    expect(sql).toContain("AND (p.author_user_id = public.community_main_account(uid) OR public.is_community_staff())");
+    expect(sql).toContain("REVOKE ALL ON FUNCTION public.community_remove_note_scene(uuid) FROM public, anon;");
+  });
+});

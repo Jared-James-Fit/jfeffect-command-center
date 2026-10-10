@@ -6,8 +6,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { NoteEditor } from "@/components/community/note-editor";
 import { EditPostSheet } from "@/components/community/edit-post-sheet";
 import type { CommunityPost } from "@/lib/community";
-import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useSetPostMedia, useUpdateNote } from "@/lib/community.queries";
-import { postSlides } from "@/lib/community";
+import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useRemoveNoteScene, useSetPostMedia, useUpdateNote } from "@/lib/community.queries";
+import { extraScene, postSlides } from "@/lib/community";
+import { isSpiritScene } from "@/components/community/spirit-scenes";
 
 /**
  * The "…" on a post, Instagram-style. Your own post: Edit, Archive (only you
@@ -23,6 +24,10 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
   const archive = useArchivePost();
   const updateNote = useUpdateNote();
   const setMedia = useSetPostMedia();
+  const removeScene = useRemoveNoteScene();
+  // Saturday's drawn scene (only while there's no photo: a photo is the cover)
+  const drawn = post.series === "saturday_spirit" && !post.media_type ? extraScene(post.series_extra) : null;
+  const sceneKey = drawn && isSpiritScene(drawn) ? drawn : null;
   const leave = useLeavePost();
   const me = useMyCommunityId();
 
@@ -136,9 +141,10 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
           title="Edit post"
           initial={post.caption ?? ""}
           quote={post.quote ? { text: post.quote, author: post.quote_author ?? null } : null}
-          saving={updateNote.isPending || setMedia.isPending}
+          saving={updateNote.isPending || setMedia.isPending || removeScene.isPending}
           onClose={() => setEditing(false)}
           media={{ initial: postSlides(post), key: post.id }}
+          scene={sceneKey ? { key: sceneKey, onRemove: () => removeScene.mutateAsync(post.id) } : undefined}
           onSave={async (body, _poll, media) => {
             await updateNote.mutateAsync({ postId: post.id, body });
             if (media) await setMedia.mutateAsync({ postId: post.id, media });

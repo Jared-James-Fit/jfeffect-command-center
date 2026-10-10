@@ -1036,6 +1036,21 @@ export function useSetPostMedia() {
   });
 }
 
+/** Take Saturday's drawn scene off a note (the words alone, or a photo of your own as the cover). */
+export function useRemoveNoteScene() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      const { error } = await db.rpc("community_remove_note_scene", { _post_id: postId });
+      if (error) throw error;
+    },
+    onSuccess: (_d, postId) => {
+      invalidateCommunity(qc);
+      qc.invalidateQueries({ queryKey: communityKeys.post(postId) });
+    },
+  });
+}
+
 /** The author edits a workout post: caption, who it's for, hide weights. */
 export function useEditPost() {
   const qc = useQueryClient();

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { POLL_MAX_OPTIONS, POLL_OPTION_MAX, cleanPollOptions, type PostSlide } from "@/lib/community";
 import { MentionSuggestBar } from "@/components/community/mentions";
 import { MediaStrip, useMediaDraft } from "@/components/community/media-strip";
+import { SpiritScene, type SpiritSceneKey } from "@/components/community/spirit-scenes";
 
 export const NOTE_MAX = 1200;
 
@@ -28,6 +29,7 @@ export function NoteEditor({
   onSave,
   allowPoll = false,
   media,
+  scene,
 }: {
   open: boolean;
   title: string;
@@ -39,6 +41,8 @@ export function NoteEditor({
   allowPoll?: boolean;
   /** Offer photos: what's on it now (when editing) and a key for this post. `hint` says where they go. */
   media?: { initial: PostSlide[] | null | undefined; key: string; hint?: string };
+  /** Saturday's drawn scene, when the post has one: it's the cover until it's removed or a photo goes on. */
+  scene?: { key: SpiritSceneKey; onRemove: () => Promise<void> };
 }) {
   const [body, setBody] = useState(initial);
   const draft = useMediaDraft({ open: open && !!media, initial: media?.initial, key: media?.key ?? "none" });
@@ -48,11 +52,13 @@ export function NoteEditor({
   };
   // null = no poll; otherwise the options as typed
   const [poll, setPoll] = useState<string[] | null>(null);
+  const [dropScene, setDropScene] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     if (open) {
       setBody(initial);
       setPoll(null);
+      setDropScene(false);
     }
   }, [open, initial]);
   const trimmed = body.trim();
@@ -80,6 +86,19 @@ export function NoteEditor({
           aria-label={poll ? "Poll question" : "Post text"}
         />
         <MentionSuggestBar value={body} onChange={(v) => setBody(v.slice(0, NOTE_MAX))} inputRef={bodyRef} className="-my-2" />
+        {/* the drawn scene is the cover: take it off, or add a photo to use instead */}
+        {scene && !dropScene && draft.tray.items.length === 0 && (
+          <div data-scene-cover className="flex items-center gap-3 rounded-2xl border border-border p-2">
+            <SpiritScene scene={scene.key} className="h-16 w-24 shrink-0 rounded-xl" />
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-bold">Cover: drawn scene</div>
+              <div className="text-[11px] leading-snug text-muted-foreground">Add a photo below to use it instead.</div>
+            </div>
+            <button type="button" onClick={() => setDropScene(true)} className="h-9 shrink-0 rounded-full bg-muted px-3 text-[12px] font-bold active:scale-95">
+              Remove
+            </button>
+          </div>
+        )}
         {media && (
           <div>
             <MediaStrip tray={draft.tray} />
@@ -133,9 +152,12 @@ export function NoteEditor({
               onClick={() => {
                 const options = pollCheck?.ok ? pollCheck.options : undefined;
                 // photos only go when they changed (left out, the post keeps what it has)
+                // a photo on, or the scene taken off: the drawing goes (so removing the photo later leaves no picture)
+                const offScene = scene && (dropScene || (media && draft.changed && draft.tray.items.length > 0)) ? scene.onRemove : null;
+                const save = (m?: PostSlide[]) => onSave(trimmed, options, m).then(() => offScene?.());
                 const run = media && draft.changed
-                  ? draft.save((m) => onSave(trimmed, options, m))
-                  : onSave(trimmed, options).then(() => { if (media) draft.discard(); });
+                  ? draft.save((m) => save(m))
+                  : save().then(() => { if (media) draft.discard(); });
                 void run.then(
                   () => onClose(),
                   (e: any) => toast.error(e?.message ?? "Couldn't save"),
