@@ -189,6 +189,8 @@ export type CommunityPost = {
   comment_preview?: CommentPreview[];
   /** A poll on a coach's text post (null / missing = none). */
   poll?: CommunityPoll | null;
+  /** Pulse: posted by itself when the workout was finished (until the author adds to it). */
+  auto?: boolean;
   /** Your own posts only: how many have seen it, and the three latest (named) faces. */
   views?: { count: number; faces: CommunityAuthor[] } | null;
 };
@@ -1328,4 +1330,42 @@ export const SHARE_NUDGE_DONE = "share_nudge_done";
 export function shareNudgeKey(now = new Date()): string {
   const day = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000);
   return `share_nudge:${Math.floor(day / SHARE_NUDGE_EVERY_DAYS)}`;
+}
+
+/* ---- Pulse: a finished workout, posted by itself ----------------------- */
+
+export type WorkoutWin = {
+  kind: "pr" | "month" | "week" | "top" | "done";
+  /** Small caps over the headline ("All-time PR", "Consistency"). */
+  label: string;
+  headline: string;
+  detail: string | null;
+};
+
+const ordinal = (n: number) => {
+  const v = n % 100;
+  return `${n}${v >= 11 && v <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+};
+/** The session counts that read as a milestone this month. */
+export const MONTH_MILESTONES = [5, 10, 15, 20, 25, 30];
+
+/**
+ * The one real win a Pulse card leads with, from the session's own stats
+ * (nothing made up): a PR first (the best of them, and how many), then a
+ * monthly milestone (5th, 10th… session), three or more sessions this week,
+ * the top set, else the work done.
+ */
+export function pickWorkoutWin(s: Pick<WorkoutShareStats, "prs" | "pr_count" | "month_sessions" | "week_sessions" | "top_lift" | "working_sets" | "duration_min">, unit: "kg" | "lb"): WorkoutWin {
+  const pr = s.prs?.[0];
+  if (pr) {
+    const n = Math.max(s.pr_count ?? 1, 1);
+    return { kind: "pr", label: n > 1 ? `${SCOPE_WORD[pr.scope]} · ${n} PRs` : SCOPE_WORD[pr.scope], headline: pr.exercise_name, detail: formatTopSet(pr, unit) };
+  }
+  const month = s.month_sessions ?? 0;
+  if (MONTH_MILESTONES.includes(month)) return { kind: "month", label: "Consistency", headline: `${ordinal(month)} session this month`, detail: null };
+  const week = s.week_sessions ?? 0;
+  if (week >= 3) return { kind: "week", label: "Consistency", headline: `${ordinal(week)} session this week`, detail: null };
+  if (s.top_lift) return { kind: "top", label: "Top set", headline: s.top_lift.exercise_name, detail: formatTopSet(s.top_lift, unit) };
+  // the line under it carries the time
+  return { kind: "done", label: "Session done", headline: `${s.working_sets} working ${s.working_sets === 1 ? "set" : "sets"}`, detail: null };
 }

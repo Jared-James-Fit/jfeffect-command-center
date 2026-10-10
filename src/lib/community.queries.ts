@@ -670,6 +670,8 @@ export type MyPostRow = {
   extra_media?: PostSlide[] | null;
   locked_in_at: string | null;
   hide_loads: boolean;
+  /** Pulse posted it by itself; a caption or photo makes it theirs. */
+  auto_shared?: boolean;
 };
 
 /**
@@ -688,7 +690,7 @@ export function useMyPostForCompletion(completionId: string | null | undefined, 
     queryFn: async (): Promise<MyPostRow | null> => {
       let q = db
         .from("community_posts")
-        .select("id, caption, visibility, media_path, media_thumb_path, media_type, extra_media, locked_in_at, hide_loads")
+        .select("id, caption, visibility, media_path, media_thumb_path, media_type, extra_media, locked_in_at, hide_loads, auto_shared")
         .eq("completion_id", completionId);
       q = slot === "lockin" ? q.not("locked_in_at", "is", null) : q.is("locked_in_at", null);
       const { data, error } = await q.maybeSingle();
@@ -1173,6 +1175,32 @@ export function usePublicSessionTitle(by: { dayId?: string | null; completionId?
       if (error) throw error;
       return (data as string | null) ?? null;
     },
+  });
+}
+
+/** Your community switches: Pulse (post finished workouts by themselves), view privately. */
+export function useMyCommunitySettings(enabled = true) {
+  return useQuery({
+    queryKey: ["community-my-settings"],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<{ auto_share_workouts: boolean; private_views: boolean }> => {
+      const { data, error } = await db.rpc("community_my_settings");
+      if (error) throw error;
+      return (data ?? { auto_share_workouts: true, private_views: false }) as { auto_share_workouts: boolean; private_views: boolean };
+    },
+  });
+}
+
+export function useSetAutoShare() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (on: boolean) => {
+      const { error } = await db.rpc("community_set_auto_share", { _on: on });
+      if (error) throw error;
+    },
+    onMutate: (on) => qc.setQueryData(["community-my-settings"], (old: any) => ({ ...(old ?? { private_views: false }), auto_share_workouts: on })),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["community-my-settings"] }),
   });
 }
 
