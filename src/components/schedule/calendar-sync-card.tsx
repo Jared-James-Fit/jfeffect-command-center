@@ -6,7 +6,12 @@ import { AlertTriangle, CalendarPlus, CheckCircle2, ChevronDown, ChevronRight, C
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { getMyCalendarFeed, getMyCalendarSyncStatus } from "@/lib/schedule.functions";
+import {
+  disconnectGoogleCalendar,
+  getMyCalendarFeed,
+  getMyCalendarSyncStatus,
+  startGoogleCalendarConnect,
+} from "@/lib/schedule.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import {
   calendarChoices,
@@ -44,10 +49,30 @@ function markStarted(app: string) {
 
 type Feed = { httpsUrl: string; webcalUrl: string; googleUrl: string; outlookUrl: string; office365Url: string };
 
+type GoogleStatus = {
+  available: boolean;
+  connected: boolean;
+  revoked: boolean;
+  email: string | null;
+  lastSyncedAt: string | null;
+  error: string | null;
+  events: number;
+} | null;
+
+/** Connected Google Calendar counts as synced; otherwise the feed's own state. */
+function cardState(data: any, startedAt: number | null): CalendarSyncState {
+  const g = data?.google as GoogleStatus | undefined;
+  if (g?.connected) return "synced";
+  const feed = calendarSyncState({ lastFetchAt: data?.lastFetchAt, startedAt });
+  if (feed === "connecting") return feed;
+  if (g?.revoked && feed !== "synced") return "stale";
+  return feed;
+}
+
 /**
  * Optional Setup step: put sessions and workouts in the client's own phone
- * calendar. Green only once Google / Apple / Outlook has actually pulled the
- * feed (recorded server-side), so the check means it really works.
+ * calendar. Green only once it really works: Google Calendar connected, or
+ * Google / Apple / Outlook has actually pulled the feed (recorded server-side).
  */
 export function CalendarSyncCard({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
@@ -61,14 +86,14 @@ export function CalendarSyncCard({ className }: { className?: string }) {
     queryFn: () => statusFn({ data: {} }),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
-    // While waiting for the calendar's first fetch, check back often so the
-    // card goes green the moment it works.
-    refetchInterval: (q) =>
-      calendarSyncState({ lastFetchAt: (q.state.data as any)?.lastFetchAt, startedAt: started.at }) === "connecting" ? 15_000 : false,
+    // While waiting for the calendar to connect, check back often so the card
+    // goes green the moment it works.
+    refetchInterval: (q) => (cardState(q.state.data, started.at) === "connecting" ? 15_000 : false),
   });
 
-  const state: CalendarSyncState = calendarSyncState({ lastFetchAt: status?.lastFetchAt, startedAt: isPov ? null : started.at });
-  const app = status?.app || "your calendar";
+  const google = (status?.google ?? null) as GoogleStatus;
+  const state: CalendarSyncState = cardState(status, isPov ? null : started.at);
+  const app = google?.connected ? "Google Calendar" : status?.app || "your calendar";
 
   // Say so when it connects, instead of leaving them to wonder.
   const prevState = useRef<CalendarSyncState | null>(null);
@@ -84,7 +109,9 @@ export function CalendarSyncCard({ className }: { className?: string }) {
   const view = {
     synced: {
       title: "Calendar synced",
-      message: `Sessions and workouts show in ${app}. Checked ${timeAgo(status.lastFetchAt)}.`,
+      message: google?.connected
+        ? `Sessions and workouts sync to Google Calendar${google.email ? ` (${google.email})` : ""}.${google.lastSyncedAt ? ` Updated ${timeAgo(google.lastSyncedAt)}.` : ""}`
+        : `Sessions and workouts show in ${app}. Checked ${timeAgo(status.lastFetchAt)}.`,
       icon: <CheckCircle2 className="h-4 w-4" />,
       tone: "bg-emerald-500/15 text-emerald-500",
       action: null,
@@ -98,7 +125,9 @@ export function CalendarSyncCard({ className }: { className?: string }) {
     },
     stale: {
       title: "Calendar not syncing",
-      message: `${app} hasn't checked in since ${status.lastFetchAt ? new Date(status.lastFetchAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "a while"}. Add it again.`,
+      message: google?.revoked
+        ? "Google access was removed, so your calendar stopped updating. Connect Google Calendar again."
+        : `${app} hasn't checked in since ${status.lastFetchAt ? new Date(status.lastFetchAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "a while"}. Add it again.`,
       icon: <AlertTriangle className="h-4 w-4" />,
       tone: "bg-amber-500/15 text-amber-500",
       action: "Fix",
@@ -136,6 +165,7 @@ export function CalendarSyncCard({ className }: { className?: string }) {
         open={open}
         onOpenChange={setOpen}
         synced={state === "synced" ? app : null}
+        google={google}
         isPov={isPov}
         onStarted={(picked) => {
           markStarted(picked);
@@ -150,25 +180,60 @@ function CalendarSyncSheet({
   open,
   onOpenChange,
   synced,
+  google,
   isPov,
   onStarted,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   synced: string | null;
+  google: GoogleStatus;
   isPov: boolean;
   onStarted: (app: string) => void;
 }) {
   const qc = useQueryClient();
   const feedFn = useServerFn(getMyCalendarFeed);
+  const startGoogleFn = useServerFn(startGoogleCalendarConnect);
+  const disconnectGoogleFn = useServerFn(disconnectGoogleCalendar);
   const [resetting, setResetting] = useState(false);
+  const [openingGoogle, setOpeningGoogle] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [expanded, setExpanded] = useState<CalendarChoice["id"] | null>(null);
   const platform = useMemo<DevicePlatform>(
     () => (typeof navigator === "undefined" ? "other" : devicePlatform(navigator.userAgent, navigator.maxTouchPoints ?? 0)),
     [],
   );
-  const choices = calendarChoices(platform);
+  const googleConnected = !!google?.connected;
+  // Once the Google sign-in app is set up, Google is one tap on every device.
+  const googleConnect = !!google?.available;
+  const choices = calendarChoices(platform, { googleConnect }).filter((c) => !(c.id === "google" && googleConnected));
   const phone = platform === "ios" || platform === "android";
+
+  const connectGoogle = async () => {
+    setOpeningGoogle(true);
+    try {
+      const { url } = await startGoogleFn({ data: { returnTo: `${window.location.pathname}${window.location.search}` } });
+      onStarted("Google sign-in");
+      window.location.assign(url);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't open Google sign-in.");
+      setOpeningGoogle(false);
+    }
+  };
+
+  const disconnectGoogle = async () => {
+    if (!confirm("Disconnect Google Calendar? The JF Effect calendar is removed from your Google account.")) return;
+    setDisconnecting(true);
+    try {
+      await disconnectGoogleFn();
+      await qc.invalidateQueries({ queryKey: ["my-calendar-sync"] });
+      toast.success("Google Calendar disconnected.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't disconnect.");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
 
   // Fetched when the sheet opens, so the buttons are real links by the time
   // they're tapped (a link opened or shared after an await gets blocked).
@@ -247,10 +312,35 @@ function CalendarSyncSheet({
             </p>
           )}
 
-          {synced && (
-            <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400">
-              <CheckCircle2 className="h-4 w-4 shrink-0" /> Connected to {synced}
+          {googleConnected ? (
+            <div className="space-y-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
+                <CheckCircle2 className="h-4 w-4 shrink-0" /> Google Calendar connected
+              </div>
+              <p className="text-xs leading-snug text-muted-foreground">
+                {google?.email ? `${google.email}, ` : ""}in a calendar called "JF Effect".
+                {google?.lastSyncedAt ? ` Updated ${timeAgo(google.lastSyncedAt)}.` : ""} Changes show up within about 5 minutes.
+              </p>
+              {google?.error && (
+                <p className="text-xs leading-snug text-amber-300">The last update didn't fully go through. It tries again every 5 minutes.</p>
+              )}
+              {!isPov && (
+                <button
+                  type="button"
+                  onClick={disconnectGoogle}
+                  disabled={disconnecting}
+                  className="text-[11px] font-semibold text-muted-foreground underline underline-offset-2"
+                >
+                  {disconnecting ? "Disconnecting…" : "Disconnect Google Calendar"}
+                </button>
+              )}
             </div>
+          ) : (
+            synced && (
+              <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400">
+                <CheckCircle2 className="h-4 w-4 shrink-0" /> Connected to {synced}
+              </div>
+            )
           )}
 
           <div className="grid gap-2">
@@ -258,6 +348,25 @@ function CalendarSyncSheet({
               // One red action at a time: the recommended calendar, until they open another one's steps.
               const primary = !synced && !expanded && i === 0;
               const btnClass = cn("h-12 w-full justify-between text-sm font-bold", primary && "bg-gradient-primary");
+
+              if (c.how === "connect") {
+                return (
+                  <Button
+                    key={c.id}
+                    type="button"
+                    variant={primary ? "default" : "outline"}
+                    className={btnClass}
+                    disabled={isPov || openingGoogle}
+                    onClick={connectGoogle}
+                  >
+                    <span>{google?.revoked ? "Reconnect Google Calendar" : c.label}</span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium opacity-70">
+                      {openingGoogle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                      {openingGoogle ? "Opening Google…" : c.hint}
+                    </span>
+                  </Button>
+                );
+              }
 
               if (c.how === "web") {
                 const isOpen = expanded === c.id;
@@ -339,7 +448,7 @@ function CalendarSyncSheet({
             )}
           </div>
 
-          {!phone && (
+          {!phone && !googleConnect && (
             <p className="text-[11px] leading-snug text-muted-foreground">
               Google checks linked calendars every 12 to 24 hours, so a moved session can take a while to show there.
               Apple Calendar picks up changes much faster.
