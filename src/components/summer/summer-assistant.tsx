@@ -1,8 +1,8 @@
 /**
  * Cleo, everywhere in admin: a floating button (tap to open or close her
- * chat, press and hold to start a voice call), ⌘/Ctrl+Shift+S, and window
+ * chat, press and hold to start talking), ⌘/Ctrl+Shift+S, and window
  * events other screens use to open her ("summer:open", "summer:toggle",
- * "summer:close"; detail { year?, call? }).
+ * "summer:close"; detail { year?, dictate? }).
  *
  * Admin only; mounted once in the admin layout.
  */
@@ -16,11 +16,12 @@ import { getSummerProfile } from "@/lib/business-books.functions";
 import { summerSpeaker } from "@/lib/summer-speaker";
 import { SummerChat } from "@/components/admin/books/summer-chat";
 
-export type SummerOpenDetail = { year?: number; call?: boolean };
+/** `dictate`: open straight into listening (the mic in Messages, a long-press on her button). */
+export type SummerOpenDetail = { year?: number; dictate?: boolean };
 
 export function openSummer(detail: SummerOpenDetail = {}) {
-  // Called from a tap: unlock audio now so a call's first reply can autoplay.
-  if (detail.call) summerSpeaker().unlock();
+  // Called from a tap: unlock audio now so her first spoken reply can autoplay.
+  if (detail.dictate) summerSpeaker().unlock();
   try {
     window.dispatchEvent(new CustomEvent<SummerOpenDetail>("summer:open", { detail }));
   } catch {
@@ -42,7 +43,7 @@ export function SummerAssistant() {
   const hash = useRouterState({ select: (r) => r.location.hash });
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState<number | undefined>(undefined);
-  const [startCall, setStartCall] = useState(false);
+  const [startDictating, setStartDictating] = useState(false);
   const holdTimer = useRef<number | null>(null);
   const held = useRef(false);
 
@@ -54,7 +55,7 @@ export function SummerAssistant() {
 
   const show = useCallback((detail: SummerOpenDetail = {}) => {
     if (detail.year) setYear(detail.year);
-    if (detail.call) setStartCall(true);
+    if (detail.dictate) setStartDictating(true);
     setOpen(true);
   }, []);
 
@@ -65,7 +66,7 @@ export function SummerAssistant() {
       setOpen((o) => {
         if (!o) {
           if (d.year) setYear(d.year);
-          if (d.call) setStartCall(true);
+          if (d.dictate) setStartDictating(true);
         }
         return !o;
       });
@@ -113,7 +114,7 @@ export function SummerAssistant() {
       held.current = true;
       summerSpeaker().unlock(); // still inside the press, so her reply can autoplay
       try { navigator.vibrate?.(15); } catch { /* not supported */ }
-      show({ call: true });
+      show({ dictate: true });
     }, 450);
   };
   const pressEnd = () => {
@@ -166,8 +167,8 @@ export function SummerAssistant() {
         route={href}
         isOwner={persona?.isOwner ?? false}
         isFinance={persona?.isFinance ?? false}
-        startCall={startCall}
-        onCallStarted={() => setStartCall(false)}
+        startDictating={startDictating}
+        onDictationStarted={() => setStartDictating(false)}
       />
     </>
   );
