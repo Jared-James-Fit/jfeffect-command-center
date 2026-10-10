@@ -123,7 +123,7 @@ export function MemberWeekCard({ memberId }: { memberId: string | null | undefin
         selected={selected}
         onSelect={setSelected}
         count={(d) => (byDay.get(d) ?? []).length}
-        dotClass="bg-emerald-400"
+        dotClass="bg-cyan-400"
       />
 
       {rows.length === 0 ? (
