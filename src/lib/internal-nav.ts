@@ -21,7 +21,7 @@ import {
   LayoutDashboard, Users, ClipboardList, Video, Activity, ClipboardCheck,
   Dumbbell, Heart, Flame, ChefHat, BookOpen, FileEdit, HelpCircle,
   MessageCircle, Megaphone, LayoutGrid, Phone, Sparkles, MessagesSquare,
-  UserCheck, CreditCard, DollarSign, Ticket, Calendar, Film, FolderOpen,
+  UserCheck, CreditCard, DollarSign, Ticket, Calendar,
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
   Link as LinkIcon, Trophy, Tag, ShieldCheck,
@@ -231,9 +231,6 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "sales"] },
   { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Business",
     visibleTo: ["admin", "sales", "coach"] },
-  { to: "/admin/content", label: "Website & Content", icon: Film, group: "Business",
-    visibleTo: ["admin", "media_manager", "operations"],
-    keywords: ["website", "landing pages", "content", "marketing"] },
   { to: "/admin/content-ideas", label: "Content Ideas", icon: Sparkles, group: "Business",
     visibleTo: ["admin", "media_manager"] },
   { to: "/admin/testimonials", label: "Testimonials", icon: Star, group: "Business",
@@ -252,8 +249,6 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "operations"] },
   { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team",
     visibleTo: ["admin", "operations"] },
-  { to: "/admin/media-archives", label: "Media Archives", icon: FolderOpen, group: "Team",
-    visibleTo: ["admin", "media_manager", "operations"], section: "Media & Approvals" },
 
   // ── ADD-ONS ──────────────────────────────────────────────────────────
   { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Add-ons",
