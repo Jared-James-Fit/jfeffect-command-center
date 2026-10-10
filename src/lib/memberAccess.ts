@@ -15,7 +15,15 @@ export type MemberAccessInput = {
   in_grace?: boolean | null;
 };
 
-const ACTIVE_SUB_STATUSES = new Set(["active", "trialing", "admin_granted"]);
+// "active (cancels at period end)" is what applyJfLifecycle writes for a member
+// who cancelled but has paid through current_period_end. Access still ends on
+// time: when Stripe ends the subscription the lifecycle writes "Cancelled".
+const ACTIVE_SUB_STATUSES = new Set([
+  "active",
+  "active (cancels at period end)",
+  "trialing",
+  "admin_granted",
+]);
 const INACTIVE_STATUSES = new Set(["expired", "cancelled", "canceled"]);
 
 function toMs(v: string | Date | null | undefined): number | null {

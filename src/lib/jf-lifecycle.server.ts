@@ -191,10 +191,12 @@ export function resolveLifecycle(args: {
       };
     case "canceled":
     default:
+      // A canceled subscription has no paid time left, even if
+      // cancel_at_period_end was set (Stripe keeps the flag when a scheduled
+      // cancel is turned into an immediate one). Never label it "Active (Cancels
+      // at period end)": isMemberAccessActive treats that label as active.
       return {
-        status: cancelAtPeriodEnd && sub.current_period_end && sub.current_period_end * 1000 > now.getTime()
-          ? "Active (Cancels at period end)"
-          : "Cancelled",
+        status: "Cancelled",
         grants_access: false,
         in_grace: false,
         grace_ends_at: null,
