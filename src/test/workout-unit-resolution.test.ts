@@ -53,6 +53,69 @@ describe("one unit per exercise per workout", () => {
   });
 });
 
+describe("a lift's first log opens in the unit the athlete uses for that lift", () => {
+  // Hall of Strength, Oct 2026: lb squatters opened their first Competition
+  // Squat in kg (the competition-lift default) and saved 305 lb as 305 kg.
+  const compSquat = { id: "ex-csq", competition_lift_type: "squat", is_competition_lift: true, movement_family: "squat" };
+  const tempoSquat = { id: "ex-tsq", competition_lift_type: null, movement_family: "squat" };
+  const compBench = { id: "ex-cb", competition_lift_type: "bench", is_competition_lift: true, movement_family: "bench" };
+  const log = (unit: string, family: string, load = 100) =>
+    ({ actual_load_unit: unit, actual_load: load, pl_exercise_rows: { exercises: { movement_family: family } } });
+
+  it("an lb squatter's first Competition Squat opens in lb, not the kg default", () => {
+    const units = resolveWorkoutRowUnits({
+      rows: [{ id: "sq", exercise_id: "ex-csq", exercises: compSquat, load_unit: null }],
+      prefRows: [], historyRows: [],
+      familyHistoryRows: [log("lb", "squat"), log("lb", "squat"), log("kg", "squat")],
+      overrides: {},
+    });
+    expect(units["row:sq"]).toBe("lb");
+  });
+
+  it("the athlete's squat unit beats the coach's kg on a new variation (Shaina's tempo squat)", () => {
+    const units = resolveWorkoutRowUnits({
+      rows: [{ id: "t", exercise_id: "ex-tsq", exercises: tempoSquat, load_unit: "kg" }],
+      prefRows: [], historyRows: [], familyHistoryRows: [log("lb", "squat")], overrides: {},
+    });
+    expect(units["row:t"]).toBe("lb");
+  });
+
+  it("each lift keeps its own habit: kg bench, lb squat", () => {
+    const units = resolveWorkoutRowUnits({
+      rows: [
+        { id: "sq", exercise_id: "ex-csq", exercises: compSquat, load_unit: null },
+        { id: "b", exercise_id: "ex-cb", exercises: compBench, load_unit: null },
+      ],
+      prefRows: [], historyRows: [],
+      familyHistoryRows: [log("lb", "squat"), log("kg", "bench"), log("kg", "bench")],
+      overrides: {},
+    });
+    expect(units).toEqual({ "row:sq": "lb", "row:b": "kg" });
+  });
+
+  it("the exercise's own history and saved preference still come first", () => {
+    const rows = [{ id: "sq", exercise_id: "ex-csq", exercises: compSquat, load_unit: null }];
+    const family = [log("lb", "squat"), log("lb", "squat")];
+    expect(resolveWorkoutRowUnits({
+      rows, prefRows: [], familyHistoryRows: family, overrides: {},
+      historyRows: [{ actual_load_unit: "kg", pl_exercise_rows: { exercise_id: "ex-csq" } }],
+    })["row:sq"]).toBe("kg");
+    expect(resolveWorkoutRowUnits({
+      rows, prefRows: [{ exercise_id: "ex-csq", unit: "kg" }], historyRows: [], familyHistoryRows: family, overrides: {},
+    })["row:sq"]).toBe("kg");
+  });
+
+  it("machines and empty sets don't count, and no habit keeps the old default", () => {
+    const rows = [{ id: "sq", exercise_id: "ex-csq", exercises: compSquat, load_unit: null }];
+    const units = resolveWorkoutRowUnits({
+      rows, prefRows: [], historyRows: [],
+      familyHistoryRows: [log("lb", "accessory"), log("lb", "squat", 0), { actual_load_unit: "lb", pl_exercise_rows: null }],
+      overrides: {},
+    });
+    expect(units["row:sq"]).toBe("kg");
+  });
+});
+
 describe("a set is saved in the unit its number was typed in", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { readFileSync } = require("node:fs") as typeof import("node:fs");

@@ -770,7 +770,20 @@ function MeetYouCard({ me, mode, division }: { me: StrengthRow | null; mode: Boa
 type ReviewRow = {
   result_id: string; client_id: string; display_name: string; lift: string; load_kg: number; reps: number;
   sets: number; lift_day: string; bw_kg: number | null; flag: string | null; review: string | null; counted_best_kg: number | null;
+  /** What the athlete typed and the unit it was saved in (305, "kg"). */
+  entered_value?: number | null; entered_unit?: string | null;
+  /** Saved in kg, but as lb it passes the typo checks and fits their other sessions. */
+  likely_lb?: boolean | null;
 };
+
+/** 305 → "305 kg"; 755.3467 → "755.3 lb". */
+function typedLoad(value: number, unit: WeightUnit): string {
+  const v = Math.round(Number(value) * 10) / 10;
+  return `${Number.isInteger(v) ? v.toLocaleString() : v.toFixed(1)} ${unit}`;
+}
+
+const typedUnit = (r: ReviewRow): WeightUnit | null =>
+  r.entered_unit === "kg" || r.entered_unit === "lb" ? r.entered_unit : null;
 
 /** Coach review for the board; also shown on the admin Athlete Records page. */
 export function StrengthBoardCoachTools() {
@@ -805,6 +818,35 @@ export function StrengthBoardCoachTools() {
     },
     onError: (e: unknown) => toast.error("Couldn't save", { description: (e as Error)?.message }),
   });
+  // lb typed into a kg card: keep the number, fix the unit on every set of that card that day.
+  const undoFix = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await db.rpc("strength_board_unfix_unit", { _result_ids: ids });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Back to kg");
+      await qc.invalidateQueries({ queryKey: ["strength-board"] });
+    },
+    onError: (e: unknown) => toast.error("Couldn't undo", { description: (e as Error)?.message }),
+  });
+  const fixUnit = useMutation({
+    mutationFn: async (r: ReviewRow) => {
+      const { data, error } = await db.rpc("strength_board_fix_unit", { _result_id: r.result_id });
+      if (error) throw error;
+      return (data ?? []) as string[];
+    },
+    onSuccess: async (ids, r) => {
+      await qc.invalidateQueries({ queryKey: ["strength-board"] });
+      toast.success(`Fixed: ${r.display_name} · ${r.lift} ${typedLoad(Number(r.entered_value), "lb")}`, {
+        description: `${ids.length} set${ids.length === 1 ? "" : "s"} now saved in lb`,
+        duration: 8000,
+        action: { label: "Undo", onClick: () => undoFix.mutate(ids) },
+      });
+    },
+    onError: (e: unknown) => toast.error("Couldn't fix the unit", { description: (e as Error)?.message }),
+  });
+  const busy = decide.isPending || fixUnit.isPending || undoFix.isPending;
   const pending = review.filter((r) => !r.review);
   const decided = review.filter((r) => r.review);
 
@@ -820,13 +862,18 @@ export function StrengthBoardCoachTools() {
           <p className="mt-1 text-xs text-muted-foreground">Nothing waiting. Every top lift passed the typo check.</p>
         ) : (
           <ul className="mt-1 divide-y">
-            {pending.map((r) => (
-              <ReviewLine key={r.result_id} r={r} unit={unit} busy={decide.isPending}
-                actions={[
-                  { label: "Count it", onClick: () => decide.mutate({ id: r.result_id, status: "approved" }) },
-                  { label: "Remove", onClick: () => decide.mutate({ id: r.result_id, status: "excluded" }), danger: true },
-                ]} />
-            ))}
+            {pending.map((r) => {
+              const lbFix = r.likely_lb === true && typedUnit(r) === "kg" && r.entered_value != null;
+              return (
+                <ReviewLine key={r.result_id} r={r} unit={unit} busy={busy}
+                  hint={lbFix ? `Looks like lb typed into a kg card. As ${typedLoad(Number(r.entered_value), "lb")} it fits their other ${r.lift} sessions.` : null}
+                  actions={[
+                    ...(lbFix ? [{ label: `It was ${typedLoad(Number(r.entered_value), "lb")}`, onClick: () => fixUnit.mutate(r), primary: true }] : []),
+                    { label: lbFix ? "Count as kg" : "Count it", onClick: () => decide.mutate({ id: r.result_id, status: "approved" }) },
+                    { label: "Remove", onClick: () => decide.mutate({ id: r.result_id, status: "excluded" }), danger: true },
+                  ]} />
+              );
+            })}
           </ul>
         )}
       </div>
@@ -836,14 +883,14 @@ export function StrengthBoardCoachTools() {
           <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Your decisions</div>
           <ul className="mt-1 divide-y">
             {decided.map((r) => (
-              <ReviewLine key={r.result_id} r={r} unit={unit} busy={decide.isPending}
+              <ReviewLine key={r.result_id} r={r} unit={unit} busy={busy}
                 actions={[{ label: "Undo", onClick: () => decide.mutate({ id: r.result_id, status: "clear" }) }]} />
             ))}
           </ul>
         </div>
       )}
 
-      <RemoveFromBoard unit={unit} busy={decide.isPending} onRemove={(id) => decide.mutate({ id, status: "excluded" })} />
+      <RemoveFromBoard unit={unit} busy={busy} onRemove={(id) => decide.mutate({ id, status: "excluded" })} />
 
       {unranked.length > 0 && (
         <div>
@@ -862,27 +909,33 @@ export function StrengthBoardCoachTools() {
   );
 }
 
-function ReviewLine({ r, unit, busy, actions }: {
-  r: ReviewRow; unit: WeightUnit; busy: boolean;
-  actions: { label: string; onClick: () => void; danger?: boolean }[];
+function ReviewLine({ r, unit, busy, actions, hint }: {
+  r: ReviewRow; unit: WeightUnit; busy: boolean; hint?: string | null;
+  actions: { label: string; onClick: () => void; danger?: boolean; primary?: boolean }[];
 }) {
   const verdict = r.review === "approved" ? "Counted" : r.review === "excluded" ? "Removed" : r.flag;
+  // Show the number as it was typed, in the unit it was saved in ("305 kg"),
+  // so a unit slip reads as one; the viewer's unit follows when it differs.
+  const savedIn = typedUnit(r);
+  const typed = savedIn && r.entered_value != null ? typedLoad(Number(r.entered_value), savedIn) : null;
   return (
     <li className="py-2.5">
       <div className="text-xs font-bold">
-        {r.display_name} · {r.lift} {formatLoad(Number(r.load_kg), unit)} ×{r.reps}
-        {r.sets > 1 ? <span className="font-normal text-muted-foreground"> ({r.sets} sets)</span> : null}
+        {r.display_name} · {r.lift} {typed ?? formatLoad(Number(r.load_kg), unit)} ×{r.reps}
+        {typed && savedIn !== unit ? <span className="font-normal text-muted-foreground"> (= {formatLoad(Number(r.load_kg), unit)})</span> : null}
+        {r.sets > 1 ? <span className="font-normal text-muted-foreground"> · {r.sets} sets</span> : null}
       </div>
       <div className="text-[11px] text-muted-foreground">
         <span className="font-semibold text-foreground/80">{verdict}</span> · {format(new Date(r.lift_day + "T12:00:00"), "MMM d")}
         {r.bw_kg ? ` · BW ${formatLoad(Number(r.bw_kg), unit)}` : ""}
         {` · counted best ${r.counted_best_kg ? formatLoad(Number(r.counted_best_kg), unit) : "none yet"}`}
       </div>
-      <div className="mt-1.5 flex gap-2">
+      {hint ? <p className="mt-1 text-[11px] font-semibold text-foreground">{hint}</p> : null}
+      <div className="mt-1.5 flex flex-wrap gap-2">
         {actions.map((a) => (
           <button key={a.label} type="button" disabled={busy} onClick={a.onClick}
             className={cn("min-h-9 flex-1 rounded-lg border px-2.5 text-xs font-black disabled:opacity-50",
-              a.danger ? "border-destructive/40 text-destructive" : "")}>
+              a.primary ? "basis-full border-primary bg-primary text-primary-foreground" : a.danger ? "border-destructive/40 text-destructive" : "")}>
             {a.label}
           </button>
         ))}
