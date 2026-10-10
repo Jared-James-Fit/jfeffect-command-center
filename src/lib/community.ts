@@ -666,8 +666,8 @@ export function buildShareCardFields(i: ShareCardInput) {
     .map((e) => ({ name: e.name, detail: formatExerciseBest(e, i.unit), pr: !!e.pr }));
   return {
     athleteName: i.athleteName,
-    // The program's weekday ("Tuesday — ") clashes with the real date on the card.
-    workoutTitle: sessionDisplayTitle(s.workout_title || i.workoutTitle || "Workout"),
+    // The server's public title ("Block 5 · Week 1"), never the coach's day name.
+    workoutTitle: sessionDisplayTitle(s.workout_title || "Workout"),
     dateLabel: i.dateLabel,
     lift: lift ? { name: lift.name, detail: formatTopSet(lift.detail, i.unit), prLabel: lift.pr ? SCOPE_WORD[lift.pr].toUpperCase() : null } : null,
     stats: pickCardStats(s, i.unit),
@@ -1129,6 +1129,7 @@ export function lockInCameraCard(i: { workoutTitle: string; athleteName: string 
     data: {
       format: "story",
       athleteName: first(i.athleteName),
+      // a public title from usePublicSessionTitle, never the coach's day name
       workoutTitle: sessionDisplayTitle(i.workoutTitle || "Workout"),
       dateLabel: now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
       lift: null,

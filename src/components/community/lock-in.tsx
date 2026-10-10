@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
 import { PREVIEW_ONLY_MESSAGE, lockInCameraCard, lockInTimeLabel } from "@/lib/community";
-import { shareToCommunity, useCommunityActivity, useDayPlan, useMyPostForCompletion } from "@/lib/community.queries";
+import { shareToCommunity, useCommunityActivity, useDayPlan, useMyPostForCompletion, usePublicSessionTitle } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
 import { CameraChip } from "@/components/community/camera-overlays";
 import type { LockTemplate } from "@/components/community/lock-in-editor";
@@ -48,6 +48,9 @@ export function LockInBar({
 }) {
   const { data: activity } = useCommunityActivity(true);
   const { data: plan } = useDayPlan(dayId ?? null);
+  // what the card says in public ("Block 5 · Week 1"); the day's own name stays on the client's screen
+  const { data: publicTitle } = usePublicSessionTitle({ dayId });
+  const cardTitle = publicTitle ?? "Workout";
   const { data: existing } = useMyPostForCompletion(completionId, !!completionId, "lockin");
   const [open, setOpen] = useState(false);
   const [capturing, setCapturing] = useState(false);
@@ -100,7 +103,7 @@ export function LockInBar({
             onOpenChange={setOpen}
             completionId={completionId}
             ensureStarted={ensureStarted}
-            workoutTitle={workoutTitle}
+            workoutTitle={cardTitle}
             athleteName={athleteName}
             existing={existing ?? null}
             pick={null}
@@ -125,7 +128,7 @@ export function LockInBar({
             onClose={() => setCapturing(false)}
             chip={<CameraChip icon="🔒" title={workoutTitle} sub={existing ? "Update your lock in" : "Snap the gym, your setup, the vibe"} />}
             card={(() => {
-              const c = lockInCameraCard({ workoutTitle, athleteName, plan: plan ?? [] });
+              const c = lockInCameraCard({ workoutTitle: cardTitle, athleteName, plan: plan ?? [] });
               return { data: c.data, looks: c.looks, look: c.looks.includes(look) ? look : "lockin", onLook: (t) => setLook(t as LockTemplate) };
             })()}
             post={{

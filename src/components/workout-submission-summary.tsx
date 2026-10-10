@@ -19,6 +19,7 @@ import { SCOPE_LABEL, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLa
 import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
 import { RecapPostFooter } from "@/components/community/recap-post";
+import { usePublicSessionTitle } from "@/lib/community.queries";
 
 // The share studio (camera, cards, upload) is only fetched the first time
 // someone taps Share workout, so the recap itself stays light.
@@ -181,6 +182,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     return out.sort((a, b) => rank[a.tier] - rank[b.tier]);
   };
 
+  const { data: publicTitle } = usePublicSessionTitle({ completionId }, open);
   const buildShareBlob = async (): Promise<Blob | null> => {
     const canvas = shareCanvasRef.current ?? document.createElement("canvas");
     shareCanvasRef.current = canvas;
@@ -196,7 +198,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
       athleteName: athleteName?.trim() || null,
       headline,
       score: summary.score,
-      workoutTitle: workoutTitle ?? null,
+      // the shareable image says where they are in the program, not the coach's day name
+      workoutTitle: publicTitle ?? null,
       dateLabel,
       records: storyRecords(),
       stats,

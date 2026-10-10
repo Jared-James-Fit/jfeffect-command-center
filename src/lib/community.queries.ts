@@ -1154,6 +1154,28 @@ export function useTodaySession(enabled: boolean) {
   });
 }
 
+/**
+ * What a shared session is called in public ("Block 5 · Week 1", else
+ * "Friday session"), never the coach's day or block names: for the cards
+ * the phone draws itself (lock-in camera, recap story). By day or by
+ * finished session; your own only.
+ */
+export function usePublicSessionTitle(by: { dayId?: string | null; completionId?: string | null }, enabled = true) {
+  const { dayId = null, completionId = null } = by;
+  return useQuery({
+    queryKey: ["community-public-session-title", dayId, completionId],
+    enabled: enabled && !!(dayId || completionId),
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = completionId
+        ? await db.rpc("community_my_completion_title", { _completion_id: completionId })
+        : await db.rpc("community_my_session_title", { _day_id: dayId });
+      if (error) throw error;
+      return (data as string | null) ?? null;
+    },
+  });
+}
+
 /** Everyone in the community but you (Crew tab). */
 export function useCommunityMembers(enabled: boolean) {
   return useQuery({
