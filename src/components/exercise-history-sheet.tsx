@@ -11,6 +11,7 @@ import { History, CheckCircle2, Circle, StickyNote } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { matchingHistoryExerciseIds } from "@/lib/workout-previous-lift";
+import { listenChannel } from "@/lib/realtime-channel";
 
 const sb = supabase as any;
 
@@ -55,8 +56,7 @@ export function ExerciseHistorySheet({
   // the user needing to reopen the sheet.
   useEffect(() => {
     if (!open || !clientId) return;
-    const channel = sb
-      .channel(`exercise-history-${clientId}-${exerciseId ?? "all"}`)
+    const channel = (listenChannel(`exercise-history-${clientId}-${exerciseId ?? "all"}`) as any)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "pl_row_results", filter: `client_id=eq.${clientId}` },

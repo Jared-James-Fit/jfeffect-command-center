@@ -28,6 +28,7 @@ import { directThreadsKey, isUnread, useDirectThreads } from "@/lib/direct-chats
 import { DirectChatView, DirectRow, RequestsEntry, RequestsList } from "@/components/direct-chat";
 import { crewThreadsKey, isCrewUnread, useCrewThreads } from "@/lib/crew-chats";
 import { CreateCrewSheet, CrewChatView, CrewRow } from "@/components/crew-chat";
+import { listenChannel } from "@/lib/realtime-channel";
 
 export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   const { user, role } = useAuth();
@@ -143,8 +144,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
 
   // Realtime invalidation across groups
   useEffect(() => {
-    const ch = supabase
-      .channel("groups-pane")
+    const ch = listenChannel("groups-pane")
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_groups" }, () => {
         qc.invalidateQueries({ queryKey: ["chat-groups"] });
         qc.invalidateQueries({ queryKey: directThreadsKey });

@@ -4,6 +4,7 @@ import { CalendarClock, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { SessionActionsSheet, whenLabel, type ActionSession, type ChangeRequest } from "@/components/schedule/session-actions-sheet";
+import { listenChannel } from "@/lib/realtime-channel";
 
 type Row = ChangeRequest & {
   session: ActionSession | null;
@@ -40,8 +41,7 @@ export function ChangeRequestsCard({ clientId, onEdit }: { clientId?: string; on
   });
 
   useEffect(() => {
-    const ch = supabase
-      .channel(`schedule-requests-${clientId ?? "all"}-${channelId}`)
+    const ch = listenChannel(`schedule-requests-${clientId ?? "all"}-${channelId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "pt_session_change_requests" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule-change-requests"] });
       })

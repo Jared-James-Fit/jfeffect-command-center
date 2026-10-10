@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Send, Bug, Lightbulb, HelpCircle, Headphones, Radio, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { listenChannel } from "@/lib/realtime-channel";
 
 export const Route = createFileRoute("/_authenticated/m/support")({ component: SupportPage });
 
@@ -51,8 +52,7 @@ function SupportPage() {
 
   useEffect(() => {
     if (!thread?.id) return;
-    const ch = supabase
-      .channel(`m-support-${thread.id}`)
+    const ch = listenChannel(`m-support-${thread.id}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "member_support_messages", filter: `thread_id=eq.${thread.id}` },

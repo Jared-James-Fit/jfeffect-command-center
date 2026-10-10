@@ -4,6 +4,7 @@ import { ArrowUp, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { listenChannel } from "@/lib/realtime-channel";
 
 /**
  * A post that eases in (fade + small rise) the first time it scrolls into
@@ -89,8 +90,7 @@ export function useNewPosts(enabled: boolean, myId: string | null) {
   mine.current = myId;
   useEffect(() => {
     if (!enabled) return;
-    const ch = supabase
-      .channel("community-new-posts")
+    const ch = listenChannel("community-new-posts")
       .on("postgres_changes" as any, { event: "INSERT", schema: "public", table: "community_posts", filter: "visibility=eq.community" }, (payload: any) => {
         const row = payload.new;
         if (!row?.id || row.author_user_id === mine.current) return;

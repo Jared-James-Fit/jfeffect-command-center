@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
+import { listenChannel } from "@/lib/realtime-channel";
 
 async function uploadGroupFile(
   groupId: string,
@@ -202,8 +203,7 @@ export function GroupMessageThread({
   useResyncOnResume(resyncGroup);
 
   useEffect(() => {
-    const ch = supabase
-      .channel(`group-thread:${groupId}`)
+    const ch = listenChannel(`group-thread:${groupId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "group_messages", filter: `group_id=eq.${groupId}` }, () => {
         qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
         qc.invalidateQueries({ queryKey: ["group-unread"] });

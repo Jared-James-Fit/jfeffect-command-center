@@ -12,6 +12,7 @@ import { listGoogleEventsRange } from "@/lib/google-cal.functions";
 import { addDaysISO, deviceTodayISO, fmtWallClock } from "@/lib/schedule-time";
 import { WeekStrip, nextSevenDays } from "@/components/calendar/week-strip";
 import { cn } from "@/lib/utils";
+import { listenChannel } from "@/lib/realtime-channel";
 
 // Same switch as the Calendar page, so "Coaching | + Google" is one choice everywhere.
 const GOOGLE_PREF_KEY = "admin.calendar.includeGoogle";
@@ -152,8 +153,7 @@ export function DashboardScheduleCard() {
 
   // Live: a session booked, moved or closed anywhere updates the dashboard.
   useEffect(() => {
-    const ch = supabase
-      .channel(`dash-schedule-${channelId}`)
+    const ch = listenChannel(`dash-schedule-${channelId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "pt_sessions" }, () => {
         qc.invalidateQueries({ queryKey: ["dash-schedule-sessions"] });
         qc.invalidateQueries({ queryKey: ["dash-schedule-next"] });

@@ -40,6 +40,7 @@ import { Check, Mic, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { openSummer } from "@/components/summer/summer-assistant";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
+import { listenChannel } from "@/lib/realtime-channel";
 
 type StaffInboxRow = {
   client_id: string;
@@ -293,8 +294,7 @@ export function MessagesInbox({
         for (const k of keysToFlush) qc.invalidateQueries({ queryKey: [k] });
       }, 75);
     };
-    const ch = supabase
-      .channel("admin-inbox")
+    const ch = listenChannel("admin-inbox")
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload: any) => {
         // The event already carries the whole row: patch the list now (preview,
         // time, order and unread dot update immediately) instead of re-downloading

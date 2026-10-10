@@ -23,6 +23,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { Switch } from "@/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { listenChannel } from "@/lib/realtime-channel";
 
 const FILTER_KEY = "jf-support-filter";
 const ago = (iso: string) => {
@@ -66,8 +67,7 @@ export function SupportMessenger({ sub, onOpen }: { sub?: string; onOpen: (sub: 
   const { data: live } = useQuery({ queryKey: ["live-support-status"], queryFn: () => liveFn(), refetchInterval: 30_000 });
 
   useEffect(() => {
-    const ch = supabase
-      .channel("support-messenger")
+    const ch = listenChannel("support-messenger")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "member_support_messages" }, () => {
         qc.invalidateQueries({ queryKey: ["admin-support-threads"] });
         qc.invalidateQueries({ queryKey: ["admin-support-thread"] });

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { listenChannel } from "@/lib/realtime-channel";
 
 /**
  * Single source of truth for admin/coach nav badge counts.
@@ -95,7 +96,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
   useEffect(() => {
     if (!enabled || !user) return;
     const bump = () => invalidateAdminNavBadges(qc);
-    const ch = supabase.channel(`admin-nav-badges-${user.id}`)
+    const ch = listenChannel(`admin-nav-badges-${user.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_staff_reads" }, bump)

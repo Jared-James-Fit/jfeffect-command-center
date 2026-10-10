@@ -31,6 +31,7 @@ import {
 import { SESSION_TYPES, statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import { useAuth } from "@/lib/auth";
 import { SessionActionsSheet } from "@/components/schedule/session-actions-sheet";
+import { listenChannel } from "@/lib/realtime-channel";
 
 type TabKey = "upcoming" | "review" | "completed" | "cancelled" | "noshow" | "all";
 
@@ -78,8 +79,7 @@ export function PtCalendarPanel() {
 
   // Keep the list live across tabs/devices (targeted invalidation, no polling).
   useEffect(() => {
-    const ch = supabase
-      .channel("pt-calendar-sessions")
+    const ch = listenChannel("pt-calendar-sessions")
       .on("postgres_changes", { event: "*", schema: "public", table: "pt_sessions" }, () => {
         qc.invalidateQueries({ queryKey: ["pt-sessions"] });
         qc.invalidateQueries({ queryKey: ["pt-session-events"] });
