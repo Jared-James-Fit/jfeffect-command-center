@@ -63,9 +63,11 @@ export const DEFAULT_VOICE: VoiceProfile = {
     "cooked", "cooking", "killing it", "crushing it", "looking yoked", "massive", "honestly", "ngl", "fr", "imo",
     "crazy", "trash", "trashhh", "dump", "dumping", "winner", "winning", "geeking", "geeking out", "goes hard",
     "floored", "no way", "bless", "bless up", "omg", "perff",
+    "thats wild", "this is wild", "thats crazy", "v proud",
   ],
   hype: [
     "sheeeesh", "ayooooo", "noo way", "thats craaazy", "gawd damn", "holy shiii", "wtf", "tooo goood!!",
+    "WILDDD", "craaazy", "insane", "this is nuts", "so freaking hyped",
   ],
   emojis: ["💪", "🔥🔥🔥", "😭", "💀", "🙏", "👊", "🤝", "🙌", "🥹", "🤣", "🤩", "🫡", "🏆", "🥇", "🤤"],
   for_guys: ["big man", "big guy", "boss man", "dude", "bro", "brother", "man"],

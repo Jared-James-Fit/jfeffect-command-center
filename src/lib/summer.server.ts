@@ -421,6 +421,10 @@ export async function answerSummer(
     supabase.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
     ownerFirstName(),
   ]);
+  // His saved voice (Admin → My Voice), for anything she writes as him.
+  const { loadCoachVoice } = await import("@/lib/coach-voice.functions");
+  const { buildVoicePrompt } = await import("@/lib/coach-voice");
+  const coachVoice = await loadCoachVoice(supabase);
 
   // The books (taxes, expenses, income) are the owner's, and the finance
   // login keeps them. Other admins get the rest of the app plus who still owes
@@ -448,6 +452,9 @@ export async function answerSummer(
     }),
     "",
     booksSection,
+    "",
+    `WRITING AS ${ownerName ?? "THE COACH"}: when asked to write, draft or reword anything that goes out as him (community posts, captions, shout-outs, messages to clients, replies), write it in HIS voice below, not yours. Your own tone is only for talking to the person using the app. For a post to the whole community, keep it group-friendly (no nicknames, no edgy words).`,
+    buildVoicePrompt(coachVoice, null, { group: true }),
     "",
     `NOW: ${new Date().toLocaleString("en-CA", { timeZone: BUSINESS_TZ, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })} (${BUSINESS_TZ}). Today is ${businessToday()}.`,
     "",

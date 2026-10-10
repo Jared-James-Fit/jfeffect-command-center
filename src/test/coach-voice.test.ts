@@ -98,3 +98,24 @@ describe("wiring", () => {
     expect(readFileSync("src/routeTree.gen.ts", "utf8")).toContain("'/admin/voice'");
   });
 });
+
+describe("voice everywhere he writes", () => {
+  it("Summer drafts posts / messages as him in his saved voice", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/lib/summer.server.ts", "utf8");
+    expect(src).toMatch(/loadCoachVoice\(supabase\)/);
+    expect(src).toMatch(/buildVoicePrompt\(coachVoice, null, \{ group: true \}\)/);
+  });
+  it("My Voice saves on its own and removing a word can be undone", async () => {
+    const { readFileSync } = await import("node:fs");
+    const page = readFileSync("src/route-pages/_authenticated/admin/voice.tsx", "utf8");
+    expect(page).toMatch(/Autosave/);
+    expect(page).toMatch(/label: "Undo"/);
+    expect(page).not.toMatch(/Save voice/);
+  });
+  it("his new phrases are in the starting voice", async () => {
+    const { DEFAULT_VOICE } = await import("@/lib/coach-voice");
+    expect(DEFAULT_VOICE.everyday).toEqual(expect.arrayContaining(["thats wild", "this is wild", "thats crazy", "v proud"]));
+    expect(DEFAULT_VOICE.hype).toEqual(expect.arrayContaining(["WILDDD", "craaazy", "insane", "this is nuts", "so freaking hyped"]));
+  });
+});
