@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { ArrowLeft, Ban, Check, ExternalLink, History, Landmark, Loader2, RefreshCw } from "lucide-react";
+import { Ban, Check, ExternalLink, History, Landmark, Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
@@ -160,16 +160,13 @@ function MeetCard({ m, unit, record }: { m: CareerMeet; unit: WeightUnit; record
 type Filter = "all" | "coached" | "other";
 
 /** One athlete's powerlifting career: badges, bests and every meet, coached or not. */
-export function PowerliftingCareer({ athleteId, onBack, backLabel = "Board" }: { athleteId: string; onBack: () => void; backLabel?: string }) {
+export function PowerliftingCareer({ athleteId }: { athleteId: string }) {
   const { unit } = useWeightUnit();
   const { data: c, isPending, error, refetch, isFetching } = useCareer(athleteId);
   const [filter, setFilter] = useState<Filter>("all");
 
-  const back = (
-    <button type="button" onClick={onBack} className="inline-flex min-h-10 items-center gap-1 rounded-full border bg-card px-3 text-sm font-semibold">
-      <ArrowLeft className="h-4 w-4" /> {backLabel}
-    </button>
-  );
+  // No Back of its own: the sheet's Back (top-left) leaves the career for the board. This only clears it.
+  const back = <div className="h-11" aria-hidden />;
   if (isPending) return <div className="space-y-4">{back}<div className="py-12 text-center text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div></div>;
   if (error || !c) {
     return (

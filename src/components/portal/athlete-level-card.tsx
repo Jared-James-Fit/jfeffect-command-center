@@ -24,7 +24,7 @@ import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "
 import { CoachTag } from "@/components/portal/coach-tag";
 import { SwipeCards, type SwipeCard } from "@/components/portal/swipe-cards";
 import { CoachFocus, PointsBar, PointsLegend, VsCard } from "@/components/portal/league-insights";
-import { HallOfStrength } from "@/components/portal/strength-board";
+import { HallOfStrengthSheet } from "@/components/portal/strength-board";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
 type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean; is_coach?: boolean };
@@ -214,13 +214,12 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [], le
         </SheetContent>
       </Sheet>
 
-      <Sheet open={open === "powerlifting"} onOpenChange={(o) => !o && setOpen(null)}>
-        <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-5 pb-safe-bottom pt-5">
-          <div className="min-h-[320px]">
-            <HallOfStrength initialSource="meets" />
-          </div>
-        </SheetContent>
-      </Sheet>
+      <HallOfStrengthSheet
+        open={open === "powerlifting"}
+        onOpenChange={(o) => !o && setOpen(null)}
+        initialSource="meets"
+        contentClassName="max-h-[88dvh] px-5 pt-5"
+      />
     </>
   );
 }

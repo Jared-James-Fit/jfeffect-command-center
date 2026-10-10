@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ChevronRight, Crown, Dumbbell, Info, Landmark, Loader2, Medal, Scale, ShieldCheck, Trophy } from "lucide-react";
@@ -211,11 +211,7 @@ export function StrengthBoardCard() {
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </div>
       </button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-safe-bottom">
-          <HallOfStrength />
-        </SheetContent>
-      </Sheet>
+      <HallOfStrengthSheet open={open} onOpenChange={setOpen} />
     </>
   );
 }
@@ -369,11 +365,7 @@ export function StrengthBoardSlide() {
           </button>
         </div>
       </div>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-safe-bottom">
-          <HallOfStrength initialMode={mode} initialLift={lift} initialDivision={division} initialCareer={careerId} />
-        </SheetContent>
-      </Sheet>
+      <HallOfStrengthSheet open={open} onOpenChange={setOpen} initialMode={mode} initialLift={lift} initialDivision={division} initialCareer={careerId} />
     </>
   );
 }
@@ -405,9 +397,33 @@ function KingTile({ label, row, value, loading, className }: {
 
 // ── The board ──────────────────────────────────────────────────────────────
 
+type BoardStart = { initialSource?: BoardSource; initialMode?: BoardMode; initialLift?: BoardLift; initialDivision?: Division; initialCareer?: string | null };
+
+/**
+ * The Hall of Strength in a bottom sheet, with ONE Back. The sheet's own Back
+ * sits top-left; inside a lifter's career it goes back to the board (one level
+ * up), and from the board it closes the sheet. The career has no Back of its
+ * own, so the two never stack on each other.
+ */
+export function HallOfStrengthSheet({ open, onOpenChange, contentClassName, ...start }: BoardStart & {
+  open: boolean; onOpenChange: (open: boolean) => void; contentClassName?: string;
+}) {
+  const [career, setCareer] = useState<string | null>(start.initialCareer ?? null);
+  // Each time it opens it starts where the opener says (a lifter's career, or the board).
+  useEffect(() => { if (open) setCareer(start.initialCareer ?? null); }, [open, start.initialCareer]);
+  return (
+    <Sheet open={open} onOpenChange={(o) => (!o && career ? setCareer(null) : onOpenChange(o))}>
+      <SheetContent side="bottom" className={cn("max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-safe-bottom", contentClassName)}>
+        <HallOfStrength {...start} career={career} onCareerChange={setCareer} />
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 /** The full Hall of Strength: All-time (training + meets, everyone ever coached) and Competition (sanctioned meets). */
-export function HallOfStrength({ initialSource = "all", initialMode = "p4p", initialLift = "total", initialDivision = "all", initialCareer = null }: {
-  initialSource?: BoardSource; initialMode?: BoardMode; initialLift?: BoardLift; initialDivision?: Division; initialCareer?: string | null;
+export function HallOfStrength({ initialSource = "all", initialMode = "p4p", initialLift = "total", initialDivision = "all", initialCareer = null, career: controlledCareer, onCareerChange }: BoardStart & {
+  /** Controlled by HallOfStrengthSheet, so its Back can leave a career. Alone, the board keeps its own. */
+  career?: string | null; onCareerChange?: (id: string | null) => void;
 }) {
   const { unit, setUnit } = useWeightUnit();
   const isStaff = useIsStaff();
@@ -419,7 +435,9 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   const [division, setDivision] = useState<Division>(initialDivision);
   const [showAll, setShowAll] = useState(false);
   // A lifter's powerlifting career, opened from the board (rows with a meet record).
-  const [career, setCareer] = useState<string | null>(initialCareer);
+  const [ownCareer, setOwnCareer] = useState<string | null>(initialCareer);
+  const career = onCareerChange ? controlledCareer ?? null : ownCareer;
+  const setCareer = onCareerChange ?? setOwnCareer;
   const { data: tiers } = useTiers();
   const active = source === "all" ? allTime : meets;
   const rows = active.data ?? [];
@@ -432,7 +450,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   const what = lift === "total" ? "squat + bench + deadlift" : LIFT_NAME[lift];
   const pick = <T,>(set: (v: T) => void) => (v: T) => { set(v); setShowAll(false); };
 
-  if (career) return <PowerliftingCareer athleteId={career} onBack={() => setCareer(null)} backLabel="Hall of Strength" />;
+  if (career) return <PowerliftingCareer athleteId={career} />;
 
   return (
     <div className="space-y-4">

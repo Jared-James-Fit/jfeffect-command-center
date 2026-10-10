@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   attemptsMade,
@@ -110,5 +111,46 @@ describe("normalizeCareer / coaching status", () => {
   it("podiums count 1st to 3rd only", () => {
     expect(podiums(jared)).toBe(5);
     expect(podiums([meet({ place: "DQ" }), meet({ place: "4" }), meet({ place: null })])).toBe(0);
+  });
+});
+
+describe("a lifter's career has one Back", () => {
+  const board = readFileSync("src/components/portal/strength-board.tsx", "utf8");
+  const career = readFileSync("src/components/portal/powerlifting-career.tsx", "utf8");
+
+  it("the career draws no Back of its own (it overlapped the sheet's)", () => {
+    expect(career).not.toContain("ArrowLeft");
+    expect(career).not.toContain("onBack");
+    expect(career).toContain('<div className="h-11" aria-hidden />');
+  });
+
+  it("the sheet's Back leaves a career for the board first, then closes the sheet", () => {
+    expect(board).toContain("onOpenChange={(o) => (!o && career ? setCareer(null) : onOpenChange(o))}");
+    expect(board).toContain("<HallOfStrength {...start} career={career} onCareerChange={setCareer} />");
+    expect(board).toContain("if (career) return <PowerliftingCareer athleteId={career} />;");
+  });
+
+  it("every Hall of Strength sheet goes through that one wrapper", () => {
+    const level = readFileSync("src/components/portal/athlete-level-card.tsx", "utf8");
+    expect(level).toContain("<HallOfStrengthSheet");
+    expect(level).not.toContain("<HallOfStrength ");
+    expect(board.match(/<HallOfStrengthSheet /g)?.length).toBe(2); // the Home card and the League slide
+  });
+});
+
+describe("Athlete Records opened from the League tab", () => {
+  const page = readFileSync("src/routes/_authenticated/admin/athlete-records.tsx", "utf8");
+  const league = readFileSync("src/components/community/staff-league-board.tsx", "utf8");
+
+  it("has a Back to the League tab on a phone", () => {
+    expect(page).toContain('backTo="/admin/community" backLabel="League"');
+    expect(league).toContain('<Link to="/admin/athlete-records"');
+  });
+
+  it("doesn't repeat the League tab's own tools (Final-week boost, Hall of Strength review)", () => {
+    expect(page).not.toContain("LeagueBoostAdmin");
+    expect(page).not.toContain("StrengthBoardCoachTools");
+    expect(league).toContain("<LeagueBoostAdmin />");
+    expect(league).toContain("<StrengthBoardCoachTools />");
   });
 });
