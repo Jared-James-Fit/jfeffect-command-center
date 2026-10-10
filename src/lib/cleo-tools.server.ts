@@ -267,13 +267,13 @@ export function cleoReadTools(ctx: ToolCtx) {
         const lines = [`${clientName(c)} program:`];
         if (!blocks.length) lines.push("- no program blocks");
         for (const b of [current, ...blocks.filter((b) => b !== current)].filter(Boolean).slice(0, 8)) {
-          lines.push(`- ${b === current ? "CURRENT " : ""}${b.name ?? "Block"} | ${b.status ?? "?"} | ${b.start_date ?? "?"} to ${b.end_date ?? "?"} | ${b.weeks ?? "?"} weeks`);
+          lines.push(`- ${b === current ? "CURRENT " : ""}${b.name ?? "Block"} | block id ${b.id} | ${b.status ?? "?"} | ${b.client_visible ? "published" : "HIDDEN from client"} | ${b.start_date ?? "?"} to ${b.end_date ?? "?"} | ${b.weeks ?? "?"} weeks`);
         }
         lines.push(`Schedule ${from} to ${to}:`);
         for (const s of sched) {
           const d = days.get(s.source_day_id);
           const comp = done.get(s.id);
-          lines.push(`- ${s.scheduled_date}${s.scheduled_time ? ` ${String(s.scheduled_time).slice(0, 5)}` : ""} | ${d?.title ?? "Workout"}${d?.focus ? ` (${d.focus})` : ""} | ${comp ? `done${comp.session_rating != null ? `, rated ${comp.session_rating}` : ""}` : s.scheduled_date < today ? "NOT logged" : "upcoming"}`);
+          lines.push(`- ${s.scheduled_date}${s.scheduled_time ? ` ${String(s.scheduled_time).slice(0, 5)}` : ""} | ${d?.title ?? "Workout"}${d?.focus ? ` (${d.focus})` : ""} | ${comp ? `done${comp.session_rating != null ? `, rated ${comp.session_rating}` : ""}` : s.scheduled_date < today ? "NOT logged" : "upcoming"} | workout id ${s.id} | day id ${s.source_day_id}`);
         }
         if (!sched.length) lines.push("- nothing scheduled");
         if (date) {

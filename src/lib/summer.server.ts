@@ -487,7 +487,8 @@ export async function answerSummer(
     ]),
   );
   const tz = BUSINESS_TZ;
-  const tools = { ...cleoReadTools({ db: supabase, tz, today: businessToday() }), ...actionTools };
+  const { cleoProgramTools } = await import("@/lib/cleo-program.server");
+  const tools = { ...cleoReadTools({ db: supabase, tz, today: businessToday() }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools };
 
   // Gemini 3 needs its "thought signature" echoed back on every tool step.
   // The SDK keeps it under the provider's name but only sends back what's
@@ -506,7 +507,7 @@ export async function answerSummer(
         { role: "user" as const, content: input.message },
       ],
       tools,
-      stopWhen: stepCountIs(8),
+      stopWhen: stepCountIs(14),
     });
 
   let text = "";

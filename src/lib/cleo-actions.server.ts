@@ -12,7 +12,7 @@
  *   is checked, and every status change is a compare-and-set, so a double tap
  *   can't run something twice.
  */
-import { BUSINESS_TZ } from "@/lib/billing-schedule";
+import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
 import { wallTimeToUtc } from "@/lib/schedule-time";
 import {
   CLEO_ACTION_INFO, CLEO_ACTION_PARAMS, actionPermission, isCleoActionKind, isStale, routeFor,
@@ -76,6 +76,8 @@ function when(date: string, time: string): string {
 
 /** The card's words, from the database. Throws when the thing doesn't exist or can't be done. */
 export async function describeAction(db: any, kind: CleoActionKind, p: any): Promise<string> {
+  const program = await import("@/lib/cleo-program.server");
+  if (program.isProgramKind(kind)) return program.describeProgramAction(db, kind, p, businessToday());
   switch (kind) {
     case "create_task":
       return `Add "${p.title}" to the team board${p.due_date ? `, due ${p.due_date}` : ""}.${p.notes ? `\nNotes: ${p.notes}` : ""}`;
@@ -132,6 +134,8 @@ export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoA
 /** Runs it with this actor's own session (same server functions and RLS as the app). */
 async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Promise<string> {
   const p: any = CLEO_ACTION_PARAMS[kind].parse(raw);
+  const program = await import("@/lib/cleo-program.server");
+  if (program.isProgramKind(kind)) return program.executeProgramAction(actor, kind, p, businessToday());
   const sb = actor.supabase;
   const myCoachId = async () => (await sb.from("coaches").select("id").eq("user_id", actor.userId).maybeSingle()).data?.id ?? null;
   switch (kind) {

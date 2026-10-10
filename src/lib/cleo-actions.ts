@@ -4,11 +4,12 @@
  *
  * Cleo never acts on her own. She proposes; the person taps Confirm; it runs
  * with their own session. When it's outside their role it becomes a request
- * the business owner approves (see 20261029090000_cleo_actions.sql).
+ * the business owner approves (see 20261101090000_cleo_actions.sql).
  */
 import { z } from "zod";
 import { RECORDABLE_PAYMENT_STATUSES, type Permission } from "@/lib/permissions";
 import { PAYMENT_STATUS_DETAILED } from "@/lib/offers";
+import { WEEKDAYS, rxSchema } from "@/lib/cleo-program";
 
 export type ActionPermission = Permission | "admin";
 
@@ -22,6 +23,20 @@ export const CLEO_APPOINTMENT_TYPES = [
 const uuid = z.string().uuid();
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
 const hm = z.string().regex(/^\d{2}:\d{2}$/, "HH:MM (24h)");
+
+/** An exercise from the library (ids from exercise_library; never invented) with its prescription. */
+const programExercise = rxSchema.extend({ exercise_id: uuid.describe("Library exercise id from exercise_library.") });
+
+/** One change to a program day. Fields used depend on `op`. */
+const dayChange = rxSchema.extend({
+  op: z.enum(["update", "swap", "add", "remove"]).describe("update: change a row's prescription. swap: replace a row's exercise. add: new exercise. remove: delete a row."),
+  row_id: uuid.optional().describe("The row to update, swap or remove (row ids from program_detail)."),
+  exercise_id: uuid.optional().describe("For swap and add: the library exercise."),
+  position: z.number().int().min(0).max(30).optional().describe("For add: where in the day (0 = first). Default last."),
+}).superRefine((c, ctx) => {
+  if (c.op !== "add" && !c.row_id) ctx.addIssue({ code: "custom", message: `${c.op} needs row_id` });
+  if ((c.op === "add" || c.op === "swap") && !c.exercise_id) ctx.addIssue({ code: "custom", message: `${c.op} needs exercise_id` });
+});
 
 export const CLEO_ACTION_PARAMS = {
   create_task: z.object({
@@ -55,6 +70,55 @@ export const CLEO_ACTION_PARAMS = {
     video_call: z.boolean().default(false),
     location: z.string().trim().max(300).optional(),
   }),
+  assign_program_template: z.object({
+    client_id: uuid,
+    template_id: uuid.describe("From program_templates."),
+    start_date: ymd,
+    name: z.string().trim().min(1).max(80).optional(),
+    publish: z.boolean().default(true).describe("Visible to the client right away."),
+  }),
+  build_program: z
+    .object({
+      client_id: uuid,
+      name: z.string().trim().min(1).max(80),
+      start_date: ymd,
+      weeks: z.number().int().min(1).max(16),
+      training_days: z.array(z.enum(WEEKDAYS)).min(1).max(7).optional().describe("Weekdays the workouts fall on, one per day in `days`. Leave out to use the client's committed training days."),
+      days: z
+        .array(
+          z.object({
+            title: z.string().trim().min(1).max(60),
+            focus: z.string().trim().max(60).optional(),
+            exercises: z
+              .array(programExercise.extend({ weeks: z.array(rxSchema.extend({ week: z.number().int().min(1).max(16) })).max(16).optional().describe("Per-week changes for progression (e.g. week 2 RPE 8, week 4 deload). Anything not given repeats the base prescription.") }))
+              .min(1)
+              .max(14),
+          }),
+        )
+        .min(1)
+        .max(7),
+      coach_notes: z.string().trim().max(1000).optional(),
+      publish: z.boolean().default(false).describe("Visible to the client right away. Default: hidden until published."),
+    })
+    .superRefine((p, ctx) => {
+      if (p.training_days && p.training_days.length !== p.days.length) ctx.addIssue({ code: "custom", message: "training_days needs one weekday per day" });
+      if (p.training_days && new Set(p.training_days).size !== p.training_days.length) ctx.addIssue({ code: "custom", message: "training_days repeats a weekday" });
+    }),
+  edit_program_day: z.object({
+    day_id: uuid.describe("From program_detail."),
+    scope: z.enum(["this", "future"]).default("this").describe("this: only this day. future: also the same day in later weeks of the block (days the client already started or logged are never touched)."),
+    changes: z.array(dayChange).min(1).max(20),
+  }),
+  add_workout: z.object({
+    client_id: uuid,
+    date: ymd,
+    title: z.string().trim().min(1).max(60),
+    focus: z.string().trim().max(60).optional(),
+    exercises: z.array(programExercise).min(1).max(14),
+    block_id: uuid.optional().describe("Which block it belongs to. Default: their current block."),
+  }),
+  publish_program: z.object({ block_id: uuid, visible: z.boolean().default(true).describe("true publishes it to the client; false hides it.") }),
+  move_workout: z.object({ workout_id: uuid.describe("Scheduled workout id from training_program."), date: ymd }),
 } as const;
 
 export type CleoActionKind = keyof typeof CLEO_ACTION_PARAMS;
@@ -77,6 +141,12 @@ export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: str
   update_payment_status: { title: "Update a payment", tool: "Change a purchase's payment status (e.g. mark it Paid or Partially Paid). Purchase ids come from the purchases lookup." },
   send_payment_link: { title: "Send a payment link", tool: "Send a client the payment link for an existing purchase by email or text." },
   book_appointment: { title: "Book an appointment", tool: "Book an appointment on the calendar (business time zone), optionally with a client and a video call." },
+  assign_program_template: { title: "Assign a program", tool: "Put a client on a program template from the library, starting on a date. Its workouts land on their committed training days." },
+  build_program: { title: "Build a program", tool: "Build a new training block for a client from scratch: weeks, days, and library exercises with prescriptions and weekly progression. Hidden from the client unless publish is true." },
+  edit_program_day: { title: "Edit a workout", tool: "Change one program day: update prescriptions, swap or add library exercises, remove rows. Can carry the change into the same day in later weeks." },
+  add_workout: { title: "Add a workout", tool: "Add a one-off workout with library exercises to a client's program and schedule it on a date." },
+  publish_program: { title: "Publish a program", tool: "Make a block visible to the client (publish) or hide it." },
+  move_workout: { title: "Move a workout", tool: "Move a scheduled workout to another date." },
 };
 
 /** What doing it takes. Admins can do all of these; the finance login holds some role permissions. */
