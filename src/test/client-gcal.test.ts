@@ -205,7 +205,7 @@ describe("wiring", () => {
   const read = (p: string) => readFileSync(p, "utf8");
 
   it("tokens table is server-only and has its own 5-minute job with a long wait", () => {
-    const sql = read("supabase/migrations/20261031090000_client_google_calendars.sql");
+    const sql = read("supabase/migrations/20261031120000_client_google_calendars.sql");
     expect(sql).toContain("enable row level security");
     expect(sql).not.toMatch(/create policy/i);
     expect(sql).toContain("client-google-calendars-tick");
