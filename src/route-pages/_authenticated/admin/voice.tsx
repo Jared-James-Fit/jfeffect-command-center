@@ -1,10 +1,12 @@
 /**
  * Admin → My Voice. How the app talks when it writes as the coach: AI
- * suggested check-in replies, form-review replies and the Wednesday Wins post.
+ * suggested check-in replies, form-review replies, the Wednesday Wins post and
+ * anything Summer drafts as him (posts, captions, messages).
  * Edit the rules, word lists and examples, set per-client nicknames / edgy
- * humour, and try a sample before saving.
+ * humour, and try a sample. Every change saves on its own (removing a word
+ * can be undone from the toast).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -47,28 +49,59 @@ export function CoachVoicePage() {
   const save = useServerFn(saveCoachVoiceFn);
   const { data, isLoading } = useQuery({ queryKey: ["coach-voice"], queryFn: () => get() });
 
+  // The draft is loaded once; after that what you type is the truth and saves
+  // itself (a refetch never overwrites what you're in the middle of writing).
   const [draft, setDraft] = useState<VoiceProfile | null>(null);
+  const savedJson = useRef<string | null>(null);
   useEffect(() => {
-    if (data?.profile) setDraft(data.profile);
-  }, [data?.profile]);
-  const dirty = useMemo(() => !!draft && !!data && JSON.stringify(draft) !== JSON.stringify(data.profile), [draft, data]);
+    if (data?.profile && !draft) {
+      setDraft(data.profile);
+      savedJson.current = JSON.stringify(data.profile);
+    }
+  }, [data?.profile, draft]);
+  const [status, setStatus] = useState<"saved" | "pending" | "saving" | "error">("saved");
 
   const saveMut = useMutation({
-    mutationFn: async () => save({ data: { profile: draft! } }),
-    onSuccess: async () => {
-      toast.success("Voice saved. New replies will use it.");
-      await qc.invalidateQueries({ queryKey: ["coach-voice"] });
+    mutationFn: async (profile: VoiceProfile) => save({ data: { profile } }),
+    onMutate: () => setStatus("saving"),
+    onSuccess: (res, sent) => {
+      savedJson.current = JSON.stringify(sent);
+      qc.setQueryData(["coach-voice"], (old: any) => (old ? { ...old, profile: res.profile } : old));
+      setStatus((cur) => (cur === "saving" ? "saved" : cur));
     },
-    onError: (e: any) => toast.error(e?.message ?? "Couldn't save"),
+    onError: (e: any) => {
+      setStatus("error");
+      toast.error(e?.message ?? "Couldn't save your voice. Try again.");
+    },
   });
 
-  const setList = (k: VoiceListKey, next: string[]) => setDraft((d) => (d ? { ...d, [k]: next } : d));
+  // Autosave: a moment after the last change.
+  useEffect(() => {
+    if (!draft) return;
+    const json = JSON.stringify(draft);
+    if (json === savedJson.current) return;
+    setStatus("pending");
+    const t = window.setTimeout(() => saveMut.mutate(draft), 900);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
+
+  const setList = (k: VoiceListKey, next: string[]) => {
+    const before = draft?.[k] ?? [];
+    setDraft((d) => (d ? { ...d, [k]: next } : d));
+    const gone = before.filter((w) => !next.includes(w));
+    if (gone.length === 1 && next.length < before.length) {
+      toast(`Removed "${gone[0]}"`, {
+        action: { label: "Undo", onClick: () => setDraft((d) => (d ? { ...d, [k]: d[k].includes(gone[0]) ? d[k] : [...d[k], gone[0]] } : d)) },
+      });
+    }
+  };
 
   return (
     <>
       <PageHeader
         title="My Voice"
-        subtitle="How the app talks when it writes as you: suggested check-in replies, form replies and the Wednesday Wins post."
+        subtitle="How the app sounds when it writes as you: posts and messages Summer drafts, suggested check-in and form replies, and the Wednesday Wins post. Changes save on their own."
       />
       <SettingsTabs />
       <div className="mx-auto max-w-3xl space-y-4 p-4 pb-28 md:p-6">
@@ -154,16 +187,25 @@ export function CoachVoicePage() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                if (confirm("Reset everything to the starting voice? Unsaved changes are lost.")) setDraft(DEFAULT_VOICE);
+                if (confirm("Reset everything back to the starting voice? Your added words and examples will be replaced.")) setDraft(DEFAULT_VOICE);
               }}
             >
               <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset to defaults
             </Button>
-            <div className="ml-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "Saved"}</div>
-            <Button type="button" size="sm" disabled={!dirty || saveMut.isPending} onClick={() => saveMut.mutate()}>
-              {saveMut.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
-              Save voice
-            </Button>
+            <div className={cn("ml-auto flex items-center gap-1.5 text-xs", status === "error" ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
+              {status === "saving" || status === "pending" ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</>
+              ) : status === "error" ? (
+                <>Couldn't save</>
+              ) : (
+                <><Save className="h-3.5 w-3.5" /> All changes saved</>
+              )}
+            </div>
+            {status === "error" && (
+              <Button type="button" size="sm" onClick={() => saveMut.mutate(draft)}>
+                Retry
+              </Button>
+            )}
           </div>
         </div>
       )}
