@@ -73,13 +73,25 @@ export function verifyOAuthState(token: string): Record<string, any> | null {
   } catch { return null; }
 }
 
+/**
+ * The Google sign-in app's id and secret, trimmed: a space or line break
+ * pasted into the Lovable secret makes Google answer "OAuth client was not
+ * found" (invalid_client).
+ */
+export function googleClientCreds(): { clientId: string; clientSecret: string } {
+  return {
+    clientId: (process.env.GOOGLE_OAUTH_CLIENT_ID ?? "").trim(),
+    clientSecret: (process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? "").trim(),
+  };
+}
+
 export function buildOAuthRedirectUri(origin: string): string {
   return `${origin.replace(/\/$/, "")}/api/public/google/oauth/callback`;
 }
 
 export function buildAuthorizeUrl(origin: string, state: string): string {
   const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
+    client_id: googleClientCreds().clientId,
     redirect_uri: buildOAuthRedirectUri(origin),
     response_type: "code",
     scope: GOOGLE_SCOPES.join(" "),
@@ -99,8 +111,8 @@ export async function exchangeCode(code: string, origin: string): Promise<{
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       code,
-      client_id: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
-      client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || "",
+      client_id: googleClientCreds().clientId,
+      client_secret: googleClientCreds().clientSecret,
       redirect_uri: buildOAuthRedirectUri(origin),
       grant_type: "authorization_code",
     }).toString(),
@@ -115,8 +127,8 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
-      client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || "",
+      client_id: googleClientCreds().clientId,
+      client_secret: googleClientCreds().clientSecret,
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }).toString(),

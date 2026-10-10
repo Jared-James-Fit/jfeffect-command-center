@@ -13,7 +13,11 @@ import {
   CLIENT_GCAL_SCOPES,
   FULL_CHECK_MS,
   SYNC_WINDOW_PAST_MS,
+  authErrorCode,
+  canonicalOrigin,
   googleEventEndMs,
+  looksLikeGoogleClientId,
+  setupProblemMessage,
   batchBoundaryOf,
   buildBatchBody,
   desiredGoogleEvents,
@@ -24,7 +28,9 @@ import {
   type BatchResult,
   type ExistingGoogleEvent,
   type GoogleEventBody,
+  type GoogleSetupCheck,
 } from "@/lib/client-gcal";
+import { buildOAuthRedirectUri, googleClientCreds } from "@/lib/google-cal.server";
 import { DEFAULT_TZ } from "@/lib/schedule-time";
 
 type Admin = SupabaseClient<any, any, any>;
@@ -43,9 +49,10 @@ export class ConnectError extends Error {
 }
 class RevokedError extends Error {}
 
-/** On once the Google sign-in app's id and secret are in the project secrets. */
+/** The Google sign-in app's id and secret are in the project secrets (not yet checked with Google). */
 export function clientGoogleConfigured(): boolean {
-  return !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET);
+  const { clientId, clientSecret } = googleClientCreds();
+  return !!(clientId && clientSecret);
 }
 
 /** Where calendar items link back to (same as the feed links). */
@@ -53,10 +60,18 @@ function appOrigin(): string {
   return (process.env.PUBLIC_APP_URL || process.env.SITE_URL || "https://jfeffect.com").replace(/\/$/, "");
 }
 
+/**
+ * The one address Google sends people back to. Fixed (the real site, never
+ * a preview host), so it's the single redirect URI registered with Google,
+ * and the start, the check and the callback all use the same one.
+ */
+export function oauthOrigin(): string {
+  return canonicalOrigin(process.env.PUBLIC_APP_URL || process.env.SITE_URL);
+}
+
 export async function clientAuthorizeUrl(origin: string, state: string): Promise<string> {
-  const { buildOAuthRedirectUri } = await import("@/lib/google-cal.server");
   const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
+    client_id: googleClientCreds().clientId,
     redirect_uri: buildOAuthRedirectUri(origin),
     response_type: "code",
     scope: CLIENT_GCAL_SCOPES.join(" "),
@@ -70,6 +85,135 @@ export async function clientAuthorizeUrl(origin: string, state: string): Promise
   return `${AUTH_URL}?${params.toString()}`;
 }
 
+// ---- Setup check ---------------------------------------------------------------
+//
+// Asks Google whether the configured client id, secret and redirect URI work,
+// without anyone signing in: the authorize endpoint answers with its error
+// page for a bad client or redirect URI, and the token endpoint tells a bad
+// secret (invalid_client) from a fine one (invalid_grant for a fake code).
+// Cached in app_settings so the button only shows when sign-in will work, and
+// a broken setup raises one admin alert (cleared once it works) instead of
+// sending clients to Google's error page.
+
+const SETUP_KEY = "client_google_calendar_check";
+const SETUP_ALERT = "google_calendar_setup";
+const RECHECK_OK_MS = 60 * 60 * 1000;
+const RECHECK_FAILED_MS = 5 * 60 * 1000;
+
+async function probeGoogleSetup(): Promise<{ ok: boolean; problem: string | null }> {
+  const { clientId, clientSecret } = googleClientCreds();
+  if (!clientId || !clientSecret) return { ok: false, problem: "missing" };
+  if (!looksLikeGoogleClientId(clientId)) return { ok: false, problem: "client_id_format" };
+  const redirectUri = buildOAuthRedirectUri(oauthOrigin());
+
+  const auth = await fetch(
+    `${AUTH_URL}?${new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: CLIENT_GCAL_SCOPES.join(" ") })}`,
+    { redirect: "manual" },
+  );
+  const location = auth.headers.get("location");
+  let code = authErrorCode(location);
+  if (!location) {
+    const body = await auth.text().catch(() => "");
+    if (/signin\/oauth\/error/.test(body)) {
+      code = /(invalid_client|redirect_uri_mismatch|unauthorized_client|deleted_client|disabled_client|invalid_request)/.exec(body)?.[1] ?? "authorize_error";
+    }
+  }
+  if (code) return { ok: false, problem: code };
+
+  const token = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code: "jf-setup-check",
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+    }).toString(),
+  });
+  const data: any = await token.json().catch(() => ({}));
+  if (data?.error === "invalid_grant") return { ok: true, problem: null };
+  if (data?.error === "invalid_client") return { ok: false, problem: /secret/i.test(data?.error_description ?? "") ? "bad_secret" : "invalid_client" };
+  return { ok: false, problem: String(data?.error || `token_${token.status}`) };
+}
+
+async function readSetupCheck(admin: Admin): Promise<GoogleSetupCheck | null> {
+  const { data } = await admin.from("app_settings").select("value").eq("key", SETUP_KEY).maybeSingle();
+  try {
+    return data?.value ? (JSON.parse(data.value) as GoogleSetupCheck) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Run the check now, store it, and raise or clear the admin alert. */
+export async function runGoogleSetupCheck(admin: Admin): Promise<GoogleSetupCheck> {
+  let result: { ok: boolean; problem: string | null };
+  try {
+    result = await probeGoogleSetup();
+  } catch (e: any) {
+    // Couldn't reach Google: keep what we knew, try again next time.
+    const prev = await readSetupCheck(admin);
+    if (prev) return prev;
+    result = { ok: false, problem: "unreachable" };
+  }
+  const check: GoogleSetupCheck = {
+    ok: result.ok,
+    problem: result.problem,
+    clientId: googleClientCreds().clientId || null,
+    redirectUri: buildOAuthRedirectUri(oauthOrigin()),
+    checkedAt: new Date().toISOString(),
+  };
+  await admin
+    .from("app_settings")
+    .upsert({ key: SETUP_KEY, value: JSON.stringify(check), updated_at: check.checkedAt }, { onConflict: "key" });
+  await syncSetupAlert(admin, check).catch(() => {});
+  return check;
+}
+
+async function syncSetupAlert(admin: Admin, check: GoogleSetupCheck): Promise<void> {
+  const { data: open } = await admin
+    .from("support_alerts")
+    .select("id, error_message")
+    .eq("error_type", SETUP_ALERT)
+    .in("status", ["open", "in_progress"])
+    .limit(1);
+  const current = (open ?? [])[0] as { id: string; error_message: string | null } | undefined;
+  const now = new Date().toISOString();
+  if (check.ok) {
+    if (current) {
+      await admin.from("support_alerts").update({ status: "resolved", resolved_at: now, updated_at: now }).eq("id", current.id);
+    }
+    return;
+  }
+  // "Not set up" isn't a fault: no alert until someone has added keys.
+  if (check.problem === "missing") return;
+  const message = `Clients can't connect Google Calendar: ${setupProblemMessage(check)}`;
+  const details = { problem: check.problem, client_id: check.clientId, redirect_uri: check.redirectUri, checked_at: check.checkedAt };
+  if (current) {
+    if (current.error_message !== message) {
+      await admin.from("support_alerts").update({ error_message: message, details, updated_at: now }).eq("id", current.id);
+    }
+    return;
+  }
+  await admin.from("support_alerts").insert({ error_type: SETUP_ALERT, error_message: message, details, page_route: "/admin" });
+}
+
+/**
+ * Google sign-in will work: keys present and Google accepted them on the
+ * last check. Re-checks when the keys changed, hourly when fine, and every 5
+ * minutes while broken (so a fix in Lovable shows up quickly).
+ */
+export async function clientGoogleReady(admin: Admin): Promise<boolean> {
+  if (!clientGoogleConfigured()) return false;
+  const prev = await readSetupCheck(admin);
+  const age = prev ? Date.now() - Date.parse(prev.checkedAt) : Infinity;
+  const keysChanged = !prev || prev.clientId !== googleClientCreds().clientId || prev.redirectUri !== buildOAuthRedirectUri(oauthOrigin());
+  const due = keysChanged || age > (prev?.ok ? RECHECK_OK_MS : RECHECK_FAILED_MS);
+  const check = due ? await runGoogleSetupCheck(admin) : prev!;
+  return check.ok;
+}
+
 // ---- Tokens -------------------------------------------------------------------
 
 async function refreshToken(refresh: string): Promise<{ access_token: string; expires_in: number }> {
@@ -77,8 +221,8 @@ async function refreshToken(refresh: string): Promise<{ access_token: string; ex
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_OAUTH_CLIENT_ID || "",
-      client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || "",
+      client_id: googleClientCreds().clientId,
+      client_secret: googleClientCreds().clientSecret,
       refresh_token: refresh,
       grant_type: "refresh_token",
     }).toString(),
@@ -324,6 +468,10 @@ export async function syncClientCalendar(admin: Admin, clientId: string, opts: {
 /** The 5-minute job: least recently checked connections first, within a time budget. */
 export async function syncDueClientCalendars(admin: Admin, opts: { max?: number; budgetMs?: number } = {}) {
   if (!clientGoogleConfigured()) return { skipped: "not_configured" };
+  if (!(await clientGoogleReady(admin))) {
+    const check = await readSetupCheck(admin);
+    return { skipped: "setup_problem", problem: check?.problem ?? null };
+  }
   const started = Date.now();
   const { data: rows, error } = await admin
     .from(TABLE)
@@ -442,8 +590,9 @@ export async function clientGoogleStatus(admin: Admin, clientId: string) {
     .select("google_email, status, last_synced_at, last_error, event_count")
     .eq("client_id", clientId)
     .maybeSingle();
+  const available = await clientGoogleReady(admin).catch(() => false);
   return {
-    available: clientGoogleConfigured(),
+    available,
     connected: !!row && row.status !== "revoked",
     revoked: row?.status === "revoked",
     email: (row?.google_email as string | null) ?? null,

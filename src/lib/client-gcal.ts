@@ -234,3 +234,77 @@ export function connectErrorMessage(code: string | null | undefined): string {
       return "Couldn't connect Google Calendar. Go back to the app and try again in a minute.";
   }
 }
+
+// ---- Is the Google sign-in app set up right? -----------------------------------
+
+/** Where Google sends people back to: the real site, never a preview host. */
+export function canonicalOrigin(raw: string | null | undefined): string {
+  const o = (raw || "https://jfeffect.com").trim().replace(/\/$/, "");
+  return /lovable\.(app|dev)|localhost|127\.0\.0\.1/.test(o) || !/^https:\/\//.test(o) ? "https://jfeffect.com" : o;
+}
+
+export function looksLikeGoogleClientId(id: string): boolean {
+  return /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(id);
+}
+
+/**
+ * Google's sign-in error page carries the reason in `authError`: base64 of a
+ * small protobuf whose first field is the code ("invalid_client",
+ * "redirect_uri_mismatch", ...).
+ */
+export function authErrorCode(location: string | null | undefined): string | null {
+  if (!location || !/\/signin\/oauth\/error/.test(location)) return null;
+  let raw: string | null = null;
+  try {
+    raw = new URL(location).searchParams.get("authError");
+  } catch {
+    return "authorize_error";
+  }
+  if (!raw) return "authorize_error";
+  try {
+    const b64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = typeof atob === "function" ? atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)) : "";
+    if (bin.charCodeAt(0) === 0x0a) {
+      const len = bin.charCodeAt(1);
+      const code = bin.slice(2, 2 + len);
+      if (/^[a-z_]+$/.test(code)) return code;
+    }
+    const m = /(invalid_client|redirect_uri_mismatch|unauthorized_client|invalid_request|access_denied|org_internal|deleted_client|disabled_client)/.exec(bin);
+    return m ? m[1] : "authorize_error";
+  } catch {
+    return "authorize_error";
+  }
+}
+
+export type GoogleSetupCheck = {
+  ok: boolean;
+  problem: string | null;
+  clientId: string | null;
+  redirectUri: string;
+  checkedAt: string;
+};
+
+/** For the admin alert: what's wrong and exactly where to fix it. */
+export function setupProblemMessage(check: Pick<GoogleSetupCheck, "problem" | "redirectUri">): string {
+  switch (check.problem) {
+    case null:
+      return "Google Calendar sign-in works.";
+    case "missing":
+      return "GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET isn't in Lovable's secrets (Cloud → Secrets).";
+    case "client_id_format":
+      return "The GOOGLE_OAUTH_CLIENT_ID secret isn't a Google client ID. It should look like 1234567890-abc123.apps.googleusercontent.com (Google Cloud → Google Auth Platform → Clients).";
+    case "invalid_client":
+    case "deleted_client":
+      return "Google doesn't recognise the client ID in Lovable's GOOGLE_OAUTH_CLIENT_ID secret (deleted, from another project, or pasted wrong). In Google Cloud → Google Auth Platform → Clients, create a Web application client, then paste its Client ID and Client secret into Lovable's two secrets.";
+    case "disabled_client":
+      return "The Google client in GOOGLE_OAUTH_CLIENT_ID is disabled in Google Cloud. Enable it or create a new Web application client and update both secrets.";
+    case "bad_secret":
+      return "GOOGLE_OAUTH_CLIENT_SECRET doesn't belong to the client in GOOGLE_OAUTH_CLIENT_ID. Copy the secret from the same Google client (Google Auth Platform → Clients → your client).";
+    case "redirect_uri_mismatch":
+      return `The Google client is missing this Authorized redirect URI: ${check.redirectUri} (Google Auth Platform → Clients → your client → Authorized redirect URIs → Add URI, then Save).`;
+    case "unauthorized_client":
+      return "The Google client isn't a Web application client. Create one of type Web application and update both secrets.";
+    default:
+      return `Google rejected the sign-in setup (${check.problem}). Check the client in Google Cloud → Google Auth Platform → Clients.`;
+  }
+}
