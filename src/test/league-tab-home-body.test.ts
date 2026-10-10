@@ -113,3 +113,14 @@ describe("Home: what you do today, and one Body swipe", () => {
     expect(home).not.toContain('title="Manage"');
   });
 });
+
+describe("SwipeCards always lands on a whole card", () => {
+  it("height follows only after the swipe settles, and settle snaps to the nearest card", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/components/portal/swipe-cards.tsx", "utf8");
+    expect(src).toMatch(/settleTimer\.current = window\.setTimeout\(settle, 140\)/);
+    expect(src).toMatch(/addEventListener\("scrollend", onEnd\)/);
+    expect(src).toMatch(/el\.scrollTo\(\{ left: target, behavior: "smooth" \}\)/);
+    expect(src).toMatch(/snap-center snap-always/);
+  });
+});
