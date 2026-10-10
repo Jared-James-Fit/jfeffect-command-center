@@ -29,6 +29,7 @@ import { SessionActionsSheet, whenLabel } from "@/components/schedule/session-ac
 import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
 import { deviceTodayISO } from "@/lib/schedule-time";
 import { useAuth } from "@/lib/auth";
+import { listenChannel } from "@/lib/realtime-channel";
 
 const ADJUST_REASONS = ["Bonus session", "Complimentary", "Correction", "Refund / manual adjustment", "No-show deduction", "Other"];
 
@@ -83,8 +84,7 @@ export function ClientSessionsPanel({
   };
 
   useEffect(() => {
-    const ch = supabase
-      .channel(`sessions-${clientId}`)
+    const ch = listenChannel(`sessions-${clientId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "pt_sessions", filter: `client_id=eq.${clientId}` }, invalidateAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "session_ledger_events", filter: `client_id=eq.${clientId}` }, invalidateAll)
       .subscribe();

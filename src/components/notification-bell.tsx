@@ -34,6 +34,7 @@ import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointment
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { initialNotificationView, notificationListScrollClass } from "@/lib/notifications-page-layout";
+import { listenChannel } from "@/lib/realtime-channel";
 
 // =============================================================================
 // Types
@@ -257,8 +258,7 @@ function acquireNotificationsChannel(userId: string, qc: QC): () => void {
         playAppSound("notify");
       }
     };
-    entry.ch = supabase
-      .channel(`notifications-${userId}`)
+    entry.ch = listenChannel(`notifications-${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, onInsert("messages"))
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, invalidate)

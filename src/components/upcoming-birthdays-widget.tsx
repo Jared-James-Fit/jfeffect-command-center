@@ -33,6 +33,7 @@ import { prefilledBirthdayMessage } from "@/lib/birthday-templates";
 import { sendMessage } from "@/lib/messages";
 import { cn } from "@/lib/utils";
 import { todayLocalISO } from "@/lib/today";
+import { listenChannel } from "@/lib/realtime-channel";
 
 type Status = "today" | "overdue" | "upcoming" | "wished";
 
@@ -114,8 +115,7 @@ export function UpcomingBirthdaysWidget({ windowDays = UPCOMING_DAYS_DEFAULT }: 
 
   // Live sync: flip the "Seen" state as soon as the client opens their card.
   useEffect(() => {
-    const channel = supabase
-      .channel("birthday-card-views-live")
+    const channel = listenChannel("birthday-card-views-live")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "client_birthday_card_views" },

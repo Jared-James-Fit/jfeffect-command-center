@@ -85,6 +85,7 @@ import { groupFormHistory, planFormMessages } from "@/lib/form-message-presentat
 import { playAppSound, registerOpenThread } from "@/lib/app-sounds";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
 import { StaffInviteChatCard } from "@/components/staff-invite-chat-card";
+import { listenChannel } from "@/lib/realtime-channel";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -1123,8 +1124,7 @@ export function MessageThread({
   useEffect(() => {
     if (!clientId) return;
     const key = ["messages", clientId, role] as const;
-    const ch = supabase
-      .channel(`messages-${clientId}-${role}`)
+    const ch = listenChannel(`messages-${clientId}-${role}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `client_id=eq.${clientId}` }, (payload: any) => {
         // Append the new message directly to the cache — no full refetch needed.
         // This is the primary performance fix: instead of invalidating the entire

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { listenChannel } from "@/lib/realtime-channel";
 
 /**
  * Real-time Stripe ↔ sales sync.
@@ -37,8 +38,7 @@ export function useSalesRealtime(): void {
       }, 250);
     };
 
-    const channel = supabase
-      .channel("sales-stripe-sync")
+    const channel = listenChannel("sales-stripe-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_records" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "payment_ledger" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "session_ledger_events" }, invalidate)

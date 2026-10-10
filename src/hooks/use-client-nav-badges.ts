@@ -7,6 +7,7 @@ import { useCommunityActivity } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
 import { useAdminNavBadgeCounts, adminBadgeMap } from "@/hooks/use-admin-nav-badges";
 import { messagesBadgeCount, unreadGroupCount } from "@/lib/nav-badge-counts";
+import { listenChannel } from "@/lib/realtime-channel";
 
 export type NavBadge = { count?: number; dot?: boolean };
 
@@ -118,7 +119,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
       }, NAV_BADGE_REALTIME_DEBOUNCE_MS);
     };
     const scoped = { event: "*" as const, schema: "public", filter: `client_id=eq.${clientId}` };
-    const ch = supabase.channel(`nav-badges-${user.id}-${clientId}`)
+    const ch = listenChannel(`nav-badges-${user.id}-${clientId}`)
       .on("postgres_changes", { ...scoped, table: "messages" }, invalidateBadges)
       .on("postgres_changes", { ...scoped, table: "conversation_state" }, invalidateBadges)
       .on("postgres_changes", { ...scoped, table: "lift_videos" }, invalidateBadges)

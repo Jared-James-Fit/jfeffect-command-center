@@ -168,6 +168,7 @@ import {
   estimateDurationFromLogs,
   touchWorkoutSession,
 } from "@/components/workout-day/WorkoutTimer";
+import { listenChannel } from "@/lib/realtime-channel";
 
 /* -------------------------------------------------------------------------- */
 /* Target-parsing helpers (Suggested → Draft → Confirmed fast-logging)         */
@@ -1049,8 +1050,7 @@ function WorkoutDay({
   useEffect(() => {
     if (!secondaryHydrationReady || !client?.id || rowIds.length === 0) return;
     const channelName = `workout-results:${dayId}:${client.id}`;
-    const channel = supabase
-      .channel(channelName)
+    const channel = listenChannel(channelName)
       .on(
         // @ts-ignore — "postgres_changes" is a valid Realtime event type
         "postgres_changes",
@@ -1093,8 +1093,7 @@ function WorkoutDay({
   useEffect(() => {
     if (!secondaryHydrationReady || !memberRealtimeCtx) return;
     const { enrollmentId, weekIndex, dayIndex } = memberRealtimeCtx;
-    const channel = supabase
-      .channel(`member-workout:${enrollmentId}:${weekIndex}:${dayIndex}`)
+    const channel = listenChannel(`member-workout:${enrollmentId}:${weekIndex}:${dayIndex}`)
       .on(
         // @ts-ignore — "postgres_changes" is a valid Realtime event type
         "postgres_changes",

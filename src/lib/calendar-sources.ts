@@ -7,6 +7,7 @@ import { listGoogleEventsRange, getGoogleConnectionStatus } from "@/lib/google-c
 import { resolveClientWeekDays, type ResolvedWorkoutDate } from "@/lib/resolved-client-days";
 import { toLocalISO } from "@/lib/today";
 import { cardioActivityLabel } from "@/lib/cardio-activity";
+import { listenChannel } from "@/lib/realtime-channel";
 
 /**
  * Phase 1 calendar item — a single chip rendered on the calendar grid.
@@ -254,8 +255,7 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
     const invalidate = () => {
       void qc.invalidateQueries({ queryKey: ["cal-client-workouts", clientId] });
     };
-    const channel = supabase
-      .channel(`cal-workouts:${clientId}`)
+    const channel = listenChannel(`cal-workouts:${clientId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_blocks", filter: `client_id=eq.${clientId}` }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_weeks" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_days" }, invalidate)

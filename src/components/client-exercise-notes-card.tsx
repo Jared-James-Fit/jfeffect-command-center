@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { StickyNote } from "lucide-react";
+import { listenChannel } from "@/lib/realtime-channel";
 
 const sb = supabase as any;
 
@@ -28,8 +29,7 @@ export function ClientExerciseNotesCard({ clientId }: { clientId: string }) {
   // client portal, and member app without a manual refresh.
   useEffect(() => {
     if (!clientId) return;
-    const channel = sb
-      .channel(`client-exercise-notes-${clientId}`)
+    const channel = (listenChannel(`client-exercise-notes-${clientId}`) as any)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "pl_exercise_notes", filter: `client_id=eq.${clientId}` },

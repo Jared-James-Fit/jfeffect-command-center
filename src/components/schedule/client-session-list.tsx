@@ -17,6 +17,7 @@ import { sendMessage } from "@/lib/messages";
 import { useAuth } from "@/lib/auth";
 import { fmtWallClock } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
+import { listenChannel } from "@/lib/realtime-channel";
 
 type Session = {
   id: string;
@@ -111,8 +112,7 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
       qc.invalidateQueries({ queryKey: ["my-upcoming-sessions", clientId] });
       qc.invalidateQueries({ queryKey: ["my-session-requests", clientId] });
     };
-    const ch = supabase
-      .channel(`client-schedule-${clientId}-${channelId}`)
+    const ch = listenChannel(`client-schedule-${clientId}-${channelId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "pt_sessions", filter: `client_id=eq.${clientId}` }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "pt_session_change_requests", filter: `client_id=eq.${clientId}` }, refresh)
       .subscribe();

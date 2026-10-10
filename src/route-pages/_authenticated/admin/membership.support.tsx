@@ -18,6 +18,7 @@ import { Send, Bug, Lightbulb, HelpCircle, Check, Radio, Ticket } from "lucide-r
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { listenChannel } from "@/lib/realtime-channel";
 
 export function SupportInboxRedirect() {
   const nav = useNavigate();
@@ -73,8 +74,7 @@ export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) 
   };
 
   useEffect(() => {
-    const ch = supabase
-      .channel("admin-msm")
+    const ch = listenChannel("admin-msm")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "member_support_messages" }, () => {
         qc.invalidateQueries({ queryKey: ["admin-support-threads"] });
         if (selected) qc.invalidateQueries({ queryKey: ["admin-support-thread", selected] });

@@ -6,6 +6,7 @@ import {
   type CachedExercise,
   type ExerciseLibraryChange,
 } from "@/lib/exercise-library-cache";
+import { listenChannel } from "@/lib/realtime-channel";
 
 /**
  * Keeps every mounted exercise selector current when a coach creates, edits,
@@ -19,8 +20,7 @@ export function useExerciseLibraryRealtime(): void {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const channel = supabase
-      .channel("exercise-library-sync")
+    const channel = listenChannel("exercise-library-sync")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "exercises" },

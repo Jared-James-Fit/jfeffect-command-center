@@ -16,6 +16,7 @@ import {
   type ReviewMessage,
 } from "@/lib/manual-check-in-reviews";
 import { cn } from "@/lib/utils";
+import { listenChannel } from "@/lib/realtime-channel";
 
 type Props = {
   review: ManualCheckInReview;
@@ -68,8 +69,7 @@ export function CheckInReviewThread({ review, viewerRole, autoMarkRead = true, c
 
   // Realtime: refetch on inserts in this thread
   useEffect(() => {
-    const ch = supabase
-      .channel(`review-thread-${review.id}`)
+    const ch = listenChannel(`review-thread-${review.id}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "manual_check_in_review_messages", filter: `review_id=eq.${review.id}` },
