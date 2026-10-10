@@ -305,6 +305,13 @@ function PortalHome() {
         <DashboardRefreshIndicator />
       </div>
 
+        {/* 1b — Schedule first on every Home: Today / the next 7 days (full calendar one tap away) */}
+        {client?.id && (
+          <SectionErrorBoundary label="Upcoming schedule">
+            <UpcomingScheduleCard clientId={client.id} />
+          </SectionErrorBoundary>
+        )}
+
       {/* 2 — Profile-missing fallback (workouts moved off the dashboard
             for perf — clients reach training via Quick Actions / nav). */}
         {clientSettled && !client ? <NoProfileCard /> : null}
@@ -328,13 +335,6 @@ function PortalHome() {
         {client?.id && (
           <SectionErrorBoundary label="Sex prompt">
             <SexPromptCard enabled={role === "client"} />
-          </SectionErrorBoundary>
-        )}
-
-        {/* 1b — Compact Today / Upcoming schedule (full calendar one tap away) */}
-        {client?.id && (
-          <SectionErrorBoundary label="Upcoming schedule">
-            <UpcomingScheduleCard clientId={client.id} />
           </SectionErrorBoundary>
         )}
 

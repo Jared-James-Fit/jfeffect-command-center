@@ -16,10 +16,21 @@ describe("every Home leads with its schedule", () => {
     expect(i, `${s} missing`).toBeGreaterThan(-1);
     return i;
   };
-  it("coach dashboard: right after the snapshot numbers, before Training today", () => {
+  it("coach dashboard: the schedule is the first card, above the numbers and banners", () => {
     const src = readFileSync("src/routes/_authenticated/admin/index.tsx", "utf8");
-    expect(at(src, "<SnapshotGrid")).toBeLessThan(at(src, "<DashboardScheduleCard"));
+    expect(at(src, "<DashboardScheduleCard")).toBeLessThan(at(src, "<DriveSetupBanner />"));
+    expect(at(src, "<DashboardScheduleCard")).toBeLessThan(at(src, "<SnapshotGrid"));
     expect(at(src, "<DashboardScheduleCard")).toBeLessThan(at(src, "<TrainingTodayCard"));
+  });
+  it("client Home: schedule right under the greeting, above every banner", () => {
+    const src = readFileSync("src/routes/_authenticated/portal/index.tsx", "utf8");
+    expect(at(src, "<GreetingHeader")).toBeLessThan(at(src, "<UpcomingScheduleCard"));
+    expect(at(src, "<UpcomingScheduleCard")).toBeLessThan(at(src, "<AgreementDashboardCard"));
+    expect(at(src, "<UpcomingScheduleCard")).toBeLessThan(at(src, "<SetupChecklistBanner"));
+  });
+  it("finance Home: My calendar before the money", () => {
+    const src = readFileSync("src/components/admin/finance/finance-home.tsx", "utf8");
+    expect(at(src, "<MyCalendarCard")).toBeLessThan(at(src, "Today's money"));
   });
   it("member Home: first card", () => {
     const src = readFileSync("src/routes/_authenticated/m/index.tsx", "utf8");
