@@ -83,6 +83,8 @@ import {
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 import { WeekStrip, statusDotClass } from "@/components/workouts/week-strip";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
+import { ProgramRoadmapCard, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
+import type { ProgramRoadmap } from "@/lib/training-roadmap";
 
 type Mode = "self" | "coach";
 
@@ -236,6 +238,13 @@ export function WorkoutsExperience({
   ].filter(Boolean).join(" · ");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [calView, setCalView] = useState<"week" | "month">("week");
+
+  // Program roadmap: shared by both tabs. Tapping a block on its timeline
+  // opens that block in Block View.
+  const { data: visibleBlocks } = useClientVisibleBlocks(clientId);
+  const roadmap = useProgramRoadmap(clientId, visibleBlocks);
+  const [tab, setTab] = useState<"calendar" | "block">("calendar");
+  const [blockViewId, setBlockViewId] = useState<string | null>(null);
 
   // ---- Drag & drop rescheduling (pointer + touch) ------------------------
   // dnd-kit PointerSensor (mouse/iPad pointer) + TouchSensor (press-and-hold,
@@ -522,7 +531,19 @@ export function WorkoutsExperience({
           />
         )}
 
-        <Tabs defaultValue="calendar" className="space-y-4">
+        {!isLoading && (
+          <ProgramRoadmapCard
+            roadmap={roadmap}
+            selectedBlockId={tab === "block" ? blockViewId ?? roadmap?.currentBlockId ?? null : null}
+            onSelectBlock={(id) => {
+              setBlockViewId(id);
+              setTab("block");
+            }}
+            coach={mode === "coach"}
+          />
+        )}
+
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "calendar" | "block")} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
             <TabsTrigger value="calendar" className="gap-1">
               <CalendarIcon className="h-3.5 w-3.5" /> Calendar
@@ -603,7 +624,14 @@ export function WorkoutsExperience({
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading program…
               </Card>
             ) : (
-              <BlockViewTab items={primaryDayItems} clientId={clientId} mode={mode} />
+              <BlockViewTab
+                items={primaryDayItems}
+                clientId={clientId}
+                mode={mode}
+                roadmap={roadmap}
+                selectedBlockId={blockViewId}
+                onSelectBlock={setBlockViewId}
+              />
             )}
           </TabsContent>
         </Tabs>
@@ -1503,9 +1531,13 @@ function DayPreviewSheet({
 /* ---------------------------------------------------------------------- */
 
 function BlockViewTab({
-  items, clientId, mode,
+  items, clientId, mode, roadmap, selectedBlockId, onSelectBlock,
 }: {
   items: WorkoutItem[]; clientId: string; mode: Mode;
+  roadmap: ProgramRoadmap | null;
+  /** null = the current block. Lifted so the program roadmap can open a block here. */
+  selectedBlockId: string | null;
+  onSelectBlock: (blockId: string) => void;
 }) {
   // Pull EVERY client-visible block for this client directly, so previous
   // and upcoming blocks appear in the selector even when the current
@@ -1513,23 +1545,7 @@ function BlockViewTab({
   // upcoming blocks with no completions yet, or completed blocks the
   // client should still be able to review). Falls back to blocks derived
   // from items until the direct query resolves.
-  const { data: allBlocks } = useQuery({
-    queryKey: ["client-visible-blocks", clientId],
-    enabled: !!clientId,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("pl_blocks")
-        .select("*")
-        .eq("client_id", clientId)
-        .eq("client_visible", true)
-        .neq("status", "Archived")
-        .order("start_date", { ascending: true, nullsFirst: false })
-        .order("sort_order", { ascending: true, nullsFirst: false })
-        .order("created_at", { ascending: true });
-      return (data ?? []) as any[];
-    },
-  });
+  const { data: allBlocks } = useClientVisibleBlocks(clientId);
 
   const blocks = useMemo(() => {
     const seen = new Map<string, any>();
@@ -1553,10 +1569,6 @@ function BlockViewTab({
   const defaultBlock =
     pickCurrentBlock(blocks, today) ?? blocks[blocks.length - 1] ?? null;
 
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(defaultBlock?.id ?? null);
-  useEffect(() => {
-    if (!selectedBlockId && defaultBlock?.id) setSelectedBlockId(defaultBlock.id);
-  }, [defaultBlock?.id, selectedBlockId]);
 
   // Week + day selection also needs local state so clicks in
   // ClientBlockView actually change what's rendered. When the block
@@ -1579,8 +1591,9 @@ function BlockViewTab({
     <ClientBlockView
       block={block}
       blocks={blocks}
-      selectedBlockId={selectedBlockId}
-      onBlockChange={(bid) => setSelectedBlockId(bid)}
+      selectedBlockId={block.id}
+      onBlockChange={onSelectBlock}
+      roadmap={roadmap}
       selectedWeekIndex={selectedWeekIndex}
       selectedDayId={selectedDayId}
       onWeekChange={(idx) => {
