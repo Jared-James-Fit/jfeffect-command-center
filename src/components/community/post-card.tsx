@@ -5,9 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   REACTION,
   SCOPE_WORD,
-  SERIES_LABEL,
   extraScene,
-  extraTipKind,
   featuredLift,
   isRecapStats,
   isWinsStats,
@@ -92,18 +90,12 @@ export function CoachBadge({ className }: { className?: string }) {
  * `clamp` keeps long notes tidy in the feed; the detail shows everything.
  */
 export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: CommunityPost; clamp?: boolean; onOpenPerson?: (a: CommunityAuthor) => void; cover?: ReactNode }) {
-  const series = post.series ? SERIES_LABEL[post.series] ?? null : null;
   // Saturday: the picture says it, the words just sit under it. A photo of
   // the coach's own (the note's cover) takes the drawn scene's place.
   const scene = post.series === "saturday_spirit" && !cover ? extraScene(post.series_extra) : null;
   return (
     <div className="px-4 pb-1 pt-1">
-      {series && (
-        <div className="mb-2.5 flex min-w-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em]">
-          <span className="shrink-0 whitespace-nowrap text-primary">{series.name}</span>
-          <span className="truncate text-muted-foreground/70">· {extraTipKind(post.series_extra) ?? series.tagline}</span>
-        </div>
-      )}
+      {/* no "Saturday Spirit" style day label: the post speaks for itself */}
       {cover && <div className="-mx-1 mb-3 overflow-hidden rounded-2xl">{cover}</div>}
       {scene && isSpiritScene(scene) && <SpiritScene scene={scene} className="mb-3 rounded-2xl" />}
       {post.quote && (
