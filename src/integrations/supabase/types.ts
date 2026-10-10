@@ -23345,6 +23345,10 @@ export type Database = {
         Returns: undefined
       }
       community_recent_completions: { Args: { _limit?: number }; Returns: Json }
+      community_remove_note_scene: {
+        Args: { _post_id: string }
+        Returns: undefined
+      }
       community_save_post: {
         Args: {
           _caption?: string
