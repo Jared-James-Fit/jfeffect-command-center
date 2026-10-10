@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Layers, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { featuredLift, formatTopSet, isTrainingNow, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
@@ -15,8 +16,17 @@ export function postThumbPath(p: Pick<CommunityPost, "media_thumb_path" | "media
  * inside it). Fills its box (the profile grid's squares, Home's Crew feed).
  * `footer`: keep the card's words clear of a strip along the bottom (the
  * like count). `large`: Home's Crew feed cards, with the author along the top.
+ * A picture that won't load falls back to the card (never a broken-image box);
+ * `onBroken` tells the parent so its overlays stop dressing it as a photo.
  */
-export function PostTileFace({ post, thumb, unit, footer = false, large = false }: { post: CommunityPost; thumb: string | null; unit: "kg" | "lb"; footer?: boolean; large?: boolean }) {
+export function PostTileFace({ post, thumb: signed, unit, footer = false, large = false, onBroken }: { post: CommunityPost; thumb: string | null; unit: "kg" | "lb"; footer?: boolean; large?: boolean; onBroken?: (url: string) => void }) {
+  const [broken, setBroken] = useState<string | null>(null);
+  const thumb = signed && signed !== broken ? signed : null;
+  const fail = () => {
+    if (!thumb) return;
+    setBroken(thumb);
+    onBroken?.(thumb);
+  };
   const shared = post.shared_comment && !post.shared_comment.gone ? post.shared_comment : null;
   const pad = large ? "p-4 pt-12" : "p-2.5";
   const bottom = footer && (large ? "pb-11" : "pb-8");
@@ -24,7 +34,7 @@ export function PostTileFace({ post, thumb, unit, footer = false, large = false 
     <>
       {post.kind === "note" && post.media_type && thumb ? (
         // a coach post with a photo shows the photo, like any other post
-        <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+        <img src={thumb} alt="" loading="lazy" decoding="async" onError={fail} className="h-full w-full object-cover" />
       ) : post.kind === "note" ? (
         <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)] text-left", pad, bottom)}>
           <span className={cn("font-black uppercase tracking-[0.14em] text-primary", large ? "text-[10px]" : "text-[8px]")}>{post.poll ? "Poll" : "Note"}</span>
@@ -33,7 +43,7 @@ export function PostTileFace({ post, thumb, unit, footer = false, large = false 
           </span>
         </div>
       ) : post.media_type && thumb ? (
-        <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+        <img src={thumb} alt="" loading="lazy" decoding="async" onError={fail} className="h-full w-full object-cover" />
       ) : post.stats ? (
         <WorkoutTile stats={post.stats} unit={unit} pad={pad} bottom={bottom} large={large} />
       ) : post.locked_in_at ? (

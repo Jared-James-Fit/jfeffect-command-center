@@ -6,7 +6,7 @@ import {
   createQueryPersister,
   QUERY_PERSIST_BUSTER,
   QUERY_PERSIST_MAX_AGE,
-  shouldPersistQueryKey,
+  shouldPersistQuery,
 } from "@/lib/query-persister";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -424,8 +424,7 @@ function RootComponent() {
           maxAge: QUERY_PERSIST_MAX_AGE,
           buster: QUERY_PERSIST_BUSTER,
           dehydrateOptions: {
-            shouldDehydrateQuery: (q) =>
-              q.state.status === "success" && shouldPersistQueryKey(q.queryKey),
+            shouldDehydrateQuery: shouldPersistQuery,
           },
         }}
       >

@@ -11,7 +11,8 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // v6 evicts persisted unread/thread lists that could light stale nav badges.
 // v7 evicts every saved copy after a phone's admin app kept failing on a
 // snapshot from an older build (a fresh browser loaded the same pages fine).
-export const QUERY_PERSIST_BUSTER = "v7";
+// v8 evicts saved copies holding expired signed photo links (the "?" boxes).
+export const QUERY_PERSIST_BUSTER = "v8";
 export const QUERY_PERSIST_KEY = "jfeffect-rq-cache";
 export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
@@ -71,6 +72,21 @@ export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
   const first = queryKey[0];
   if (typeof first !== "string") return false;
   return !DO_NOT_PERSIST_PREFIXES.some((p) => first.startsWith(p));
+}
+
+// Signed storage links (photos, videos, files) expire after about an hour, but the
+// disk copy lives 24h: a restored one paints a dead link (iOS shows a "?" box)
+// before the refetch lands. Any query holding one is kept in memory only.
+const SIGNED_URL_MARK = "/storage/v1/object/sign/";
+
+/** What goes to disk: an allowed key, and no signed link anywhere in its data. */
+export function shouldPersistQuery(q: { queryKey: readonly unknown[]; state: { status: string; data: unknown } }): boolean {
+  if (q.state.status !== "success" || !shouldPersistQueryKey(q.queryKey)) return false;
+  try {
+    return !JSON.stringify(q.state.data ?? null).includes(SIGNED_URL_MARK);
+  } catch {
+    return false;
+  }
 }
 
 export function createQueryPersister(): Persister | null {
