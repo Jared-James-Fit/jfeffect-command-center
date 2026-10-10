@@ -825,7 +825,7 @@ export function FormHistoryRow({ p, role }: { p: FormPresentation; role: Role })
   const [sheetOpen, setSheetOpen] = useState(false);
   const completed = p.state === "completed";
   const statusLine = completed
-    ? "Completed"
+    ? p.submittedAt ? `Submitted ${fmtShortDate(p.submittedAt)}` : "Submitted"
     : role === "admin"
     ? `Not completed · ${p.readAt ? `Read ${fmtShortDate(p.readAt)}` : "Unread"}`
     : "Not completed";

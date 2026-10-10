@@ -26,6 +26,8 @@ export type FormPresentation = {
   state: FormUnitState;
   taskType: FormTaskType;
   submissionId: string;
+  /** The newest unit of its type: never folded into the history summary. */
+  latest: boolean;
   /** When the request was sent (falls back to the visible message time). */
   sentAt: string;
   /** When the client opened the request message, if known. */
@@ -88,6 +90,7 @@ export function planFormMessages(
     const expanded = isNewest && (state === "pending" || role === "admin");
     const base = {
       state,
+      latest: isNewest,
       taskType: u.taskType,
       submissionId: id,
       sentAt: req?.at ?? u.firstAt,
@@ -130,7 +133,10 @@ export function groupFormHistory(
   const seen = new Set<string>();
   for (const msgId of orderedMessageIds) {
     const p = plan.get(msgId);
-    if (!p || p.mode !== "compact" || seen.has(p.submissionId)) continue;
+    // The newest unit stays at its own spot in the thread. For the client a
+    // finished check-in is compact, and folding it into the history row (which
+    // sits at the OLDEST check-in) left no "submitted" sign at the bottom.
+    if (!p || p.mode !== "compact" || p.latest || seen.has(p.submissionId)) continue;
     seen.add(p.submissionId);
     const list = byType.get(p.taskType) ?? [];
     list.push({ msgId, p });

@@ -87,4 +87,18 @@ describe("groupFormHistory", () => {
     expect(leaders.size).toBe(0);
     expect(hidden.size).toBe(0);
   });
+
+  it("client: the newest finished check-in keeps its own row at the bottom, not folded into history", () => {
+    const r1 = req("w1", "weekly_checkin", "2026-09-26T15:00:00Z");
+    const s1 = sub("w1", "weekly_checkin", "2026-09-27T10:00:00Z");
+    const r2 = req("w2", "weekly_checkin", "2026-10-03T15:00:00Z");
+    const s2 = sub("w2", "weekly_checkin", "2026-10-05T14:00:00Z");
+    const r3 = req("w3", "weekly_checkin", "2026-10-09T05:00:00Z");
+    const s3 = sub("w3", "weekly_checkin", "2026-10-10T02:56:00Z");
+    const plan = planFormMessages([r1, s1, r2, s2, r3, s3], "client");
+    expect(plan.get(s3.id)).toMatchObject({ mode: "compact", state: "completed", latest: true });
+    const { leaders, hidden } = groupFormHistory(plan, [s1.id, s2.id, s3.id]);
+    expect(hidden.has(s3.id)).toBe(false);
+    expect(leaders.get(s1.id)!.units.map((u) => u.submissionId)).toEqual(["w2", "w1"]);
+  });
 });
