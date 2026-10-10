@@ -5654,9 +5654,8 @@ function SetRow({
             ? Number(displayLoadInUnit(prevExisting, unit))
             : null) ?? loadHint?.target ?? lastTimeWeight ?? suggestedWeight ?? null
         }
-        // Today's suggestion sits faded in the next set's empty weight cell —
-        // where the athlete types — instead of a second box under the row.
-        suggested={!readonly && !isConfirmed && isNextSet && loadHint && loadType === "external" ? loadHint.target : null}
+        // No faded target in the weight cell: an empty cell reads as empty.
+        // Today's suggestion lives behind "Show suggestions" (and the warm-up card).
         disabled={readonly}
         focusMode={focusMode}
         onPick={({ load: nextLoad, bodyweight, loadType: nextType }: { load: string; bodyweight: boolean; loadType: LoadType }) => {
