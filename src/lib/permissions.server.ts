@@ -10,13 +10,11 @@
  *
  * Server-only. Do NOT import from client modules.
  */
-import { ADMIN_VIEW_HEADER, MFA_REQUIRED, type Permission } from "@/lib/permissions";
+import { ADMIN_VIEW_HEADER, type Permission } from "@/lib/permissions";
 
 export type PermissionContext = { supabase: any; userId: string; claims?: Record<string, any> | null };
 
 export async function assertPermission(ctx: PermissionContext, perm: Permission): Promise<void> {
-  // Same rule as has_permission(): a password-only (aal1) session never passes.
-  if (ctx.claims?.aal !== "aal2") throw new Error(`${MFA_REQUIRED}: verify with your authenticator app first`);
   const { data, error } = await ctx.supabase.rpc("has_permission", { _uid: ctx.userId, _perm: perm });
   if (error) throw new Error(`Permission check failed: ${error.message}`);
   if (data !== true) throw new Error(`Forbidden: missing ${perm}`);
@@ -46,7 +44,7 @@ async function assertAdminOrPermission(ctx: PermissionContext, perm: Permission)
 
 /**
  * For handlers that only read: the admin, or a view-only login (admin.view,
- * MFA-verified). Returns the client to read with. For a view-only login that's
+ * Returns the client to read with. For a view-only login that's
  * its own client plus the admin-view header, which the database honours for
  * reads only, so it gets back what the admin would.
  *
@@ -60,7 +58,7 @@ export async function assertAdminView(ctx: PermissionContext): Promise<{ db: any
 
 /**
  * For the few changes a view-only login may make: the admin, or someone with
- * `perm` (MFA-verified). `viewOnly` is true when it wasn't the admin.
+ * `perm`. `viewOnly` is true when it wasn't the admin.
  */
 export async function assertAdminOr(ctx: PermissionContext, perm: Permission): Promise<{ viewOnly: boolean }> {
   return { viewOnly: await assertAdminOrPermission(ctx, perm) };
@@ -74,7 +72,6 @@ export async function assertAdminOr(ctx: PermissionContext, perm: Permission): P
  */
 export async function readClientFor(ctx: PermissionContext): Promise<{ db: any; viewOnly: boolean }> {
   const own = { db: ctx.supabase, viewOnly: false };
-  if (ctx.claims?.aal !== "aal2") return own; // every view-only session is MFA-verified
   if ((await callerKind(ctx)) !== "permissions") return own;
   try {
     await assertPermission(ctx, "admin.view");

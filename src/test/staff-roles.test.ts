@@ -10,14 +10,14 @@ describe("staff roles", () => {
     expect(STAFF_ROLE_INFO.media_manager.setup).toBe("retired");
   });
 
-  it("finance sees everything view-only, changes only its own areas, and needs an authenticator", () => {
+  it("finance sees everything view-only, changes only its own areas, and signs in with a password alone", () => {
     const f = STAFF_ROLE_INFO.finance;
     expect(f.can.join(" ")).toMatch(/everything in the admin app, view-only/);
     expect(f.cannot.join(" ")).toMatch(/Change clients, programs, check-ins, messages or settings/);
     expect(f.cannot.join(" ")).toMatch(/Refund, comp or cancel/);
     expect(f.cannot.join(" ")).toMatch(/Delete/);
     expect(f.cannot.join(" ")).toMatch(/tokens or invite links/);
-    expect(f.requiresAuthenticator).toBe(true);
+    expect("requiresAuthenticator" in f).toBe(false);
   });
 
   it("labels invite expiry", () => {

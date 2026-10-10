@@ -83,7 +83,7 @@ interface AuthState {
    * change, whatever the screens offer.
    */
   role: AppRole | null;
-  /** The account's own role (finance stays "finance"): MFA and sign-in routing. */
+  /** The account's own role (finance stays "finance"): sign-in routing. */
   accountRole: AppRole | null;
   /** The finance login looking at the admin app, or the owner previewing it. */
   viewOnly: boolean;

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -102,13 +102,6 @@ function StaffSetupPage() {
                 {mismatch && <p className="text-xs text-destructive">Those don't match yet.</p>}
               </div>
             </div>
-
-            {invite.requiresAuthenticator && (
-              <p className="flex gap-2 text-xs text-muted-foreground">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-                Next you'll connect an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password). It takes one tap on your phone.
-              </p>
-            )}
 
             <Button type="submit" className="w-full" disabled={!ready || busy}>
               {busy ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Setting up…</> : "Create my account"}

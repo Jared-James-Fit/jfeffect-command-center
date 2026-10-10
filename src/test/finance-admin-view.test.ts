@@ -118,12 +118,12 @@ describe("finance login on the server", () => {
     expect(c.rpc).toEqual([]);
   });
 
-  it("lets a finance login through only with the permission and MFA", async () => {
+  it("lets a finance login through only with the permission (a password sign-in is enough)", async () => {
     const ok = ctx(["finance"], { allowed: true });
     expect(await assertAdminOr(ok, "discounts.manage")).toEqual({ viewOnly: true });
     expect(ok.rpc).toEqual(["has_permission:discounts.manage"]);
     await expect(assertAdminOr(ctx(["finance"], { allowed: false }), "payments.record")).rejects.toThrow(/Forbidden: missing payments.record/);
-    await expect(assertAdminOr(ctx(["finance"], { aal: "aal1", allowed: true }), "payments.record")).rejects.toThrow(/MFA_REQUIRED/);
+    expect(await assertAdminOr(ctx(["finance"], { aal: "aal1", allowed: true }), "payments.record")).toEqual({ viewOnly: true });
   });
 
   it("gives coaches and clients the usual admin-only error, without asking about permissions", async () => {
@@ -156,10 +156,15 @@ describe("finance admin-view migration", () => {
     expect(hasRole).toContain("public.is_admin_viewer()");
   });
 
-  it("needs MFA and never matches an admin", () => {
-    const viewer = sql.slice(sql.indexOf("FUNCTION public.is_admin_viewer()"), sql.indexOf("$$;", sql.indexOf("FUNCTION public.is_admin_viewer()")));
-    expect(viewer).toContain("public.session_mfa_verified()");
+  it("asks for no second step and never matches an admin", () => {
+    // 20261102090000 took the authenticator step out of both database rules
+    const pw = readFileSync("supabase/migrations/20261102090000_finance_login_password_only.sql", "utf8");
+    const viewer = pw.slice(pw.indexOf("FUNCTION public.is_admin_viewer()"), pw.indexOf("$$;", pw.indexOf("FUNCTION public.is_admin_viewer()")));
+    const perm = pw.slice(pw.indexOf("FUNCTION public.has_permission("), pw.indexOf("$$;", pw.indexOf("FUNCTION public.has_permission(")));
+    expect(viewer).not.toContain("session_mfa_verified");
+    expect(perm).not.toContain("session_mfa_verified");
     expect(viewer).toContain("NOT EXISTS (SELECT 1 FROM public.user_roles ur");
+    expect(pw).toContain("DROP FUNCTION IF EXISTS public.session_mfa_verified();");
   });
 
   it("keeps credential tables away from view-only logins", () => {
@@ -300,17 +305,13 @@ describe("reads with no admin check of their own", () => {
     };
   };
 
-  it("keeps everyone's own client unless it's an MFA-verified view-only login", async () => {
+  it("keeps everyone's own client unless it's a view-only login", async () => {
     const { readClientFor } = await import("@/lib/permissions.server");
-    for (const c of [ctx(["coach"], { aal: "aal1" }), ctx(["client"]), ctx(["admin"]), ctx(["finance"], { aal: "aal1", allowed: true }), ctx(["finance"], { allowed: false })]) {
+    for (const c of [ctx(["coach"]), ctx(["client"]), ctx(["admin"]), ctx(["finance"], { allowed: false })]) {
       const r = await readClientFor(c);
       expect(r.viewOnly).toBe(false);
       expect(r.db.tag).toBe("own");
     }
-    // aal1 sessions never even look up roles
-    const quick = ctx(["coach"], { aal: "aal1" });
-    await readClientFor(quick);
-    expect(quick.calls).toEqual([]);
   });
 
   it("calls a database function as a read and leaves null arguments to the defaults", async () => {

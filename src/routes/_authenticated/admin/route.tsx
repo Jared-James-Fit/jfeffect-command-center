@@ -11,7 +11,6 @@ import { ReturnToDashboardPill } from "@/components/return-to-dashboard";
 import { useIsBusinessOwner, withoutOwnerOnly } from "@/lib/business-owner";
 import { useBarLayout, resolveLayout, withBarActionItems, mergeNavSources } from "@/lib/floating-bar";
 import { FullPageLoader } from "@/components/full-page-loader";
-import { StaffMfaGate } from "@/components/staff-mfa-gate";
 import { ViewOnlyStrip } from "@/components/view-only-strip";
 import { TeamPreviewBanner } from "@/components/team-preview-banner";
 
@@ -83,16 +82,14 @@ function AdminLayout() {
   }
 
   return (
-    <StaffMfaGate>
-      <AppShell items={nav} bottomItems={bottomItems} title={title} moreInHeader>
-        <AdminTopBar />
-        <TeamPreviewBanner />
-        {viewOnly && !preview && <ViewOnlyStrip />}
-        <Outlet />
-        {!viewOnly && <TaskPopupGate />}
-        <ReturnToDashboardPill />
-        {role === "admin" && <SummerAssistant />}
-      </AppShell>
-    </StaffMfaGate>
+    <AppShell items={nav} bottomItems={bottomItems} title={title} moreInHeader>
+      <AdminTopBar />
+      <TeamPreviewBanner />
+      {viewOnly && !preview && <ViewOnlyStrip />}
+      <Outlet />
+      {!viewOnly && <TaskPopupGate />}
+      <ReturnToDashboardPill />
+      {role === "admin" && <SummerAssistant />}
+    </AppShell>
   );
 }
