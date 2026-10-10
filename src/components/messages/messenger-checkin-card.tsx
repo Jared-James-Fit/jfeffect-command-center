@@ -943,7 +943,7 @@ export function FormHistoryGroup({ group, role }: { group: FormHistoryGroupData;
   );
 }
 
-function CheckinAnswersSheet({
+export function CheckinAnswersSheet({
   open,
   onOpenChange,
   submissionId,

@@ -78,3 +78,55 @@ describe("pickUnfilledFormRequests", () => {
     expect(pickUnfilledFormRequests([msg("m", "c1", RETIRED_NUTRITION_REVIEW_FORM_ID, ago(2))], [])).toHaveLength(0);
   });
 });
+
+import { matchFormRequests, sortTracked, summarizeWeeks, trackedStatus, weekOf, type TrackedRequest } from "@/lib/form-requests";
+
+describe("tracker", () => {
+  const fm = (id: string, client: string, form: string, at: string) => ({
+    id, client_id: client, created_at: at, attachments: [{ kind: "form_request", form_id: form }],
+  });
+
+  it("matches each submission to the request it answered; unfilled older ones are missed, the newest open", () => {
+    const msgs = [
+      fm("a1", "c1", "f", "2026-09-01T12:00:00Z"), // filled
+      fm("a2", "c1", "f", "2026-09-08T12:00:00Z"), // never filled, replaced → missed
+      fm("a3", "c1", "f", "2026-09-15T12:00:00Z"), // still open
+      fm("b1", "c2", "f", "2026-09-15T12:00:00Z"), // filled after
+    ];
+    const subs = [
+      { id: "s1", client_id: "c1", form_id: "f", submitted_at: "2026-09-02T09:00:00Z" },
+      { id: "s2", client_id: "c2", form_id: "f", submitted_at: "2026-09-20T09:00:00Z" },
+      { id: "draft", client_id: "c2", form_id: "f", submitted_at: null },
+    ];
+    const by = new Map(matchFormRequests(msgs, subs).map((r) => [r.message.id, r]));
+    expect(by.get("a1")).toMatchObject({ state: "submitted", submissionId: "s1" });
+    expect(by.get("a2")).toMatchObject({ state: "missed", submissionId: null });
+    expect(by.get("a3")).toMatchObject({ state: "open" });
+    expect(by.get("b1")).toMatchObject({ state: "submitted", submissionId: "s2" });
+  });
+
+  it("buckets by Monday in the coach's time zone", () => {
+    expect(weekOf("2026-10-05T12:00:00Z")).toBe("2026-10-05"); // Monday
+    expect(weekOf("2026-10-12T03:00:00Z")).toBe("2026-10-05"); // Sunday 10pm in Winnipeg
+    expect(weekOf("2026-10-09T05:00:00Z")).toBe("2026-10-05");
+  });
+
+  const t = (over: Partial<TrackedRequest>): TrackedRequest => ({
+    ...row({}), state: "open", submittedAt: null, submissionId: null, ...over,
+  });
+
+  it("summarizes weeks newest first and orders what needs action first", () => {
+    const rows = [
+      t({ key: "1", sentAt: "2026-10-06T12:00:00Z", state: "submitted", submittedAt: "2026-10-07T12:00:00Z" }),
+      t({ key: "2", sentAt: "2026-10-01T12:00:00Z" }), // overdue
+      t({ key: "3", sentAt: "2026-10-06T06:00:00Z" }), // waiting
+      t({ key: "4", sentAt: "2026-09-29T12:00:00Z", state: "missed" }),
+    ];
+    const w = summarizeWeeks(rows, now);
+    expect(w.map((x) => x.week)).toEqual(["2026-10-05", "2026-09-28"]);
+    expect(w[0]).toMatchObject({ sent: 2, submitted: 1, open: 1, overdue: 0 });
+    expect(w[1]).toMatchObject({ sent: 2, open: 1, overdue: 1, missed: 1 });
+    expect(trackedStatus(rows[1], now)).toBe("overdue");
+    expect(sortTracked(rows, now).map((r) => r.key)).toEqual(["2", "3", "1", "4"]);
+  });
+});

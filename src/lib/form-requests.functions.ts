@@ -5,8 +5,9 @@ import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
 import { createMessengerCheckinRequest } from "@/lib/messenger-checkins.functions";
 import {
   classifyKind,
-  pickUnfilledFormRequests,
-  type OutstandingRequest,
+  matchFormRequests,
+  type TrackedRequest,
+  type TrackedState,
 } from "@/lib/form-requests";
 
 const WINDOW_DAYS = 120;
@@ -96,23 +97,25 @@ const actionInput = z.object({ items: z.array(itemSchema).min(1).max(200) });
 
 export type RequestActionResult = { done: number; failed: Array<{ clientId: string; reason: string }> };
 
-/** Everything I've sent that the client hasn't filled in (newest request per client + form type). */
-export const listOutstandingFormRequestsFn = createServerFn({ method: "POST" })
+/**
+ * Every form / check-in sent in the window with its outcome (submitted, still
+ * open, or missed because a newer one replaced it). Reads go through the
+ * caller's own session, so a coach only sees their clients.
+ */
+export const listFormTrackerFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<OutstandingRequest[]> => {
-    // Reads go through the caller's own session so a coach only sees their clients.
+  .handler(async ({ context }): Promise<TrackedRequest[]> => {
     const sb = context.supabase as any;
     const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString();
 
     const [checkinsRes, formMsgsRes] = await Promise.all([
       sb
         .from("messenger_checkins")
-        .select("id, client_id, request_message_id, created_at")
-        .eq("status", "pending")
+        .select("id, client_id, request_message_id, status, submitted_at, created_at")
         .eq("task_type", "weekly_checkin")
-        .not("request_message_id", "is", null)
+        .in("status", ["pending", "completed", "superseded"])
         .gte("created_at", since)
-        .limit(1000),
+        .limit(5000),
       sb
         .from("messages")
         .select("id, client_id, created_at, read_by_client_at, attachments")
@@ -121,17 +124,17 @@ export const listOutstandingFormRequestsFn = createServerFn({ method: "POST" })
         .eq("is_internal_note", false)
         .gte("created_at", since)
         .order("created_at", { ascending: false })
-        .limit(2000),
+        .limit(5000),
     ]);
     if (checkinsRes.error) throw new Error(checkinsRes.error.message);
     if (formMsgsRes.error) throw new Error(formMsgsRes.error.message);
 
     const checkins: any[] = checkinsRes.data ?? [];
-    const unfilled = pickUnfilledFormRequests<any>(formMsgsRes.data ?? [], await loadSubmissions(sb, formMsgsRes.data ?? []));
+    const forms = matchFormRequests<any>(formMsgsRes.data ?? [], await loadSubmissions(sb, formMsgsRes.data ?? []));
 
-    const reqMsgIds = checkins.map((c) => c.request_message_id);
-    const clientIds = Array.from(new Set([...checkins.map((c) => c.client_id), ...unfilled.map((u) => u.message.client_id)]));
-    const formIds = Array.from(new Set(unfilled.map((u) => u.formId)));
+    const reqMsgIds = checkins.map((c) => c.request_message_id).filter(Boolean);
+    const clientIds = Array.from(new Set([...checkins.map((c) => c.client_id), ...forms.map((u) => u.message.client_id)]));
+    const formIds = Array.from(new Set(forms.map((u) => u.formId)));
 
     const [msgRes, clientRes, formRes] = await Promise.all([
       reqMsgIds.length
@@ -144,10 +147,12 @@ export const listOutstandingFormRequestsFn = createServerFn({ method: "POST" })
     const nameById = new Map<string, string>((clientRes.data ?? []).map((c: any) => [c.id, c.full_name || "Client"]));
     const formById = new Map<string, any>((formRes.data ?? []).map((f: any) => [f.id, f]));
 
-    const out: OutstandingRequest[] = [];
+    const out: TrackedRequest[] = [];
     for (const c of checkins) {
-      const m = msgById.get(c.request_message_id);
-      if (!m || m.deleted_at) continue;
+      const m = c.request_message_id ? msgById.get(c.request_message_id) : null;
+      const state: TrackedState = c.status === "completed" ? "submitted" : c.status === "superseded" ? "missed" : "open";
+      // An open request whose message was unsent isn't outstanding any more.
+      if (state === "open" && (!m || m.deleted_at)) continue;
       out.push({
         key: `checkin:${c.id}`,
         source: "checkin",
@@ -155,16 +160,19 @@ export const listOutstandingFormRequestsFn = createServerFn({ method: "POST" })
         title: "Weekly Check-In",
         clientId: c.client_id,
         clientName: nameById.get(c.client_id) ?? "Client",
-        messageId: c.request_message_id,
+        messageId: c.request_message_id ?? "",
         requestId: c.id,
         formId: null,
         formKind: null,
         externalUrl: null,
-        sentAt: m.created_at ?? c.created_at,
-        readAt: m.read_by_client_at ?? null,
+        sentAt: m?.created_at ?? c.created_at,
+        readAt: m?.read_by_client_at ?? null,
+        state,
+        submittedAt: state === "submitted" ? (c.submitted_at ?? null) : null,
+        submissionId: state === "submitted" ? c.id : null,
       });
     }
-    for (const u of unfilled) {
+    for (const u of forms) {
       const f = formById.get(u.formId);
       out.push({
         key: `form:${u.message.id}`,
@@ -180,9 +188,12 @@ export const listOutstandingFormRequestsFn = createServerFn({ method: "POST" })
         externalUrl: f?.external_url ?? null,
         sentAt: u.message.created_at,
         readAt: u.message.read_by_client_at ?? null,
+        state: u.state,
+        submittedAt: u.submittedAt,
+        submissionId: u.submissionId,
       });
     }
-    return out.sort((a, b) => a.sentAt.localeCompare(b.sentAt));
+    return out.sort((a, b) => b.sentAt.localeCompare(a.sentAt));
   });
 
 async function loadSubmissions(sb: any, messages: any[]) {
@@ -190,7 +201,7 @@ async function loadSubmissions(sb: any, messages: any[]) {
   if (!clientIds.length) return [];
   const { data, error } = await sb
     .from("nf_submissions")
-    .select("client_id, form_id, submitted_at")
+    .select("id, client_id, form_id, submitted_at")
     .in("client_id", clientIds)
     .not("submitted_at", "is", null)
     .limit(10000);
