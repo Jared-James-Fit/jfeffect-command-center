@@ -23,6 +23,7 @@ import { ChevronRight, UserPlus, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
+import { listClientCalendarSyncKinds } from "@/lib/schedule.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { filtersFromSearch, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
 import { STATUS_META } from "@/components/clients/clients-status";
@@ -180,6 +181,14 @@ function ClientsDirectoryPage() {
   const counts = data?.counts;
   const total = data?.total ?? 0;
   const rows = data?.rows ?? [];
+  const calKindsFn = useServerFn(listClientCalendarSyncKinds);
+  const rowIds = rows.map((r) => r.id);
+  const { data: calKinds } = useQuery({
+    queryKey: ["clients-calendar-sync-kinds", rowIds],
+    enabled: rowIds.length > 0,
+    queryFn: () => calKindsFn({ data: { clientIds: rowIds.slice(0, 200) } }),
+    staleTime: 5 * 60_000,
+  });
 
   // Only surface a count next to the controls when the result set is
   // narrowed — the page heading already shows the active-client total.
@@ -285,7 +294,7 @@ function ClientsDirectoryPage() {
         ) : (
           <ul className="space-y-2">
             {rows.map((r) => (
-              <ClientRow key={r.id} r={r} onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined} />
+              <ClientRow key={r.id} r={r} calSync={calKinds ? (calKinds[r.id] ?? null) : undefined} onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined} />
             ))}
           </ul>
         )}

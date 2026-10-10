@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { wallTimeToUtc } from "@/lib/schedule-time";
 import { findConflicts, type BusyItem, type SlotConflict } from "@/lib/session-conflicts";
-import { PovInput, isPovRequest, resolvePovClientId } from "@/lib/client-pov.server";
+import { PovInput, canViewClient, isPovRequest, resolvePovClientId } from "@/lib/client-pov.server";
 import { ownOrLinkedClient } from "@/lib/linked-client.server";
 
 /**
@@ -390,4 +390,88 @@ export const getMyClientAccount = createServerFn({ method: "POST" })
       target = data.userId;
     }
     return ownOrLinkedClient(target);
+  });
+
+// ---- Staff view of a client's calendar sync ---------------------------------
+
+/** One client's sync status for the admin profile. Never returns tokens. */
+export const getClientCalendarSyncStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    if (!(await canViewClient(supabase, userId, data.clientId))) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { clientGoogleStatus } = await import("@/lib/client-gcal.server");
+    const [google, { data: feed }, { data: c }] = await Promise.all([
+      clientGoogleStatus(supabaseAdmin as any, data.clientId).catch(() => null),
+      (supabaseAdmin as any).from("client_calendar_sync").select("app, last_fetch_at, fetch_count").eq("client_id", data.clientId).maybeSingle(),
+      supabaseAdmin.from("clients").select("calendar_feed_token").eq("id", data.clientId).maybeSingle(),
+    ]);
+    return {
+      google,
+      feed: feed
+        ? { app: (feed.app as string | null) ?? null, lastFetchAt: (feed.last_fetch_at as string | null) ?? null, fetchCount: Number(feed.fetch_count ?? 0) }
+        : null,
+      hasFeedToken: !!(c as any)?.calendar_feed_token,
+    };
+  });
+
+/** Staff-only: the client's existing feed link (never mints a new one). */
+export const getClientFeedLink = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    if (!(await canViewClient(supabase, userId, data.clientId))) throw new Error("Forbidden");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: c } = await supabaseAdmin.from("clients").select("calendar_feed_token").eq("id", data.clientId).maybeSingle();
+    const token = (c as any)?.calendar_feed_token as string | null;
+    if (!token) throw new Error("This client hasn't opened calendar setup yet, so there's no feed link.");
+    return { url: feedUrls(token).httpsUrl };
+  });
+
+/** Clients list: Google / Feed / none per client, in one query. */
+export const listClientCalendarSyncKinds = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientIds: z.array(z.string().uuid()).max(200) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const staff = await requireStaff(supabase, userId);
+    const out: Record<string, "google" | "feed"> = {};
+    let ids = data.clientIds;
+    if (!ids.length) return out;
+    // Coaches: only the clients their own access can read.
+    if (!staff.isAdmin) {
+      const { data: visible } = await supabase.from("clients").select("id").in("id", ids);
+      ids = ((visible ?? []) as any[]).map((r) => r.id);
+      if (!ids.length) return out;
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { SYNC_FRESH_MS } = await import("@/lib/calendar-sync");
+    const [{ data: g }, { data: f }] = await Promise.all([
+      (supabaseAdmin as any).from("client_google_calendars").select("client_id, status").in("client_id", ids),
+      (supabaseAdmin as any).from("client_calendar_sync").select("client_id, last_fetch_at").in("client_id", ids),
+    ]);
+    const fresh = Date.now() - SYNC_FRESH_MS;
+    for (const r of (f ?? []) as any[]) if (r.last_fetch_at && Date.parse(r.last_fetch_at) >= fresh) out[r.client_id] = "feed";
+    for (const r of (g ?? []) as any[]) if (r.status !== "revoked") out[r.client_id] = "google";
+    return out;
+  });
+
+/** Connected client: push the JF Effect calendar to Google now (once a minute). */
+export const syncMyGoogleCalendarNow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId } = context as any;
+    const mine = await ownOrLinkedClient(userId);
+    if (!mine) throw new Error("Only clients can sync a calendar.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await (supabaseAdmin as any)
+      .from("client_google_calendars").select("last_synced_at").eq("client_id", mine.id).maybeSingle();
+    if (row?.last_synced_at && Date.now() - Date.parse(row.last_synced_at) < 60_000) {
+      throw new Error("Synced less than a minute ago. Try again in a moment.");
+    }
+    const { syncClientCalendar } = await import("@/lib/client-gcal.server");
+    return syncClientCalendar(supabaseAdmin as any, mine.id, { force: true });
   });

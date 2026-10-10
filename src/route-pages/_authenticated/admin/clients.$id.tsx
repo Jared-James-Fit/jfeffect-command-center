@@ -37,6 +37,7 @@ import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
 import { ClientQuickLinksCard } from "@/components/client-quick-links-card";
 import { AppActivityCard } from "@/components/app-activity-card";
+import { ClientCalendarSyncStatus } from "@/components/admin/client-calendar-sync-status";
 import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review-composer";
 import { ClientCheckInConversations } from "@/components/client-check-in-conversations";
 import { Send } from "lucide-react";
@@ -1914,6 +1915,7 @@ function ClientOverviewSnapshot({
 
   return (
     <div className="md:col-span-3 space-y-6">
+      <ClientCalendarSyncStatus clientId={clientId} />
       {/* Header card: identity + key facts (hidden when embedded — sticky header covers this) */}
       {!embedded && (
       <Card className="border-border bg-card p-5 md:p-6">

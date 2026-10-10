@@ -104,7 +104,7 @@ export const sendSetupReminder = createServerFn({ method: "POST" })
             const brand = settings.brand_name || "JF Effect";
             let coachRow: any = null;
             if (member.user_id) {
-              const { data: linked } = await supabaseAdmin
+              const { data: linked } = await (supabaseAdmin as any)
                 .from("clients").select(CLIENT_COACH_EMBED).eq("user_id", member.user_id).limit(1).maybeSingle();
               coachRow = (linked as any)?.coach ?? null;
             }
