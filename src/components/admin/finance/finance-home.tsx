@@ -110,6 +110,9 @@ export function FinanceHome() {
 
   return (
     <div className="space-y-5 p-4 md:p-6">
+      {/* Schedule first on every Home */}
+      <MyCalendarCard />
+
       <div>
         <h2 className="text-lg font-semibold">Today's money</h2>
         <p className="text-sm text-muted-foreground">Live from payments and receipts, as of today.</p>
@@ -131,8 +134,6 @@ export function FinanceHome() {
           ? <Kpi label="GST/HST owing" value={fmtCad(s.gst.owingMinor)} sub={`${shortCad(s.revenue.collectedMinor)} collected, ${shortCad(s.gst.paidMinor)} paid`} />
           : <Kpi label="Profit so far" value={fmtCad(s.profitMinor)} sub={`${s.year} to date`} />}
       </div>
-
-      <MyCalendarCard />
 
       {toCheck > 0 && (
         <Link to={"/admin/finance/books" as any} search={{ tab: "expenses", filter: "review" } as any} className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">

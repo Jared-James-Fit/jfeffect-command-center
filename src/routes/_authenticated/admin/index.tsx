@@ -456,6 +456,12 @@ function AdminDashboard() {
         className="w-full max-w-full space-y-4 overflow-x-hidden p-4 md:p-6"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6rem)" }}
       >
+        {/* ---------------- SCHEDULE first on every Home: change requests (hidden when none), then the next 7 days ---------------- */}
+        <SectionErrorBoundary label="Schedule">
+          <ChangeRequestsCard />
+          <DashboardScheduleCard />
+        </SectionErrorBoundary>
+
         <DriveSetupBanner />
         <NotificationSetupPrompt problemsOnly />
 
@@ -466,13 +472,6 @@ function AdminDashboard() {
 
         {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
         <SnapshotGrid tiles={snapshot} loading={directoryLoading} />
-
-        {/* ---------------- SCHEDULE: client change requests (hidden when none), then the next 7 days.
-            Right under the numbers because it's the one part of "Today" tied to the clock. ---------------- */}
-        <SectionErrorBoundary label="Schedule">
-          <ChangeRequestsCard />
-          <DashboardScheduleCard />
-        </SectionErrorBoundary>
 
         {/* ---------------- TODAY: who trains today and who already has ---------------- */}
         <TrainingTodayCard overview={overview} loading={overviewLoading} />
