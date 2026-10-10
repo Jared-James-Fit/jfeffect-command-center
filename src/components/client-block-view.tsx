@@ -20,6 +20,7 @@ import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-da
 import { isWeekLocked, dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { localStartOfToday, parseLocalDate } from "@/lib/today";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
+import { STYLE_LABEL, type ProgramRoadmap } from "@/lib/training-roadmap";
 
 /* ──────────────────────────────────────────────────────────────────────────
    ClientBlockView
@@ -85,7 +86,10 @@ export function ClientBlockView({
   selectedDayId,
   onDayChange,
   mode = "client",
+  roadmap = null,
 }: {
+  /** Block purpose + weekly focus (coach's words, else Cleo's). */
+  roadmap?: ProgramRoadmap | null;
   block: any;
   /** Full list of visible blocks (current + next + previous). Optional for back-compat. */
   blocks?: any[];
@@ -204,6 +208,14 @@ export function ClientBlockView({
   const weekRange = resolvedWeek ? weekDisplayRange(block, resolvedWeek) : null;
   const weekIsCurrent = isCurrentWeek(weekRange);
   const weekLocked = mode === "client" && resolvedWeek ? isWeekLocked(block, resolvedWeek) : false;
+
+  // What this block is for and what the selected week focuses on.
+  const blockRoadmap = blockId ? roadmap?.byBlock[blockId] ?? null : null;
+  const weekRoadmap = blockRoadmap?.weeks.find((w) => w.id === resolvedWeek?.id) ?? null;
+  const roadmapWeekById = useMemo(
+    () => new Map((blockRoadmap?.weeks ?? []).map((w) => [w.id, w])),
+    [blockRoadmap],
+  );
 
   // Days for the selected week.
   const days = useMemo(() => {
@@ -444,7 +456,8 @@ export function ClientBlockView({
           the user has clicked into a previous block. Also gives a
           one-tap way to jump back to today's block. */}
       {block && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2">
+        <div className="rounded-lg border border-border bg-secondary/40 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
             Now viewing
           </span>
@@ -479,6 +492,21 @@ export function ClientBlockView({
               </Button>
             );
           })()}
+        </div>
+        {(blockRoadmap?.label || blockRoadmap?.purpose) && (
+          <div className="mt-1.5 border-t border-border/60 pt-1.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              {blockRoadmap.label && <span className="text-foreground/80">{blockRoadmap.label}</span>}
+              {blockRoadmap.style && STYLE_LABEL[blockRoadmap.style] && <span>{STYLE_LABEL[blockRoadmap.style]}</span>}
+              <span className="font-semibold normal-case tracking-normal">
+                {blockRoadmap.weekCount} week{blockRoadmap.weekCount === 1 ? "" : "s"}
+              </span>
+            </div>
+            {blockRoadmap.purpose && (
+              <p className="mt-0.5 text-xs leading-snug text-foreground/80">{blockRoadmap.purpose}</p>
+            )}
+          </div>
+        )}
         </div>
       )}
 
@@ -552,6 +580,12 @@ export function ClientBlockView({
                     </Badge>
                   )}
                 </div>
+                {roadmap?.byBlock[b.id]?.label && (
+                  <div className={cn("mt-0.5 truncate text-[10px] font-semibold",
+                    isSel ? "text-primary-foreground/90" : "text-foreground/80")}>
+                    {roadmap.byBlock[b.id].label}
+                  </div>
+                )}
                 <div className={cn("mt-0.5 text-[10px]",
                   isSel ? "text-primary-foreground/80" : "text-foreground/65")}>
                   {range ?? "Dates pending"}
@@ -593,6 +627,9 @@ export function ClientBlockView({
               const isSel = w.id === resolvedWeek?.id;
               const stats = weekStats.get(w.id) ?? { total: 0, done: 0 };
               const allDone = stats.total > 0 && stats.done === stats.total;
+              const rw = roadmapWeekById.get(w.id);
+              const past = !isCur && !!r && r.end < today;
+              const upcoming = !isCur && !!r && r.start > today;
               return (
                 <button
                   key={w.id}
@@ -604,9 +641,12 @@ export function ClientBlockView({
                     isSel
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-border bg-card text-foreground/80 hover:bg-secondary/60",
+                    !isSel && isCur && "border-primary/60",
+                    !isSel && past && "bg-secondary/40 text-foreground/55",
+                    !isSel && upcoming && "border-dashed",
                   )}
                   aria-pressed={isSel}
-                  aria-label={`Week ${w.week_index}${isCur ? " — current" : ""}`}
+                  aria-label={`Week ${w.week_index}${rw?.label ? `, ${rw.label}` : ""}${isCur ? " — current" : past ? " — done" : upcoming ? " — upcoming" : ""}`}
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-black uppercase tracking-wider">W{w.week_index}</span>
@@ -715,11 +755,22 @@ export function ClientBlockView({
         )}
       </div>
 
-      {weeklyPriorities.length > 0 && (
+      {(weeklyPriorities.length > 0 || weekRoadmap?.label || weekRoadmap?.focus) && (
         <Card className="p-3">
           <div className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-foreground/70">
-            Week {resolvedWeek?.week_index} Priorities
+            Week {resolvedWeek?.week_index}
+            {weekRoadmap?.label ? ` · ${weekRoadmap.label}` : weeklyPriorities.length > 0 ? " Priorities" : ""}
           </div>
+          {weekRoadmap?.focus && (
+            <p className={cn("text-xs leading-snug text-foreground/85", weeklyPriorities.length > 0 && "mb-2")}>
+              {weekRoadmap.focus}
+            </p>
+          )}
+          {weeklyPriorities.length > 0 && weekRoadmap?.label && (
+            <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Priorities</div>
+          )}
+          {weeklyPriorities.length > 0 && (
+          <>
           <ul className="grid gap-0.5">
             {weeklyPriorities.map((p) => {
               const line = `${p.label} ${p.family} — ${p.dayName}`;
@@ -764,6 +815,8 @@ export function ClientBlockView({
               <li><span className="font-semibold text-foreground">Quaternary</span> — fourth-priority exposure</li>
             </ul>
           </details>
+          </>
+          )}
         </Card>
       )}
 

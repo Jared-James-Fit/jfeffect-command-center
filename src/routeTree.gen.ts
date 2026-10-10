@@ -253,6 +253,7 @@ import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './rou
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksSummerVoiceCheckRouteImport } from './routes/api/public/hooks/summer-voice-check'
+import { Route as ApiPublicHooksTrainingRoadmapTickRouteImport } from './routes/api/public/hooks/training-roadmap-tick'
 import { Route as ApiPublicHooksWearablesSyncRouteImport } from './routes/api/public/hooks/wearables-sync'
 import { Route as ApiPublicPushSubscriptionChangeRouteImport } from './routes/api/public/push/subscription-change'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -1672,6 +1673,12 @@ const ApiPublicHooksSummerVoiceCheckRoute =
     path: '/api/public/hooks/summer-voice-check',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksTrainingRoadmapTickRoute =
+  ApiPublicHooksTrainingRoadmapTickRouteImport.update({
+    id: '/api/public/hooks/training-roadmap-tick',
+    path: '/api/public/hooks/training-roadmap-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksWearablesSyncRoute =
   ApiPublicHooksWearablesSyncRouteImport.update({
     id: '/api/public/hooks/wearables-sync',
@@ -2014,6 +2021,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
+  '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -2274,6 +2282,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
+  '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -2540,6 +2549,7 @@ export interface FileRoutesById {
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
+  '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -2806,6 +2816,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
     | '/api/public/hooks/summer-voice-check'
+    | '/api/public/hooks/training-roadmap-tick'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
@@ -3066,6 +3077,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
     | '/api/public/hooks/summer-voice-check'
+    | '/api/public/hooks/training-roadmap-tick'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
@@ -3331,6 +3343,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
     | '/api/public/hooks/summer-voice-check'
+    | '/api/public/hooks/training-roadmap-tick'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
     | '/lovable/email/auth/preview'
@@ -3424,6 +3437,7 @@ export interface RootRouteChildren {
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
   ApiPublicHooksSummerVoiceCheckRoute: typeof ApiPublicHooksSummerVoiceCheckRoute
+  ApiPublicHooksTrainingRoadmapTickRoute: typeof ApiPublicHooksTrainingRoadmapTickRoute
   ApiPublicHooksWearablesSyncRoute: typeof ApiPublicHooksWearablesSyncRoute
   ApiPublicPushSubscriptionChangeRoute: typeof ApiPublicPushSubscriptionChangeRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
@@ -5145,6 +5159,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSummerVoiceCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/training-roadmap-tick': {
+      id: '/api/public/hooks/training-roadmap-tick'
+      path: '/api/public/hooks/training-roadmap-tick'
+      fullPath: '/api/public/hooks/training-roadmap-tick'
+      preLoaderRoute: typeof ApiPublicHooksTrainingRoadmapTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/wearables-sync': {
       id: '/api/public/hooks/wearables-sync'
       path: '/api/public/hooks/wearables-sync'
@@ -6026,6 +6047,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksScheduledSendWorkerRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
   ApiPublicHooksSummerVoiceCheckRoute: ApiPublicHooksSummerVoiceCheckRoute,
+  ApiPublicHooksTrainingRoadmapTickRoute:
+    ApiPublicHooksTrainingRoadmapTickRoute,
   ApiPublicHooksWearablesSyncRoute: ApiPublicHooksWearablesSyncRoute,
   ApiPublicPushSubscriptionChangeRoute: ApiPublicPushSubscriptionChangeRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,

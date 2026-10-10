@@ -32,6 +32,7 @@ import {
 } from "@/route-pages/_authenticated/admin/program-library_.$templateId";
 import { BlockWarmupPanel } from "@/components/block-warmup-panel";
 import { AutoSchedulePanel } from "@/components/auto-schedule-panel";
+import { BlockRoadmapPanel } from "@/components/programs/block-roadmap-panel";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
 import { ClientBuilderIdentityHeader, ClientBuilderStickyChip } from "@/components/builder-identity-header";
@@ -857,6 +858,7 @@ function BlockEditor() {
       />
 
       <AutoSchedulePanel blockId={blockId} />
+      <BlockRoadmapPanel blockId={blockId} />
       <BlockWarmupPanel blockId={blockId} />
     </div>
   );
