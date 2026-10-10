@@ -189,6 +189,8 @@ export type CommunityPost = {
   comment_preview?: CommentPreview[];
   /** A poll on a coach's text post (null / missing = none). */
   poll?: CommunityPoll | null;
+  /** Your own posts only: how many have seen it, and the three latest (named) faces. */
+  views?: { count: number; faces: CommunityAuthor[] } | null;
 };
 
 /** A comment line under a post in the feed (Instagram style). */

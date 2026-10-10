@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowRight, ChevronRight, Flame, Heart, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { CrewGoalStrip } from "@/components/community/crew-goal";
 import { EngagementPop } from "@/components/community/engagement-pop";
+import { usePostViewTracker } from "@/components/community/post-views";
 import { ShareNudge } from "@/components/community/share-nudge";
 
 const NEW_GRADIENT = "bg-primary";
@@ -122,6 +123,9 @@ export function CommunityHomeStrip() {
 
 /** One post on Home, big enough to read: who and when along the top, the post, its likes and comments. */
 function CrewCard({ post, unit, thumb, fresh, onOpen }: { post: CommunityPost; unit: "kg" | "lb"; thumb: string | null; fresh: boolean; onOpen: () => void }) {
+  // on screen (half of it) for two seconds = a view, here too
+  const ref = useRef<HTMLButtonElement | null>(null);
+  usePostViewTracker(ref, post);
   const live = isTrainingNow(post);
   const name = post.is_mine ? "You" : post.author.name.split(" ")[0];
   const likes = post.reaction_count ?? 0;
@@ -133,6 +137,7 @@ function CrewCard({ post, unit, thumb, fresh, onOpen }: { post: CommunityPost; u
   const detail = photo ? (lift ? `${formatTopSet(lift.detail, unit)}${lift.pr ? " · PR" : ""}` : post.locked_in_at && !post.stats ? post.session_title : post.caption?.split("\n")[0]) : null;
   return (
     <button
+      ref={ref}
       type="button"
       data-crew-card
       data-fresh={fresh ? "" : undefined}
