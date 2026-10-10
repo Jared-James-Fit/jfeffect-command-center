@@ -119,7 +119,7 @@ describe("load suggestions in the logger", () => {
   it("builds a model per exercise and shows a card plus the suggestion faded in the next set's weight cell", () => {
     expect(wdv).toContain("buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel, bodyweightKg })");
     expect(wdv).toContain("<LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} />");
-    expect(wdv).toContain('suggested={!readonly && !isConfirmed && isNextSet && loadHint && loadType === "external" ? loadHint.target : null}');
+    expect(wdv).not.toContain("suggested={!readonly && !isConfirmed && isNextSet");
   });
   it("never competes with a coach's fixed load or top-set back-off", () => {
     expect(wdv).toContain('const coachOwnsLoad = !!row.manual_override || row.percentage_basis === "top_set";');

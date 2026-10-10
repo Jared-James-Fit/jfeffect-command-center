@@ -13,11 +13,11 @@ describe("suggested-load card: off by default, one toggle for the whole workout"
     expect(html).toContain('aria-pressed="false"');
   });
 
-  it("every exercise card reads the same switch; the ◎ weight in the next set stays either way", () => {
+  it("every exercise card reads the same switch; no ◎ target in the weight cell", () => {
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
     expect(wdv).toContain("{showSuggestionCard && loadModel && loadPlan && (");
     expect(wdv).toContain("<LoadSuggestionsToggle />");
-    expect(wdv).toContain('suggested={!readonly && !isConfirmed && isNextSet && loadHint && loadType === "external" ? loadHint.target : null}');
+    expect(wdv).not.toContain("suggested={!readonly && !isConfirmed && isNextSet");
   });
 
   it("is a per-device UI preference with a safe fallback", async () => {
