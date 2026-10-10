@@ -29,8 +29,8 @@ describe("dashboard is an overview, not another inbox", () => {
     expect(src).toMatch(/admin_dashboard_overview/);
     expect(src).toMatch(/TrainingTodayCard/);
     expect(src).toMatch(/WinsCard/);
-    // money is admin-only: rendered only when the RPC returns it
-    expect(src).toMatch(/overview\?\.money && <BusinessCard/);
+    // the Business (money) card was removed from the dashboard
+    expect(src).not.toMatch(/BusinessCard/);
     // numbers refresh silently: no "Updating" spinner floating over the tiles
     expect(src).not.toMatch(/DashboardRefreshIndicator/);
   });

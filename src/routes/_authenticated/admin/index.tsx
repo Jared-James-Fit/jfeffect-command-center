@@ -291,67 +291,6 @@ function WinsCard({ wins }: { wins: OverviewWin[] }) {
   );
 }
 
-function BusinessCard({ overview }: { overview: Overview }) {
-  const money = overview.money ?? [];
-  const primary = money.find((m) => m.currency === "CAD") ?? money[0];
-  const others = money.filter((m) => m !== primary && m.this_month > 0);
-  const delta = primary ? revenueDelta(primary) : null;
-  const leads = overview.leads;
-  return (
-    <Card className="border-border bg-card p-4">
-      <SectionHeader title={`Business · ${format(new Date(), "MMMM")}`} icon={TrendingUp} viewAll={{ to: "/admin/transactions", label: "Transactions" }} />
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-        <div>
-          <div className="text-[28px] font-black leading-none tabular-nums">{formatMoney(primary?.this_month ?? 0, primary?.currency ?? "CAD")}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            Collected this month{primary ? ` · ${primary.payments} ${primary.payments === 1 ? "payment" : "payments"}` : ""}
-            {others.map((o) => ` · ${formatMoney(o.this_month, o.currency)}`).join("")}
-          </div>
-        </div>
-        {delta && primary && (
-          <div className="text-right">
-            <div className={cn("text-sm font-bold tabular-nums", delta.up ? "text-emerald-500" : "text-amber-500")}>
-              {delta.up ? "▲" : "▼"} {delta.pct}%
-            </div>
-            <div className="text-[10px] text-muted-foreground">vs {formatMoney(primary.last_month_to_date, primary.currency)} by this day last month</div>
-          </div>
-        )}
-      </div>
-      <div className="mt-3 grid grid-cols-3 divide-x divide-border rounded-lg bg-secondary/20 py-2.5">
-        <Link to="/admin/clients" className="text-center">
-          <div className="text-xl font-black tabular-nums">{overview.roster.active}</div>
-          <div className="text-[10px] font-semibold text-muted-foreground">Active clients</div>
-        </Link>
-        <Link to="/admin/clients" className="text-center">
-          <div className={cn("text-xl font-black tabular-nums", overview.roster.new_this_month > 0 && "text-emerald-500")}>
-            {overview.roster.new_this_month > 0 ? `+${overview.roster.new_this_month}` : 0}
-          </div>
-          <div className="text-[10px] font-semibold text-muted-foreground">New this month</div>
-        </Link>
-        <Link to="/admin/sales/coaching-applications" className="text-center">
-          <div className={cn("text-xl font-black tabular-nums", (leads?.new_7d ?? 0) > 0 && "text-primary")}>{leads?.new_7d ?? 0}</div>
-          <div className="text-[10px] font-semibold text-muted-foreground">New leads · 7d</div>
-        </Link>
-      </div>
-      {leads && leads.latest.length > 0 && (
-        <ul className="mt-2 divide-y divide-border">
-          {leads.latest.slice(0, 3).map((l) => (
-            <li key={l.id}>
-              <Link to="/admin/sales/coaching-applications" className="flex items-center gap-2 py-2 text-xs">
-                <span className="min-w-0 flex-1 truncate font-bold">{l.name?.trim() || "New applicant"}</span>
-                {l.temperature && <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold capitalize text-muted-foreground">{l.temperature}</span>}
-                <span className="shrink-0 text-[11px] text-muted-foreground">{formatDistanceToNowStrict(parseISO(l.submitted_at), { addSuffix: true })}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-
 function AdminDashboard() {
   const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
   const offlineNoCache = useIsOfflineWithoutCache();
@@ -546,9 +485,6 @@ function AdminDashboard() {
             </ul>
           )}
         </Card>
-
-        {/* ---------------- BUSINESS (admins only: the RPC returns no money for coaches) ---------------- */}
-        {overview?.money && <BusinessCard overview={overview} />}
 
       </div>
 
