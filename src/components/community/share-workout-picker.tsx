@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
 import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, lockInCameraCard, sessionDisplayTitle, sessionWhen } from "@/lib/community";
-import { shareToCommunity, useDayPlan, useMyPostForCompletion, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
+import { shareToCommunity, useDayPlan, useMyPostForCompletion, usePublicSessionTitle, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
 import type { ShareTemplate } from "@/lib/workout-share-card";
 import type { CameraCard, StudioPost } from "@/components/community/share-studio";
 import { startWorkout as startWorkoutFn } from "@/lib/workout-completion.functions";
@@ -78,7 +78,8 @@ export function ShareWorkoutButton({
   // The look they're on (swipe to change).
   const [lockLook, setLockLook] = useState<LockLook>("lockin");
   const workout = useWorkoutStudio(target, unit, capturing);
-  const lockCard = useMemo(() => (today ? lockInCameraCard({ workoutTitle: today.title, athleteName: today.athleteName, plan: plan ?? [] }) : null), [today, plan]);
+  const { data: publicTitle } = usePublicSessionTitle({ dayId: today?.dayId }, !!today);
+  const lockCard = useMemo(() => (today ? lockInCameraCard({ workoutTitle: publicTitle ?? "Workout", athleteName: today.athleteName, plan: plan ?? [] }) : null), [today, plan, publicTitle]);
   const cameraCard: CameraCard | null =
     activeMode === "lockin" && lockCard
       ? { data: lockCard.data, looks: lockCard.looks, look: lockCard.looks.includes(lockLook) ? lockLook : "lockin", onLook: (t) => setLockLook(t as LockLook) }

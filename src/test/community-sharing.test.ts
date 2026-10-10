@@ -971,7 +971,7 @@ describe("share camera: options right away, no list in the way", () => {
   });
   it("the viewfinder is the real card, live; swipe changes the look, before and after the shot", () => {
     expect(picker).toContain("card={cameraCard}");
-    expect(read("src/components/community/lock-in.tsx")).toContain("lockInCameraCard({ workoutTitle, athleteName, plan: plan ?? [] })");
+    expect(read("src/components/community/lock-in.tsx")).toContain("lockInCameraCard({ workoutTitle: cardTitle, athleteName, plan: plan ?? [] })");
     expect(cam).toContain("paintShareCard(cardEl, { ...c.data, lockedIn, template: c.look, media }, logo, LIVE_SCALE);");
     expect(cam).toContain("if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) changeLook(dx < 0 ? 1 : -1);");
     // the card is exactly 9:16 on screen, so what you see is what you share
@@ -1329,5 +1329,29 @@ describe("like: tap the heart, hold for more, double-tap the post", () => {
     expect(q).not.toMatch(/localStorage[^\n]*hint/);
     expect(heart).toContain("PRIMARY KEY (user_id, hint)");
     expect(heart).toContain("FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());");
+  });
+});
+
+describe("shared sessions never show the coach's day or block names", () => {
+  const sql = read("supabase/migrations/20261028120000_community_public_session_title.sql");
+  it("the server calls a session 'Block 5 · Week 1' (else 'Friday session'), for cards, the feed and lock-ins", () => {
+    expect(sql).toContain("'Block ' || (SELECT count(*) FROM public.pl_blocks b2");
+    expect(sql).toContain("' · Week ' || w.week_index");
+    expect(sql).toContain("'FMDay') || ' session'");
+    expect(sql).toContain("v_title := public.community_public_session_title(pc.day_id, pc.client_id, pc.completed_at);");
+    expect(sql).toContain("'session_title', CASE WHEN n.kind = 'workout' THEN public.community_public_session_title(");
+    // the block's place, never its name (b.name is never read)
+    expect(sql).not.toMatch(/\bb2?\.name\b/);
+  });
+  it("cards the phone draws itself use the same title (lock-in camera, lock-in editor, recap story); the share card ignores the day title", () => {
+    expect(read("src/components/community/share-workout-picker.tsx")).toContain('lockInCameraCard({ workoutTitle: publicTitle ?? "Workout"');
+    expect(read("src/components/community/lock-in.tsx")).toContain("workoutTitle={cardTitle}");
+    expect(read("src/components/workout-submission-summary.tsx")).toContain("workoutTitle: publicTitle ?? null,");
+    expect(buildShareCardFields({ stats: { workout_title: "Block 5 · Week 1", completed_at: "2026-10-09T18:00:00Z", duration_min: 39, working_sets: 16, tonnage_kg: 5686, top_lift: null, pr_count: 0, prs: [] } as any, unit: "lb", athleteName: "Fionna", workoutTitle: "Upper Girly Pop", dateLabel: null }).workoutTitle).toBe("Block 5 · Week 1");
+  });
+  it("the phone can only ask about its own sessions", () => {
+    expect(sql).toContain("WHERE d.id = _day_id AND c.user_id = auth.uid();");
+    expect(sql).toContain("WHERE pc.id = _completion_id AND c.user_id = auth.uid();");
+    expect(sql).toContain("REVOKE ALL ON FUNCTION public.community_public_session_title(uuid, uuid, timestamptz) FROM public, anon, authenticated;");
   });
 });
