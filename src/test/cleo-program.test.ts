@@ -38,7 +38,7 @@ describe("dates for a new block", () => {
 describe("program cards", () => {
   it("are the owner's call for the finance login", () => {
     const finance = { isAdmin: false, permissions: ["admin.view", "payments.record", "payments.request", "tasks.manage"] };
-    for (const k of ["build_program", "edit_program_day", "add_workout", "assign_program_template", "publish_program", "move_workout"] as const) {
+    for (const k of ["build_program", "edit_program_day", "add_workout", "assign_program_template", "publish_program", "move_workout", "correct_logged_exercise", "set_nutrition_targets"] as const) {
       expect(routeFor(actionPermission(k, {}), finance)).toBe("ask_owner");
     }
   });
@@ -66,3 +66,19 @@ describe("program cards", () => {
     expect(CLEO_ACTION_PARAMS.build_program.safeParse({ ...base, training_days: ["mon", "mon"] }).success).toBe(false);
   });
 });
+
+describe("fixing what was logged, and nutrition", () => {
+  it("relabels a logged row by row and library exercise only", () => {
+    expect(CLEO_ACTION_PARAMS.correct_logged_exercise.safeParse({ row_id: id(1), exercise_id: id(2) }).success).toBe(true);
+    expect(CLEO_ACTION_PARAMS.correct_logged_exercise.safeParse({ row_id: id(1), exercise_name: "Barbell Bench" }).success).toBe(false);
+  });
+
+  it("sets every day type with sane macros", () => {
+    const ok = { client_id: id(1), phase: "Fat Loss", days: [{ day_label: "Training Day", calories: 2200, protein: 180, carbs: 220, fats: 65 }, { day_label: "Rest Day", calories: 1900, protein: 180, carbs: 150, fats: 65 }] };
+    expect(CLEO_ACTION_PARAMS.set_nutrition_targets.safeParse(ok).success).toBe(true);
+    expect(CLEO_ACTION_PARAMS.set_nutrition_targets.safeParse({ ...ok, days: [] }).success).toBe(false);
+    expect(CLEO_ACTION_PARAMS.set_nutrition_targets.safeParse({ ...ok, phase: "Shred" }).success).toBe(false);
+    expect(CLEO_ACTION_PARAMS.set_nutrition_targets.safeParse({ ...ok, days: [{ day_label: "Every Day", calories: 300, protein: 100, carbs: 0, fats: 0 }] }).success).toBe(false);
+  });
+});
+

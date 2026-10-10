@@ -222,7 +222,7 @@ async function targetDays(db: Db, dayId: string, scope: "this" | "future") {
 // ---------------------------------------------------------------------------
 // Cards
 
-const PROGRAM_KINDS = ["assign_program_template", "build_program", "edit_program_day", "add_workout", "publish_program", "move_workout"] as const;
+const PROGRAM_KINDS = ["assign_program_template", "build_program", "edit_program_day", "add_workout", "publish_program", "move_workout", "correct_logged_exercise", "set_nutrition_targets"] as const;
 export type ProgramKind = (typeof PROGRAM_KINDS)[number];
 export function isProgramKind(k: string): k is ProgramKind {
   return (PROGRAM_KINDS as readonly string[]).includes(k);
@@ -269,7 +269,7 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
     }
     case "edit_program_day": {
       const t = await targetDays(db, p.day_id, p.scope);
-      if (t.originLocked) throw new Error("That day has already been started or logged, so it stays as trained. Pick a later day.");
+      if (t.originLocked) throw new Error("That day has already been started or logged, so its plan stays as trained. If they did a different exercise than planned, use propose_correct_logged_exercise on that row instead (their logged sets stay).");
       const rowIds = p.changes.map((c: any) => c.row_id).filter(Boolean);
       const rowList = rowIds.length ? rows<any>(await db.from("pl_exercise_rows").select("id, day_id, exercises(name), exercise_name_override").in("id", rowIds), "rows") : [];
       const rowName = new Map(rowList.map((r) => [r.id, r.exercises?.name ?? r.exercise_name_override ?? "exercise"]));
@@ -307,6 +307,42 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
       if (!!b.client_visible === !!p.visible) throw new Error(`"${b.name}" is already ${p.visible ? "published" : "hidden"}.`);
       return p.visible ? `Publish "${b.name}" so ${clientLabel(c)} can see and train it.` : `Hide "${b.name}" from ${clientLabel(c)}.`;
     }
+    case "correct_logged_exercise": {
+      const { data: r } = await db.from("pl_exercise_rows").select("id, day_id, exercise_id, exercise_name_override, exercises(name)").eq("id", p.row_id).maybeSingle();
+      if (!r) throw new Error("I couldn't find that row.");
+      if (r.exercise_id === p.exercise_id) throw new Error("That row is already that exercise.");
+      const names = await exerciseNames(db, [p.exercise_id]);
+      const [{ data: sets }, { data: day }] = await Promise.all([
+        db.from("pl_row_results").select("client_id, set_index, entered_value, entered_unit, actual_reps, actual_rpe, completed_at").eq("row_id", r.id).order("set_index"),
+        db.from("pl_days").select("title, day_index").eq("id", r.day_id).maybeSingle(),
+      ]);
+      const logged = (sets ?? []) as any[];
+      const c = logged[0]?.client_id ? await client(db, logged[0].client_id) : null;
+      const when = logged[0]?.completed_at ? ` on ${longDate(String(logged[0].completed_at).slice(0, 10))}` : "";
+      return [
+        `Fix ${c ? `${clientLabel(c)}'s ` : ""}${day?.title ? `"${day.title}"` : `Day ${day?.day_index ?? "?"}`}${when}: change ${r.exercises?.name ?? r.exercise_name_override ?? "the exercise"} to ${names.get(p.exercise_id)}.`,
+        logged.length
+          ? `Their ${logged.length} logged set${logged.length === 1 ? "" : "s"} stay exactly as entered: ${logged.map((x) => `${x.entered_value ?? "?"} ${x.entered_unit ?? ""} x ${x.actual_reps ?? "?"}${x.actual_rpe ? ` @${x.actual_rpe}` : ""}`.replace(/\s+/g, " ")).join(", ")}.`
+          : "Nothing is logged on it yet.",
+      ].join("\n");
+    }
+    case "set_nutrition_targets": {
+      const c = await client(db, p.client_id);
+      const current = await currentTargets(db, p.client_id);
+      const before = new Map(((current?.nutrition_target_days ?? []) as any[]).map((d) => [String(d.day_label).toLowerCase(), d]));
+      const macro = (d: any) => `${d.calories} kcal, P ${d.protein} / C ${d.carbs} / F ${d.fats}${d.fibre ? `, fibre ${d.fibre}` : ""}`;
+      const lines = [`${current ? "Update" : "Set up"} ${clientLabel(c)}'s nutrition${p.phase ? ` (${p.phase})` : current?.phase ? ` (${current.phase})` : ""}:`];
+      for (const d of p.days) {
+        const was = before.get(d.day_label.toLowerCase());
+        lines.push(`- ${d.day_label}: ${macro(d)}${was ? ` (was ${was.calories ?? "?"} kcal, P ${was.protein ?? "?"} / C ${was.carbs ?? "?"} / F ${was.fats ?? "?"})` : ""}`);
+      }
+      const dropped = [...before.values()].filter((d) => !p.days.some((x: any) => x.day_label.toLowerCase() === String(d.day_label).toLowerCase()));
+      if (dropped.length) lines.push(`Removes: ${dropped.map((d) => d.day_label).join(", ")}.`);
+      if (p.client_notes) lines.push(`Note to them: ${p.client_notes}`);
+      if (p.coach_notes) lines.push(`Staff note: ${p.coach_notes}`);
+      lines.push(current && current.visible_to_client === false ? "Their targets are hidden from them." : `${clientLabel(c)} sees the new targets and gets a heads-up.`);
+      return lines.join("\n");
+    }
     case "move_workout": {
       const { data: w } = await db.from("pl_scheduled_workouts").select("id, client_id, scheduled_date, source_day_id").eq("id", p.workout_id).maybeSingle();
       if (!w) throw new Error("I couldn't find that scheduled workout.");
@@ -316,6 +352,19 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
       return `Move ${clientLabel(c)}'s ${d?.title ? `"${d.title}"` : `Day ${d?.day_index ?? "?"}`} from ${longDate(w.scheduled_date)} to ${longDate(p.date)}.`;
     }
   }
+}
+
+/** The nutrition targets the coach edits now: the latest one that isn't archived. */
+async function currentTargets(db: Db, clientId: string) {
+  const { data } = await db
+    .from("nutrition_targets")
+    .select("*, nutrition_target_days(*)")
+    .eq("client_id", clientId)
+    .neq("status", "Archived")
+    .order("start_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data as any | null;
 }
 
 /** The block a one-off workout goes into: the one asked for, else the current one. */
@@ -513,6 +562,65 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
       // A hidden prep would still hide a published block from the client.
       if (p.visible && b.prep_id) await sb.from("pl_preps").update({ client_visible: true }).eq("id", b.prep_id);
       return p.visible ? "Published." : "Hidden from the client.";
+    }
+    case "correct_logged_exercise": {
+      await exerciseNames(sb, [p.exercise_id]);
+      const { inferTimeProfileFromExercise } = await import("@/lib/pl-programs");
+      const { data: m } = await sb.from("exercises").select("id, name, category, muscle_group, exercise_category, is_competition_lift, competition_lift_type").eq("id", p.exercise_id).maybeSingle();
+      // Only which exercise it was: sets, reps, loads and every logged result stay put.
+      const { data, error } = await sb
+        .from("pl_exercise_rows")
+        .update({ exercise_id: p.exercise_id, exercise_name_override: null, time_profile: inferTimeProfileFromExercise(m as any) })
+        .eq("id", p.row_id)
+        .select("id");
+      if (error) throw new Error(error.message);
+      if (!data?.length) throw new Error("That row couldn't be changed.");
+      return "Exercise corrected; the logged sets are unchanged.";
+    }
+    case "set_nutrition_targets": {
+      const { PHASE_GOAL } = await import("@/lib/nutrition-cardio");
+      const current = await currentTargets(sb, p.client_id);
+      const now = new Date().toISOString();
+      const structure = p.days.length > 1 ? "Training / Rest Day Split" : "Same Every Day";
+      let targetId: string;
+      if (current) {
+        const patch: Record<string, unknown> = { last_updated_at: now, last_updated_date: today };
+        if (p.phase) Object.assign(patch, { phase: p.phase, goal: PHASE_GOAL[p.phase] ?? current.goal });
+        if (p.coach_notes !== undefined) patch.admin_notes = p.coach_notes;
+        if (p.client_notes !== undefined) patch.client_notes = p.client_notes;
+        if (p.water !== undefined) patch.water = p.water;
+        const { error } = await sb.from("nutrition_targets").update(patch).eq("id", current.id);
+        if (error) throw new Error(error.message);
+        targetId = current.id;
+      } else {
+        const phase = p.phase ?? "Maintenance";
+        const { data, error } = await sb
+          .from("nutrition_targets")
+          .insert({ client_id: p.client_id, phase, goal: PHASE_GOAL[phase] ?? "Maintain bodyweight", structure, start_date: today, status: "Active", visible_to_client: true, admin_notes: p.coach_notes ?? null, client_notes: p.client_notes ?? null, water: p.water ?? null, last_updated_at: now })
+          .select("id")
+          .single();
+        if (error) throw new Error(error.message);
+        targetId = data.id;
+      }
+      // Same as the targets dialog: replace the day list.
+      const old = ((current?.nutrition_target_days ?? []) as any[]).map(({ id, created_at, updated_at, ...d }) => d);
+      await sb.from("nutrition_target_days").delete().eq("target_id", targetId);
+      const { error: dErr } = await sb.from("nutrition_target_days").insert(p.days.map((d: any, i: number) => ({ target_id: targetId, sort_order: i, ...d })));
+      if (dErr) {
+        if (old.length) await sb.from("nutrition_target_days").insert(old);
+        throw new Error(dErr.message);
+      }
+      const visible = current ? current.visible_to_client !== false && (current.status ?? "Active") === "Active" : true;
+      if (visible) {
+        try {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+          await notifyAppEvent(supabaseAdmin as any, "nutrition_targets_updated", { clientId: p.client_id, sourceId: `cleo:${targetId}:${now}`, actorUserId: actor.userId });
+        } catch (e) {
+          console.warn("[cleo] nutrition push failed", e);
+        }
+      }
+      return "Nutrition targets updated.";
     }
     case "move_workout": {
       const { moveScheduledWorkout } = await import("@/lib/scheduled-workouts.functions");

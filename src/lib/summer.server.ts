@@ -515,17 +515,23 @@ export async function answerSummer(
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("AI is not configured (LOVABLE_API_KEY missing).");
   const gateway = createOpenAICompatible({ name: "google", baseURL: GATEWAY, headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" } });
-  const run = (model: string) =>
-    generateText({
+  const convo = [
+    ...past.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content })),
+    { role: "user" as const, content: input.message },
+  ];
+  const run = async (model: string) => {
+    const r = await generateText({ model: gateway(model), system, messages: convo, tools, stopWhen: stepCountIs(20) });
+    if (r.text.trim()) return r;
+    // She used every step looking things up and never wrote back. Make her
+    // answer from what she found, with no more tool calls.
+    return generateText({
       model: gateway(model),
       system,
-      messages: [
-        ...past.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content })),
-        { role: "user" as const, content: input.message },
-      ],
+      messages: [...convo, ...(r.response.messages as any[]), { role: "user" as const, content: "Answer me now from what you found and any card you set up. No more lookups." }],
       tools,
-      stopWhen: stepCountIs(14),
+      toolChoice: "none",
     });
+  };
 
   let text = "";
   try {
