@@ -54,8 +54,13 @@ describe("photos on every post, same rules as sharing a workout", () => {
   });
 
   it("coach posts show their photos in the feed, the post, the grid and Home", () => {
-    expect(read("src/components/community/post-card.tsx")).toContain("{post.media_type && <div className=\"mt-2\"><PostMedia post={post} thumbUrl={thumbUrl} /></div>}");
-    expect(read("src/components/community/post-detail.tsx")).toContain("{post.media_type && <div className=\"mt-2\"><PostMedia post={post} thumbUrl={thumb} full /></div>}");
+    // the photo is the note's cover: above its words, where Saturday's drawn scene goes (and in its place)
+    expect(read("src/components/community/post-card.tsx")).toContain("cover={post.media_type ? <PostMedia post={post} thumbUrl={thumbUrl} /> : undefined}");
+    expect(read("src/components/community/post-detail.tsx")).toContain("cover={post.media_type ? <PostMedia post={post} thumbUrl={thumb} full /> : undefined}");
+    expect(read("src/components/community/post-card.tsx")).toContain('post.series === "saturday_spirit" && !cover ? extraScene(post.series_extra) : null');
+    // a picture shipped with the app needs no signing and is never deleted from the bucket
+    expect(read("src/lib/community-media.ts")).toContain("if (p.startsWith(APP_MEDIA)) {");
+    expect(read("src/lib/community-media.ts")).toContain("!p.startsWith(APP_MEDIA)");
     expect(read("src/components/community/post-tile.tsx")).toContain('post.kind === "note" && post.media_type && thumb ?');
     expect(read("src/components/community/community-entry.tsx")).toContain("const photo = !!(post.media_type && thumb);");
   });

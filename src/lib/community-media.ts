@@ -16,6 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { checkMediaFile, checkVideoDuration } from "@/lib/community";
 
 export const COMMUNITY_BUCKET = "community-media" as const;
+/** A post picture that ships with the app instead of living in the bucket ("app:community/x.jpg" → /community/x.jpg). */
+export const APP_MEDIA = "app:";
 
 export type PickedMedia = {
   kind: "image" | "video";
@@ -197,7 +199,8 @@ export async function uploadCommunityAvatar(file: File, userId: string): Promise
 
 /** Best-effort cleanup of files no post points at any more. */
 export async function removeCommunityFiles(paths: (string | null | undefined)[]) {
-  const list = paths.filter((p): p is string => !!p);
+  // a picture shipped with the app isn't in the bucket
+  const list = paths.filter((p): p is string => !!p && !p.startsWith(APP_MEDIA));
   if (!list.length) return;
   try {
     await supabase.storage.from(COMMUNITY_BUCKET).remove(list);
@@ -218,6 +221,11 @@ export async function signCommunityPaths(paths: (string | null | undefined)[]): 
   const out: Record<string, string> = {};
   const missing: string[] = [];
   for (const p of wanted) {
+    // "app:<file>": a picture that ships with the app (public/), no signing
+    if (p.startsWith(APP_MEDIA)) {
+      out[p] = `/${p.slice(APP_MEDIA.length)}`;
+      continue;
+    }
     const hit = urlCache.get(p);
     if (hit && hit.expiresAt > now) out[p] = hit.url;
     else missing.push(p);
