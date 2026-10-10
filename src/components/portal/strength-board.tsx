@@ -239,7 +239,8 @@ export function StrengthBoardSlide() {
   const show = (athleteId: string | null = null) => { setCareerId(athleteId); setOpen(true); };
   const [mode, setMode] = useState<BoardMode>("p4p");
   const [lift, setLift] = useState<BoardLift>("total");
-  const [division, setDivision] = useState<Division>("all");
+  // Men first: the board people look for most; Women and All are one tap away.
+  const [division, setDivision] = useState<Division>("male");
   const { data = [], isPending } = useStrengthBoard();
   const { unit } = useWeightUnit();
   // The card's Top 5 for the board you pick; Open shows that same board in full.
@@ -298,7 +299,7 @@ export function StrengthBoardSlide() {
             </div>
             <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
             <div className="flex flex-[2] gap-0.5" role="tablist" aria-label="Division">
-              {([["all", "All"], ["male", "M"], ["female", "W"]] as const).map(([d, label]) => (
+              {([["male", "M"], ["female", "W"], ["all", "All"]] as const).map(([d, label]) => (
                 <button key={d} type="button" role="tab" aria-selected={division === d} aria-label={d === "all" ? "All" : d === "male" ? "Men" : "Women"} onClick={() => setDivision(d)} className={chip(division === d)}>
                   {label}
                 </button>
@@ -421,7 +422,7 @@ export function HallOfStrengthSheet({ open, onOpenChange, contentClassName, ...s
 }
 
 /** The full Hall of Strength: All-time (training + meets, everyone ever coached) and Competition (sanctioned meets). */
-export function HallOfStrength({ initialSource = "all", initialMode = "p4p", initialLift = "total", initialDivision = "all", initialCareer = null, career: controlledCareer, onCareerChange }: BoardStart & {
+export function HallOfStrength({ initialSource = "all", initialMode = "p4p", initialLift = "total", initialDivision = "male", initialCareer = null, career: controlledCareer, onCareerChange }: BoardStart & {
   /** Controlled by HallOfStrengthSheet, so its Back can leave a career. Alone, the board keeps its own. */
   career?: string | null; onCareerChange?: (id: string | null) => void;
 }) {
@@ -521,7 +522,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
         ))}
       </div>
       <div className="flex gap-1.5">
-        {([["all", "All"], ["male", "Men"], ["female", "Women"]] as const).map(([d, label]) => (
+        {([["male", "Men"], ["female", "Women"], ["all", "All"]] as const).map(([d, label]) => (
           <button key={d} type="button" onClick={() => pick(setDivision)(d)}
             className={cn("min-h-9 flex-1 rounded-full border text-xs font-bold transition",
               division === d ? "border-foreground bg-foreground text-background" : "text-muted-foreground")}>
