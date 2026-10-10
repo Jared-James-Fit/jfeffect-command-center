@@ -9,16 +9,20 @@
  * - Tapping a note opens a dedicated editor: full screen on mobile (sized to
  *   the visual viewport so the keyboard never covers the text), a large
  *   centered panel on desktop.
- * - Move to matrix: one tap on a quadrant tile (row menu, editor menu, or
- *   bulk select) creates the task and moves the note to Recently Deleted,
- *   with Undo that removes the task and restores the note.
+ * - Private to the person: notes live in the database under their account
+ *   (see useNotes), so they follow them across devices and nobody else, not
+ *   even the owner's "view as", ever sees them.
+ * - Send anywhere: one tap on a quadrant tile files the note in My tasks
+ *   (private); "Send to team…" puts it on the team board, optionally assigned
+ *   to a teammate. Either way the note moves to Recently Deleted, with Undo
+ *   that removes the task and restores the note.
  * - Delete (swipe left, row menu, editor menu, bulk) moves a note to
  *   Recently Deleted with an Undo toast. Trashed notes are restorable for
  *   30 days, then purged on the next load. Trash is just a `deletedAt`
  *   stamp on the same stored note, so nothing else about storage changes.
  * - Auto-saves (debounced, flushed on close / page hide) with a quiet
- *   Saving… / Saved indicator. Storage key + note shape are unchanged, so
- *   existing notes carry over as-is.
+ *   Saving… / Saved indicator. Notes saved on a device before this carry
+ *   over into the account on first open.
  * - Save to client file: a note can be linked to a client. It then syncs to
  *   their profile (client_file_notes) both ways. Deleting it here (or moving
  *   it to the matrix) archives the client copy; it is never lost from their file.
@@ -34,16 +38,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   MoreHorizontal, Trash2, ChevronDown, ChevronLeft, Copy, Check, Pencil, CheckSquare, Files, SquarePen,
-  RotateCcw, ArrowRightLeft, UserRound, UserRoundPlus, ExternalLink, Link2Off,
+  RotateCcw, ArrowRightLeft, UserRound, UserRoundPlus, ExternalLink, Link2Off, Users, Lock,
 } from "lucide-react";
 import { toast } from "sonner";
-import { QUADRANTS, type TaskQuadrant } from "@/lib/tasks";
+import { QUADRANTS, firstName, type TaskQuadrant, type TeamMember } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { useOpenClientProfile } from "@/lib/open-client-profile";
 import { fetchLinkedCopies, pushQuickNote, setQuickNoteRemoved, unlinkQuickNote } from "@/lib/client-file-notes";
 import { ClientLinkDialog } from "@/components/tasks/client-link-dialog";
+import { deleteQuickNotes, fetchMyQuickNotes, noteSignature, upsertQuickNotes } from "@/lib/quick-notes-db";
 
 /** `deletedAt` set ⇒ the note is in Recently Deleted. */
 export type Note = {
@@ -52,8 +57,10 @@ export type Note = {
   clientId?: string; clientName?: string;
 };
 type QuadStyle = { color: string; title: string; subtitle: string };
+/** Where a note goes: My tasks (private) or the team board, optionally assigned. */
+export type NoteDestination = { quadrant: TaskQuadrant; team: boolean; assignee?: TeamMember | null };
 /** What a note becomes in the matrix. */
-export type NoteTaskInput = { title: string; notes: string | null; quadrant: TaskQuadrant };
+export type NoteTaskInput = { title: string; notes: string | null } & NoteDestination;
 export type SaveState = "idle" | "saving" | "saved" | "error";
 
 const newId = () =>
@@ -61,71 +68,144 @@ const newId = () =>
 
 // ---------------------------------------------------------------- storage
 
-export function useNotes(storageKey: string) {
+/** Notes saved on this device before they lived in the database. */
+function readDeviceNotes(storageKey: string): Note[] {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    const v = raw ? JSON.parse(raw) : [];
+    return Array.isArray(v) ? v.filter((n) => n && typeof n.id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The signed-in person's notes, stored in the database (private to them) so
+ * they follow the person across devices. Same interface as before: edit the
+ * array with `setNotes`; changes save automatically (debounced, flushed when
+ * the app is hidden or the panel closes) with a Saving… / Saved state.
+ *
+ * Notes still sitting in this device's storage from before are carried over
+ * once, into the account that opens the panel, then cleared from the device.
+ * Coming back to the app re-reads the notes, so an edit on another device
+ * shows up here unless this device has unsaved changes.
+ */
+export function useNotes(storageKey: string, userId: string | null, enabled = true) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
-  // `ready` flips in the same render that applies the stored notes, so the
-  // initial empty state can never be written over what's in storage.
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const latest = useRef<Note[]>([]);
-  const dirty = useRef(false);
-  /** JSON currently in storage — lets the save effect skip no-op writes. */
-  const persisted = useRef<string | null>(null);
+  /** Signature of each note as the database has it. */
+  const persisted = useRef(new Map<string, string>());
+  const saving = useRef(false);
+  const again = useRef(false);
+  latest.current = notes;
 
-  useEffect(() => {
-    let stored: Note[] = [];
-    try {
-      const raw = localStorage.getItem(storageKey);
-      persisted.current = raw;
-      if (raw) stored = JSON.parse(raw);
-    } catch { /* storage unavailable — keep in memory */ }
-    // Expired trash is dropped here; the save effect persists the purge.
-    setNotes(purgeExpired(stored, Date.now()));
-    setReady(true);
-  }, [storageKey]);
+  const pending = useCallback(() => {
+    const cur = latest.current;
+    const ids = new Set(cur.map((n) => n.id));
+    const upserts = cur.filter((n) => {
+      const prev = persisted.current.get(n.id);
+      // A brand-new note isn't stored until something is written in it.
+      if (prev === undefined && !n.title.trim() && !n.body.trim()) return false;
+      return prev !== noteSignature(n);
+    });
+    const deletes = [...persisted.current.keys()].filter((id) => !ids.has(id));
+    return { upserts, deletes };
+  }, []);
 
-  const flush = useCallback(() => {
-    if (!dirty.current) return;
+  const flush = useCallback(async () => {
+    if (!userId || !ready) return;
+    if (saving.current) { again.current = true; return; }
+    const { upserts, deletes } = pending();
+    if (!upserts.length && !deletes.length) return;
+    saving.current = true;
+    setSaveState("saving");
     try {
-      const json = JSON.stringify(latest.current);
-      localStorage.setItem(storageKey, json);
-      persisted.current = json;
-      dirty.current = false;
+      await upsertQuickNotes(upserts, userId);
+      for (const n of upserts) persisted.current.set(n.id, noteSignature(n));
+      await deleteQuickNotes(deletes);
+      for (const id of deletes) persisted.current.delete(id);
       setSaveState("saved");
     } catch {
       setSaveState("error");
+    } finally {
+      saving.current = false;
+      if (again.current) { again.current = false; void flush(); }
     }
-  }, [storageKey]);
+  }, [userId, ready, pending]);
+
+  const load = useCallback(async () => {
+    if (!userId) return;
+    try {
+      let stored = await fetchMyQuickNotes();
+      const device = readDeviceNotes(storageKey);
+      if (device.length) {
+        const known = new Set(stored.map((n) => n.id));
+        const carry = purgeExpired(device, Date.now()).filter((n) => !known.has(n.id) && (n.title.trim() || n.body.trim()));
+        await upsertQuickNotes(carry, userId);
+        stored = [...stored, ...carry];
+        try { localStorage.removeItem(storageKey); } catch { /* storage unavailable */ }
+      }
+      persisted.current = new Map(stored.map((n) => [n.id, noteSignature(n)]));
+      // Expired trash is dropped here; the save effect deletes it from the database.
+      setNotes(purgeExpired(stored, Date.now()));
+      setLoadError(false);
+      setReady(true);
+    } catch {
+      setLoadError(true);
+    }
+  }, [userId, storageKey]);
 
   useEffect(() => {
-    latest.current = notes;
-    if (!ready) return;
-    if (JSON.stringify(notes) === (persisted.current ?? "[]")) {
-      // Back to what's stored (e.g. an edit was undone) — nothing pending.
-      if (dirty.current) { dirty.current = false; setSaveState("saved"); }
-      return;
-    }
-    dirty.current = true;
-    setSaveState("saving");
-    const t = window.setTimeout(flush, 400);
-    return () => window.clearTimeout(t);
-  }, [notes, ready, flush]);
+    if (!enabled || !userId) return;
+    void load();
+  }, [enabled, userId, load]);
 
-  // Never lose the last keystrokes: flush when the app is backgrounded,
+  // Pick up edits made on another device when the app comes back.
+  useEffect(() => {
+    if (!enabled || !ready) return;
+    const onVis = async () => {
+      if (document.visibilityState !== "visible" || saving.current) return;
+      const { upserts, deletes } = pending();
+      if (upserts.length || deletes.length) return;
+      try {
+        const stored = await fetchMyQuickNotes();
+        const still = pending();
+        if (saving.current || still.upserts.length || still.deletes.length) return;
+        persisted.current = new Map(stored.map((n) => [n.id, noteSignature(n)]));
+        setNotes(purgeExpired(stored, Date.now()));
+      } catch { /* offline — keep what's here */ }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [enabled, ready, pending]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const { upserts, deletes } = pending();
+    if (!upserts.length && !deletes.length) return;
+    setSaveState("saving");
+    const t = window.setTimeout(() => void flush(), 400);
+    return () => window.clearTimeout(t);
+  }, [notes, ready, flush, pending]);
+
+  // Never lose the last keystrokes: save when the app is backgrounded,
   // the page is closed, or the panel unmounts.
   useEffect(() => {
-    const onHide = () => flush();
-    const onVis = () => { if (document.visibilityState === "hidden") flush(); };
+    const onHide = () => void flush();
+    const onVis = () => { if (document.visibilityState === "hidden") void flush(); };
     window.addEventListener("pagehide", onHide);
     document.addEventListener("visibilitychange", onVis);
     return () => {
       window.removeEventListener("pagehide", onHide);
       document.removeEventListener("visibilitychange", onVis);
-      flush();
+      void flush();
     };
   }, [flush]);
 
-  return { notes, setNotes, saveState, flush, ready };
+  return { notes, setNotes, saveState, flush, ready, loadError, retry: load };
 }
 
 // ---------------------------------------------------------------- client file sync
@@ -266,7 +346,7 @@ export function notePreview(n: Pick<Note, "title" | "body">) {
  * Task fields for a note: its title (or first line) becomes the task title
  * and the rest of the text rides along as the task notes. Null when empty.
  */
-export function noteToTask(n: Pick<Note, "title" | "body">): Omit<NoteTaskInput, "quadrant"> | null {
+export function noteToTask(n: Pick<Note, "title" | "body">): { title: string; notes: string | null } | null {
   const bodyLines = n.body.split("\n");
   const firstIdx = bodyLines.findIndex((l) => l.trim());
   const title = (n.title.trim() || (firstIdx >= 0 ? bodyLines[firstIdx].trim() : "")).slice(0, 200);
@@ -360,11 +440,29 @@ function RowMenu({ label, children }: { label: string; children: React.ReactNode
 /** Rows shown before "Show all" — keeps the panel short at the top of the page. */
 const COLLAPSED_ROWS = 3;
 
-export function QuickNotesPanel({
-  storageKey, quadStyles, onCreateTask, onDeleteTask, search = "", hideComposeButton = false,
-}: {
+export function QuickNotesPanel(props: QuickNotesPanelProps) {
+  // Viewing as someone else: their notes are theirs alone, so show nothing of anyone's.
+  if (props.privateTo) {
+    return (
+      <section aria-label="Quick Notes" className="flex items-center gap-2 rounded-xl border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
+        <Lock className="h-4 w-4 shrink-0" />
+        {firstName(props.privateTo) || "Their"}&apos;s Quick Notes are private to them.
+      </section>
+    );
+  }
+  return <NotesPanel {...props} />;
+}
+
+type QuickNotesPanelProps = {
+  /** Device storage key that held notes before they moved to the database (carried over once). */
   storageKey: string;
+  /** The signed-in person; their notes are the only ones shown. */
+  userId: string | null;
+  /** Set while viewing as someone else: shows a "private" placeholder instead. */
+  privateTo?: string | null;
   quadStyles: Record<TaskQuadrant, QuadStyle>;
+  /** People a note can be sent to on the team board. */
+  teamMembers: TeamMember[];
   /** Creates the matrix task for a note; resolves to the new task id. */
   onCreateTask: (input: NoteTaskInput) => Promise<string>;
   /** Removes a task created by a move (Undo). */
@@ -373,12 +471,18 @@ export function QuickNotesPanel({
   search?: string;
   /** Hide the floating compose button (e.g. while the task bulk bar is up). */
   hideComposeButton?: boolean;
-}) {
-  const { notes, setNotes, saveState, flush, ready } = useNotes(storageKey);
+};
+
+function NotesPanel({
+  storageKey, userId, quadStyles, teamMembers, onCreateTask, onDeleteTask, search = "", hideComposeButton = false,
+}: QuickNotesPanelProps) {
+  const { notes, setNotes, saveState, flush, ready, loadError, retry } = useNotes(storageKey, userId);
   useClientFileSync(notes, setNotes, ready);
   const openClient = useOpenClientProfile();
   /** Note whose client is being picked. */
   const [linkFor, setLinkFor] = useState<string | null>(null);
+  /** Notes being sent to the team board (dialog open while set). */
+  const [teamSend, setTeamSend] = useState<Note[] | null>(null);
   const [collapsed, setCollapsed] = usePersistedFlag(`${storageKey}-collapsed`, false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -458,16 +562,18 @@ export function QuickNotesPanel({
   const openNote = notes.find((n) => n.id === openId) ?? null;
   const allSelected = shown.length > 0 && selected.size === shown.length;
 
-  const moveToMatrix = async (list: Note[], quadrant: TaskQuadrant) => {
+  const moveToMatrix = async (list: Note[], dest: NoteDestination) => {
     const movable = list.flatMap((n) => {
       const t = noteToTask(n);
-      return t ? [{ note: n, task: { ...t, quadrant } }] : [];
+      return t ? [{ note: n, task: { ...t, ...dest } }] : [];
     });
     if (!movable.length) { toast.error("Write something first, then move it."); return; }
     const results = await Promise.allSettled(movable.map((m) => onCreateTask(m.task)));
     const movedIds = movable.filter((_, i) => results[i].status === "fulfilled").map((m) => m.note.id);
     const taskIds = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
-    const where = quadStyles[quadrant].title;
+    const where = dest.team
+      ? `Team · ${quadStyles[dest.quadrant].title}${dest.assignee ? ` · ${firstName(dest.assignee.full_name)}` : ""}`
+      : `My tasks · ${quadStyles[dest.quadrant].title}`;
     if (movedIds.length) {
       // The note goes to Recently Deleted (not gone) so Undo can bring it back.
       trashNotes(movedIds, { quiet: true });
@@ -486,11 +592,11 @@ export function QuickNotesPanel({
     if (failed) toast.error(failed > 1 ? `${failed} notes couldn't be moved. They're still here.` : "Couldn't move the note. It's still here.");
   };
 
-  /** 2×2 quadrant tiles, laid out like the matrix. One tap moves the note(s). */
+  /** 2×2 quadrant tiles (My tasks), laid out like the matrix, plus "Send to team…". */
   const moveGrid = (list: () => Note[]) => (
     <>
       <DropdownMenuLabel className="pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-        Move to matrix
+        Move to my tasks
       </DropdownMenuLabel>
       <div className="grid grid-cols-2 gap-1 px-1 pb-1">
         {QUADRANTS.map((q) => {
@@ -498,7 +604,7 @@ export function QuickNotesPanel({
           return (
             <DropdownMenuItem
               key={q.key}
-              onClick={() => moveToMatrix(list(), q.key)}
+              onClick={() => moveToMatrix(list(), { quadrant: q.key, team: false })}
               className="min-h-10 justify-center rounded-md border px-1.5 text-center text-xs font-bold"
               style={{
                 color: st.color,
@@ -511,6 +617,9 @@ export function QuickNotesPanel({
           );
         })}
       </div>
+      <DropdownMenuItem onClick={() => setTeamSend(list())}>
+        <Users className="mr-2 h-4 w-4" />Send to team…
+      </DropdownMenuItem>
     </>
   );
 
@@ -626,7 +735,20 @@ export function QuickNotesPanel({
             </div>
           )}
 
-          {shown.length === 0 ? (
+          {!ready ? (
+            loadError ? (
+              <button
+                type="button"
+                onClick={() => void retry()}
+                className="mt-1 flex w-full items-center gap-2 rounded-xl border border-dashed border-border px-3 py-3 text-left text-xs text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw className="h-4 w-4 shrink-0" />
+                Couldn&apos;t load your notes. Tap to try again.
+              </button>
+            ) : (
+              <div className="mt-1 h-[52px] animate-pulse rounded-xl bg-card ring-1 ring-border" aria-label="Loading notes" />
+            )
+          ) : shown.length === 0 ? (
             searching ? (
               <p className="px-1 py-3 text-xs text-muted-foreground">No notes match your search.</p>
             ) : (
@@ -711,8 +833,8 @@ export function QuickNotesPanel({
       )}
 
       {/* Compose — floats bottom-right above the mobile nav, like Apple Notes. */}
-      {mounted && !openNote && !selectMode && !hideComposeButton && <PageFabFlag />}
-      {mounted && !openNote && !selectMode && !hideComposeButton && createPortal(
+      {mounted && ready && !openNote && !selectMode && !hideComposeButton && <PageFabFlag />}
+      {mounted && ready && !openNote && !selectMode && !hideComposeButton && createPortal(
         <button
           type="button"
           data-viewport-pinned
@@ -746,6 +868,19 @@ export function QuickNotesPanel({
           onOpenClient={() => openClientFile(openNote)}
         />
       )}
+
+      <SendToTeamDialog
+        notes={teamSend}
+        quadStyles={quadStyles}
+        teamMembers={teamMembers}
+        userId={userId}
+        onClose={() => setTeamSend(null)}
+        onSend={(dest) => {
+          const list = teamSend ?? [];
+          setTeamSend(null);
+          void moveToMatrix(list, dest);
+        }}
+      />
 
       <ClientLinkDialog
         open={!!linkTarget}
@@ -814,6 +949,92 @@ export function QuickNotesPanel({
         </DialogContent>
       </Dialog>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------- send to team
+
+/** Pick a quadrant and (optionally) a teammate, then put the note(s) on the team board. */
+function SendToTeamDialog({
+  notes, quadStyles, teamMembers, userId, onClose, onSend,
+}: {
+  notes: Note[] | null;
+  quadStyles: Record<TaskQuadrant, QuadStyle>;
+  teamMembers: TeamMember[];
+  userId: string | null;
+  onClose: () => void;
+  onSend: (dest: NoteDestination) => void;
+}) {
+  const [quadrant, setQuadrant] = useState<TaskQuadrant>("do");
+  const [assignee, setAssignee] = useState<string | null>(null);
+  useEffect(() => { if (notes) { setQuadrant("do"); setAssignee(null); } }, [notes]);
+  const count = notes?.length ?? 0;
+  const label = count > 1 ? `${count} notes` : notes?.[0] ? noteHeading(notes[0]) : "";
+  return (
+    <Dialog open={!!notes} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="z-[90] max-w-sm gap-4">
+        <DialogHeader>
+          <DialogTitle>Send to team</DialogTitle>
+          <DialogDescription className="truncate">{label}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Category</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {QUADRANTS.map((q) => {
+              const st = quadStyles[q.key];
+              const on = quadrant === q.key;
+              return (
+                <button
+                  key={q.key}
+                  type="button"
+                  onClick={() => setQuadrant(q.key)}
+                  aria-pressed={on}
+                  className={cn("min-h-10 rounded-md border px-1.5 text-xs font-bold transition-shadow", on && "ring-2 ring-offset-1 ring-offset-background")}
+                  style={{
+                    color: st.color,
+                    borderColor: `color-mix(in srgb, ${st.color} 45%, transparent)`,
+                    backgroundColor: `color-mix(in srgb, ${st.color} ${on ? 22 : 10}%, transparent)`,
+                    ...(on ? { ["--tw-ring-color" as string]: st.color } : {}),
+                  }}
+                >
+                  {st.title}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Assign to</div>
+          <div className="flex flex-wrap gap-1.5">
+            {[{ user_id: null as string | null, full_name: "Unassigned" }, ...teamMembers].map((m) => {
+              const on = assignee === m.user_id;
+              return (
+                <button
+                  key={m.user_id ?? "none"}
+                  type="button"
+                  onClick={() => setAssignee(m.user_id)}
+                  aria-pressed={on}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                    on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {m.user_id && m.user_id === userId ? "Me" : m.user_id ? firstName(m.full_name) : m.full_name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <DialogFooter className="flex-row justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={() => onSend({ quadrant, team: true, assignee: teamMembers.find((m) => m.user_id === assignee) ?? null })}
+          >
+            <Users className="mr-1.5 h-4 w-4" />Send
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -18,13 +18,12 @@ export async function buildClientFeedEvents(admin: Admin, clientId: string, orig
   const now = Date.now();
   const sinceISO = new Date(now - PAST_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const sinceDate = sinceISO.slice(0, 10);
-  const today = new Date(now).toISOString().slice(0, 10);
 
   const [sessions, appointments, workouts, events] = await Promise.all([
     feedSessions(admin, clientId, sinceISO, origin),
     feedAppointments(admin, clientId, sinceISO, origin),
     feedWorkouts(admin, clientId, sinceDate, origin),
-    feedEvents(admin, clientId, today, origin),
+    feedEvents(admin, clientId, sinceDate, origin),
   ]);
   return [...sessions, ...appointments, ...workouts, ...events];
 }
@@ -123,14 +122,16 @@ async function feedWorkouts(admin: Admin, clientId: string, sinceDate: string, o
   });
 }
 
-async function feedEvents(admin: Admin, clientId: string, today: string, origin: string): Promise<FeedEvent[]> {
+// From the same date as workouts, not "today in UTC": that cut an evening
+// event out of the feed (and Google) hours before it started in Winnipeg.
+async function feedEvents(admin: Admin, clientId: string, sinceDate: string, origin: string): Promise<FeedEvent[]> {
   const [{ data: assigned }, { data: events }] = await Promise.all([
     admin.from("event_assignments").select("event_id").eq("client_id", clientId),
     admin
       .from("events")
       .select("id, name, event_date, start_time, end_time, timezone, location, client_facing_notes, status, audience_scope, updated_at")
       .in("status", ["Active", "Completed"])
-      .gte("event_date", today)
+      .gte("event_date", sinceDate)
       .limit(200),
   ]);
   const assignedIds = new Set(((assigned ?? []) as any[]).map((r) => r.event_id));

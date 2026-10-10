@@ -242,6 +242,7 @@ import { Route as ApiPublicHooksActionCentreTickRouteImport } from './routes/api
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './routes/api/public/hooks/birthday-notifications'
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
+import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
@@ -1606,6 +1607,12 @@ const ApiPublicHooksCleanupPendingSignupsRoute =
     path: '/api/public/hooks/cleanup-pending-signups',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksClientCalendarsTickRoute =
+  ApiPublicHooksClientCalendarsTickRouteImport.update({
+    id: '/api/public/hooks/client-calendars-tick',
+    path: '/api/public/hooks/client-calendars-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
   id: '/api/public/hooks/fillout',
   path: '/api/public/hooks/fillout',
@@ -1996,6 +2003,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
+  '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
@@ -2255,6 +2263,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
+  '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
@@ -2520,6 +2529,7 @@ export interface FileRoutesById {
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
+  '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
@@ -2785,6 +2795,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
+    | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
@@ -3044,6 +3055,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
+    | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
@@ -3308,6 +3320,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
+    | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
@@ -3400,6 +3413,7 @@ export interface RootRouteChildren {
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksBirthdayNotificationsRoute: typeof ApiPublicHooksBirthdayNotificationsRoute
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
+  ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
@@ -5054,6 +5068,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCleanupPendingSignupsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/client-calendars-tick': {
+      id: '/api/public/hooks/client-calendars-tick'
+      path: '/api/public/hooks/client-calendars-tick'
+      fullPath: '/api/public/hooks/client-calendars-tick'
+      preLoaderRoute: typeof ApiPublicHooksClientCalendarsTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/fillout': {
       id: '/api/public/hooks/fillout'
       path: '/api/public/hooks/fillout'
@@ -5990,6 +6011,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksBirthdayNotificationsRoute,
   ApiPublicHooksCleanupPendingSignupsRoute:
     ApiPublicHooksCleanupPendingSignupsRoute,
+  ApiPublicHooksClientCalendarsTickRoute:
+    ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,

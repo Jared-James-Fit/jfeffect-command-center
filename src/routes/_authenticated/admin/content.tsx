@@ -1,57 +1,12 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
-import { PageHeader } from "@/components/app-shell";
-import { cn } from "@/lib/utils";
+import { createFileRoute } from "@tanstack/react-router";
 import { AdminTasksPanel } from "@/route-pages/_authenticated/admin/tasks";
-import { ResourceLibrary } from "@/route-pages/_authenticated/admin/resources";
-import { MediaArchivesPage } from "@/route-pages/_authenticated/admin/media-archives";
 
-type TabKey = "tasks" | "library" | "archive";
-const TABS: { value: TabKey; label: string }[] = [
-  { value: "tasks", label: "Tasks" },
-  { value: "library", label: "Library" },
-  { value: "archive", label: "Archive" },
-];
-const LAST_TAB_KEY = "jf-admin-content-last-tab";
-const isTab = (v: unknown): v is TabKey => typeof v === "string" && TABS.some((t) => t.value === v);
-
+/**
+ * The Task Manager. (This page used to also hold a Resource Library and a
+ * Media Archive tab; both were retired.) `tab` stays in the URL as "tasks" so
+ * the bottom nav's Tasks item stays lit and old ?tab= links still land here.
+ */
 export const Route = createFileRoute("/_authenticated/admin/content")({
-  validateSearch: (raw: Record<string, unknown>): { tab: TabKey } => {
-    const t = raw?.tab;
-    if (isTab(t)) return { tab: t };
-    if (typeof t === "undefined" && typeof window !== "undefined") {
-      try { const s = window.localStorage.getItem(LAST_TAB_KEY); if (isTab(s)) return { tab: s }; } catch {}
-    }
-    return { tab: "tasks" };
-  },
-  component: ContentWorkspace,
+  validateSearch: (_raw: Record<string, unknown>): { tab: "tasks" } => ({ tab: "tasks" }),
+  component: AdminTasksPanel,
 });
-
-function ContentWorkspace() {
-  const { tab } = Route.useSearch();
-  const navigate = useNavigate();
-  useMemo(() => { try { window.localStorage.setItem(LAST_TAB_KEY, tab); } catch {} }, [tab]);
-  const setTab = (n: TabKey) => navigate({ to: "/admin/content", search: { tab: n } as any });
-  return (
-    <>
-      <PageHeader title="Content" subtitle="Tasks, resource library, and archive." />
-      <div className="border-b border-border bg-background/50">
-        <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
-          {TABS.map((t) => {
-            const active = t.value === tab;
-            return (
-              <button key={t.value} type="button" onClick={() => setTab(t.value)}
-                className={cn("shrink-0 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition-colors",
-                  active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>{t.label}</button>
-            );
-          })}
-        </div>
-      </div>
-      <div>
-        {tab === "tasks" && <AdminTasksPanel />}
-        {tab === "library" && <div className="p-4 md:p-6"><ResourceLibrary embedded /></div>}
-        {tab === "archive" && <MediaArchivesPage embedded />}
-      </div>
-    </>
-  );
-}
