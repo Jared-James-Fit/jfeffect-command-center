@@ -119,6 +119,31 @@ export const CLEO_ACTION_PARAMS = {
   }),
   publish_program: z.object({ block_id: uuid, visible: z.boolean().default(true).describe("true publishes it to the client; false hides it.") }),
   move_workout: z.object({ workout_id: uuid.describe("Scheduled workout id from training_program."), date: ymd }),
+  correct_logged_exercise: z.object({
+    row_id: uuid.describe("The row the sets were logged against (row id from training_log or program_detail)."),
+    exercise_id: uuid.describe("The library exercise they actually did, from exercise_library."),
+  }),
+  set_nutrition_targets: z.object({
+    client_id: uuid,
+    days: z
+      .array(
+        z.object({
+          day_label: z.string().trim().min(1).max(50).describe('"Every Day", "Training Day", "Rest Day", "High Day"...'),
+          calories: z.number().int().min(800).max(8000),
+          protein: z.number().int().min(0).max(600),
+          carbs: z.number().int().min(0).max(1200),
+          fats: z.number().int().min(0).max(400),
+          fibre: z.number().int().min(0).max(150).optional(),
+        }),
+      )
+      .min(1)
+      .max(7)
+      .describe("Every day type they should have; this replaces the current list."),
+    phase: z.enum(["Fat Loss", "Muscle Gain", "Maintenance", "Performance", "Lifestyle Reset", "Reverse Diet", "Recomp"]).optional(),
+    coach_notes: z.string().trim().max(2000).optional().describe("Staff-only notes."),
+    client_notes: z.string().trim().max(2000).optional().describe("Notes the client sees."),
+    water: z.string().trim().max(100).optional(),
+  }),
 } as const;
 
 export type CleoActionKind = keyof typeof CLEO_ACTION_PARAMS;
@@ -147,6 +172,8 @@ export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: str
   add_workout: { title: "Add a workout", tool: "Add a one-off workout with library exercises to a client's program and schedule it on a date." },
   publish_program: { title: "Publish a program", tool: "Make a block visible to the client (publish) or hide it." },
   move_workout: { title: "Move a workout", tool: "Move a scheduled workout to another date." },
+  correct_logged_exercise: { title: "Fix a logged exercise", tool: "Correct which exercise a client actually did on a day they already logged (e.g. they did barbell bench instead of the dumbbell incline). Only the exercise changes; every logged set (load, reps, RPE) stays exactly as entered." },
+  set_nutrition_targets: { title: "Update nutrition", tool: "Set a client's nutrition targets: calories and macros for each day type, plus phase and notes. Replaces their current day list (or creates their first targets)." },
 };
 
 /** What doing it takes. Admins can do all of these; the finance login holds some role permissions. */

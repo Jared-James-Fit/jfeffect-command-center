@@ -54,6 +54,7 @@ describe("logged sets", () => {
     const out = formatSessions(sessions, "lb");
     expect(out).toContain("2026-10-08 | Lower A");
     expect(out).toContain("225 lb x 5 @RPE 8 (warm-up)");
+    expect(formatSessions(groupSessions([set({ row_id: "row-1" })], "America/Winnipeg"))).toContain("High-Bar Back Squat (top set e1RM ~346 lb) (row id row-1)");
     expect(out).toMatch(/top set e1RM ~346 lb/);
   });
 

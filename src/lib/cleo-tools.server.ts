@@ -187,6 +187,7 @@ export function cleoReadTools(ctx: ToolCtx) {
         }
         const sets: LoggedSet[] = picked.map(({ r, name }) => ({
           completed_at: r.completed_at,
+          row_id: r.row_id ?? null,
           exercise: name,
           day_title: titles.get(r.pl_exercise_rows?.day_id) ?? null,
           set_index: r.set_index ?? null,

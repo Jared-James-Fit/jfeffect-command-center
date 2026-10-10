@@ -26,6 +26,8 @@ export function matchesExercise(name: string | null | undefined, query: string |
 
 export type LoggedSet = {
   completed_at: string;
+  /** The program row the set was logged against (to correct its exercise). */
+  row_id?: string | null;
   exercise: string;
   day_title: string | null;
   set_index: number | null;
@@ -80,7 +82,7 @@ export function dayIn(iso: string, tz: string): string {
   }
 }
 
-export type Session = { date: string; title: string | null; exercises: Array<{ name: string; sets: LoggedSet[] }> };
+export type Session = { date: string; title: string | null; exercises: Array<{ name: string; rowId?: string | null; sets: LoggedSet[] }> };
 
 /** Sets grouped by training day (newest first), then by exercise in the order they were done. */
 export function groupSessions(sets: LoggedSet[], tz: string): Session[] {
@@ -96,7 +98,7 @@ export function groupSessions(sets: LoggedSet[], tz: string): Session[] {
     if (!session.title && s.day_title) session.title = s.day_title;
     let ex = session.exercises.find((e) => e.name === s.exercise);
     if (!ex) {
-      ex = { name: s.exercise, sets: [] };
+      ex = { name: s.exercise, rowId: s.row_id ?? null, sets: [] };
       session.exercises.push(ex);
     }
     ex.sets.push(s);
@@ -121,7 +123,7 @@ export function formatSessions(sessions: Session[], unit: "kg" | "lb" = "lb"): s
         .filter((t) => t.e1 != null)
         .sort((a, b) => (b.e1 ?? 0) - (a.e1 ?? 0))[0];
       const e1 = top?.e1 != null ? ` (top set e1RM ~${round(unit === "kg" ? top.e1 : top.e1 * LB_PER_KG, 1)} ${unit})` : "";
-      lines.push(`  ${ex.name}${e1}`);
+      lines.push(`  ${ex.name}${e1}${ex.rowId ? ` (row id ${ex.rowId})` : ""}`);
       for (const set of ex.sets) lines.push(`    ${set.set_index != null ? `set ${set.set_index + 1}: ` : ""}${formatSet(set, unit)}`);
     }
   }
