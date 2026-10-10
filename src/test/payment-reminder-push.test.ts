@@ -33,7 +33,12 @@ const MSG = {
 describe("pushNewPaymentReminders", () => {
   it("pushes each automated payment reminder with lockscreen-safe copy", async () => {
     const { admin } = fakeAdmin([MSG], { coachName: "Jared James" });
-    const send = vi.fn(async () => ({ sent: 1, removed: 0, skipped: null }));
+    const send = vi.fn(async (
+      _admin: any,
+      _userId: string,
+      _payload: { title: string; body: string; url: string; tag: string; data: any },
+      _options: { category: any; eventKey: string },
+    ) => ({ sent: 1, removed: 0, skipped: null as string | null }));
     const res = await pushNewPaymentReminders(admin, { sendWebPushToUser: send });
 
     expect(res).toEqual({ pushed: 1, skipped: 0 });
