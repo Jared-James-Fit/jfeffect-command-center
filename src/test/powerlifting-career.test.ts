@@ -135,6 +135,9 @@ describe("a lifter's career has one Back", () => {
     expect(level).toContain("<HallOfStrengthSheet");
     expect(level).not.toContain("<HallOfStrength ");
     expect(board.match(/<HallOfStrengthSheet /g)?.length).toBe(2); // the Home card and the League slide
+  });
+});
+
 describe("Athlete Records opened from the League tab", () => {
   const page = readFileSync("src/routes/_authenticated/admin/athlete-records.tsx", "utf8");
   const league = readFileSync("src/components/community/staff-league-board.tsx", "utf8");
