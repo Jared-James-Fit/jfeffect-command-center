@@ -9,6 +9,7 @@ import { POLL_MAX_OPTIONS, POLL_OPTION_MAX, cleanPollOptions, type PostSlide } f
 import { MentionSuggestBar } from "@/components/community/mentions";
 import { MediaStrip, useMediaDraft } from "@/components/community/media-strip";
 import { SpiritScene, type SpiritSceneKey } from "@/components/community/spirit-scenes";
+import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach, type PostAttachInitial } from "@/components/community/post-attach";
 
 export const NOTE_MAX = 1200;
 
@@ -30,6 +31,7 @@ export function NoteEditor({
   allowPoll = false,
   media,
   scene,
+  attach,
 }: {
   open: boolean;
   title: string;
@@ -37,17 +39,22 @@ export function NoteEditor({
   quote?: { text: string; author: string | null } | null;
   saving: boolean;
   onClose: () => void;
-  onSave: (body: string, poll?: string[], media?: PostSlide[]) => Promise<void>;
+  /** Resolves with the post's id when it has one to put a GIF / voice memo on. */
+  onSave: (body: string, poll?: string[], media?: PostSlide[]) => Promise<string | void>;
   allowPoll?: boolean;
   /** Offer photos: what's on it now (when editing) and a key for this post. `hint` says where they go. */
   media?: { initial: PostSlide[] | null | undefined; key: string; hint?: string };
   /** Saturday's drawn scene, when the post has one: it's the cover until it's removed or a photo goes on. */
   scene?: { key: SpiritSceneKey; onRemove: () => Promise<void> };
+  /** Offer a GIF and a voice memo: what's on it now and a key for this post. */
+  attach?: { initial: PostAttachInitial | null; key: string };
 }) {
   const [body, setBody] = useState(initial);
   const draft = useMediaDraft({ open: open && !!media, initial: media?.initial, key: media?.key ?? "none" });
+  const att = usePostAttach({ initial: attach?.initial, key: attach?.key ?? "none", open: open && !!attach });
   const close = () => {
     if (media) draft.discard();
+    att.discard();
     onClose();
   };
   // null = no poll; otherwise the options as typed
@@ -105,6 +112,7 @@ export function NoteEditor({
             {media.hint && <p className="mt-1 text-[11px] text-muted-foreground">{media.hint}</p>}
           </div>
         )}
+        {attach && <AttachPreview a={att} />}
         {allowPoll &&
           (poll ? (
             <div data-poll-editor className="space-y-2 rounded-2xl border border-border p-3">
@@ -137,24 +145,36 @@ export function NoteEditor({
               )}
               {pollCheck && !pollCheck.ok && poll.some((x) => x.trim()) && <p className="text-[12px] text-muted-foreground">{pollCheck.reason}</p>}
             </div>
-          ) : (
-            <button type="button" onClick={() => setPoll(["", ""])} className="inline-flex h-9 w-max items-center gap-1.5 rounded-full bg-muted px-3.5 text-[13px] font-bold active:scale-95">
-              <BarChart3 className="h-4 w-4" /> Add a poll
-            </button>
-          ))}
+          ) : null)}
+        {/* one row of extras: GIF, voice memo, poll */}
+        {(attach || (allowPoll && !poll)) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {attach && <AttachButtons a={att} small />}
+            {allowPoll && !poll && (
+              <button type="button" onClick={() => setPoll(["", ""])} className="inline-flex h-9 w-max items-center gap-1.5 rounded-full bg-muted px-3.5 text-[13px] font-bold active:scale-95">
+                <BarChart3 className="h-4 w-4" /> Add a poll
+              </button>
+            )}
+          </div>
+        )}
+        {attach && <AttachGifPicker a={att} />}
         <div className="flex items-center justify-between">
           <span className="text-[11px] tabular-nums text-muted-foreground">{body.length}/{NOTE_MAX}</span>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" disabled={saving} onClick={close}>Cancel</Button>
             <Button
               type="button"
-              disabled={saving || !trimmed || !pollReady || draft.tray.uploading > 0}
+              disabled={saving || !trimmed || !pollReady || draft.tray.uploading > 0 || att.recorder.recording}
               onClick={() => {
                 const options = pollCheck?.ok ? pollCheck.options : undefined;
                 // photos only go when they changed (left out, the post keeps what it has)
                 // a photo on, or the scene taken off: the drawing goes (so removing the photo later leaves no picture)
                 const offScene = scene && (dropScene || (media && draft.changed && draft.tray.items.length > 0)) ? scene.onRemove : null;
-                const save = (m?: PostSlide[]) => onSave(trimmed, options, m).then(() => offScene?.());
+                const save = (m?: PostSlide[]) =>
+                  onSave(trimmed, options, m).then(async (id) => {
+                    await offScene?.();
+                    if (attach && id) await att.save(id);
+                  });
                 const run = media && draft.changed
                   ? draft.save((m) => save(m))
                   : save().then(() => { if (media) draft.discard(); });

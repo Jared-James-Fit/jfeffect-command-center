@@ -115,11 +115,12 @@ export function ShareWorkoutButton({
         caption: lockExisting?.caption,
         visibility: lockExisting?.visibility,
         extras: lockExisting?.extra_media ?? null,
+        attach: lockExisting,
         onPost: async (a) => {
           if (!user?.id) throw new Error("Sign in again to post");
           const id = await ensureStarted();
           if (!id) throw new Error("Couldn't start your session. Try again.");
-          await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing: lockExisting, extras: a.extras, lockIn: true });
+          await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing: lockExisting, extras: a.extras, lockIn: true, attach: a.attach });
           const t = postedToast(a.visibility, true, !!lockExisting);
           toast.success(t.title, { description: t.description });
         },

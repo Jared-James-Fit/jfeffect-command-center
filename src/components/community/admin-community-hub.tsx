@@ -154,9 +154,11 @@ export function AdminCommunityHub() {
         onClose={() => setWriting(false)}
         allowPoll
         media={{ initial: null, key: "new-post" }}
+        attach={{ initial: null, key: "new-post" }}
         onSave={async (body, poll, media) => {
-          await act.mutateAsync({ kind: "note", body, poll, media });
+          const r = await act.mutateAsync({ kind: "note", body, poll, media });
           toast.success(poll ? "Poll posted to the community" : "Posted to the community");
+          return r?.id;
         }}
       />
     </div>

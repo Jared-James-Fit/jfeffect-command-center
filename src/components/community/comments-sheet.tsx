@@ -13,6 +13,9 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { COMMENT_MAX, likesLabel, pinnedFirst, postTimeLabel, threadComments, type CommunityAuthor, type CommunityComment, type CommunityPost } from "@/lib/community";
 import { pickMedia, releasePicked, type PickedMedia } from "@/lib/community-media";
+import type { ChatGif } from "@/lib/chat-gifs";
+import { GifPicker } from "@/components/gif-picker";
+import { MicButton, RecordingBar, VoiceMemoPlayer, useVoiceMemoRecorder, type RecordedVoice } from "@/components/community/voice-memo";
 import {
   useAddComment,
   useCommentMediaUrls,
@@ -74,6 +77,16 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [picked, setPicked] = useState<PickedMedia | null>(null);
+  // one attachment at a time: a photo / video, a GIF, or a voice memo
+  const [gif, setGif] = useState<ChatGif | null>(null);
+  const [gifOpen, setGifOpen] = useState(false);
+  const [voice, setVoice] = useState<RecordedVoice | null>(null);
+  const recorder = useVoiceMemoRecorder((v) => {
+    releasePicked(pickedRef.current);
+    setPicked(null);
+    setGif(null);
+    setVoice(v);
+  });
   const [picking, setPicking] = useState(false);
   const [progress, setProgress] = useState<Record<string, number>>({});
   const [menuFor, setMenuFor] = useState<CommunityComment | null>(null);
@@ -110,15 +123,19 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
 
   const me: CommunityAuthor = profile?.author ?? { user_id: user?.id ?? "me", name: "You", avatar_url: null, is_coach: viewerIsStaff };
   const body = text.trim();
-  const canSend = (!!body || !!picked) && !!user?.id && !picking;
+  const canSend = (!!body || !!picked || !!gif || !!voice) && !!user?.id && !picking && !recorder.recording;
 
   const send = () => {
     if (!canSend || !user?.id) return;
     const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const media = picked;
+    const g = gif ? { url: gif.media_url, thumb: gif.thumb_url } : null;
+    const v = voice;
     const to = replyTo;
     setText("");
     setPicked(null);
+    setGif(null);
+    setVoice(null);
     setReplyTo(null);
     if (to) setExpanded((s) => new Set(s).add(to.threadId));
     add
@@ -129,15 +146,18 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
         threadId: to?.threadId ?? null,
         replyTo: to && !to.mine ? to.name : null,
         media,
+        gif: g,
+        voice: v,
         userId: user.id,
         me,
-        onProgress: media ? (pct) => setProgress((p) => ({ ...p, [tempId]: pct })) : undefined,
+        onProgress: media || v ? (pct) => setProgress((p) => ({ ...p, [tempId]: pct })) : undefined,
       })
       .catch((e: any) => {
         toast.error(e?.message ?? "Couldn't post that comment");
         // put it back so nothing typed is lost
         setText((t) => t || body);
         if (media) setPicked((p) => p ?? media);
+        if (v) setVoice((x) => x ?? v);
         if (to) setReplyTo((r) => r ?? to);
       })
       .finally(() =>
@@ -159,6 +179,8 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
     }
     releasePicked(pickedRef.current);
     setPicked(res.media);
+    setGif(null);
+    setVoice(null);
     inputRef.current?.focus();
   };
 
@@ -269,6 +291,22 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
             </button>
           </div>
         )}
+        {(gif || voice) && (
+          <div data-attach-preview className="relative mb-2 inline-block">
+            {gif ? <img src={gif.thumb_url ?? gif.media_url} alt={gif.title} className="h-20 rounded-xl bg-muted object-cover" /> : voice ? <VoiceMemoPlayer src={voice.url} duration={voice.duration} /> : null}
+            <button
+              type="button"
+              onClick={() => {
+                setGif(null);
+                setVoice(null);
+              }}
+              className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full bg-foreground text-background shadow"
+              aria-label={gif ? "Remove GIF" : "Remove voice memo"}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         {picked && (
           <div className="relative mb-2 inline-block">
             {picked.kind === "video" ? (
@@ -305,14 +343,26 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
               e.target.value = "";
             }}
           />
+          {recorder.recording ? (
+            <RecordingBar elapsed={recorder.elapsed} levels={recorder.levels} onCancel={recorder.cancel} onDone={() => void recorder.finish()} />
+          ) : (
+          <>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={picking}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+            className="grid h-11 w-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
             aria-label="Add a photo or video"
           >
             {picking ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setGifOpen(true)}
+            className="-ml-1 grid h-11 w-9 shrink-0 place-items-center rounded-full text-[11px] font-black tracking-tight text-muted-foreground hover:bg-muted"
+            aria-label="Add a GIF"
+          >
+            <span className="rounded-[5px] border-[1.5px] border-current px-1 leading-[14px]">GIF</span>
           </button>
           <Textarea
             ref={inputRef}
@@ -329,10 +379,31 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
             className="min-h-11 flex-1 resize-none rounded-2xl text-[16px]"
             aria-label={replyTo ? "Write a reply" : "Add a comment"}
           />
-          <Button type="button" size="icon" className="h-11 w-11 shrink-0 rounded-full" disabled={!canSend} onClick={send} aria-label="Send comment">
-            <Send className="h-4 w-4" />
-          </Button>
+          {/* nothing to send yet: the mic, to say it instead */}
+          {canSend ? (
+            <Button type="button" size="icon" className="h-11 w-11 shrink-0 rounded-full" onClick={send} aria-label="Send comment">
+              <Send className="h-4 w-4" />
+            </Button>
+          ) : (
+            <MicButton onClick={() => void recorder.start()} disabled={!user?.id || picking} />
+          )}
+          </>
+          )}
         </div>
+        <GifPicker
+          hideTrigger
+          asDialog
+          showSounds={false}
+          controlledOpen={gifOpen}
+          onControlledOpenChange={setGifOpen}
+          onPick={(g) => {
+            releasePicked(pickedRef.current);
+            setPicked(null);
+            setVoice(null);
+            setGif(g);
+            setGifOpen(false);
+          }}
+        />
       </div>
 
       <CommentMenu
@@ -379,9 +450,17 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
   );
 }
 
+/** "a photo" · "a video" · "a GIF" · "a voice memo" */
+function mediaWord(c: CommunityComment, cap = false): string {
+  const t = c.media?.type;
+  const w = t === "video" ? "a video" : t === "gif" ? "a GIF" : t === "audio" ? "a voice memo" : "a photo";
+  return cap ? w[0].toUpperCase() + w.slice(1) : w;
+}
+
 function urlFor(c: CommunityComment, urls: Record<string, string> | undefined): string | null {
   const m = c.media;
   if (!m) return null;
+  if (m.type === "audio" || m.type === "gif") return urls?.[m.path] ?? null;
   const p = m.thumb ?? (m.type === "image" ? m.path : null);
   return (p && urls?.[p]) || null;
 }
@@ -498,7 +577,7 @@ function CommentRow({
       {...hold.handlers}
       tabIndex={c.pending ? -1 : 0}
       data-comment-id={c.id}
-      aria-label={`${c.author.name}: ${c.body || (c.media?.type === "video" ? "a video" : "a photo")}. Hold for options.`}
+      aria-label={`${c.author.name}: ${c.body || mediaWord(c)}. Hold for options.`}
       className={cn(
         "group -mx-2 flex select-none items-start gap-2.5 rounded-2xl px-2 py-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
         hold.pressing && "bg-muted",
@@ -572,6 +651,8 @@ function CommentRow({
 
 function CommentMedia({ c, url, onOpen }: { c: CommunityComment; url: string | null; onOpen: (c: CommunityComment) => void }) {
   const m = c.media!;
+  if (m.type === "audio") return <VoiceMemoPlayer src={c.local_preview ?? url} duration={m.duration} seed={c.id.length + (c.created_at?.length ?? 0)} className="mt-1.5" />;
+  if (m.type === "gif") return <img data-comment-gif src={m.path} alt="GIF" loading="lazy" decoding="async" className="mt-1.5 block max-h-40 max-w-[200px] rounded-2xl bg-muted object-cover" />;
   const ratio = m.width && m.height ? Math.min(Math.max(m.width / m.height, 0.6), 1.6) : 1;
   const local = c.local_preview ?? null;
   return (
@@ -646,7 +727,7 @@ function CommentMenu({
                 <span className="truncate">{c.is_mine ? "Your comment" : `${c.author.name}'s comment`}</span>
               </SheetTitle>
               <SheetDescription className="line-clamp-3 whitespace-pre-line text-[13px] text-foreground/80">
-                {c.body || (c.media?.type === "video" ? "A video" : "A photo")}
+                {c.body || mediaWord(c, true)}
               </SheetDescription>
             </SheetHeader>
             <div className="py-1">

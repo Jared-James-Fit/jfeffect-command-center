@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import type { CommunityVisibility } from "@/lib/community";
 import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
 import { CaptionEditor, CaptionField, captionThumb } from "@/components/community/caption-editor";
+import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach, type PostAttachInitial } from "@/components/community/post-attach";
 import { SlideTray, useSlideTray } from "@/components/community/slide-tray";
 import { MAX_SLIDES, type PostSlide } from "@/lib/community";
 import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
@@ -30,6 +31,8 @@ export type StudioPostArgs = {
   look: ShareTemplate;
   /** Slides 2..10, already uploaded, in order. */
   extras: PostSlide[];
+  /** Puts the GIF / voice memo on the saved post (a no-op when they didn't change). */
+  attach: (postId: string) => Promise<void>;
 };
 export type StudioPost = {
   /** Changes when the post it's for changes (resets the caption etc.). */
@@ -41,6 +44,8 @@ export type StudioPost = {
   showHideLoads?: boolean;
   /** The post's other slides already (editing it). */
   extras?: PostSlide[] | null;
+  /** The post's GIF and voice memo already (editing it). */
+  attach?: PostAttachInitial | null;
   onPost: (a: StudioPostArgs) => Promise<void>;
 };
 
@@ -138,6 +143,11 @@ export function ShareStudio({
   const cardRef = useRef(card);
   cardRef.current = card;
   const tray = useSlideTray({ open, initial: post?.extras, resetKey: post?.key ?? "", coverCount: 1 });
+  const att = usePostAttach({ initial: post?.attach, key: post?.key ?? "", open });
+  useEffect(() => {
+    if (!open) att.discard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const postedRef = useRef(false);
   postedRef.current = posted;
 
@@ -478,7 +488,7 @@ export function ShareStudio({
     try {
       // the extras have been uploading all along; this only waits for any still going
       const extras = await tray.ready();
-      await post.onPost({ photo: await postPhoto(extras.length > 0), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card.look, extras });
+      await post.onPost({ photo: await postPhoto(extras.length > 0), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card.look, extras, attach: att.save });
       tray.commit();
       setPosted(true);
       setTimeout(onClose, 900);
@@ -678,7 +688,14 @@ export function ShareStudio({
                 }}
                 onLibrary={() => libRef.current?.click()}
               />
-              <CaptionField value={caption} onOpen={openCaption} />
+              <AttachPreview a={att} dark />
+              <div className="flex gap-2">
+                <div className="min-w-0 flex-1">
+                  <CaptionField value={caption} onOpen={openCaption} />
+                </div>
+                <AttachButtons a={att} dark />
+              </div>
+              <AttachGifPicker a={att} />
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -717,7 +734,7 @@ export function ShareStudio({
                 )}
                 <button
                   type="button"
-                  disabled={!!busy || posted || !post || !card}
+                  disabled={!!busy || posted || !post || !card || att.recorder.recording}
                   onClick={() => void doPost()}
                   className={cn(
                     // the app's own primary button: JF red, solid

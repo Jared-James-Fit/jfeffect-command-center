@@ -9,6 +9,7 @@ import { CAPTION_MAX, postSlides, type CommunityPost, type CommunityVisibility }
 import { useEditPost, useSetPostMedia } from "@/lib/community.queries";
 import { MentionSuggestBar } from "@/components/community/mentions";
 import { MediaStrip, useMediaDraft } from "@/components/community/media-strip";
+import { PostAttachRow, attachOfPost, usePostAttach } from "@/components/community/post-attach";
 
 /**
  * Edit your own workout post, Instagram-style, any time: the photos and
@@ -20,6 +21,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
   const edit = useEditPost();
   const setMedia = useSetPostMedia();
   const draft = useMediaDraft({ open: !!post, initial: post ? postSlides(post) : null, key: post?.id ?? "none" });
+  const att = usePostAttach({ initial: attachOfPost(post), key: post?.id ?? "none", open: !!post });
   const archived = !!post?.archived_at;
   const [caption, setCaption] = useState("");
   const captionRef = useRef<HTMLTextAreaElement | null>(null);
@@ -40,6 +42,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
       if (draft.changed) await draft.save((media) => setMedia.mutateAsync({ postId: post.id, media }));
       else draft.discard();
       await edit.mutateAsync({ postId: post.id, caption, visibility, hideLoads });
+      await att.save(post.id);
       toast.success("Post updated");
       onClose();
     } catch (e: any) {
@@ -48,6 +51,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
   };
   const close = () => {
     draft.discard();
+    att.discard();
     onClose();
   };
   const busy = edit.isPending || setMedia.isPending;
@@ -81,10 +85,11 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
               {caption.length}/{CAPTION_MAX}
             </div>
           </div>
+          <PostAttachRow a={att} />
           <AudiencePicker value={visibility} onChange={setVisibility} hideLoads={hideLoads} onHideLoads={setHideLoads} />
         </div>
         <div className="border-t border-border/60 px-5 pb-[max(env(safe-area-inset-bottom),16px)] pt-3">
-          <Button type="button" className="h-12 w-full rounded-2xl text-[15px] font-black" disabled={busy || draft.tray.uploading > 0} onClick={() => void save()}>
+          <Button type="button" className="h-12 w-full rounded-2xl text-[15px] font-black" disabled={busy || draft.tray.uploading > 0 || att.recorder.recording} onClick={() => void save()}>
             {busy ? "Saving…" : draft.tray.uploading > 0 ? "Uploading…" : "Save"}
           </Button>
         </div>

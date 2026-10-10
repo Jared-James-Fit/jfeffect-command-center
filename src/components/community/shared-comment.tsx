@@ -3,6 +3,7 @@ import { ArrowUpRight, MessageCircle, Play } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge } from "@/components/community/post-card";
 import { signCommunityPaths } from "@/lib/community-media";
+import { VoiceMemoPlayer } from "@/components/community/voice-memo";
 import { cn } from "@/lib/utils";
 import type { CommentMedia, CommunityAuthor, SharedComment } from "@/lib/community";
 
@@ -67,13 +68,16 @@ export function SharedCommentCard({
 }
 
 function SharedMedia({ media }: { media: CommentMedia }) {
-  const path = media.thumb ?? (media.type === "image" ? media.path : null);
+  // a GIF's link or a voice memo's file; else the photo's thumb
+  const path = media.type === "gif" || media.type === "audio" ? media.path : media.thumb ?? (media.type === "image" ? media.path : null);
   const { data: url } = useQuery({
     queryKey: ["community-media-full", path],
     enabled: !!path,
     staleTime: 45 * 60 * 1000,
     queryFn: async () => (await signCommunityPaths([path]))[path!] ?? null,
   });
+  if (media.type === "audio") return <VoiceMemoPlayer src={url ?? null} duration={media.duration} className="mt-2" />;
+  if (media.type === "gif") return url ? <img src={url} alt="GIF" loading="lazy" className="mt-2 block max-h-48 max-w-[240px] rounded-xl bg-muted object-cover" /> : null;
   const ratio = media.width && media.height ? Math.min(Math.max(media.width / media.height, 0.6), 1.6) : 1;
   return (
     <div data-pinch-zoom className="relative mt-2 overflow-hidden rounded-xl bg-muted" style={{ width: ratio >= 1 ? 240 : Math.round(260 * ratio), maxWidth: "100%", aspectRatio: String(ratio) }}>

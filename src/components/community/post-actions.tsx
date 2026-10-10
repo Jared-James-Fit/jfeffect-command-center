@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { NoteEditor } from "@/components/community/note-editor";
+import { attachOfPost } from "@/components/community/post-attach";
 import { EditPostSheet } from "@/components/community/edit-post-sheet";
 import type { CommunityPost } from "@/lib/community";
 import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useRemoveNoteScene, useSetPostMedia, useUpdateNote } from "@/lib/community.queries";
@@ -145,10 +146,13 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
           onClose={() => setEditing(false)}
           media={{ initial: postSlides(post), key: post.id }}
           scene={sceneKey ? { key: sceneKey, onRemove: () => removeScene.mutateAsync(post.id) } : undefined}
+          // a GIF / voice memo is the author's own (staff can fix the words of anyone's note)
+          attach={mine ? { initial: attachOfPost(post), key: post.id } : undefined}
           onSave={async (body, _poll, media) => {
             await updateNote.mutateAsync({ postId: post.id, body });
             if (media) await setMedia.mutateAsync({ postId: post.id, media });
             toast.success("Post updated");
+            return post.id;
           }}
         />
       ) : (
