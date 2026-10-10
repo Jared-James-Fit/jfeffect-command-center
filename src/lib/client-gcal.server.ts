@@ -13,6 +13,7 @@ import {
   CLIENT_GCAL_SCOPES,
   FULL_CHECK_MS,
   SYNC_WINDOW_PAST_MS,
+  googleEventEndMs,
   batchBoundaryOf,
   buildBatchBody,
   desiredGoogleEvents,
@@ -99,7 +100,11 @@ async function accessTokenFor(admin: Admin, row: any): Promise<string> {
   try {
     const t = await refreshToken(row.refresh_token);
     const expires = new Date(Date.now() + (Number(t.expires_in || 3600) - 30) * 1000).toISOString();
-    await admin.from(TABLE).update({ access_token: t.access_token, token_expires_at: expires }).eq("client_id", row.client_id);
+    await admin
+      .from(TABLE)
+      .update({ access_token: t.access_token, token_expires_at: expires })
+      .eq("client_id", row.client_id)
+      .eq("refresh_token", row.refresh_token);
     row.access_token = t.access_token;
     row.token_expires_at = expires;
     return t.access_token;
@@ -108,7 +113,8 @@ async function accessTokenFor(admin: Admin, row: any): Promise<string> {
       await admin
         .from(TABLE)
         .update({ status: "revoked", last_error: "Google access was removed. Connect Google Calendar again.", updated_at: new Date().toISOString() })
-        .eq("client_id", row.client_id);
+        .eq("client_id", row.client_id)
+        .eq("refresh_token", row.refresh_token);
     }
     throw e;
   }
@@ -155,7 +161,7 @@ async function listEvents(token: string, calendarId: string, timeMin: Date): Pro
       showDeleted: "true",
       singleEvents: "true",
       maxResults: "2500",
-      fields: "nextPageToken,items(id,status,extendedProperties/private)",
+      fields: "nextPageToken,items(id,status,start,end,extendedProperties/private)",
     });
     if (pageToken) q.set("pageToken", pageToken);
     const r = await google(token, `${API}/calendars/${encodeURIComponent(calendarId)}/events?${q}`);
@@ -163,7 +169,7 @@ async function listEvents(token: string, calendarId: string, timeMin: Date): Pro
     if (!r.ok) throw new Error(`Google list failed (${r.data?.error?.message || r.status})`);
     for (const it of (r.data?.items ?? []) as any[]) {
       const priv = it.extendedProperties?.private ?? {};
-      items.push({ id: it.id, status: it.status, jf: priv.jf === "1", hash: priv.jfHash ?? null });
+      items.push({ id: it.id, status: it.status, jf: priv.jf === "1", hash: priv.jfHash ?? null, endsAt: googleEventEndMs(it.end) });
     }
     pageToken = r.data?.nextPageToken;
     if (!pageToken) break;
@@ -270,7 +276,7 @@ export async function syncClientCalendar(admin: Admin, clientId: string, opts: {
   const desired = desiredGoogleEvents(await buildClientFeedEvents(admin, clientId, appOrigin()), windowStart);
   const recentlyChecked = row.last_synced_at && now.getTime() - Date.parse(row.last_synced_at) < FULL_CHECK_MS;
   if (!opts.force && row.status === "connected" && recentlyChecked && row.last_sync_hash === syncSetHash(desired, row.calendar_id)) {
-    await admin.from(TABLE).update({ last_checked_at: now.toISOString() }).eq("client_id", clientId);
+    await admin.from(TABLE).update({ last_checked_at: now.toISOString() }).eq("client_id", clientId).eq("refresh_token", row.refresh_token);
     return { skipped: "unchanged" };
   }
 
@@ -286,6 +292,10 @@ export async function syncClientCalendar(admin: Admin, clientId: string, opts: {
   let calendarId: string | null = row.calendar_id;
   let listed = calendarId ? await listEvents(token, calendarId, windowStart) : { notFound: true, items: [] as ExistingGoogleEvent[] };
   if (listed.notFound) {
+    // Still the same connection? (Not disconnected or switched to another
+    // Google account while this ran: never leave an orphan calendar behind.)
+    const { data: current } = await admin.from(TABLE).select("refresh_token").eq("client_id", clientId).maybeSingle();
+    if (current?.refresh_token !== row.refresh_token) return { skipped: "not_connected" };
     calendarId = await createCalendar(token);
     listed = { notFound: false, items: [] };
   }
@@ -304,7 +314,9 @@ export async function syncClientCalendar(admin: Admin, clientId: string, opts: {
       event_count: desired.length,
       updated_at: now.toISOString(),
     })
-    .eq("client_id", clientId);
+    .eq("client_id", clientId)
+    // Only onto the connection this run started with.
+    .eq("refresh_token", row.refresh_token);
 
   return { inserted: result.inserted, updated: result.updated, removed: result.removed, failed: result.failed, events: desired.length };
 }
@@ -335,7 +347,8 @@ export async function syncDueClientCalendars(admin: Admin, opts: { max?: number;
       await admin
         .from(TABLE)
         .update({ status: "error", last_error: String(e?.message ?? e).slice(0, 300), last_checked_at: new Date().toISOString() })
-        .eq("client_id", row.client_id);
+        .eq("client_id", row.client_id)
+        .eq("refresh_token", row.refresh_token);
     }
   }
   return { connected: (rows ?? []).length, checked, changed, failed };

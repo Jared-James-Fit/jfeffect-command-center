@@ -108,6 +108,19 @@ describe("sync plan", () => {
     expect(plan).toEqual({ insert: [], update: [], remove: [] });
   });
 
+  it("keeps events that already happened when they drop out of the feed", () => {
+    const now = Date.parse("2026-10-12T12:00:00Z");
+    const plan = planSync(
+      [],
+      [
+        { id: "jfpast", status: "confirmed", jf: true, hash: "x", endsAt: Date.parse("2026-10-11T17:00:00Z") },
+        { id: "jffuture", status: "confirmed", jf: true, hash: "x", endsAt: Date.parse("2026-10-13T17:00:00Z") },
+      ],
+      now,
+    );
+    expect(plan.remove).toEqual(["jffuture"]);
+  });
+
   it("never deletes something the client added to the calendar by hand", () => {
     const plan = planSync([], [{ id: "theirown123", status: "confirmed", jf: false, hash: null }]);
     expect(plan.remove).toEqual([]);
@@ -166,6 +179,9 @@ describe("sign-in safety and wording", () => {
     expect(safeReturnPath("https://evil.example")).toBe("/portal/calendar");
     expect(safeReturnPath("//evil.example")).toBe("/portal/calendar");
     expect(safeReturnPath("/\\evil.example")).toBe("/portal/calendar");
+    expect(safeReturnPath("/\t/evil.example")).toBe("/portal/calendar");
+    expect(safeReturnPath("/\n/evil.example")).toBe("/portal/calendar");
+    expect(safeReturnPath("/portal/calendar?view=week#today")).toBe("/portal/calendar?view=week#today");
     expect(safeReturnPath(undefined)).toBe("/portal/calendar");
   });
 

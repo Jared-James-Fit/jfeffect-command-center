@@ -119,14 +119,30 @@ export function syncSetHash(desired: GoogleEventBody[], calendarId: string | nul
   return shortHash(`${calendarId ?? ""}|${desired.map((d) => `${d.id}:${d.extendedProperties.private.jfHash}`).join(",")}`);
 }
 
-export type ExistingGoogleEvent = { id: string; status?: string | null; jf?: boolean; hash?: string | null };
+export type ExistingGoogleEvent = {
+  id: string;
+  status?: string | null;
+  jf?: boolean;
+  hash?: string | null;
+  /** When it ends (ms). Ended events are history and never deleted. */
+  endsAt?: number | null;
+};
+
+/** End of a Google event in ms; an all-day end date counts from UTC midnight. */
+export function googleEventEndMs(end: { date?: string; dateTime?: string } | null | undefined): number | null {
+  if (!end) return null;
+  const t = Date.parse(end.dateTime ?? (end.date ? `${end.date}T00:00:00Z` : ""));
+  return Number.isFinite(t) ? t : null;
+}
 export type SyncPlan = { insert: GoogleEventBody[]; update: GoogleEventBody[]; remove: string[] };
 
 /**
  * What to change in Google. Only events the app wrote are ever deleted, so
- * anything the client adds to the calendar by hand is left alone.
+ * anything the client adds to the calendar by hand is left alone, and only
+ * ones that haven't ended: something dropping out of the feed because it's
+ * in the past stays in their calendar as history.
  */
-export function planSync(desired: GoogleEventBody[], existing: ExistingGoogleEvent[]): SyncPlan {
+export function planSync(desired: GoogleEventBody[], existing: ExistingGoogleEvent[], now: number = Date.now()): SyncPlan {
   const have = new Map(existing.map((e) => [e.id, e]));
   const want = new Set(desired.map((d) => d.id));
   const plan: SyncPlan = { insert: [], update: [], remove: [] };
@@ -136,7 +152,8 @@ export function planSync(desired: GoogleEventBody[], existing: ExistingGoogleEve
     else if (ex.status === "cancelled" || ex.hash !== d.extendedProperties.private.jfHash) plan.update.push(d);
   }
   for (const ex of existing) {
-    if (ex.jf && ex.status !== "cancelled" && !want.has(ex.id)) plan.remove.push(ex.id);
+    const ended = ex.endsAt != null && ex.endsAt <= now;
+    if (ex.jf && ex.status !== "cancelled" && !ended && !want.has(ex.id)) plan.remove.push(ex.id);
   }
   return plan;
 }
@@ -189,9 +206,17 @@ export function parseBatchResponse(text: string, boundary: string): BatchResult[
 
 /** Where to send someone after the Google sign-in: an in-app path only, never another site. */
 export function safeReturnPath(p: unknown, fallback = "/portal/calendar"): string {
-  if (typeof p !== "string") return fallback;
-  if (!p.startsWith("/") || p.startsWith("//") || p.startsWith("/\\") || p.length > 300) return fallback;
-  return p;
+  if (typeof p !== "string" || p.length > 300 || !p.startsWith("/")) return fallback;
+  // Browsers drop tabs and newlines from URLs ("/\t/evil.com" becomes
+  // "//evil.com"), so control characters and backslashes are refused outright.
+  if (/[\u0000-\u001f\u007f\\]/.test(p)) return fallback;
+  try {
+    const u = new URL(p, "https://app.invalid");
+    if (u.origin !== "https://app.invalid") return fallback;
+    return `${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return fallback;
+  }
 }
 
 /** Plain words for what went wrong in the Google sign-in. */

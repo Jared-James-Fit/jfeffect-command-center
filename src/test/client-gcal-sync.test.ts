@@ -120,7 +120,13 @@ function fakeGoogle() {
       const cal = g.calendars.get(decodeURIComponent(list[1]));
       if (!cal) return json(404, { error: { message: "Not Found" } });
       return json(200, {
-        items: Array.from(cal.values()).map((e) => ({ id: e.id, status: e.status, extendedProperties: e.body?.extendedProperties })),
+        items: Array.from(cal.values()).map((e) => ({
+          id: e.id,
+          status: e.status,
+          start: e.body?.start,
+          end: e.body?.end,
+          extendedProperties: e.body?.extendedProperties,
+        })),
       });
     }
     if (url.pathname === "/batch/calendar/v3") {
@@ -200,6 +206,29 @@ describe("Connect Google Calendar, end to end against a fake Google", () => {
     feed = [...feed.filter((e) => !e.uid.startsWith("pt-a")), sessionAt("a", 2)];
     expect(await syncClientCalendar(admin as any, "client-1")).toMatchObject({ updated: 1, failed: 0 });
     expect(events().length).toBe(4);
+  });
+
+  it("something that already happened stays in Google when it leaves the feed", async () => {
+    const { completeClientConnect, syncClientCalendar } = await import("@/lib/client-gcal.server");
+    const justDone: FeedEvent = { uid: "pt-done@jfeffect.com", start: day(-0.2), end: day(-0.1), summary: "1:1 Training" };
+    feed = [justDone, sessionAt("a", 2)];
+    await completeClientConnect(admin as any, { code: "c7", origin: "https://jfeffect.com", clientId: "client-1", userId: "user-1" });
+    feed = [sessionAt("a", 2)];
+    expect(await syncClientCalendar(admin as any, "client-1")).toMatchObject({ removed: 0, failed: 0 });
+    expect(events().length).toBe(2);
+  });
+
+  it("a run that started on an old connection never overwrites a newer one", async () => {
+    const { completeClientConnect, syncClientCalendar } = await import("@/lib/client-gcal.server");
+    await completeClientConnect(admin as any, { code: "old", origin: "https://jfeffect.com", clientId: "client-1", userId: "user-1" });
+    const stale = { ...row() };
+    await completeClientConnect(admin as any, { code: "new", origin: "https://jfeffect.com", clientId: "client-1", userId: "user-1" });
+    const fresh = { ...row() };
+    feed = [sessionAt("n", 3)];
+    await syncClientCalendar(admin as any, "client-1", { row: stale, force: true });
+    expect(row().refresh_token).toBe("rt-new");
+    expect(row().calendar_id).toBe(fresh.calendar_id);
+    expect(row().last_sync_hash).toBe(fresh.last_sync_hash);
   });
 
   it("a calendar deleted by hand in Google is recreated and refilled", async () => {
