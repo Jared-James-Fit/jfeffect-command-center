@@ -1,4 +1,5 @@
 import React, { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { SessionRequestCard } from "@/components/schedule/session-request-card";
 import { getMicStream } from "@/lib/audio-session";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -465,6 +466,9 @@ function AttachmentView({
 }) {
   if (att.kind === "community_post" && att.post_id) {
     return <CommunityPostChatCard att={att as PostCardAttachment} mine={mine} staff={role !== "client"} />;
+  }
+  if (att.kind === "session_request" && att.session_request_id) {
+    return <SessionRequestCard requestId={att.session_request_id} staff={role !== "client"} clientId={clientId} />;
   }
   if (att.kind === "staff_invite") {
     return <StaffInviteChatCard att={att as any} mine={mine} />;
@@ -2154,7 +2158,8 @@ export function MessageThread({
                     </div>
                   </div>
                 ) : (
-                  m.body && renderBodyWithMeet(m.body, mine)
+                  // A session request's card says it all; its text is for inbox previews.
+                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request") && renderBodyWithMeet(m.body, mine)
                 )}
                 {!isDeleted && !isEditing && m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>

@@ -44,6 +44,8 @@ type Props = {
   /** Prefill for a new booking started from a day on the calendar (yyyy-mm-dd / HH:MM). */
   initialDate?: string | null;
   initialTime?: string | null;
+  /** New bookings only: the ids just created (e.g. to answer a client's session request). */
+  onBooked?: (sessionIds: string[]) => void | Promise<void>;
 };
 
 const DOW = [
@@ -69,7 +71,7 @@ function computeRecurringDates(startISO: string, weekdays: number[], weeks: numb
   return out;
 }
 
-export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], initial, initialCard, initialDate, initialTime }: Props) {
+export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], initial, initialCard, initialDate, initialTime, onBooked }: Props) {
   const qc = useQueryClient();
   const { role } = useAuth();
   const isAdmin = role === "admin";
@@ -334,6 +336,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (!form.id) basePayload.wants_meet = !!form.wants_meet;
 
     let error: any = null;
+    let createdIds: string[] = [];
     if (form.id) {
       const { error: e } = await supabase
         .from("pt_sessions")
@@ -342,8 +345,9 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       error = e;
     } else {
       const rows = previewDates.map((d) => ({ ...basePayload, session_date: d }));
-      const { error: e } = await supabase.from("pt_sessions").insert(rows);
+      const { data: created, error: e } = await supabase.from("pt_sessions").insert(rows).select("id");
       error = e;
+      createdIds = ((created ?? []) as Array<{ id: string }>).map((r) => r.id);
     }
 
     setSaving(false);
@@ -357,6 +361,9 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     );
     invalidatePtSessionCaches(qc, form.client_id);
     kickGoogleSync();
+    if (!form.id && createdIds.length && onBooked) {
+      try { await onBooked(createdIds); } catch (e: any) { toast.error(e?.message ?? "Booked, but couldn't update the request"); }
+    }
     onOpenChange(false);
   };
 
