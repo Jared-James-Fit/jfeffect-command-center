@@ -15,8 +15,8 @@ import { ATHLETE_SEX_KEYS, SexChoice } from "@/components/athlete-sex";
 import { saveMySexFn } from "@/lib/athlete-sex.functions";
 import type { AthleteSex } from "@/lib/athlete-sex";
 import { useWeightUnit } from "@/lib/use-weight-unit";
-import { LevelBadge, PowerliftingCareer } from "@/components/portal/powerlifting-career";
-import type { MeetLevel } from "@/lib/powerlifting-career";
+import { PowerliftingCareer } from "@/components/portal/powerlifting-career";
+import { LEVELS, type MeetLevel } from "@/lib/powerlifting-career";
 import type { WeightUnit } from "@/lib/weight-lifted";
 import {
   BOARD_LIFTS,
@@ -111,36 +111,47 @@ function XBadge({ row, className }: { row: StrengthRow; className?: string }) {
   );
 }
 
+// One quiet chip style for every tag on the board: gold / silver / bronze
+// belong to board rank alone, red to you and to actions.
+const CHIP = "inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold text-foreground/80";
+
 function ClubBadge({ row }: { row: StrengthRow }) {
   const club = row.lift === "total" ? totalClub(row.kg) : null;
   if (!club) return null;
+  return <span className={CHIP}>{club}</span>;
+}
+
+/**
+ * Their competition level, in words: the highest level they've lifted at and
+ * how they finished there ("National champion"). No medal: on this board the
+ * medals are the board's own places.
+ */
+export function levelTitle(tier: Tier): string {
+  const level = LEVELS[tier.top_level].label;
+  if (tier.top_place === 1) return `${level} champion`;
+  if (tier.top_place != null && tier.top_place <= 3) return `${level} medalist`;
+  return `${level} lifter`;
+}
+
+function LevelTag({ tier, wrap }: { tier: Tier; wrap?: boolean }) {
+  // `wrap`: the narrow podium cards (two short lines beat a clipped one)
   return (
-    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-black tracking-wide text-amber-500">
-      {club}
+    <span className={cn(CHIP, tier.top_place === 1 && "text-foreground", wrap && "max-w-full justify-center whitespace-normal py-1 text-center leading-tight")}>
+      {levelTitle(tier)}
     </span>
   );
 }
 
-/** All-time board only: where the number was made. */
-function SourceTag({ row }: { row: StrengthRow }) {
-  return row.source === "meet" ? (
-    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-black tracking-wide text-amber-600 dark:text-amber-400">
-      <Landmark className="h-2.5 w-2.5" /> MEET
-    </span>
-  ) : (
-    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[8px] font-black tracking-wide text-muted-foreground">
-      <Dumbbell className="h-2.5 w-2.5" /> TRAINING
-    </span>
-  );
+/** All-time board only: where the number was made, as a small mark on its detail line. */
+function SourceIcon({ row }: { row: StrengthRow }) {
+  const Icon = row.source === "meet" ? Landmark : Dumbbell;
+  return <Icon className="mr-1 inline h-3 w-3 shrink-0 -translate-y-px" aria-label={row.source === "meet" ? "Meet" : "Training"} />;
 }
 
-function AlumniTag({ row }: { row: StrengthRow }) {
+/** A former athlete, said quietly under the name. */
+function AlumniLine({ row }: { row: StrengthRow }) {
   if (!row.is_alumni) return null;
-  return (
-    <span className="inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[8px] font-black tracking-wide text-muted-foreground">
-      ALUMNI
-    </span>
-  );
+  return <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Alumni</div>;
 }
 
 /** Everything behind the headline number, smallest first. */
@@ -593,7 +604,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
         {source === "all" ? (
           <ul className="mt-2 space-y-1.5 text-muted-foreground">
             <li><b className="text-foreground">Who's on it:</b> everyone JF Effect has coached. Current clients, former clients (ALUMNI) and athletes who competed with us.</li>
-            <li><b className="text-foreground">Your number:</b> your heaviest lift from either place. <b className="text-foreground">TRAINING</b> = logged in the app, any reps (×3 = a set of 3). <b className="text-foreground">MEET</b> = made at a powerlifting meet.</li>
+            <li><b className="text-foreground">Your number:</b> your heaviest lift from either place. <Dumbbell className="inline h-3 w-3" /> = logged in the app, any reps (×3 = a set of 3). <Landmark className="inline h-3 w-3" /> = made at a powerlifting meet.</li>
             <li><b className="text-foreground">What counts in training:</b> barbell squat, bench and deadlift, including paused, tempo, touch-and-go, close-grip, high-bar, sumo and deficit. Not partials (pins, boxes, boards), machines, dumbbells, specialty bars or RDLs.</li>
             <li><b className="text-foreground">Total:</b> in training, your best squat + best bench + best deadlift. At a meet, that day's total. Whichever is higher counts.</li>
             <li><b className="text-foreground">Pound for pound:</b> the lift ÷ your bodyweight at the time (closest weigh-in you logged, or the meet's official weigh-in).</li>
@@ -654,23 +665,25 @@ function PodiumSpot({ row, rank, mode, unit, showSource, tier, onOpen }: {
       <LifterAvatar row={row} size={first ? "mt-1 h-14 w-14" : "mt-1 h-11 w-11"} />
       <div className="mt-1 line-clamp-2 w-full break-words text-xs font-bold leading-tight">{row.display_name}</div>
       <NameLine row={row} />
+      <AlumniLine row={row} />
       {row.is_coach && <CoachTag className="mt-0.5" />}
       <div className={cn("mt-0.5 font-black tabular-nums leading-tight", first ? "text-lg" : "text-base")}>
         <Headline row={row} mode={mode} unit={unit} />
       </div>
       <div className="mt-1 flex flex-wrap justify-center gap-1">
-        {tier && <LevelBadge level={tier.top_level} place={tier.top_place} />}
-        {showSource && <SourceTag row={row} />}
+        {tier && <LevelTag tier={tier} wrap />}
         {mode === "absolute" && <XBadge row={row} />}
         <ClubBadge row={row} />
-        <AlumniTag row={row} />
       </div>
       {mode === "p4p" && (
-        <div className="mt-0.5 text-[10px] text-muted-foreground">
+        <div className="mt-1 text-[10px] font-semibold text-foreground/80">
           {formatLoad(row.kg, unit)}{row.reps && row.reps > 1 ? ` ×${row.reps}` : ""}
         </div>
       )}
-      {row.meet && <div className="w-full truncate text-[9px] text-muted-foreground">{row.meet.name} · {format(new Date(row.lifted_at), "yyyy")}</div>}
+      <div className="w-full truncate text-[9px] text-muted-foreground">
+        {showSource && <SourceIcon row={row} />}
+        {row.meet ? `${row.meet.name} · ${format(new Date(row.lifted_at), "yyyy")}` : `Training · ${format(new Date(row.lifted_at), "MMM yyyy")}`}
+      </div>
       {onOpen && <div className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">Career ›</div>}
     </Tag>
   );
@@ -692,12 +705,16 @@ function BoardLine({ row, rank, mode, unit, showSource, tier, onOpen }: {
           {row.is_coach && <CoachTag />}
         </div>
         <NameLine row={row} />
-        <div className="mt-0.5 flex flex-wrap items-center gap-1">
-          {tier && <LevelBadge level={tier.top_level} place={tier.top_place} />}
-          {showSource && <SourceTag row={row} />}
-          <AlumniTag row={row} />
+        <AlumniLine row={row} />
+        {tier && (
+          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+            <LevelTag tier={tier} />
+          </div>
+        )}
+        <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+          {showSource && <SourceIcon row={row} />}
+          {subline(row, mode, unit)}
         </div>
-        <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{subline(row, mode, unit)}</div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
         <div className="text-sm font-black tabular-nums"><Headline row={row} mode={mode} unit={unit} /></div>

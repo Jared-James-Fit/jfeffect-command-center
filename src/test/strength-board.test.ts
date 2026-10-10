@@ -211,3 +211,16 @@ describe("pound for pound by sex", () => {
     expect(meStatus(onWomen.me, "p4p", "total", "female")).toEqual({ kind: "ranked", rank: 1, count: 1 });
   });
 });
+
+import { levelTitle } from "@/components/portal/strength-board";
+describe("Hall of Strength tags", () => {
+  it("say the competition level in words, never with a medal (the board's medals are its own places)", () => {
+    expect(levelTitle({ top_level: "international", top_place: 1 })).toBe("International champion");
+    expect(levelTitle({ top_level: "national", top_place: 3 })).toBe("National medalist");
+    expect(levelTitle({ top_level: "regional", top_place: 7 })).toBe("Regional lifter");
+    expect(levelTitle({ top_level: "provincial", top_place: null })).toBe("Provincial lifter");
+    const src = require("node:fs").readFileSync("src/components/portal/strength-board.tsx", "utf8");
+    expect(levelTitle({ top_level: "international", top_place: 1 })).not.toMatch(/🥇|🥈|🥉/);
+    expect(src).not.toContain("LevelBadge");
+  });
+});
