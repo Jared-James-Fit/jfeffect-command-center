@@ -22,6 +22,7 @@ import {
   type CommunityPost,
   type ReactionKey,
 } from "@/lib/community";
+import { PostViewsRow, useViewOnOpen } from "@/components/community/post-views";
 import { useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { formatTonnage } from "@/lib/training-records";
 
@@ -58,6 +59,8 @@ export function PostDetailDialog({
 
 function Body({ postId, unit, viewerIsStaff, onClose, onOpenAuthor }: { postId: string; unit: "kg" | "lb"; viewerIsStaff: boolean; onClose: () => void; onOpenAuthor?: (a: CommunityAuthor) => void }) {
   const { data: post, isLoading, isError } = usePostDetail(postId);
+  // opening a post counts as a view
+  useViewOnOpen(post);
   const { data: urls } = usePostMediaUrls(post ? [post] : []);
   const thumb = post ? urls?.[post.media_thumb_path ?? (post.media_type === "image" ? post.media_path ?? "" : "")] ?? null : null;
 
@@ -219,6 +222,7 @@ function Detail({
 
       <div className="px-2 pt-2">
         <ReactionBar post={post} onReact={onReact} onOpenAuthor={onOpenAuthor} />
+        <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
       </div>
 
       <section className="border-t border-border/60">

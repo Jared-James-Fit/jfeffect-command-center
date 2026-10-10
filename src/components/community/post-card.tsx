@@ -32,6 +32,7 @@ import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
+import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
 import { PollCard } from "@/components/community/poll";
@@ -286,6 +287,9 @@ type Props = {
 function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
+  // half on screen for two seconds = a view (never your own)
+  const articleRef = useRef<HTMLElement | null>(null);
+  usePostViewTracker(articleRef, post);
   const singleTimer = useRef<number | null>(null);
   const s = post.stats;
   const lift = s ? featuredLift(s) : null;
@@ -315,7 +319,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   };
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm">
+    <article ref={articleRef} className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm">
       <header className="flex items-center justify-between gap-2 px-3.5 py-3">
         <AuthorLine author={post.author} sub={sub} onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined} collaborators={post.collaborators} onOpenPerson={onOpenAuthor} />
         <div className="flex shrink-0 items-center gap-1">
@@ -400,6 +404,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       )}
 
       <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} />
+      <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
       <CommentPreviewList post={post} onOpenComments={() => onOpenComments(post)} />
     </article>
   );
