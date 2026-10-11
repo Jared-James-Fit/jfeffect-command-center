@@ -17,7 +17,8 @@ import { ShareNudge } from "@/components/community/share-nudge";
 import { CrewList } from "@/components/community/crew-list";
 import { LeagueHub } from "@/components/community/league-hub";
 import { communityKeys, markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
-import type { CommunityActivity, CommunityAuthor, CommunityPost, ReactionKey } from "@/lib/community";
+import { feedLayout, isPulsePost, type CommunityActivity, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { PulseStrip } from "@/components/community/pulse-strip";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
@@ -98,6 +99,8 @@ export function CommunityScreen({
 
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
+  // Pulses fold into one strip a day, so the feed stays about the posts people wrote
+  const layout = useMemo(() => feedLayout(posts), [posts]);
   // "Double-tap to like": a few seconds on the first post (a workout before a
   // note), once a visit, until the first double-tap, and only for the first
   // few visits either way. Remembered on the account, not the device.
@@ -106,7 +109,7 @@ export function CommunityScreen({
   const onDoubleTap = useCallback(() => markHint("double_tap"), [markHint]);
   const [tipDone, setTipDone] = useState(tipShownThisVisit);
   const tipVisit = hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k)) : undefined;
-  const hintId = scope.kind === "feed" && !tipDone && tipVisit && posts.length ? ((posts.find((p) => p.kind !== "note") ?? posts[0])?.id ?? null) : null;
+  const hintId = scope.kind === "feed" && !tipDone && tipVisit && posts.length ? ((posts.find((p) => p.kind !== "note" && !isPulsePost(p)) ?? posts.find((p) => !isPulsePost(p)))?.id ?? null) : null;
   useEffect(() => {
     if (!hintId || !tipVisit || tipShownThisVisit) return;
     tipShownThisVisit = true;
@@ -329,7 +332,12 @@ export function CommunityScreen({
         />
       ) : (
         <>
-          {posts.map((p, i) => (
+          {layout.map((e, i) => e.kind === "pulse" ? (
+            // a day of finished sessions, folded into one card
+            <FeedItem key={e.key} index={i}>
+              <PulseStrip posts={e.posts} unit={unit} viewerIsStaff={viewerIsStaff} onOpen={openPost} />
+            </FeedItem>
+          ) : (() => { const p = e.post; return (
             <Fragment key={p.id}>
             <FeedItem index={i} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
@@ -347,9 +355,9 @@ export function CommunityScreen({
             />
             </FeedItem>
             {/* now and then, until their first post: an invite to lock in or share (after the second post) */}
-            {canShare && i === Math.min(1, posts.length - 1) && <ShareNudge surface="feed" unit={unit} />}
+            {canShare && i === Math.min(1, layout.length - 1) && <ShareNudge surface="feed" unit={unit} />}
             </Fragment>
-          ))}
+          ); })())}
           <div ref={sentinel} aria-hidden className="h-px" />
           {isFetchingNextPage && <PostSkeleton />}
           {!hasNextPage && posts.length > 1 && (

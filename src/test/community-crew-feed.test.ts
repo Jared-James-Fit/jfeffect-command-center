@@ -114,6 +114,6 @@ describe("the share nudge", () => {
   });
   it("sits second in Home's swipe and after the second post in the feed", () => {
     expect(entry).toContain("cards.splice(Math.min(1, cards.length), 0, nudge);");
-    expect(screen).toContain('{canShare && i === Math.min(1, posts.length - 1) && <ShareNudge surface="feed" unit={unit} />}');
+    expect(screen).toContain('{canShare && i === Math.min(1, layout.length - 1) && <ShareNudge surface="feed" unit={unit} />}');
   });
 });

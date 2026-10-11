@@ -42,3 +42,24 @@ describe("Pulse: a finished workout posts itself, with its real win", () => {
     expect(card).toContain("<PulseHero post={post} stats={s} unit={unit} onReact={onReact} />");
   });
 });
+
+import { HOME_CREW_PULSES, PULSE_STRIP_ROWS, feedLayout, homeCrewPosts } from "@/lib/community";
+describe("Pulse never swamps the feed", () => {
+  const at = (h: number) => new Date(Date.UTC(2026, 9, 10, h)).toISOString();
+  const pulse = (id: string, h: number) => ({ id, created_at: at(h), auto: true, stats: {} });
+  const own = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: {} });
+  it("a day's Pulses fold into one strip where the newest was; people's own posts keep their place", () => {
+    const out = feedLayout([pulse("p1", 20), own("a", 19), pulse("p2", 18), pulse("p3", 17), own("b", 16)]);
+    expect(out.map((e) => (e.kind === "post" ? e.post.id : e.posts.map((p) => p.id).join("+")))).toEqual(["p1+p2+p3", "a", "b"]);
+    expect(PULSE_STRIP_ROWS).toBe(3);
+  });
+  it("a Pulse someone made their own (caption / photo) is a regular post again", () => {
+    expect(feedLayout([own("claimed", 20)])[0].kind).toBe("post");
+  });
+  it("Home shows a couple of Pulses at most", () => {
+    const now = Date.UTC(2026, 9, 10, 21);
+    const { shown } = homeCrewPosts([pulse("p1", 20), pulse("p2", 19), pulse("p3", 18), own("a", 17), own("b", 16)], now);
+    expect(shown.filter((p) => p.auto).length).toBe(HOME_CREW_PULSES);
+    expect(shown.map((p) => p.id)).toEqual(["p1", "p2", "a", "b"]);
+  });
+});

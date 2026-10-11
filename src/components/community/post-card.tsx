@@ -213,7 +213,7 @@ export function AuthorLine({
   );
 }
 
-const WIN_STYLE: Record<WorkoutWin["kind"], { tint: string; text: string; Icon: typeof Trophy }> = {
+export const WIN_STYLE: Record<WorkoutWin["kind"], { tint: string; text: string; Icon: typeof Trophy }> = {
   pr: { tint: "bg-[radial-gradient(120%_100%_at_100%_0%,rgba(245,158,11,0.32),transparent_60%)]", text: "text-amber-400", Icon: Trophy },
   month: { tint: "bg-[radial-gradient(120%_100%_at_100%_0%,rgba(56,189,248,0.24),transparent_60%)]", text: "text-sky-400", Icon: CalendarCheck },
   week: { tint: "bg-[radial-gradient(120%_100%_at_100%_0%,rgba(249,115,22,0.28),transparent_60%)]", text: "text-orange-400", Icon: Flame },
