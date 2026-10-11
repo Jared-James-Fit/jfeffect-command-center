@@ -21,7 +21,7 @@ export function PulseStrip({ posts, unit, viewerIsStaff, onOpen }: { posts: Comm
     <section data-pulse-strip className="overflow-hidden rounded-3xl border border-border/80 bg-card">
       <header className="flex items-center gap-2 px-4 pb-1.5 pt-3">
         <Activity className="h-4 w-4 text-primary" />
-        <span className="text-[13px] font-black">Pulse</span>
+        <span className="text-[13px] font-black">Activity</span>
         <span className="text-[12px] text-muted-foreground">
           · {posts.length} {posts.length === 1 ? "session" : "sessions"} finished{prs > 0 ? ` · ${prs} PR${prs === 1 ? "" : "s"}` : ""}
         </span>

@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/portal/goals-setup")({
   component: PortalGoalsSetupPage,
   head: () => ({
     meta: [
-      { title: "Goals & Setup — Client Portal" },
+      { title: "Goals & Setup — JF Effect" },
       { name: "description", content: "Tell your coach the goals and preferences they need to build your program." },
     ],
   }),

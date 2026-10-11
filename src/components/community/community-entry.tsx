@@ -106,7 +106,7 @@ export function CommunityHomeStrip() {
     <section data-crew-feed className="rounded-2xl border border-border/80 bg-card pb-3 pt-3">
       <div className="flex items-center justify-between gap-2 px-3.5">
         <Link to="/portal/community" hash="feed" className="-my-1 flex min-w-0 items-center gap-1.5 whitespace-nowrap py-1">
-          <span className="text-[16px] font-black tracking-tight">Crew feed</span>
+          <span className="text-[16px] font-black tracking-tight">Feed</span>
           {/* Who showed up today beats "N new": it's the nudge to go train. */}
           {lockedToday > 0 ? (
             <span className="truncate rounded-full bg-red-500/15 px-1.5 py-px text-[10px] font-bold text-red-600 dark:text-red-400">🔒 {lockedToday} locked in today</span>

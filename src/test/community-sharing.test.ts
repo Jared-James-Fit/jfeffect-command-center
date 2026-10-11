@@ -376,13 +376,13 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("bottom bar is Home, Workouts, League (centre), Nutrition, Messages; More opens from the top bar", () => {
+  it("bottom bar is Home, Workouts, Crew (centre), Nutrition, Messages; More opens from the top bar", () => {
     const nav = read("src/lib/admin-nav.ts");
     const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
     expect(bottom.match(/\{ to: "[^"]+"/g)).toEqual([
       '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/community"', '{ to: "/portal/nutrition-targets"', '{ to: "/portal/messages"',
     ]);
-    expect(bottom).toContain('{ to: "/portal/community", label: "League", icon: Trophy, featured: true },');
+    expect(bottom).toContain('{ to: "/portal/community", label: "Crew", icon: Trophy, featured: true },');
     // the count of new posts rides on the centre button
     expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
     // its own tab now, so Home no longer lights up for it
@@ -532,9 +532,9 @@ describe("the crew: find anyone's profile", () => {
     expect(sql).toContain("WHERE m.user_id <> uid");
     expect(sql).not.toMatch(/community_follow|is_following/i);
   });
-  it("is a Crew tab (you're its first row), and Home never dead-ends: a post opens over the feed", () => {
-    expect(screen).toContain('(["league", "feed", "crew"] as const)');
-    expect(screen).toContain('<CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "crew" })} />');
+  it("is the Members directory (you're its first row), and Home never dead-ends: a post opens over the feed", () => {
+    expect(screen).toContain('(["feed", "rankings"] as const)');
+    expect(screen).toContain('<CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "members" })} />');
     expect(entry).toContain("onOpen={() => openPost(post.id)}");
   });
 });

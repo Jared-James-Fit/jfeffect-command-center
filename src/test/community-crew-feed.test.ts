@@ -44,10 +44,10 @@ describe("Home's Crew feed: newest first, a few, then the feed", () => {
   it("posting is one tap: + Post in the header", () => {
     expect(entry).toContain('label="Post"');
   });
-  it("is called Crew feed, and the menu entry is League & Crew", () => {
-    expect(entry).toContain(">Crew feed</span>");
+  it("is called Feed, and the menu entry is Crew", () => {
+    expect(entry).toContain(">Feed</span>");
     expect(entry).not.toMatch(/>\s*Community\s*</);
-    expect(read("src/lib/admin-nav.ts")).toContain('label: "League & Crew"');
+    expect(read("src/lib/admin-nav.ts")).toContain('{ to: "/portal/community", label: "Crew", icon: Trophy, keywords:');
   });
 });
 

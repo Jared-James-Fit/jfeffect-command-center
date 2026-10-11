@@ -12,55 +12,53 @@ const hub = read("src/components/community/league-hub.tsx");
 const screen = read("src/components/community/community-screen.tsx");
 const crew = read("src/components/community/crew-list.tsx");
 
-describe("the centre tab is League: standings and the crew in one place", () => {
-  it("the raised button says League, and the menu finds it by either name", () => {
+describe("the centre tab is Crew: the feed and the rankings in one place", () => {
+  it("the raised button says Crew (trophy kept), and the menu finds it by any name", () => {
     const centre = clientBottomNav.find((i) => i.featured);
-    expect(centre).toMatchObject({ to: "/portal/community", label: "League" });
+    expect(centre).toMatchObject({ to: "/portal/community", label: "Crew" });
     const menu = clientNav.find((i) => i.to === "/portal/community");
-    expect(menu?.label).toBe("League & Crew");
-    expect(menu?.keywords).toEqual(expect.arrayContaining(["league", "leaderboard", "community", "feed", "crew"]));
+    expect(menu?.label).toBe("Crew");
+    expect(menu?.keywords).toEqual(expect.arrayContaining(["league", "leaderboard", "rankings", "community", "feed", "crew", "members"]));
   });
-  it("League · Feed · Crew; your profile is the first row of Crew", () => {
-    expect(screen).toContain('(["league", "feed", "crew"] as const)');
-    expect(screen).toContain("<LeagueHub />");
+  it("Feed · Rankings; Members is a secondary entry, and your profile is its first row", () => {
+    expect(screen).toContain('(["feed", "rankings"] as const)');
+    expect(screen).toContain("<RankingsHub />");
+    expect(screen).toContain('aria-label="Members"');
     expect(crew).toContain("data-crew-me");
-    expect(screen).toContain('onOpenMe={() => setScope({ kind: "you", from: "crew" })}');
+    expect(screen).toContain('onOpenMe={() => setScope({ kind: "you", from: "members" })}');
   });
-  it("opens on the League, or the feed when there's something new in it (links to a post always land on the feed)", () => {
-    expect(screen).toContain('if (/(post|at)=|#feed/.test(hash)) return { kind: "feed" };');
-    expect(screen).toContain('return (activity?.unseen ?? 0) > 0 ? { kind: "feed" } : { kind: "league" };');
+  it("opens on the Feed; ranking links land on Rankings (Monthly or Strength)", () => {
+    expect(screen).toContain('if (rankingsFromHash()) return { kind: "rankings" };');
+    expect(screen).toContain('return { kind: "feed" };');
+    expect(hub).toContain('return /(rankings|league)=strength/.test(hash) ? "strength" : "monthly";');
     expect(read("src/components/community/share-composer.tsx")).toContain('navigate({ to: "/portal/community", hash: "feed" })');
     expect(read("src/components/community/use-workout-studio.ts")).toContain('navigate({ to: "/portal/community", hash: "feed" })');
     expect(read("src/lib/push/app-events.server.ts")).toContain('url: () => "/portal/community#feed"');
   });
-  it("only the feed clears the new-posts count (opening on the League doesn't)", () => {
+  it("only the feed clears the new-posts count (opening on Rankings doesn't)", () => {
     expect(screen).toContain('if (markedRef.current || !feed.isSuccess || scope.kind !== "feed") return;');
   });
   it("a profile's back button returns to the tab you came from", () => {
     expect(screen).toContain("{TAB_LABEL[tab]}");
     expect(screen).toContain("const tab: Tab = scope.kind === \"author\" || scope.kind === \"you\" ? scope.from : scope.kind;");
   });
-  it("small phones get a round + for Share so the three tabs keep their room", () => {
+  it("small phones get a round + for Share so the tabs keep their room", () => {
     expect(screen).toContain('labelClassName="max-[389px]:sr-only"');
     expect(read("src/components/community/share-workout-picker.tsx")).toContain("aria-label={labelClassName ? label : undefined}");
   });
 });
 
-describe("the League tab", () => {
-  it("one swipe first: the crew goal (always the default) and the Logging Level; then the League and the Hall of Strength", () => {
-    expect(hub.indexOf("<CrewGoalCard />")).toBeLessThan(hub.indexOf("<AthleteLevelCard"));
-    expect(hub).toContain('const crew = goal ? { key: "crew", label: "Crew goal", node: <CrewGoalCard /> } : undefined;');
-    expect(hub).toMatch(/<AthleteLevelCard\s+clientId=\{client\.id\}\s+levelSwipe=\{crew\}\s+boards=\{\[\{ key: "strength", node: <StrengthBoardSlide \/> \}\]\}/);
-    expect(card).toContain('storageKey="jf-league-top"');
-    expect(card).toContain("remember={false}");
-    expect(card.indexOf("levelSwipe,")).toBeLessThan(card.indexOf('{ key: "level", label: "Logging Level"'));
-    expect(card).toContain('? [{ key: "league", node: leagueCard }, ...boards]');
-    // no crew goal this week: the level is its own card again
-    expect(card).toContain(': [{ key: "league", node: leagueCard }, ...boards, { key: "level", node: levelCard }];');
-    expect(swipe).toContain("if (!remember) return;");
-    expect(card).toContain("data-standing={c.key}");
+describe("Rankings", () => {
+  it("Monthly and Strength: one board at a time, never stacked", () => {
+    expect(hub).toContain('([["monthly", "Monthly"], ["strength", "Strength"]] as const)');
+    expect(hub).toContain('board === "strength" ? (');
+    expect(hub).toContain("<StrengthBoardSlide />");
+    expect(hub).toContain("<AthleteLevelCard clientId={client.id}");
   });
-  it("the race is for the Top 10: the card shows the Top 5 and you; Full standings has everyone; every row opens that athlete", () => {
+  it("the Monthly board is titled by the month (October League)", () => {
+    expect(card).toContain('{format(new Date(),"MMMM")} League');
+  });
+  it("the race is for the Top 10: the card shows the Top 5 and you; View Rankings has everyone; every row opens that athlete", () => {
     expect(card).toContain("Number(r.rank)<=10");
     expect(card).toContain("const shownTo = 5;");
     expect(card).toContain("[...top10.slice(3, shownTo), ...(outside && leagueMe ? [leagueMe] : [])]");
@@ -69,11 +67,10 @@ describe("the League tab", () => {
     expect(card).toContain("onClick={() => openRankings(r.client_id)}");
   });
   it("every board still opens in full: standings, levels, competition records, the Hall of Strength, last month's recap", () => {
-    expect(card).toContain("Full standings");
+    expect(card).toContain("View Rankings");
     expect(card).toContain('onClick={() => setOpen("levels")}');
     expect(card).toContain('onClick={() => setOpen("powerlifting")}');
     expect(board).toContain("export function StrengthBoardSlide()");
-    expect(board).toContain("<HallOfStrengthSheet open={open} onOpenChange={setOpen} />");
     expect(board).toContain("pickBoard(data, mode, lift, division, 5)");
     expect(board).toContain("<HallOfStrengthSheet open={open} onOpenChange={setOpen} initialMode={mode} initialLift={lift} initialDivision={division} initialCareer={careerId} />");
     expect(card).toContain('<LeagueRecapHomeTile variant="mini" />');
@@ -83,7 +80,7 @@ describe("the League tab", () => {
   it("the level shows what just earned points", () => {
     expect(card).toContain("events.slice(0, 2).map((e) =>");
   });
-  it("new-milestone reveals pop on Home, once (not again on the League tab)", () => {
+  it("new-milestone reveals pop on Home, once (not again on Rankings)", () => {
     expect(home).toContain("{client?.id && <LevelCelebrations clientId={client.id} />}");
     expect(card).toContain("export function LevelCelebrations(");
     // only LevelCelebrations shows them

@@ -3,13 +3,13 @@ import { CommunityScreen } from "@/components/community/community-screen";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
 /**
- * The client community feed: the raised centre tab (also Home's community
- * card, pushes and the post-share toast). A tab, so no back arrow: Feed /
- * Crew / You, the bell and + Share on one row, right under the app bar.
- * `#post=<id>` opens a post straight away, `#at=<id>` scrolls to it.
+ * Crew: the raised centre tab (also Home's Crew section, pushes and the
+ * post-share toast). A tab, so no back arrow: Feed / Rankings, Members, the
+ * bell and + Share on one row, right under the app bar. `#post=<id>` opens a
+ * post straight away, `#at=<id>` scrolls to it, `#rankings` opens Rankings.
  */
 export const Route = createFileRoute("/_authenticated/portal/community")({
-  head: () => ({ meta: [{ title: "League" }] }),
+  head: () => ({ meta: [{ title: "Crew" }] }),
   component: PortalCommunity,
 });
 

@@ -390,7 +390,7 @@ export function StrengthBoardSlide() {
         <div className="mt-auto px-3 pb-3 pt-2.5">
           {/* Same button as the League card: everyone on this board, the board you picked. */}
           <button type="button" onClick={() => show()} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
-            Full standings{count > 0 ? ` · ${count}` : ""} <ChevronRight className="h-4 w-4" />
+            View Rankings{count > 0 ? ` · ${count}` : ""} <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>

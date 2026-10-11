@@ -190,7 +190,7 @@ export function ProgramRoadmapCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-              {browsing ? (roadmap.program.status === "completed" ? "Past program" : "Program") : "Your program"}
+              {browsing ? (roadmap.program.status === "completed" ? "Past program" : "Program") : "Program"}
             </div>
             <div className="mt-0.5 text-lg font-black leading-tight tabular-nums">{headline}</div>
             {roadmap.program.title && (roadmap.programs.length <= 1 || !onSelectProgram) && (

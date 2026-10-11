@@ -167,7 +167,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
   { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
-  { to: "/portal/community", label: "League & Crew", icon: Trophy, keywords: ["league","rank","leaderboard","level","hall of strength","community","shared workouts","feed","posts","photos","reactions","crew"] },
+  { to: "/portal/community", label: "Crew", icon: Trophy, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","strength","community","members","shared workouts","posts","photos","reactions","activity"] },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
   { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
@@ -178,14 +178,14 @@ export const clientNav: NavItem[] = [
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 
-// Mobile bottom-tab nav for the client portal: five destinations, the League
-// as the raised centre button: League · Feed · Crew inside, with a ring and a
-// count when there are new posts (it opens on the feed then). "More" opens from the top bar instead (AppShell `moreInHeader`), so
+// Mobile bottom-tab nav for the client portal: five destinations, Crew as the
+// raised centre (trophy) button: Feed · Rankings inside, with a ring and a
+// count when there are new posts. "More" opens from the top bar instead (AppShell `moreInHeader`), so
 // Home, Workouts and Nutrition keep their places and Messages takes More's.
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
-  { to: "/portal/community", label: "League", icon: Trophy, featured: true },
+  { to: "/portal/community", label: "Crew", icon: Trophy, featured: true },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
 ];

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Info, Trophy, Medal, Zap, ChevronRight, Scale, Crown } from "lucide-react";
@@ -48,14 +48,12 @@ function useXpEvents(clientId: string) {
 }
 
 /**
- * The athlete's standings (the League tab): this month's League with its whole
- * Top 10, their Logging Level, plus any extra boards passed in (the Hall of
- * Strength), a card each. New-milestone reveals pop on Home (LevelCelebrations).
+ * Crew → Rankings → Monthly: this month's League with its whole Top 10, and the
+ * Logging Level. New-milestone reveals pop on Home (LevelCelebrations).
  */
-export function AthleteLevelCard({ clientId, defaultView = null, boards = [], levelSwipe }: {
+export function AthleteLevelCard({ clientId, defaultView = null, levelSwipe }: {
   clientId: string;
   defaultView?: null | "rankings";
-  boards?: { key: string; node: ReactNode }[];
   /** A card to share one swipe spot with the Logging Level, shown first (the crew goal). */
   levelSwipe?: SwipeCard;
 }) {
@@ -79,7 +77,7 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [], le
 
   const openRankings = (athlete: string | null = null) => { setSelectedLeagueAthlete(athlete); setOpen("rankings"); };
   // The race is for the Top 10. The card shows the Top 5 (and you, if you're below it);
-  // Full standings has everyone.
+  // View Rankings has everyone.
   const top10 = leagueRows.filter(r=>r.qualified && r.rank!=null && Number(r.rank)<=10).sort((a,b)=>Number(a.rank)-Number(b.rank));
   const shownTo = 5;
   const outside = !!leagueMe?.qualified && Number(leagueMe.rank) > shownTo;
@@ -92,8 +90,8 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [], le
     <div className="flex h-full flex-col">
       <button type="button" onClick={() => openRankings()} className="flex w-full items-start gap-3 px-4 pt-3 text-left active:opacity-70">
         <span className="min-w-0 flex-1">
-          <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{format(new Date(),"MMMM")} Performance League</span>
-          <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">Top 10 <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>Live</span></span>
+          <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Performance League · Top 10</span>
+          <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">{format(new Date(),"MMMM")} League <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>Live</span></span>
           {rankedCount > 0 && <span className="block text-[11px] text-muted-foreground">{rankedCount} ranked this month · make the Top 10</span>}
           {isFinalWeek() && <span className="mt-1 inline-flex w-fit items-center rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">🔥 Final week · Boost live</span>}
         </span>
@@ -144,7 +142,7 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [], le
       )}
       <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
         <button type="button" onClick={() => openRankings()} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
-          Full standings{rankedCount > 5 ? ` · ${rankedCount}` : ""} <ChevronRight className="h-4 w-4" />
+          View Rankings{rankedCount > 5 ? ` · ${rankedCount}` : ""} <ChevronRight className="h-4 w-4" />
         </button>
         <LeagueRecapHomeTile variant="mini" />
       </div>
@@ -181,11 +179,11 @@ export function AthleteLevelCard({ clientId, defaultView = null, boards = [], le
     </div>
   );
 
-  // League, then the boards (Hall of Strength), then the Logging Level, unless
-  // the level shares a swipe (first, opening on the other card) instead.
+  // The League, then the Logging Level, unless the level shares a swipe
+  // (first, opening on the other card) instead.
   const cards = levelSwipe
-    ? [{ key: "league", node: leagueCard }, ...boards]
-    : [{ key: "league", node: leagueCard }, ...boards, { key: "level", node: levelCard }];
+    ? [{ key: "league", node: leagueCard }]
+    : [{ key: "league", node: leagueCard }, { key: "level", node: levelCard }];
   return (
     <>
       <div className="space-y-3">

@@ -14,10 +14,10 @@ const profile = read("src/components/community/profile-view.tsx");
 const screen = read("src/components/community/community-screen.tsx");
 const item = (to: string): NavItem => ({ to, label: to, icon: Home });
 
-describe("client tab bar: League in the centre", () => {
-  it("five destinations, League (standings + the crew) raised in the middle", () => {
+describe("client tab bar: Crew in the centre", () => {
+  it("five destinations, Crew (feed + rankings) raised in the middle", () => {
     const visible = resolveVisibleBarItems(clientBottomNav, { more: false });
-    expect(visible.map((i) => i.label)).toEqual(["Home", "Workouts", "League", "Nutrition", "Messages"]);
+    expect(visible.map((i) => i.label)).toEqual(["Home", "Workouts", "Crew", "Nutrition", "Messages"]);
     expect(visible[2].featured).toBe(true);
     expect(visible.some((i) => i.to === MORE_BAR_TO)).toBe(false);
   });
@@ -29,7 +29,7 @@ describe("client tab bar: League in the centre", () => {
   });
 
   it("More opens from the top bar, in place of the gear (the avatar has the same menu)", () => {
-    expect(portal).toContain('title="Client Portal" moreInHeader>');
+    expect(portal).toContain('title="JF Effect" moreInHeader>');
     expect(shell).toContain('<Button variant="outline" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-xl px-0">');
     expect(shell).toContain("resolveVisibleBarItems(bottomItems, { more: !moreInHeader })");
   });

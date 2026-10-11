@@ -68,7 +68,7 @@ function PortalProgress() {
   return (
     <div className="mx-auto w-full max-w-5xl pb-safe-bottom">
       <PageHeader
-        title="Your Progress"
+        title="Progress"
         subtitle="Every photo, video, weigh-in and measurement you've logged."
         backTo="/portal"
         backLabel="Home"

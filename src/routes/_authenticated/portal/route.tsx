@@ -27,7 +27,7 @@ function PortalLayout() {
     <>
       <PovFrame />
       <ClientPovBanner />
-      <AppShell items={clientNav} bottomItems={bottomNav} title="Client Portal" moreInHeader>
+      <AppShell items={clientNav} bottomItems={bottomNav} title="JF Effect" moreInHeader>
         {/* Onboarding requirements (profile photo, basic info, training schedule,
             Goals & Setup) are surfaced as a non-blocking checklist on the Home
             page — they must never lock the portal. See

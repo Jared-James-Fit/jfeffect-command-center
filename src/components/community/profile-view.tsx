@@ -189,7 +189,7 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
   );
 }
 
-/** Your own profile: Pulse on or off (finished workouts post themselves). */
+/** Your own profile: Activity on or off (finished workouts post themselves). */
 function PulseSwitch() {
   const { isImpersonating } = useClientImpersonation();
   const { data } = useMyCommunitySettings(!isImpersonating);
@@ -198,7 +198,7 @@ function PulseSwitch() {
   return (
     <label data-pulse-switch className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-3.5 py-3">
       <span className="min-w-0">
-        <span className="block text-[13px] font-bold">Pulse</span>
+        <span className="block text-[13px] font-bold">Share my activity</span>
         <span className="block text-[11.5px] leading-snug text-muted-foreground">Post my finished workouts to the crew automatically, with the session's best win</span>
       </span>
       <Switch checked={data.auto_share_workouts} disabled={set.isPending} onCheckedChange={(on) => set.mutate(on, { onError: () => toast.error("Couldn't save that") })} />

@@ -22,11 +22,11 @@ export function HomePulseCard({ posts, today, unit, onOpen }: { posts: Community
     <div
       data-crew-pulse
       className={cn("relative flex h-full w-[82%] shrink-0 snap-center snap-always flex-col overflow-hidden rounded-[20px] bg-[#0b0b0e] p-3.5 text-white", top.tint)}
-      aria-label="Crew Pulse"
+      aria-label="Crew activity"
     >
       <span className="flex items-center gap-1.5">
         <Activity className="h-3.5 w-3.5 text-primary" />
-        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Pulse</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Activity</span>
         {others > 0 && <span className="ml-auto text-[10px] font-bold text-white/55">+{others} more today</span>}
       </span>
       <ul className="mt-2 flex flex-1 flex-col justify-around divide-y divide-white/10">

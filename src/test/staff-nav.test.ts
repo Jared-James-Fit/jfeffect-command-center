@@ -21,7 +21,7 @@ describe("one staff app, laid out like the client app", () => {
   it("More opens from a big header button for staff, clients and members", () => {
     expect(read("src/routes/_authenticated/admin/route.tsx")).toContain("title={title} moreInHeader>");
     expect(read("src/routes/_authenticated/m/route.tsx")).toContain('title="Member" moreInHeader>');
-    expect(read("src/routes/_authenticated/portal/route.tsx")).toContain('title="Client Portal" moreInHeader>');
+    expect(read("src/routes/_authenticated/portal/route.tsx")).toContain('title="JF Effect" moreInHeader>');
     expect(read("src/components/app-shell.tsx")).toContain('className="h-10 w-10 shrink-0 rounded-xl px-0">');
   });
 
