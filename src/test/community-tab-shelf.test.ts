@@ -55,7 +55,7 @@ describe("client tab bar: League in the centre", () => {
 
 describe("Home's Crew feed", () => {
   it("newest first (yours too), then a card that opens the feed", () => {
-    expect(entry).toContain("const { shown, more } = useMemo(() => homeCrewPosts(");
+    expect(entry).toContain("const { pulse, today, shown, more } = useMemo(() => homeCrewDeck(");
     expect(entry).toContain("<SeeMoreCard posts=");
   });
 
