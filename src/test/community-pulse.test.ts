@@ -80,3 +80,18 @@ describe("Home's Crew feed deck", () => {
     expect(homeCrewDeck([post("a", 2), pulse("old", 72)], now).pulse).toBeNull();
   });
 });
+
+describe("Home deck: Pulse, three posts, then the rest", () => {
+  const now = Date.UTC(2026, 9, 10, 21);
+  const at = (h: number) => new Date(now - h * 3600e3).toISOString();
+  const post = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: null });
+  it("three newest posts, and how many more there are (the More card only when there are)", () => {
+    const d = homeCrewDeck([post("a", 1), post("b", 2), post("c", 3), post("d", 4), post("e", 5)], now);
+    expect(d.shown.map((p) => p.id)).toEqual(["a", "b", "c"]);
+    expect(d.more).toBe(2);
+    expect(homeCrewDeck([post("a", 1)], now).more).toBe(0);
+    const entry = readFileSync(new URL("../components/community/community-entry.tsx", import.meta.url), "utf8");
+    expect(entry).toContain("{more > 0 && <SeeMoreCard");
+    expect(entry).toContain('hash: `post=${postId}`');
+  });
+});

@@ -391,9 +391,9 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
     expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} bell />");
     expect(page).not.toContain("PageHeader");
   });
-  it("Home's Crew feed: the newest posts as cards, then one that opens the feed; every tap lands in the feed", () => {
+  it("Home's Crew feed: the newest posts as cards, then one that opens the feed; a post opens in full over the feed", () => {
     expect(entry).toContain("homeCrewDeck(feed.data?.pages[0]?.posts ?? [])");
-    expect(entry).toContain("onOpen={() => openAt(post.id)}");
+    expect(entry).toContain("onOpen={() => openPost(post.id)}");
     expect(entry).toContain("<PostTileFace post={post}");
     expect(entry).toContain("<SeeMoreCard ");
     expect(entry).not.toContain("PostDetailDialog");
@@ -406,9 +406,9 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
     expect(workouts).toContain('throw redirect({ to: "/portal/community"');
     expect(entry).not.toContain('to="/portal/workouts"');
   });
-  it("tapping a post opens the feed at it (not a dead-end single post)", () => {
-    expect(entry).toContain("onOpen={() => openAt(post.id)}");
-    // the tab opens on League; anything from a post lands on the feed
+  it("tapping a post opens it in full (likes, comments) on top of the feed, so closing it lands in the feed", () => {
+    expect(entry).toContain("onOpen={() => openPost(post.id)}");
+    expect(entry).toContain('navigate({ to: "/portal/community", hash: `post=${postId}` })');
     expect(entry).toContain('navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : "feed" })');
   });
   it("only shows a header nudge when there is something new", () => {
@@ -532,10 +532,10 @@ describe("the crew: find anyone's profile", () => {
     expect(sql).toContain("WHERE m.user_id <> uid");
     expect(sql).not.toMatch(/community_follow|is_following/i);
   });
-  it("is a Crew tab (you're its first row), and Home never dead-ends: a person opens the feed at their post", () => {
+  it("is a Crew tab (you're its first row), and Home never dead-ends: a post opens over the feed", () => {
     expect(screen).toContain('(["league", "feed", "crew"] as const)');
     expect(screen).toContain('<CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "crew" })} />');
-    expect(entry).toContain("onOpen={() => openAt(post.id)}");
+    expect(entry).toContain("onOpen={() => openPost(post.id)}");
   });
 });
 
