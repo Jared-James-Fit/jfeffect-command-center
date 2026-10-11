@@ -85,7 +85,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
       <button type="button" onClick={() => openRankings()} className="flex w-full items-start gap-3 px-4 pt-3 text-left active:opacity-70">
         <span className="min-w-0 flex-1">
           <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Performance League · Top 10</span>
-          <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">{format(new Date(),"MMMM")} League <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>Live</span></span>
+          <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">{format(new Date(),"MMMM")} League</span>
           {rankedCount > 0 && <span className="block text-[11px] text-muted-foreground">{rankedCount} ranked this month · make the Top 10</span>}
           {isFinalWeek() && <span className="mt-1 inline-flex w-fit items-center rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">🔥 Final week · Boost live</span>}
         </span>
@@ -417,7 +417,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
     <div className="space-y-4">
       <SheetHeader className="text-left">
         <SheetTitle>{monthName} {view === "previous" ? "Final Standings" : "Performance League"}</SheetTitle>
-        <SheetDescription>{view === "previous" ? "Final results, including Final Week Boost awards." : "Earn points all month. Tap anyone to see where their points come from."}</SheetDescription>
+        <SheetDescription>{view === "previous" ? "Final results, including Final Week Boost awards." : "Tap anyone to see where their points come from."}</SheetDescription>
       </SheetHeader>
 
       <div className="grid grid-cols-2 rounded-xl bg-muted/50 p-1 text-xs font-bold">
@@ -442,19 +442,6 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
           <div className="mt-1 text-xs leading-relaxed">Log a bodyweight in the app to unlock your leaderboard score. Your latest entry is always used.</div>
         </div>
       )}
-
-      {view === "current" && !finalWeek && <div className="rounded-2xl border bg-muted/20 p-3">
-        <div className="text-xs font-black">How to earn points</div>
-        <ul className="mt-2 space-y-1">
-          {LEAGUE_RULES.map((rule) => (
-            <li key={rule.key} className="flex items-baseline justify-between gap-3 text-xs">
-              <span>{rule.label}{"note" in rule && rule.note ? <span className="text-muted-foreground"> · {rule.note}</span> : null}</span>
-              <span className="shrink-0 font-black text-primary">+{rule.points}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-2 text-[11px] text-muted-foreground">{LEAGUE_RECORDS_NOTE} Resets on the 1st. Log your bodyweight once to join.</div>
-      </div>}
 
       {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">No athletes have qualified for {monthName} yet. Log a bodyweight and complete training to get on the board.</div>
@@ -507,8 +494,12 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
         </div>
       )}
 
-      {view === "current" && finalWeek && <div className="rounded-2xl border bg-muted/20 p-3">
-        <div className="text-xs font-black">How to earn points</div>
+      {/* how scoring works: tucked away under the board, open when you want it */}
+      {view === "current" && <details className="group rounded-2xl border bg-muted/20 px-3 py-2.5">
+        <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between text-xs font-black [&::-webkit-details-marker]:hidden">
+          How points work
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90" />
+        </summary>
         <ul className="mt-2 space-y-1">
           {LEAGUE_RULES.map((rule) => (
             <li key={rule.key} className="flex items-baseline justify-between gap-3 text-xs">
@@ -518,7 +509,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
           ))}
         </ul>
         <div className="mt-2 text-[11px] text-muted-foreground">{LEAGUE_RECORDS_NOTE} Resets on the 1st. Log your bodyweight once to join.</div>
-      </div>}
+      </details>}
 
     </div>
   );

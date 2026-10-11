@@ -55,6 +55,13 @@ describe("Rankings", () => {
     expect(hub).toContain("<StrengthBoardSlide />");
     expect(hub).toContain("<AthleteLevelCard clientId={client.id}");
   });
+  it("one Live mark in the Rankings header (not on each board); scoring rules folded under the board", () => {
+    expect(hub).toContain("one Live mark for the page");
+    expect(hub.match(/animate-ping/g)?.length).toBe(1);
+    expect(card).not.toContain("animate-ping");
+    expect(card).toContain("How points work");
+    expect(card.match(/How to earn points/g)).toBeNull();
+  });
   it("the Monthly board is titled by the month (October League)", () => {
     expect(card).toContain('{format(new Date(),"MMMM")} League');
   });

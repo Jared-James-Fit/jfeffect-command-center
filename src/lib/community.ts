@@ -1406,28 +1406,42 @@ const dayKey = (iso: string) => {
 };
 
 /**
- * The feed's order, with Pulses folded away: each day's Pulses become one
- * compact strip (where that day's newest one would have been), so a busy
- * day of finished sessions never buries the posts people wrote themselves.
+ * The feed's order, with automatic Activity (Pulses) folded away: each day's
+ * Activity becomes one compact strip, and member posts lead. The strip sits
+ * right after that day's newest post someone made themselves (or where that
+ * day's Activity was, on a day nobody posted), so finished sessions never sit
+ * above what people wrote and never interrupt the feed more than once a day.
  * Everything else keeps its place.
  */
 export function feedLayout<T extends { id: string; created_at: string; auto?: boolean; stats?: unknown }>(posts: T[]): FeedEntry<T>[] {
   const out: FeedEntry<T>[] = [];
-  const byDay = new Map<string, { kind: "pulse"; key: string; posts: T[] }>();
+  const strips = new Map<string, { kind: "pulse"; key: string; posts: T[] }>();
+  const postedOn = new Set<string>();
+  // a day's strip waits for that day's first member post (or for the day to end)
+  let pending: { day: string; strip: { kind: "pulse"; key: string; posts: T[] } } | null = null;
+  const flush = () => {
+    if (pending) out.push(pending.strip);
+    pending = null;
+  };
   for (const p of posts) {
+    const day = dayKey(p.created_at);
+    if (pending && pending.day !== day) flush();
     if (!isPulsePost(p)) {
       out.push({ kind: "post", post: p });
+      postedOn.add(day);
+      if (pending?.day === day) flush();
       continue;
     }
-    const day = dayKey(p.created_at);
-    let strip = byDay.get(day);
+    let strip = strips.get(day);
     if (!strip) {
       strip = { kind: "pulse", key: `pulse:${day}`, posts: [] };
-      byDay.set(day, strip);
-      out.push(strip);
+      strips.set(day, strip);
+      if (postedOn.has(day)) out.push(strip);
+      else pending = { day, strip };
     }
     strip.posts.push(p);
   }
+  flush();
   return out;
 }
 

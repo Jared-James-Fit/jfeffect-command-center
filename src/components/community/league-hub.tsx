@@ -38,7 +38,8 @@ export function RankingsHub() {
   const [board, setBoard] = useState<RankingsBoard>(() => rankingsFromHash() ?? "monthly");
   return (
     <div data-league-hub className="space-y-3">
-      <div className="grid grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
+      <div className="flex items-center gap-2">
+      <div className="grid flex-1 grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
         {([["monthly", "Monthly"], ["strength", "Strength"]] as const).map(([k, label]) => (
           <button
             key={k}
@@ -51,6 +52,15 @@ export function RankingsHub() {
             {label}
           </button>
         ))}
+      </div>
+        {/* both boards update as people train: one Live mark for the page */}
+        <span className="inline-flex shrink-0 items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          </span>
+          Live
+        </span>
       </div>
       {board === "strength" ? (
         <section data-standing="strength" className="overflow-hidden rounded-2xl border bg-card">
