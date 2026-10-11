@@ -101,8 +101,10 @@ export type WeekStats = {
   exercises: number;
   sets: number;
   compSets: number;
+  rpeMin: number | null;
   rpeMax: number | null;
-  rpeAvg: number | null;
+  rirMin: number | null;
+  rirMax: number | null;
   pctMin: number | null;
   pctMax: number | null;
   repsMin: number | null;
@@ -113,41 +115,39 @@ function nums(text: string | null | undefined): number[] {
   return (String(text ?? "").match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter((n) => Number.isFinite(n));
 }
 
-const round1 = (n: number) => Math.round(n * 10) / 10;
-
 export function weekStats(days: DigestDay[], rows: DigestRow[]): WeekStats {
   const dayIds = new Set(days.map((d) => d.id));
   const mine = rows.filter((r) => dayIds.has(r.day_id));
   let sets = 0;
   let compSets = 0;
   const rpes: number[] = [];
+  const rirs: number[] = [];
   const pcts: number[] = [];
   const reps: number[] = [];
   for (const r of mine) {
     const s = r.sets && r.sets > 0 ? r.sets : 1;
     sets += s;
     if (r.exercise?.is_competition_lift) compSets += s;
-    const rpe = nums(r.rpe).filter((n) => n >= 4 && n <= 10);
-    if (rpe.length) rpes.push(Math.max(...rpe));
-    else {
-      const rir = nums(r.rir).filter((n) => n >= 0 && n <= 6);
-      if (rir.length) rpes.push(10 - Math.min(...rir));
-    }
+    rpes.push(...nums(r.rpe).filter((n) => n >= 4 && n <= 10));
+    rirs.push(...nums(r.rir).filter((n) => n >= 0 && n <= 6));
     if (r.percentage != null && r.percentage > 0) pcts.push(r.percentage);
-    const rp = nums(r.reps_text).filter((n) => n >= 1 && n <= 100);
-    reps.push(...rp);
+    reps.push(...nums(r.reps_text).filter((n) => n >= 1 && n <= 100));
   }
+  const min = (a: number[]) => (a.length ? Math.min(...a) : null);
+  const max = (a: number[]) => (a.length ? Math.max(...a) : null);
   return {
     days: days.length,
     exercises: mine.length,
     sets,
     compSets,
-    rpeMax: rpes.length ? Math.max(...rpes) : null,
-    rpeAvg: rpes.length ? round1(rpes.reduce((a, b) => a + b, 0) / rpes.length) : null,
-    pctMin: pcts.length ? Math.min(...pcts) : null,
-    pctMax: pcts.length ? Math.max(...pcts) : null,
-    repsMin: reps.length ? Math.min(...reps) : null,
-    repsMax: reps.length ? Math.max(...reps) : null,
+    rpeMin: min(rpes),
+    rpeMax: max(rpes),
+    rirMin: min(rirs),
+    rirMax: max(rirs),
+    pctMin: min(pcts),
+    pctMax: max(pcts),
+    repsMin: min(reps),
+    repsMax: max(reps),
   };
 }
 
@@ -161,17 +161,42 @@ function rowLine(r: DigestRow): string {
   return `${name}${tags ? ` (${tags})` : ""}: ${[head, effort, pct, extra].filter(Boolean).join(" ")}`.trim();
 }
 
-function statsLine(s: WeekStats): string {
+const span = (a: number | null, b: number | null) => (a == null ? "" : a === b ? `${a}` : `${a}-${b}`);
+
+/** How volume moved against the week before, in words (never a count). */
+export function volumeChange(sets: number, prevSets: number | null): string {
+  if (prevSets == null || prevSets <= 0) return "first week";
+  const change = (sets - prevSets) / prevSets;
+  if (Math.abs(change) < 0.08) return "about the same as last week";
+  const pct = Math.round(Math.abs(change) * 10) * 10 || 10;
+  return `about ${pct}% ${change > 0 ? "more" : "less"} than last week`;
+}
+
+function compShare(s: WeekStats): string {
+  if (!s.compSets || !s.sets) return "";
+  const share = s.compSets / s.sets;
+  const words = share < 0.15 ? "a small part" : share < 0.4 ? "around a third" : share < 0.65 ? "about half" : "most";
+  return `competition lifts are ${words} of the work`;
+}
+
+/**
+ * The week's shape for Cleo to read. Totals and averages are left out on
+ * purpose: she can't quote what she never sees, so the athlete reads
+ * "about 40% less volume than last week", not "52 working sets".
+ */
+function statsLine(s: WeekStats, prev: WeekStats | null): string {
+  const effort = [s.rpeMin != null ? `RPE ${span(s.rpeMin, s.rpeMax)}` : "", s.rirMin != null ? `${span(s.rirMin, s.rirMax)} RIR` : ""]
+    .filter(Boolean)
+    .join(", ");
   const parts = [
     `${s.days} training day${s.days === 1 ? "" : "s"}`,
-    `${s.exercises} exercises`,
-    `${s.sets} working sets`,
-    s.compSets ? `${s.compSets} on competition lifts` : "",
-    s.rpeMax != null ? `RPE avg ${s.rpeAvg}, top ${s.rpeMax}` : "",
-    s.pctMin != null ? `${s.pctMin === s.pctMax ? s.pctMax : `${s.pctMin}-${s.pctMax}`}% loads` : "",
-    s.repsMin != null ? `reps ${s.repsMin === s.repsMax ? s.repsMax : `${s.repsMin}-${s.repsMax}`}` : "",
+    `volume ${volumeChange(s.sets, prev?.sets ?? null)}`,
+    effort ? `effort ${effort}` : "",
+    s.pctMin != null ? `loads ${span(s.pctMin, s.pctMax)}%` : "",
+    s.repsMin != null ? `reps ${span(s.repsMin, s.repsMax)}` : "",
+    compShare(s),
   ];
-  return parts.filter(Boolean).join(", ");
+  return parts.filter(Boolean).join("; ");
 }
 
 const DAY_MS = 86_400_000;
@@ -205,7 +230,7 @@ export function hashText(text: string): string {
 const MAX_DIGEST = 28_000;
 
 /** Bump when the prompt changes, so every block is rewritten in the new style. */
-export const ROADMAP_PROMPT_VERSION = 2;
+export const ROADMAP_PROMPT_VERSION = 3;
 
 /**
  * The block as Cleo reads it, plus a hash of only what the notes depend on
@@ -264,13 +289,16 @@ export function digestBlock(input: {
   const weekParts: string[] = [];
   const hashParts: string[] = [`v${ROADMAP_PROMPT_VERSION}`, block.goal ?? "", block.training_focus ?? "", meetLine.replace(/ on \d{4}-\d{2}-\d{2}/, "")];
   let hasTraining = false;
+  let prev: WeekStats | null = null;
   for (const w of weeks) {
     const days = (daysByWeek.get(w.id) ?? []).slice().sort((a, b) => a.day_index - b.day_index);
     const wRows = days.flatMap((d) => rowsByDay.get(d.id) ?? []);
     if (wRows.length) hasTraining = true;
     const s = weekStats(days, wRows);
+    const prevStats = prev;
+    prev = s;
     const dates = weekDates(block, w);
-    const lines = [`Week ${w.week_index}${dates ? ` (${dates.start} to ${dates.end})` : ""}${w.phase ? ` [coach's phase: ${w.phase}]` : ""}: ${statsLine(s)}`];
+    const lines = [`Week ${w.week_index}${dates ? ` (${dates.start} to ${dates.end})` : ""}${w.phase ? ` [coach's phase: ${w.phase}]` : ""}: ${statsLine(s, prevStats)}`];
     for (const d of days) {
       const dr = rowsByDay.get(d.id) ?? [];
       const title = clean(d.title) ?? clean(d.subtitle) ?? clean(d.focus);
@@ -317,6 +345,11 @@ const replySchema = z.object({
     .default([]),
 });
 
+/** Week totals or averages leaking into athlete text ("96 working sets", "average RPE 8.3"). */
+export function quotesTotals(text: string): boolean {
+  return /\b([2-9]\d|\d{3,})\s+(working\s+|total\s+|hard\s+)?sets\b|\b\d+\s+exercises\b|\baverage\b/i.test(text);
+}
+
 export type RoadmapReply = {
   style: (typeof ROADMAP_STYLES)[number];
   label: string;
@@ -339,6 +372,7 @@ export function parseRoadmapReply(text: string, weekIndexes: number[]): RoadmapR
   if (!parsed.success) return null;
   const r = parsed.data;
   if (!r.label || !r.purpose) return null;
+  if ([r.purpose, ...r.weeks.map((w) => w.focus)].some(quotesTotals)) return null;
   const style = (ROADMAP_STYLES as readonly string[]).includes(r.style) ? (r.style as RoadmapReply["style"]) : "general_fitness";
   const valid = new Set(weekIndexes);
   const seen = new Set<number>();
