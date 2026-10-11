@@ -97,7 +97,7 @@ export function HomeLeaguePreviews() {
     <div className="grid grid-cols-2 gap-2" aria-label="League">
       <Link to="/portal/community" hash="league=standings" className={tile}>
         <span className={kicker}>
-          <span className="truncate">{format(new Date(), "MMM")} League</span>
+          <span className="truncate">{format(new Date(), "MMMM")} League</span>
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
         </span>
         {leaguePending ? (
