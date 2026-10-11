@@ -32,7 +32,7 @@ describe("Home's Crew feed: newest first, a few, then the feed", () => {
     expect(more).toBe(0);
   });
   it("the swipe always ends on the card that opens the feed (never every post)", () => {
-    expect(entry).toContain('<SeeMoreCard posts={feed.data?.pages[0]?.posts ?? []} shown={shown} more={more} onOpen={() => openAt()} />');
+    expect(entry).toContain('<SeeMoreCard posts={loaded} shown={shown} more={more} onOpen={() => openAt()} />');
     expect(entry).toContain('{more > 0 ? `${more} more in the feed` : "Open the feed"}');
   });
   it("a carousel shows its first slide only: nothing inside a card swipes, so the Home swipe always works", () => {

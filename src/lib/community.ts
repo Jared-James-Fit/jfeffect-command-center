@@ -1360,6 +1360,27 @@ export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> 
   return { pulses: allPulses.slice(0, HOME_PULSE_ROWS), today, shown, more: own.length - shown.length };
 }
 
+/** Feed pages Home reads at most while looking for posts people made (the first page is often all Pulses). */
+export const HOME_DECK_PAGES = 5;
+
+/**
+ * Whether Home should read another feed page: it still has fewer than
+ * `max` posts people made, the feed has more, it hasn't read too many pages,
+ * and what it has read is still inside the deck's two weeks.
+ */
+export function homeDeckNeedsMore<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; stats?: unknown }>(
+  posts: T[],
+  hasMore: boolean,
+  pages: number,
+  now = Date.now(),
+  max = HOME_DECK_POSTS,
+): boolean {
+  if (!hasMore || pages >= HOME_DECK_PAGES) return false;
+  if (posts.filter((p) => !isPulsePost(p)).length >= max) return false;
+  const oldest = Math.min(...posts.map((p) => new Date(p.created_at).getTime()));
+  return !posts.length || oldest > now - 14 * 86_400_000;
+}
+
 /** Sessions the Crew Pulse card on Home lists. */
 export const HOME_PULSE_ROWS = 3;
 
