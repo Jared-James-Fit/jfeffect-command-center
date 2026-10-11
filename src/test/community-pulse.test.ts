@@ -70,15 +70,14 @@ describe("Home's Crew feed deck", () => {
   const at = (h: number) => new Date(now - h * 3600e3).toISOString();
   const pulse = (id: string, h: number, prs = 0) => ({ id, created_at: at(h), auto: true, stats: { pr_count: prs } });
   const post = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: null });
-  it("a Crew Pulse first (the day's newest PR, else the newest session), then regular posts newest first", () => {
-    const d = homeCrewDeck([pulse("p1", 1), pulse("p2", 3, 2), post("a", 2), post("b", 5), pulse("old", 72, 5)], now);
-    expect(d.pulse?.id).toBe("p2");
-    // posts people made first, then other recent sessions so there are always 3 when there can be
-    expect(d.shown.map((p) => p.id)).toEqual(["a", "b", "p1"]);
-    expect(homeCrewDeck([pulse("p1", 1), post("a", 2)], now).pulse?.id).toBe("p1");
+  it("the Crew Pulse card lists the 3 newest sessions; Pulses never sit among the posts", () => {
+    const d = homeCrewDeck([pulse("p1", 1), pulse("p2", 3, 2), post("a", 2), post("b", 5), pulse("p3", 30), pulse("p4", 72, 5), pulse("ancient", 24 * 20)], now);
+    expect(d.pulses.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+    expect(d.shown.map((p) => p.id)).toEqual(["a", "b"]);
+    expect(d.more).toBe(0);
   });
   it("no recent Pulse: just the posts", () => {
-    expect(homeCrewDeck([post("a", 2), pulse("old", 72)], now).pulse).toBeNull();
+    expect(homeCrewDeck([post("a", 2), pulse("old", 24 * 20)], now).pulses).toEqual([]);
   });
 });
 
@@ -94,9 +93,11 @@ describe("Home deck: Pulse, three posts, then the rest", () => {
     const entry = readFileSync(new URL("../components/community/community-entry.tsx", import.meta.url), "utf8");
     expect(entry).toContain("<SeeMoreCard posts=");
     expect(entry).not.toContain("{more > 0 && <SeeMoreCard");
-    // a quiet day of only Pulses still fills the shelf
+    // a day of only Pulses: they stay in the Pulse card, and More doesn't count them
     const pulse = (id: string, h: number) => ({ id, created_at: at(h), auto: true, stats: { pr_count: 0 } });
-    expect(homeCrewDeck([pulse("x", 1), pulse("y", 2), pulse("z", 3), pulse("w", 4)], now).shown.map((p) => p.id)).toEqual(["y", "z", "w"]);
+    const quiet = homeCrewDeck([pulse("x", 1), pulse("y", 2), pulse("z", 3), pulse("w", 4)], now);
+    expect(quiet.shown).toEqual([]);
+    expect(quiet.more).toBe(0);
     expect(entry).toContain('hash: `post=${postId}`');
   });
 });

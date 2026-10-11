@@ -76,8 +76,8 @@ export function CommunityHomeStrip() {
   // a card opens its post in full (likes, comments); the last card opens the feed
   const openPost = (postId: string) => navigate({ to: "/portal/community", hash: `post=${postId}` });
 
-  // a Crew Pulse up front, then the newest posts people made themselves
-  const { pulse, today, shown, more } = useMemo(() => homeCrewDeck(feed.data?.pages[0]?.posts ?? []), [feed.data]);
+  // the Crew Pulse card up front (the newest finished sessions), then the newest posts people made themselves
+  const { pulses, today, shown, more } = useMemo(() => homeCrewDeck(feed.data?.pages[0]?.posts ?? []), [feed.data]);
   const { data: urls } = usePostMediaUrls(shown);
   // "3 locked in today": people who showed up today (local day).
   const lockedToday = useMemo(() => {
@@ -90,10 +90,9 @@ export function CommunityHomeStrip() {
 
   if (!activity?.enabled || feed.isLoading) return null;
   const cards = shown.map((post) => <CrewCard key={post.id} post={post} unit={unit} thumb={urls?.[postThumbPath(post) ?? ""] ?? null} fresh={!post.is_mine && new Date(post.created_at).getTime() > seenAt} onOpen={() => openPost(post.id)} />);
-  // the invite sits second, after the newest post (first when there's none)
-  const nudge = <ShareNudge key="nudge" surface="home" unit={unit} />;
-  cards.splice(Math.min(1, cards.length), 0, nudge);
-  if (pulse) cards.unshift(<HomePulseCard key={`pulse:${pulse.id}`} post={pulse} today={today} unit={unit} onOpen={() => openPost(pulse.id)} />);
+  // the invite (now and then, until their first post) comes after the posts, before the More card
+  cards.push(<ShareNudge key="nudge" surface="home" unit={unit} />);
+  if (pulses.length) cards.unshift(<HomePulseCard key="pulse" posts={pulses} today={today} unit={unit} onOpen={openPost} />);
 
   return (
     <section data-crew-feed className="rounded-2xl border border-border/80 bg-card pb-3 pt-3">
@@ -112,7 +111,7 @@ export function CommunityHomeStrip() {
         <ShareWorkoutButton unit={unit} label="Post" previewOnly={isImpersonating} className="h-8 px-3 text-[12px]" />
       </div>
       <div className="mt-2.5 flex h-[200px] snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain px-[9%] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {shown.length === 0 && !pulse && (
+        {shown.length === 0 && !pulses.length && (
           <div className="flex h-full w-[82%] shrink-0 snap-center snap-always flex-col justify-center rounded-[20px] border border-dashed border-border bg-muted/30 p-4">
             <div className="text-[15px] font-black leading-tight">Be the first to share this week</div>
             <div className="mt-1 text-[12.5px] leading-snug text-muted-foreground">Post a session for the crew. Your coach sees every one.</div>

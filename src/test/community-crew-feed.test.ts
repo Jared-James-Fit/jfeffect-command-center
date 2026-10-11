@@ -112,8 +112,8 @@ describe("the share nudge", () => {
     expect(nudge).toContain('const title = lock ? "Lock in today\'s session" : "Share a session with the crew";');
     expect(nudge).toContain('const eligible = role === "client" || isImpersonating;');
   });
-  it("sits second in Home's swipe and after the second post in the feed", () => {
-    expect(entry).toContain("cards.splice(Math.min(1, cards.length), 0, nudge);");
+  it("sits after the posts in Home's swipe (before More) and after the second post in the feed", () => {
+    expect(entry).toContain('cards.push(<ShareNudge key="nudge" surface="home" unit={unit} />);');
     expect(screen).toContain('{canShare && i === Math.min(1, layout.length - 1) && <ShareNudge surface="feed" unit={unit} />}');
   });
 });

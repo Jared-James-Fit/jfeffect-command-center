@@ -1336,33 +1336,32 @@ export function homeCrewPosts<T extends Pick<CommunityPost, "id" | "created_at">
 }
 
 /**
- * Home's Crew feed deck: one Crew Pulse up front (the crew's newest PR from
- * the last day if there is one, else the newest finished session, from the
- * last two days), then the newest regular posts, newest first. `today` is
- * how many sessions the crew finished since midnight, for "+N more".
+ * Home's Crew feed deck: one Crew Pulse card up front with the crew's newest
+ * finished sessions (Pulses, newest first, `HOME_PULSE_ROWS` of them, from the
+ * last two weeks), then the newest posts people made themselves. Pulses only
+ * ever sit in that card, never among the posts. `today` is how many sessions
+ * the crew finished since midnight; `more` is how many recent posts people
+ * made beyond the ones shown.
  */
 export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; stats?: { pr_count?: number } | null }>(
   posts: T[],
   now = Date.now(),
   max = HOME_DECK_POSTS,
-): { pulse: T | null; today: number; shown: T[]; more: number } {
+): { pulses: T[]; today: number; shown: T[]; more: number } {
   const t = (p: T) => new Date(p.created_at).getTime();
-  const newest = [...posts].sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
-  const pulses = newest.filter((p) => isPulsePost(p) && t(p) > now - 2 * 86_400_000);
-  const pulse = pulses.find((p) => (p.stats?.pr_count ?? 0) > 0 && t(p) > now - 86_400_000) ?? pulses[0] ?? null;
+  const since = now - 14 * 86_400_000;
+  const recent = [...posts].filter((p) => t(p) > since).sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
+  const allPulses = recent.filter((p) => isPulsePost(p));
   const midnight = new Date(now);
   midnight.setHours(0, 0, 0, 0);
-  const today = pulses.filter((p) => t(p) >= midnight.getTime()).length;
-  // Then the 3 newest recent posts: posts people made first, topped up with other
-  // finished sessions on a quiet day, so the shelf is never a lone card.
-  const since = now - 14 * 86_400_000;
-  const recent = newest.filter((p) => p !== pulse && t(p) > since);
+  const today = allPulses.filter((p) => t(p) >= midnight.getTime()).length;
   const own = recent.filter((p) => !isPulsePost(p));
-  const fill = recent.filter((p) => isPulsePost(p));
-  const shown = [...own, ...fill].slice(0, max);
-  // "N more in the feed": the recent posts that didn't fit
-  return { pulse, today, shown, more: Math.max(0, recent.length - shown.length) };
+  const shown = own.slice(0, max);
+  return { pulses: allPulses.slice(0, HOME_PULSE_ROWS), today, shown, more: own.length - shown.length };
 }
+
+/** Sessions the Crew Pulse card on Home lists. */
+export const HOME_PULSE_ROWS = 3;
 
 /** Regular posts Home's Crew feed swipes through after the Crew Pulse. */
 export const HOME_DECK_POSTS = 3;
