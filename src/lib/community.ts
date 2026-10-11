@@ -1295,12 +1295,59 @@ export const HOME_CREW_POSTS = 5;
  * never looks stale), at most `max`. `more` is how many recent ones the feed
  * has beyond these, for the card at the end.
  */
-export function homeCrewPosts<T extends Pick<CommunityPost, "id" | "created_at">>(posts: T[], now = Date.now(), max = HOME_CREW_POSTS): { shown: T[]; more: number } {
+export function homeCrewPosts<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean }>(posts: T[], now = Date.now(), max = HOME_CREW_POSTS): { shown: T[]; more: number } {
   const since = now - 14 * 86_400_000;
   const recent = posts
     .filter((p) => new Date(p.created_at).getTime() > since)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || (a.id < b.id ? 1 : -1));
-  return { shown: recent.slice(0, max), more: Math.max(0, recent.length - max) };
+  // a busy training day mustn't push everyone's own posts off Home: a couple of Pulses at most
+  let pulses = 0;
+  const kept = recent.filter((p) => !p.auto || ++pulses <= HOME_CREW_PULSES);
+  return { shown: kept.slice(0, max), more: Math.max(0, recent.length - Math.min(max, kept.length)) };
+}
+
+/** Pulses (automatic workout posts) Home's Crew feed shows at most. */
+export const HOME_CREW_PULSES = 2;
+
+/** A Pulse: posted by itself when a session finished, nobody's words or photo on it. */
+export function isPulsePost(p: { auto?: boolean; stats?: unknown }): boolean {
+  return !!p.auto && !!p.stats;
+}
+
+/** Rows a Pulse strip shows before "more". */
+export const PULSE_STRIP_ROWS = 3;
+
+export type FeedEntry<T> = { kind: "post"; post: T } | { kind: "pulse"; key: string; posts: T[] };
+
+const dayKey = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+};
+
+/**
+ * The feed's order, with Pulses folded away: each day's Pulses become one
+ * compact strip (where that day's newest one would have been), so a busy
+ * day of finished sessions never buries the posts people wrote themselves.
+ * Everything else keeps its place.
+ */
+export function feedLayout<T extends { id: string; created_at: string; auto?: boolean; stats?: unknown }>(posts: T[]): FeedEntry<T>[] {
+  const out: FeedEntry<T>[] = [];
+  const byDay = new Map<string, { kind: "pulse"; key: string; posts: T[] }>();
+  for (const p of posts) {
+    if (!isPulsePost(p)) {
+      out.push({ kind: "post", post: p });
+      continue;
+    }
+    const day = dayKey(p.created_at);
+    let strip = byDay.get(day);
+    if (!strip) {
+      strip = { kind: "pulse", key: `pulse:${day}`, posts: [] };
+      byDay.set(day, strip);
+      out.push(strip);
+    }
+    strip.posts.push(p);
+  }
+  return out;
 }
 
 /**
