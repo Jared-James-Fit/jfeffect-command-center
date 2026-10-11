@@ -64,7 +64,7 @@ describe("Pulse never swamps the feed", () => {
   });
 });
 
-import { homeCrewDeck } from "@/lib/community";
+import { homeCrewDeck, homeDeckNeedsMore, HOME_DECK_PAGES } from "@/lib/community";
 describe("Home's Crew feed deck", () => {
   const now = Date.UTC(2026, 9, 10, 21);
   const at = (h: number) => new Date(now - h * 3600e3).toISOString();
@@ -99,5 +99,32 @@ describe("Home deck: Pulse, three posts, then the rest", () => {
     expect(quiet.shown).toEqual([]);
     expect(quiet.more).toBe(0);
     expect(entry).toContain('hash: `post=${postId}`');
+  });
+});
+
+describe("Home reads on until it has 3 posts people made", () => {
+  const now = Date.UTC(2026, 9, 11, 7);
+  const at = (h: number) => new Date(now - h * 3600e3).toISOString();
+  const pulse = (id: string, h: number) => ({ id, created_at: at(h), auto: true, stats: { pr_count: 0 } });
+  // a member's own workout post (photo, caption) is a regular post even though it has stats
+  const own = (id: string, h: number, stats: { pr_count: number } | null = null) => ({ id, created_at: at(h), auto: false, stats });
+  it("a first page of only Pulses asks for more; three member posts (workout ones too) are enough", () => {
+    const firstPage = [pulse("a", 1), pulse("b", 4), pulse("c", 5), pulse("d", 7), pulse("e", 10)];
+    expect(homeDeckNeedsMore(firstPage, true, 1, now)).toBe(true);
+    const more = [...firstPage, own("note", 16), own("photo-workout", 38, { pr_count: 1 }), own("w2", 50, { pr_count: 0 })];
+    expect(homeDeckNeedsMore(more, true, 2, now)).toBe(false);
+    const d = homeCrewDeck(more, now);
+    expect(d.shown.map((p) => p.id)).toEqual(["note", "photo-workout", "w2"]);
+    expect(d.pulses.map((p) => p.id)).toEqual(["a", "b", "c"]);
+  });
+  it("stops at the end of the feed, after a few pages, or past two weeks", () => {
+    expect(homeDeckNeedsMore([pulse("a", 1)], false, 1, now)).toBe(false);
+    expect(homeDeckNeedsMore([pulse("a", 1)], true, HOME_DECK_PAGES, now)).toBe(false);
+    expect(homeDeckNeedsMore([pulse("a", 1), pulse("old", 24 * 15)], true, 2, now)).toBe(false);
+  });
+  it("Home reads every loaded page, not just the first", () => {
+    const entry = readFileSync(new URL("../components/community/community-entry.tsx", import.meta.url), "utf8");
+    expect(entry).toContain("feed.data?.pages.flatMap((pg) => pg.posts)");
+    expect(entry).toContain("void feed.fetchNextPage()");
   });
 });

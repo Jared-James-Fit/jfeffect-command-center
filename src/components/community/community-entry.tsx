@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowRight, ChevronRight, Flame, Heart, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { featuredLift, formatTopSet, homeCrewDeck, workoutHeadline, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
+import { featuredLift, formatTopSet, homeCrewDeck, homeDeckNeedsMore, workoutHeadline, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
 import { useCommunityActivity, useCommunityFeed, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -77,7 +77,14 @@ export function CommunityHomeStrip() {
   const openPost = (postId: string) => navigate({ to: "/portal/community", hash: `post=${postId}` });
 
   // the Crew Pulse card up front (the newest finished sessions), then the newest posts people made themselves
-  const { pulses, today, shown, more } = useMemo(() => homeCrewDeck(feed.data?.pages[0]?.posts ?? []), [feed.data]);
+  // every page read so far: a busy training day can fill the first page with Pulses, so
+  // Home reads on (a few pages, two weeks at most) until it has 3 posts people made
+  const loaded = useMemo(() => feed.data?.pages.flatMap((pg) => pg.posts) ?? [], [feed.data]);
+  const { pulses, today, shown, more } = useMemo(() => homeCrewDeck(loaded), [loaded]);
+  const needsMore = homeDeckNeedsMore(loaded, !!feed.hasNextPage, feed.data?.pages.length ?? 0);
+  useEffect(() => {
+    if (needsMore && !feed.isFetchingNextPage && !feed.isError) void feed.fetchNextPage();
+  }, [needsMore, feed.isFetchingNextPage, feed.isError]); // eslint-disable-line react-hooks/exhaustive-deps
   const { data: urls } = usePostMediaUrls(shown);
   // "3 locked in today": people who showed up today (local day).
   const lockedToday = useMemo(() => {
@@ -88,7 +95,8 @@ export function CommunityHomeStrip() {
     return ids.size;
   }, [feed.data]);
 
-  if (!activity?.enabled || feed.isLoading) return null;
+  // wait until those reads are in, so cards don't shuffle in after the More card shows
+  if (!activity?.enabled || feed.isLoading || (needsMore && !feed.isError)) return null;
   const cards = shown.map((post) => <CrewCard key={post.id} post={post} unit={unit} thumb={urls?.[postThumbPath(post) ?? ""] ?? null} fresh={!post.is_mine && new Date(post.created_at).getTime() > seenAt} onOpen={() => openPost(post.id)} />);
   // the invite (now and then, until their first post) comes after the posts, before the More card
   cards.push(<ShareNudge key="nudge" surface="home" unit={unit} />);
@@ -118,7 +126,7 @@ export function CommunityHomeStrip() {
           </div>
         )}
         {cards}
-        <SeeMoreCard posts={feed.data?.pages[0]?.posts ?? []} shown={shown} more={more} onOpen={() => openAt()} />
+        <SeeMoreCard posts={loaded} shown={shown} more={more} onOpen={() => openAt()} />
       </div>
       <CrewGoalStrip className="mt-3 px-3.5" />
     </section>

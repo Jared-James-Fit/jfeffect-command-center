@@ -392,7 +392,7 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
     expect(page).not.toContain("PageHeader");
   });
   it("Home's Crew feed: the newest posts as cards, then one that opens the feed; a post opens in full over the feed", () => {
-    expect(entry).toContain("homeCrewDeck(feed.data?.pages[0]?.posts ?? [])");
+    expect(entry).toContain("homeCrewDeck(loaded)");
     expect(entry).toContain("onOpen={() => openPost(post.id)}");
     expect(entry).toContain("<PostTileFace post={post}");
     expect(entry).toContain("<SeeMoreCard ");
