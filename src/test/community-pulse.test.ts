@@ -63,3 +63,20 @@ describe("Pulse never swamps the feed", () => {
     expect(shown.map((p) => p.id)).toEqual(["p1", "p2", "a", "b"]);
   });
 });
+
+import { homeCrewDeck } from "@/lib/community";
+describe("Home's Crew feed deck", () => {
+  const now = Date.UTC(2026, 9, 10, 21);
+  const at = (h: number) => new Date(now - h * 3600e3).toISOString();
+  const pulse = (id: string, h: number, prs = 0) => ({ id, created_at: at(h), auto: true, stats: { pr_count: prs } });
+  const post = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: null });
+  it("a Crew Pulse first (the day's newest PR, else the newest session), then regular posts newest first", () => {
+    const d = homeCrewDeck([pulse("p1", 1), pulse("p2", 3, 2), post("a", 2), post("b", 5), pulse("old", 72, 5)], now);
+    expect(d.pulse?.id).toBe("p2");
+    expect(d.shown.map((p) => p.id)).toEqual(["a", "b"]);
+    expect(homeCrewDeck([pulse("p1", 1), post("a", 2)], now).pulse?.id).toBe("p1");
+  });
+  it("no recent Pulse: just the posts", () => {
+    expect(homeCrewDeck([post("a", 2), pulse("old", 72)], now).pulse).toBeNull();
+  });
+});

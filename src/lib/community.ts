@@ -1335,6 +1335,28 @@ export function homeCrewPosts<T extends Pick<CommunityPost, "id" | "created_at">
   return { shown: kept.slice(0, max), more: Math.max(0, recent.length - Math.min(max, kept.length)) };
 }
 
+/**
+ * Home's Crew feed deck: one Crew Pulse up front (the crew's newest PR from
+ * the last day if there is one, else the newest finished session, from the
+ * last two days), then the newest regular posts, newest first. `today` is
+ * how many sessions the crew finished since midnight, for "+N more".
+ */
+export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; stats?: { pr_count?: number } | null }>(
+  posts: T[],
+  now = Date.now(),
+  max = HOME_CREW_POSTS,
+): { pulse: T | null; today: number; shown: T[]; more: number } {
+  const t = (p: T) => new Date(p.created_at).getTime();
+  const newest = [...posts].sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
+  const pulses = newest.filter((p) => isPulsePost(p) && t(p) > now - 2 * 86_400_000);
+  const pulse = pulses.find((p) => (p.stats?.pr_count ?? 0) > 0 && t(p) > now - 86_400_000) ?? pulses[0] ?? null;
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  const today = pulses.filter((p) => t(p) >= midnight.getTime()).length;
+  const regular = homeCrewPosts(newest.filter((p) => !isPulsePost(p)), now, max);
+  return { pulse, today, shown: regular.shown, more: regular.more + Math.max(0, pulses.length - 1) };
+}
+
 /** Pulses (automatic workout posts) Home's Crew feed shows at most. */
 export const HOME_CREW_PULSES = 2;
 
