@@ -119,7 +119,7 @@ export function CommunityHomeStrip() {
           </div>
         )}
         {cards}
-        {more > 0 && <SeeMoreCard posts={feed.data?.pages[0]?.posts ?? []} shown={shown} more={more} onOpen={() => openAt()} />}
+        <SeeMoreCard posts={feed.data?.pages[0]?.posts ?? []} shown={shown} more={more} onOpen={() => openAt()} />
       </div>
       <CrewGoalStrip className="mt-3 px-3.5" />
     </section>

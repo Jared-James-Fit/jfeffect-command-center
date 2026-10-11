@@ -73,7 +73,8 @@ describe("Home's Crew feed deck", () => {
   it("a Crew Pulse first (the day's newest PR, else the newest session), then regular posts newest first", () => {
     const d = homeCrewDeck([pulse("p1", 1), pulse("p2", 3, 2), post("a", 2), post("b", 5), pulse("old", 72, 5)], now);
     expect(d.pulse?.id).toBe("p2");
-    expect(d.shown.map((p) => p.id)).toEqual(["a", "b"]);
+    // posts people made first, then other recent sessions so there are always 3 when there can be
+    expect(d.shown.map((p) => p.id)).toEqual(["a", "b", "p1"]);
     expect(homeCrewDeck([pulse("p1", 1), post("a", 2)], now).pulse?.id).toBe("p1");
   });
   it("no recent Pulse: just the posts", () => {
@@ -85,13 +86,17 @@ describe("Home deck: Pulse, three posts, then the rest", () => {
   const now = Date.UTC(2026, 9, 10, 21);
   const at = (h: number) => new Date(now - h * 3600e3).toISOString();
   const post = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: null });
-  it("three newest posts, and how many more there are (the More card only when there are)", () => {
+  it("three newest posts, how many more there are, and the More card always at the end", () => {
     const d = homeCrewDeck([post("a", 1), post("b", 2), post("c", 3), post("d", 4), post("e", 5)], now);
     expect(d.shown.map((p) => p.id)).toEqual(["a", "b", "c"]);
     expect(d.more).toBe(2);
     expect(homeCrewDeck([post("a", 1)], now).more).toBe(0);
     const entry = readFileSync(new URL("../components/community/community-entry.tsx", import.meta.url), "utf8");
-    expect(entry).toContain("{more > 0 && <SeeMoreCard");
+    expect(entry).toContain("<SeeMoreCard posts=");
+    expect(entry).not.toContain("{more > 0 && <SeeMoreCard");
+    // a quiet day of only Pulses still fills the shelf
+    const pulse = (id: string, h: number) => ({ id, created_at: at(h), auto: true, stats: { pr_count: 0 } });
+    expect(homeCrewDeck([pulse("x", 1), pulse("y", 2), pulse("z", 3), pulse("w", 4)], now).shown.map((p) => p.id)).toEqual(["y", "z", "w"]);
     expect(entry).toContain('hash: `post=${postId}`');
   });
 });
