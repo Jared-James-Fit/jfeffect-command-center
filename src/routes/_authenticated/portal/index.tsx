@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
-import { Bell, Calendar as CalendarIcon } from "lucide-react";
+import { Bell } from "lucide-react";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
 import { derivePhase } from "@/lib/training-phases";
@@ -34,7 +34,6 @@ import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { setClientTimeZone, bootstrapClientOccurrences } from "@/lib/action-centre.functions";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
-import { format, isToday, isTomorrow } from "date-fns";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { DashboardRefreshIndicator } from "@/components/portal/dashboard-refresh-indicator";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
@@ -294,143 +293,130 @@ function PortalHome() {
         />
       )}
 
-      <div className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-safe-bottom pt-4 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
-        {/* 1 — Compact greeting header (renders immediately) */}
-        <GreetingHeader firstName={firstName} unreadCount={unreadMsgs.length} />
-      <div className="-mt-2 flex justify-end">
-        <DashboardRefreshIndicator />
-      </div>
+      <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-safe-bottom pt-3 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
+        {/* Home is three sections: Today (what to do), Progress (what to log),
+            Crew (who's training). Anything else shows only while it needs you. */}
 
-        {/* 1b — Schedule first on every Home: Today / the next 7 days (full calendar one tap away) */}
-        {client?.id && (
-          <SectionErrorBoundary label="Upcoming schedule">
-            <UpcomingScheduleCard clientId={client.id} />
+        {/* ── Today ───────────────────────────────────────────── */}
+        <section className="space-y-3" aria-label="Today">
+          <GreetingHeader firstName={firstName} unreadCount={unreadMsgs.length} />
+          <DashboardRefreshIndicator />
+
+          {/* the week strip and the selected day's workout / sessions (full calendar one tap away) */}
+          {client?.id && (
+            <SectionErrorBoundary label="Upcoming schedule">
+              <UpcomingScheduleCard clientId={client.id} />
+            </SectionErrorBoundary>
+          )}
+
+          {clientSettled && !client ? <NoProfileCard /> : null}
+
+          {/* Needs-you items: each hides itself once it's done. */}
+          <SectionErrorBoundary label="Coaching agreement">
+            <AgreementDashboardCard />
           </SectionErrorBoundary>
-        )}
+          {client?.id && portalUserId && (
+            <SectionErrorBoundary label="Setup checklist">
+              <SetupChecklistBanner clientId={client.id} userId={portalUserId ?? ""} />
+            </SectionErrorBoundary>
+          )}
+          {client?.id && (
+            <SectionErrorBoundary label="Sex prompt">
+              <SexPromptCard enabled={role === "client"} />
+            </SectionErrorBoundary>
+          )}
 
-        {/* Body, right under the calendar: weigh-in first (most clients log it), then
-            water and progress, one swipe apart. */}
-        {client?.id && portalUserId ? (
-          <DeferRender placeholderHeight="h-52">
-            <SwipeCards
-              storageKey="jf-home-body"
-              cards={[
-                {
-                  key: "bodyweight",
-                  label: "Bodyweight",
-                  node: (
-                    <SectionErrorBoundary label="Bodyweight">
-                      <BodyweightSummaryCard
-                        clientId={client.id}
-                        userId={portalUserId}
-                        defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
-                      />
-                    </SectionErrorBoundary>
-                  ),
-                },
-                {
-                  key: "water",
-                  label: "Water",
-                  node: (
-                    <SectionErrorBoundary label="Water">
-                      <HomeWaterCard userId={portalUserId} currentUserId={portalUserId} surface="portal" />
-                    </SectionErrorBoundary>
-                  ),
-                },
-                {
-                  key: "progress",
-                  label: "Progress",
-                  node: (
-                    <SectionErrorBoundary label="Progress">
-                      <ProgressSummaryCard
-                        userId={portalUserId}
-                        currentUserId={portalUserId}
-                        viewerRole="owner"
-                        progressHref={{ kind: "portal" }}
-                        liftHref="/portal/lift-videos"
-                      />
-                    </SectionErrorBoundary>
-                  ),
-                },
-              ]}
-            />
+          {/* PT package (only with an active one) and events (only when there's one coming) */}
+          {client?.id && (
+            <SectionErrorBoundary label="Sessions">
+              <SessionsCard clientId={client.id} nextAppointmentAt={nextAppointment?.starts_at ?? null} />
+            </SectionErrorBoundary>
+          )}
+          <DeferRender placeholderHeight="h-0">
+            <SectionErrorBoundary label="Events">
+              <UpcomingEventsPanel audience="client" />
+            </SectionErrorBoundary>
           </DeferRender>
+        </section>
+
+        {/* ── Progress ────────────────────────────────────────── */}
+        {client?.id && portalUserId ? (
+          <section className="space-y-3" aria-label="Progress">
+            <SectionLabel>Progress</SectionLabel>
+            {/* weigh-in first (most clients log it), then water and progress, one swipe apart */}
+            <DeferRender placeholderHeight="h-52">
+              <SwipeCards
+                storageKey="jf-home-body"
+                cards={[
+                  {
+                    key: "bodyweight",
+                    label: "Bodyweight",
+                    node: (
+                      <SectionErrorBoundary label="Bodyweight">
+                        <BodyweightSummaryCard
+                          clientId={client.id}
+                          userId={portalUserId}
+                          defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
+                        />
+                      </SectionErrorBoundary>
+                    ),
+                  },
+                  {
+                    key: "water",
+                    label: "Water",
+                    node: (
+                      <SectionErrorBoundary label="Water">
+                        <HomeWaterCard userId={portalUserId} currentUserId={portalUserId} surface="portal" />
+                      </SectionErrorBoundary>
+                    ),
+                  },
+                  {
+                    key: "progress",
+                    label: "Progress",
+                    node: (
+                      <SectionErrorBoundary label="Progress">
+                        <ProgressSummaryCard
+                          userId={portalUserId}
+                          currentUserId={portalUserId}
+                          viewerRole="owner"
+                          progressHref={{ kind: "portal" }}
+                          liftHref="/portal/lift-videos"
+                        />
+                      </SectionErrorBoundary>
+                    ),
+                  },
+                ]}
+              />
+            </DeferRender>
+            {/* the current block (only while one is running or about to) */}
+            {activePhase && (
+              <SectionErrorBoundary label="Training block">
+                <TrainingBlockCard phase={activePhase} />
+              </SectionErrorBoundary>
+            )}
+            <SectionErrorBoundary label="Devices">
+              <WearablesCard mode="summary" />
+            </SectionErrorBoundary>
+          </section>
         ) : clientLoading ? (
           <SectionSkeleton height="h-52" />
         ) : null}
 
-      {/* 2 — Profile-missing fallback (workouts moved off the dashboard
-            for perf — clients reach training via Quick Actions / nav). */}
-        {clientSettled && !client ? <NoProfileCard /> : null}
-
-        {/* 2a — Mandatory Coaching Agreement. Shown on every visit until signed;
-            hides itself once signed (and in coach "View as client"). */}
-        <SectionErrorBoundary label="Coaching agreement">
-          <AgreementDashboardCard />
-        </SectionErrorBoundary>
-
-        {/* 2b — Non-blocking onboarding checklist (replaces the old hard-lock
-            gates for profile picture / basic info / training schedule / goals). */}
-        {client?.id && portalUserId && (
-          <SectionErrorBoundary label="Setup checklist">
-            <SetupChecklistBanner clientId={client.id} userId={portalUserId ?? ""} />
-          </SectionErrorBoundary>
-        )}
-
-        {/* 2c — One-tap profile question for athletes who haven't answered
-            (the athlete only, never in coach "View as client"). */}
+        {/* ── Crew ────────────────────────────────────────────── */}
         {client?.id && (
-          <SectionErrorBoundary label="Sex prompt">
-            <SexPromptCard enabled={role === "client"} />
-          </SectionErrorBoundary>
-        )}
-
-        {/* The crew's week: a shelf of posts, "+ Share" first. */}
-        {client?.id && (
-          <SectionErrorBoundary label="Crew feed">
-            <CommunityHomeStrip />
-          </SectionErrorBoundary>
-        )}
-
-        {/* League previews: your month's rank and Hall of Strength spot; tap for the full boards. */}
-        {client?.id && (
-          <SectionErrorBoundary label="League previews">
-            <HomeLeaguePreviews />
-          </SectionErrorBoundary>
+          <section className="space-y-3" aria-label="Crew">
+            {/* the newest posts (Feed), then your current ranking in one row */}
+            <SectionErrorBoundary label="Crew feed">
+              <CommunityHomeStrip />
+            </SectionErrorBoundary>
+            <SectionErrorBoundary label="League previews">
+              <HomeLeaguePreviews />
+            </SectionErrorBoundary>
+          </section>
         )}
 
         {/* New-milestone reveals pop here, on the way in */}
         {client?.id && <LevelCelebrations clientId={client.id} />}
-
-        {/* Current Training Block */}
-        {activePhase && (
-          <SectionErrorBoundary label="Training block">
-            <TrainingBlockCard phase={activePhase} />
-          </SectionErrorBoundary>
-        )}
-
-        {client?.id && (
-          <SectionErrorBoundary label="Devices">
-            <WearablesCard mode="summary" />
-          </SectionErrorBoundary>
-        )}
-
-        {/* 7 — Upcoming appointment (compact, only if exists) */}
-        {nextAppointment && <UpcomingAppointmentRow appt={nextAppointment} />}
-
-        {/* 7b — Sessions package summary (only if active package) */}
-        {client?.id && (
-          <SectionErrorBoundary label="Sessions">
-            <SessionsCard clientId={client.id} nextAppointmentAt={nextAppointment?.starts_at ?? null} />
-          </SectionErrorBoundary>
-        )}
-
-        {/* 8 — Events panel (only renders when there's something) */}
-        <DeferRender placeholderHeight="h-24">
-          <SectionErrorBoundary label="Events">
-            <UpcomingEventsPanel audience="client" />
-          </SectionErrorBoundary>
-        </DeferRender>
 
         {/* Setup: install, notifications, calendar. Each one only while it still
             needs doing; nothing once it's done (Account and Schedule keep theirs). */}
@@ -467,7 +453,6 @@ function GreetingHeader({
         <h1 className="truncate text-xl font-black tracking-tight md:text-2xl">
           {greeting()}{firstName ? `, ${firstName}` : ""}
         </h1>
-        <p className="truncate text-xs text-muted-foreground">Here's what to focus on today.</p>
       </div>
       <div className="flex items-center gap-2">
       <Link
@@ -497,23 +482,7 @@ function NoProfileCard() {
   );
 }
 
-function UpcomingAppointmentRow({ appt }: { appt: any }) {
-  const start: Date | null = appt?.starts_at ? new Date(appt.starts_at) : null;
-  if (!start) return null;
-  const when = isToday(start) ? `Today · ${format(start, "h:mma")}`
-    : isTomorrow(start) ? `Tomorrow · ${format(start, "h:mma")}`
-    : format(start, "EEE, MMM d · h:mma");
-  return (
-    <Link to="/portal/calendar" className="block">
-      <div className="flex min-h-[64px] items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 transition active:bg-secondary/30">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border bg-secondary/40">
-          <CalendarIcon className="h-5 w-5 text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold">{appt.title || appt.appointment_type || "Upcoming appointment"}</div>
-          <div className="truncate text-xs text-muted-foreground">{when}</div>
-        </div>
-      </div>
-    </Link>
-  );
+/** A Home section's name: small, quiet, the same everywhere. */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <h2 className="px-1 text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">{children}</h2>;
 }

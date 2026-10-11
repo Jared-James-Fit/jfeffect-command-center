@@ -115,7 +115,7 @@ export function CommunityHomeStrip() {
         </Link>
         <ShareWorkoutButton unit={unit} label="Post" previewOnly={isImpersonating} className="h-8 px-3 text-[12px]" />
       </div>
-      <div className="mt-2.5 flex h-[200px] snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain px-[9%] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mt-2.5 flex h-[180px] snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain px-[9%] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {shown.length === 0 && (
           <div className="flex h-full w-[82%] shrink-0 snap-center snap-always flex-col justify-center rounded-[20px] border border-dashed border-border bg-muted/30 p-4">
             <div className="text-[15px] font-black leading-tight">Be the first to share this week</div>

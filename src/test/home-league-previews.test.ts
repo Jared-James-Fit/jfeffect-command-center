@@ -26,8 +26,10 @@ describe("Home League previews", () => {
   it("the top three, in rank order, qualified only", () => {
     expect(topThree([row(3, 1), row(1, 3), row(null, 9, false, false), row(2, 2), row(4, 0)]).map((r) => r.rank)).toEqual([1, 2, 3]);
     const src = readFileSync("src/components/portal/home-league-previews.tsx", "utf8");
-    expect(src).toContain('const MEDALS = ["🥇", "🥈", "🥉"];');
+    // Home shows one compact ranking row: no podium lists, each half opens its board
+    expect(src).not.toContain("MEDALS");
     expect(src).toContain('<span className="truncate">Hall of Strength</span>');
+    expect(src).toContain('hash="rankings=strength"');
   });
   it("first place has nobody to catch; not qualified shows no rank", () => {
     expect(leaguePreview([row(1, 900, true), row(2, 100)]).gap).toBeNull();

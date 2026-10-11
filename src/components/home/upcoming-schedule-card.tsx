@@ -4,10 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { CalendarDays, ChevronRight, Plus } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { KIND_META, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
-import { isAppointmentItem, selectHomeUpcoming } from "@/lib/home-upcoming";
+import { isAppointmentItem } from "@/lib/home-upcoming";
 import { WeekStrip } from "@/components/calendar/week-strip";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
@@ -41,11 +42,12 @@ function countsOnStrip(item: CalendarItem): boolean {
 const MAX_DAY_ROWS = 4;
 
 /**
- * Client Home schedule: a 7-day strip on top of a short list.
+ * Client Home schedule: a 7-day strip on top of the selected day's list.
  *
- * Today keeps the summary behaviour (today's remaining items, or the next day
- * with something on it when today is clear). Tapping another day shows that
- * day. The full Day / Week / Month calendar stays behind "View calendar".
+ * The list is always the day that's selected (today by default), so the strip
+ * and what's shown under it can never disagree. A clear day offers the next
+ * day with something on it as one tap, which selects that day. The full Day /
+ * Week / Month calendar stays behind "Calendar".
  */
 export function UpcomingScheduleCard({ clientId, links = true }: {
   clientId: string | null | undefined;
@@ -66,7 +68,11 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   const [selected, setSelected] = useState(today);
   const [requesting, setRequesting] = useState(false);
 
-  const summary = useMemo(() => selectHomeUpcoming(items ?? [], { today }), [items, today]);
+  // the next day after the selected one with something on it (for a clear day's "Next up")
+  const nextDay = useMemo(() => {
+    const later = (items ?? []).filter((i) => i.date > selected && countsOnStrip(i)).map((i) => i.date).sort();
+    return later[0] ?? null;
+  }, [items, selected]);
   const countByDay = useMemo(() => {
     const m = new Map<string, number>();
     for (const it of items ?? []) if (countsOnStrip(it)) m.set(it.date, (m.get(it.date) ?? 0) + 1);
@@ -81,10 +87,9 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
         .sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? "")),
     [items, selected],
   );
-  const rows = isToday ? summary.rows : dayItems.slice(0, MAX_DAY_ROWS);
-  const moreCount = isToday ? summary.moreCount : Math.max(0, dayItems.length - MAX_DAY_ROWS);
-  const mode = isToday ? summary.mode : "day";
-  const heading = mode === "next" ? "Next up" : isToday ? "Today" : dayLabel(selected, today);
+  const rows = dayItems.slice(0, MAX_DAY_ROWS);
+  const moreCount = Math.max(0, dayItems.length - MAX_DAY_ROWS);
+  const heading = isToday ? "Today" : dayLabel(selected, today);
 
   return (
     <Card className="space-y-2.5 border-border bg-card p-3.5">
@@ -93,30 +98,35 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
           <CalendarDays className="h-3.5 w-3.5 shrink-0 text-primary" />
           <span className="truncate">{heading}</span>
         </h3>
-        {links && <div className="flex shrink-0 items-center gap-3">
-          {bookable.length > 0 && !pov.viewAsClientId && (
-            bookable.length === 1 ? (
-              <Link
-                to="/book/$slug"
-                params={{ slug: bookable[0].slug }}
-                search={{ name: "", email: "", phone: "", application_id: "", i: "" }}
-                className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary"
-              >
-                <Plus className="h-3.5 w-3.5" /> Book
-              </Link>
-            ) : (
-              <Link to="/portal/calendar" className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary">
-                <Plus className="h-3.5 w-3.5" /> Book
-              </Link>
-            )
-          )}
-          <button
-            type="button"
-            onClick={() => setRequesting(true)}
-            className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary"
-          >
-            <Plus className="h-3.5 w-3.5" /> Request
-          </button>
+        {links && <div className="flex shrink-0 items-center gap-1">
+          {/* one "+" for Book and Request, instead of two links in the header */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" aria-label="Book or request a session" className="grid h-8 w-8 place-items-center rounded-full text-primary active:bg-muted">
+                <Plus className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              {bookable.length > 0 && !pov.viewAsClientId && (
+                <DropdownMenuItem asChild className="min-h-11">
+                  {bookable.length === 1 ? (
+                    <Link
+                      to="/book/$slug"
+                      params={{ slug: bookable[0].slug }}
+                      search={{ name: "", email: "", phone: "", application_id: "", i: "" }}
+                    >
+                      Book a session
+                    </Link>
+                  ) : (
+                    <Link to="/portal/calendar">Book a session</Link>
+                  )}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem className="min-h-11" onSelect={() => setRequesting(true)}>
+                Request a time
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Link
             to="/portal/calendar"
             className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-primary"
@@ -135,16 +145,23 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
       />
 
       {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {isToday ? "Nothing scheduled right now." : `Nothing on ${dayLabel(selected, today)}.`}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-sm text-muted-foreground">
+            {isToday ? "Nothing scheduled today." : `Nothing on ${dayLabel(selected, today)}.`}
+          </p>
+          {nextDay && (
+            <button type="button" onClick={() => setSelected(nextDay)} className="inline-flex shrink-0 items-center gap-0.5 text-[12px] font-bold text-primary">
+              Next: {dayLabel(nextDay, today)} <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       ) : (
         <ul className="space-y-1.5">
           {rows.map((item) => {
             const meta = KIND_META[item.kind];
             const time = timeLabel(item);
             const appointment = isAppointmentItem(item);
-            const when = mode === "next" ? [dayLabel(item.date, today), time].filter(Boolean).join(" · ") : time;
+            const when = time;
             // Sessions open the Schedule, where "Need to change it?" lives.
             const href = !links ? null : item.href ?? (item.kind === "pt_session" ? { to: "/portal/calendar" } : null);
             const row = (

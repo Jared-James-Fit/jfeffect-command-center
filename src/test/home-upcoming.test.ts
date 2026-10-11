@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { selectHomeUpcoming, HOME_MAX_TODAY_ROWS } from "@/lib/home-upcoming";
 
@@ -84,5 +85,20 @@ describe("client home upcoming summary", () => {
     const moved = selectHomeUpcoming([item({ id: "w", date: "2026-08-26" })], { today: TODAY, nowMs: NOW });
     expect(moved.mode).toBe("next");
     expect(moved.rows[0].date).toBe("2026-08-26");
+  });
+});
+
+describe("Home schedule card: the list is always the selected day", () => {
+  const src = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
+  it("shows the selected day's items (today by default), never a different day under today", () => {
+    expect(src).toContain("const rows = dayItems.slice(0, MAX_DAY_ROWS);");
+    expect(src).not.toContain("selectHomeUpcoming(");
+    expect(src).toContain('const heading = isToday ? "Today" : dayLabel(selected, today);');
+  });
+  it("a clear day offers the next day with something on it, and tapping it selects that day", () => {
+    expect(src).toContain("onClick={() => setSelected(nextDay)}");
+  });
+  it("Book and Request share one + button", () => {
+    expect(src).toContain('aria-label="Book or request a session"');
   });
 });
