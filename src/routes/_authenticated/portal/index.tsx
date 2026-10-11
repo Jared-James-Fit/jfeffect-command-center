@@ -1,4 +1,5 @@
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
+import { HomeLeaguePreviews } from "@/components/portal/home-league-previews";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -312,41 +313,8 @@ function PortalHome() {
           </SectionErrorBoundary>
         )}
 
-      {/* 2 — Profile-missing fallback (workouts moved off the dashboard
-            for perf — clients reach training via Quick Actions / nav). */}
-        {clientSettled && !client ? <NoProfileCard /> : null}
-
-        {/* 2a — Mandatory Coaching Agreement. Shown on every visit until signed;
-            hides itself once signed (and in coach "View as client"). */}
-        <SectionErrorBoundary label="Coaching agreement">
-          <AgreementDashboardCard />
-        </SectionErrorBoundary>
-
-        {/* 2b — Non-blocking onboarding checklist (replaces the old hard-lock
-            gates for profile picture / basic info / training schedule / goals). */}
-        {client?.id && portalUserId && (
-          <SectionErrorBoundary label="Setup checklist">
-            <SetupChecklistBanner clientId={client.id} userId={portalUserId ?? ""} />
-          </SectionErrorBoundary>
-        )}
-
-        {/* 2c — One-tap profile question for athletes who haven't answered
-            (the athlete only, never in coach "View as client"). */}
-        {client?.id && (
-          <SectionErrorBoundary label="Sex prompt">
-            <SexPromptCard enabled={role === "client"} />
-          </SectionErrorBoundary>
-        )}
-
-        {/* The crew's week: a shelf of posts, "+ Share" first. */}
-        {client?.id && (
-          <SectionErrorBoundary label="Crew feed">
-            <CommunityHomeStrip />
-          </SectionErrorBoundary>
-        )}
-
-        {/* Body: the daily weigh-in first (most clients log it), then water and
-            progress, one swipe apart. The standings live on the League tab. */}
+        {/* Body, right under the calendar: weigh-in first (most clients log it), then
+            water and progress, one swipe apart. */}
         {client?.id && portalUserId ? (
           <DeferRender placeholderHeight="h-52">
             <SwipeCards
@@ -395,6 +363,46 @@ function PortalHome() {
         ) : clientLoading ? (
           <SectionSkeleton height="h-52" />
         ) : null}
+
+      {/* 2 — Profile-missing fallback (workouts moved off the dashboard
+            for perf — clients reach training via Quick Actions / nav). */}
+        {clientSettled && !client ? <NoProfileCard /> : null}
+
+        {/* 2a — Mandatory Coaching Agreement. Shown on every visit until signed;
+            hides itself once signed (and in coach "View as client"). */}
+        <SectionErrorBoundary label="Coaching agreement">
+          <AgreementDashboardCard />
+        </SectionErrorBoundary>
+
+        {/* 2b — Non-blocking onboarding checklist (replaces the old hard-lock
+            gates for profile picture / basic info / training schedule / goals). */}
+        {client?.id && portalUserId && (
+          <SectionErrorBoundary label="Setup checklist">
+            <SetupChecklistBanner clientId={client.id} userId={portalUserId ?? ""} />
+          </SectionErrorBoundary>
+        )}
+
+        {/* 2c — One-tap profile question for athletes who haven't answered
+            (the athlete only, never in coach "View as client"). */}
+        {client?.id && (
+          <SectionErrorBoundary label="Sex prompt">
+            <SexPromptCard enabled={role === "client"} />
+          </SectionErrorBoundary>
+        )}
+
+        {/* The crew's week: a shelf of posts, "+ Share" first. */}
+        {client?.id && (
+          <SectionErrorBoundary label="Crew feed">
+            <CommunityHomeStrip />
+          </SectionErrorBoundary>
+        )}
+
+        {/* League previews: your month's rank and Hall of Strength spot; tap for the full boards. */}
+        {client?.id && (
+          <SectionErrorBoundary label="League previews">
+            <HomeLeaguePreviews />
+          </SectionErrorBoundary>
+        )}
 
         {/* New-milestone reveals pop here, on the way in */}
         {client?.id && <LevelCelebrations clientId={client.id} />}
