@@ -29,7 +29,9 @@ import {
   meetHistory,
   normalizeMeetRow,
   normalizeAllRow,
+  normalizeRosterRow,
   pickBoard,
+  unrankedFor,
   rankOf,
   totalClub,
   type BoardLift,
@@ -37,6 +39,7 @@ import {
   type BoardSource,
   type Division,
   type StrengthRow,
+  type UnrankedPerson,
 } from "@/lib/strength-board";
 
 const db = supabase as any;
@@ -50,6 +53,20 @@ export function useStrengthBoard() {
       const { data, error } = await db.rpc("get_strength_board_all", viewerId ? { _as_user: viewerId } : {});
       if (error) throw error;
       return ((data ?? []) as any[]).map(normalizeAllRow);
+    },
+  });
+}
+
+/** Everyone in the Hall, ranked or not (every client ever, plus meet athletes). */
+function useStrengthRoster() {
+  const viewerId = usePortalUserId() ?? null;
+  return useQuery({
+    queryKey: ["strength-board", "roster", viewerId],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await db.rpc("get_strength_board_roster", viewerId ? { _as_user: viewerId } : {});
+      if (error) throw error;
+      return ((data ?? []) as any[]).map(normalizeRosterRow);
     },
   });
 }
@@ -441,6 +458,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   const isStaff = useIsStaff();
   const allTime = useStrengthBoard();
   const meets = useMeetBoard();
+  const roster = useStrengthRoster();
   const [source, setSource] = useState<BoardSource>(initialSource);
   const [mode, setMode] = useState<BoardMode>(initialMode);
   const [lift, setLift] = useState<BoardLift>(initialLift);
@@ -459,6 +477,8 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
   // The viewer only pins below the list when they're not already in it.
   const meOnBoard = !!me && top.some((r) => r.key === me.key);
   const history = meetHistory(meets.data ?? []);
+  // the All-time Hall is everyone: whoever isn't on this board is listed under it, with what's missing
+  const unranked = source === "all" && roster.data && !active.isPending ? unrankedFor(roster.data, rows, mode, lift, division) : [];
   const what = lift === "total" ? "squat + bench + deadlift" : LIFT_NAME[lift];
   const pick = <T,>(set: (v: T) => void) => (v: T) => { set(v); setShowAll(false); };
 
@@ -594,6 +614,8 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
         </>
       )}
 
+      {unranked.length > 0 && <NotRankedYet people={unranked} />}
+
       {/* You */}
       {!active.isPending && !meOnBoard && (source === "all"
         ? <YouCard me={me} top={top} mode={mode} lift={lift} division={division} unit={unit} />
@@ -603,7 +625,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
         <summary className="cursor-pointer font-black">How the board works</summary>
         {source === "all" ? (
           <ul className="mt-2 space-y-1.5 text-muted-foreground">
-            <li><b className="text-foreground">Who's on it:</b> everyone JF Effect has coached. Current clients, former clients (ALUMNI) and athletes who competed with us.</li>
+            <li><b className="text-foreground">Who's on it:</b> everyone JF Effect has coached. Current clients, former clients (ALUMNI) and athletes who competed with us. Anyone without the lifts for a board yet is listed under it in <b className="text-foreground">Not ranked yet</b>, with what's missing.</li>
             <li><b className="text-foreground">Your number:</b> your heaviest lift from either place. <Dumbbell className="inline h-3 w-3" /> = logged in the app, any reps (×3 = a set of 3). <Landmark className="inline h-3 w-3" /> = made at a powerlifting meet.</li>
             <li><b className="text-foreground">What counts in training:</b> barbell squat, bench and deadlift, including paused, tempo, touch-and-go, close-grip, high-bar, sumo and deficit. Not partials (pins, boxes, boards), machines, dumbbells, specialty bars or RDLs.</li>
             <li><b className="text-foreground">Total:</b> in training, your best squat + best bench + best deadlift. At a meet, that day's total. Whichever is higher counts.</li>
@@ -686,6 +708,37 @@ function PodiumSpot({ row, rank, mode, unit, showSource, tier, onOpen }: {
       </div>
       {onOpen && <div className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">Career ›</div>}
     </Tag>
+  );
+}
+
+/** Everyone not on this board yet, folded: who, Alumni, and what would put them on it. */
+function NotRankedYet({ people }: { people: UnrankedPerson[] }) {
+  return (
+    <details className="group overflow-hidden rounded-2xl border bg-card">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-xs font-black [&::-webkit-details-marker]:hidden">
+        <span className="flex-1">Not ranked yet · {people.length}</span>
+        <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
+      </summary>
+      <ul className="divide-y border-t">
+        {people.map((p) => (
+          <li key={p.key} className={cn("flex items-center gap-3 px-3 py-2", p.is_me && "bg-primary/5")}>
+            <span className="w-8 shrink-0 text-center text-sm font-black text-muted-foreground/50">–</span>
+            <Avatar className="h-8 w-8 shrink-0 border border-border opacity-80">
+              {p.avatar_url && <AvatarImage src={p.avatar_url} alt={p.display_name} />}
+              <AvatarFallback className="text-xs font-bold">{p.display_name.slice(0, 1).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-sm font-bold text-foreground/85">{p.display_name}{p.is_me ? " (You)" : ""}</span>
+                {p.is_coach && <CoachTag />}
+              </div>
+              {p.is_alumni && <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Alumni</div>}
+            </div>
+            <span className="max-w-[45%] shrink-0 text-right text-[11px] leading-snug text-muted-foreground">{p.reason}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
