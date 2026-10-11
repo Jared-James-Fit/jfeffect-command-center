@@ -280,7 +280,9 @@ export function MessagesInbox({
     },
   });
 
-  // Realtime
+  // Realtime. If the channel errors or closes (iPhone network switches,
+  // expired auth), rebuild it instead of silently going deaf.
+  const [channelGen, setChannelGen] = useState(0);
   useEffect(() => {
     let pending: ReturnType<typeof setTimeout> | null = null;
     const pendingKeys = new Set<string>();
@@ -294,6 +296,9 @@ export function MessagesInbox({
         for (const k of keysToFlush) qc.invalidateQueries({ queryKey: [k] });
       }, 75);
     };
+    let closing = false;
+    let rebuild: ReturnType<typeof setTimeout> | null = null;
+    const rejoin = onRealtimeRejoin(() => scheduleInvalidate(INBOX_KEYS));
     const ch = listenChannel("admin-inbox")
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload: any) => {
         // The event already carries the whole row: patch the list now (preview,
@@ -314,11 +319,47 @@ export function MessagesInbox({
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "nf_submissions" }, () => scheduleInvalidate(["message-form-checkin-inbox"]))
       .on("postgres_changes", { event: "*", schema: "public", table: "messenger_checkins" }, () => scheduleInvalidate(["message-form-checkin-inbox"]))
-      .subscribe(onRealtimeRejoin(() => scheduleInvalidate(INBOX_KEYS)));
+      .subscribe((status: string) => {
+        rejoin(status);
+        if (closing || rebuild) return;
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          rebuild = setTimeout(() => {
+            scheduleInvalidate(INBOX_KEYS);
+            setChannelGen((g) => g + 1);
+          }, 2_000);
+        }
+      });
     return () => {
+      closing = true;
       if (pending) clearTimeout(pending);
+      if (rebuild) clearTimeout(rebuild);
       supabase.removeChannel(ch);
     };
+  }, [qc, channelGen]);
+
+  // Watchdog: a socket can look connected but be dead (no error, no events).
+  // While the inbox is on screen, check the newest message and conversation
+  // update every 15s (two 1-row reads) and refresh the list if it's behind.
+  useEffect(() => {
+    let last: string | null = null;
+    const check = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const [m, st] = await Promise.all([
+          (supabase.from("messages") as any).select("id, updated_at").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+          (supabase.from("conversation_state") as any).select("client_id, updated_at").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        const sig = `${m.data?.id}|${m.data?.updated_at}|${st.data?.client_id}|${st.data?.updated_at}`;
+        if (last !== null && sig !== last) {
+          for (const k of INBOX_KEYS) qc.invalidateQueries({ queryKey: [k] });
+          try { if (!supabase.realtime.isConnected()) supabase.realtime.connect(); } catch { /* noop */ }
+        }
+        last = sig;
+      } catch { /* offline: next tick */ }
+    };
+    void check();
+    const id = setInterval(check, 15_000);
+    return () => clearInterval(id);
   }, [qc]);
 
   const lastByClient = useMemo(() => {
