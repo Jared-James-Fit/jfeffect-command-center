@@ -242,7 +242,13 @@ export function WorkoutsExperience({
   // Program roadmap: under the calendar, shared by both tabs. Tapping
   // "Open workouts in Block View" on a block opens it there.
   const { data: visibleBlocks } = useClientVisibleBlocks(clientId);
-  const roadmap = useProgramRoadmap(clientId, visibleBlocks);
+  // Which program the roadmap shows; null = the current one. Viewing another
+  // program is read-only and never touches the schedule.
+  const [roadmapProgramId, setRoadmapProgramId] = useState<string | null>(null);
+  const roadmap = useProgramRoadmap(clientId, visibleBlocks, {
+    programId: roadmapProgramId,
+    ownerName: (client as any)?.full_name ?? (client as any)?.first_name ?? null,
+  });
   const [tab, setTab] = useState<"calendar" | "block">("calendar");
   const [blockViewId, setBlockViewId] = useState<string | null>(null);
 
@@ -635,6 +641,7 @@ export function WorkoutsExperience({
               if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             coach={mode === "coach"}
+            onSelectProgram={setRoadmapProgramId}
           />
         )}
 

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Check, ChevronDown, ChevronRight, Flag, Pencil, Sparkles } from "lucide-react";
+import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, Pencil, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,8 @@ import { isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 import {
   buildProgramRoadmap,
   type ProgramRoadmap,
+  type ProgramStatus,
+  type ProgramSummary,
   type RoadmapBlockView,
   type RoadmapNoteRow,
   type RoadmapStatus,
@@ -51,7 +53,11 @@ export function useClientVisibleBlocks(clientId: string) {
 }
 
 /** Weeks, roadmap notes and meet dates for a client's blocks → the roadmap. */
-export function useProgramRoadmap(clientId: string, blocks: any[] | undefined) {
+export function useProgramRoadmap(
+  clientId: string,
+  blocks: any[] | undefined,
+  opts: { programId?: string | null; ownerName?: string | null } = {},
+) {
   const primary = useMemo(() => (blocks ?? []).filter((b) => b?.id && !isAtHomeBackupSessionBlock(b)), [blocks]);
   const ids = useMemo(() => primary.map((b) => b.id as string).sort(), [primary]);
   const prepIds = useMemo(() => [...new Set(primary.map((b) => b.prep_id).filter(Boolean))] as string[], [primary]);
@@ -71,7 +77,7 @@ export function useProgramRoadmap(clientId: string, blocks: any[] | undefined) {
           .select("id, block_id, week_id, ai_label, ai_summary, ai_style, coach_label, coach_summary, hidden, generated_at, edited_at")
           .in("block_id", ids),
         prepIds.length
-          ? sb.from("pl_preps").select("id, event_name, event_date").in("id", prepIds)
+          ? sb.from("pl_preps").select("id, title, status, archived, event_name, event_date").in("id", prepIds)
           : Promise.resolve({ data: [] }),
       ]);
       return {
@@ -91,8 +97,10 @@ export function useProgramRoadmap(clientId: string, blocks: any[] | undefined) {
       notes: data?.notes ?? [],
       preps: data?.preps ?? [],
       today: todayLocalISO(),
+      programId: opts.programId,
+      ownerName: opts.ownerName,
     });
-  }, [primary, data]);
+  }, [primary, data, opts.programId, opts.ownerName]);
 }
 
 const fmt = (iso: string | null, f = "MMM d") => {
@@ -122,18 +130,26 @@ export function ProgramRoadmapCard({
   selectedBlockId,
   onSelectBlock,
   coach = false,
+  onSelectProgram,
 }: {
   roadmap: ProgramRoadmap | null;
+  /** Look at another program (read-only: nothing about the schedule changes). null = back to the current one. */
+  onSelectProgram?: (programId: string | null) => void;
   selectedBlockId?: string | null;
   /** Opens a block in Block View. */
   onSelectBlock?: (blockId: string) => void;
   /** Coach viewing an athlete: shows where to edit the words. */
   coach?: boolean;
 }) {
-  const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [openBlock, setOpenBlock] = useState<string | null>(null);
   if (!roadmap || !roadmap.blocks.length) return null;
   const { blocks, programWeek, totalWeeks, meet } = roadmap;
+  // Another program than today's: a read-only look back (or ahead).
+  const browsing = roadmap.program.id !== roadmap.defaultProgramId;
+  // A finished program has no "this week" card, so its roadmap is the content.
+  const showAll = expanded || roadmap.program.status === "completed";
+  const setShowAll = (fn: (v: boolean) => boolean) => setExpanded(fn);
   const current = blocks.find((b) => b.id === roadmap.currentBlockId) ?? null;
   const currentIdx = current ? blocks.indexOf(current) : -1;
   const thisWeek = current?.weeks.find((w) => w.status === "current") ?? null;
@@ -156,12 +172,30 @@ export function ProgramRoadmapCard({
 
   return (
     <Card className="overflow-hidden p-0" aria-label="Your training program">
+      {roadmap.programs.length > 1 && onSelectProgram && (
+        <ProgramSelector
+          programs={roadmap.programs}
+          selectedId={roadmap.program.id}
+          defaultId={roadmap.defaultProgramId}
+          onSelect={(id) => {
+            setExpanded(false);
+            setOpenBlock(null);
+            onSelectProgram(id === roadmap.defaultProgramId ? null : id);
+          }}
+        />
+      )}
+
       {/* Header: where you are in the whole program. */}
       <div className="space-y-2.5 p-3.5 sm:p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Your program</div>
+            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              {browsing ? (roadmap.program.status === "completed" ? "Past program" : "Program") : "Your program"}
+            </div>
             <div className="mt-0.5 text-lg font-black leading-tight tabular-nums">{headline}</div>
+            {roadmap.program.title && (roadmap.programs.length <= 1 || !onSelectProgram) && (
+              <div className="truncate text-[11px] text-muted-foreground">{roadmap.program.title}</div>
+            )}
           </div>
           {meet ? (
             <div className="shrink-0 text-right">
@@ -172,6 +206,8 @@ export function ProgramRoadmapCard({
             </div>
           ) : roadmap.end && !allDone ? (
             <div className="shrink-0 pt-1 text-[11px] text-muted-foreground">Ends {fmt(roadmap.end)}</div>
+          ) : allDone && roadmap.start ? (
+            <div className="shrink-0 pt-1 text-right text-[11px] text-muted-foreground">{rangeLabel(roadmap.start, roadmap.end)}</div>
           ) : null}
         </div>
 
@@ -228,8 +264,8 @@ export function ProgramRoadmapCard({
         )}
       </div>
 
-      {/* Roadmap: every block in order. Collapsed by default. */}
-      {blocks.length > 1 && (
+      {/* Roadmap: every block in order. Collapsed by default; always open for a finished program. */}
+      {blocks.length > 1 && roadmap.program.status !== "completed" && (
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
@@ -255,6 +291,25 @@ export function ProgramRoadmapCard({
             />
           ))}
         </ol>
+      )}
+
+      {browsing && onSelectProgram && (
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3.5 py-2 text-[11px] text-muted-foreground sm:px-4">
+          <span className="inline-flex items-center gap-1">
+            <Eye className="h-3 w-3" /> Viewing only. Your current program and schedule are unchanged.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setExpanded(false);
+              setOpenBlock(null);
+              onSelectProgram(null);
+            }}
+            className="shrink-0 font-bold text-primary"
+          >
+            Back to current
+          </button>
+        </div>
       )}
 
       {coach && (
@@ -385,5 +440,90 @@ function RoadmapStep({
         )}
       </div>
     </li>
+  );
+}
+
+const PROGRAM_STATUS: Record<ProgramStatus, { text: string; tone: string }> = {
+  active: { text: "Active", tone: "bg-primary/15 text-primary" },
+  upcoming: { text: "Upcoming", tone: "bg-secondary text-muted-foreground" },
+  completed: { text: "Completed", tone: "bg-secondary text-muted-foreground" },
+};
+
+function programName(p: ProgramSummary): string {
+  return p.title ?? (p.start ? `Program from ${fmt(p.start, "MMM yyyy")}` : "Program");
+}
+
+/**
+ * Which program the card shows. A compact row that opens a list; picking one
+ * only changes what this card shows.
+ */
+function ProgramSelector({
+  programs, selectedId, defaultId, onSelect,
+}: {
+  programs: ProgramSummary[];
+  selectedId: string;
+  defaultId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = programs.find((p) => p.id === selectedId) ?? programs[0];
+  return (
+    <div className="border-b border-border/60">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="Choose a program"
+        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition hover:bg-secondary/40 sm:px-4"
+      >
+        <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{programName(selected)}</span>
+        <span className={cn("shrink-0 rounded px-1.5 text-[9px] font-black uppercase leading-4 tracking-wider", PROGRAM_STATUS[selected.status].tone)}>
+          {PROGRAM_STATUS[selected.status].text}
+        </span>
+        <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">{programs.length} programs</span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <ul className="space-y-0.5 px-2 pb-2" role="listbox" aria-label="Programs">
+          {programs.map((p) => {
+            const isSel = p.id === selectedId;
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSel}
+                  onClick={() => {
+                    setOpen(false);
+                    onSelect(p.id);
+                  }}
+                  className={cn(
+                    "flex min-h-[44px] w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-secondary/50",
+                    isSel && "bg-secondary/70",
+                  )}
+                >
+                  {p.status === "completed" ? (
+                    <Archive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <span className={cn("h-2 w-2 shrink-0 rounded-full", p.status === "active" ? "bg-primary" : "bg-muted-foreground/40")} />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className={cn("block truncate text-[13px] font-semibold", p.status === "completed" && "text-foreground/75")}>
+                      {programName(p)}
+                    </span>
+                    <span className="block truncate text-[11px] text-muted-foreground tabular-nums">
+                      {p.blockCount} block{p.blockCount === 1 ? "" : "s"} · {p.totalWeeks} weeks
+                      {p.start ? ` · ${rangeLabel(p.start, p.end)}` : ""}
+                      {p.id === defaultId ? " · current" : ""}
+                    </span>
+                  </span>
+                  {isSel && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }

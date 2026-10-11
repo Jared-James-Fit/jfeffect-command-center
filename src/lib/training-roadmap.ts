@@ -429,7 +429,27 @@ export type RoadmapBlockView = {
   byCoach: boolean;
 };
 
+export type ProgramStatus = "active" | "upcoming" | "completed";
+
+/** One program (a pl_preps record, or a run of blocks with no program record). */
+export type ProgramSummary = {
+  id: string;
+  title: string | null;
+  status: ProgramStatus;
+  start: string | null;
+  end: string | null;
+  blockCount: number;
+  totalWeeks: number;
+};
+
 export type ProgramRoadmap = {
+  /** Every program, newest first; the selector lists these. */
+  programs: ProgramSummary[];
+  /** The program shown: the one asked for, else the current one. */
+  program: ProgramSummary;
+  /** The program today belongs to (what the selector defaults to). */
+  defaultProgramId: string;
+  /** Blocks of the shown program only, numbered from 1. */
   blocks: RoadmapBlockView[];
   /** Every live block's view by id, including ones from other programs (Block View's picker shows them all). */
   byBlock: Record<string, RoadmapBlockView>;
@@ -464,9 +484,16 @@ type RWeek = {
   end_date?: string | null;
   manually_completed?: boolean | null;
 };
-type RPrep = { id: string; event_name?: string | null; event_date?: string | null };
+type RPrep = {
+  id: string;
+  title?: string | null;
+  status?: string | null;
+  archived?: boolean | null;
+  event_name?: string | null;
+  event_date?: string | null;
+};
 
-/** Blocks more than this many days apart are separate programs. */
+/** Blocks with no program record that are more than this many days apart are separate programs. */
 const PROGRAM_GAP_DAYS = 14;
 
 const dayNum = (iso: string) => Math.round(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / DAY_MS);
@@ -485,9 +512,28 @@ function statusFor(start: string | null, end: string | null, today: string, fall
 }
 
 /**
- * The program around today: the run of blocks with no more than two weeks
- * between them (a prep's blocks always stay together), each with its weeks,
- * statuses and words. `today` is the athlete's local "YYYY-MM-DD".
+ * "Jared McIntyre — 28 Week Off-Season Development" → "28 Week Off-Season
+ * Development": coaches prefix programs with the athlete's name, which the
+ * athlete doesn't need to read on their own page.
+ */
+export function programTitle(title: string | null | undefined, ownerName?: string | null): string | null {
+  const t = clean(title);
+  if (!t) return null;
+  const parts = t.split(/\s+[—–-]\s+/);
+  const first = clean(ownerName)?.split(/\s+/)[0]?.toLowerCase();
+  if (parts.length > 1 && first && parts[0].toLowerCase().startsWith(first)) {
+    return clean(parts.slice(1).join(" — ")) ?? t;
+  }
+  return t;
+}
+
+/**
+ * One program's roadmap. A program is a pl_preps record: its blocks, and only
+ * its blocks, are numbered, counted and dated together, so a finished meet
+ * prep never pads the next program's "Week 3 of 28". Blocks without a program
+ * record are grouped by date among themselves. `programId` picks a program
+ * to look at (read-only); by default it's the one today falls in.
+ * `today` is the athlete's local "YYYY-MM-DD".
  */
 export function buildProgramRoadmap(input: {
   blocks: RBlock[];
@@ -495,7 +541,9 @@ export function buildProgramRoadmap(input: {
   notes: RoadmapNoteRow[];
   preps?: RPrep[];
   today: string;
-}): ProgramRoadmap {
+  programId?: string | null;
+  ownerName?: string | null;
+}): ProgramRoadmap | null {
   const { today } = input;
   const weeksByBlock = new Map<string, RWeek[]>();
   for (const w of input.weeks) {
@@ -553,26 +601,67 @@ export function buildProgramRoadmap(input: {
     };
   });
 
-  // Split into programs.
-  const groups: Array<typeof views> = [];
+  // Split into programs: by program record first; blocks without one are
+  // grouped by date among themselves and never join a recorded program.
+  const prepById = new Map((input.preps ?? []).map((p) => [p.id, p]));
+  const groups = new Map<string, typeof views>();
+  let solo: typeof views | null = null;
   for (const v of views) {
-    const g = groups[groups.length - 1];
-    const prev = g?.[g.length - 1];
-    const samePrep = !!prev && !!v.prep && prev.prep === v.prep;
-    const close =
-      !!prev && (!v.start || !prev.end || dayNum(v.start) - dayNum(prev.end) <= PROGRAM_GAP_DAYS);
-    if (g && (samePrep || close)) g.push(v);
-    else groups.push([v]);
+    if (v.prep) {
+      const key = `prep:${v.prep}`;
+      groups.set(key, [...(groups.get(key) ?? []), v]);
+      continue;
+    }
+    const prev = solo?.[solo.length - 1];
+    const close = !!prev && (!v.start || !prev.end || dayNum(v.start) - dayNum(prev.end) <= PROGRAM_GAP_DAYS);
+    if (solo && close) solo.push(v);
+    else {
+      solo = [v];
+      groups.set(`blocks:${v.id}`, solo);
+    }
   }
+  if (!groups.size) return null;
 
-  const pick =
-    groups.find((g) => g.some((b) => b.status === "current")) ??
-    groups.find((g) => g.some((b) => b.status === "upcoming")) ??
-    groups[groups.length - 1] ??
-    [];
+  const summaries: ProgramSummary[] = [...groups.entries()].map(([id, bs]) => {
+    const prep = id.startsWith("prep:") ? prepById.get(id.slice(5)) : undefined;
+    const stored = String(prep?.status ?? "").toLowerCase();
+    const allDone = bs.every((b) => b.status === "completed");
+    const status: ProgramStatus =
+      allDone || stored === "completed" || stored === "archived" || prep?.archived
+        ? "completed"
+        : bs.some((b) => b.status === "current")
+          ? "active"
+          : bs.every((b) => b.status === "upcoming")
+            ? "upcoming"
+            : "active";
+    return {
+      id,
+      title: programTitle(prep?.title, input.ownerName),
+      status,
+      start: bs.find((b) => b.start)?.start ?? null,
+      end: [...bs].reverse().find((b) => b.end)?.end ?? null,
+      blockCount: bs.length,
+      totalWeeks: bs.reduce((a, b) => a + b.weekCount, 0),
+    };
+  });
+  const byStart = (a: ProgramSummary, b: ProgramSummary) => String(a.start ?? "9999").localeCompare(String(b.start ?? "9999"));
+  const pickDefault =
+    summaries.find((p) => p.status === "active" && groups.get(p.id)!.some((b) => b.status === "current")) ??
+    summaries.filter((p) => p.status === "active").sort(byStart)[0] ??
+    summaries.filter((p) => p.status === "upcoming").sort(byStart)[0] ??
+    summaries.slice().sort(byStart)[summaries.length - 1];
+  const program = summaries.find((p) => p.id === input.programId) ?? pickDefault;
+  const pick = groups.get(program.id) ?? [];
+  // Newest first; the current program leads.
+  const programs = summaries
+    .slice()
+    .sort((a, b) => (a.id === pickDefault.id ? -1 : b.id === pickDefault.id ? 1 : byStart(b, a)));
 
   const blocks: RoadmapBlockView[] = pick.map(({ prep: _prep, ...rest }) => rest);
-  const current = blocks.find((b) => b.status === "current") ?? blocks.find((b) => b.status === "upcoming") ?? null;
+  const current =
+    program.status === "completed"
+      ? null
+      : blocks.find((b) => b.status === "current") ?? blocks.find((b) => b.status === "upcoming") ?? null;
 
   let programWeek: number | null = null;
   let counted = 0;
@@ -584,28 +673,26 @@ export function buildProgramRoadmap(input: {
     }
     counted += b.weekCount;
   }
-  const totalWeeks = blocks.reduce((a, b) => a + b.weekCount, 0);
+  const totalWeeks = program.totalWeeks;
 
-  const preps = new Map((input.preps ?? []).map((p) => [p.id, p]));
-  const meets = pick
-    .map((b) => (b.prep ? preps.get(b.prep) : undefined))
-    .filter((p): p is RPrep => !!p?.event_date && p.event_date.slice(0, 10) >= today)
-    .sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)));
-  const m = meets[0];
+  const prepId = program.id.startsWith("prep:") ? program.id.slice(5) : null;
+  const m = prepId ? prepById.get(prepId) : undefined;
+  const meetDate = m?.event_date && m.event_date.slice(0, 10) >= today ? m.event_date.slice(0, 10) : null;
 
   const byBlock: Record<string, RoadmapBlockView> = {};
   for (const { prep: _prep, ...rest } of views) byBlock[rest.id] = rest;
 
   return {
+    programs,
+    program,
+    defaultProgramId: pickDefault.id,
     blocks,
     byBlock,
     currentBlockId: current?.id ?? null,
     programWeek,
     totalWeeks,
-    start: blocks.find((b) => b.start)?.start ?? null,
-    end: [...blocks].reverse().find((b) => b.end)?.end ?? null,
-    meet: m?.event_date
-      ? { name: clean(m.event_name), date: m.event_date.slice(0, 10), daysOut: dayNum(m.event_date) - dayNum(today) }
-      : null,
+    start: program.start,
+    end: program.end,
+    meet: meetDate ? { name: clean(m?.event_name), date: meetDate, daysOut: dayNum(meetDate) - dayNum(today) } : null,
   };
 }

@@ -102,7 +102,7 @@ describe("program roadmap", () => {
       ],
       preps: [{ id: "p", event_name: "Nationals", event_date: "2026-03-14" }],
       today: "2026-02-10",
-    });
+    })!;
     expect(r.blocks.map((b) => b.id)).toEqual(["a", "b", "c"]);
     expect(r.blocks.map((b) => b.status)).toEqual(["completed", "current", "upcoming"]);
     expect(r.currentBlockId).toBe("b");
@@ -117,10 +117,66 @@ describe("program roadmap", () => {
   });
 
   it("between programs, shows the next one that hasn't started", () => {
-    const r = buildProgramRoadmap({ blocks, weeks, notes: [], today: "2025-12-20" });
+    const r = buildProgramRoadmap({ blocks, weeks, notes: [], today: "2025-12-20" })!;
     expect(r.blocks.map((b) => b.id)).toEqual(["a", "b", "c"]);
     expect(r.programWeek).toBeNull();
     expect(r.currentBlockId).toBe("a");
+  });
+});
+
+describe("one program at a time", () => {
+  // A finished meet prep ending a week before the new off-season program:
+  // close in dates, but two programs.
+  const blocks = [
+    { id: "m1", name: "Block 1 — Accumulation", start_date: "2026-06-15", end_date: "2026-07-05", weeks: 3, prep_id: "meet", status: "Completed" },
+    { id: "m2", name: "Block 2 — Peak", start_date: "2026-07-06", end_date: "2026-09-20", weeks: 11, prep_id: "meet", status: "Completed" },
+    { id: "o1", name: "Block 1 — Volume 5s/7s", start_date: "2026-09-27", end_date: "2026-10-31", weeks: 5, prep_id: "off", status: "Active" },
+    { id: "o2", name: "Block 2 — Volume 4s/6s", start_date: "2026-11-01", end_date: "2026-12-05", weeks: 5, prep_id: "off", status: "Draft" },
+  ];
+  const weeks = blocks.flatMap((b) => Array.from({ length: b.weeks }, (_, i) => ({ id: `${b.id}w${i + 1}`, block_id: b.id, week_index: i + 1 })));
+  const preps = [
+    { id: "meet", title: "Jared McIntyre (M 66kg) — NAPF/CPF Dual Meet Prep", status: "Completed", event_name: "Commonwealths", event_date: "2026-09-19" },
+    { id: "off", title: "Jared McIntyre — 28 Week Off-Season Development", status: "Active" },
+  ];
+  const base = { blocks, weeks, notes: [], preps, today: "2026-10-08", ownerName: "Jared McIntyre" };
+
+  it("counts, numbers and dates only the current program's blocks", () => {
+    const r = buildProgramRoadmap(base)!;
+    expect(r.program).toMatchObject({ id: "prep:off", title: "28 Week Off-Season Development", status: "active" });
+    expect(r.blocks.map((b) => b.id)).toEqual(["o1", "o2"]);
+    expect(r.totalWeeks).toBe(10);
+    expect(r.programWeek).toBe(2);
+    expect(r.currentBlockId).toBe("o1");
+    expect(r.start).toBe("2026-09-27");
+    expect(r.meet).toBeNull();
+  });
+
+  it("lists every program, current first, active vs completed", () => {
+    const r = buildProgramRoadmap(base)!;
+    expect(r.programs.map((p) => [p.id, p.status, p.blockCount, p.totalWeeks])).toEqual([
+      ["prep:off", "active", 2, 10],
+      ["prep:meet", "completed", 2, 14],
+    ]);
+    expect(r.defaultProgramId).toBe("prep:off");
+  });
+
+  it("shows a past program read-only with its own blocks and dates, no current week", () => {
+    const r = buildProgramRoadmap({ ...base, programId: "prep:meet" })!;
+    expect(r.program).toMatchObject({ title: "NAPF/CPF Dual Meet Prep", status: "completed" });
+    expect(r.blocks.map((b) => b.id)).toEqual(["m1", "m2"]);
+    expect(r.blocks.every((b) => b.status === "completed")).toBe(true);
+    expect(r.currentBlockId).toBeNull();
+    expect(r.programWeek).toBeNull();
+    expect(r.defaultProgramId).toBe("prep:off");
+    // An id that no longer exists falls back to the current program.
+    expect(buildProgramRoadmap({ ...base, programId: "prep:gone" })!.program.id).toBe("prep:off");
+  });
+
+  it("blocks without a program record never join a recorded program", () => {
+    const loose = [{ id: "x", name: "Extra", start_date: "2026-09-21", end_date: "2026-09-26", weeks: 1 }];
+    const r = buildProgramRoadmap({ ...base, blocks: [...blocks, ...loose], weeks: [...weeks, { id: "xw1", block_id: "x", week_index: 1 }] })!;
+    expect(r.blocks.map((b) => b.id)).toEqual(["o1", "o2"]);
+    expect(r.programs.map((p) => p.id)).toContain("blocks:x");
   });
 });
 
