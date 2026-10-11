@@ -149,8 +149,17 @@ describe("messenger stays current after the app resumes", () => {
     const groupPane = readFileSync("src/components/group-chats-pane.tsx", "utf8");
     for (const src of [messagesRoute, thread, groupThread, groupPane]) {
       expect(src).toContain("useResyncOnResume(");
-      expect(src).toContain(".subscribe(onRealtimeRejoin(");
+      expect(src).toContain("onRealtimeRejoin(");
     }
+  });
+
+  it("inbox list heals a dead or errored live channel instead of going quiet", () => {
+    // Errored/closed channel: rebuilt and resynced.
+    expect(messagesRoute).toContain('status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"');
+    expect(messagesRoute).toContain("setChannelGen((g) => g + 1);");
+    // Silent dead socket: a 1-row check every 15s refreshes the list when it's behind.
+    expect(messagesRoute).toContain("const id = setInterval(check, 15_000);");
+    expect(messagesRoute).toContain('if (document.visibilityState !== "visible") return;');
   });
 
   it("re-checks lists on open instead of trusting a cache realtime wasn't updating", () => {
