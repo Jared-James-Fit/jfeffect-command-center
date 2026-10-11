@@ -69,7 +69,7 @@ import {
 } from "@/lib/workout-unit-persistence";
 import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
-import { writePlanCache, cachedInitialData } from "@/lib/workout-plan-cache";
+import { writePlanCache, cachedInitialData, cachedUpdatedAt } from "@/lib/workout-plan-cache";
 import { WarmupRows, useWarmupSets } from "@/components/workout-day/final-warmup-input";
 import { LoadSuggestionCard, LoadSuggestionsToggle } from "@/components/workout-day/load-suggestion-card";
 import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
@@ -550,6 +550,7 @@ function WorkoutDay({
   const { data: day } = useQuery({
     queryKey: ["pl-day", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     initialData: cachedInitialData<any>(cacheScope, "day"),
+    initialDataUpdatedAt: () => cachedUpdatedAt(cacheScope, "day"),
     // Days don't mutate while a workout is open. Treat as fresh for the
     // whole session so remounts (tab toggles, back nav) are instant.
     staleTime: 5 * 60_000,
@@ -599,6 +600,9 @@ function WorkoutDay({
   const scheduledWorkoutId = adapter?.kind === "client"
     ? adapter.ref.scheduledWorkoutId ?? (search as any)?.instance ?? null
     : null;
+  const instanceCacheKey = scheduledWorkoutId ?? "legacy";
+  const resultsCacheKey = (clientId: string) => `results:${clientId}:${instanceCacheKey}`;
+  const completionCacheKey = (clientId: string) => `completion:${clientId}:${instanceCacheKey}`;
 
   // Canonical schedule instance (pl_scheduled_workouts) owns WHEN this
   // workout happens. When the logger was opened from a calendar instance,
@@ -646,6 +650,7 @@ function WorkoutDay({
   } = useQuery({
     queryKey: ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
     initialData: cachedInitialData<any[]>(cacheScope, "rows"),
+    initialDataUpdatedAt: () => cachedUpdatedAt(cacheScope, "rows"),
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,
     // Never run the exercise-rows read before Supabase has a session —
@@ -795,7 +800,10 @@ function WorkoutDay({
   const { data: results = [] } = useQuery({
     queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId],
     enabled: !!client?.id && (rows as any[]).length > 0,
-    initialData: client?.id ? cachedInitialData<any[]>(cacheScope, `results:${client.id}`) : undefined,
+    // Logged sets belong to one scheduled instance: never show another
+    // instance's (or an older visit's) sets as this one's.
+    initialData: client?.id ? cachedInitialData<any[]>(cacheScope, resultsCacheKey(client.id)) : undefined,
+    initialDataUpdatedAt: () => (client?.id ? cachedUpdatedAt(cacheScope, resultsCacheKey(client.id)) : undefined),
     staleTime: 2 * 60_000,
     gcTime: 10 * 60_000,
     // Override global refetchOnWindowFocus:false — when the user switches from
@@ -807,7 +815,7 @@ function WorkoutDay({
       const r = adapter
         ? await adapter.listRowResultsRaw(dayId, rowIds)
         : (await sb.from("pl_row_results").select("*").in("row_id", rowIds).eq("client_id", client!.id)).data ?? [];
-      writePlanCache(cacheScope, `results:${client!.id}`, r);
+      writePlanCache(cacheScope, resultsCacheKey(client!.id), r);
       return r;
     },
   });
@@ -1193,12 +1201,13 @@ function WorkoutDay({
     // Completion state is critical — always fetch fresh to prevent stuck UI states
     // where the workout appears both completed and incomplete simultaneously.
     staleTime: 0,
-    initialData: client?.id ? cachedInitialData<any>(cacheScope, `completion:${client.id}`) : undefined,
+    initialData: client?.id ? cachedInitialData<any>(cacheScope, completionCacheKey(client.id)) : undefined,
+    initialDataUpdatedAt: () => (client?.id ? cachedUpdatedAt(cacheScope, completionCacheKey(client.id)) : undefined),
     queryFn: async () => {
       const c = adapter
         ? await adapter.getDayCompletionRaw(dayId)
         : (await sb.from("pl_day_completions").select("*").eq("day_id", dayId).eq("client_id", client!.id).maybeSingle()).data;
-      writePlanCache(cacheScope, `completion:${client!.id}`, c);
+      writePlanCache(cacheScope, completionCacheKey(client!.id), c);
       return c;
     },
   });

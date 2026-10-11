@@ -68,6 +68,24 @@ function pruneIfNeeded() {
  * Read-through helper for TanStack Query: returns cached data as `initialData`
  * so the page renders instantly offline; the live `queryFn` then refreshes it.
  */
+/**
+ * When the cached copy was written (ms), for React Query's
+ * `initialDataUpdatedAt`. Without it a cached copy counts as fetched "now",
+ * so a stale copy from days ago is shown as fresh and never refetched until
+ * staleTime passes (sets logged on another device looked missing).
+ */
+export function cachedUpdatedAt(scope: string, key: string): number | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = window.localStorage.getItem(safeKey(scope, key));
+    if (!raw) return undefined;
+    const t = (JSON.parse(raw) as Entry<unknown>).t;
+    return typeof t === "number" ? t : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function cachedInitialData<T>(scope: string, key: string): T | undefined {
   const v = readPlanCache<T>(scope, key);
   return v ?? undefined;
