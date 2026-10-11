@@ -20,6 +20,8 @@ import {
   type RoadmapReply,
 } from "@/lib/training-roadmap";
 
+import { isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
+
 type Admin = any;
 
 /** Give a coach mid-edit time to finish before re-reading the block. */
@@ -36,7 +38,7 @@ async function loadBlock(admin: Admin, blockId: string) {
   const block = must<any>(
     await admin
       .from("pl_blocks")
-      .select("id, client_id, name, goal, training_focus, start_date, end_date, weeks, week_duration_days, prep_id, status, archived, client_visible, sort_order, created_at")
+      .select("id, client_id, name, goal, training_focus, start_date, end_date, weeks, week_duration_days, prep_id, status, archived, client_visible, sort_order, created_at, source_template_block_key")
       .eq("id", blockId)
       .maybeSingle(),
     "block",
@@ -189,6 +191,8 @@ export type RoadmapResult = { blockId: string; outcome: "written" | "reused" | "
 export async function refreshBlockRoadmap(admin: Admin, blockId: string, opts: { force?: boolean } = {}): Promise<RoadmapResult> {
   const loaded = await loadBlock(admin, blockId);
   if (!loaded || loaded.block.archived || loaded.block.status === "Archived") return { blockId, outcome: "gone" };
+  // At-home backup sessions aren't part of the program roadmap.
+  if (isAtHomeBackupSessionBlock(loaded.block)) return { blockId, outcome: "empty" };
   const { block, weeks, digest } = loaded;
 
   const { data: existing } = await admin

@@ -144,3 +144,12 @@ describe("roadmap wiring", () => {
     expect(server).not.toMatch(/from\("pl_(blocks|weeks|days|exercise_rows)"\)\s*\.(update|insert|delete|upsert)/);
   });
 });
+
+describe("Cleo's wording rules", () => {
+  it("speaks in prescriptions, not week totals, and backup blocks are skipped", async () => {
+    const { ROADMAP_SYSTEM_PROMPT } = await import("@/lib/training-roadmap");
+    expect(ROADMAP_SYSTEM_PROMPT).toMatch(/Never quote the week's totals or averages/);
+    const server = readFileSync("src/lib/training-roadmap.server.ts", "utf8");
+    expect(server).toMatch(/isAtHomeBackupSessionBlock\(loaded\.block\)/);
+  });
+});
