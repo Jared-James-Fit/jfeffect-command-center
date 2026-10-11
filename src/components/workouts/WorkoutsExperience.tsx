@@ -239,8 +239,8 @@ export function WorkoutsExperience({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [calView, setCalView] = useState<"week" | "month">("week");
 
-  // Program roadmap: shared by both tabs. Tapping a block on its timeline
-  // opens that block in Block View.
+  // Program roadmap: under the calendar, shared by both tabs. Tapping
+  // "Open workouts in Block View" on a block opens it there.
   const { data: visibleBlocks } = useClientVisibleBlocks(clientId);
   const roadmap = useProgramRoadmap(clientId, visibleBlocks);
   const [tab, setTab] = useState<"calendar" | "block">("calendar");
@@ -531,18 +531,6 @@ export function WorkoutsExperience({
           />
         )}
 
-        {!isLoading && (
-          <ProgramRoadmapCard
-            roadmap={roadmap}
-            selectedBlockId={tab === "block" ? blockViewId ?? roadmap?.currentBlockId ?? null : null}
-            onSelectBlock={(id) => {
-              setBlockViewId(id);
-              setTab("block");
-            }}
-            coach={mode === "coach"}
-          />
-        )}
-
         <Tabs value={tab} onValueChange={(v) => setTab(v as "calendar" | "block")} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
             <TabsTrigger value="calendar" className="gap-1">
@@ -635,6 +623,20 @@ export function WorkoutsExperience({
             )}
           </TabsContent>
         </Tabs>
+
+        {/* The calendar says what to do today; the roadmap says where it's going and why. */}
+        {!isLoading && (
+          <ProgramRoadmapCard
+            roadmap={roadmap}
+            selectedBlockId={tab === "block" ? blockViewId ?? roadmap?.currentBlockId ?? null : null}
+            onSelectBlock={(id) => {
+              setBlockViewId(id);
+              setTab("block");
+              if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            coach={mode === "coach"}
+          />
+        )}
 
         {mode === "self" && (
           // Each section carries its own label, so give them room to breathe.
