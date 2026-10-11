@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Layers, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { featuredLift, formatTopSet, isTrainingNow, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
+import { featuredLift, formatTopSet, isTrainingNow, workoutHeadline, workoutSubtitle, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
 
 // Small on purpose: Home's shelf loads this with the app, the feed card stays in its own chunk.
 
@@ -76,7 +76,9 @@ function WorkoutTile({ stats, unit, pad, bottom, large }: { stats: WorkoutShareS
     <div className={cn("flex h-full w-full flex-col justify-between text-white", pad, bottom, pr ? "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(245,158,11,0.45),#0b0b0e_60%)]" : "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.5),#0b0b0e_60%)]")}>
       {pr ? <span className={cn("w-max rounded-full bg-amber-400 font-black uppercase text-[#2b1700]", large ? "px-2 py-px text-[10px]" : "px-1.5 text-[8px]")}>PR</span> : <span />}
       <div>
-        <div className={cn("font-display line-clamp-2 uppercase leading-[1.02]", large ? "text-[26px]" : "text-[15px]")}>{stats.workout_title}</div>
+        {large && <div className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/55">Workout completed</div>}
+        <div className={cn("font-display line-clamp-2 uppercase leading-[1.02]", large ? "text-[26px]" : "text-[15px]")}>{workoutHeadline(stats)}</div>
+        {large && workoutSubtitle(stats) && <div className="mt-0.5 truncate text-[11px] font-semibold text-white/60">{workoutSubtitle(stats)}</div>}
         {lift && <div className={cn("font-display mt-0.5 uppercase", large ? "text-[19px]" : "text-[13px]", pr ? "text-amber-300" : "text-white/80")}>{formatTopSet(lift.detail, unit)}</div>}
       </div>
     </div>

@@ -50,7 +50,12 @@ export const AUDIENCES: { key: CommunityVisibility; label: string; hint: string 
 export type RecordScope = "atpr" | "program_pr" | "block_pr";
 
 export type WorkoutShareStats = {
+  /** The public session label: "Block 1 · Week 2", else "Friday session". */
   workout_title: string;
+  /** The day's own name, prefix off ("Primary Deadlift"); only when it's plain training language. */
+  workout_name?: string | null;
+  /** The block's focus as a short label ("Hypertrophy", "Volume 5s/7s"). */
+  phase?: string | null;
   completed_at: string;
   duration_min: number | null;
   working_sets: number;
@@ -495,6 +500,30 @@ export function pickCardStats(s: WorkoutShareStats, unit: "kg" | "lb"): CardStat
   if (s.pr_count > 0) out.push({ value: String(s.pr_count), label: s.pr_count === 1 ? "PR" : "PRs" });
   if (!dur && s.tonnage_kg > 0 && out.length < 3) out.push({ value: formatTonnage(s.tonnage_kg, unit), label: "Volume" });
   return out.slice(0, 3);
+}
+
+/** A finished workout's headline: what was trained ("Primary Deadlift"), else the session label. */
+export function workoutHeadline(s: Pick<WorkoutShareStats, "workout_title" | "workout_name">): string {
+  return s.workout_name?.trim() || s.workout_title;
+}
+
+/** Under the headline: block / week and the training phase ("Block 1 · Week 2 · Volume 5s/7s"). */
+export function workoutSubtitle(s: Pick<WorkoutShareStats, "workout_title" | "workout_name" | "phase">): string | null {
+  const parts = [s.workout_name?.trim() && /^Block \d/.test(s.workout_title) ? s.workout_title : null, s.phase?.trim() || null].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * A finished workout's numbers, once each: time, working sets, total volume.
+ * PRs are told by the featured lift, so they aren't repeated here.
+ */
+export function workoutStats(s: WorkoutShareStats, unit: "kg" | "lb"): CardStat[] {
+  const out: CardStat[] = [];
+  const dur = formatWorkoutDuration(s.duration_min);
+  if (dur) out.push({ value: dur, label: "Time" });
+  if (s.working_sets > 0) out.push({ value: String(s.working_sets), label: "Sets" });
+  if (s.tonnage_kg > 0) out.push({ value: formatTonnage(s.tonnage_kg, unit), label: "Volume" });
+  return out;
 }
 
 export const SCOPE_WORD: Record<RecordScope, string> = {

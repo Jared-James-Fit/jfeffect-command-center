@@ -21,6 +21,8 @@ import {
   type CommunityAuthor,
   type CommunityPost,
   type ReactionKey,
+  workoutHeadline,
+  workoutSubtitle,
 } from "@/lib/community";
 import { PostViewsRow, useViewOnOpen } from "@/components/community/post-views";
 import { PostExtras } from "@/components/community/post-attach";
@@ -177,7 +179,12 @@ function Detail({
       )}
       {post.kind !== "note" && <PostExtras post={post} className="px-4 pt-3" />}
 
-      {s && post.media_type && <h2 className="font-display px-4 pt-4 text-[28px] uppercase leading-none">{s.workout_title}</h2>}
+      {s && post.media_type && (
+        <div className="px-4 pt-4">
+          <h2 className="font-display text-[28px] uppercase leading-none">{workoutHeadline(s)}</h2>
+          {workoutSubtitle(s) && <div className="mt-1 text-[12px] font-semibold text-muted-foreground">{workoutSubtitle(s)}</div>}
+        </div>
+      )}
 
       {tiles.length > 0 && (
         <div className="grid grid-cols-3 gap-2 px-4 pt-4">

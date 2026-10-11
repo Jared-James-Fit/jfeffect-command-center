@@ -1362,3 +1362,24 @@ describe("public session titles", () => {
     expect(sql).toContain("AND b2.prep_id IS NOT DISTINCT FROM b.prep_id");
   });
 });
+
+import { workoutHeadline, workoutStats, workoutSubtitle } from "@/lib/community";
+describe("completed workout card", () => {
+  const base = { workout_title: "Block 1 · Week 2", completed_at: "", duration_min: 62, working_sets: 14, tonnage_kg: 9800, top_lift: null, pr_count: 2, prs: [], month_sessions: 9 } as any;
+  it("leads with what was trained, then block / week / phase underneath", () => {
+    expect(workoutHeadline({ ...base, workout_name: "Primary Deadlift" })).toBe("Primary Deadlift");
+    expect(workoutSubtitle({ ...base, workout_name: "Primary Deadlift", phase: "Volume 5s/7s" })).toBe("Block 1 · Week 2 · Volume 5s/7s");
+    // no public day name: the session label stays the headline, never repeated below
+    expect(workoutHeadline(base)).toBe("Block 1 · Week 2");
+    expect(workoutSubtitle(base)).toBeNull();
+  });
+  it("one stats row: time, sets, volume; no PR count or monthly session count repeated", () => {
+    expect(workoutStats(base, "kg").map((s) => s.label)).toEqual(["Time", "Sets", "Volume"]);
+    expect(workoutStats({ ...base, tonnage_kg: 0 }, "kg").map((s) => s.label)).toEqual(["Time", "Sets"]);
+  });
+  it("a day name goes public only in plain training language; the lift the day is named for leads", () => {
+    const sql = readFileSync(new URL("../../supabase/migrations/20261031120000_community_workout_name_phase_featured.sql", import.meta.url), "utf8");
+    expect(sql).toContain("RETURN NULL;  -- a word that isn't plain training language: keep the day's name private");
+    expect(sql).toContain("LIKE '%' || kw || '%' AND lower(pe.exercise_name) LIKE '%' || kw || '%') DESC");
+  });
+});
