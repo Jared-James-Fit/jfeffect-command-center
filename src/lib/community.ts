@@ -1353,9 +1353,15 @@ export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> 
   const midnight = new Date(now);
   midnight.setHours(0, 0, 0, 0);
   const today = pulses.filter((p) => t(p) >= midnight.getTime()).length;
-  const regular = homeCrewPosts(newest.filter((p) => !isPulsePost(p)), now, max);
-  // "N more in the feed": the posts people made that didn't fit
-  return { pulse, today, shown: regular.shown, more: regular.more };
+  // Then the 3 newest recent posts: posts people made first, topped up with other
+  // finished sessions on a quiet day, so the shelf is never a lone card.
+  const since = now - 14 * 86_400_000;
+  const recent = newest.filter((p) => p !== pulse && t(p) > since);
+  const own = recent.filter((p) => !isPulsePost(p));
+  const fill = recent.filter((p) => isPulsePost(p));
+  const shown = [...own, ...fill].slice(0, max);
+  // "N more in the feed": the recent posts that didn't fit
+  return { pulse, today, shown, more: Math.max(0, recent.length - shown.length) };
 }
 
 /** Regular posts Home's Crew feed swipes through after the Crew Pulse. */
