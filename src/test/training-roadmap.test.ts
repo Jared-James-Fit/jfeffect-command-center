@@ -153,3 +153,22 @@ describe("Cleo's wording rules", () => {
     expect(server).toMatch(/isAtHomeBackupSessionBlock\(loaded\.block\)/);
   });
 });
+
+describe("no week totals in athlete text", () => {
+  it("Cleo's digest describes volume change in words, never counts", async () => {
+    const d = digestBlock(block(3));
+    expect(d.text).not.toMatch(/working sets|exercises,|avg/);
+    expect(d.text).toMatch(/Week 1[^\n]*volume first week/);
+    expect(d.text).toMatch(/Week 2[^\n]*volume about 10% more than last week/);
+    expect(d.text).toMatch(/effort RPE 8, 2 RIR/);
+  });
+
+  it("rejects replies that quote totals or averages, keeps real prescriptions", async () => {
+    const { quotesTotals } = await import("@/lib/training-roadmap");
+    expect(quotesTotals("Establish a baseline with 96 working sets at 3 RIR.")).toBe(true);
+    expect(quotesTotals("Effort rises to an average RPE of 8.3.")).toBe(true);
+    expect(quotesTotals("Across all 28 exercises.")).toBe(true);
+    expect(quotesTotals("Top single at RPE 8, then 3 sets of 3 at RPE 7.5.")).toBe(false);
+    expect(quotesTotals("About 40% less volume than last week, sets at 3 to 4 RIR.")).toBe(false);
+  });
+});
