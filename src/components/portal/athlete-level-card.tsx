@@ -49,12 +49,12 @@ function useXpEvents(clientId: string) {
  * (LevelCelebrations). Logging Level points still accrue (DB triggers) and
  * feed the milestones; the level itself isn't shown to clients.
  */
-export function AthleteLevelCard({ clientId, defaultView = null }: {
+export function AthleteLevelCard({ clientId }: {
   clientId: string;
-  defaultView?: null | "rankings";
 }) {
   const { data: events = [] } = useXpEvents(clientId);
-  const [open, setOpen] = useState<null | "rankings">(defaultView);
+  // The sheet holds only an athlete's details or last month's final standings.
+  const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string } | { kind: "previous" }>(null);
   const [selectedLeagueAthlete, setSelectedLeagueAthlete] = useState<string | null>(null);
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
@@ -68,11 +68,11 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
   const leagueMe=leagueRows.find(r=>r.client_id===clientId) ?? leagueRows.find(r=>r.is_me);
   const leagueTop=leagueRows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,3);
 
-  const openRankings = (athlete: string | null = null) => { setSelectedLeagueAthlete(athlete); setOpen("rankings"); };
-  // The race is for the Top 10. The card shows the Top 5 (and you, if you're below it);
-  // View Rankings has everyone.
+  const openAthlete = (athlete: string) => { setSelectedLeagueAthlete(athlete); setSheet({ kind: "athlete", id: athlete }); };
+  const closeSheet = () => { setSheet(null); setSelectedLeagueAthlete(null); };
+  // The race is for the Top 10: the board shows all of it (and you, if you're below it).
   const top10 = leagueRows.filter(r=>r.qualified && r.rank!=null && Number(r.rank)<=10).sort((a,b)=>Number(a.rank)-Number(b.rank));
-  const shownTo = 5;
+  const shownTo = 10;
   const outside = !!leagueMe?.qualified && Number(leagueMe.rank) > shownTo;
   const outsideTen = !!leagueMe?.qualified && Number(leagueMe.rank) > 10;
   const gapToTen = outsideTen && top10.at(-1) ? Math.max(0, leagueScore(top10.at(-1)) - leagueScore(leagueMe)) : 0;
@@ -81,7 +81,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
   // The month's league: where you stand, the podium, the race for the Top 10, last month's recap, full standings.
   const leagueCard = (
     <div className="flex h-full flex-col">
-      <button type="button" onClick={() => openRankings()} className="flex w-full items-start gap-3 px-4 pt-3 text-left active:opacity-70">
+      <div className="flex w-full items-start gap-3 px-4 pt-3 text-left">
         <span className="min-w-0 flex-1">
           <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Performance League · Top 10</span>
           <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">{format(new Date(),"MMMM")} League</span>
@@ -95,12 +95,12 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
             <span className="block text-[11px] font-bold text-muted-foreground">{outsideTen ? `${formatLeaguePoints(gapToTen)} pts to Top 10` : `${formatLeaguePoints(leagueScore(leagueMe))} pts`}</span>
           </span>
         )}
-      </button>
+      </div>
       {!leaguePending && !leagueMe?.qualified && (
-        <button type="button" onClick={() => openRankings()} className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
+        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
           <Scale className="h-4 w-4 text-muted-foreground"/>
           <span className="text-[11px] font-medium">Log bodyweight to enter the league</span>
-        </button>
+        </div>
       )}
       {leagueTop.length > 0 && (
         <div className="mt-2.5 grid grid-cols-3 gap-1.5 px-3">
@@ -108,7 +108,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
             const place=Number(r.rank);
             const medal=place===1?"🥇":place===2?"🥈":"🥉";
             return (
-              <button type="button" key={r.client_id} onClick={() => openRankings(r.client_id)} className="min-w-0 rounded-xl bg-muted/40 px-1.5 py-2 text-center transition-colors active:bg-muted">
+              <button type="button" key={r.client_id} onClick={() => openAthlete(r.client_id)} className="min-w-0 rounded-xl bg-muted/40 px-1.5 py-2 text-center transition-colors active:bg-muted">
                 <div className="text-base leading-none">{medal}</div>
                 <div className="mt-1 truncate text-xs font-semibold">{r.display_name}</div>
                 {r.is_coach && <div className="mt-0.5 flex justify-center"><CoachTag /></div>}
@@ -118,12 +118,12 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
           })}
         </div>
       )}
-      {/* 4th and 5th, then you if you're below them */}
+      {/* 4th to 10th, then you if you're below them */}
       {(top10.length > 3 || outside) && (
         <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
           {[...top10.slice(3, shownTo), ...(outside && leagueMe ? [leagueMe] : [])].map((r) => (
             <li key={r.client_id}>
-              <button type="button" onClick={() => openRankings(r.client_id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
+              <button type="button" onClick={() => openAthlete(r.client_id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
                 <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{r.rank}</span>
                 <span className="min-w-0 flex-1 truncate font-semibold">{r.is_me ? "You" : r.display_name}</span>
                 {r.is_coach && <CoachTag />}
@@ -134,12 +134,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
         </ol>
       )}
       <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
-        <button type="button" onClick={() => openRankings()} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
-          View Rankings{rankedCount > 5 ? ` · ${rankedCount}` : ""} <ChevronRight className="h-4 w-4" />
-        </button>
-        {/* Last month's recap lives in View Rankings (beside last month's standings), and
-            meet records in Strength → View Rankings → Competition. Milestones has no
-            other home, so it stays here. */}
+        {/* Milestones has no other home, so it stays on the board. */}
         <div className="min-w-0 [&>button]:mt-0 [&>button]:rounded-xl [&>button]:border-0 [&>button]:bg-muted/40 [&>button]:px-2.5 [&>button]:py-2"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
       </div>
     </div>
@@ -147,13 +142,26 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
 
   return (
     <>
-      <section data-standing="league" className="overflow-hidden rounded-2xl border bg-card">
-        {leagueCard}
-      </section>
+      <div className="space-y-3">
+        <section data-standing="league" className="overflow-hidden rounded-2xl border bg-card">
+          {leagueCard}
+        </section>
+        <YourMonthDetails onOpenPrevious={() => setSheet({ kind: "previous" })} />
+      </div>
 
-      <Sheet open={open === "rankings"} onOpenChange={(o) => { if (!o) { setOpen(null); setSelectedLeagueAthlete(null); } }}>
-        <SheetContent side="bottom" hideCloseButton={open === "rankings" && !!selectedLeagueAthlete} className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-5 pb-safe-bottom pt-5">
-          {open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} selected={selectedLeagueAthlete} onSelectedChange={setSelectedLeagueAthlete} /> : null}
+      <Sheet open={!!sheet} onOpenChange={(o) => { if (!o) closeSheet(); }}>
+        <SheetContent side="bottom" hideCloseButton={!!selectedLeagueAthlete} className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-5 pb-safe-bottom pt-5">
+          {sheet ? (
+            <RankingsView
+              key={sheet.kind}
+              myStats={stats}
+              myBadgeCount={earned.length}
+              selected={selectedLeagueAthlete}
+              onSelectedChange={setSelectedLeagueAthlete}
+              initialView={sheet.kind === "previous" ? "previous" : "current"}
+              onClose={sheet.kind === "athlete" ? closeSheet : undefined}
+            />
+          ) : null}
         </SheetContent>
       </Sheet>
     </>
@@ -339,26 +347,22 @@ function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague,
     </div>
   );
 }
-function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
-  myStats: BadgeStats;
-  myBadgeCount: number;
-  selected: string | null;
-  onSelectedChange: (id: string | null) => void;
-}) {
-  // "This month" or last month's final standings (with boost awards).
-  const [view, setView] = useState<"current" | "previous">("current");
-  const previousMonth = (() => {
-    const [y, m] = leagueToday().split("-").map(Number);
-    const d = new Date(Date.UTC(y, m - 2, 1));
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
-  })();
+/** The first day of last month (the League's own calendar). */
+function previousLeagueMonth(): string {
+  const [y, m] = leagueToday().split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 2, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/** This month's (or last month's final) League with points by source: one cache for the page and the sheet. */
+function usePerformanceLeague(view: "current" | "previous") {
   const viewerId = usePortalUserId() ?? null;
-  const { data = [], isPending } = useQuery({
+  return useQuery({
     queryKey: ["athlete-rankings-monthly-view", view, viewerId],
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_performance_league", {
-        _month: view === "previous" ? previousMonth : null,
+        _month: view === "previous" ? previousLeagueMonth() : null,
         ...(viewerId ? { _as_user: viewerId } : {}),
       });
       if (error) throw error;
@@ -373,12 +377,90 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
       })) as Array<RankRow & BoostLeagueRow & { strength_score: number }>;
     },
   });
+}
+
+/**
+ * Below the Monthly board, folded: your month (points by source, Coach's Focus,
+ * the Final Week Boost, the gap to the Top 10), last month's recap and final
+ * standings, and how points work. One tap open, nothing to navigate.
+ */
+function YourMonthDetails({ onOpenPrevious }: { onOpenPrevious: () => void }) {
+  const { data = [], isPending } = usePerformanceLeague("current");
+  const me = data.find((r) => r.is_me);
+  const finalWeek = me?.is_final_week ?? isFinalWeek();
+  const boostRows = data.map((r) => ({ ...r, rank: r.rank === 999 ? null : r.rank })) as BoostLeagueRow[];
+  const boostMe = boostRows.find((r) => r.is_me);
+  const tenth = data.filter((r) => r.qualified && r.rank <= 10).sort((a, b) => a.rank - b.rank).at(-1);
+  const gap = me?.qualified && me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
+  const prevName = format(new Date(previousLeagueMonth() + "T12:00:00"), "MMMM");
+  return (
+    <details data-your-month className="group overflow-hidden rounded-2xl border bg-card">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 px-4 text-[13px] font-black [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 truncate">Your month · breakdown, Coach's Focus, recap</span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+      </summary>
+      <div className="space-y-3 border-t px-4 pb-4 pt-3">
+        {isPending ? (
+          <div className="py-4 text-center text-sm text-muted-foreground">Loading…</div>
+        ) : me && !me.qualified ? (
+          <div className="rounded-xl border border-amber-400/50 bg-amber-400/10 p-3">
+            <div className="text-sm font-black">Bodyweight required to rank</div>
+            <div className="mt-1 text-xs leading-relaxed text-muted-foreground">Log a bodyweight in the app to unlock your leaderboard score. Your latest entry is always used.</div>
+          </div>
+        ) : me ? (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+            <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {format(new Date(), "MMMM")}</span><span className="text-lg font-black">#{me.rank}</span></div>
+            <div className="mt-1 text-2xl font-black text-primary">{formatLeaguePoints(me.xp)} <span className="text-sm">pts</span></div>
+            <MonthBreakdown me={me as BoostLeagueRow} />
+            {boostMe && <CoachFocus me={boostMe} className="mt-3" />}
+            {gap > 0 && <div className="mt-3 rounded-xl bg-background/80 px-3 py-2 text-sm font-bold text-primary">{formatLeaguePoints(gap)} pts to crack the Top 10</div>}
+          </div>
+        ) : null}
+        {boostMe?.qualified ? (finalWeek ? <><BoostHero me={boostMe} rows={boostRows} /><ThreatBanner rows={boostRows} me={boostMe} /></> : <BoostTeaser me={boostMe} />) : <BoostTeaser />}
+        <LeagueRecapButton />
+        <button type="button" onClick={onOpenPrevious} className="flex min-h-11 w-full items-center justify-between rounded-xl bg-muted/40 px-3 text-left text-xs font-bold active:bg-muted">
+          {prevName} final standings <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </button>
+        <div className="rounded-xl bg-muted/20 p-3">
+          <div className="text-xs font-black">How points work</div>
+          <ul className="mt-2 space-y-1">
+            {LEAGUE_RULES.map((rule) => (
+              <li key={rule.key} className="flex items-baseline justify-between gap-3 text-xs">
+                <span>{rule.label}{"note" in rule && rule.note ? <span className="text-muted-foreground"> · {rule.note}</span> : null}</span>
+                <span className="shrink-0 font-black text-primary">+{rule.points}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 text-[11px] text-muted-foreground">{LEAGUE_RECORDS_NOTE} Resets on the 1st. Log your bodyweight once to join.</div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+/**
+ * The League in a sheet, now only for two things the page doesn't hold: one
+ * athlete's details (tapped on the board; Back closes) and last month's final
+ * standings.
+ */
+function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange, initialView = "current", onClose }: {
+  myStats: BadgeStats;
+  myBadgeCount: number;
+  selected: string | null;
+  onSelectedChange: (id: string | null) => void;
+  initialView?: "current" | "previous";
+  /** Opened straight on an athlete: their Back closes the sheet instead of showing a list. */
+  onClose?: () => void;
+}) {
+  // "This month" or last month's final standings (with boost awards).
+  const [view] = useState<"current" | "previous">(initialView);
+  const { data = [], isPending } = usePerformanceLeague(view);
   const qualified = data.filter((r) => r.qualified && r.rank <= 10);
   const topPoints = Math.max(0, ...qualified.map((r) => Number(r.total_points ?? 0)));
   const podium = qualified.slice(0, 3);
   const rest = qualified.slice(3);
   const me = data.find((r) => r.is_me);
-  const monthLabelDate = view === "previous" ? new Date(previousMonth + "T12:00:00") : new Date();
+  const monthLabelDate = view === "previous" ? new Date(previousLeagueMonth() + "T12:00:00") : new Date();
   const monthName = format(monthLabelDate, "MMMM");
   const finalWeek = view === "current" && (me?.is_final_week ?? isFinalWeek());
   // Boost rows need the RPC shape; null rank -> skip in threat math.
@@ -399,7 +481,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
         theirRow={boostRows.find((r) => r.client_id === selected)}
         myRow={boostMe}
         live={view === "current" && !boostMe?.month_closed}
-        onBack={() => onSelectedChange(null)}
+        onBack={() => (onClose ? onClose() : onSelectedChange(null))}
       />
     );
   }
@@ -411,14 +493,7 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
         <SheetDescription>{view === "previous" ? "Final results, including Final Week Boost awards." : "Tap anyone to see where their points come from."}</SheetDescription>
       </SheetHeader>
 
-      <div className="grid grid-cols-2 rounded-xl bg-muted/50 p-1 text-xs font-bold">
-        {(["current", "previous"] as const).map((v) => (
-          <button key={v} type="button" onClick={() => setView(v)}
-            className={cn("min-h-9 rounded-lg transition", view === v ? "bg-background shadow-sm" : "text-muted-foreground")}>
-            {v === "current" ? "This month" : format(new Date(previousMonth + "T12:00:00"), "MMMM")}
-          </button>
-        ))}
-      </div>
+      {/* the page is this month; the sheet is last month's final standings, so no month switch here */}
 
       <LeagueRecapButton />
 

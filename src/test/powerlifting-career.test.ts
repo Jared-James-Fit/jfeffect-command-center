@@ -124,8 +124,9 @@ describe("a lifter's career has one Back", () => {
     expect(career).toContain('<div className="h-11" aria-hidden />');
   });
 
-  it("the sheet's Back leaves a career for the board first, then closes the sheet", () => {
-    expect(board).toContain("onOpenChange={(o) => (!o && career ? setCareer(null) : onOpenChange(o))}");
+  it("the sheet's Back leaves a career for the board first (or closes, when the board is already on the page)", () => {
+    expect(board).toContain("onOpenChange={(o) => (!o && career && !careerOnly ? setCareer(null) : onOpenChange(o))}");
+    expect(board).toContain("<HallOfStrengthSheet careerOnly open={!!careerId}");
     expect(board).toContain("<HallOfStrength {...start} career={career} onCareerChange={setCareer} />");
     expect(board).toContain("if (career) return <PowerliftingCareer athleteId={career} />;");
   });

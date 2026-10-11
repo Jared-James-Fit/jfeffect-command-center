@@ -256,30 +256,41 @@ function boardValue(r: StrengthRow, mode: BoardMode, unit: WeightUnit) {
 }
 
 /**
- * Home card, laid out like the Performance League card: your rank top right, a podium
- * for the Top 3, 4th and 5th as slim rows (then you, if you're further down), and Full
- * standings. The board filters sit small above the podium so people come first.
+ * Crew → Rankings → Strength: the whole board on the page. Your rank top right,
+ * the filters small above a podium for the Top 3, 4th to 10th as slim rows (then
+ * you, if you're further down), and "Show all athletes" expanding everyone else
+ * (and who isn't ranked yet) in place. All-time or Competition (sanctioned meets)
+ * like the full board. Tapping a lifter with a career opens it; Back closes.
  */
 export function StrengthBoardSlide() {
-  const [open, setOpen] = useState(false);
-  // Tapping a powerlifter opens their career; anything else opens the standings.
+  // Tapping a powerlifter opens their career (the only sheet left).
   const [careerId, setCareerId] = useState<string | null>(null);
-  const show = (athleteId: string | null = null) => { setCareerId(athleteId); setOpen(true); };
+  const show = (athleteId: string | null = null) => { if (athleteId) setCareerId(athleteId); };
+  const [source, setSource] = useState<BoardSource>("all");
   const [mode, setMode] = useState<BoardMode>("p4p");
   const [lift, setLift] = useState<BoardLift>("total");
   // Men first: the board people look for most; Women and All are one tap away.
   const [division, setDivision] = useState<Division>("male");
-  const { data = [], isPending } = useStrengthBoard();
+  const [showAll, setShowAll] = useState(false);
+  const allTime = useStrengthBoard();
+  const meets = useMeetBoard();
+  const roster = useStrengthRoster();
+  const active = source === "all" ? allTime : meets;
+  const data = active.data ?? [];
+  const isPending = active.isPending;
   const { unit } = useWeightUnit();
-  // The card's Top 5 for the board you pick; Open shows that same board in full.
-  const { top: top5, me, count } = pickBoard(data, mode, lift, division, 5);
+  // The Top 10 for the board you pick, or everyone once "Show all" is open.
+  const { top: top10, me, count } = pickBoard(data, mode, lift, division, showAll ? Infinity : TOP);
   const status = meStatus(me, mode, lift, division);
   const ranked = status.kind === "ranked";
-  const podium = top5.slice(0, 3);
-  const rest = top5.slice(3, 5);
-  const meBelow = ranked && me && status.rank > 5 ? me : null;
+  const podium = top10.slice(0, 3);
+  const rest = top10.slice(3);
+  const meBelow = ranked && me && !top10.some((r) => r.key === me.key) ? me : null;
+  const unranked = showAll && source === "all" && roster.data && !isPending ? unrankedFor(roster.data, data, mode, lift, division) : [];
+  const pick = <T,>(set: (v: T) => void) => (v: T) => { set(v); setShowAll(false); };
   const hint =
-    status.kind === "no-bodyweight" ? "Log your bodyweight to rank pound for pound"
+    source === "meets" ? null
+    : status.kind === "no-bodyweight" ? "Log your bodyweight to rank pound for pound"
     : status.kind === "no-division" ? "Pick Men or Women in your profile to rank here"
     : status.kind === "other-division" ? null
     : status.kind === "ranked" ? null
@@ -291,13 +302,13 @@ export function StrengthBoardSlide() {
     <>
       <div className="flex h-full flex-col">
         {/* Same header as the League: what it is on the left, where you stand on the right */}
-        <button type="button" onClick={() => show()} className="flex w-full items-start gap-3 px-4 pt-3 text-left active:opacity-70">
+        <div className="flex w-full items-start gap-3 px-4 pt-3 text-left">
           <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">All-time strength board</span>
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{source === "all" ? "All-time strength board" : "Competition · sanctioned meets"}</span>
             <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">
               Hall of Strength <Trophy className="h-4 w-4 text-amber-400" />
             </span>
-            <span className="block text-[11px] text-muted-foreground">{count > 0 ? `${count} athletes · gym + meets` : "Every JF Effect athlete · gym + meets"}</span>
+            <span className="block text-[11px] text-muted-foreground">{source === "meets" ? `${count} athletes · meets only` : count > 0 ? `${count} athletes · gym + meets` : "Every JF Effect athlete · gym + meets"}</span>
           </span>
           {!isPending && ranked && me && (
             <span className="shrink-0 text-right">
@@ -306,12 +317,20 @@ export function StrengthBoardSlide() {
               <span className="block text-[11px] font-bold tabular-nums text-muted-foreground">{boardValue(me, mode, unit)}</span>
             </span>
           )}
-        </button>
+        </div>
 
         <div className="mx-3 mt-2 space-y-1">
+          <div className="grid grid-cols-2 rounded-full bg-muted/50 p-0.5 text-[11px] font-bold" role="tablist" aria-label="Lifts from">
+            {([["all", "All-time"], ["meets", "Competition"]] as const).map(([k, label]) => (
+              <button key={k} type="button" role="tab" aria-selected={source === k} onClick={() => pick(setSource)(k)}
+                className={cn("min-h-7 rounded-full transition", source === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="grid grid-cols-2 rounded-full bg-muted/50 p-0.5 text-[11px] font-bold" role="tablist" aria-label="Ranked by">
             {([["p4p", "Pound for pound"], ["absolute", "Heaviest"]] as const).map(([k, label]) => (
-              <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => setMode(k)}
+              <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => pick(setMode)(k)}
                 className={cn("min-h-7 rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
                 {label}
               </button>
@@ -320,7 +339,7 @@ export function StrengthBoardSlide() {
           <div className="flex items-center gap-1">
             <div className="flex flex-[2] gap-0.5" role="tablist" aria-label="Division">
               {([["male", "M"], ["female", "W"], ["all", "All"]] as const).map(([d, label]) => (
-                <button key={d} type="button" role="tab" aria-selected={division === d} aria-label={d === "all" ? "All" : d === "male" ? "Men" : "Women"} onClick={() => setDivision(d)} className={chip(division === d)}>
+                <button key={d} type="button" role="tab" aria-selected={division === d} aria-label={d === "all" ? "All" : d === "male" ? "Men" : "Women"} onClick={() => pick(setDivision)(d)} className={chip(division === d)}>
                   {label}
                 </button>
               ))}
@@ -328,7 +347,7 @@ export function StrengthBoardSlide() {
             <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
             <div className="flex flex-[4] gap-0.5" role="tablist" aria-label="Lift">
               {BOARD_LIFTS.map((l) => (
-                <button key={l.key} type="button" role="tab" aria-selected={lift === l.key} onClick={() => setLift(l.key)} className={chip(lift === l.key)}>
+                <button key={l.key} type="button" role="tab" aria-selected={lift === l.key} onClick={() => pick(setLift)(l.key)} className={chip(lift === l.key)}>
                   {l.label}
                 </button>
               ))}
@@ -337,20 +356,20 @@ export function StrengthBoardSlide() {
         </div>
 
         {hint && !isPending && (
-          <button type="button" onClick={() => show()} className="mx-3 mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
+          <div className="mx-3 mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
             <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-[11px] font-medium">{hint}</span>
-          </button>
+          </div>
         )}
 
         {isPending ? (
           <div className="mx-3 mt-2.5 grid grid-cols-3 gap-1.5">
             {[0, 1, 2].map((i) => <div key={i} className="h-[88px] animate-pulse rounded-xl bg-muted/40" />)}
           </div>
-        ) : top5.length === 0 ? (
-          <button type="button" onClick={() => show()} className="mx-3 mt-2.5 rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
+        ) : top10.length === 0 ? (
+          <div className="mx-3 mt-2.5 rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
             Nobody's on this board yet. Be the first.
-          </button>
+          </div>
         ) : (
           <>
             {/* The podium: Top 3 as tiles, like the League */}
@@ -370,7 +389,7 @@ export function StrengthBoardSlide() {
                 );
               })}
             </div>
-            {/* 4th and 5th, then you if you're below them */}
+            {/* 4th to 10th (everyone, once Show all is open), then you if you're below them */}
             {(rest.length > 0 || meBelow) && (
               <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
                 {[...rest, ...(meBelow ? [meBelow] : [])].map((r) => (
@@ -387,14 +406,17 @@ export function StrengthBoardSlide() {
             )}
           </>
         )}
-        <div className="mt-auto px-3 pb-3 pt-2.5">
-          {/* Same button as the League card: everyone on this board, the board you picked. */}
-          <button type="button" onClick={() => show()} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
-            View Rankings{count > 0 ? ` · ${count}` : ""} <ChevronRight className="h-4 w-4" />
-          </button>
+        <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
+          {/* everyone else on this board (and who isn't ranked yet), opened right here */}
+          {count > TOP && (
+            <button type="button" onClick={() => setShowAll((v) => !v)} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
+              {showAll ? "Show top 10" : `Show all ${count} athletes`}
+            </button>
+          )}
+          {unranked.length > 0 && <NotRankedYet people={unranked} />}
         </div>
       </div>
-      <HallOfStrengthSheet open={open} onOpenChange={setOpen} initialMode={mode} initialLift={lift} initialDivision={division} initialCareer={careerId} />
+      <HallOfStrengthSheet careerOnly open={!!careerId} onOpenChange={(o) => !o && setCareerId(null)} initialSource={source} initialMode={mode} initialLift={lift} initialDivision={division} initialCareer={careerId} />
     </>
   );
 }
@@ -434,14 +456,16 @@ type BoardStart = { initialSource?: BoardSource; initialMode?: BoardMode; initia
  * up), and from the board it closes the sheet. The career has no Back of its
  * own, so the two never stack on each other.
  */
-export function HallOfStrengthSheet({ open, onOpenChange, contentClassName, ...start }: BoardStart & {
+export function HallOfStrengthSheet({ open, onOpenChange, contentClassName, careerOnly = false, ...start }: BoardStart & {
   open: boolean; onOpenChange: (open: boolean) => void; contentClassName?: string;
+  /** Opened on a lifter's career from a board that's already on the page: Back closes. */
+  careerOnly?: boolean;
 }) {
   const [career, setCareer] = useState<string | null>(start.initialCareer ?? null);
   // Each time it opens it starts where the opener says (a lifter's career, or the board).
   useEffect(() => { if (open) setCareer(start.initialCareer ?? null); }, [open, start.initialCareer]);
   return (
-    <Sheet open={open} onOpenChange={(o) => (!o && career ? setCareer(null) : onOpenChange(o))}>
+    <Sheet open={open} onOpenChange={(o) => (!o && career && !careerOnly ? setCareer(null) : onOpenChange(o))}>
       <SheetContent side="bottom" className={cn("max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl pb-safe-bottom", contentClassName)}>
         <HallOfStrength {...start} career={career} onCareerChange={setCareer} />
       </SheetContent>
