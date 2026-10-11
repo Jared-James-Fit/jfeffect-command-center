@@ -14,13 +14,14 @@ import {
   isTrainingNow,
   pickWorkoutWin,
   lockInTimeLabel,
-  pickCardStats,
+  workoutHeadline,
+  workoutStats,
+  workoutSubtitle,
   postSlides,
   postTimeLabel,
   reactionEmoji,
   reactionKinds,
   reactorsLine,
-  sessionLine,
   slideThumbPath,
   type CommunityAuthor,
   type CommunityPost,
@@ -238,7 +239,7 @@ export function PulseHero({ post, stats, unit, onReact }: { post: CommunityPost;
           <style.Icon className="h-4 w-4" />
         </span>
         <span className={cn("truncate text-[10px] font-black uppercase tracking-[0.16em]", style.text)}>{win.label}</span>
-        <span className="ml-auto shrink-0 text-[11px] font-semibold text-white/50">{stats.workout_title}</span>
+        <span className="ml-auto min-w-0 truncate text-[11px] font-semibold text-white/50">{workoutHeadline(stats)}</span>
       </div>
       <div className="font-display mt-3 text-[28px] uppercase leading-[1.02]">{win.headline}</div>
       {win.detail && (
@@ -272,9 +273,9 @@ export function PulseHero({ post, stats, unit, onReact }: { post: CommunityPost;
  */
 export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShareStats; unit: "kg" | "lb"; size?: "feed" | "detail" }) {
   const lift = featuredLift(stats);
-  const nums = pickCardStats(stats, unit);
+  const nums = workoutStats(stats, unit);
   const pr = !!lift?.pr;
-  const session = sessionLine(stats);
+  const subtitle = workoutSubtitle(stats);
   const big = size === "detail";
   return (
     <div
@@ -286,28 +287,33 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
           : "bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.45),rgba(127,29,29,0.14)_45%,#0a0a0d_75%)]",
       )}
     >
-      {pr && lift?.pr ? (
-        <span className="inline-block rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-[#2b1700]">
-          New {SCOPE_WORD[lift.pr]}
-        </span>
-      ) : session ? (
-        <span className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">{session}</span>
-      ) : null}
-      <div className={cn("font-display mt-2 uppercase leading-[0.98]", big ? "text-[40px]" : "text-[30px]")}>{stats.workout_title}</div>
+      <span data-workout-completed className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/55">
+        <CheckCircle2 className="h-3 w-3" /> Workout completed
+      </span>
+      {/* what was trained, then where it sits in the program */}
+      <div className={cn("font-display mt-1.5 uppercase leading-[0.98]", big ? "text-[40px]" : "text-[30px]")}>{workoutHeadline(stats)}</div>
+      {subtitle && <div className="mt-1 truncate text-[12px] font-semibold text-white/60">{subtitle}</div>}
       {lift && (
-        <div className="mt-2.5">
-          <div className="text-[12px] font-semibold text-white/65">{lift.name}</div>
+        <div className="mt-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {pr && lift.pr && (
+              <span className="shrink-0 rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2 py-px text-[9px] font-black uppercase tracking-[0.14em] text-[#2b1700]">
+                New {SCOPE_WORD[lift.pr]}
+              </span>
+            )}
+            <span className="truncate text-[12px] font-semibold text-white/65">{lift.name}</span>
+          </div>
           <div className={cn("font-display uppercase leading-none", big ? "text-[54px]" : "text-[42px]", pr ? "bg-[linear-gradient(90deg,#fde68a,#f59e0b)] bg-clip-text text-transparent" : "")}>
             {formatTopSet(lift.detail, unit)}
           </div>
         </div>
       )}
       {nums.length > 0 && (
-        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/10 pt-3">
+        <div className={cn("mt-4 grid gap-2 border-t border-white/10 pt-3", nums.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
           {nums.map((n) => (
             <div key={n.label} className="min-w-0">
               <div className={cn("font-display truncate uppercase leading-none", big ? "text-[30px]" : "text-[24px]")}>{n.value}</div>
-              <div className="mt-1 truncate text-[9px] font-black uppercase tracking-[0.14em] text-white/55">{shortLabel(n.label)}</div>
+              <div className="mt-1 truncate text-[9px] font-black uppercase tracking-[0.14em] text-white/55">{n.label}</div>
             </div>
           ))}
         </div>
@@ -350,7 +356,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const singleTimer = useRef<number | null>(null);
   const s = post.stats;
   const lift = s ? featuredLift(s) : null;
-  const stats = s ? pickCardStats(s, unit) : [];
+  const stats = s ? workoutStats(s, unit) : [];
   const isNote = post.kind === "note";
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
   const sub = [post.auto && s ? "Finished a session" : null, postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
@@ -422,12 +428,16 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {/* With a photo, the numbers sit under it, Strava style */}
       {post.media_type && s && (
         <button type="button" onClick={() => onOpen(post)} className="block w-full px-3.5 pt-3 text-left">
-          <div className="flex items-center gap-2">
-            <h3 className="font-display min-w-0 flex-1 truncate text-[22px] uppercase leading-none">{s.workout_title}</h3>
+          <span data-workout-completed className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+            <CheckCircle2 className="h-3 w-3" /> Workout completed
+          </span>
+          <div className="mt-1 flex items-center gap-2">
+            <h3 className="font-display min-w-0 flex-1 truncate text-[22px] uppercase leading-none">{workoutHeadline(s)}</h3>
             {lift?.pr && (
               <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-px text-[10px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-300">{SCOPE_WORD[lift.pr]}</span>
             )}
           </div>
+          {workoutSubtitle(s) && <div className="mt-1 truncate text-[12px] font-semibold text-muted-foreground">{workoutSubtitle(s)}</div>}
           <div className="mt-2 grid grid-cols-4 gap-2">
             {lift && (
               <div className="col-span-2 min-w-0">
