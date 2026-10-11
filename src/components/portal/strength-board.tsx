@@ -366,6 +366,10 @@ export function StrengthBoardSlide() {
           <div className="mx-3 mt-2.5 grid grid-cols-3 gap-1.5">
             {[0, 1, 2].map((i) => <div key={i} className="h-[88px] animate-pulse rounded-xl bg-muted/40" />)}
           </div>
+        ) : active.error ? (
+          <div className="mx-3 mt-2.5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-center text-xs text-muted-foreground">
+            The board couldn't load. Pull down to refresh or try again in a minute.
+          </div>
         ) : top10.length === 0 ? (
           <div className="mx-3 mt-2.5 rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">
             Nobody's on this board yet. Be the first.
