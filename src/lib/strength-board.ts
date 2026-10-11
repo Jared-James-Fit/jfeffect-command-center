@@ -254,3 +254,59 @@ export function meetHistory(rows: StrengthRow[]) {
   const firsts = athletes.map((r) => r.meet?.first_meet).filter((d): d is string => !!d).sort();
   return { athletes: athletes.length, meets, since: firsts[0] ? Number(firsts[0].slice(0, 4)) : null };
 }
+
+/** Everyone in the Hall (get_strength_board_roster): every client ever, plus meet athletes. */
+export type RosterPerson = {
+  key: string;
+  display_name: string;
+  avatar_url: string | null;
+  is_me: boolean;
+  is_coach: boolean;
+  is_alumni: boolean;
+  sex: Sex | null;
+};
+
+export function normalizeRosterRow(r: any): RosterPerson {
+  return {
+    key: String(r.person),
+    display_name: r.display_name ?? "Athlete",
+    avatar_url: r.avatar_url ?? null,
+    is_me: !!r.is_me,
+    is_coach: !!r.is_coach,
+    is_alumni: !!r.is_alumni,
+    sex: sexOf(r.sex),
+  };
+}
+
+export type UnrankedPerson = RosterPerson & { reason: string };
+
+const SINGLE_LIFTS: Exclude<BoardLift, "total">[] = ["squat", "bench", "deadlift"];
+
+/**
+ * Everyone not on the board being shown, and what's missing for them: a lift,
+ * a bodyweight, or Men/Women. A Men or Women board lists its own people and
+ * those with no division set (they could be either). Current athletes first,
+ * then alumni; by name within each.
+ */
+export function unrankedFor(roster: RosterPerson[], rows: StrengthRow[], mode: BoardMode, lift: BoardLift, division: Division): UnrankedPerson[] {
+  const ranked = new Set(pickBoard(rows, mode, lift, division, Infinity).top.map((r) => r.key));
+  const byKey = new Map<string, StrengthRow[]>();
+  for (const r of rows) byKey.set(r.key, [...(byKey.get(r.key) ?? []), r]);
+  const out: UnrankedPerson[] = [];
+  for (const p of roster) {
+    if (ranked.has(p.key)) continue;
+    if (division !== "all" && p.sex && p.sex !== division) continue;
+    const mine = byKey.get(p.key) ?? [];
+    const has = (l: BoardLift) => mine.some((r) => r.lift === l);
+    let reason: string;
+    if (mine.length === 0) reason = "No lifts logged yet";
+    else if (!has(lift)) {
+      const missing = lift === "total" ? SINGLE_LIFTS.filter((l) => !has(l)) : [lift];
+      reason = lift === "total" ? `Needs a ${missing.join(" + ")} for a total` : `No ${lift} logged yet`;
+    } else if (division !== "all" && !p.sex) reason = "Men or Women not set";
+    else if (mode === "p4p" && !mine.some((r) => r.lift === lift && r.bw_kg)) reason = "Needs a bodyweight";
+    else continue; // ranked on another view of this board (shouldn't happen)
+    out.push({ ...p, reason });
+  }
+  return out.sort((a, b) => Number(a.is_alumni) - Number(b.is_alumni) || a.display_name.localeCompare(b.display_name));
+}
