@@ -76,11 +76,14 @@ describe("Rankings", () => {
   it("every board still opens in full: standings, levels, competition records, the Hall of Strength, last month's recap", () => {
     expect(card).toContain("View Rankings");
     expect(card).not.toContain('setOpen("levels")');
-    expect(card).toContain('onClick={() => setOpen("powerlifting")}');
+    // meet records: Strength → View Rankings → Competition; last month's recap: View Rankings
+    expect(card).not.toContain('setOpen("powerlifting")');
+    expect(board).toContain('["meets", "Competition", "Sanctioned meets only", Landmark]');
+    expect(card).toContain("<LeagueRecapButton />");
     expect(board).toContain("export function StrengthBoardSlide()");
     expect(board).toContain("pickBoard(data, mode, lift, division, 5)");
     expect(board).toContain("<HallOfStrengthSheet open={open} onOpenChange={setOpen} initialMode={mode} initialLift={lift} initialDivision={division} initialCareer={careerId} />");
-    expect(card).toContain('<LeagueRecapHomeTile variant="mini" />');
+    expect(card).not.toContain("LeagueRecapHomeTile");
     expect(recap).toContain("You finished ${ordinal(recap.me.rank)} place");
     expect(recap).toContain("{playing && <LeagueRecapStory recap={playing} open={!!playing} onClose={() => setPlaying(null)} />}");
   });

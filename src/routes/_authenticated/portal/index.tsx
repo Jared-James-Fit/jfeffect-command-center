@@ -28,7 +28,6 @@ import { LevelCelebrations } from "@/components/portal/athlete-level-card";
 import { SwipeCards } from "@/components/portal/swipe-cards";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
 import { SexPromptCard } from "@/components/athlete-sex";
-import { CommunityHomeStrip } from "@/components/community/community-entry";
 import { useEffect, useState } from "react";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -402,17 +401,12 @@ function PortalHome() {
           <SectionSkeleton height="h-52" />
         ) : null}
 
-        {/* ── Crew ────────────────────────────────────────────── */}
+        {/* ── Rankings ────────────────────────────────────────── */}
+        {/* one swipeable card: Monthly (default) and Strength; the feed lives in Crew */}
         {client?.id && (
-          <section className="space-y-3" aria-label="Crew">
-            {/* the newest posts (Feed), then your current ranking in one row */}
-            <SectionErrorBoundary label="Crew feed">
-              <CommunityHomeStrip />
-            </SectionErrorBoundary>
-            <SectionErrorBoundary label="League previews">
-              <HomeLeaguePreviews />
-            </SectionErrorBoundary>
-          </section>
+          <SectionErrorBoundary label="Rankings">
+            <HomeLeaguePreviews />
+          </SectionErrorBoundary>
         )}
 
         {/* New-milestone reveals pop here, on the way in */}

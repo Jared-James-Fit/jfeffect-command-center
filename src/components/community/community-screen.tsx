@@ -17,8 +17,8 @@ import { ShareNudge } from "@/components/community/share-nudge";
 import { CrewList } from "@/components/community/crew-list";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
-import { feedLayout, isPulsePost, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
-import { PulseStrip } from "@/components/community/pulse-strip";
+import { activityNeedsMore, isPulsePost, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { ActivitySection } from "@/components/community/pulse-strip";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
@@ -97,8 +97,9 @@ export function CommunityScreen({
 
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
-  // Pulses fold into one strip a day, so the feed stays about the posts people wrote
-  const layout = useMemo(() => feedLayout(posts), [posts]);
+  // Automatic Activity sits in one section at the top; the posts people made follow, newest first
+  const activity = useMemo(() => posts.filter((p) => isPulsePost(p)), [posts]);
+  const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);
   // "Double-tap to like": a few seconds on the first post (a workout before a
   // note), once a visit, until the first double-tap, and only for the first
   // few visits either way. Remembered on the account, not the device.
@@ -226,6 +227,13 @@ export function CommunityScreen({
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
+  // The first page is small: read on until the Activity section holds the whole week
+  const pageCount = feed.data?.pages.length ?? 0;
+  const readAhead = scope.kind === "feed" && feed.isSuccess && !feed.isError && activityNeedsMore(posts, !!hasNextPage, pageCount);
+  useEffect(() => {
+    if (readAhead && !isFetchingNextPage) void fetchNextPage();
+  }, [readAhead, isFetchingNextPage, fetchNextPage]);
+  const activityWeekComplete = !activityNeedsMore(posts, !!hasNextPage, 0) || !hasNextPage;
   useEffect(() => {
     const el = sentinel.current;
     if (!el || !hasNextPage || scope.kind !== "feed") return;
@@ -343,14 +351,23 @@ export function CommunityScreen({
         />
       ) : (
         <>
-          {layout.map((e, i) => e.kind === "pulse" ? (
-            // a day of finished sessions, folded into one card
-            <FeedItem key={e.key} index={i}>
-              <PulseStrip posts={e.posts} unit={unit} viewerIsStaff={viewerIsStaff} onOpen={openPost} />
+          {activity.length > 0 && (
+            <FeedItem index={0}>
+              <ActivitySection
+                posts={activity}
+                unit={unit}
+                viewerIsStaff={viewerIsStaff}
+                onOpen={openPost}
+                weekComplete={activityWeekComplete}
+                hasMore={!!hasNextPage}
+                loadingMore={isFetchingNextPage}
+                onLoadMore={() => void fetchNextPage()}
+              />
             </FeedItem>
-          ) : (() => { const p = e.post; return (
+          )}
+          {ownPosts.map((p, i) => (
             <Fragment key={p.id}>
-            <FeedItem index={i} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
+            <FeedItem index={i + (activity.length > 0 ? 1 : 0)} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
               post={p}
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
@@ -366,9 +383,9 @@ export function CommunityScreen({
             />
             </FeedItem>
             {/* now and then, until their first post: an invite to lock in or share (after the second post) */}
-            {canShare && i === Math.min(1, layout.length - 1) && <ShareNudge surface="feed" unit={unit} />}
+            {canShare && i === Math.min(1, ownPosts.length - 1) && <ShareNudge surface="feed" unit={unit} />}
             </Fragment>
-          ); })())}
+          ))}
           <div ref={sentinel} aria-hidden className="h-px" />
           {isFetchingNextPage && <PostSkeleton />}
           {!hasNextPage && posts.length > 1 && (

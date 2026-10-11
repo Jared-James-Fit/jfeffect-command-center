@@ -13,7 +13,7 @@ import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "
 import { ArrowLeft } from "lucide-react";
 import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 import { RecordBadges } from "@/components/portal/record-badges";
-import { LeagueRecapButton, LeagueRecapHomeTile } from "@/components/portal/league-recap";
+import { LeagueRecapButton } from "@/components/portal/league-recap";
 import { formatWeightLifted, type WeightUnit } from "@/lib/weight-lifted";
 import { useWeightUnit } from "@/lib/use-weight-unit";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -21,7 +21,6 @@ import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/li
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 import { CoachTag } from "@/components/portal/coach-tag";
 import { CoachFocus, PointsBar, PointsLegend, VsCard } from "@/components/portal/league-insights";
-import { HallOfStrengthSheet } from "@/components/portal/strength-board";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
 type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean; is_coach?: boolean };
@@ -55,7 +54,7 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
   defaultView?: null | "rankings";
 }) {
   const { data: events = [] } = useXpEvents(clientId);
-  const [open, setOpen] = useState<null | "rankings" | "powerlifting">(defaultView);
+  const [open, setOpen] = useState<null | "rankings">(defaultView);
   const [selectedLeagueAthlete, setSelectedLeagueAthlete] = useState<string | null>(null);
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
@@ -138,11 +137,10 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
         <button type="button" onClick={() => openRankings()} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border bg-background text-sm font-bold text-primary active:bg-muted">
           View Rankings{rankedCount > 5 ? ` · ${rankedCount}` : ""} <ChevronRight className="h-4 w-4" />
         </button>
-        <LeagueRecapHomeTile variant="mini" />
-        <div className="grid grid-cols-2 gap-2">
-          <div className="min-w-0 [&>button]:mt-0 [&>button]:h-full [&>button]:rounded-xl [&>button]:border-0 [&>button]:bg-muted/40 [&>button]:px-2.5 [&>button]:py-2"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
-          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 rounded-xl bg-muted/40 px-2.5 py-2 text-left transition-colors active:bg-muted"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Meet records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
-        </div>
+        {/* Last month's recap lives in View Rankings (beside last month's standings), and
+            meet records in Strength → View Rankings → Competition. Milestones has no
+            other home, so it stays here. */}
+        <div className="min-w-0 [&>button]:mt-0 [&>button]:rounded-xl [&>button]:border-0 [&>button]:bg-muted/40 [&>button]:px-2.5 [&>button]:py-2"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
       </div>
     </div>
   );
@@ -158,13 +156,6 @@ export function AthleteLevelCard({ clientId, defaultView = null }: {
           {open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} selected={selectedLeagueAthlete} onSelectedChange={setSelectedLeagueAthlete} /> : null}
         </SheetContent>
       </Sheet>
-
-      <HallOfStrengthSheet
-        open={open === "powerlifting"}
-        onOpenChange={(o) => !o && setOpen(null)}
-        initialSource="meets"
-        contentClassName="max-h-[88dvh] px-5 pt-5"
-      />
     </>
   );
 }

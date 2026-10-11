@@ -26,23 +26,31 @@ describe("Home League previews", () => {
   it("the top three, in rank order, qualified only", () => {
     expect(topThree([row(3, 1), row(1, 3), row(null, 9, false, false), row(2, 2), row(4, 0)]).map((r) => r.rank)).toEqual([1, 2, 3]);
     const src = readFileSync("src/components/portal/home-league-previews.tsx", "utf8");
-    // Home shows one compact ranking row: no podium lists, each half opens its board
-    expect(src).not.toContain("MEDALS");
+    expect(src).toContain('const MEDALS = ["🥇", "🥈", "🥉"];');
     expect(src).toContain('<span className="truncate">Hall of Strength</span>');
-    expect(src).toContain('hash="rankings=strength"');
   });
   it("first place has nobody to catch; not qualified shows no rank", () => {
     expect(leaguePreview([row(1, 900, true), row(2, 100)]).gap).toBeNull();
     expect(leaguePreview([row(null, 0, true, false)]).rank).toBeNull();
   });
-  it("Home order: calendar, body cards, crew feed, league previews, then setup (only what's left to do)", () => {
+  it("Home order: calendar, body cards, then one Rankings card (no feed shelf), then setup (only what's left to do)", () => {
     const src = readFileSync("src/routes/_authenticated/portal/index.tsx", "utf8");
     const at = (s: string) => src.indexOf(s);
     expect(at("<UpcomingScheduleCard")).toBeLessThan(at("<SwipeCards"));
-    expect(at("<SwipeCards")).toBeLessThan(at("<CommunityHomeStrip"));
-    expect(at("<CommunityHomeStrip")).toBeLessThan(at("<HomeLeaguePreviews"));
+    expect(at("<SwipeCards")).toBeLessThan(at("<HomeLeaguePreviews"));
+    expect(src).not.toContain("<CommunityHomeStrip");
     expect(at("<HomeLeaguePreviews")).toBeLessThan(at("<InstallAppCard hideWhenDone />"));
     expect(src).toContain("<NotificationSetupPrompt problemsOnly />");
     expect(src).toContain("<CalendarSyncCard hideWhenDone />");
+  });
+  it("the Rankings card: Monthly first, swipe to Strength, dots, one Live mark, View all opens the page you're on", () => {
+    const src = readFileSync("src/components/portal/home-league-previews.tsx", "utf8");
+    expect(src).toContain('useState<Slide>("monthly")');
+    expect(src).toContain("snap-x snap-mandatory");
+    expect(src).toContain('aria-label="Rankings page"');
+    expect(src.match(/animate-ping/g)?.length).toBe(1);
+    expect(src).toContain('hash={slide === "strength" ? "rankings=strength" : "rankings"}');
+    expect(src).not.toMatch(/setInterval|setTimeout/);
+    expect(src).toContain('pickBoard(board, "p4p", "total", division, 3)');
   });
 });

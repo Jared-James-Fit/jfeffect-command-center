@@ -131,8 +131,8 @@ describe("a lifter's career has one Back", () => {
   });
 
   it("every Hall of Strength sheet goes through that one wrapper", () => {
+    // meet records open from Strength → View Rankings → Competition now, not the Monthly card
     const level = readFileSync("src/components/portal/athlete-level-card.tsx", "utf8");
-    expect(level).toContain("<HallOfStrengthSheet");
     expect(level).not.toContain("<HallOfStrength ");
     expect(board.match(/<HallOfStrengthSheet /g)?.length).toBe(2); // the Home card and the League slide
   });

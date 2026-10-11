@@ -43,24 +43,36 @@ describe("Pulse: a finished workout posts itself, with its real win", () => {
   });
 });
 
-import { HOME_CREW_PULSES, PULSE_STRIP_ROWS, feedLayout, homeCrewPosts } from "@/lib/community";
-describe("Pulse never swamps the feed", () => {
+import { ACTIVITY_PREVIEW_ROWS, HOME_CREW_PULSES, activityNeedsMore, activityWeekSummary, homeCrewPosts, isPulsePost } from "@/lib/community";
+describe("Activity: one section at the top of the feed", () => {
+  const now = Date.UTC(2026, 9, 10, 21);
+  const at = (h: number) => new Date(now - h * 3600e3).toISOString();
+  const pulse = (id: string, h: number, prs = 0) => ({ id, created_at: at(h), auto: true, stats: { pr_count: prs } });
+  const own = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: {} });
+  it("only automatic posts are Activity; one someone made their own (caption / photo) is a regular post", () => {
+    expect(isPulsePost(pulse("p", 1))).toBe(true);
+    expect(isPulsePost(own("claimed", 1))).toBe(false);
+  });
+  it("shows the 2 newest, with the week's sessions and PRs", () => {
+    expect(ACTIVITY_PREVIEW_ROWS).toBe(2);
+    expect(activityWeekSummary([pulse("a", 1, 2), pulse("b", 30), pulse("old", 24 * 8, 5)], now)).toEqual({ sessions: 2, prs: 2 });
+  });
+  it("reads on until the last 7 days are loaded (bounded), so the section is complete", () => {
+    expect(activityNeedsMore([own("a", 1)], true, 1, now)).toBe(true);
+    expect(activityNeedsMore([own("a", 1), own("b", 24 * 8)], true, 1, now)).toBe(false);
+    expect(activityNeedsMore([own("a", 1)], false, 1, now)).toBe(false);
+    expect(activityNeedsMore([own("a", 1)], true, 5, now)).toBe(false);
+  });
+  it("the feed puts Activity first, then the posts people made, newest first", () => {
+    const screen = readFileSync("src/components/community/community-screen.tsx", "utf8");
+    expect(screen).toContain("const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);");
+    expect(screen.indexOf("<ActivitySection")).toBeLessThan(screen.indexOf("{ownPosts.map((p, i) => ("));
+  });
+});
+describe("Home shows a couple of Pulses at most", () => {
   const at = (h: number) => new Date(Date.UTC(2026, 9, 10, h)).toISOString();
   const pulse = (id: string, h: number) => ({ id, created_at: at(h), auto: true, stats: {} });
   const own = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: {} });
-  const ids = (out: ReturnType<typeof feedLayout>) => out.map((e) => (e.kind === "post" ? e.post.id : e.posts.map((p) => p.id).join("+")));
-  it("a day's Activity folds into one strip, right after that day's newest member post", () => {
-    expect(ids(feedLayout([pulse("p1", 20), own("a", 19), pulse("p2", 18), pulse("p3", 17), own("b", 16)]))).toEqual(["a", "p1+p2+p3", "b"]);
-    expect(PULSE_STRIP_ROWS).toBe(3);
-  });
-  it("a day nobody posted: the strip sits where that day's Activity was, before older days", () => {
-    const day2 = (id: string, h: number, auto: boolean) => ({ id, created_at: new Date(Date.UTC(2026, 9, 9, h)).toISOString(), auto, stats: {} });
-    expect(ids(feedLayout([pulse("p1", 20), pulse("p2", 18), day2("old", 15, false)]))).toEqual(["p1+p2", "old"]);
-    expect(ids(feedLayout([own("a", 20), pulse("p1", 19), own("b", 18), pulse("p2", 17)]))).toEqual(["a", "p1+p2", "b"]);
-  });
-  it("a Pulse someone made their own (caption / photo) is a regular post again", () => {
-    expect(feedLayout([own("claimed", 20)])[0].kind).toBe("post");
-  });
   it("Home shows a couple of Pulses at most", () => {
     const now = Date.UTC(2026, 9, 10, 21);
     const { shown } = homeCrewPosts([pulse("p1", 20), pulse("p2", 19), pulse("p3", 18), own("a", 17), own("b", 16)], now);

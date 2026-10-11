@@ -1,42 +1,78 @@
 import { useState } from "react";
-import { Activity, ChevronDown } from "lucide-react";
+import { Activity, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { PULSE_STRIP_ROWS, pickWorkoutWin, postTimeLabel, reactionEmoji, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { ACTIVITY_PREVIEW_ROWS, activityWeekSummary, pickWorkoutWin, postTimeLabel, reactionEmoji, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 
 /**
- * A day of Pulses, folded into one card: a row per finished session (who,
- * its real win, one-tap props), the newest few first, the rest a tap away.
- * Each row opens the full post. Keeps the feed for the posts people wrote.
+ * Feed → Activity: every automatic post (a finished session, posted by itself)
+ * in ONE compact section at the top of the feed. The 2 newest are shown with a
+ * one-line summary of the week; "View all" opens the complete history, each
+ * row with its props button and opening its full post (likes, comments). The
+ * posts people made themselves follow below, newest first.
  */
-export function PulseStrip({ posts, unit, viewerIsStaff, onOpen }: { posts: CommunityPost[]; unit: "kg" | "lb"; viewerIsStaff: boolean; onOpen: (p: CommunityPost) => void }) {
-  const [open, setOpen] = useState(false);
-  const shown = open ? posts : posts.slice(0, PULSE_STRIP_ROWS);
-  const more = posts.length - shown.length;
-  const prs = posts.reduce((n, p) => n + (p.stats?.pr_count ?? 0), 0);
+export function ActivitySection({ posts, unit, viewerIsStaff, onOpen, weekComplete = true, hasMore, loadingMore, onLoadMore }: {
+  posts: CommunityPost[];
+  /** Everything from the last 7 days is loaded (otherwise the count reads "N+"). */
+  weekComplete?: boolean;
+  unit: "kg" | "lb";
+  viewerIsStaff: boolean;
+  onOpen: (p: CommunityPost) => void;
+  /** The feed has older pages, so the history can keep going. */
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}) {
+  const [all, setAll] = useState(false);
+  const shown = posts.slice(0, ACTIVITY_PREVIEW_ROWS);
+  const week = activityWeekSummary(posts);
+  const open = (p: CommunityPost) => {
+    setAll(false);
+    onOpen(p);
+  };
   return (
-    <section data-pulse-strip className="overflow-hidden rounded-3xl border border-border/80 bg-card">
+    <section data-activity className="overflow-hidden rounded-3xl border border-border/80 bg-card">
       <header className="flex items-center gap-2 px-4 pb-1.5 pt-3">
-        <Activity className="h-4 w-4 text-primary" />
+        <Activity className="h-4 w-4 shrink-0 text-primary" />
         <span className="text-[13px] font-black">Activity</span>
-        <span className="text-[12px] text-muted-foreground">
-          · {posts.length} {posts.length === 1 ? "session" : "sessions"} finished{prs > 0 ? ` · ${prs} PR${prs === 1 ? "" : "s"}` : ""}
+        <span className="min-w-0 flex-1 text-[12px] leading-snug text-muted-foreground">
+          · {week.sessions}{weekComplete ? "" : "+"} {week.sessions === 1 && weekComplete ? "session" : "sessions"} this week{week.prs > 0 ? ` · ${week.prs}${weekComplete ? "" : "+"} PR${week.prs === 1 && weekComplete ? "" : "s"}` : ""}
         </span>
+        <button type="button" onClick={() => setAll(true)} className="-mr-1 inline-flex min-h-8 shrink-0 items-center gap-0.5 rounded-full px-2 text-[12px] font-bold text-primary active:bg-muted">
+          View all <ChevronRight className="h-3.5 w-3.5" />
+        </button>
       </header>
       <ul className="divide-y divide-border/60">
         {shown.map((p) => (
           <PulseRow key={p.id} post={p} unit={unit} viewerIsStaff={viewerIsStaff} onOpen={onOpen} />
         ))}
       </ul>
-      {(more > 0 || open) && posts.length > PULSE_STRIP_ROWS && (
-        <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center justify-center gap-1 border-t border-border/60 py-2.5 text-[12px] font-bold text-muted-foreground active:bg-muted">
-          {open ? "Show less" : `${more} more`}
-          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
-        </button>
-      )}
+
+      <Sheet open={all} onOpenChange={setAll}>
+        <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-0 pb-safe-bottom pt-5">
+          <SheetHeader className="px-5 text-left">
+            <SheetTitle>Activity</SheetTitle>
+            <SheetDescription>Finished sessions and PRs from the crew, newest first.</SheetDescription>
+          </SheetHeader>
+          <ul className="mt-3 divide-y divide-border/60 border-y border-border/60">
+            {posts.map((p) => (
+              <PulseRow key={p.id} post={p} unit={unit} viewerIsStaff={viewerIsStaff} onOpen={open} />
+            ))}
+          </ul>
+          {hasMore && (
+            <div className="px-5 pt-3">
+              <Button type="button" variant="outline" className="h-11 w-full rounded-xl" disabled={loadingMore} onClick={onLoadMore}>
+                {loadingMore ? "Loading…" : "Show older"}
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </section>
   );
 }
@@ -54,14 +90,15 @@ function PulseRow({ post, unit, viewerIsStaff, onOpen }: { post: CommunityPost; 
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5 text-[12px]">
             {/* the name keeps its room; the win's label gives way */}
-            <span className="max-w-[9.5rem] shrink-0 truncate font-bold">{post.is_mine ? "You" : post.author.name}</span>
-            <span className={cn("inline-flex min-w-0 items-center gap-0.5 font-bold", style.text.replace("text-white/70", "text-muted-foreground"))}>
+            <span className="min-w-0 shrink truncate font-bold">{post.is_mine ? "You" : post.author.name}</span>
+            <span className={cn("inline-flex shrink-0 items-center gap-0.5 font-bold", style.text.replace("text-white/70", "text-muted-foreground"))}>
               <style.Icon className="h-3 w-3 shrink-0" />
-              <span className="truncate">{win.kind === "done" ? "Done" : win.label}</span>
+              <span>{win.kind === "done" ? "Done" : win.label}</span>
             </span>
             <span className="shrink-0 text-muted-foreground">· {postTimeLabel(post.created_at)}</span>
           </div>
-          <div className="truncate text-[14px] font-semibold leading-snug">
+          {/* the win wraps to a second line instead of cutting off */}
+          <div className="line-clamp-2 text-[14px] font-semibold leading-snug">
             {win.headline}
             {win.detail && <span className="text-muted-foreground"> · {win.detail}</span>}
           </div>

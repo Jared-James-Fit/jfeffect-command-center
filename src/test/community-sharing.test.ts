@@ -356,9 +356,9 @@ describe("community is easy to find without taking over", () => {
   const shell = read("src/components/app-shell.tsx");
   const home = read("src/routes/_authenticated/portal/index.tsx");
   const entry = read("src/components/community/community-entry.tsx");
-  it("is on Home, with a header nudge for coaches (clients have the centre tab)", () => {
+  it("has a header nudge for coaches; clients reach it from the centre tab (Home shows Rankings, not the feed)", () => {
     expect(shell).toContain("<CommunityNavButton />");
-    expect(home).toContain("<CommunityHomeStrip />");
+    expect(home).not.toContain("<CommunityHomeStrip />");
   });
   it("is always on Home (clients live there), with + Post one tap away and an invite instead of an empty widget", () => {
     expect(entry).toContain('<ShareWorkoutButton unit={unit} label="Post" previewOnly={isImpersonating} className="h-8 px-3 text-[12px]" />');

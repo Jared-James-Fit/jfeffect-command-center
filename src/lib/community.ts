@@ -1395,54 +1395,32 @@ export function isPulsePost(p: { auto?: boolean; stats?: unknown }): boolean {
   return !!p.auto && !!p.stats;
 }
 
-/** Rows a Pulse strip shows before "more". */
-export const PULSE_STRIP_ROWS = 3;
-
-export type FeedEntry<T> = { kind: "post"; post: T } | { kind: "pulse"; key: string; posts: T[] };
-
-const dayKey = (iso: string) => {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-};
+/** Activity rows the top of the feed shows before "View all". */
+export const ACTIVITY_PREVIEW_ROWS = 2;
 
 /**
- * The feed's order, with automatic Activity (Pulses) folded away: each day's
- * Activity becomes one compact strip, and member posts lead. The strip sits
- * right after that day's newest post someone made themselves (or where that
- * day's Activity was, on a day nobody posted), so finished sessions never sit
- * above what people wrote and never interrupt the feed more than once a day.
- * Everything else keeps its place.
+ * Whether the feed should read another page for the Activity section: the first
+ * page is only a handful of posts, so it reads on (at most HOME_DECK_PAGES
+ * pages) until it holds the last 7 days, or the feed ends.
  */
-export function feedLayout<T extends { id: string; created_at: string; auto?: boolean; stats?: unknown }>(posts: T[]): FeedEntry<T>[] {
-  const out: FeedEntry<T>[] = [];
-  const strips = new Map<string, { kind: "pulse"; key: string; posts: T[] }>();
-  const postedOn = new Set<string>();
-  // a day's strip waits for that day's first member post (or for the day to end)
-  let pending: { day: string; strip: { kind: "pulse"; key: string; posts: T[] } } | null = null;
-  const flush = () => {
-    if (pending) out.push(pending.strip);
-    pending = null;
-  };
+export function activityNeedsMore(posts: { created_at: string }[], hasMore: boolean, pages: number, now = Date.now()): boolean {
+  if (!hasMore || pages >= HOME_DECK_PAGES) return false;
+  if (!posts.length) return true;
+  const oldest = Math.min(...posts.map((p) => new Date(p.created_at).getTime()));
+  return oldest > now - 7 * 86_400_000;
+}
+
+/** The Activity header's line: sessions finished and PRs in the last 7 days. */
+export function activityWeekSummary(posts: { created_at: string; stats?: { pr_count?: number } | null | unknown }[], now = Date.now()): { sessions: number; prs: number } {
+  const since = now - 7 * 86_400_000;
+  let sessions = 0;
+  let prs = 0;
   for (const p of posts) {
-    const day = dayKey(p.created_at);
-    if (pending && pending.day !== day) flush();
-    if (!isPulsePost(p)) {
-      out.push({ kind: "post", post: p });
-      postedOn.add(day);
-      if (pending?.day === day) flush();
-      continue;
-    }
-    let strip = strips.get(day);
-    if (!strip) {
-      strip = { kind: "pulse", key: `pulse:${day}`, posts: [] };
-      strips.set(day, strip);
-      if (postedOn.has(day)) out.push(strip);
-      else pending = { day, strip };
-    }
-    strip.posts.push(p);
+    if (new Date(p.created_at).getTime() < since) continue;
+    sessions += 1;
+    prs += Number((p.stats as { pr_count?: number } | null)?.pr_count ?? 0);
   }
-  flush();
-  return out;
+  return { sessions, prs };
 }
 
 /**
