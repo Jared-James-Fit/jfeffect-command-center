@@ -204,6 +204,9 @@ export function hashText(text: string): string {
 
 const MAX_DIGEST = 28_000;
 
+/** Bump when the prompt changes, so every block is rewritten in the new style. */
+export const ROADMAP_PROMPT_VERSION = 2;
+
 /**
  * The block as Cleo reads it, plus a hash of only what the notes depend on
  * (the training itself, the coach's goal/focus and where a meet falls), so a
@@ -259,7 +262,7 @@ export function digestBlock(input: {
   ].filter(Boolean);
 
   const weekParts: string[] = [];
-  const hashParts: string[] = [block.goal ?? "", block.training_focus ?? "", meetLine.replace(/ on \d{4}-\d{2}-\d{2}/, "")];
+  const hashParts: string[] = [`v${ROADMAP_PROMPT_VERSION}`, block.goal ?? "", block.training_focus ?? "", meetLine.replace(/ on \d{4}-\d{2}-\d{2}/, "")];
   let hasTraining = false;
   for (const w of weeks) {
     const days = (daysByWeek.get(w.id) ?? []).slice().sort((a, b) => a.day_index - b.day_index);
@@ -355,7 +358,7 @@ Rules:
 - Read the structure like an experienced strength coach: how sets, reps, RPE/RIR and percentages move from week to week (volume building, intensity rising, a deload, a heavy single/test week, a taper before a meet), how much is competition squat/bench/deadlift versus accessories, and rep ranges.
 - If the coach gave a goal, focus or week phase, follow it and use their wording.
 - Style: plain, specific, confident. Second person ("you"). No hype, no emojis, no em dashes, no filler like "this is a great week".
-- Numbers you mention must appear in the data (e.g. "top sets at RPE 8", "sets of 8 to 12").
+- Numbers you mention must appear in the data, and only as prescriptions the athlete will see on their workouts: "top sets at RPE 8", "1 to 2 RIR", "sets of 8 to 12", "around 80%". Never quote the week's totals or averages (total working sets, exercise counts, "average RPE"); the stats are for your reading only. Say how the week changes in plain words instead: "same volume as last week", "about a third fewer sets", "sets taken to 0 to 1 RIR".
 
 Pick "style" from: powerlifting, meet_prep, strength, hypertrophy, bodybuilding, general_fitness. Use meet_prep only when a competition date is given.
 
