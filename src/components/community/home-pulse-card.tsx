@@ -26,7 +26,7 @@ export function HomePulseCard({ posts, today, unit, onOpen }: { posts: Community
     >
       <span className="flex items-center gap-1.5">
         <Activity className="h-3.5 w-3.5 text-primary" />
-        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Crew Pulse</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Pulse</span>
         {others > 0 && <span className="ml-auto text-[10px] font-bold text-white/55">+{others} more today</span>}
       </span>
       <ul className="mt-2 flex flex-1 flex-col justify-around divide-y divide-white/10">
