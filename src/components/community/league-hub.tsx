@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
-import { StrengthBoardSlide } from "@/components/portal/strength-board";
+import { HallOfStrengthSheet, StrengthBoardSlide } from "@/components/portal/strength-board";
 import { CrewGoalCard } from "@/components/community/crew-goal";
 import { useCrewGoal } from "@/lib/community.queries";
 
@@ -24,12 +25,20 @@ export function LeagueHub() {
     },
   });
   const { data: goal } = useCrewGoal(true);
+  // Home's League tiles open a section straight away: #league=standings / #league=strength.
+  const [opening] = useState(() => (typeof window === "undefined" ? "" : window.location.hash.match(/league=(standings|strength)/)?.[1] ?? ""));
+  const [hallOpen, setHallOpen] = useState(opening === "strength");
   // No goal this week: the level stays a card of its own, under the boards.
   const crew = goal ? { key: "crew", label: "Crew goal", node: <CrewGoalCard /> } : undefined;
   return (
     <div data-league-hub className="space-y-3">
       {client?.id ? (
-        <AthleteLevelCard clientId={client.id} levelSwipe={crew} boards={[{ key: "strength", node: <StrengthBoardSlide /> }]} />
+        <AthleteLevelCard
+          clientId={client.id}
+          levelSwipe={crew}
+          boards={[{ key: "strength", node: <StrengthBoardSlide /> }]}
+          defaultView={opening === "standings" ? "rankings" : null}
+        />
       ) : isPending && userId ? (
         <>
           <CrewGoalCard />
@@ -43,6 +52,7 @@ export function LeagueHub() {
         </section>
         </>
       )}
+      <HallOfStrengthSheet open={hallOpen} onOpenChange={setHallOpen} />
     </div>
   );
 }

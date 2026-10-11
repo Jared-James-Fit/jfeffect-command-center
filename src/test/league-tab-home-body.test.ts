@@ -50,7 +50,7 @@ describe("the League tab", () => {
   it("one swipe first: the crew goal (always the default) and the Logging Level; then the League and the Hall of Strength", () => {
     expect(hub.indexOf("<CrewGoalCard />")).toBeLessThan(hub.indexOf("<AthleteLevelCard"));
     expect(hub).toContain('const crew = goal ? { key: "crew", label: "Crew goal", node: <CrewGoalCard /> } : undefined;');
-    expect(hub).toContain('<AthleteLevelCard clientId={client.id} levelSwipe={crew} boards={[{ key: "strength", node: <StrengthBoardSlide /> }]} />');
+    expect(hub).toMatch(/<AthleteLevelCard\s+clientId=\{client\.id\}\s+levelSwipe=\{crew\}\s+boards=\{\[\{ key: "strength", node: <StrengthBoardSlide \/> \}\]\}/);
     expect(card).toContain('storageKey="jf-league-top"');
     expect(card).toContain("remember={false}");
     expect(card.indexOf("levelSwipe,")).toBeLessThan(card.indexOf('{ key: "level", label: "Logging Level"'));

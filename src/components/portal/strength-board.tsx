@@ -41,7 +41,7 @@ import {
 
 const db = supabase as any;
 
-function useStrengthBoard() {
+export function useStrengthBoard() {
   const viewerId = usePortalUserId() ?? null;
   return useQuery({
     queryKey: ["strength-board", "all", viewerId],
