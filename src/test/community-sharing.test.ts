@@ -1355,3 +1355,10 @@ describe("shared sessions never show the coach's day or block names", () => {
     expect(sql).toContain("REVOKE ALL ON FUNCTION public.community_public_session_title(uuid, uuid, timestamptz) FROM public, anon, authenticated;");
   });
 });
+
+describe("public session titles", () => {
+  it("number blocks within their own program, never across every program the athlete has had", () => {
+    const sql = readFileSync(new URL("../../supabase/migrations/20261031090000_community_session_title_per_program.sql", import.meta.url), "utf8");
+    expect(sql).toContain("AND b2.prep_id IS NOT DISTINCT FROM b.prep_id");
+  });
+});
