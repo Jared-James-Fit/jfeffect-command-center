@@ -68,7 +68,7 @@ describe("Rankings", () => {
   });
   it("every board still opens in full: standings, levels, competition records, the Hall of Strength, last month's recap", () => {
     expect(card).toContain("View Rankings");
-    expect(card).toContain('onClick={() => setOpen("levels")}');
+    expect(card).not.toContain('setOpen("levels")');
     expect(card).toContain('onClick={() => setOpen("powerlifting")}');
     expect(board).toContain("export function StrengthBoardSlide()");
     expect(board).toContain("pickBoard(data, mode, lift, division, 5)");
@@ -77,8 +77,11 @@ describe("Rankings", () => {
     expect(recap).toContain("You finished ${ordinal(recap.me.rank)} place");
     expect(recap).toContain("{playing && <LeagueRecapStory recap={playing} open={!!playing} onClose={() => setPlaying(null)} />}");
   });
-  it("the level shows what just earned points", () => {
-    expect(card).toContain("events.slice(0, 2).map((e) =>");
+  it("Logging Level is gone from the client app (its points still feed Milestones)", () => {
+    expect(card).not.toContain("Logging Level</span>");
+    expect(card).not.toContain("LevelsView");
+    expect(card).toContain("<MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />");
+    expect(read("src/components/records/workout-points-card.tsx")).not.toContain("TrendingUp");
   });
   it("new-milestone reveals pop on Home, once (not again on Rankings)", () => {
     expect(home).toContain("{client?.id && <LevelCelebrations clientId={client.id} />}");

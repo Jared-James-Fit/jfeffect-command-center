@@ -246,6 +246,7 @@ export function AppShell({
   title,
   children,
   moreInHeader = false,
+  simpleHeader = false,
 }: {
   items: NavItem[];
   bottomItems?: NavItem[];
@@ -257,6 +258,12 @@ export function AppShell({
    * destinations.
    */
   moreInHeader?: boolean;
+  /**
+   * Phones (client portal): one control in the top bar, More. The account
+   * (photo, email, sign out) and the light/dark switch move to the top of
+   * More instead of sitting in the bar as a second menu and a toggle.
+   */
+  simpleHeader?: boolean;
 }) {
   useKeyboardOpen();
   useExerciseLibraryRealtime();
@@ -889,7 +896,7 @@ export function AppShell({
                 <Search className="h-4 w-4" />
               </Button>
             )}
-            <ThemeToggle className="mr-0.5" />
+            {!simpleHeader && <ThemeToggle className="mr-0.5" />}
             {moreInHeader ? (
               // Big enough to find and hit without looking: every account opens More here.
               <Button variant="outline" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-xl px-0">
@@ -908,17 +915,19 @@ export function AppShell({
                 }
               />
             )}
-            <SettingsMenu
-              items={items}
-              meName={me?.name ?? user?.email ?? ""}
-              mePic={me?.pic ?? null}
-              onSignOut={handleSignOut}
-              trigger={
-                <button type="button" aria-label="Account menu" className="shrink-0 rounded-full">
-                  <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
-                </button>
-              }
-            />
+            {!simpleHeader && (
+              <SettingsMenu
+                items={items}
+                meName={me?.name ?? user?.email ?? ""}
+                mePic={me?.pic ?? null}
+                onSignOut={handleSignOut}
+                trigger={
+                  <button type="button" aria-label="Account menu" className="shrink-0 rounded-full">
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={28} ring expandable={false} />
+                  </button>
+                }
+              />
+            )}
           </div>
         </header>
 
@@ -996,6 +1005,34 @@ export function AppShell({
         query={moreQuery}
         setQuery={setMoreQuery}
         filteredResults={moreFiltered}
+        account={
+          simpleHeader ? (
+            <div className="mb-2 space-y-1 border-b border-border px-1 pb-2">
+              {/* Same account menu the avatar used to open: photo, email, sign out */}
+              <SettingsMenu
+                items={[]}
+                align="start"
+                meName={me?.name ?? user?.email ?? ""}
+                mePic={me?.pic ?? null}
+                onSignOut={handleSignOut}
+                trigger={
+                  <button type="button" aria-label="Account" className="flex min-h-[56px] w-full items-center gap-3 rounded-md px-2 py-2 text-left active:bg-sidebar-accent/70">
+                    <UserAvatar src={me?.pic ?? null} name={me?.name ?? user?.email ?? ""} size={36} ring expandable={false} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-semibold">{me?.name || user?.email}</span>
+                      <span className="block truncate text-[12px] text-muted-foreground">Photo, email, sign out</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                }
+              />
+              <div className="flex min-h-[52px] items-center justify-between gap-3 px-2">
+                <span className="text-[15px] font-semibold">Appearance</span>
+                <ThemeToggle />
+              </div>
+            </div>
+          ) : null
+        }
       />
 
       {/* Global Command Palette — ⌘K / Ctrl+K (mobile: full-screen sheet) */}
@@ -1859,8 +1896,10 @@ export function PageHeader({
  */
 function MobileNavDrawer({
   open, onOpenChange, title, grouped, activeTo, pathname, navBadges,
-  query, setQuery, filteredResults,
+  query, setQuery, filteredResults, account,
 }: {
+  /** Shown at the top of the root list (client portal: account + appearance). */
+  account?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -1975,6 +2014,8 @@ function MobileNavDrawer({
               })}
             </ul>
           ) : (
+            <>
+            {account}
             <MobileRoot
               grouped={grouped}
               activeTo={activeTo}
@@ -1983,6 +2024,7 @@ function MobileNavDrawer({
               onOpenCategory={setSubmenu}
               onNavigate={close}
             />
+            </>
           )}
         </div>
       </SheetContent>

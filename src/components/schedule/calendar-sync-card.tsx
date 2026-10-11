@@ -79,8 +79,11 @@ export function CalendarSyncCard({
   className,
   viewAsClientId,
   autoOpen,
+  hideWhenDone = false,
 }: {
   className?: string;
+  /** Home: nothing to show once the calendar is synced (the Schedule page keeps the card). */
+  hideWhenDone?: boolean;
   /** Read-only preview of another client's status (team preview). */
   viewAsClientId?: string | null;
   /** Open the setup sheet on mount (?sync=1 link). */
@@ -125,6 +128,7 @@ export function CalendarSyncCard({
   }, [autoOpen, isPov, status?.isClient]);
 
   if (isLoading || !status?.isClient) return null;
+  if (hideWhenDone && state === "synced") return null;
 
   const view = {
     synced: {

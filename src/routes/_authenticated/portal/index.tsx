@@ -5,7 +5,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bell, Calendar as CalendarIcon } from "lucide-react";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
@@ -297,11 +296,7 @@ function PortalHome() {
 
       <div className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-safe-bottom pt-4 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
         {/* 1 — Compact greeting header (renders immediately) */}
-        <GreetingHeader
-          firstName={firstName}
-          avatarUrl={(client as any)?.profile_picture_url ?? null}
-          unreadCount={unreadMsgs.length}
-        />
+        <GreetingHeader firstName={firstName} unreadCount={unreadMsgs.length} />
       <div className="-mt-2 flex justify-end">
         <DashboardRefreshIndicator />
       </div>
@@ -437,13 +432,14 @@ function PortalHome() {
           </SectionErrorBoundary>
         </DeferRender>
 
-        {/* Setup — install app + notifications, grouped together */}
+        {/* Setup: install, notifications, calendar. Each one only while it still
+            needs doing; nothing once it's done (Account and Schedule keep theirs). */}
         {client && (
-          <SectionGroup title="Setup" subtitle="Get the most out of JF Effect">
-            <InstallAppCard />
-            <NotificationSetupPrompt />
-            <CalendarSyncCard />
-          </SectionGroup>
+          <div className="space-y-3">
+            <InstallAppCard hideWhenDone />
+            <NotificationSetupPrompt problemsOnly />
+            <CalendarSyncCard hideWhenDone />
+          </div>
         )}
 
         {/* Billing, agreements and account live in the top menu (☰) and the avatar menu. */}
@@ -457,8 +453,8 @@ function SectionSkeleton({ height = "h-32" }: { height?: string }) {
 }
 
 function GreetingHeader({
-  firstName, avatarUrl, unreadCount,
-}: { firstName: string; avatarUrl: string | null; unreadCount: number }) {
+  firstName, unreadCount,
+}: { firstName: string; unreadCount: number }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000);
@@ -466,13 +462,7 @@ function GreetingHeader({
   }, []);
   void now;
   return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-      <Avatar className="h-11 w-11 shrink-0 border border-border">
-        {avatarUrl && <AvatarImage src={avatarUrl} alt={firstName} />}
-        <AvatarFallback className="text-sm font-bold">
-          {(firstName?.[0] ?? "?").toUpperCase()}
-        </AvatarFallback>
-      </Avatar>
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
       <div className="min-w-0">
         <h1 className="truncate text-xl font-black tracking-tight md:text-2xl">
           {greeting()}{firstName ? `, ${firstName}` : ""}
@@ -527,28 +517,3 @@ function UpcomingAppointmentRow({ appt }: { appt: any }) {
     </Link>
   );
 }
-
-function SectionGroup({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="space-y-3">
-      <div className="px-1">
-        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-          {title}
-        </h2>
-        {subtitle && (
-          <p className="mt-0.5 text-[11px] text-muted-foreground/80">{subtitle}</p>
-        )}
-      </div>
-      <div className="space-y-3">{children}</div>
-    </section>
-  );
-}
-

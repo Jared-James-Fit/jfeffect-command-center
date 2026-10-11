@@ -28,8 +28,11 @@ describe("client tab bar: Crew in the centre", () => {
     expect(visible[4].to).toBe(MORE_BAR_TO);
   });
 
-  it("More opens from the top bar, in place of the gear (the avatar has the same menu)", () => {
-    expect(portal).toContain('title="JF Effect" moreInHeader>');
+  it("one control in the client top bar: More, with the account and appearance at its top", () => {
+    expect(portal).toContain('title="JF Effect" moreInHeader simpleHeader>');
+    expect(shell).toContain('{!simpleHeader && <ThemeToggle className="mr-0.5" />}');
+    expect(shell).toContain("{!simpleHeader && (");
+    expect(shell).toContain('<span className="text-[15px] font-semibold">Appearance</span>');
     expect(shell).toContain('<Button variant="outline" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-xl px-0">');
     expect(shell).toContain("resolveVisibleBarItems(bottomItems, { more: !moreInHeader })");
   });
@@ -55,7 +58,9 @@ describe("client tab bar: Crew in the centre", () => {
 
 describe("Home's Crew feed", () => {
   it("newest first (yours too), then a card that opens the feed", () => {
-    expect(entry).toContain("const { pulses, today, shown, more } = useMemo(() => homeCrewDeck(");
+    expect(entry).toContain("const { shown, more } = useMemo(() => homeCrewDeck(");
+    // automatic Activity stays in the feed; Home's shelf is posts people made
+    expect(entry).not.toContain("HomePulseCard");
     expect(entry).toContain("<SeeMoreCard posts=");
   });
 

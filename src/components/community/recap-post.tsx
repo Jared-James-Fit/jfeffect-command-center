@@ -7,7 +7,6 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { Textarea } from "@/components/ui/textarea";
 import { CAPTION_MAX, postPointsHint } from "@/lib/community";
 import { MentionSuggestBar } from "@/components/community/mentions";
-import { CrewGoalAfterWorkout } from "@/components/community/crew-goal";
 import {
   invalidateCommunity,
   saveCommunityPost,
@@ -89,7 +88,6 @@ export function RecapPostFooter({
           : "Saved to your profile";
     return (
       <div className="w-full">
-        {canPost && <CrewGoalAfterWorkout className="mb-2.5" />}
         <div className="mb-2 flex items-center justify-center gap-1.5 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">
           <Check className="h-3.5 w-3.5" strokeWidth={3} /> {where}
           {justPosted === existing.id && (
@@ -130,7 +128,6 @@ export function RecapPostFooter({
 
   return (
     <div className="w-full">
-    <CrewGoalAfterWorkout className="mb-2.5" />
     {lockIn && (
       <div className="mb-2 text-center text-[12px] font-semibold text-muted-foreground">🔒 Your lock-in stays up. This posts your finish on its own.</div>
     )}

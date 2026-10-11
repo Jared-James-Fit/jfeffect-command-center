@@ -1,10 +1,11 @@
 /**
  * "Points earned" card for the post-workout recap: what this workout added
- * to the Performance League (this month) and to the Logging Level. Numbers
- * come from workout_points_summary — the same rules as the leaderboard.
+ * to the Performance League (this month). Numbers come from
+ * workout_points_summary — the same rules as the leaderboard. (Logging Level
+ * points still accrue server-side; they're no longer shown to clients.)
  */
 import { useEffect, useState } from "react";
-import { Trophy, TrendingUp } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SCOPE_LABEL, type WorkoutPoints } from "@/lib/training-records";
 
@@ -26,18 +27,10 @@ function useCountUp(target: number, ms = 900) {
   return v;
 }
 
-const LEVEL_LABEL: Record<string, string> = {
-  workout_completed: "Completed",
-  workout_fully_logged: "Fully logged",
-  workout_review: "Workout review",
-};
-
 export function WorkoutPointsCard({ points }: { points: WorkoutPoints }) {
   const league = points.league;
-  const level = points.level;
   const leagueTotal = useCountUp(league.total);
-  const levelTotal = useCountUp(level.total);
-  if (league.total <= 0 && level.total <= 0) return null;
+  if (league.total <= 0) return null;
 
   // Lines always add up to the total: records show the points that actually
   // counted; the lifts that earned them are listed underneath.
@@ -52,7 +45,7 @@ export function WorkoutPointsCard({ points }: { points: WorkoutPoints }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-700">
       <div className="px-3.5 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">Points earned</div>
-      <div className="grid grid-cols-2 divide-x divide-border/70">
+      <div>
         {/* League */}
         <div className="p-3.5">
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
@@ -90,23 +83,6 @@ export function WorkoutPointsCard({ points }: { points: WorkoutPoints }) {
               Monthly PR cap hit (40 pts) — {recordsShown} earned, +{league.records} counted
             </div>
           )}
-        </div>
-        {/* Logging Level */}
-        <div className="p-3.5">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
-            <TrendingUp className="h-3.5 w-3.5 text-emerald-500" /> Logging Level
-          </div>
-          <div className={cn("mt-0.5 text-3xl font-black tabular-nums", level.total > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
-            +{levelTotal}
-          </div>
-          <ul className="mt-1.5 space-y-0.5 text-[11px] leading-snug">
-            {level.events.map((e, i) => (
-              <li key={`${e.event_type}-${i}`} className="flex justify-between gap-2">
-                <span className="truncate text-muted-foreground">{LEVEL_LABEL[e.event_type] ?? e.label}</span>
-                <span className="shrink-0 font-bold tabular-nums">+{e.xp}</span>
-              </li>
-            ))}
-          </ul>
         </div>
       </div>
     </section>

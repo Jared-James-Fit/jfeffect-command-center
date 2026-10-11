@@ -10,10 +10,12 @@ import { cn } from "@/lib/utils";
  * Always present, full-width tappable card. Opens platform-aware modal.
  * In standalone (installed) mode, shows "JF Effect Installed" state.
  */
-export function InstallAppCard({ className }: { className?: string }) {
+export function InstallAppCard({ className, hideWhenDone = false }: { className?: string; /** Home: nothing to show once it's installed (or running as the native app). */ hideWhenDone?: boolean }) {
   const [open, setOpen] = useState(false);
   const info = usePwaInstall();
   const installed = info.isStandalone;
+  const native = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
+  if (hideWhenDone && (installed || native)) return null;
 
   return (
     <>

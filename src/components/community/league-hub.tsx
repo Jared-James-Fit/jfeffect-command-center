@@ -6,8 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { StrengthBoardSlide } from "@/components/portal/strength-board";
-import { CrewGoalCard } from "@/components/community/crew-goal";
-import { useCrewGoal } from "@/lib/community.queries";
 
 export type RankingsBoard = "monthly" | "strength";
 
@@ -37,10 +35,7 @@ export function RankingsHub() {
       return data;
     },
   });
-  const { data: goal } = useCrewGoal(true);
   const [board, setBoard] = useState<RankingsBoard>(() => rankingsFromHash() ?? "monthly");
-  // No goal this week: the level stays a card of its own, under the board.
-  const crew = goal ? { key: "crew", label: "Crew goal", node: <CrewGoalCard /> } : undefined;
   return (
     <div data-league-hub className="space-y-3">
       <div className="grid grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
@@ -62,11 +57,11 @@ export function RankingsHub() {
           <StrengthBoardSlide />
         </section>
       ) : client?.id ? (
-        <AthleteLevelCard clientId={client.id} levelSwipe={crew} />
+        <AthleteLevelCard clientId={client.id} />
       ) : isPending && userId ? (
         <Skeleton className="h-64 w-full rounded-2xl" />
       ) : (
-        <CrewGoalCard />
+        <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-[13px] text-muted-foreground">The monthly League is for active coaching clients.</div>
       )}
     </div>
   );

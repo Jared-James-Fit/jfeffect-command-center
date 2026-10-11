@@ -1,14 +1,12 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Info, Trophy, Medal, Zap, ChevronRight, Scale, Crown } from "lucide-react";
+import { Medal, ChevronRight, Scale } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ATHLETE_LEVELS, XP_RULES, levelForXp } from "@/lib/athlete-level";
 import { cn } from "@/lib/utils";
 import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type AchievementMetrics } from "@/lib/athlete-achievements";
 import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
@@ -22,7 +20,6 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
 import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 import { CoachTag } from "@/components/portal/coach-tag";
-import { SwipeCards, type SwipeCard } from "@/components/portal/swipe-cards";
 import { CoachFocus, PointsBar, PointsLegend, VsCard } from "@/components/portal/league-insights";
 import { HallOfStrengthSheet } from "@/components/portal/strength-board";
 
@@ -48,20 +45,18 @@ function useXpEvents(clientId: string) {
 }
 
 /**
- * Crew → Rankings → Monthly: this month's League with its whole Top 10, and the
- * Logging Level. New-milestone reveals pop on Home (LevelCelebrations).
+ * Crew → Rankings → Monthly: this month's League with its whole Top 10, with
+ * Milestones and meet records one tap away. New-milestone reveals pop on Home
+ * (LevelCelebrations). Logging Level points still accrue (DB triggers) and
+ * feed the milestones; the level itself isn't shown to clients.
  */
-export function AthleteLevelCard({ clientId, defaultView = null, levelSwipe }: {
+export function AthleteLevelCard({ clientId, defaultView = null }: {
   clientId: string;
   defaultView?: null | "rankings";
-  /** A card to share one swipe spot with the Logging Level, shown first (the crew goal). */
-  levelSwipe?: SwipeCard;
 }) {
-  const { data: events = [], isPending } = useXpEvents(clientId);
-  const [open, setOpen] = useState<null | "levels" | "rankings" | "powerlifting">(defaultView);
+  const { data: events = [] } = useXpEvents(clientId);
+  const [open, setOpen] = useState<null | "rankings" | "powerlifting">(defaultView);
   const [selectedLeagueAthlete, setSelectedLeagueAthlete] = useState<string | null>(null);
-  const total = events.reduce((s, e) => s + (e.xp || 0), 0);
-  const lvl = levelForXp(total);
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
   const { data: earned = [] } = useMyAchievements(clientId);
@@ -73,7 +68,6 @@ export function AthleteLevelCard({ clientId, defaultView = null, levelSwipe }: {
   });
   const leagueMe=leagueRows.find(r=>r.client_id===clientId) ?? leagueRows.find(r=>r.is_me);
   const leagueTop=leagueRows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,3);
-  useEffect(() => { const h=()=>setOpen("levels"); window.addEventListener("jf-open-athlete-levels",h); return () => window.removeEventListener("jf-open-athlete-levels",h); }, []);
 
   const openRankings = (athlete: string | null = null) => { setSelectedLeagueAthlete(athlete); setOpen("rankings"); };
   // The race is for the Top 10. The card shows the Top 5 (and you, if you're below it);
@@ -145,70 +139,23 @@ export function AthleteLevelCard({ clientId, defaultView = null, levelSwipe }: {
           View Rankings{rankedCount > 5 ? ` · ${rankedCount}` : ""} <ChevronRight className="h-4 w-4" />
         </button>
         <LeagueRecapHomeTile variant="mini" />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="min-w-0 [&>button]:mt-0 [&>button]:h-full [&>button]:rounded-xl [&>button]:border-0 [&>button]:bg-muted/40 [&>button]:px-2.5 [&>button]:py-2"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
+          <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 rounded-xl bg-muted/40 px-2.5 py-2 text-left transition-colors active:bg-muted"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Meet records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
+        </div>
       </div>
     </div>
   );
 
-  // Logging Level: the level, the bar to the next one, milestones, competition records.
-  const levelCard = (
-    <div className="flex h-full flex-col px-4 pt-3">
-      <button type="button" onClick={() => setOpen("levels")} className="w-full text-left active:opacity-70">
-        <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Logging Level</span>
-        <span className="mt-0.5 flex items-baseline justify-between gap-3">
-          <span className="text-lg font-bold uppercase tracking-tight">{isPending ? "—" : lvl.current.name}</span>
-          <span className="truncate text-[11px] text-muted-foreground">{lvl.next ? Number(lvl.remaining ?? 0).toLocaleString()+" pts to "+lvl.next.name : "Top level"}</span>
-        </span>
-        <Progress value={Number(lvl.pct ?? 0)} className="mt-2 h-1.5" />
-      </button>
-      {/* what just earned points: the level is earned, and this is how */}
-      {events.length > 0 && (
-        <ul className="mt-2.5 space-y-1">
-          {events.slice(0, 2).map((e) => (
-            <li key={e.id} className="flex min-w-0 items-center gap-2 text-[12px]">
-              <span className="w-10 shrink-0 font-black tabular-nums text-primary">+{e.xp}</span>
-              <span className="min-w-0 flex-1 truncate">{e.label ?? e.event_type.replace(/_/g, " ")}</span>
-              <span className="shrink-0 text-muted-foreground">{whenLabel(e.occurred_at)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-auto grid grid-cols-2 gap-2 pb-3 pt-3">
-        <div className="min-w-0 [&>button]:mt-0 [&>button]:h-full [&>button]:rounded-xl [&>button]:border-0 [&>button]:bg-muted/40 [&>button]:px-2.5 [&>button]:py-2"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
-        <button type="button" onClick={() => setOpen("powerlifting")} className="flex min-w-0 items-center gap-2 rounded-xl bg-muted/40 px-2.5 py-2 text-left transition-colors active:bg-muted"><Medal className="h-4 w-4 shrink-0 text-primary"/><span className="truncate text-xs font-semibold">Meet records</span><ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground"/></button>
-      </div>
-    </div>
-  );
-
-  // The League, then the Logging Level, unless the level shares a swipe
-  // (first, opening on the other card) instead.
-  const cards = levelSwipe
-    ? [{ key: "league", node: leagueCard }]
-    : [{ key: "league", node: leagueCard }, { key: "level", node: levelCard }];
   return (
     <>
-      <div className="space-y-3">
-        {levelSwipe && (
-          <SwipeCards
-            storageKey="jf-league-top"
-            remember={false}
-            cards={[
-              levelSwipe,
-              { key: "level", label: "Logging Level", node: <section data-standing="level" className="overflow-hidden rounded-2xl border bg-card">{levelCard}</section> },
-            ]}
-          />
-        )}
-        {cards.map((c) => (
-          <section key={c.key} data-standing={c.key} className="overflow-hidden rounded-2xl border bg-card">
-            {c.node}
-          </section>
-        ))}
-      </div>
+      <section data-standing="league" className="overflow-hidden rounded-2xl border bg-card">
+        {leagueCard}
+      </section>
 
-      <Sheet open={open === "levels" || open === "rankings"} onOpenChange={(o) => { if (!o) { setOpen(null); setSelectedLeagueAthlete(null); } }}>
+      <Sheet open={open === "rankings"} onOpenChange={(o) => { if (!o) { setOpen(null); setSelectedLeagueAthlete(null); } }}>
         <SheetContent side="bottom" hideCloseButton={open === "rankings" && !!selectedLeagueAthlete} className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-5 pb-safe-bottom pt-5">
-          {open === "levels" ? <LevelsView total={total} events={events} />
-            : open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} selected={selectedLeagueAthlete} onSelectedChange={setSelectedLeagueAthlete} />
-            : null}
+          {open === "rankings" ? <RankingsView myStats={stats} myBadgeCount={earned.length} selected={selectedLeagueAthlete} onSelectedChange={setSelectedLeagueAthlete} /> : null}
         </SheetContent>
       </Sheet>
 
@@ -222,94 +169,10 @@ export function AthleteLevelCard({ clientId, defaultView = null, levelSwipe }: {
   );
 }
 
-/** "today" / "yesterday" / "Tue" / "Sep 28". */
-function whenLabel(iso: string): string {
-  const d = new Date(iso);
-  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diff = Math.round((day(new Date()) - day(d)) / 86_400_000);
-  if (diff <= 0) return "today";
-  if (diff === 1) return "yesterday";
-  return diff < 7 ? format(d, "EEE") : format(d, "MMM d");
-}
-
 /** New-milestone reveals, for a page that doesn't show the standings themselves (Home). */
 export function LevelCelebrations({ clientId }: { clientId: string }) {
   const { data: catalog = [] } = useBadgeCatalog();
   return <AchievementCelebrations clientId={clientId} catalog={catalog} />;
-}
-
-function LevelsView({ total, events }: { total: number; events: XpEvent[] }) {
-  const lvl = levelForXp(total);
-  return (
-    <div className="space-y-5">
-      <SheetHeader className="text-left">
-        <SheetTitle>Logging Levels</SheetTitle>
-        <SheetDescription>Your Logging Level reflects how consistently and completely you track your journey. Milestones are managed separately.</SheetDescription>
-      </SheetHeader>
-      <div className="grid grid-cols-4 gap-1.5 text-center">
-        {["Train", "Log", "Earn points", "Level up"].map((t, i) => (
-          <div key={t} className="rounded-xl border bg-muted/30 px-1 py-2">
-            <div className="text-[10px] font-black text-primary">{i + 1}</div>
-            <div className="text-[11px] font-bold leading-tight">{t}</div>
-          </div>
-        ))}
-      </div>
-      <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-        <div className="flex items-baseline justify-between"><span className="text-sm font-black uppercase">{lvl.current.name}</span><span className="text-xs text-muted-foreground">{Number(lvl.xp ?? 0).toLocaleString()} pts</span></div>
-        <Progress value={lvl.pct} className="mt-2 h-2" />
-        <div className="mt-1 text-[11px] text-muted-foreground">{lvl.next ? `${Number(lvl.remaining ?? 0).toLocaleString()} points to ${lvl.next.name}` : "Top level reached."}</div>
-      </div>
-      <ul className="space-y-1.5">
-        {[...ATHLETE_LEVELS].reverse().map((l) => {
-          const here = l.index === lvl.current.index;
-          const reached = total >= l.min;
-          return (
-            <li key={l.name} className={cn("flex items-center justify-between rounded-lg border px-3 py-2 text-sm",
-              here ? "border-primary bg-primary/10" : "border-border", !reached && "opacity-60")}>
-              <div className="flex items-center gap-2">
-                <span className="font-bold uppercase">{l.name}</span>
-                {here && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">YOU'RE HERE</span>}
-              </div>
-              <span className="text-xs text-muted-foreground">{Number(l.min ?? 0).toLocaleString()} pts</span>
-            </li>
-          );
-        })}
-      </ul>
-      <div>
-        <div className="mb-2 text-sm font-semibold">How to earn points</div>
-        <ul className="space-y-1.5 text-sm">
-          {XP_RULES.map((r) => (
-            <li key={r.label} className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{r.label}{r.cap && <span className="ml-1 text-[10px]">({r.cap})</span>}</span>
-              <span className="shrink-0 font-bold text-primary">+{r.xp}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-[11px] text-muted-foreground">Editing a record never earns extra points. Monthly Performance League and the Hall of Strength are scored separately.</p>
-      </div>
-      <div>
-        <div className="mb-2 text-sm font-semibold">Points history</div>
-        {events.length === 0 ? (
-          <div className="text-sm text-muted-foreground">Finish a workout or log something to earn your first points.</div>
-        ) : (
-          <ul className="divide-y text-sm">
-            {events.slice(0, 25).map((e) => (
-              <li key={e.id} className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-3.5 w-3.5 text-primary" />
-                  <span>{e.label ?? e.event_type}</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold">+{e.xp}</div>
-                  <div className="text-[10px] text-muted-foreground">{format(new Date(e.occurred_at), "MMM d, yyyy")}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
 }
 
 type BadgeStats = AchievementMetrics;
@@ -427,8 +290,7 @@ function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague,
             <RankAvatar row={{ client_id: p.client_id, display_name: p.display_name, avatar_url: p.avatar_url, xp: theirXp, rank: 0, is_me: isMe }} size="h-14 w-14" />
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-lg font-black">{p.display_name}</span>{p.is_coach && <CoachTag />}</div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Logging level</div><div className="text-sm font-black uppercase tracking-wide text-primary">{levelForXp(theirXp).current.name}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">{Number(theirXp ?? 0).toLocaleString()} lifetime points · {publicBadges.length} milestones</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{publicBadges.length} milestones</div>
             </div>
           </div>
 
@@ -465,8 +327,6 @@ function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague,
                 <span /><span className="text-center">You</span><span className="truncate text-center">{p.display_name}</span>
               </div>
               {[
-                ["Level", levelForXp(myStats.xp).current.name, levelForXp(theirXp).current.name],
-                ["Lifetime points", Number(myStats?.xp ?? 0).toLocaleString(), Number(theirXp ?? 0).toLocaleString()],
                 ["Lifetime workouts", Number(myStats?.workouts_completed ?? 0).toLocaleString(), lifetimeWorkouts.toLocaleString()],
                 [`${monthName} workouts`, myLeague ? String(myLeague.workouts_completed) : "—", String(monthWorkouts)],
                 [`${monthName} weight lifted`, myWeight ? formatWeightLifted(myWeight.month_lb, unit) : "—", theirWeight ? formatWeightLifted(theirWeight.month_lb, unit) : "—"],
@@ -488,8 +348,6 @@ function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague,
     </div>
   );
 }
-const levelAccent = (xp:number) => { const n=levelForXp(xp).current.name; return n.includes("LEGEND")?"border-amber-400":n.includes("ELITE")?"border-violet-400":n.includes("ADVANCED")?"border-sky-400":n.includes("TRAINED")?"border-emerald-400":"border-slate-300"; };
-
 function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange }: {
   myStats: BadgeStats;
   myBadgeCount: number;
@@ -672,19 +530,5 @@ function RankAvatar({ row, size }: { row: RankRow; size: string }) {
       {row.avatar_url && <AvatarImage src={row.avatar_url} alt={row.display_name} />}
       <AvatarFallback className="text-xs font-bold">{row.display_name.slice(0, 1).toUpperCase()}</AvatarFallback>
     </Avatar>
-  );
-}
-
-function RankLine({ row, onSelect }: { row: RankRow; onSelect: (id: string) => void }) {
-  return (
-    <li role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onSelect(row.client_id)} onClick={() => onSelect(row.client_id)} className={cn("flex cursor-pointer items-center gap-3 border-l-4 px-3 py-2 text-sm transition hover:brightness-[0.98]", "border-border bg-card", levelAccent(row.xp), row.is_me && "bg-sky-50/60 ring-1 ring-inset ring-sky-300")}>
-      <span className="w-6 text-center font-bold text-muted-foreground">{row.rank}</span>
-      <RankAvatar row={row} size="h-8 w-8" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate font-semibold">{row.display_name}{row.is_me ? " (You)" : ""}</div>
-        <div className="text-[10px] font-bold uppercase text-muted-foreground">{levelForXp(row.xp).current.name}</div>
-      </div>
-      <span className="text-xs text-muted-foreground">{Number(row?.xp ?? 0).toLocaleString()} XP</span>
-    </li>
   );
 }

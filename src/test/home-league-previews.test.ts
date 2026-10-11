@@ -33,12 +33,14 @@ describe("Home League previews", () => {
     expect(leaguePreview([row(1, 900, true), row(2, 100)]).gap).toBeNull();
     expect(leaguePreview([row(null, 0, true, false)]).rank).toBeNull();
   });
-  it("Home order: calendar, body cards, crew feed, league previews, setup", () => {
+  it("Home order: calendar, body cards, crew feed, league previews, then setup (only what's left to do)", () => {
     const src = readFileSync("src/routes/_authenticated/portal/index.tsx", "utf8");
     const at = (s: string) => src.indexOf(s);
     expect(at("<UpcomingScheduleCard")).toBeLessThan(at("<SwipeCards"));
     expect(at("<SwipeCards")).toBeLessThan(at("<CommunityHomeStrip"));
     expect(at("<CommunityHomeStrip")).toBeLessThan(at("<HomeLeaguePreviews"));
-    expect(at("<HomeLeaguePreviews")).toBeLessThan(at('title="Setup"'));
+    expect(at("<HomeLeaguePreviews")).toBeLessThan(at("<InstallAppCard hideWhenDone />"));
+    expect(src).toContain("<NotificationSetupPrompt problemsOnly />");
+    expect(src).toContain("<CalendarSyncCard hideWhenDone />");
   });
 });
