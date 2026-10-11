@@ -107,6 +107,8 @@ export function HomeLeaguePreviews() {
             <span className="mt-0.5 flex items-baseline gap-1.5">
               <span className="text-lg font-bold leading-tight text-primary">#{league.rank}</span>
               <span className="truncate text-[11px] font-bold tabular-nums text-muted-foreground">{formatLeaguePoints(league.points)} pts</span>
+              {/* same Live mark as the League page, beside the rank as it sits beside "Top 10" there */}
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600"><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>Live</span>
             </span>
             <span className="truncate text-[11px] text-muted-foreground">
               {league.gap ? `${formatLeaguePoints(league.gap.pts)} pts to #${league.gap.to}` : "You're leading 🔥"}
