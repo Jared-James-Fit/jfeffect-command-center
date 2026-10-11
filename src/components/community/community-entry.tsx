@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { featuredLift, formatTopSet, homeCrewPosts, workoutHeadline, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
+import { featuredLift, formatTopSet, homeCrewDeck, workoutHeadline, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
 import { useCommunityActivity, useCommunityFeed, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -13,6 +13,7 @@ import { ShareWorkoutButton } from "@/components/community/share-workout-picker"
 import { CrewGoalStrip } from "@/components/community/crew-goal";
 import { EngagementPop } from "@/components/community/engagement-pop";
 import { usePostViewTracker } from "@/components/community/post-views";
+import { HomePulseCard } from "@/components/community/home-pulse-card";
 import { ShareNudge } from "@/components/community/share-nudge";
 
 const NEW_GRADIENT = "bg-primary";
@@ -73,7 +74,8 @@ export function CommunityHomeStrip() {
   const navigate = useNavigate();
   const openAt = (postId?: string) => navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : "feed" });
 
-  const { shown, more } = useMemo(() => homeCrewPosts(feed.data?.pages[0]?.posts ?? []), [feed.data]);
+  // a Crew Pulse up front, then the newest posts people made themselves
+  const { pulse, today, shown, more } = useMemo(() => homeCrewDeck(feed.data?.pages[0]?.posts ?? []), [feed.data]);
   const { data: urls } = usePostMediaUrls(shown);
   // "3 locked in today": people who showed up today (local day).
   const lockedToday = useMemo(() => {
@@ -89,6 +91,7 @@ export function CommunityHomeStrip() {
   // the invite sits second, after the newest post (first when there's none)
   const nudge = <ShareNudge key="nudge" surface="home" unit={unit} />;
   cards.splice(Math.min(1, cards.length), 0, nudge);
+  if (pulse) cards.unshift(<HomePulseCard key={`pulse:${pulse.id}`} post={pulse} today={today} unit={unit} onOpen={() => openAt(pulse.id)} />);
 
   return (
     <section data-crew-feed className="rounded-2xl border border-border/80 bg-card pb-3 pt-3">
@@ -107,7 +110,7 @@ export function CommunityHomeStrip() {
         <ShareWorkoutButton unit={unit} label="Post" previewOnly={isImpersonating} className="h-8 px-3 text-[12px]" />
       </div>
       <div className="mt-2.5 flex h-[200px] snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain px-[9%] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {shown.length === 0 && (
+        {shown.length === 0 && !pulse && (
           <div className="flex h-full w-[82%] shrink-0 snap-center snap-always flex-col justify-center rounded-[20px] border border-dashed border-border bg-muted/30 p-4">
             <div className="text-[15px] font-black leading-tight">Be the first to share this week</div>
             <div className="mt-1 text-[12.5px] leading-snug text-muted-foreground">Post a session for the crew. Your coach sees every one.</div>

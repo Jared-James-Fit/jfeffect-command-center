@@ -5,7 +5,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { PULSE_STRIP_ROWS, pickWorkoutWin, postTimeLabel, reactionEmoji, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { useReact } from "@/lib/community.queries";
-import { WIN_STYLE } from "@/components/community/post-card";
+import { WIN_STYLE } from "@/components/community/pulse-style";
 
 /**
  * A day of Pulses, folded into one card: a row per finished session (who,
