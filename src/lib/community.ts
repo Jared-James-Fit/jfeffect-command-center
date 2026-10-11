@@ -1344,7 +1344,7 @@ export function homeCrewPosts<T extends Pick<CommunityPost, "id" | "created_at">
 export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; stats?: { pr_count?: number } | null }>(
   posts: T[],
   now = Date.now(),
-  max = HOME_CREW_POSTS,
+  max = HOME_DECK_POSTS,
 ): { pulse: T | null; today: number; shown: T[]; more: number } {
   const t = (p: T) => new Date(p.created_at).getTime();
   const newest = [...posts].sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
@@ -1354,8 +1354,12 @@ export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> 
   midnight.setHours(0, 0, 0, 0);
   const today = pulses.filter((p) => t(p) >= midnight.getTime()).length;
   const regular = homeCrewPosts(newest.filter((p) => !isPulsePost(p)), now, max);
-  return { pulse, today, shown: regular.shown, more: regular.more + Math.max(0, pulses.length - 1) };
+  // "N more in the feed": the posts people made that didn't fit
+  return { pulse, today, shown: regular.shown, more: regular.more };
 }
+
+/** Regular posts Home's Crew feed swipes through after the Crew Pulse. */
+export const HOME_DECK_POSTS = 3;
 
 /** Pulses (automatic workout posts) Home's Crew feed shows at most. */
 export const HOME_CREW_PULSES = 2;

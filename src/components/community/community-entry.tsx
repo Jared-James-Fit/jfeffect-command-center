@@ -73,6 +73,8 @@ export function CommunityHomeStrip() {
   const seenAt = activity?.seen_at ? new Date(activity.seen_at).getTime() : 0;
   const navigate = useNavigate();
   const openAt = (postId?: string) => navigate({ to: "/portal/community", hash: postId ? `at=${postId}` : "feed" });
+  // a card opens its post in full (likes, comments); the last card opens the feed
+  const openPost = (postId: string) => navigate({ to: "/portal/community", hash: `post=${postId}` });
 
   // a Crew Pulse up front, then the newest posts people made themselves
   const { pulse, today, shown, more } = useMemo(() => homeCrewDeck(feed.data?.pages[0]?.posts ?? []), [feed.data]);
@@ -87,11 +89,11 @@ export function CommunityHomeStrip() {
   }, [feed.data]);
 
   if (!activity?.enabled || feed.isLoading) return null;
-  const cards = shown.map((post) => <CrewCard key={post.id} post={post} unit={unit} thumb={urls?.[postThumbPath(post) ?? ""] ?? null} fresh={!post.is_mine && new Date(post.created_at).getTime() > seenAt} onOpen={() => openAt(post.id)} />);
+  const cards = shown.map((post) => <CrewCard key={post.id} post={post} unit={unit} thumb={urls?.[postThumbPath(post) ?? ""] ?? null} fresh={!post.is_mine && new Date(post.created_at).getTime() > seenAt} onOpen={() => openPost(post.id)} />);
   // the invite sits second, after the newest post (first when there's none)
   const nudge = <ShareNudge key="nudge" surface="home" unit={unit} />;
   cards.splice(Math.min(1, cards.length), 0, nudge);
-  if (pulse) cards.unshift(<HomePulseCard key={`pulse:${pulse.id}`} post={pulse} today={today} unit={unit} onOpen={() => openAt(pulse.id)} />);
+  if (pulse) cards.unshift(<HomePulseCard key={`pulse:${pulse.id}`} post={pulse} today={today} unit={unit} onOpen={() => openPost(pulse.id)} />);
 
   return (
     <section data-crew-feed className="rounded-2xl border border-border/80 bg-card pb-3 pt-3">
@@ -117,7 +119,7 @@ export function CommunityHomeStrip() {
           </div>
         )}
         {cards}
-        <SeeMoreCard posts={feed.data?.pages[0]?.posts ?? []} shown={shown} more={more} onOpen={() => openAt()} />
+        {more > 0 && <SeeMoreCard posts={feed.data?.pages[0]?.posts ?? []} shown={shown} more={more} onOpen={() => openAt()} />}
       </div>
       <CrewGoalStrip className="mt-3 px-3.5" />
     </section>
