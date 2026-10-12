@@ -53,7 +53,7 @@ describe("history feeding suggestions", () => {
     expect(src).toContain("fetchAllPages((from, to) =>");
   });
   it("passes bodyweight into the model and recomputes when it changes", () => {
-    expect(src).toContain("warmup: warmupForModel, bodyweightKg });");
-    expect(src).toMatch(/warmupForModel\?\.rpe, bodyweightKg\]\);/);
+    expect(src).toContain("warmup: warmupForModel, bodyweightKg,");
+    expect(src).toMatch(/warmupForModel\?\.rpe, bodyweightKg, dayRead\]\);/);
   });
 });

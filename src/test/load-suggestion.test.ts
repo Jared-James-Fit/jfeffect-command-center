@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildLoadModel,
   warmupTrust,
+  todayVsUsual,
+  dayFactorFrom,
+  DAY_FACTOR_MAX,
   estimateFor,
   loadStep,
   percentOf1RM,
@@ -363,5 +366,53 @@ describe("a hard last warm-up sets today's weight", () => {
     expect(warmupTrust(8)).toBe(1);
     expect(warmupTrust(9)).toBe(1);
     expect(warmupTrust(null)).toBe(0);
+  });
+});
+
+describe("live across cards: today's top set moves the lift's other cards", () => {
+  const plan = { reps: 5, rpe: 8 };
+  const cold = estimateFor(buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW }), 5, 8)!.load;
+
+  it("reads today vs usual from the sets logged (1 = as predicted)", () => {
+    const usual = todayVsUsual({ history: twoWeeks, sets: [{ load: cold, reps: 5, rpe: 8 }], unit: "kg", now: NOW })!;
+    expect(usual).toBeCloseTo(1, 6);
+    const strong = todayVsUsual({ history: twoWeeks, sets: [{ load: cold * 1.05, reps: 5, rpe: 8 }], unit: "kg", now: NOW })!;
+    expect(strong).toBeCloseTo(1.05, 6);
+  });
+
+  it("ignores easy-rated sets and needs history", () => {
+    expect(todayVsUsual({ history: twoWeeks, sets: [{ load: 200, reps: 5, rpe: 5 }], unit: "kg", now: NOW })).toBeNull();
+    expect(todayVsUsual({ history: [], sets: [{ load: 140, reps: 5, rpe: 8 }], unit: "kg", now: NOW })).toBeNull();
+  });
+
+  it("trust and cap: same exercise 80%, a variation 50%, never past ±8%", () => {
+    expect(dayFactorFrom(1.05, 0.8)).toBeCloseTo(1.04, 6);
+    expect(dayFactorFrom(1.05, 0.5)).toBeCloseTo(1.025, 6);
+    expect(dayFactorFrom(1.3, 0.8)).toBeCloseTo(1 + DAY_FACTOR_MAX, 6);
+    expect(dayFactorFrom(0.6, 0.8)).toBeCloseTo(1 - DAY_FACTOR_MAX, 6);
+    expect(dayFactorFrom(1.003, 0.8)).toBeNull();
+  });
+
+  it("a back-off before its own first set moves by the day factor, replacing the review forecast", () => {
+    const tired = { multiplier: 0.97, reasons: ["short sleep"] };
+    const m = buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, readiness: tired, dayFactor: 1.04 });
+    expect(m.dayFactor).toBeCloseTo(1.04, 6);
+    expect(m.readiness.multiplier).toBe(1);
+    expect(estimateFor(m, 5, 8)!.load / cold).toBeCloseTo(1.04, 6);
+    expect(suggestSetLoad(m, plan)!.target).toBeGreaterThan(suggestSetLoad(buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW }), plan)!.target);
+  });
+
+  it("once the card has its own set, its own sets lead (no day factor)", () => {
+    const m = buildLoadModel({ history: twoWeeks, today: [{ load: 150, reps: 5, rpe: 8 }], unit: "kg", now: NOW, dayFactor: 0.95 });
+    expect(m.dayFactor).toBeNull();
+    expect(m.source).toBe("blend");
+  });
+
+  it("a brand-new lift's back-off borrows today's top set of the same exercise", () => {
+    const m = buildLoadModel({ history: [], today: [], unit: "kg", now: NOW, carryToday: [{ load: 150, reps: 3, rpe: 8 }] });
+    expect(m.status).toBe("ready");
+    expect(m.source).toBe("today");
+    expect(m.carried).toBe(true);
+    expect(suggestSetLoad(m, { reps: 5, rpe: 8 })!.target).toBeLessThan(150);
   });
 });
