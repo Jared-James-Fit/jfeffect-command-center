@@ -106,9 +106,10 @@ describe("Home's Crew feed", () => {
 describe("Home order: what you do today, then what you check", () => {
   const home = read("src/routes/_authenticated/portal/index.tsx");
   const at = (s: string) => home.indexOf(s);
-  it("three sections: Today (schedule), Rankings (one card; no feed shelf), Progress (weigh-in, water, progress, block)", () => {
+  it("three sections: Today (schedule), Rankings (one card; no feed shelf), Progress (weigh-in, water, progress); the block lives in Workouts", () => {
     expect(home).not.toContain("<CommunityHomeStrip");
-    const order = ['aria-label="Today"', "<UpcomingScheduleCard", "<HomeLeaguePreviews", 'aria-label="Progress"', "<BodyweightSummaryCard", "<HomeWaterCard", "<ProgressSummaryCard", "<TrainingBlockCard"];
+    expect(home).not.toContain("<TrainingBlockCard");
+    const order = ['aria-label="Today"', "<UpcomingScheduleCard", "<HomeLeaguePreviews", 'aria-label="Progress"', "<BodyweightSummaryCard", "<HomeWaterCard", "<ProgressSummaryCard"];
     const idx = order.map(at);
     expect(idx.every((i) => i > 0)).toBe(true);
     expect([...idx].sort((a, b) => a - b)).toEqual(idx);

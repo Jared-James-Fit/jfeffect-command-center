@@ -58,7 +58,8 @@ describe("her calendar on the finance home", () => {
     const c = read("src/components/home/upcoming-schedule-card.tsx");
     expect(c).toContain("enabled: !!clientId && links,");
     expect(c).toContain("{links && <div");
-    expect(c).toContain("const href = !links ? null :");
+    expect(c).toContain("function itemLink(item: CalendarItem, links: boolean)");
+    expect(c).toContain("  if (!links) return null;");
   });
 
   it("the subscribe link and its status follow the link; a coach's client view never does", () => {

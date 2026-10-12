@@ -58,11 +58,13 @@ describe("every Home leads with its schedule", () => {
     const src = readFileSync("src/routes/_authenticated/m/index.tsx", "utf8");
     expect(at(src, "<MemberWeekCard")).toBeLessThan(at(src, "<HomeBodyweightCard"));
   });
-  it("all three use the same strip", () => {
+  it("the coach and member homes share the strip; the client Home is a day agenda (weeks live in Workouts)", () => {
     for (const f of [
       "src/components/admin-calendar/dashboard-schedule-card.tsx",
-      "src/components/home/upcoming-schedule-card.tsx",
       "src/components/member/member-week-card.tsx",
     ]) expect(readFileSync(f, "utf8")).toContain("<WeekStrip");
+    const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
+    expect(client).not.toContain("<WeekStrip");
+    expect(client).toContain("buildHomeAgenda(items, { today })");
   });
 });

@@ -62,18 +62,46 @@ export function placeLabel(location: string | null | undefined): string | null {
   return loc.split(",")[0].trim() || null;
 }
 
-export const KIND_META: Record<CalendarKind, { label: string; chip: string; dot: string }> = {
-  event:          { label: "Event",        chip: "bg-primary/15 text-primary border-primary/30",                dot: "bg-primary" },
-  important_date: { label: "Key Date",     chip: "bg-amber-500/15 text-amber-300 border-amber-500/30",          dot: "bg-amber-400" },
-  appointment:    { label: "Appointment",  chip: "bg-blue-500/15 text-blue-300 border-blue-500/30",             dot: "bg-blue-400" },
-  pt_session:     { label: "PT Session",   chip: "bg-violet-500/15 text-violet-300 border-violet-500/30",       dot: "bg-violet-400" },
-  // Cyan: not green/red, which read as done/missed elsewhere (completion, compliance).
-  workout:        { label: "Workout",      chip: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",             dot: "bg-cyan-400" },
-  check_in:       { label: "Check-In",     chip: "bg-amber-500/15 text-amber-300 border-amber-500/30",           dot: "bg-amber-400" },
-  google_event:   { label: "Google",       chip: "bg-slate-500/15 text-slate-300 border-slate-500/30",          dot: "bg-slate-400" },
-  membership_event: { label: "Membership", chip: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30",    dot: "bg-fuchsia-400" },
-  cardio:           { label: "Cardio",      chip: "bg-rose-500/15 text-rose-300 border-rose-500/30",              dot: "bg-rose-400" },
+/**
+ * Four colour families, everywhere a calendar item shows (client and coach):
+ *   training (workouts, cardio)            cyan
+ *   with a person (sessions, appointments) violet
+ *   from the coach (events, key dates, check-ins, membership) amber
+ *   Google (their own calendar)            slate, quiet
+ * Red stays for "today" and the selected day; green for done.
+ */
+export type KindFamily = "training" | "people" | "coach" | "google";
+export const KIND_FAMILY: Record<CalendarKind, KindFamily> = {
+  workout: "training",
+  cardio: "training",
+  pt_session: "people",
+  appointment: "people",
+  event: "coach",
+  important_date: "coach",
+  check_in: "coach",
+  membership_event: "coach",
+  google_event: "google",
 };
+const FAMILY_STYLE: Record<KindFamily, { chip: string; dot: string }> = {
+  training: { chip: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30", dot: "bg-cyan-400" },
+  people: { chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30", dot: "bg-violet-400" },
+  coach: { chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30", dot: "bg-amber-400" },
+  google: { chip: "bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/25", dot: "bg-slate-400" },
+};
+const KIND_LABEL: Record<CalendarKind, string> = {
+  event: "Event",
+  important_date: "Key Date",
+  appointment: "Appointment",
+  pt_session: "PT Session",
+  workout: "Workout",
+  check_in: "Check-In",
+  google_event: "Google",
+  membership_event: "Membership",
+  cardio: "Cardio",
+};
+export const KIND_META: Record<CalendarKind, { label: string; chip: string; dot: string }> = Object.fromEntries(
+  (Object.keys(KIND_LABEL) as CalendarKind[]).map((k) => [k, { label: KIND_LABEL[k], ...FAMILY_STYLE[KIND_FAMILY[k]] }]),
+) as Record<CalendarKind, { label: string; chip: string; dot: string }>;
 
 /** Per-kind action label so clients/admins see the *thing they can do*, not just "Open". */
 export const CTA_LABELS: Record<CalendarKind, string> = {

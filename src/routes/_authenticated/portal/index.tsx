@@ -8,7 +8,6 @@ import { usePortalUserId } from "@/lib/client-impersonation";
 import { Bell } from "lucide-react";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
-import { derivePhase } from "@/lib/training-phases";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
@@ -16,7 +15,6 @@ import { ClientActionRequestModal } from "@/components/client-action-request-mod
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { InstallAppCard } from "@/components/portal/install-app-card";
 import { UpcomingScheduleCard } from "@/components/home/upcoming-schedule-card";
-import { TrainingBlockCard } from "@/components/portal/training-block-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
@@ -129,16 +127,6 @@ function PortalHome() {
       .catch(() => {});
   }, [client?.id, bootstrapOcc, ensureMessengerCheckins, qc]);
 
-  const { data: phases = [] } = useQuery({
-    queryKey: ["my-phases", client?.id],
-    enabled: !!client?.id,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("training_phases").select("*").eq("client_id", client!.id)
-        .order("start_date", { ascending: false });
-      return (data ?? []) as TrainingPhase[];
-    },
-  });
 
   const { data: goalsSetup } = useQuery({
     queryKey: ["client-goals-setup", client?.id],
@@ -224,11 +212,6 @@ function PortalHome() {
     },
   });
   useEffect(() => { if (coachUpdates) logPerf("card:coach-updates loaded"); }, [coachUpdates]);
-
-  const activePhase = phases.find((p) => {
-    const s = derivePhase(p).state;
-    return s === "active" || s === "ending-soon" || s === "due-today";
-  }) ?? phases.find((p) => derivePhase(p).state === "upcoming") ?? null;
 
   // Compact upcoming appointment (single, only if within ~14 days).
   const fetchPortalAppointments = usePovFn(useServerFn(listMyPortalAppointments));
@@ -395,12 +378,6 @@ function PortalHome() {
                 ]}
               />
             </DeferRender>
-            {/* the current block (only while one is running or about to) */}
-            {activePhase && (
-              <SectionErrorBoundary label="Training block">
-                <TrainingBlockCard phase={activePhase} />
-              </SectionErrorBoundary>
-            )}
             <SectionErrorBoundary label="Devices">
               <WearablesCard mode="summary" />
             </SectionErrorBoundary>

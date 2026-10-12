@@ -79,3 +79,69 @@ export function selectHomeUpcoming(
   const rows = trim(nextDay, maxNext);
   return { mode: "next", rows, moreCount: later.length - rows.length };
 }
+
+// ---------------------------------------------------------------------------
+// Home agenda: today in full, then the next few days in brief.
+//
+// Home answers "what's on today and what's next"; the Workouts calendar owns
+// navigating weeks and months, the Schedule page owns everything at once.
+// Cardio rides on training days (shown with the workout), so it's left out.
+
+export type HomeAgenda = {
+  today: CalendarItem[];
+  /** The next days with something on them, in order, rows capped across all days. */
+  upcoming: Array<{ date: string; items: CalendarItem[] }>;
+  /** Rows left out of `upcoming` by the cap. */
+  moreUpcoming: number;
+};
+
+export const HOME_AGENDA_DAYS = 7;
+export const HOME_AGENDA_MAX_UPCOMING = 5;
+
+const DAY_MS = 86_400_000;
+function addDaysIso(day: string, n: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + n * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** Workouts lead the day (untimed), then everything by start time, all-day items before timed ones. */
+function agendaOrder(a: CalendarItem, b: CalendarItem): number {
+  const rank = (i: CalendarItem) => (i.kind === "workout" ? 0 : i.startsAt ? 2 : 1);
+  return rank(a) - rank(b) || (a.startsAt ?? "").localeCompare(b.startsAt ?? "") || a.title.localeCompare(b.title);
+}
+
+export function buildHomeAgenda(
+  items: CalendarItem[] | null | undefined,
+  options: { today: string; days?: number; maxUpcoming?: number },
+): HomeAgenda {
+  const { today } = options;
+  const horizon = addDaysIso(today, options.days ?? HOME_AGENDA_DAYS);
+  const max = options.maxUpcoming ?? HOME_AGENDA_MAX_UPCOMING;
+  const seen = new Set<string>();
+  const live = (items ?? []).filter((i) => {
+    if (!i || i.kind === "cardio" || i.status === "Cancelled") return false;
+    if (seen.has(i.id)) return false;
+    seen.add(i.id);
+    return true;
+  });
+
+  const todayItems = live.filter((i) => i.date === today).sort(agendaOrder);
+  const byDay = new Map<string, CalendarItem[]>();
+  for (const i of live) {
+    if (i.date <= today || i.date > horizon) continue;
+    byDay.set(i.date, [...(byDay.get(i.date) ?? []), i]);
+  }
+  const upcoming: HomeAgenda["upcoming"] = [];
+  let shown = 0;
+  let total = 0;
+  for (const date of [...byDay.keys()].sort()) {
+    const dayItems = byDay.get(date)!.sort(agendaOrder);
+    total += dayItems.length;
+    const room = max - shown;
+    if (room <= 0) continue;
+    const take = dayItems.slice(0, room);
+    upcoming.push({ date, items: take });
+    shown += take.length;
+  }
+  return { today: todayItems, upcoming, moreUpcoming: total - shown };
+}

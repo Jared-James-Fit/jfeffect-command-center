@@ -90,3 +90,21 @@ export function WorkoutStatusMark({ mark, onPrimary = false, className }: { mark
     </span>
   );
 }
+
+/** One quiet line under a calendar saying what the marks mean. */
+export function WorkoutMarkLegend({ className }: { className?: string }) {
+  const items: Array<[WorkoutMark, string]> = [
+    [{ kind: "scheduled" }, "Planned"],
+    [{ kind: "progress", pct: 50 }, "In progress"],
+    [{ kind: "done" }, "Done"],
+  ];
+  return (
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-muted-foreground", className)}>
+      {items.map(([mark, label]) => (
+        <span key={label} className="inline-flex items-center gap-1">
+          <WorkoutStatusMark mark={mark} /> {label}
+        </span>
+      ))}
+    </div>
+  );
+}

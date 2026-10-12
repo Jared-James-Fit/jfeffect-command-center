@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink, MapPin, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { KIND_META, ctaLabel, placeLabel, type CalendarItem, type CalendarKind } from "@/lib/calendar-sources";
+import { KIND_FAMILY, KIND_META, ctaLabel, placeLabel, type CalendarItem, type CalendarKind, type KindFamily } from "@/lib/calendar-sources";
 import { compactTimeRange, durationLabel } from "@/lib/schedule-time";
 import { CalendarEmptyState } from "./empty-state";
 
@@ -189,21 +189,32 @@ export function CalendarBoard({
   );
 }
 
+const FAMILY_LEGEND: Record<KindFamily, string> = {
+  training: "Training",
+  people: "Sessions",
+  coach: "Coach events",
+  google: "Google",
+};
+
+/** One entry per colour family on screen (four at most), not one per item type. */
 function LegendRow({ items }: { items: CalendarItem[] }) {
-  const kinds = useMemo(() => {
-    const s = new Set<CalendarKind>();
-    for (const i of items) s.add(i.kind);
-    return Array.from(s);
+  const families = useMemo(() => {
+    const order: KindFamily[] = ["training", "people", "coach", "google"];
+    const seen = new Set(items.map((i) => KIND_FAMILY[i.kind]));
+    return order.filter((f) => seen.has(f));
   }, [items]);
-  if (kinds.length === 0) return null;
+  if (families.length < 2) return null;
   return (
-    <div className="mt-3 flex flex-wrap gap-1.5">
-      {kinds.map((k) => (
-        <span key={k} className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-          <span className={cn("h-2 w-2 rounded-full", KIND_META[k].dot)} />
-          {KIND_META[k].label}
-        </span>
-      ))}
+    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+      {families.map((f) => {
+        const kind = (Object.keys(KIND_FAMILY) as CalendarKind[]).find((k) => KIND_FAMILY[k] === f)!;
+        return (
+          <span key={f} className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+            <span className={cn("h-2 w-2 rounded-full", KIND_META[kind].dot)} />
+            {FAMILY_LEGEND[f]}
+          </span>
+        );
+      })}
     </div>
   );
 }

@@ -32,7 +32,6 @@ import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
 import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
-import { deriveWeeklyPurposeLabelByRowId, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
 import { pickCurrentBlock } from "@/lib/block-dates";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
@@ -82,7 +81,7 @@ import {
 } from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 import { WeekStrip, statusDotClass } from "@/components/workouts/week-strip";
-import { WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
+import { WorkoutMarkLegend, WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import type { ProgramRoadmap } from "@/lib/training-roadmap";
@@ -131,81 +130,6 @@ export function WorkoutsExperience({
   // Date → workouts (shared with the coach's messenger workout peek).
   const byDate = useMemo(() => buildWorkoutDateMap(dayItems, committedDays), [dayItems, committedDays]);
 
-  // Fetch priority-labelled rows for every visible scheduled day so the
-  // month/week grids can render compact priority chips. Only pulls the
-  // metadata columns needed to derive labels.
-  const dayIds = useMemo(
-    () => dayItems.map((it) => it.day?.id).filter(Boolean) as string[],
-    [dayItems],
-  );
-  const { data: priorityRows = [] } = useQuery({
-    queryKey: ["workouts-priority-rows", clientId, dayIds.length],
-    enabled: dayIds.length > 0,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("pl_exercise_rows")
-        .select("day_id, sort_order, purpose_label, movement_family, card_color, exercise_id, exercises(competition_lift_type, is_competition_lift, exercise_category)")
-        .in("day_id", dayIds)
-        .order("sort_order");
-      return (data ?? []) as any[];
-    },
-  });
-
-  const priorityChipsByDate = useMemo(() => {
-    const rowsByDay = new Map<string, any[]>();
-    for (const r of priorityRows) {
-      const list = rowsByDay.get(r.day_id) ?? [];
-      list.push(r);
-      rowsByDay.set(r.day_id, list);
-    }
-    const FAMILY: Record<string, string> = {
-      squat: "Squat", bench: "Bench", deadlift: "Deadlift",
-      upper: "Upper", lower: "Lower", other: "Other",
-    };
-    const priorityByRowId = new Map<string, string>();
-    const itemsByWeek = new Map<string, WorkoutItem[]>();
-    for (const item of dayItems) {
-      const key = `${item.block?.id ?? "block"}:${item.week?.id ?? "week"}`;
-      const group = itemsByWeek.get(key) ?? [];
-      group.push(item);
-      itemsByWeek.set(key, group);
-    }
-
-    for (const weekItems of itemsByWeek.values()) {
-      const labels = deriveWeeklyPurposeLabelByRowId(
-        weekItems.map((item, index) => {
-          const scheduled = dayScheduledDate(item, committedDays);
-          return {
-            order: scheduled?.getTime() ?? item.day?.day_index ?? item.day?.sort_order ?? index,
-            rows: (rowsByDay.get(item.day?.id) ?? []) as any[],
-          };
-        }),
-        (row: any) => row.exercises ?? null,
-      );
-      labels.forEach((label, rowId) => priorityByRowId.set(rowId, label));
-    }
-
-    const out = new Map<string, Array<{ label: string; family: string }>>();
-    for (const it of dayItems) {
-      const id = it.day?.id;
-      if (!id) continue;
-      const rows = rowsByDay.get(id) ?? [];
-      if (!rows.length) continue;
-      const chips: Array<{ label: string; family: string }> = [];
-      rows.forEach((r: any) => {
-        const label = priorityByRowId.get(r.id) ?? "Assistance";
-        if (!label || label === "Assistance") return;
-        const famRaw = (r.movement_family as string | null) ?? r.exercises?.competition_lift_type ?? "";
-        chips.push({ label, family: FAMILY[String(famRaw).toLowerCase()] ?? "" });
-      });
-      if (!chips.length) continue;
-      const d = dayScheduledDate(it, committedDays);
-      if (!d) continue;
-      out.set(toLocalISO(d), chips);
-    }
-    return out;
-  }, [priorityRows, dayItems, committedDays]);
 
   // --- Selected date drives the calendar tab and header context. ----------
   const today = localStartOfToday();
@@ -451,43 +375,19 @@ export function WorkoutsExperience({
         title={mode === "coach" ? `${clientName ?? "Client"} — Workouts` : "Workouts"}
         subtitle={subtitle || undefined}
         actions={
+          // Two everyday actions; the occasional ones (report, history,
+          // rescheduling several workouts) live in ⋮.
           <div className="flex items-center gap-1.5">
             <Button
               size="sm"
               variant="outline"
-              className="h-8 gap-1"
-              onClick={handleDownloadPdf}
-              disabled={downloadingPdf}
-              aria-label="Download complete training report as PDF (all blocks + logged data)"
-              title="Download complete training report (all blocks + logged workouts)"
-            >
-              {downloadingPdf ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Download className="h-3.5 w-3.5" />
-              )}
-              <span className="hidden sm:inline">PDF</span>
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1"
+              className="h-9 gap-1"
               onClick={() => setSelectedDate(localStartOfToday())}
             >
               <Sun className="h-3.5 w-3.5" /> Today
             </Button>
-            <Button asChild size="sm" variant="outline" className="h-8 gap-1">
-              <Link
-                to={(mode === "coach" ? "/admin/clients/$id/schedule" : "/portal/schedule") as any}
-                params={mode === "coach" ? ({ id: clientId } as any) : (undefined as any)}
-                aria-label="Open full calendar"
-              >
-                <CalendarIcon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Calendar</span>
-              </Link>
-            </Button>
             {mode === "self" && (
-              <Button asChild size="sm" variant="outline" className="h-8 gap-1">
+              <Button asChild size="sm" variant="outline" className="h-9 gap-1">
                 <Link to={"/portal/workouts/analytics" as any} aria-label="Open training analytics">
                   <Activity className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Analytics</span>
@@ -496,14 +396,11 @@ export function WorkoutsExperience({
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="More actions">
+                <Button size="sm" variant="ghost" className="h-9 w-9 p-0" aria-label="More actions">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
-                  <History className="mr-2 h-4 w-4" /> Schedule history
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() =>
                     navigate({
@@ -512,15 +409,15 @@ export function WorkoutsExperience({
                     } as any)
                   }
                 >
-                  <ClipboardList className="mr-2 h-4 w-4" /> Manage schedule
+                  <Move className="mr-2 h-4 w-4" /> Move several workouts
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
+                  <History className="mr-2 h-4 w-4" /> Schedule history
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() =>
-                    navigate({ to: "/portal/workouts/analytics" as any } as any)
-                  }
-                >
-                  <Activity className="mr-2 h-4 w-4" /> Training analytics
+                <DropdownMenuItem onSelect={() => void handleDownloadPdf()} disabled={downloadingPdf}>
+                  {downloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Training report (PDF)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -596,11 +493,11 @@ export function WorkoutsExperience({
                       selectedDate={selectedDate}
                       onSelectDate={setSelectedDate}
                       byDate={byDate}
-                      chipsByDate={priorityChipsByDate}
                       dnd={dnd}
                     />
                   )}
                 </CalendarDndProvider>
+                <WorkoutMarkLegend className="-mt-2 px-1" />
                 <SelectedDayList
                   items={byDate.get(toLocalISO(selectedDate)) ?? []}
                   date={selectedDate}
@@ -713,12 +610,11 @@ export type { CalendarDnd } from "@/components/workouts/calendar-day-dnd";
 /* ---------------------------------------------------------------------- */
 
 function MonthGrid({
-  selectedDate, onSelectDate, byDate, chipsByDate, dnd,
+  selectedDate, onSelectDate, byDate, dnd,
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
   byDate: Map<string, WorkoutItem[]>;
-  chipsByDate?: Map<string, Array<{ label: string; family: string }>>;
   dnd?: CalendarDnd;
 }) {
   const monthStart = startOfMonth(selectedDate);
@@ -809,33 +705,6 @@ function MonthGrid({
                   {title}{extraCount > 0 ? ` +${extraCount}` : ""}
                 </span>
               )}
-              {(() => {
-                const chips = chipsByDate?.get(iso) ?? [];
-                if (!chips.length) return null;
-                const shown = chips.slice(0, 2);
-                const extra = chips.length - shown.length;
-                return (
-                  <div className="mt-1 flex flex-wrap gap-0.5">
-                    {shown.map((c, i) => (
-                      <span
-                        key={i}
-                        className={cn(
-                          "truncate rounded border px-1 text-[9px] font-semibold leading-tight",
-                          purposeLabelBadgeClass(c.label),
-                        )}
-                        title={c.family ? `${c.label} ${c.family}` : c.label}
-                      >
-                        {c.label[0]}{c.family ? ` ${c.family}` : ""}
-                      </span>
-                    ))}
-                    {extra > 0 && (
-                      <span className="truncate rounded border border-muted-foreground/30 bg-muted px-1 text-[9px] font-semibold leading-tight text-muted-foreground">
-                        +{extra}
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
             </button>
               )}
             </CalendarDayCell>
