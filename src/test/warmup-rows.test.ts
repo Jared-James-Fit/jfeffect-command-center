@@ -25,70 +25,64 @@ const preview = (w: { load: number; reps: number; rpe: number | null }) =>
 const tuneProps = { target: { reps: 7, rpe: 4 }, preview, openSets: 3, onUseForAllSets: async () => 3 };
 
 describe("warm-up rows in the set table", () => {
-  it("before the first working set: 'Last warm-up → today's weight', with what to work up to", () => {
+  it("before the first working set: one slim 'Last warm-up' row with what to work up to", () => {
     const html = render({ prompt: { suggested: { load: 125, reps: 2 }, tunes: true } });
     expect(html).toContain('data-testid="warmup-prompt"');
     expect(html).toContain(">W<");
-    expect(html).toContain("Last warm-up → today&#x27;s weight");
-    expect(html).toContain("Work up to ~125 × 2, log it, get your sets");
+    expect(html).toContain("Last warm-up");
+    expect(html).toContain("~125 × 2");
+    expect(html).toContain(">Log<");
+    expect(render({ prompt: { suggested: null, tunes: true } })).toContain("sets today&#x27;s weight");
   });
 
-  it("no history yet: says the warm-up is how to get a working weight", () => {
-    expect(render({ prompt: { suggested: null, tunes: true } })).toContain("Log it to get your working weight");
+  it("once it can't tune, the warm-up prompt goes (e1RM has its own chip)", () => {
+    expect(render({ prompt: { suggested: null, tunes: false } })).not.toContain("warmup-prompt");
+    expect(render({ prompt: { suggested: null, tunes: false } })).not.toContain("e1RM");
   });
 
-  it("after working sets it stays, as the e1RM calculator", () => {
-    const html = render({ prompt: { suggested: { load: 125, reps: 2 }, tunes: false } });
-    expect(html).toContain("e1RM calculator");
-    expect(html).toContain("Any set · weight × reps @ RPE → rough 1RM");
-    expect(html).toContain(">Open<");
-  });
-
-  it("logged warm-ups show weight × reps @ RPE and a rough 1RM", () => {
-    const html = render({ sets: [set], prompt: { suggested: null, tunes: true }, tunedId: "a" });
+  it("logged warm-ups stay as compact W rows: weight × reps, how it felt, tuned", () => {
+    const html = render({ sets: [set], tunedId: "a" });
     expect(html).not.toContain("warmup-prompt");
     expect(html).toContain("140 kg × 2");
-    expect(html).toContain("@ 7");
-    expect(html).toContain("≈1RM 162.5");
+    expect(html).toContain("Smooth 7");
     expect(html).toContain("✓ tuned");
+    expect(html).not.toContain("1RM");
   });
 
-  it("read-only rows stay, without editing or a prompt", () => {
-    const html = render({ sets: [set], canEdit: false, prompt: { suggested: null, tunes: false } });
+  it("read-only: rows stay, no edit, no prompt", () => {
+    const html = render({ sets: [set], canEdit: false });
     expect(html).toContain("140 kg × 2");
     expect(html).not.toContain("Edit warm-up");
-    expect(render({ canEdit: false, prompt: { suggested: null, tunes: false } })).not.toContain("warmup-prompt");
+    expect(render({ canEdit: false, prompt: { suggested: null, tunes: true } })).not.toContain("warmup-prompt");
   });
 
-  it("'Set today's weight' mode: suggested warm-up faded, says it suggests today's sets, one tap for all sets", () => {
+  it("open: suggested warm-up pre-filled, four feel taps (Smooth by default), the answer and one Use button", () => {
     const html = render({ form: "new", seed: { load: 100, reps: 2 }, prompt: { suggested: { load: 100, reps: 2 }, tunes: true }, ...tuneProps });
-    expect(html).toContain("Last warm-up / e1RM");
-    expect(html).toContain("Set today&#x27;s weight");
-    expect(html).toContain("e1RM only");
-    expect(html).toContain("we&#x27;ll suggest your 7 reps @ RPE 4");
-    expect(html).toContain('placeholder="100"');
-    expect(html).toContain("Today: 7 @ RPE 4");
-    expect(html).toContain("150–160 kg");
-    expect(html).toContain("Use 155 kg for all 3 sets");
-    expect(html).toContain("Just log the warm-up");
-    expect(html).toContain("not a tested max");
+    expect(html).toContain('value="100"');
+    expect(html).toContain('value="2"');
+    for (const f of ["Easy", "Smooth", "Heavy", "Grind"]) expect(html).toContain(f);
+    expect(html).toMatch(/aria-checked="true"[^>]*>Smooth/);
+    expect(html).toContain("Today: 7 reps @ RPE 4");
+    expect(html).toMatch(/data-testid="warmup-target"[^>]*>155 kg</);
+    expect(html).toContain("(150–160)");
+    expect(html).toContain("Use for 3 sets");
+    expect(html).toContain("Log warm-up only");
+    // no mode tabs, no typed RPE, no e1RM in here
+    expect(html).not.toContain("e1RM");
+    expect(html).not.toContain('name="warmup-rpe"');
   });
 
-  it("no target (after working sets / coach load): just the calculator — nothing saved", () => {
+  it("no target (after working sets / coach load): just log it", () => {
     const html = render({ form: "new", prompt: { suggested: null, tunes: false } });
-    expect(html).not.toContain("Set today&#x27;s weight");
-    expect(html).toContain("Nothing is saved or changed");
-    expect(html).toContain(">Done<");
+    expect(html).toContain("Save warm-up");
     expect(html).not.toContain("warmup-use-all");
   });
 
-  it("editing opens in place of the row, with the stored RPE and the live e1RM", () => {
+  it("editing opens in place of the row, with how it felt and Remove", () => {
     const html = render({ sets: [set], form: "a" });
-    expect(html).toContain("Save warm-up");
     expect(html).toContain(">Remove<");
-    expect(html).toContain('value="7"');
-    expect(html).toContain("RPE 7 · about 3 reps left");
-    expect(html).toContain("≈ 162.5 kg");
+    expect(html).toContain('value="140"');
+    expect(html).toMatch(/aria-checked="true"[^>]*>Smooth/);
     expect(html).not.toContain('data-testid="warmup-row"');
   });
 
@@ -139,17 +133,34 @@ describe("reset is always in the workout menu", () => {
   });
 });
 
-describe("the warm-up card shows one answer that adds up", () => {
-  it("leads with the weight to use, range underneath, and a single set reads 'Use 155 kg'", () => {
+describe("the warm-up answer adds up", () => {
+  it("a single open set reads 'Use'", () => {
     const html = render({ form: "new", seed: { load: 100, reps: 2 }, prompt: { suggested: null, tunes: true }, ...tuneProps, openSets: 1 });
     expect(html).toMatch(/data-testid="warmup-target"[^>]*>155 kg</);
-    expect(html).toContain("range 150–160 kg");
-    expect(html).toContain(">Use 155 kg<");
-    expect(html).not.toContain("for all 1 set");
+    expect(html).toContain(">Use<");
+    expect(html).not.toContain("for 1 set");
   });
 
   it("the set row's ghost hides while the warm-up form is setting the weight", () => {
     const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
     expect(view).toContain("loadHint={warmupForm && warmupGauge ? null : loadHint}");
+  });
+});
+
+describe("e1RM: its own compact chip", () => {
+  it("shows today's best rough 1RM from sets with an RPE, else just 'e1RM'", async () => {
+    const { E1rmChip, bestE1rm } = await import("@/components/workout-day/final-warmup-input");
+    const best = bestE1rm([{ load: 140, reps: 5, rpe: 8 }, { load: 145, reps: 5, rpe: 8.5 }, { load: 150, reps: 3, rpe: null }], "kg");
+    expect(best?.from.load).toBe(145);
+    expect(best?.e1rm).toBe(estimateOneRepMax({ load: 145, reps: 5, rpe: 8.5 }, "kg"));
+    const html = renderToStaticMarkup(createElement(E1rmChip, { sets: [{ load: 145, reps: 5, rpe: 8.5 }], unit: "kg" }));
+    expect(html).toContain('data-testid="e1rm-chip"');
+    expect(html).toContain(`≈${best!.e1rm}`);
+    expect(renderToStaticMarkup(createElement(E1rmChip, { sets: [], unit: "kg" }))).toMatch(/e1RM<\/button>/);
+  });
+  it("sits in the card header on compound lifts, fed by today's sets and warm-ups", () => {
+    const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    expect(wdv).toContain("{e1rmSets && <E1rmChip sets={e1rmSets} unit={activeUnit} />}");
+    expect(wdv).toContain('!offersLastWarmup(family, name)) return null;');
   });
 });

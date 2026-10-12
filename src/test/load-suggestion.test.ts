@@ -197,12 +197,23 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
       expect(h - down).toBeGreaterThan(up - h);
     });
 
-    it("a hard (RPE 8+) warm-up is read like a set: down as far as it says, up by at most 7.5%", () => {
+    it("a hard (RPE 8+) warm-up is read like a set: down as far as it says, never above the same warm-up rated a normal 7", () => {
       const h = estimateFor(base(), 5, 8)!.load;
       const weak = estimateFor(withWarm({ load: 90, reps: 3, rpe: 9 }), 5, 8)!.load;
       expect(weak).toBeCloseTo(warmupE1rm({ load: 90, reps: 3, rpe: 9 })! * percentOf1RM(5, 2)!, 6);
       const strong = estimateFor(withWarm({ load: 300, reps: 1, rpe: 8 }), 5, 8)!.load;
-      expect(strong / h).toBeLessThanOrEqual(1.015 * 1.075 + 1e-9);
+      const strongNormal = estimateFor(withWarm({ load: 300, reps: 1, rpe: 7 }), 5, 8)!.load;
+      expect(strong).toBeLessThanOrEqual(strongNormal + 1e-9);
+      expect(strong / h).toBeLessThanOrEqual(1.015 + 1e-9);
+    });
+
+    it("rating the same warm-up harder never raises today's weight (with or without history)", () => {
+      const cold = (rpe: number) => estimateFor(buildLoadModel({ history: [], today: [], unit: "kg", now: NOW, warmup: { load: 122.5, reps: 2, rpe } }), 5, 8)!.load;
+      const warm = (rpe: number) => estimateFor(withWarm({ load: 160, reps: 2, rpe }), 5, 8)!.load;
+      for (const f of [cold, warm]) {
+        const loads = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map(f);
+        for (let i = 1; i < loads.length; i++) expect(loads[i]).toBeLessThanOrEqual(loads[i - 1] + 1e-9);
+      }
     });
 
     it("keeps the readiness trim instead of cancelling it", () => {
