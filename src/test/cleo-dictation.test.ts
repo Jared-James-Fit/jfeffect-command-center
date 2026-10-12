@@ -26,6 +26,16 @@ describe("Cleo dictation", () => {
     expect(chat).not.toMatch(/PhoneOff|Call Cleo|End call/);
   });
 
+  it("after she answers it's your turn: one tap keeps the conversation going", () => {
+    expect(chat).toMatch(/if \(turn === turnRef\.current\) setVoiceState\("ready"\);/);
+    expect(chat).toContain("Keep talking");
+    // The orb sends while listening, and otherwise starts listening (cutting her off).
+    expect(chat).toContain("onClick={listening ? onSend : onTalk}");
+    expect(chat).toContain("onTalk={startDictation}");
+    // Nothing listens on its own: "ready" waits for the tap.
+    expect(chat).not.toMatch(/setVoiceState\("ready"\);\s*\n\s*void dictate\(\)/);
+  });
+
   it("Cleo's row in Messages opens straight into dictation with a mic", () => {
     expect(inbox).toContain("openSummer({ dictate: true })");
     expect(inbox).toContain('aria-label="Talk to Cleo"');
@@ -50,3 +60,31 @@ describe("Cleo's floating button", () => {
   });
 });
 
+
+describe("Cleo's speaker never sticks on Speaking", () => {
+  const speaker = read("lib/summer-speaker.ts");
+
+  it("finishes audio by the end of playback, an outside pause or the clock, not just 'ended'", () => {
+    expect(speaker).toContain("el.ontimeupdate = () =>");
+    expect(speaker).toContain("el.onpause = () =>");
+    expect(speaker).toContain("finishBy(10_000)");
+  });
+
+  it("keeps device-voice utterances alive and watches the engine as a backstop", () => {
+    expect(speaker).toContain("this.utterances.push(u);");
+    expect(speaker).toMatch(/!ss\.speaking && !ss\.pending/);
+  });
+
+  it("a slow voice request falls back without turning the server voice off for good", () => {
+    expect(speaker).toContain("SERVER_VOICE_TIMEOUT_MS");
+    expect(speaker).toContain("if (i === 0 && !r.timedOut) this.serverVoiceOff = true;");
+  });
+
+  it("caps device speech by reply length", async () => {
+    const { deviceSpeechCapMs } = await import("@/lib/summer-speaker");
+    expect(deviceSpeechCapMs("", 1)).toBe(5000);
+    const forty = Array(40).fill("word").join(" ");
+    expect(deviceSpeechCapMs(forty, 1)).toBe(30600);
+    expect(deviceSpeechCapMs(forty, 2)).toBeLessThan(deviceSpeechCapMs(forty, 1));
+  });
+});
