@@ -43,8 +43,14 @@ describe("client tab bar: Crew in the centre", () => {
   });
 
   it("the centre button is only brand-red on its own page, and every label sits on one line", () => {
-    // inactive it's neutral, so it never reads as the selected tab
-    expect(shell).toContain('? "bg-primary text-primary-foreground shadow-lg shadow-primary/35"\n                    : "bg-secondary text-foreground');
+    // a Cleo-style disc: brand gradient when you're on Crew, a quiet raised disc otherwise,
+    // so it never reads as the selected tab
+    expect(shell).toContain('? "bg-[image:var(--gradient-primary)] text-primary-foreground inset-ring');
+    expect(shell).toContain(': "bg-gradient-to-b from-secondary to-card text-foreground inset-ring');
+    // springy press, and the icon settles in when Crew opens
+    expect(shell).toContain("group-active/tab:scale-[0.92]");
+    expect(shell).toContain('active && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]"');
+    expect(read("src/styles.css")).toContain("@keyframes crew-pop {");
     // it shares the icon box with the other tabs, so its label lines up with theirs
     expect(shell).toContain('<div className={cn(BAR_ICON_BOX, "w-full")}>');
     // the active underline is absolute: lighting a tab doesn't shift it
@@ -56,7 +62,12 @@ describe("client tab bar: Crew in the centre", () => {
 
   it("sits just above the home indicator, lined up with the page, with the page fading out under it", () => {
     // ~22pt off the bottom on Face ID iPhones (not the full 34pt safe area), 10px elsewhere
-    expect(shell).toContain('const BAR_BOTTOM = "max(calc(env(safe-area-inset-bottom) - 12px), 10px)";');
+    expect(shell).toContain('const BAR_BOTTOM = "var(--mobile-bar-bottom)";');
+    expect(read("src/styles.css")).toContain("--mobile-bar-bottom: max(calc(env(safe-area-inset-bottom) - 12px), 10px);");
+    // floating buttons (Cleo, page "+", Back to Today) stack from the bar's real top edge
+    expect(read("src/styles.css")).toContain(".summer-fab { bottom: calc(var(--mobile-bar-top) + 14px); }");
+    expect(read("src/components/tasks/quick-notes.tsx")).toContain('"calc(var(--mobile-bar-top) + 14px)"');
+    expect(read("src/components/return-to-dashboard.tsx")).toContain("bottom-[calc(var(--mobile-bar-top)+14px)]");
     // same 16px gutter as the page's px-4
     expect(shell).toContain('"fixed inset-x-4 z-50 mx-auto grid max-w-md');
     // the fade is tagged like the bar, so keyboard / workout focus / pinch-zoom hide and pin it too
@@ -69,9 +80,9 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain("const dy = Math.round(window.innerHeight - (vv.height + vv.offsetTop));");
     expect(shell).toContain("(zoomed || keyboard) && (dy > 0 || dx !== 0)");
     expect(shell).not.toContain("dy > 0 || dx !== 0 || scale !== 1");
-    // even 50px disc, so centring it never lands on a half pixel
-    expect(shell).toContain('"absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[2px]');
-    expect(shell).toContain('"relative grid h-[46px] w-[46px] place-items-center rounded-full');
+    // even 56px disc (50 + 3px ring), so centring it never lands on a half pixel
+    expect(shell).toContain('"absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[3px]"');
+    expect(shell).toContain('"relative grid h-[50px] w-[50px] place-items-center rounded-full"');
     // a whole 12px label line, placed after the size so tailwind-merge keeps it
     expect(shell).toContain('dense ? "text-[10px]" : "text-[10.5px]", "leading-3", active && "font-semibold")');
   });

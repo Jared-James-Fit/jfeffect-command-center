@@ -846,7 +846,7 @@ function NotesPanel({
             "shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] ring-1 ring-black/10 transition-opacity active:opacity-80",
             "h-14 w-14 md:right-8 md:h-12 md:w-auto md:px-5",
           )}
-          style={{ bottom: isDesktop ? "2rem" : "calc(max(env(safe-area-inset-bottom), 6px) + 84px)" }}
+          style={{ bottom: isDesktop ? "2rem" : "calc(var(--mobile-bar-top) + 14px)" }}
         >
           <SquarePen className="h-6 w-6 md:h-5 md:w-5" />
           <span className="hidden text-sm font-semibold md:inline">New note</span>

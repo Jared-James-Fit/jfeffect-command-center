@@ -24,7 +24,7 @@ import {
   UserCheck, CreditCard, DollarSign, Ticket, Calendar,
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
-  Link as LinkIcon, Trophy, Tag, ShieldCheck,
+  Link as LinkIcon, Trophy, Tag, ShieldCheck, UsersRound, Contact,
   Home as HomeIcon,
   ListChecks, Upload, Star, FileText, ExternalLink, Image as ImageIcon,
   PowerOff, Landmark, Wallet, BadgeCheck,
@@ -87,16 +87,16 @@ const REGISTRY: Entry[] = [
     keywords: ["inbox", "chat", "direct messages", "group chat", "support inbox"] },
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Messages",
     visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/community", label: "Community", icon: Users, group: "Messages",
+  { to: "/admin/community", label: "Crew", icon: UsersRound, group: "Messages",
     visibleTo: ["admin", "coach"],
-    keywords: ["community", "shared workouts", "feed", "photos", "reactions", "coach recognition"] },
+    keywords: ["crew", "community", "league", "leaderboard", "shared workouts", "feed", "photos", "reactions", "coach recognition"] },
   { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Messages",
     visibleTo: ["admin"], section: "Chat Assets" },
   { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Messages",
     visibleTo: ["admin"], section: "Chat Assets" },
 
   // ── CLIENTS ──────────────────────────────────────────────────────────
-  { to: "/admin/clients", label: "Clients", icon: Users, group: "Clients",
+  { to: "/admin/clients", label: "Clients", icon: Contact, group: "Clients",
     visibleTo: ["admin", "coach", "assistant_coach", "sales", "support"] },
   { to: "/admin/coaching-agreements", label: "Coaching Agreements", icon: FileSignature, group: "Clients",
     visibleTo: ["admin"],
@@ -294,8 +294,8 @@ const REGISTRY: Entry[] = [
  */
 export const STAFF_BAR: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/admin/clients", label: "Clients", icon: Users },
-  { to: "/admin/community", label: "Crew", icon: Trophy, featured: true },
+  { to: "/admin/clients", label: "Clients", icon: Contact },
+  { to: "/admin/community", label: "Crew", icon: UsersRound, featured: true },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
 ];

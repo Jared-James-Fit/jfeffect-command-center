@@ -253,9 +253,9 @@ describe("the finance phone bar: Home, Money, Crew (raised), Clients, Tasks", ()
 
   it("the League is the crew's boards and feed, without the coach's queues and tools", () => {
     const hub = read("src/components/community/admin-community-hub.tsx");
-    expect(hub).toContain('const VIEW_TABS: HubTab[] = ["league", "feed"];');
+    expect(hub).toContain('const VIEW_TABS: HubTab[] = ["feed", "league"];');
     expect(hub).toContain("{tabs.length > 1 && <div");
-    expect(hub).toContain('const tab = tabs.some((t) => t.key === picked) ? picked : "league";');
+    expect(hub).toContain('const tab = tabs.some((t) => t.key === picked) ? picked : "feed";');
     expect(hub).toContain("{!viewOnly && <button");
     expect(hub).toContain("<StaffLeagueTab tools={!viewOnly} />");
     expect(hub).toContain("{!viewOnly && <PulsePanel onGo={setTab} />}");

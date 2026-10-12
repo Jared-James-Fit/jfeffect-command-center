@@ -18,6 +18,7 @@ import {
   Star, FileText, ExternalLink, Image as ImageIcon, PowerOff, Bell, Image,
   Mail, Smartphone, ListTodo, Database, GitBranch, Globe, Package,
   Wrench, Plus, Send, Mic, Music, Eye, Landmark, type LucideIcon,
+  UsersRound,
 } from "lucide-react";
 
 export type AdminRole = "admin" | "coach" | "media_manager";
@@ -196,9 +197,9 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
   { id: "broadcasts", label: "Broadcasts", to: "/admin/broadcasts",
     category: "Communication", parent: "Admin → Communication", roles: ADMIN_COACH, icon: Megaphone,
     keywords: ["announcement", "blast", "newsletter"] },
-  { id: "community", label: "Community", to: "/admin/community",
-    category: "Communication", parent: "Admin → Communication", roles: ADMIN_COACH, icon: Users,
-    keywords: ["shared workouts", "feed", "posts", "photos", "reactions", "coach recognition"] },
+  { id: "community", label: "Crew", to: "/admin/community",
+    category: "Communication", parent: "Admin → Communication", roles: ADMIN_COACH, icon: UsersRound,
+    keywords: ["community", "league", "leaderboard", "shared workouts", "feed", "posts", "photos", "reactions", "coach recognition"] },
   { id: "support", label: "Support", to: "/admin/support-alerts",
     category: "Communication", parent: "Admin → Communication", roles: ADMIN_COACH, icon: AlertCircle, hidden: true },
   { id: "call-access", label: "Call Access", to: "/admin/call-access",
