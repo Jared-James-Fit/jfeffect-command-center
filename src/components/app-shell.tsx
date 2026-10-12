@@ -1706,7 +1706,7 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
                     : "bg-gradient-to-b from-secondary to-card text-foreground inset-ring inset-ring-foreground/10 shadow-[0_8px_20px_-8px_rgba(0,0,0,0.55)]",
                 )}
               >
-                <Icon className={cn("h-[26px] w-[26px]", lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]")} />
+                <Icon className={cn("h-[26px] w-[26px]", lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:animate-none")} />
                 <BottomNavBadge badge={badge} />
               </span>
             </span>
@@ -1726,10 +1726,14 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
     return (
       <div className="relative">
         {link}
-        {/* Cleo-style satellite on the disc's top-left shoulder (the new-post
-            count keeps the top-right). Its own link, not inside Crew's, so the
-            two taps never mix; its extra tap area grows up and left only,
-            away from the disc. */}
+        {/* League satellite, docked on the disc's top-left shoulder (the
+            new-post count keeps the top-right). Its 3px card ring matches the
+            disc's cut-out ring, so the two read as one piece rather than a
+            bubble floating above the bar. Its own link, not inside Crew's, so
+            the two taps never mix; the extra tap area (44px) grows up and left
+            only, away from the disc. The trophy stays gold in every state: on
+            Rankings/League the satellite lights gold (Crew lights red), so
+            each button has its own "you're here". */}
         <Link
           to={shortcut.to}
           hash={shortcut.hash}
@@ -1745,15 +1749,17 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
           aria-current={shortcutOn ? "page" : undefined}
           style={{ WebkitTapHighlightColor: "transparent" }}
           className={cn(
-            "absolute left-[calc(50%-41px)] top-[-36px] z-10 grid h-7 w-7 place-items-center rounded-full ring-[2.5px] ring-card",
-            "shadow-[0_4px_10px_-3px_rgba(0,0,0,0.5)] transition-transform duration-150 active:scale-90 select-none touch-manipulation [-webkit-touch-callout:none]",
-            "after:absolute after:-left-2.5 after:-top-2.5 after:bottom-0 after:right-0 after:content-['']",
+            // Centre sits 24px left and 24px up from the disc's centre (on its
+            // 45° shoulder), overlapping the rim instead of hovering above it.
+            "absolute left-[calc(50%-38px)] top-[-33px] z-10 grid h-7 w-7 place-items-center rounded-full ring-[3px] ring-card",
+            "transition-[transform,background-color,box-shadow] duration-200 ease-out active:scale-90 motion-reduce:transition-none select-none touch-manipulation [-webkit-touch-callout:none]",
+            "after:absolute after:-left-4 after:-top-4 after:bottom-1/2 after:right-1/2 after:content-['']",
             shortcutOn
-              ? "bg-[image:var(--gradient-primary)] text-primary-foreground"
-              : "bg-card text-amber-500 inset-ring inset-ring-foreground/10",
+              ? "bg-[color-mix(in_oklab,var(--color-amber-500)_22%,var(--card))] text-amber-500 inset-ring inset-ring-amber-500/60 shadow-[0_6px_16px_-6px_color-mix(in_oklab,var(--color-amber-500)_75%,transparent)]"
+              : "bg-card text-amber-500 inset-ring inset-ring-foreground/10 shadow-[0_4px_10px_-3px_rgba(0,0,0,0.5)]",
           )}
         >
-          <ShortcutIcon className={cn("h-3.5 w-3.5 stroke-[2.5]", shortcutOn && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]")} />
+          <ShortcutIcon className={cn("h-3.5 w-3.5 stroke-[2.5]", shortcutOn && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:animate-none")} />
         </Link>
       </div>
     );

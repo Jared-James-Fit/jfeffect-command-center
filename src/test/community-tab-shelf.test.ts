@@ -49,7 +49,7 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain(': "bg-gradient-to-b from-secondary to-card text-foreground inset-ring');
     // springy press, and the icon settles in when Crew opens
     expect(shell).toContain("group-active/tab:scale-[0.92]");
-    expect(shell).toContain('lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]"');
+    expect(shell).toContain('lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:animate-none"');
     expect(read("src/styles.css")).toContain("@keyframes crew-pop {");
     // it shares the icon box with the other tabs, so its label lines up with theirs
     expect(shell).toContain('<div className={cn(BAR_ICON_BOX, "w-full")}>');
@@ -97,7 +97,15 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain("if (!shortcut) return link;");
     expect(shell).toMatch(/<Link\s+to=\{shortcut\.to\}\s+hash=\{shortcut\.hash\}\s+activeOptions=\{\{ includeHash: true \}\}/);
     expect(shell).toContain("activeOptions={shortcut ? { includeHash: true } : undefined}");
-    expect(shell).toContain('"after:absolute after:-left-2.5 after:-top-2.5 after:bottom-0 after:right-0 after:content-[\'\']"');
+    // A 44px tap area that grows up and left only, away from the disc.
+    expect(shell).toContain('"after:absolute after:-left-4 after:-top-4 after:bottom-1/2 after:right-1/2 after:content-[\'\']"');
+    // Docked on the disc's shoulder with the disc's own 3px cut-out ring.
+    expect(shell).toContain("left-[calc(50%-38px)] top-[-33px]");
+    expect(shell).toContain("ring-[3px] ring-card");
+    // The trophy is gold in both states; lit, the satellite glows gold (Crew lights red).
+    const satellite = shell.slice(shell.indexOf("data-featured-shortcut"), shell.indexOf("<ShortcutIcon"));
+    expect(satellite.match(/text-amber-500/g)?.length).toBe(2);
+    expect(satellite).not.toContain("text-primary-foreground");
     // the Crew screen follows the hash, so the shortcut and Crew switch the view in place
     const crew = read("src/components/community/community-screen.tsx");
     expect(crew).toContain('if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });');
