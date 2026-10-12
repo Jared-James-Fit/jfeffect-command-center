@@ -234,13 +234,13 @@ describe("phone bar selected tab", () => {
   });
 });
 
-describe("the finance phone bar: Home, Money, League (raised), Clients, Tasks", () => {
-  it("has the same League and Tasks tabs as every staff bar", async () => {
+describe("the finance phone bar: Home, Money, Crew (raised), Clients, Tasks", () => {
+  it("has the same Crew and Tasks tabs as every staff bar", async () => {
     const { FINANCE_BAR, STAFF_BAR } = await import("@/lib/internal-nav");
-    expect(FINANCE_BAR.map((i) => i.label)).toEqual(["Home", "Money", "League", "Clients", "Tasks"]);
+    expect(FINANCE_BAR.map((i) => i.label)).toEqual(["Home", "Money", "Crew", "Clients", "Tasks"]);
     expect(FINANCE_BAR.map((i) => i.to)).toEqual(["/admin/finance", "/admin/finance/books", "/admin/community", "/admin/clients", "/admin/tasks"]);
-    expect(FINANCE_BAR.filter((i) => i.featured).map((i) => i.label)).toEqual(["League"]);
-    for (const label of ["League", "Clients", "Tasks"]) {
+    expect(FINANCE_BAR.filter((i) => i.featured).map((i) => i.label)).toEqual(["Crew"]);
+    for (const label of ["Crew", "Clients", "Tasks"]) {
       expect(FINANCE_BAR.find((i) => i.label === label)).toBe(STAFF_BAR.find((i) => i.label === label));
     }
   });
@@ -253,9 +253,9 @@ describe("the finance phone bar: Home, Money, League (raised), Clients, Tasks", 
 
   it("the League is the crew's boards and feed, without the coach's queues and tools", () => {
     const hub = read("src/components/community/admin-community-hub.tsx");
-    expect(hub).toContain('const VIEW_TABS: HubTab[] = ["league", "feed"];');
+    expect(hub).toContain('const VIEW_TABS: HubTab[] = ["feed", "league"];');
     expect(hub).toContain("{tabs.length > 1 && <div");
-    expect(hub).toContain('const tab = tabs.some((t) => t.key === picked) ? picked : "league";');
+    expect(hub).toContain('const tab = tabs.some((t) => t.key === picked) ? picked : "feed";');
     expect(hub).toContain("{!viewOnly && <button");
     expect(hub).toContain("<StaffLeagueTab tools={!viewOnly} />");
     expect(hub).toContain("{!viewOnly && <PulsePanel onGo={setTab} />}");

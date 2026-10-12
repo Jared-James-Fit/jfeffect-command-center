@@ -382,7 +382,7 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
     expect(bottom.match(/\{ to: "[^"]+"/g)).toEqual([
       '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/community"', '{ to: "/portal/nutrition-targets"', '{ to: "/portal/messages"',
     ]);
-    expect(bottom).toContain('{ to: "/portal/community", label: "Crew", icon: Trophy, featured: true },');
+    expect(bottom).toContain('{ to: "/portal/community", label: "Crew", icon: UsersRound, featured: true },');
     // the count of new posts rides on the centre button
     expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
     // its own tab now, so Home no longer lights up for it
@@ -414,8 +414,8 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   it("only shows a header nudge when there is something new", () => {
     expect(entry).toContain("data.unseen <= 0) return null;");
   });
-  it("puts the community behind the coach's League button, with one-tap props on that page", () => {
-    expect(read("src/lib/internal-nav.ts")).toContain('{ to: "/admin/community", label: "League", icon: Trophy, featured: true },');
+  it("puts the community behind the coach's Crew button (named like the clients'), with one-tap props on that page", () => {
+    expect(read("src/lib/internal-nav.ts")).toContain('{ to: "/admin/community", label: "Crew", icon: UsersRound, featured: true },');
     expect(read("src/components/community/admin-community-hub.tsx")).toContain("<CoachPostRow key={x.id} post={x} unit={unit} />");
     expect(entry).toContain('react.mutate(given ? null : "fire"');
     // a ❤️ from the feed counts as props given

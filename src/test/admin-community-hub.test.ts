@@ -8,25 +8,27 @@ const hub = read("src/components/community/admin-community-hub.tsx");
 const dash = read("src/routes/_authenticated/admin/index.tsx");
 
 describe("the coach's community, in one place", () => {
-  it("the League page is the hub: League / Feed / Daily / Birthdays, what needs you, and + Post", () => {
+  it("the Crew page is the hub: Feed / League / Daily / Birthdays, opening on the Feed like the clients', what needs you, and + Post", () => {
     expect(read("src/routes/_authenticated/admin/community.tsx")).toContain("component: AdminCommunityHub,");
-    expect(hub).toContain('{ key: "league", label: "League" }');
-    expect(hub).toContain('{ key: "feed", label: "Feed" }');
+    expect(hub).toContain('{ key: "feed", label: "Feed" },\n  { key: "league", label: "League" },');
+    expect(hub).toContain('<h1 className="text-[22px] font-black tracking-tight">Crew</h1>');
     expect(hub).toContain('{ key: "daily", label: "Daily" }');
     expect(hub).toContain('{ key: "birthdays", label: "Birthdays" }');
     expect(hub).toContain("<StaffLeagueTab tools={!viewOnly} />");
     // the week at a glance heads the feed; anything waiting shows on every other tab
     expect(hub).toContain("{!viewOnly && <PulsePanel onGo={setTab} />}");
     expect(hub).toContain('{tab !== "feed" && !viewOnly && <NeedsYouStrip onGo={setTab} />}');
-    // links to a post land on the feed
-    expect(hub).toContain('if (/tab=feed/.test(h) || /post=/.test(h)) return "feed";');
+    // the Feed is the default (links to a post land there); #tab=league opens the League,
+    // and the tab is kept in the hash so Back (e.g. from Athlete Records) returns to it
+    expect(hub).toContain('if (/tab=league/.test(h) || /rankings/.test(h)) return "league";\n  return "feed";');
+    expect(hub).toContain('t === "feed" ? pathname + search : `${pathname}${search}#tab=${t}`');
     expect(hub).toContain("<CommunityScreen hideTabs />");
     expect(hub).toContain("<UpcomingBirthdaysWidget windowDays={30} />");
     expect(hub).toContain('await act.mutateAsync({ kind: "note", body, poll, media });');
     // the composer lives on the page now, not at the bottom of the schedule
     expect(read("src/components/community/coach-weekly-posts.tsx")).not.toContain("Write a post for the crew");
   });
-  it("the dashboard has no community card: it's one tap away on the League button (a birthday draft to approve still shows)", () => {
+  it("the dashboard has no community card: it's one tap away on the Crew button (a birthday draft to approve still shows)", () => {
     expect(dash).not.toContain("CommunityPulseCard");
     expect(dash).toContain("<BirthdayPostsCard actionableOnly />");
     expect(dash).not.toContain("CommunityCoachCard");

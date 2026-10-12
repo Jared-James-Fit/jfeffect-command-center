@@ -344,6 +344,15 @@ html[data-keyboard-open="true"] [data-mobile-bottom-nav] {
 @media (max-width: 768px) {
   :root { --bottom-nav-clearance: 92px; }
 }
+
+/* The floating mobile tab bar's edges. Its bottom sits just above the home
+   indicator (~22pt on Face ID iPhones, not the full 34pt safe area; 10px on
+   phones with none); it is 70px tall. Floating buttons (Cleo, page "+"
+   buttons, Back to Today) stack from its top so they all clear it evenly. */
+:root {
+  --mobile-bar-bottom: max(calc(env(safe-area-inset-bottom) - 12px), 10px);
+  --mobile-bar-top: calc(var(--mobile-bar-bottom) + 70px);
+}
 html[data-keyboard-open="true"] {
   --bottom-nav-clearance: 0px;
   --composer-bottom-pad: 0.5rem;
@@ -975,8 +984,8 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
 
 /* Cleo's floating button: above the mobile tab bar, and lifted over a
    page's own floating button when one is showing (html[data-page-fab]). */
-.summer-fab { bottom: calc(max(env(safe-area-inset-bottom), 6px) + 84px); }
-html[data-page-fab] .summer-fab { bottom: calc(max(env(safe-area-inset-bottom), 6px) + 148px); }
+.summer-fab { bottom: calc(var(--mobile-bar-top) + 14px); }
+html[data-page-fab] .summer-fab { bottom: calc(var(--mobile-bar-top) + 78px); }
 @media (min-width: 768px) {
   .summer-fab { bottom: 1.5rem; }
   html[data-page-fab] .summer-fab { bottom: 5.5rem; }
@@ -990,4 +999,11 @@ html[data-page-fab] .summer-fab { bottom: calc(max(env(safe-area-inset-bottom), 
 @keyframes slow-load-hint-in {
   from { opacity: 0; visibility: hidden; }
   to { opacity: 1; visibility: visible; }
+}
+
+/* The Crew button's icon settles in with a small spring when Crew opens. */
+@keyframes crew-pop {
+  0% { transform: scale(0.82); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
 }

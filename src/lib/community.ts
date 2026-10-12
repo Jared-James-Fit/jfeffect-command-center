@@ -147,7 +147,8 @@ export type CommunityPost = {
   completion_id: string | null;
   /** "workout" (a session) or "note" (a coach's text post). Missing = workout. */
   kind?: "workout" | "note";
-  series?: CommunitySeries | null;
+  /** A daily post, or "holiday" (a coach post on a big holiday, with its picture in series_extra). */
+  series?: CommunitySeries | "holiday" | null;
   /** A featured quote on a note: always from the verified library. */
   quote?: string | null;
   quote_author?: string | null;
@@ -825,6 +826,8 @@ export type CrewCompare = { habit: string; outcome: "spw" | "prs" | "rating"; a:
 export type SeriesExtra =
   /** Saturday: one of the illustrated scenes. */
   | { scene: string }
+  /** A holiday post: which holiday, and its photo (a path the app serves). */
+  | { holiday: string; name: string; image?: string | null }
   /** Tuesday from the library: what kind of tip it is. */
   | { kind: string }
   /** Tuesday from the crew's own data. */
@@ -834,6 +837,11 @@ export type SeriesExtra =
 
 export function extraScene(e: SeriesExtra | null | undefined): string | null {
   return e && "scene" in e && typeof e.scene === "string" ? e.scene : null;
+}
+/** A holiday post's photo. Only the app's own files (a path starting with "/"), never a URL from elsewhere. */
+export function extraHoliday(e: SeriesExtra | null | undefined): { name: string; image: string } | null {
+  if (!e || !("holiday" in e) || typeof e.image !== "string" || !/^\/[\w\-./]+$/.test(e.image) || e.image.includes("..")) return null;
+  return { name: typeof e.name === "string" ? e.name : "Holiday", image: e.image };
 }
 export function extraFeature(e: SeriesExtra | null | undefined) {
   return e && "feature" in e && typeof e.feature === "string" && Array.isArray((e as { where?: unknown }).where)

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 const read = (p: string) => readFileSync(p, "utf8");
 
 describe("lb or kg is asked until answered", () => {
-  const migration = read("supabase/migrations/20261114090000_weight_unit_confirmed.sql");
+  const migration = read("supabase/migrations/20261116090000_weight_unit_confirmed.sql");
   const prompt = read("src/components/portal/weight-unit-prompt.tsx");
   const layout = read("src/routes/_authenticated/portal/route.tsx");
   const pref = read("src/lib/weight-unit-pref.ts");

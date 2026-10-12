@@ -24,7 +24,7 @@ import {
   UserCheck, CreditCard, DollarSign, Ticket, Calendar,
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
-  Link as LinkIcon, Trophy, Tag, ShieldCheck,
+  Link as LinkIcon, Trophy, Tag, ShieldCheck, UsersRound, Contact,
   Home as HomeIcon,
   ListChecks, Upload, Star, FileText, ExternalLink, Image as ImageIcon,
   PowerOff, Landmark, Wallet, BadgeCheck,
@@ -87,16 +87,16 @@ const REGISTRY: Entry[] = [
     keywords: ["inbox", "chat", "direct messages", "group chat", "support inbox"] },
   { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Messages",
     visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/community", label: "Community", icon: Users, group: "Messages",
+  { to: "/admin/community", label: "Crew", icon: UsersRound, group: "Messages",
     visibleTo: ["admin", "coach"],
-    keywords: ["community", "shared workouts", "feed", "photos", "reactions", "coach recognition"] },
+    keywords: ["crew", "community", "league", "leaderboard", "shared workouts", "feed", "photos", "reactions", "coach recognition"] },
   { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Messages",
     visibleTo: ["admin"], section: "Chat Assets" },
   { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Messages",
     visibleTo: ["admin"], section: "Chat Assets" },
 
   // ── CLIENTS ──────────────────────────────────────────────────────────
-  { to: "/admin/clients", label: "Clients", icon: Users, group: "Clients",
+  { to: "/admin/clients", label: "Clients", icon: Contact, group: "Clients",
     visibleTo: ["admin", "coach", "assistant_coach", "sales", "support"] },
   { to: "/admin/coaching-agreements", label: "Coaching Agreements", icon: FileSignature, group: "Clients",
     visibleTo: ["admin"],
@@ -288,14 +288,14 @@ const REGISTRY: Entry[] = [
 
 /**
  * Every staff account's phone bar (admin, coach), laid out like the client
- * app: plain tabs with League as the raised centre button (the crew's
- * league, the feed, daily and birthday posts, and the tools to run them).
- * More opens from the header.
+ * app: plain tabs with Crew as the raised centre button, named the same as the
+ * clients' (the league, the feed, daily and birthday posts, and the tools to
+ * run them). More opens from the header.
  */
 export const STAFF_BAR: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/admin/clients", label: "Clients", icon: Users },
-  { to: "/admin/community", label: "League", icon: Trophy, featured: true },
+  { to: "/admin/clients", label: "Clients", icon: Contact },
+  { to: "/admin/community", label: "Crew", icon: UsersRound, featured: true },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
 ];
@@ -313,8 +313,8 @@ export const FINANCE_PAYMENTS: NavItem = { to: "/admin/finance/payments", label:
 
 /**
  * The finance login's phone bar, laid out like every staff bar: its home,
- * Money (Books and Payments, switched at the top of the page), the League as
- * the raised centre button, Clients and Tasks. More opens from the header.
+ * Money (Books and Payments, switched at the top of the page), Crew as the
+ * raised centre button, Clients and Tasks. More opens from the header.
  */
 export const FINANCE_BAR: NavItem[] = [
   { to: FINANCE_HOME.to, label: "Home", icon: Wallet },

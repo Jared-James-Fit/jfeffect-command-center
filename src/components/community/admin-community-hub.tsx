@@ -63,43 +63,53 @@ function birthdayPost(p: CommunityPulse): { title: string; when: string | null }
 
 type HubTab = "league" | "feed" | "daily" | "birthdays";
 const HUB_TABS: { key: HubTab; label: string }[] = [
-  { key: "league", label: "League" },
   { key: "feed", label: "Feed" },
+  { key: "league", label: "League" },
   { key: "daily", label: "Daily" },
   { key: "birthdays", label: "Birthdays" },
 ];
 
-/** A view-only login (finance) sees the League and the Feed, not the coach's queues. */
-const VIEW_TABS: HubTab[] = ["league", "feed"];
+/** A view-only login (finance) sees the Feed and the League, not the coach's queues. */
+const VIEW_TABS: HubTab[] = ["feed", "league"];
 
 function tabFromHash(): HubTab {
-  if (typeof window === "undefined") return "league";
+  if (typeof window === "undefined") return "feed";
   const h = window.location.hash;
   if (/birthday=/.test(h) || /tab=birthdays/.test(h)) return "birthdays";
   if (/tab=daily/.test(h)) return "daily";
-  if (/tab=feed/.test(h) || /post=/.test(h)) return "feed";
-  return "league";
+  if (/tab=league/.test(h) || /rankings/.test(h)) return "league";
+  return "feed";
 }
 
 /**
- * The coach's League page, behind the raised centre button: League (the
- * crew goal, this month's standings, the Hall of Strength and the tools to
- * run them), Feed (the week at a glance, what needs you, then the feed),
- * Daily (the schedule, on/off, post now, edit what's next) and Birthdays
- * (drafts to review, who's next). "+ Post" writes to the crew from any tab.
+ * The coach's Crew page, behind the raised centre button, opening on the Feed
+ * like the clients' Crew: Feed (the week at a glance, what needs you, then the
+ * feed), League one tap away (the crew goal, this month's standings, the Hall
+ * of Strength and the tools to run them; `#tab=league` opens it), Daily (the
+ * schedule, on/off, post now, edit what's next) and Birthdays (drafts to
+ * review, who's next). "+ Post" writes to the crew from any tab.
  */
 export function AdminCommunityHub() {
   const { viewOnly } = useAuth();
-  const [picked, setTab] = useState<HubTab>(tabFromHash);
+  const [picked, setPicked] = useState<HubTab>(tabFromHash);
+  // The tab goes in the hash, so Back from a page opened here (Athlete
+  // Records from League) returns to the same tab, not the Feed.
+  const setTab = (t: HubTab) => {
+    setPicked(t);
+    try {
+      const { pathname, search } = window.location;
+      window.history.replaceState(window.history.state, "", t === "feed" ? pathname + search : `${pathname}${search}#tab=${t}`);
+    } catch { /* hash is a convenience */ }
+  };
   const [writing, setWriting] = useState(false);
   const act = useSeriesAction();
   const tabs = viewOnly ? HUB_TABS.filter((t) => VIEW_TABS.includes(t.key)) : HUB_TABS;
-  const tab = tabs.some((t) => t.key === picked) ? picked : "league";
+  const tab = tabs.some((t) => t.key === picked) ? picked : "feed";
 
   return (
     <div className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 sm:px-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-[22px] font-black tracking-tight">League</h1>
+        <h1 className="text-[22px] font-black tracking-tight">Crew</h1>
         {!viewOnly && <button
           type="button"
           onClick={() => setWriting(true)}
@@ -110,7 +120,7 @@ export function AdminCommunityHub() {
       </div>
 
       {tabs.length > 1 && <div className="sticky top-0 z-20 -mx-3 bg-background/95 px-3 py-1.5 md:top-[41px] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-4 sm:px-4">
-        <div className={cn("grid rounded-full bg-muted p-1", tabs.length === 2 ? "grid-cols-2" : "grid-cols-4")} role="tablist" aria-label="League sections">
+        <div className={cn("grid rounded-full bg-muted p-1", tabs.length === 2 ? "grid-cols-2" : "grid-cols-4")} role="tablist" aria-label="Crew sections">
           {tabs.map((t) => (
             <button
               key={t.key}

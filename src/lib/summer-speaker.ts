@@ -8,12 +8,13 @@
  * speech synthesis, so the reply can play by itself a few seconds later.
  */
 import { speechFromReply } from "@/lib/summer-voice-text";
+import { serverVoiceOf, type CleoVoice } from "@/lib/cleo-voices";
 import { setAudioSessionType } from "@/lib/audio-session";
 
 export type SummerVoicePrefs = {
   /** Speak replies to voice questions automatically. */
   autoplay: boolean;
-  /** "summer" = her own voice from the server; otherwise a device voiceURI. */
+  /** "summer" / "summer:<voice>" = Cleo's own server voice (cleo-voices.ts); otherwise a device voiceURI. */
   voice: string;
   rate: number;
 };
@@ -110,7 +111,9 @@ export function speechChunks(text: string, maxChars = 220): string[] {
  * so there is no seam at all.
  */
 export function leadAndRest(text: string): [string] | [string, string] {
-  if (text.length < 140) return [text];
+  // A seam between two pieces is audible (the voice resets its intonation),
+  // so only long replies are split; a normal spoken answer plays in one go.
+  if (text.length < 320) return [text];
   const sentences = splitSentences(text);
   let lead = "";
   let i = 0;
@@ -138,7 +141,7 @@ export function deviceSpeechCapMs(text: string, rate: number): number {
   return Math.round((words / (2.5 * Math.max(0.5, rate || 1))) * 1000 * 1.6 + 5000);
 }
 /** The server voice for one piece of a reply (see SpeechRequest in summer.server). */
-export type ServerVoice = (text: string, ctx: { rate: number; prev?: string; next?: string }) => Promise<ServerAudio>;
+export type ServerVoice = (text: string, ctx: { rate: number; prev?: string; next?: string; voice?: CleoVoice }) => Promise<ServerAudio>;
 
 // 0.1s of silence; playing it on a tap unlocks the element for later replies.
 const SILENT_WAV =
@@ -224,11 +227,12 @@ class SummerSpeaker {
     // whatever the app had (ambient for UI sounds).
     const prevSession = setAudioSessionType("playback");
     try {
-      if (prefs.voice === "summer" && !this.serverVoiceOff) {
+      const cleoVoice = serverVoiceOf(prefs.voice);
+      if (cleoVoice && !this.serverVoiceOff) {
         const parts = leadAndRest(text);
         const ask = (i: number) =>
           Promise.race<ServerAudio>([
-            serverVoice(parts[i], { rate: prefs.rate, prev: parts[i - 1], next: parts[i + 1] }).catch(() => ({ ok: false as const })),
+            serverVoice(parts[i], { rate: prefs.rate, prev: parts[i - 1], next: parts[i + 1], voice: cleoVoice }).catch(() => ({ ok: false as const })),
             new Promise<ServerAudio>((r) => setTimeout(() => r({ ok: false, timedOut: true }), SERVER_VOICE_TIMEOUT_MS)),
           ]);
         // Both pieces start generating now; the second is usually ready
