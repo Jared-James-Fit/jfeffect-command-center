@@ -147,22 +147,17 @@ describe("the warm-up answer adds up", () => {
   });
 });
 
-describe("e1RM: its own compact chip", () => {
-  it("shows today's best rough 1RM from sets with an RPE, else just 'e1RM'", async () => {
+describe("e1RM: today's best set feeds Workout Tools", () => {
+  it("picks today's best rough 1RM from sets with an RPE", async () => {
     const { bestE1rm } = await import("@/components/workout-day/final-warmup-input");
-    const { E1rmChip } = await import("@/components/workout-day/card-tools");
     const best = bestE1rm([{ load: 140, reps: 5, rpe: 8 }, { load: 145, reps: 5, rpe: 8.5 }, { load: 150, reps: 3, rpe: null }], "kg");
     expect(best?.from.load).toBe(145);
     expect(best?.e1rm).toBe(estimateOneRepMax({ load: 145, reps: 5, rpe: 8.5 }, "kg"));
-    const html = renderToStaticMarkup(createElement(E1rmChip, { sets: [{ load: 145, reps: 5, rpe: 8.5 }], unit: "kg", open: false, onToggle() {} }));
-    expect(html).toContain('data-testid="e1rm-chip"');
-    expect(html).toMatch(new RegExp(`>${best!.e1rm}(<!-- -->)? (<!-- -->)?kg<`));
-    expect(html).not.toContain("≈");
-    expect(renderToStaticMarkup(createElement(E1rmChip, { sets: [], unit: "kg", open: false, onToggle() {} }))).toMatch(/>e1RM<\/span><\/button>/);
   });
-  it("sits in the card header on compound lifts, fed by today's sets and warm-ups", () => {
+  it("each compound-lift card reports it (sets and warm-ups); no chip on the card", () => {
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-    expect(wdv).toContain('{e1rmSets && <E1rmChip sets={e1rmSets} unit={activeUnit} open={cardTool === "e1rm"} onToggle={() => toggleCardTool("e1rm")} />}');
+    expect(wdv).toContain("toolsActions?.reportE1rm(row.id, e1rmBest");
     expect(wdv).toContain('!offersLastWarmup(family, name)) return null;');
+    expect(wdv).not.toContain("E1rmChip");
   });
 });

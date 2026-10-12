@@ -63,9 +63,10 @@ async function flushWarmupBatch(batch: Map<string, WarmupWaiter[]>, clientId: st
 export function useWarmupSets(rowId: string, clientId: string | null | undefined, scheduledWorkoutId: string | null = null) {
   const qc = useQueryClient();
   const key = ["pl-warmup-sets", rowId, clientId ?? null, scheduledWorkoutId];
-  const { data } = useQuery({
+  const enabled = !!clientId && !!rowId;
+  const { data, isSuccess, isFetching } = useQuery({
     queryKey: key,
-    enabled: !!clientId && !!rowId,
+    enabled,
     staleTime: 60_000,
     queryFn: () => loadWarmupSets(rowId, clientId!, scheduledWorkoutId),
   });
@@ -92,7 +93,27 @@ export function useWarmupSets(rowId: string, clientId: string | null | undefined
       await refresh();
     } catch (e) { fail(e); }
   };
-  return { sets, save, remove, atLimit: sets.length >= MAX_WARMUPS };
+  /** Card undo / reset: make the warm-ups exactly `list` (in order). Throws so the caller can report it. */
+  const replaceAll = async (list: Array<{ load: number; unit: string; reps: number; rpe: number | null }>) => {
+    if (!clientId) return;
+    let del = sb.from("pl_warmup_sets").delete().eq("row_id", rowId).eq("client_id", clientId);
+    del = scheduledWorkoutId ? del.eq("scheduled_workout_id", scheduledWorkoutId) : del.is("scheduled_workout_id", null);
+    await del.throwOnError();
+    // One at a time so created_at keeps their order.
+    for (const w of list.slice(0, MAX_WARMUPS)) {
+      await sb.from("pl_warmup_sets").insert({ row_id: rowId, client_id: clientId, scheduled_workout_id: scheduledWorkoutId, load: w.load, unit: w.unit, reps: w.reps, rpe: w.rpe }).throwOnError();
+    }
+    await qc.refetchQueries({ queryKey: key });
+  };
+  return {
+    sets,
+    save,
+    remove,
+    replaceAll,
+    atLimit: sets.length >= MAX_WARMUPS,
+    /** Loaded and settled (nothing being fetched) — safe to read as the truth. */
+    ready: !enabled || (isSuccess && !isFetching),
+  };
 }
 
 type WarmupSaveInput = { id?: string; load: number; unit: WarmupUnit; reps: number; rpe: number | null };
@@ -116,7 +137,7 @@ export const WARMUP_FEELS: ReadonlyArray<{ rpe: number; label: string }> = [
  * work up to; tap it, tap how it felt, tap "Use" — today's weight is in every
  * open set (2–3 taps, no typing when the suggested warm-up was used). Logged
  * warm-ups stay as W rows; tap one to fix it. Never counted as work. The rough
- * 1RM lives in its own chip on the card (E1rmChip), not here.
+ * 1RM lives in Workout Tools → e1RM (today's best set is one tap there), not here.
  */
 export function WarmupRows({
   sets,

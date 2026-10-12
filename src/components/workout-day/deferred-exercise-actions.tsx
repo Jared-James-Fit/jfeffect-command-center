@@ -152,6 +152,24 @@ export function DeferredExerciseHowToButton({
   );
 }
 
+/**
+ * The swap sheet opened from somewhere else (the exercise ⋯ menu): it lives
+ * outside the menu so closing the menu can't take the sheet with it, and the
+ * swap code only loads once it's asked for.
+ */
+export function DeferredQuickSwapSheet({
+  open,
+  onOpenChange,
+  ...props
+}: Parameters<typeof DeferredQuickSwapButton>[0] & { open: boolean; onOpenChange: (open: boolean) => void }) {
+  if (!open) return null;
+  return (
+    <Suspense fallback={null}>
+      <LazyQuickSwapButton {...props} open hideTrigger onOpenChange={onOpenChange} />
+    </Suspense>
+  );
+}
+
 export function DeferredQuickSwapButton(props: {
   rowId: string;
   exerciseId: string | null;
