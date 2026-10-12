@@ -40,7 +40,8 @@ describe("RPE chart", () => {
     expect(percentOf1RM(5, 2)).toBeCloseTo(0.811, 3); // 5 @ RPE 8 ≈ 7RM
     expect(percentOf1RM(3, 1.5)!).toBeGreaterThan(percentOf1RM(3, 2)!);
     expect(percentOf1RM(15, 3)!).toBeLessThan(percentOf1RM(12, 0)!);
-    expect(percentOf1RM(20, 4)).toBeNull(); // too far out to trust
+    expect(percentOf1RM(20, 0)!).toBeLessThan(percentOf1RM(15, 0)!); // high-rep tail keeps falling
+    expect(percentOf1RM(28, 4)).toBeNull(); // too far out to trust
   });
 
   it("ignores warm-ups and down-weights unlogged effort", () => {
@@ -444,5 +445,38 @@ describe("early estimate: one recent session is enough to suggest", () => {
 
   it("an early estimate never drives another card's day read", () => {
     expect(todayVsUsual({ history: larsen, sets: [{ load: 90, reps: 7, rpe: 6 }], unit: "kg", now: NOW })).toBeNull();
+  });
+});
+
+describe("high-rep accessories (10–20, 20+ reps)", () => {
+  // Standing Calf Raise - Machine, Oct 2026: 10–20 @ RPE 9–10, every set ever
+  // logged at 20 reps, so the old 15-rep cap left Suggest with nothing at all.
+  const calf = (session: string, d: number, lb: number) =>
+    log(session, d, lb / 2.2046226218, 20, 10, { exerciseName: "Standing Calf Raise - Machine", enteredValue: lb, enteredUnit: "lb", normalizedLb: lb });
+  const history = [calf("a", 9, 100), calf("b", 5, 25), calf("c", 1, 50), calf("c", 1, 50)];
+  const plan = planningTarget({ repTarget: { min: 10, max: 20 }, rpeTarget: { min: 9, max: 10 }, rirTarget: {} })!;
+
+  it("plans 10–20 @ 9–10 at the midpoint and reads 20-rep sets", () => {
+    expect(plan).toEqual({ reps: 15, rpe: 9.5 });
+    expect(setE1rm({ load: 50, reps: 20, rpe: 10 })).not.toBeNull();
+    expect(setE1rm({ load: 50, reps: 20, rpe: 10 })!.trust).toBeGreaterThanOrEqual(0.7); // counts as a set today
+    expect(planningTarget({ repTarget: { min: 15, max: 20 }, rpeTarget: { exact: 8 }, rirTarget: {} })).toEqual({ reps: 18, rpe: 8 });
+  });
+
+  it("suggests from history before the first set, and live after it", () => {
+    const cold = buildLoadModel({ history, today: [], unit: "lb", now: NOW });
+    expect(cold.status).toBe("ready");
+    const s = suggestSetLoad(cold, plan)!;
+    // 50 × 20 @ 10 yesterday → 15 @ 9.5 a little heavier, never a jump.
+    expect(s.target).toBeGreaterThanOrEqual(50);
+    expect(s.target).toBeLessThanOrEqual(55);
+    const live = buildLoadModel({ history, today: [{ load: 45, reps: 20, rpe: 10 }], unit: "lb", now: NOW });
+    expect(live.source).toBe("blend");
+    expect(suggestSetLoad(live, plan)!.target).toBeGreaterThanOrEqual(45);
+  });
+
+  it("past the chart there's no plan (30 reps @ RPE 7), so no empty promise", () => {
+    expect(planningTarget({ repTarget: { exact: 30 }, rpeTarget: { exact: 7 }, rirTarget: {} })).toBeNull();
+    expect(setE1rm({ load: 50, reps: 31, rpe: 10 })).toBeNull();
   });
 });
