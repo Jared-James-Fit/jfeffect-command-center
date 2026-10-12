@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import type { WeightUnit } from "@/lib/weight-lifted";
+import { saveWeightUnitChoice, weightUnitSetupKey } from "@/lib/weight-unit-pref";
 
 // lb by default; the choice is saved on the client (clients.preferred_weight_unit,
 // the same preference the analytics pages seed from). A coach in "View as client"
@@ -29,8 +30,10 @@ export function useWeightUnit() {
     setLocal(next);
     if (viewingAsClient || !portalUserId) return;
     qc.setQueryData(key, next);
-    const { error } = await supabase.from("clients").update({ preferred_weight_unit: next }).eq("user_id", portalUserId);
-    if (error) {
+    try {
+      await saveWeightUnitChoice({ userId: portalUserId }, next);
+      qc.invalidateQueries({ queryKey: weightUnitSetupKey(portalUserId) });
+    } catch {
       qc.setQueryData(key, prev);
       setLocal(null);
       toast.error("Couldn't save your unit preference");

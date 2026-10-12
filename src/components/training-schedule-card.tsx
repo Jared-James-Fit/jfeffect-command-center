@@ -145,18 +145,20 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
   const dayCountValid = targetCount > 0 && committedDays.length === targetCount;
 
   return (
-    <Card className={`border-border bg-card ${compact ? "p-4" : "p-6"} space-y-3 ${incomplete && editable ? "border-amber-500/50" : ""}`}>
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <Calendar className="h-4 w-4" /> Committed Training Schedule
+    <Card className={`border-border bg-card ${compact ? "p-4" : "p-4 sm:p-6"} space-y-3 ${incomplete && editable ? "border-amber-500/50" : ""}`}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
+            <Calendar className="h-4 w-4 shrink-0" /> Committed Training Schedule
+          </h3>
           {incomplete && (
-            <Badge variant="outline" className="border-amber-500/40 text-amber-500">
+            <Badge variant="outline" className="whitespace-nowrap border-amber-500/40 text-amber-500">
               <AlertCircle className="mr-1 h-3 w-3" /> Required
             </Badge>
           )}
-        </h3>
+        </div>
         {editable && !editing && (
-          <Button size="sm" variant={incomplete ? "default" : "ghost"} onClick={() => setEditing(true)}>
+          <Button size="sm" className="shrink-0" variant={incomplete ? "default" : "ghost"} onClick={() => setEditing(true)}>
             {incomplete ? "Set Schedule" : <Pencil className="h-3.5 w-3.5" />}
           </Button>
         )}

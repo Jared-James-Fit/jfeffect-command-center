@@ -4328,6 +4328,7 @@ export type Database = {
           tiktok: string | null
           timezone: string
           timezone_confirmed_at: string | null
+          weight_unit_confirmed_at: string | null
           training_notes: string | null
           training_schedule_completed: boolean
           training_schedule_last_updated: string | null
@@ -4516,6 +4517,7 @@ export type Database = {
           tiktok?: string | null
           timezone?: string
           timezone_confirmed_at?: string | null
+          weight_unit_confirmed_at?: string | null
           training_notes?: string | null
           training_schedule_completed?: boolean
           training_schedule_last_updated?: string | null
@@ -4704,6 +4706,7 @@ export type Database = {
           tiktok?: string | null
           timezone?: string
           timezone_confirmed_at?: string | null
+          weight_unit_confirmed_at?: string | null
           training_notes?: string | null
           training_schedule_completed?: boolean
           training_schedule_last_updated?: string | null
