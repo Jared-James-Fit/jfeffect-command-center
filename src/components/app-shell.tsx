@@ -60,6 +60,12 @@ export interface NavItem {
   featured?: boolean;
   /** More pages (and their sub-pages) that light this bar tab, e.g. Money on Payments. */
   activeOn?: string[];
+  /**
+   * A small satellite button on the raised centre button that opens one view
+   * of its page directly (Crew's League: `to` + `hash`). Lit while the URL
+   * hash starts with `hash`; the centre button stays quiet then.
+   */
+  shortcut?: { to: string; hash: string; label: string; icon: React.ComponentType<{ className?: string }> };
 }
 
 function groupNavItems(items: NavItem[]) {
@@ -274,6 +280,7 @@ export function AppShell({
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
+  const hash = useRouterState({ select: (r) => r.location.hash });
   const clientBadges = useClientNavBadges();
   const navBadges = clientBadges;
   const [mode, setMode] = useSidebarMode();
@@ -949,6 +956,7 @@ export function AppShell({
           items={resolveVisibleBarItems(bottomItems, { more: !moreInHeader })}
           pathname={pathname}
           search={search}
+          hash={hash}
           navBadges={navBadges}
           onNavigate={(to) => markNavSeen(user?.id, to)}
           moreOpen={moreOpen}
@@ -1475,11 +1483,13 @@ function TabletFlyoutRow({
 const BAR_BOTTOM = "var(--mobile-bar-bottom)";
 
 /** The floating mobile tab bar (hidden from md up). */
-export function MobileBottomBar({ items, pathname, search, navBadges, onNavigate, moreOpen, onOpenMore }: {
+export function MobileBottomBar({ items, pathname, search, hash = "", navBadges, onNavigate, moreOpen, onOpenMore }: {
   /** Already resolved to the visible slots (resolveVisibleBarItems). */
   items: NavItem[];
   pathname: string;
   search?: Record<string, unknown>;
+  /** Router hash, without "#": lights a centre-button shortcut (Crew's League). */
+  hash?: string;
   navBadges: Record<string, { count?: number; dot?: boolean }>;
   onNavigate: (to: string) => void;
   moreOpen: boolean;
@@ -1528,6 +1538,7 @@ export function MobileBottomBar({ items, pathname, search, navBadges, onNavigate
               item={item}
               pathname={pathname}
               search={search}
+              hash={hash}
               navBadges={navBadges}
               onNavigate={onNavigate}
               dense={dense}
@@ -1570,10 +1581,11 @@ function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }
   return null;
 }
 
-function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, prefixActive }: {
+function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigate, dense, prefixActive }: {
   item: NavItem;
   pathname: string;
   search?: Record<string, unknown>;
+  hash?: string;
   navBadges: Record<string, { count?: number; dot?: boolean }>;
   onNavigate: (to: string) => void;
   /** True when 6 columns share the bar — tightens icon/label sizing. */
@@ -1638,9 +1650,16 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
         (search?.tab === tabAlias.tab ||
           // No tab in URL → workspace falls back to "messages" by default.
           (typeof search?.tab === "undefined" && tabAlias.tab === "messages")));
-    return (
+    // The centre button's satellite (Crew's League). While its view is open it
+    // is the one lit, and the centre button goes quiet: one "you're here".
+    const shortcut = item.featured ? item.shortcut : undefined;
+    const shortcutOn = !!shortcut && pathname === shortcut.to && hash.startsWith(shortcut.hash);
+    const lit = active && !shortcutOn;
+    const link = (
       <Link
         to={item.to}
+        // with a satellite, the hash tells them apart (Link ignores it by default)
+        activeOptions={shortcut ? { includeHash: true } : undefined}
         onClick={() => {
           // Tapping the tab you're already on goes back to the top (and the
           // page can refresh itself), like every app with a feed.
@@ -1656,9 +1675,9 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
         className={cn(
           BAR_SLOT,
           item.featured && "group/tab",
-          active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+          lit ? "text-primary" : "text-muted-foreground hover:text-foreground",
         )}
-        aria-current={active ? "page" : undefined}
+        aria-current={lit ? "page" : undefined}
         aria-label={item.featured && badge?.count ? `${item.label}, ${badge.count} new` : undefined}
       >
         {item.featured ? (
@@ -1682,12 +1701,12 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
               <span
                 className={cn(
                   "relative grid h-[50px] w-[50px] place-items-center rounded-full",
-                  active
+                  lit
                     ? "bg-[image:var(--gradient-primary)] text-primary-foreground inset-ring inset-ring-white/15 shadow-[0_10px_24px_-8px_color-mix(in_oklab,var(--primary)_75%,transparent)]"
                     : "bg-gradient-to-b from-secondary to-card text-foreground inset-ring inset-ring-foreground/10 shadow-[0_8px_20px_-8px_rgba(0,0,0,0.55)]",
                 )}
               >
-                <Icon className={cn("h-[26px] w-[26px]", active && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]")} />
+                <Icon className={cn("h-[26px] w-[26px]", lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]")} />
                 <BottomNavBadge badge={badge} />
               </span>
             </span>
@@ -1701,6 +1720,42 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
         <span className={barLabel(dense, active || item.featured)}>{item.label}</span>
         {active && !item.featured && <BarActiveMark />}
       </Link>
+    );
+    if (!shortcut) return link;
+    const ShortcutIcon = shortcut.icon;
+    return (
+      <div className="relative">
+        {link}
+        {/* Cleo-style satellite on the disc's top-left shoulder (the new-post
+            count keeps the top-right). Its own link, not inside Crew's, so the
+            two taps never mix; its extra tap area grows up and left only,
+            away from the disc. */}
+        <Link
+          to={shortcut.to}
+          hash={shortcut.hash}
+          activeOptions={{ includeHash: true }}
+          onClick={() => {
+            if (shortcutOn) {
+              try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+            }
+          }}
+          data-featured-shortcut
+          aria-label={shortcut.label}
+          title={shortcut.label}
+          aria-current={shortcutOn ? "page" : undefined}
+          style={{ WebkitTapHighlightColor: "transparent" }}
+          className={cn(
+            "absolute left-[calc(50%-41px)] top-[-36px] z-10 grid h-7 w-7 place-items-center rounded-full ring-[2.5px] ring-card",
+            "shadow-[0_4px_10px_-3px_rgba(0,0,0,0.5)] transition-transform duration-150 active:scale-90 select-none touch-manipulation [-webkit-touch-callout:none]",
+            "after:absolute after:-left-2.5 after:-top-2.5 after:bottom-0 after:right-0 after:content-['']",
+            shortcutOn
+              ? "bg-[image:var(--gradient-primary)] text-primary-foreground"
+              : "bg-card text-amber-500 inset-ring inset-ring-foreground/10",
+          )}
+        >
+          <ShortcutIcon className={cn("h-3.5 w-3.5 stroke-[2.5]", shortcutOn && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]")} />
+        </Link>
+      </div>
     );
   }
 

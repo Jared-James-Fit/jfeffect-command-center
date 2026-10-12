@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { CalendarClock, Cake, ChevronDown, ChevronRight, Eye, Flame, MessageCircle, PenLine, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -72,9 +72,7 @@ const HUB_TABS: { key: HubTab; label: string }[] = [
 /** A view-only login (finance) sees the Feed and the League, not the coach's queues. */
 const VIEW_TABS: HubTab[] = ["feed", "league"];
 
-function tabFromHash(): HubTab {
-  if (typeof window === "undefined") return "feed";
-  const h = window.location.hash;
+function tabFromHash(h: string = typeof window === "undefined" ? "" : window.location.hash): HubTab {
   if (/birthday=/.test(h) || /tab=birthdays/.test(h)) return "birthdays";
   if (/tab=daily/.test(h)) return "daily";
   if (/tab=league/.test(h) || /rankings/.test(h)) return "league";
@@ -91,15 +89,23 @@ function tabFromHash(): HubTab {
  */
 export function AdminCommunityHub() {
   const { viewOnly } = useAuth();
-  const [picked, setPicked] = useState<HubTab>(tabFromHash);
-  // The tab goes in the hash, so Back from a page opened here (Athlete
-  // Records from League) returns to the same tab, not the Feed.
+  const [picked, setPicked] = useState<HubTab>(() => tabFromHash());
+  // The tab lives in the hash: Back from a page opened here (Athlete Records
+  // from League) returns to the same tab, the bar's League shortcut
+  // (#tab=league) and Crew's own button (no hash) switch it while you're
+  // here, and the bar lights the right one.
+  const navigate = useNavigate();
+  const routeHash = useRouterState({ select: (s) => s.location.hash });
+  // null: also apply the hash once on arrival (the router's, not window's).
+  const seenHash = useRef<string | null>(null);
+  useEffect(() => {
+    if (routeHash === seenHash.current) return;
+    seenHash.current = routeHash;
+    setPicked(tabFromHash(`#${routeHash}`));
+  }, [routeHash]);
   const setTab = (t: HubTab) => {
     setPicked(t);
-    try {
-      const { pathname, search } = window.location;
-      window.history.replaceState(window.history.state, "", t === "feed" ? pathname + search : `${pathname}${search}#tab=${t}`);
-    } catch { /* hash is a convenience */ }
+    void navigate({ to: ".", hash: t === "feed" ? "" : `tab=${t}`, replace: true, resetScroll: false });
   };
   const [writing, setWriting] = useState(false);
   const act = useSeriesAction();
