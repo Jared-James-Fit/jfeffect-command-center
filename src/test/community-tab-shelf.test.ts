@@ -54,6 +54,15 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).not.toContain("hsl(var(--primary)");
   });
 
+  it("sits just above the home indicator, lined up with the page, with the page fading out under it", () => {
+    // ~22pt off the bottom on Face ID iPhones (not the full 34pt safe area), 10px elsewhere
+    expect(shell).toContain('const BAR_BOTTOM = "max(calc(env(safe-area-inset-bottom) - 12px), 10px)";');
+    // same 16px gutter as the page's px-4
+    expect(shell).toContain('"fixed inset-x-4 z-50 mx-auto grid max-w-md');
+    // the fade is tagged like the bar, so keyboard / workout focus / pinch-zoom hide and pin it too
+    expect(shell).toMatch(/aria-hidden\s+data-mobile-bottom-nav\s+className="pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-background/);
+  });
+
   it("no community for this account: no centre button", () => {
     expect(portal).toContain('community?.enabled === false ? clientBottomNav.filter((i) => i.to !== "/portal/community") : clientBottomNav');
   });
