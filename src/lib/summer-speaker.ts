@@ -123,7 +123,20 @@ export function leadAndRest(text: string): [string] | [string, string] {
   return lead && rest ? [lead, rest] : [text];
 }
 
-type ServerAudio = { ok: true; audio: string; mime: string } | { ok: false; reason?: string };
+type ServerAudio = { ok: true; audio: string; mime: string } | { ok: false; reason?: string; timedOut?: boolean };
+
+/** A voice request that hangs falls back to the device voice instead of sitting on "Speaking". */
+const SERVER_VOICE_TIMEOUT_MS = 20_000;
+
+/**
+ * Longest a device-voice reply can plausibly take (about 2.5 words a second
+ * at rate 1, with plenty of slack). iOS sometimes never fires the last
+ * utterance's onend; this is the backstop.
+ */
+export function deviceSpeechCapMs(text: string, rate: number): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.round((words / (2.5 * Math.max(0.5, rate || 1))) * 1000 * 1.6 + 5000);
+}
 /** The server voice for one piece of a reply (see SpeechRequest in summer.server). */
 export type ServerVoice = (text: string, ctx: { rate: number; prev?: string; next?: string }) => Promise<ServerAudio>;
 
@@ -139,6 +152,8 @@ class SummerSpeaker {
   /** Bumped by every speak() and stop(), so a superseded reply goes quiet. */
   private turn = 0;
   private listeners = new Set<(speaking: boolean) => void>();
+  /** Held so the browser can't garbage-collect them mid-sentence (which drops onend). */
+  private utterances: SpeechSynthesisUtterance[] = [];
   speaking = false;
 
   onChange(fn: (speaking: boolean) => void) {
@@ -212,7 +227,10 @@ class SummerSpeaker {
       if (prefs.voice === "summer" && !this.serverVoiceOff) {
         const parts = leadAndRest(text);
         const ask = (i: number) =>
-          serverVoice(parts[i], { rate: prefs.rate, prev: parts[i - 1], next: parts[i + 1] }).catch(() => ({ ok: false as const }));
+          Promise.race<ServerAudio>([
+            serverVoice(parts[i], { rate: prefs.rate, prev: parts[i - 1], next: parts[i + 1] }).catch(() => ({ ok: false as const })),
+            new Promise<ServerAudio>((r) => setTimeout(() => r({ ok: false, timedOut: true }), SERVER_VOICE_TIMEOUT_MS)),
+          ]);
         // Both pieces start generating now; the second is usually ready
         // before the first finishes playing.
         const pending = parts.map((_, i) => ask(i));
@@ -220,7 +238,8 @@ class SummerSpeaker {
           const r = await pending[i];
           if (turn !== this.turn) return;
           if (!r.ok) {
-            if (i === 0) this.serverVoiceOff = true;
+            // A slow request isn't a missing voice: try the server again next reply.
+            if (i === 0 && !r.timedOut) this.serverVoiceOff = true;
             await this.speakDevice(parts.slice(i).join(" "), prefs);
             return;
           }
@@ -248,18 +267,53 @@ class SummerSpeaker {
       if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
       this.objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
       const el = this.audio;
+      let finished = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
       const done = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
         el.onended = null;
         el.onerror = null;
+        el.onpause = null;
+        el.ontimeupdate = null;
+        el.onloadedmetadata = null;
         this.stopCurrent = null;
         resolve();
+      };
+      // iOS (home-screen app especially) sometimes never fires "ended", which
+      // left the chat on "Speaking" after she'd finished. Also finish when
+      // playback reaches the end, when it's paused from outside (a call, the
+      // lock screen), and by the clock as a last resort.
+      const finishBy = (ms: number) => {
+        clearTimeout(timer);
+        timer = setTimeout(done, ms);
+      };
+      const armFromDuration = () => {
+        const d = el.duration;
+        if (Number.isFinite(d) && d > 0) finishBy(((d - el.currentTime) / (el.playbackRate || 1)) * 1000 + 1500);
       };
       this.stopCurrent = done;
       el.onended = done;
       el.onerror = done;
+      el.ontimeupdate = () => {
+        if (el.ended || (Number.isFinite(el.duration) && el.duration > 0 && el.currentTime >= el.duration - 0.05)) done();
+      };
+      el.onloadedmetadata = armFromDuration;
+      finishBy(10_000); // never started
       el.src = this.objectUrl;
       el.playbackRate = rate;
-      void el.play().catch(done);
+      el.play()
+        .then(() => {
+          if (finished) return;
+          // Set after play() so the pause from swapping src doesn't count.
+          el.onpause = () => {
+            if (!el.ended) done();
+          };
+          armFromDuration();
+          if (!Number.isFinite(el.duration)) finishBy(90_000);
+        })
+        .catch(done);
     });
   }
 
@@ -270,13 +324,26 @@ class SummerSpeaker {
     const parts = speechChunks(text);
     return new Promise((resolve) => {
       let finished = false;
+      let quietTicks = 0;
+      const startedAt = Date.now();
+      const cap = setTimeout(() => done(), deviceSpeechCapMs(text, prefs.rate));
+      // onend on the last utterance can go missing (iOS): watch the engine too.
+      const poll = setInterval(() => {
+        const ss = window.speechSynthesis;
+        quietTicks = !ss.speaking && !ss.pending ? quietTicks + 1 : 0;
+        if (quietTicks >= 2 && Date.now() - startedAt > 1200) done();
+      }, 400);
       const done = () => {
         if (finished) return;
         finished = true;
+        clearTimeout(cap);
+        clearInterval(poll);
+        this.utterances = [];
         this.stopCurrent = null;
         resolve();
       };
       this.stopCurrent = done;
+      this.utterances = [];
       parts.forEach((p, i) => {
         const u = new SpeechSynthesisUtterance(p);
         if (voice) {
@@ -289,6 +356,7 @@ class SummerSpeaker {
           u.onend = done;
           u.onerror = done;
         }
+        this.utterances.push(u);
         window.speechSynthesis.speak(u);
       });
     });
