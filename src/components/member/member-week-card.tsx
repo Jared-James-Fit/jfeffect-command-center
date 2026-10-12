@@ -122,7 +122,12 @@ export function MemberWeekCard({ memberId }: { memberId: string | null | undefin
         today={today}
         selected={selected}
         onSelect={setSelected}
-        count={(d) => (byDay.get(d) ?? []).length}
+        count={() => 0}
+        workoutMark={(d) => {
+          const list = byDay.get(d) ?? [];
+          if (!list.length) return null;
+          return list.every((e) => done.has(`${e.week}:${e.day}`)) ? { kind: "done" } : { kind: "scheduled" };
+        }}
         dotClass="bg-cyan-400"
       />
 

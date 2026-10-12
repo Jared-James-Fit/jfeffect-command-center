@@ -9,6 +9,7 @@ import { localStartOfToday, toLocalISO } from "@/lib/today";
 import type { WorkoutItem } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { CalendarDayCell, type CalendarDnd } from "@/components/workouts/calendar-day-dnd";
+import { WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 
 export function statusDotClass(status: WorkoutStatus | "none"): string {
   switch (status) {
@@ -110,7 +111,7 @@ export function WeekStrip({
               )}>
                 {format(d, "d")}
               </span>
-              <span className={cn("mt-0.5 h-1.5 w-1.5 rounded-full", statusDotClass(status))} />
+              <WorkoutStatusMark mark={dayMark(list)} onPrimary={isSelected} className="mt-0.5" />
               {extra > 0 && (
                 <span className={cn(
                   "text-[9px] font-bold leading-none",

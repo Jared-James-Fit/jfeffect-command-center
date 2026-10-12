@@ -10,6 +10,7 @@ import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { KIND_META, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
 import { isAppointmentItem } from "@/lib/home-upcoming";
 import { WeekStrip } from "@/components/calendar/week-strip";
+import { dayMark } from "@/components/workouts/workout-status-mark";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { RequestSessionSheet } from "@/components/schedule/request-session-sheet";
@@ -73,10 +74,19 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
     const later = (items ?? []).filter((i) => i.date > selected && countsOnStrip(i)).map((i) => i.date).sort();
     return later[0] ?? null;
   }, [items, selected]);
-  const countByDay = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const it of items ?? []) if (countsOnStrip(it)) m.set(it.date, (m.get(it.date) ?? 0) + 1);
-    return m;
+  // Workouts show their status mark (same as the Workouts calendar); everything else a dot.
+  const { countByDay, workoutsByDay } = useMemo(() => {
+    const counts = new Map<string, number>();
+    const workouts = new Map<string, any[]>();
+    for (const it of items ?? []) {
+      if (!countsOnStrip(it)) continue;
+      if (it.kind === "workout" && it.raw) {
+        workouts.set(it.date, [...(workouts.get(it.date) ?? []), it.raw]);
+        continue;
+      }
+      counts.set(it.date, (counts.get(it.date) ?? 0) + 1);
+    }
+    return { countByDay: counts, workoutsByDay: workouts };
   }, [items]);
 
   const isToday = selected === today;
@@ -141,6 +151,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
         selected={selected}
         onSelect={setSelected}
         count={(d) => countByDay.get(d) ?? 0}
+        workoutMark={(d) => dayMark(workoutsByDay.get(d) ?? [])}
         dotClass="bg-cyan-400"
       />
 
