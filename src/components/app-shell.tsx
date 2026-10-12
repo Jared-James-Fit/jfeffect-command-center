@@ -355,13 +355,19 @@ export function AppShell({
       );
       if (!els.length) return;
       // Amount the visible viewport is offset from the layout viewport.
-      const dy = window.innerHeight - (vv.height + vv.offsetTop);
-      const dx = -vv.offsetLeft;
+      const dy = Math.round(window.innerHeight - (vv.height + vv.offsetTop));
+      const dx = Math.round(-vv.offsetLeft);
       const scale = vv.scale || 1;
       // Counter-translate so fixed bars stay glued to the visible viewport
-      // corner even while the user pinch-zooms and pans.
+      // corner while the user pinch-zooms and pans, or above the keyboard.
+      // Only then: while scrolling, Safari's toolbar show/hide and iOS
+      // sub-pixel insets also move these numbers, and chasing them one frame
+      // late made the bar (most visibly the raised centre button) wiggle.
+      // Plain position: fixed already holds still for that.
+      const zoomed = scale > 1.01;
+      const keyboard = document.documentElement.getAttribute("data-keyboard-open") === "true";
       const t =
-        dy > 0 || dx !== 0 || scale !== 1
+        (zoomed || keyboard) && (dy > 0 || dx !== 0)
           ? `translate(${dx}px, ${-Math.max(dy, 0)}px)`
           : "";
       els.forEach((el) => {
@@ -1541,7 +1547,9 @@ const BAR_SLOT =
 const BAR_ICON_BOX = "relative grid h-6 place-items-center";
 const BAR_ICON = "h-[22px] w-[22px]";
 const barLabel = (dense?: boolean, active?: boolean) =>
-  cn("w-full px-0.5 text-center leading-[1.15] tracking-tight", dense ? "text-[10px]" : "text-[10.5px]", active && "font-semibold");
+  // leading after the size: tailwind-merge drops a line-height that comes before a font size.
+  // A whole 12px line keeps every slot (and the raised disc) on whole pixels.
+  cn("w-full px-0.5 text-center tracking-tight", dense ? "text-[10px]" : "text-[10.5px]", "leading-3", active && "font-semibold");
 
 function BarActiveMark() {
   return <span aria-hidden className="absolute bottom-0.5 left-1/2 h-[3px] w-4 -translate-x-1/2 rounded-full bg-primary" />;
@@ -1658,12 +1666,14 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
           // tabs (so its label lines up) and only turns brand-red when it's
           // the page you're on — otherwise it would read as selected.
           // A gradient ring means there's something new, like a story.
+          // 46px disc + 2px ring = an even 50px, so centring it never lands
+          // on a half pixel (iOS rounds those differently frame to frame).
           <div className={cn(BAR_ICON_BOX, "w-full")}>
             <span
               data-featured-tab
               data-new={badge?.count ? "" : undefined}
               className={cn(
-                "absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[2.5px] transition-transform duration-150 group-active/tab:scale-95",
+                "absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[2px] transition-transform duration-150 group-active/tab:scale-95",
                 badge?.count ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-card",
               )}
             >
