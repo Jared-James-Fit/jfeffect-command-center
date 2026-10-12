@@ -96,6 +96,12 @@ describe("Home schedule card: today in full, then what's coming", () => {
     expect(src).toContain("agenda.upcoming.map(");
     expect(src).not.toContain("<WeekStrip");
   });
+  it("reads as a timeline: time column, one colour line per item, a Now marker; no icon tiles or tinted cards", () => {
+    expect(src).toContain("<NowLine />");
+    expect(src).toContain("FAMILY_ACCENT[KIND_FAMILY[item.kind]]");
+    expect(src).not.toContain("FamilyIcon");
+    expect(src).not.toContain("bg-cyan-500/5");
+  });
   it("today's workout carries its block, week and Start / Continue / Done", () => {
     expect(src).toContain("workoutContext(item.raw)");
     expect(src).toContain("workoutAction(item.raw)");
