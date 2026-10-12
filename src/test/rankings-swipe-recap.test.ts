@@ -31,23 +31,49 @@ describe("Rankings: swipe between Monthly and Strength", () => {
   });
 });
 
-describe("Your month: shown, not folded", () => {
-  it("no accordion; breakdown, Coach's Focus and the rest render right under the Top 10", () => {
-    expect(card).not.toContain("<details data-your-month");
-    expect(card).toContain('<div data-your-month className="space-y-3 rounded-2xl border bg-card p-4">');
-    expect(card).toContain("<MonthBreakdown me={me as BoostLeagueRow} />");
-    expect(card).toContain('{boostMe && <CoachFocus me={boostMe} className="mt-3" />}');
+describe("Monthly board: you first, one board, the rest folded", () => {
+  it("your rank, points and next step sit above the board; the breakdown is one tap away", () => {
+    expect(card).toContain("<YouPanel me={me} rows={rows} />");
+    expect(card.indexOf("<YouPanel")).toBeLessThan(card.indexOf('aria-label="Standings"'));
+    expect(card).toContain("{standingText(standing)}");
+    expect(card).toContain("aria-expanded={open}");
+    expect(card).toContain("<MonthBreakdown me={me} />");
+    expect(card).toContain('<CoachFocus me={me} title="Your next moves" />');
+    // no second "your month" card repeating the same rank and gap
+    expect(card).not.toContain("data-your-month");
+    expect(card).not.toContain("pts to crack the Top 10");
+  });
+  it("one query for the board and its sheets (shared with Home)", () => {
+    expect(card).toContain('usePerformanceLeague("current")');
+    expect(card).not.toContain("get_monthly_athlete_rankings");
+  });
+  it("last month's final standings and the rules sit under the board, the rules folded", () => {
     expect(card).toContain("final standings");
+    expect(card.indexOf("final standings <ChevronRight")).toBeGreaterThan(card.indexOf('aria-label="Standings"'));
+    expect(card).toContain('<details className="group px-4 py-1">');
+    expect(card).toContain("{TIEBREAK_NOTE}");
+  });
+  it("the Final Week Boost: a quiet progress line all month, the race card in the final week", () => {
+    expect(card).toContain("me?.qualified && finalWeek ? (");
+    expect(card).toContain("<BoostHero me={me} rows={rows} />");
+    expect(card).toContain("<BoostProgressLine me={me} />");
   });
 });
 
-describe("Recap: once, at the top of Rankings", () => {
-  it("compact and dismissible, above the Monthly / Strength switch, nowhere else in Rankings", () => {
-    expect(hub.indexOf("<LeagueRecapButton compact />")).toBeGreaterThan(-1);
-    expect(hub.indexOf("<LeagueRecapButton compact />")).toBeLessThan(hub.indexOf('aria-label="Leaderboard"'));
+describe("Recap: always at the top of Rankings, never dismissible", () => {
+  it("above the Monthly / Strength switch, nowhere else in Rankings, and no ✕ or hidden state", () => {
+    expect(hub.indexOf("<LeagueRecapButton />")).toBeGreaterThan(-1);
+    expect(hub.indexOf("<LeagueRecapButton />")).toBeLessThan(hub.indexOf('aria-label="Leaderboard"'));
     expect(card).not.toContain("LeagueRecapButton");
-    expect(recap).toContain('aria-label="Dismiss recap"');
-    expect(recap).toContain("const dismissKey = `jf-recap-dismissed:${month}`;");
+    expect(recap).not.toContain("Dismiss recap");
+    expect(recap).not.toContain("jf-recap-dismissed");
+    expect(recap).not.toMatch(/localStorage/);
+  });
+  it("only last month's recap: it rolls over on the 1st, so nothing piles up", () => {
+    const btn = recap.slice(recap.indexOf("export function LeagueRecapButton"));
+    expect(btn).toContain("const month = previousLeagueMonth();");
+    expect(btn).toContain("{fresh && <span");
+    expect(recap).not.toContain("LeagueRecapHomeTile");
   });
 });
 

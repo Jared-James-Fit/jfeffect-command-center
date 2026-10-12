@@ -62,37 +62,31 @@ describe("Rankings", () => {
     expect(card).toContain("How points work");
     expect(card.match(/How to earn points/g)).toBeNull();
   });
-  it("the Monthly board is titled by the month (October League)", () => {
-    expect(card).toContain('{format(new Date(),"MMMM")} League');
+  it("the Monthly board is titled by the month (October League), with the days left", () => {
+    expect(card).toContain("{monthName(monthStart)} League");
+    expect(card).toContain("{monthClockLabel(finalWeek)}");
   });
-  it("Monthly: the whole Top 10 on the page (and you, if you're below it); every row opens that athlete, Back closes", () => {
-    expect(card).toContain("Number(r.rank)<=10");
-    expect(card).toContain("const shownTo = 10;");
-    expect(card).toContain("[...top10.slice(3, shownTo), ...(outside && leagueMe ? [leagueMe] : [])]");
-    expect(card).toContain("pts to Top 10");
-    expect(card).toContain("onClick={() => openAthlete(r.client_id)}");
-    expect(card).toContain('onClose={sheet.kind === "athlete" ? closeSheet : undefined}');
+  it("Monthly: the whole Top 10 on the page (and you, if you're below it), Show all for the rest; every row opens that athlete", () => {
+    expect(card).toContain("const SHOWN = 10;");
+    expect(card).toContain("[...shown, ...(meBelow ? [meBelow] : [])]");
+    expect(card).toContain("Show all ${ranked.length}");
+    expect(card).toContain("onOpen={() => openAthlete(r.client_id)}");
+    expect(card).toContain('hideCloseButton={sheet?.kind === "athlete"}');
     expect(card).not.toContain("View Rankings");
   });
-  it("Monthly: breakdown, Coach's Focus, last month's standings and rules under the board (recap sits atop Rankings)", () => {
-    expect(card).toContain('<YourMonthDetails onOpenPrevious={() => setSheet({ kind: "previous" })} />');
-    expect(card).toContain("<MonthBreakdown me={me as BoostLeagueRow} />");
-    expect(card).toContain('{boostMe && <CoachFocus me={boostMe} className="mt-3" />}');
-    expect(hub).toContain("<LeagueRecapButton compact />");
-    expect(card).toContain("final standings");
-  });
-  it("Strength: Top 10 on the page, Show all expands inline, All-time or Competition; no View Rankings", () => {
+  it("Strength: Top 10 on the page, Show all expands inline, Meets only is one toggle; no View Rankings", () => {
     expect(board).toContain("pickBoard(data, mode, lift, division, showAll ? Infinity : TOP)");
     expect(board).toContain('{showAll ? "Show top 10" : `Show all ${count} athletes`}');
-    expect(board).toContain('([["all", "All-time"], ["meets", "Competition"]] as const)');
+    expect(board).toContain('aria-pressed={source === "meets"}');
+    expect(board).toContain("Meets only");
     const slide = board.slice(board.indexOf("export function StrengthBoardSlide()"), board.indexOf("function KingTile("));
     expect(slide).not.toContain("View Rankings");
   });
   it("everything still opens: athlete details, careers, recap story", () => {
     expect(card).not.toContain('setOpen("levels")');
     expect(board).toContain("if (career) return <PowerliftingCareer athleteId={career} />;");
-    expect(recap).toContain("You finished ${ordinal(recap.me.rank)} place");
-    expect(recap).toContain("{playing && <LeagueRecapStory recap={playing} open={!!playing} onClose={() => setPlaying(null)} />}");
+    expect(recap).toContain("You finished ${ordinal(recap.me.rank)}");
+    expect(recap).toContain("<LeagueRecapStory recap={recap} open={open} onClose={() => setOpen(false)} />");
   });
   it("Logging Level is gone from the client app (its points still feed Milestones)", () => {
     expect(card).not.toContain("Logging Level</span>");

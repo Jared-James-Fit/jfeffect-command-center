@@ -13,8 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDownRight, ArrowUpRight, Clapperboard, Dumbbell, Flame, Medal, Minus, NotebookPen, Scale, Swords, Trophy, Volume2, VolumeX, X, Share2, Download } from "lucide-react";
 import { recapStoryBlob, shareOrSaveImage } from "@/lib/recap-story-card";
 import { createRecapMusic, readRecapMuted, writeRecapMuted, type RecapMusic, type RecapSfx } from "@/lib/recap-music";
@@ -26,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { leagueToday } from "@/lib/league-boost";
 import {
   fetchLeagueRecap, hasSeenFeature, inRecapWindow, markFeatureSeen, monthName, nextMonthName, ordinal,
-  outroLine, previousLeagueMonth, rankChange, recapMonths, recapSeenKey, rivalLine, type LeagueRecap,
+  outroLine, previousLeagueMonth, rankChange, recapSeenKey, rivalLine, type LeagueRecap,
 } from "@/lib/league-recap";
 
 const SLIDE_MS = 5600;
@@ -733,205 +732,48 @@ export function LeagueRecapGate() {
 }
 
 /**
- * Entry point inside the league: replay last month's recap anytime. `compact`
- * (top of Rankings) is a slimmer banner with an ✕: dismissing hides it on this
- * device until next month's recap.
+ * Last month's recap, at the top of Rankings: always there (no ✕, nothing to
+ * hide), and always just last month's. It rolls over by itself on the 1st,
+ * so it never piles up. "New" for the first week, while it's fresh.
  */
-export function LeagueRecapButton({ className, compact = false }: { className?: string; compact?: boolean }) {
+export function LeagueRecapButton({ className }: { className?: string }) {
   const viewerId = usePortalUserId() ?? null;
   const month = previousLeagueMonth();
   const [open, setOpen] = useState(false);
-  const dismissKey = `jf-recap-dismissed:${month}`;
-  const [dismissed, setDismissed] = useState(() => {
-    if (!compact || typeof window === "undefined") return false;
-    try {
-      return localStorage.getItem(dismissKey) === "1";
-    } catch {
-      return false;
-    }
-  });
   const { data: recap } = useQuery({
     queryKey: ["league-recap", month, viewerId],
     enabled: !!viewerId,
     staleTime: 10 * 60_000,
     queryFn: () => fetchLeagueRecap(month, viewerId),
   });
-  if (!recap || dismissed) return null;
-  const dismiss = () => {
-    setDismissed(true);
-    try {
-      localStorage.setItem(dismissKey, "1");
-    } catch {}
-  };
-  return (
-    <>
-      <div className={cn("relative", className)}>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className={cn(
-            "group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl text-left text-white shadow-md transition active:scale-[0.99]",
-            compact ? "py-2 pl-2.5 pr-11" : "p-3",
-          )}
-          style={{ background: "linear-gradient(120deg, #7f1d1d 0%, #b91c1c 45%, #4c1d95 100%)" }}
-        >
-          <span className={cn("grid shrink-0 place-items-center rounded-xl bg-white/15", compact ? "h-8 w-8" : "h-10 w-10")}><Clapperboard className={compact ? "h-4 w-4" : "h-5 w-5"} /></span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-black">Your {monthName(recap.month_start)} Recap</span>
-            <span className="block truncate text-xs text-white/75">
-              {recap.me.rank ? `${ordinal(recap.me.rank)} place · ` : ""}{recap.me.total_points} pts · see your rivals
-            </span>
-          </span>
-          <span className="text-xs font-black text-white/90">Play ▶</span>
-          <span aria-hidden className="jf-record-shine pointer-events-none absolute inset-y-0 -left-1/2 w-1/2" />
-        </button>
-        {compact && (
-          <button
-            type="button"
-            onClick={dismiss}
-            aria-label="Dismiss recap"
-            className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-white/80 active:bg-white/15"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-      <LeagueRecapStory recap={recap} open={open} onClose={() => setOpen(false)} />
-    </>
-  );
-}
-
-/**
- * Home-screen access point: last month's recap one tap away all month, plus
- * an archive of every past recap.
- */
-export function LeagueRecapHomeTile({ className, variant = "tile" }: { className?: string; variant?: "tile" | "mini" }) {
-  // The person whose portal this is (the client in coach "View as" mode).
-  const userId = usePortalUserId() ?? null;
-  const month = previousLeagueMonth();
-  const [playing, setPlaying] = useState<LeagueRecap | null>(null);
-  const [archiveOpen, setArchiveOpen] = useState(false);
-
-  const { data: recap } = useQuery({
-    queryKey: ["league-recap", month, userId],
-    enabled: !!userId,
-    staleTime: 10 * 60_000,
-    queryFn: () => fetchLeagueRecap(month, userId),
-  });
-
-  const months = useMemo(() => recapMonths(month, 12), [month]);
-  const archive = useQueries({
-    queries: months.map((m) => ({
-      queryKey: ["league-recap", m, userId],
-      enabled: !!userId && archiveOpen,
-      staleTime: 30 * 60_000,
-      queryFn: () => fetchLeagueRecap(m, userId),
-    })),
-  });
-  const past = archive.map((q) => q.data).filter((r): r is LeagueRecap => !!r && (r.me?.total_points ?? 0) > 0);
-  const archiveLoading = archiveOpen && archive.some((q) => q.isLoading);
-
   if (!recap) return null;
-  const isNew = inRecapWindow();
-
-  // Inside the League card: a full-width bar that plays last month's recap.
-  if (variant === "mini") {
-    return (
-      <>
-        <button
-          type="button"
-          onClick={() => setPlaying(recap)}
-          className={cn("relative flex min-h-12 w-full items-center gap-3 overflow-hidden rounded-xl px-2.5 py-2 text-left text-white shadow-sm active:scale-[0.99]", className)}
-          style={{ background: "linear-gradient(120deg, #450a0a 0%, #991b1b 45%, #3b0764 100%)" }}
-          aria-label={`Play your ${monthName(recap.month_start)} recap`}
-        >
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-black">
-            <span className="ml-0.5 text-xs font-black">▶</span>
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-black leading-tight">Your {monthName(recap.month_start)} recap</span>
-            <span className="block truncate text-xs text-white/80">
-              {recap.me.rank ? `You finished ${ordinal(recap.me.rank)} place · ` : ""}{recap.me.total_points} pts
-            </span>
-          </span>
-          {isNew && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 text-[9px] font-black uppercase text-black">New</span>}
-          <span className="shrink-0 text-xs font-black text-white/90">Play</span>
-        </button>
-        {playing && <LeagueRecapStory recap={playing} open={!!playing} onClose={() => setPlaying(null)} />}
-      </>
-    );
-  }
-
+  const fresh = inRecapWindow();
   return (
     <>
-      <div
-        className={cn("relative overflow-hidden rounded-2xl text-white shadow-md", className)}
+      <button
+        type="button"
+        data-league-recap
+        onClick={() => setOpen(true)}
+        aria-label={`Play your ${monthName(recap.month_start)} recap`}
+        className={cn("relative flex min-h-12 w-full items-center gap-3 overflow-hidden rounded-2xl py-2 pl-2.5 pr-3 text-left text-white shadow-sm transition active:scale-[0.99]", className)}
         style={{ background: "linear-gradient(120deg, #450a0a 0%, #991b1b 45%, #3b0764 100%)" }}
       >
-        <button
-          type="button"
-          onClick={() => setPlaying(recap)}
-          className="flex w-full items-center gap-3 p-3.5 text-left transition active:scale-[0.99]"
-          aria-label={`Play your ${monthName(recap.month_start)} recap`}
-        >
-          <span className="relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/15">
-            <Clapperboard className="h-6 w-6" />
-            {isNew && <span className="absolute -right-1 -top-1 rounded-full bg-amber-400 px-1.5 text-[9px] font-black uppercase text-black">New</span>}
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-black">
+          <span className="ml-0.5 text-xs font-black">▶</span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-black leading-tight">Your {monthName(recap.month_start)} recap</span>
+            {fresh && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 text-[9px] font-black uppercase leading-4 text-black">New</span>}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-white/60">Performance League</span>
-            <span className="block text-[15px] font-black leading-tight">Your {monthName(recap.month_start)} Recap</span>
-            <span className="block truncate text-xs text-white/75">
-              {recap.me.rank ? `Finished ${ordinal(recap.me.rank)} place · ` : ""}{recap.me.total_points} pts · 🎧
-            </span>
+          <span className="block truncate text-xs text-white/75">
+            {recap.me.rank ? `You finished ${ordinal(recap.me.rank)} · ` : ""}{recap.me.total_points} pts
           </span>
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-black shadow">
-            <span className="ml-0.5 text-sm font-black">▶</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setArchiveOpen(true)}
-          className="flex w-full items-center justify-between border-t border-white/10 px-3.5 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/5"
-        >
-          All recaps <span aria-hidden>→</span>
-        </button>
+        </span>
+        <Clapperboard className="h-4 w-4 shrink-0 text-white/70" aria-hidden />
         <span aria-hidden className="jf-record-shine pointer-events-none absolute inset-y-0 -left-1/2 w-1/2" />
-      </div>
-
-      <Sheet open={archiveOpen} onOpenChange={setArchiveOpen}>
-        <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-2xl px-5 pb-safe-bottom pt-5">
-          <SheetHeader className="text-left">
-            <SheetTitle className="flex items-center gap-2"><Clapperboard className="h-5 w-5 text-primary" /> Your Recaps</SheetTitle>
-            <SheetDescription>Replay any month of the Performance League.</SheetDescription>
-          </SheetHeader>
-          <div className="mt-4 space-y-2">
-            {past.map((r) => (
-              <button
-                key={r.month_start}
-                type="button"
-                onClick={() => { setArchiveOpen(false); setPlaying(r); }}
-                className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left transition hover:bg-muted/50 active:scale-[0.99]"
-              >
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Trophy className="h-5 w-5" /></span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-black">{monthName(r.month_start, { month: "long", year: "numeric" })}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {r.me.rank ? `#${r.me.rank} · ` : ""}{r.me.total_points} pts
-                  </span>
-                </span>
-                <span className="text-xs font-black text-primary">Play ▶</span>
-              </button>
-            ))}
-            {archiveLoading && <div className="py-6 text-center text-xs text-muted-foreground">Loading recaps…</div>}
-            {!archiveLoading && past.length === 0 && (
-              <div className="py-6 text-center text-xs text-muted-foreground">Your recaps will show up here after each month.</div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {playing && <LeagueRecapStory recap={playing} open={!!playing} onClose={() => setPlaying(null)} />}
+      </button>
+      <LeagueRecapStory recap={recap} open={open} onClose={() => setOpen(false)} />
     </>
   );
 }

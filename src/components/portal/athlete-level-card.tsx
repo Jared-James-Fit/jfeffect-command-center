@@ -1,30 +1,28 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Medal, ChevronRight, Scale } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Flame, Scale } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
-import { Button } from "@/components/ui/button";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type AchievementMetrics } from "@/lib/athlete-achievements";
 import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
-import { ArrowLeft } from "lucide-react";
-import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
+import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints } from "@/lib/league-points";
 import { RecordBadges } from "@/components/portal/record-badges";
-import { formatWeightLifted, type WeightUnit } from "@/lib/weight-lifted";
+import { formatWeightLifted } from "@/lib/weight-lifted";
 import { useWeightUnit } from "@/lib/use-weight-unit";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { isFinalWeek, leagueToday, type LeagueRow as BoostLeagueRow } from "@/lib/league-boost";
-import { BoostHero, BoostTeaser, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
+import { isFinalWeek, leagueToday } from "@/lib/league-boost";
+import { BoostHero, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 import { CoachTag } from "@/components/portal/coach-tag";
 import { CoachFocus, PointsBar, PointsLegend, VsCard } from "@/components/portal/league-insights";
+import { monthName, previousLeagueMonth } from "@/lib/league-recap";
+import { TIEBREAK_NOTE, boostProgress, monthClockLabel, rankedRows, standingOf, standingText } from "@/lib/league-standing";
+import { usePerformanceLeague, type PerformanceLeagueRow } from "@/lib/use-performance-league";
 
 type XpEvent = { id: string; event_type: string; label: string | null; xp: number; occurred_at: string };
-type RankRow = { client_id: string; display_name: string; avatar_url: string | null; xp: number; rank: number; is_me: boolean; is_coach?: boolean };
-type LeagueRow = { client_id:string; display_name:string; avatar_url:string|null; monthly_xp:number; rank:number|null; is_me:boolean; qualified:boolean; is_coach?:boolean };
-const leagueScore=(r?:LeagueRow|null)=>leaguePointsFromEncoded(r?.monthly_xp);
+type Row = PerformanceLeagueRow;
 
 function useXpEvents(clientId: string) {
   return useQuery({
@@ -42,128 +40,239 @@ function useXpEvents(clientId: string) {
   });
 }
 
+/** The board shows the Top 10 (and you, if you're below it); "Show all" opens the rest in place. */
+const SHOWN = 10;
+const MEDALS = ["🥇", "🥈", "🥉"];
+
 /**
- * Crew → Rankings → Monthly: this month's League with its whole Top 10, with
- * Milestones and meet records one tap away. New-milestone reveals pop on Home
- * (LevelCelebrations). Logging Level points still accrue (DB triggers) and
- * feed the milestones; the level itself isn't shown to clients.
+ * Crew → Rankings → Monthly: this month's League in one card. You first
+ * (rank, points, the one line that says what's next, your breakdown one tap
+ * away), the Final Week Boost while it matters, then the board. Last month's
+ * final standings and the rules sit folded underneath. One query
+ * (get_performance_league), shared with Home's Rankings card. Logging Level
+ * points still accrue (DB triggers) and feed Milestones; the level itself
+ * isn't shown to clients. New-milestone reveals pop on Home (LevelCelebrations).
  */
-export function AthleteLevelCard({ clientId }: {
-  clientId: string;
-}) {
+export function AthleteLevelCard({ clientId }: { clientId: string }) {
   const { data: events = [] } = useXpEvents(clientId);
-  // The sheet holds only an athlete's details or last month's final standings.
-  const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string } | { kind: "previous" }>(null);
-  const [selectedLeagueAthlete, setSelectedLeagueAthlete] = useState<string | null>(null);
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
   const { data: earned = [] } = useMyAchievements(clientId);
-  const viewerId = usePortalUserId() ?? null;
-  const { data: leagueRows = [], isPending: leaguePending } = useQuery({
-    queryKey:["athlete-rankings-monthly-raw", viewerId],
-    staleTime:60_000,
-    queryFn:async()=>{ const {data,error}=await (supabase as any).rpc("get_monthly_athlete_rankings",{_limit:50, ...(viewerId ? { _as_user: viewerId } : {})}); if(error) throw error; return (data??[]) as LeagueRow[]; }
-  });
-  const leagueMe=leagueRows.find(r=>r.client_id===clientId) ?? leagueRows.find(r=>r.is_me);
-  const leagueTop=leagueRows.filter(r=>r.qualified && r.rank!=null).sort((a,b)=>Number(a.rank)-Number(b.rank)).slice(0,3);
+  const { data: rows = [], isPending } = usePerformanceLeague("current");
+  // The sheet holds only an athlete's details or last month's final standings.
+  const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string; fromPrevious?: boolean } | { kind: "previous" }>(null);
+  const [showAll, setShowAll] = useState(false);
 
-  const openAthlete = (athlete: string) => { setSelectedLeagueAthlete(athlete); setSheet({ kind: "athlete", id: athlete }); };
-  const closeSheet = () => { setSheet(null); setSelectedLeagueAthlete(null); };
-  // The race is for the Top 10: the board shows all of it (and you, if you're below it).
-  const top10 = leagueRows.filter(r=>r.qualified && r.rank!=null && Number(r.rank)<=10).sort((a,b)=>Number(a.rank)-Number(b.rank));
-  const shownTo = 10;
-  const outside = !!leagueMe?.qualified && Number(leagueMe.rank) > shownTo;
-  const outsideTen = !!leagueMe?.qualified && Number(leagueMe.rank) > 10;
-  const gapToTen = outsideTen && top10.at(-1) ? Math.max(0, leagueScore(top10.at(-1)) - leagueScore(leagueMe)) : 0;
-  const rankedCount = leagueRows.filter(r=>r.qualified && r.rank!=null).length;
-
-  // The month's league: where you stand, the podium, the race for the Top 10, last month's recap, full standings.
-  const leagueCard = (
-    <div className="flex h-full flex-col">
-      <div className="flex w-full items-start gap-3 px-4 pt-3 text-left">
-        <span className="min-w-0 flex-1">
-          <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Performance League · Top 10</span>
-          <span className="mt-0.5 flex items-center gap-2 text-lg font-bold tracking-tight">{format(new Date(),"MMMM")} League</span>
-          {rankedCount > 0 && <span className="block text-[11px] text-muted-foreground">{rankedCount} ranked this month · make the Top 10</span>}
-          {isFinalWeek() && <span className="mt-1 inline-flex w-fit items-center rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">🔥 Final week · Boost live</span>}
-        </span>
-        {!leaguePending && leagueMe?.qualified && (
-          <span className="shrink-0 text-right">
-            <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Your rank</span>
-            <span className="block text-lg font-bold leading-tight text-primary">#{leagueMe.rank}</span>
-            <span className="block text-[11px] font-bold text-muted-foreground">{outsideTen ? `${formatLeaguePoints(gapToTen)} pts to Top 10` : `${formatLeaguePoints(leagueScore(leagueMe))} pts`}</span>
-          </span>
-        )}
-      </div>
-      {!leaguePending && !leagueMe?.qualified && (
-        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left">
-          <Scale className="h-4 w-4 text-muted-foreground"/>
-          <span className="text-[11px] font-medium">Log bodyweight to enter the league</span>
-        </div>
-      )}
-      {leagueTop.length > 0 && (
-        <div className="mt-2.5 grid grid-cols-3 gap-1.5 px-3">
-          {leagueTop.map((r) => {
-            const place=Number(r.rank);
-            const medal=place===1?"🥇":place===2?"🥈":"🥉";
-            return (
-              <button type="button" key={r.client_id} onClick={() => openAthlete(r.client_id)} className="min-w-0 rounded-xl bg-muted/40 px-1.5 py-2 text-center transition-colors active:bg-muted">
-                <div className="text-base leading-none">{medal}</div>
-                <div className="mt-1 truncate text-xs font-semibold">{r.display_name}</div>
-                {r.is_coach && <div className="mt-0.5 flex justify-center"><CoachTag /></div>}
-                <div className="mt-0.5 text-[11px] font-bold text-primary">{formatLeaguePoints(leagueScore(r))} pts</div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-      {/* 4th to 10th, then you if you're below them */}
-      {(top10.length > 3 || outside) && (
-        <ol className="mx-3 mt-2 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25">
-          {[...top10.slice(3, shownTo), ...(outside && leagueMe ? [leagueMe] : [])].map((r) => (
-            <li key={r.client_id}>
-              <button type="button" onClick={() => openAthlete(r.client_id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
-                <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{r.rank}</span>
-                <span className="min-w-0 flex-1 truncate font-semibold">{r.is_me ? "You" : r.display_name}</span>
-                {r.is_coach && <CoachTag />}
-                <span className="shrink-0 text-[12px] font-bold tabular-nums text-primary">{formatLeaguePoints(leagueScore(r))} pts</span>
-              </button>
-            </li>
-          ))}
-        </ol>
-      )}
-      <div className="mt-auto space-y-2 px-3 pb-3 pt-2.5">
-        {/* Milestones has no other home, so it stays on the board. */}
-        <div className="min-w-0 [&>button]:mt-0 [&>button]:rounded-xl [&>button]:border-0 [&>button]:bg-muted/40 [&>button]:px-2.5 [&>button]:py-2"><MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} /></div>
-      </div>
-    </div>
-  );
+  const me = rows.find((r) => r.client_id === clientId) ?? rows.find((r) => r.is_me) ?? null;
+  const ranked = rankedRows(rows);
+  const shown = showAll ? ranked : ranked.filter((r) => Number(r.rank) <= SHOWN);
+  const meBelow = !showAll && me?.qualified && me.rank != null && me.rank > SHOWN ? me : null;
+  const finalWeek = me?.is_final_week ?? isFinalWeek();
+  const monthStart = rows[0]?.month_start ?? `${leagueToday().slice(0, 7)}-01`;
+  const prevName = monthName(previousLeagueMonth());
+  const openAthlete = (id: string) => setSheet({ kind: "athlete", id });
+  // from last month's standings, Back goes back to them
+  const openFromPrevious = (id: string) => setSheet({ kind: "athlete", id, fromPrevious: true });
 
   return (
     <>
       <div className="space-y-3">
         <section data-standing="league" className="overflow-hidden rounded-2xl border bg-card">
-          {leagueCard}
+          <div className="flex items-baseline justify-between gap-3 px-4 pt-3.5">
+            <h3 className="text-lg font-black tracking-tight">{monthName(monthStart)} League</h3>
+            <span className={cn("shrink-0 text-[11px] font-bold", finalWeek ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")}>
+              {monthClockLabel(finalWeek)}
+            </span>
+          </div>
+
+          {isPending ? (
+            <div className="space-y-2 px-3 pb-3 pt-3">
+              <div className="h-[72px] animate-pulse rounded-xl bg-muted/50" />
+              {[0, 1, 2, 3].map((i) => <div key={i} className="h-9 animate-pulse rounded-lg bg-muted/40" />)}
+            </div>
+          ) : (
+            <>
+              <YouPanel me={me} rows={rows} />
+
+              {/* Final week: the boost race is the story. Before it: one quiet progress line. */}
+              {me?.qualified && finalWeek ? (
+                <div className="space-y-2 px-3 pt-2.5">
+                  <BoostHero me={me} rows={rows} />
+                  <ThreatBanner rows={rows} me={me} />
+                </div>
+              ) : (
+                <BoostProgressLine me={me} />
+              )}
+
+              {ranked.length === 0 ? (
+                <p className="mx-3 mt-3 rounded-xl border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
+                  Nobody's ranked yet this month. Log your bodyweight and a workout to be first.
+                </p>
+              ) : (
+                <ol className="mx-3 mt-3 divide-y divide-border/60 overflow-hidden rounded-xl bg-muted/25" aria-label="Standings">
+                  {[...shown, ...(meBelow ? [meBelow] : [])].map((r) => (
+                    <li key={r.client_id}>
+                      <BoardRow row={r} finalWeek={finalWeek} onOpen={() => openAthlete(r.client_id)} />
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {ranked.length > SHOWN && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll((v) => !v)}
+                  className="mx-3 mt-2 flex min-h-10 w-[calc(100%-1.5rem)] items-center justify-center rounded-xl text-[13px] font-bold text-primary active:bg-muted"
+                >
+                  {showAll ? "Show top 10" : `Show all ${ranked.length}`}
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Milestones have no other home, so they stay on the board. */}
+          <div className="px-3 pb-3 pt-2.5 [&>button]:mt-0 [&>button]:rounded-xl [&>button]:border-0 [&>button]:bg-muted/40 [&>button]:px-2.5 [&>button]:py-2">
+            <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />
+          </div>
         </section>
-        <YourMonthDetails onOpenPrevious={() => setSheet({ kind: "previous" })} />
+
+        <section className="divide-y divide-border/70 overflow-hidden rounded-2xl border bg-card">
+          <button
+            type="button"
+            onClick={() => setSheet({ kind: "previous" })}
+            className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-[13px] font-bold active:bg-muted"
+          >
+            {prevName} final standings <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
+          <HowPointsWork />
+        </section>
       </div>
 
-      <Sheet open={!!sheet} onOpenChange={(o) => { if (!o) closeSheet(); }}>
-        <SheetContent side="bottom" hideCloseButton={!!selectedLeagueAthlete} className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-5 pb-safe-bottom pt-5">
-          {sheet ? (
-            <RankingsView
-              key={sheet.kind}
+      <Sheet open={!!sheet} onOpenChange={(o) => { if (!o) setSheet(null); }}>
+        <SheetContent side="bottom" hideCloseButton={sheet?.kind === "athlete"} className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-5 pb-safe-bottom pt-5">
+          {sheet?.kind === "athlete" ? (
+            <CompareView
+              key={sheet.id}
+              clientId={sheet.id}
               myStats={stats}
               myBadgeCount={earned.length}
-              selected={selectedLeagueAthlete}
-              onSelectedChange={setSelectedLeagueAthlete}
-              initialView={sheet.kind === "previous" ? "previous" : "current"}
-              onClose={sheet.kind === "athlete" ? closeSheet : undefined}
+              me={me}
+              them={rows.find((r) => r.client_id === sheet.id) ?? null}
+              live={!me?.month_closed}
+              onBack={() => setSheet(sheet.fromPrevious ? { kind: "previous" } : null)}
             />
+          ) : sheet?.kind === "previous" ? (
+            <FinalStandings onOpenAthlete={openFromPrevious} />
           ) : null}
         </SheetContent>
       </Sheet>
     </>
+  );
+}
+
+/** You, at the top of the board: rank, points, what's next; your points breakdown one tap away. */
+function YouPanel({ me, rows }: { me: Row | null; rows: Row[] }) {
+  const [open, setOpen] = useState(false);
+  if (!me) return null;
+  if (!me.qualified) {
+    return (
+      <div className="mx-3 mt-2.5 flex items-center gap-2.5 rounded-xl bg-muted/50 px-3 py-2.5">
+        <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0">
+          <div className="text-[13px] font-bold">Log your bodyweight to join</div>
+          <div className="text-[11px] text-muted-foreground">Your latest entry is used. Points you've earned this month count once you're in.</div>
+        </div>
+      </div>
+    );
+  }
+  const standing = standingOf(rows, me);
+  return (
+    <div data-league-you className="mx-3 mt-2.5 rounded-xl border border-primary/25 bg-primary/[0.06]">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
+        <span className="grid h-12 min-w-12 shrink-0 place-items-center rounded-xl bg-primary px-1.5 text-primary-foreground">
+          <span className="text-[19px] font-black leading-none tabular-nums">#{me.rank}</span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[20px] font-black leading-tight tabular-nums">
+            {formatLeaguePoints(me.total_points)} <span className="text-[12px] font-bold text-muted-foreground">pts</span>
+          </span>
+          <span className="block text-[12px] font-semibold leading-snug text-muted-foreground">{standingText(standing)}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-primary">
+          <span className="max-[359px]:sr-only">Points</span> <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
+        </span>
+      </button>
+      {open && (
+        <div className="space-y-3 border-t border-primary/15 px-3 pb-3 pt-1">
+          <MonthBreakdown me={me} />
+          {!me.month_closed && <CoachFocus me={me} title="Your next moves" />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Before the final week: how close you are to the 90% that unlocks the boost. */
+function BoostProgressLine({ me }: { me: Row | null }) {
+  const p = me?.qualified ? boostProgress(me) : null;
+  if (!p) return null;
+  return (
+    <div className="mx-3 mt-2 flex items-center gap-2.5 rounded-xl bg-orange-500/[0.07] px-3 py-2">
+      <Flame className="h-4 w-4 shrink-0 text-orange-500" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2 text-[11px] font-bold">
+          <span className="truncate">Final Week Boost</span>
+          <span className="shrink-0 tabular-nums text-muted-foreground">{p.done} / {p.target} workouts</span>
+        </div>
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-orange-500/15">
+          <div className="h-full rounded-full bg-orange-500" style={{ width: `${p.pct}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BoardRow({ row: r, finalWeek, onOpen }: { row: Row; finalWeek: boolean; onOpen: () => void }) {
+  const place = Number(r.rank);
+  return (
+    <button type="button" onClick={onOpen} className={cn("flex w-full items-center gap-2.5 px-2.5 py-2 text-left active:bg-muted", r.is_me && "bg-primary/10")}>
+      <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{MEDALS[place - 1] ?? place}</span>
+      <RankAvatar row={r} size="h-7 w-7" />
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={cn("truncate text-[13px] font-semibold", r.is_me && "text-primary")}>{r.is_me ? "You" : r.display_name}</span>
+          {r.is_coach && <CoachTag />}
+        </span>
+        <RecordBadges row={r} size="xs" best className="mt-0.5" />
+        {finalWeek && <RowBoost row={r} />}
+      </span>
+      <span className="shrink-0 text-[13px] font-black tabular-nums">{formatLeaguePoints(r.total_points)}</span>
+    </button>
+  );
+}
+
+/** The rules, folded: open when you want them. */
+function HowPointsWork() {
+  return (
+    <details className="group px-4 py-1">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-[13px] font-bold [&::-webkit-details-marker]:hidden">
+        How points work
+        <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
+      </summary>
+      <ul className="space-y-1 pb-1">
+        {LEAGUE_RULES.map((rule) => (
+          <li key={rule.key} className="flex items-baseline justify-between gap-3 text-xs">
+            <span>{rule.label}{"note" in rule && rule.note ? <span className="text-muted-foreground"> · {rule.note}</span> : null}</span>
+            <span className="shrink-0 font-black text-primary">+{rule.points}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+        🔥 Final Week Boost: finish 90%+ of your prescribed workouts and your workout points are matched to the month's highest.
+      </p>
+      <p className="mt-1.5 pb-3 text-[11px] leading-snug text-muted-foreground">
+        {LEAGUE_RECORDS_NOTE} {TIEBREAK_NOTE} Resets on the 1st; log your bodyweight once to join.
+      </p>
+    </details>
   );
 }
 
@@ -197,8 +306,6 @@ function statsFromEvents(events: XpEvent[]): BadgeStats {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-type LeagueStat = { workouts_completed: number; rank: number; qualified: boolean; xp: number };
-
 type WeightLifted = { month_lb: number; lifetime_lb: number; month_sessions: number; lifetime_sessions: number };
 
 function useWeightLifted(clientId: string | null | undefined) {
@@ -231,16 +338,16 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague, myLeague, theirRow, myRow, live, onBack }: {
+/**
+ * One athlete, tapped on the board: this month head to head with you (and
+ * what would close the gap), their month and lifetime numbers, their badges.
+ */
+function CompareView({ clientId, myStats, myBadgeCount, me, them, live, onBack }: {
   clientId: string;
-  myClientId?: string | null;
   myStats: BadgeStats;
   myBadgeCount: number;
-  theirLeague?: LeagueStat;
-  myLeague?: LeagueStat;
-  /** Full league rows for the month being viewed (points by source). */
-  theirRow?: BoostLeagueRow;
-  myRow?: BoostLeagueRow;
+  me: Row | null;
+  them: Row | null;
   /** The month is still running, so coaching tips make sense. */
   live: boolean;
   onBack: () => void;
@@ -256,27 +363,20 @@ function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague,
   });
   // In coach "View as client" the session isn't the client, so match on id too.
   const povClientId = useClientImpersonation().client?.id ?? null;
-  const isMe = !!p?.is_me || (!!povClientId && clientId === povClientId);
-  const theirXp = Number(p?.xp ?? 0);
-  const { unit, setUnit } = useWeightUnit();
+  const isMe = !!p?.is_me || (!!povClientId && clientId === povClientId) || !!them?.is_me;
+  const { unit } = useWeightUnit();
   const { data: theirWeight, isPending: weightPending } = useWeightLifted(clientId);
-  const { data: myWeight } = useWeightLifted(!isMe ? myClientId : null);
   const { data: publicBadges = [] } = usePublicAchievements(clientId);
-  const monthName = format(new Date(), "MMMM");
+  const month = format(new Date(), "MMMM");
   const lifetimeWorkouts = Number(p?.workouts_completed ?? 0);
-  const monthWorkouts = Number(p?.month_workouts_completed ?? theirLeague?.workouts_completed ?? 0);
-  const fullyLogged = Number(p?.workouts_fully_logged ?? 0);
-  const loggedPct = lifetimeWorkouts > 0 ? Math.round((Math.min(fullyLogged, lifetimeWorkouts) / lifetimeWorkouts) * 100) : 0;
+  const monthWorkouts = Number(p?.month_workouts_completed ?? them?.workouts_completed ?? 0);
   const since = p?.first_workout_at ? format(new Date(p.first_workout_at), "MMM yyyy") : null;
-  const lastWorkout = p?.last_workout_at ? format(new Date(p.last_workout_at), "MMM d") : null;
   const weightValue = (lb?: number) => (theirWeight ? formatWeightLifted(lb ?? 0, unit) : weightPending ? "…" : "—");
   const weightSub = (n?: number) => (theirWeight ? plural(n ?? 0, "session") : undefined);
-  const leagueSub = theirLeague?.qualified && theirLeague.rank < 999
-    ? `#${theirLeague.rank} · ${formatLeaguePoints(theirLeague.xp)} pts`
-    : undefined;
+  const rankLine = them?.qualified && them.rank != null ? `#${them.rank} · ${formatLeaguePoints(them.total_points)} pts this month` : null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <button type="button" onClick={onBack} className="flex min-h-10 items-center gap-1 text-xs font-semibold text-muted-foreground">
         <ArrowLeft className="h-3.5 w-3.5" /> Rankings
       </button>
@@ -284,300 +384,89 @@ function CompareView({ clientId, myClientId, myStats, myBadgeCount, theirLeague,
         <div className="py-8 text-center text-sm text-muted-foreground">Athlete not available.</div>
       ) : (
         <>
-          <div className="flex items-center gap-3 rounded-2xl border bg-card p-4">
-            <RankAvatar row={{ client_id: p.client_id, display_name: p.display_name, avatar_url: p.avatar_url, xp: theirXp, rank: 0, is_me: isMe }} size="h-14 w-14" />
+          <div className="flex items-center gap-3">
+            <RankAvatar row={{ display_name: p.display_name, avatar_url: p.avatar_url }} size="h-14 w-14" />
             <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-lg font-black">{p.display_name}</span>{p.is_coach && <CoachTag />}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">{publicBadges.length} milestones</div>
+              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-lg font-black">{isMe ? "You" : p.display_name}</span>{p.is_coach && <CoachTag />}</div>
+              <div className="mt-0.5 text-[12px] font-semibold text-muted-foreground">{rankLine ?? `${publicBadges.length} milestones`}</div>
             </div>
           </div>
 
-          {!isMe && myRow && theirRow && (
+          {!isMe && me?.qualified && them?.qualified && (
             <div className="space-y-2">
-              <div className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{monthName} points · head to head</div>
-              <VsCard me={myRow} them={theirRow} themName={p.display_name} />
-              {live && <CoachFocus me={myRow} title={Number(theirRow.total_points) > Number(myRow.total_points) ? "How to close the gap" : "How to stay ahead"} />}
+              <VsCard me={me} them={them} themName={p.display_name} />
+              {live && <CoachFocus me={me} title={them.total_points > me.total_points ? "How to close the gap" : "How to stay ahead"} />}
             </div>
           )}
-          {isMe && live && theirRow && <CoachFocus me={theirRow} />}
-
-          <div className="flex items-center justify-end gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Weight units</span>
-            <ToggleGroup type="single" value={unit} onValueChange={(v) => v && setUnit(v as WeightUnit)} className="rounded-lg border bg-card p-0.5">
-              {(["lb", "kg"] as const).map((u) => (
-                <ToggleGroupItem key={u} value={u} aria-label={`Show weight in ${u}`} className="h-9 px-3 text-xs font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">{u}</ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </div>
+          {isMe && them && <MonthBreakdown me={them} />}
 
           <div className="grid grid-cols-2 gap-2">
-            <StatTile label="Lifetime workouts" value={lifetimeWorkouts.toLocaleString()} sub={since ? `Training since ${since}` : undefined} />
-            <StatTile label={`${monthName} workouts`} value={monthWorkouts.toLocaleString()} sub={leagueSub} />
-            <StatTile label={`${monthName} weight lifted`} value={weightValue(theirWeight?.month_lb)} sub={weightSub(theirWeight?.month_sessions)} />
-            <StatTile label="Lifetime weight lifted" value={weightValue(theirWeight?.lifetime_lb)} sub={weightSub(theirWeight?.lifetime_sessions)} />
-            <StatTile label="Fully logged" value={fullyLogged.toLocaleString()} sub={lifetimeWorkouts > 0 ? `${loggedPct}% of workouts` : undefined} />
-            <StatTile label="Last workout" value={lastWorkout ?? "—"} sub={p?.month_workouts_fully_logged != null ? `${p.month_workouts_fully_logged} fully logged in ${monthName}` : undefined} />
+            <StatTile label={`${month} workouts`} value={monthWorkouts.toLocaleString()} sub={!isMe ? `You: ${me?.workouts_completed ?? 0}` : undefined} />
+            <StatTile label={`${month} lifted`} value={weightValue(theirWeight?.month_lb)} sub={weightSub(theirWeight?.month_sessions)} />
+            <StatTile label="Lifetime workouts" value={lifetimeWorkouts.toLocaleString()} sub={since ? `Since ${since}` : !isMe ? `You: ${Number(myStats.workouts_completed ?? 0).toLocaleString()}` : undefined} />
+            <StatTile label="Lifetime lifted" value={weightValue(theirWeight?.lifetime_lb)} sub={weightSub(theirWeight?.lifetime_sessions)} />
           </div>
 
-          {!isMe && (
-            <div className="overflow-hidden rounded-2xl border bg-card text-sm">
-              <div className="grid grid-cols-3 bg-muted/40 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                <span /><span className="text-center">You</span><span className="truncate text-center">{p.display_name}</span>
-              </div>
-              {[
-                ["Lifetime workouts", Number(myStats?.workouts_completed ?? 0).toLocaleString(), lifetimeWorkouts.toLocaleString()],
-                [`${monthName} workouts`, myLeague ? String(myLeague.workouts_completed) : "—", String(monthWorkouts)],
-                [`${monthName} weight lifted`, myWeight ? formatWeightLifted(myWeight.month_lb, unit) : "—", theirWeight ? formatWeightLifted(theirWeight.month_lb, unit) : "—"],
-                ["Lifetime weight lifted", myWeight ? formatWeightLifted(myWeight.lifetime_lb, unit) : "—", theirWeight ? formatWeightLifted(theirWeight.lifetime_lb, unit) : "—"],
-                ["Badges", String(myBadgeCount), String(publicBadges.length)],
-              ].map(([k, a, b]) => (
-                <div key={k} className="grid grid-cols-3 border-t px-3 py-2.5">
-                  <span className="text-xs text-muted-foreground">{k}</span>
-                  <span className="text-center text-xs font-bold">{a}</span>
-                  <span className="text-center text-xs font-bold">{b}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <PublicAchievements badges={publicBadges} name={p.display_name} />
+          <PublicAchievements badges={publicBadges} name={isMe ? "You" : p.display_name} />
+          {!isMe && <p className="text-center text-[11px] text-muted-foreground">You have {plural(myBadgeCount, "milestone")}.</p>}
         </>
       )}
     </div>
   );
 }
-/** The first day of last month (the League's own calendar). */
-function previousLeagueMonth(): string {
-  const [y, m] = leagueToday().split("-").map(Number);
-  const d = new Date(Date.UTC(y, m - 2, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
-}
 
-/** This month's (or last month's final) League with points by source: one cache for the page and the sheet. */
-function usePerformanceLeague(view: "current" | "previous") {
-  const viewerId = usePortalUserId() ?? null;
-  return useQuery({
-    queryKey: ["athlete-rankings-monthly-view", view, viewerId],
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_performance_league", {
-        _month: view === "previous" ? previousLeagueMonth() : null,
-        ...(viewerId ? { _as_user: viewerId } : {}),
-      });
-      if (error) throw error;
-      return ((data ?? []) as any[]).map((r) => ({
-        ...r,
-        xp: Number(r.total_points ?? 0),
-        rank: r.rank == null ? 999 : Number(r.rank),
-        qualified: Boolean(r.qualified),
-        workouts_completed: Number(r.workouts_completed ?? 0),
-        fully_logged: Number(r.fully_logged ?? 0),
-        strength_score: Number(r.improvement_points ?? 0) * 1000,
-      })) as Array<RankRow & BoostLeagueRow & { strength_score: number }>;
-    },
-  });
-}
-
-/**
- * Right below the Monthly Top 10, open: your month (points by source, Coach's
- * Focus, the Final Week Boost, the gap to the Top 10), last month's final
- * standings and how points work. (Last month's recap banner sits at the top of
- * Rankings.)
- */
-function YourMonthDetails({ onOpenPrevious }: { onOpenPrevious: () => void }) {
-  const { data = [], isPending } = usePerformanceLeague("current");
+/** Last month's final standings (Final Week Boost awards included), in the sheet. */
+function FinalStandings({ onOpenAthlete }: { onOpenAthlete: (id: string) => void }) {
+  const { data = [], isPending } = usePerformanceLeague("previous");
+  const ranked = rankedRows(data);
+  const top = Math.max(0, ...ranked.map((r) => r.total_points));
   const me = data.find((r) => r.is_me);
-  const finalWeek = me?.is_final_week ?? isFinalWeek();
-  const boostRows = data.map((r) => ({ ...r, rank: r.rank === 999 ? null : r.rank })) as BoostLeagueRow[];
-  const boostMe = boostRows.find((r) => r.is_me);
-  const tenth = data.filter((r) => r.qualified && r.rank <= 10).sort((a, b) => a.rank - b.rank).at(-1);
-  const gap = me?.qualified && me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
-  const prevName = format(new Date(previousLeagueMonth() + "T12:00:00"), "MMMM");
-  return (
-    <div data-your-month className="space-y-3 rounded-2xl border bg-card p-4">
-        {isPending ? (
-          <div className="py-4 text-center text-sm text-muted-foreground">Loading…</div>
-        ) : me && !me.qualified ? (
-          <div className="rounded-xl border border-amber-400/50 bg-amber-400/10 p-3">
-            <div className="text-sm font-black">Bodyweight required to rank</div>
-            <div className="mt-1 text-xs leading-relaxed text-muted-foreground">Log a bodyweight in the app to unlock your leaderboard score. Your latest entry is always used.</div>
-          </div>
-        ) : me ? (
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-            <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {format(new Date(), "MMMM")}</span><span className="text-lg font-black">#{me.rank}</span></div>
-            <div className="mt-1 text-2xl font-black text-primary">{formatLeaguePoints(me.xp)} <span className="text-sm">pts</span></div>
-            <MonthBreakdown me={me as BoostLeagueRow} />
-            {boostMe && <CoachFocus me={boostMe} className="mt-3" />}
-            {gap > 0 && <div className="mt-3 rounded-xl bg-background/80 px-3 py-2 text-sm font-bold text-primary">{formatLeaguePoints(gap)} pts to crack the Top 10</div>}
-          </div>
-        ) : null}
-        {boostMe?.qualified ? (finalWeek ? <><BoostHero me={boostMe} rows={boostRows} /><ThreatBanner rows={boostRows} me={boostMe} /></> : <BoostTeaser me={boostMe} />) : <BoostTeaser />}
-        <button type="button" onClick={onOpenPrevious} className="flex min-h-11 w-full items-center justify-between rounded-xl bg-muted/40 px-3 text-left text-xs font-bold active:bg-muted">
-          {prevName} final standings <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </button>
-        <div className="rounded-xl bg-muted/20 p-3">
-          <div className="text-xs font-black">How points work</div>
-          <ul className="mt-2 space-y-1">
-            {LEAGUE_RULES.map((rule) => (
-              <li key={rule.key} className="flex items-baseline justify-between gap-3 text-xs">
-                <span>{rule.label}{"note" in rule && rule.note ? <span className="text-muted-foreground"> · {rule.note}</span> : null}</span>
-                <span className="shrink-0 font-black text-primary">+{rule.points}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-2 text-[11px] text-muted-foreground">{LEAGUE_RECORDS_NOTE} Resets on the 1st. Log your bodyweight once to join.</div>
-        </div>
-    </div>
-  );
-}
-
-/**
- * The League in a sheet, now only for two things the page doesn't hold: one
- * athlete's details (tapped on the board; Back closes) and last month's final
- * standings.
- */
-function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange, initialView = "current", onClose }: {
-  myStats: BadgeStats;
-  myBadgeCount: number;
-  selected: string | null;
-  onSelectedChange: (id: string | null) => void;
-  initialView?: "current" | "previous";
-  /** Opened straight on an athlete: their Back closes the sheet instead of showing a list. */
-  onClose?: () => void;
-}) {
-  // "This month" or last month's final standings (with boost awards).
-  const [view] = useState<"current" | "previous">(initialView);
-  const { data = [], isPending } = usePerformanceLeague(view);
-  const qualified = data.filter((r) => r.qualified && r.rank <= 10);
-  const topPoints = Math.max(0, ...qualified.map((r) => Number(r.total_points ?? 0)));
-  const podium = qualified.slice(0, 3);
-  const rest = qualified.slice(3);
-  const me = data.find((r) => r.is_me);
-  const monthLabelDate = view === "previous" ? new Date(previousLeagueMonth() + "T12:00:00") : new Date();
-  const monthName = format(monthLabelDate, "MMMM");
-  const finalWeek = view === "current" && (me?.is_final_week ?? isFinalWeek());
-  // Boost rows need the RPC shape; null rank -> skip in threat math.
-  const boostRows = data.map((r) => ({ ...r, rank: r.rank === 999 ? null : r.rank })) as BoostLeagueRow[];
-  const boostMe = boostRows.find((r) => r.is_me);
-
-  if (selected) {
-    const toStat = (r?: (typeof data)[number]): LeagueStat | undefined =>
-      r ? { workouts_completed: r.workouts_completed, rank: r.rank, qualified: r.qualified, xp: r.xp } : undefined;
-    return (
-      <CompareView
-        clientId={selected}
-        myClientId={me?.client_id ?? null}
-        myStats={myStats}
-        myBadgeCount={myBadgeCount}
-        theirLeague={toStat(data.find((r) => r.client_id === selected))}
-        myLeague={toStat(me)}
-        theirRow={boostRows.find((r) => r.client_id === selected)}
-        myRow={boostMe}
-        live={view === "current" && !boostMe?.month_closed}
-        onBack={() => (onClose ? onClose() : onSelectedChange(null))}
-      />
-    );
-  }
-
+  const name = monthName(previousLeagueMonth());
   return (
     <div className="space-y-4">
       <SheetHeader className="text-left">
-        <SheetTitle>{monthName} {view === "previous" ? "Final Standings" : "Performance League"}</SheetTitle>
-        <SheetDescription>{view === "previous" ? "Final results, including Final Week Boost awards." : "Tap anyone to see where their points come from."}</SheetDescription>
+        <SheetTitle>{name} final standings</SheetTitle>
+        <SheetDescription>Final results, Final Week Boost included. Tap anyone to see their month.</SheetDescription>
       </SheetHeader>
-
-      {/* the page is this month; the sheet is last month's final standings, so no month switch here */}
-
-
-      {view === "current" && boostMe?.qualified && (finalWeek
-        ? <><BoostHero me={boostMe} rows={boostRows} /><ThreatBanner rows={boostRows} me={boostMe} /></>
-        : <BoostTeaser me={boostMe} />)}
-      {view === "current" && !boostMe?.qualified && <BoostTeaser />}
-
-      {me && !me.qualified && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
-          <div className="text-sm font-black">Bodyweight required to rank</div>
-          <div className="mt-1 text-xs leading-relaxed">Log a bodyweight in the app to unlock your leaderboard score. Your latest entry is always used.</div>
-        </div>
-      )}
-
-      {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : qualified.length === 0 ? (
-        <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">No athletes have qualified for {monthName} yet. Log a bodyweight and complete training to get on the board.</div>
+      {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div> : ranked.length === 0 ? (
+        <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">Nobody was ranked in {name}.</div>
       ) : (
         <>
-          <PointsLegend rows={qualified} />
-          <div className="grid grid-cols-3 items-end gap-2">
-            {[podium[1], podium[0], podium[2]].map((r, i) => r ? (
-              <button type="button" onClick={() => onSelectedChange(r.client_id)} key={r.client_id} className={cn("flex flex-col items-center rounded-xl border p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md", r.rank === 1 ? "pb-4 bg-amber-50/70 ring-2 ring-amber-300" : r.rank === 2 ? "bg-slate-50/80" : "bg-orange-50/40", r.is_me && "ring-2 ring-primary")}>
-                <div className="mb-1 flex flex-col items-center gap-0.5"><Medal className={cn("h-5 w-5", r.rank === 1 ? "text-yellow-500" : r.rank === 2 ? "text-slate-400" : "text-amber-700")} /><span className="text-[11px] font-black">{r.rank === 1 ? "1ST" : r.rank === 2 ? "2ND" : "3RD"}</span></div>
-                <RankAvatar row={r} size={r.rank === 1 ? "h-14 w-14" : "h-11 w-11"} />
-                <div className="mt-1 w-full truncate text-xs font-bold">{r.display_name}</div>
-                {r.is_coach && <CoachTag className="mt-0.5" />}
-                <div className="text-[10px] text-muted-foreground">{r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : ""}</div>
-                <div className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</div>
-                <RecordBadges row={r} size="xs" center className="mt-1" />
-                <PointsBar row={r} max={topPoints} className="mt-1.5" />
-                {finalWeek && <RowBoost row={{ ...r, rank: r.rank } as BoostLeagueRow} />}
-              </button>
-            ) : <div key={i} />)}
-          </div>
-          <ul className="divide-y overflow-hidden rounded-xl border">
-            {rest.map((r) => (
-              <li key={r.client_id} onClick={() => onSelectedChange(r.client_id)} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm", r.is_me && "bg-primary/5")}>
-                <span className="w-7 text-center font-black text-muted-foreground">#{r.rank}</span>
-                <RankAvatar row={r} size="h-9 w-9" />
-                <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-bold">{r.display_name}{r.is_me ? " (You)" : ""}</span>{r.is_coach && <CoachTag />}</div><div className="text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")} · {r.bodyweight_value ? `${Number(r.bodyweight_value).toFixed(1)} ${r.bodyweight_unit ?? "lb"}` : "BW verified"}</div><RecordBadges row={r} size="xs" className="mt-1" /><PointsBar row={r} max={topPoints} className="mt-1.5" />{finalWeek && <RowBoost row={r as BoostLeagueRow} />}</div>
-                <span className="text-xs font-black text-primary">{formatLeaguePoints(r.xp)} pts</span>
+          {me?.qualified && me.rank != null && (
+            <div className="flex items-center justify-between rounded-xl bg-primary/[0.07] px-3 py-2 text-[13px] font-bold">
+              <span>You finished #{me.rank}</span>
+              <span className="tabular-nums text-primary">{formatLeaguePoints(me.total_points)} pts</span>
+            </div>
+          )}
+          <PointsLegend rows={ranked} />
+          <ol className="divide-y overflow-hidden rounded-xl border">
+            {ranked.map((r) => (
+              <li key={r.client_id}>
+                <button type="button" onClick={() => onOpenAthlete(r.client_id)} className={cn("flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm active:bg-muted", r.is_me && "bg-primary/5")}>
+                  <span className="w-7 shrink-0 text-center font-black text-muted-foreground">{MEDALS[Number(r.rank) - 1] ?? `#${r.rank}`}</span>
+                  <RankAvatar row={r} size="h-9 w-9" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex min-w-0 items-center gap-1.5"><span className="truncate font-bold">{r.is_me ? "You" : r.display_name}</span>{r.is_coach && <CoachTag />}</span>
+                    <span className="block text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")}</span>
+                    <PointsBar row={r} max={top} className="mt-1.5" />
+                  </span>
+                  <span className="shrink-0 text-xs font-black text-primary">{formatLeaguePoints(r.total_points)} pts</span>
+                </button>
               </li>
             ))}
-          </ul>
+          </ol>
         </>
       )}
-
-      {me?.qualified && (
-        <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
-          <div className="flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your {monthName}</span><span className="text-lg font-black">#{me.rank}</span></div>
-          <div className="mt-1 text-2xl font-black text-primary">{formatLeaguePoints(me.xp)} <span className="text-sm">pts</span></div>
-          <MonthBreakdown me={me as BoostLeagueRow} />
-          {view === "current" && boostMe && <CoachFocus me={boostMe} className="mt-3" />}
-          {(() => {
-            const tenth = data.filter((r) => r.qualified && r.rank <= 10).sort((a,b)=>a.rank-b.rank).at(-1);
-            const gap = me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
-            return me.rank > 10 ? (
-              <div className="mt-3 rounded-xl bg-background/80 px-3 py-2 text-sm font-bold text-primary">
-                {formatLeaguePoints(gap)} pts to crack the Top 10
-              </div>
-            ) : null;
-          })()}
-        </div>
-      )}
-
-      {/* how scoring works: tucked away under the board, open when you want it */}
-      {view === "current" && <details className="group rounded-2xl border bg-muted/20 px-3 py-2.5">
-        <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between text-xs font-black [&::-webkit-details-marker]:hidden">
-          How points work
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90" />
-        </summary>
-        <ul className="mt-2 space-y-1">
-          {LEAGUE_RULES.map((rule) => (
-            <li key={rule.key} className="flex items-baseline justify-between gap-3 text-xs">
-              <span>{rule.label}{"note" in rule && rule.note ? <span className="text-muted-foreground"> · {rule.note}</span> : null}</span>
-              <span className="shrink-0 font-black text-primary">+{rule.points}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-2 text-[11px] text-muted-foreground">{LEAGUE_RECORDS_NOTE} Resets on the 1st. Log your bodyweight once to join.</div>
-      </details>}
-
     </div>
   );
 }
 
-function RankAvatar({ row, size }: { row: RankRow; size: string }) {
+function RankAvatar({ row, size }: { row: { display_name: string; avatar_url: string | null }; size: string }) {
   return (
-    <Avatar className={cn(size, "border border-border")}>
+    <Avatar className={cn(size, "shrink-0 border border-border")}>
       {row.avatar_url && <AvatarImage src={row.avatar_url} alt={row.display_name} />}
-      <AvatarFallback className="text-xs font-bold">{row.display_name.slice(0, 1).toUpperCase()}</AvatarFallback>
+      <AvatarFallback className="text-[11px] font-bold">{(row.display_name || "?").slice(0, 1).toUpperCase()}</AvatarFallback>
     </Avatar>
   );
 }
+

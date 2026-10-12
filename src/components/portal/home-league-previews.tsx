@@ -1,43 +1,14 @@
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { useRef, useState } from "react";
-import { ChevronRight, Trophy } from "lucide-react";
+import { ChevronRight, Flame, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
-import { usePortalUserId } from "@/lib/client-impersonation";
-import { formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
+import { leagueToday } from "@/lib/league-boost";
+import { formatLeaguePoints } from "@/lib/league-points";
+import { monthName } from "@/lib/league-recap";
+import { boostLine, standingOf, standingText } from "@/lib/league-standing";
+import { usePerformanceLeague } from "@/lib/use-performance-league";
 import { formatMultiple, meStatus, pickBoard } from "@/lib/strength-board";
-import { useStrengthBoard } from "@/components/portal/strength-board";
-
-type LeagueRow = { client_id: string; display_name?: string | null; monthly_xp: number; rank: number | null; is_me: boolean; qualified: boolean };
-const score = (r?: LeagueRow | null) => leaguePointsFromEncoded(r?.monthly_xp);
-
-/**
- * Your rank and the points to move up (pure, tested). Ranks are unique even on
- * equal points, so: tied with someone ranked above you → 1 point takes their
- * spot; otherwise passing the next higher score lands you on the best rank
- * anyone on that score holds (it passes everyone tied there at once).
- */
-export function leaguePreview(rows: LeagueRow[]) {
-  const me = rows.find((r) => r.is_me) ?? null;
-  if (!me?.qualified || me.rank == null) return { me: null, rank: null, points: 0, gap: null as null | { to: number; pts: number } };
-  const rank = Number(me.rank);
-  const mine = score(me);
-  const ranked = rows.filter((r) => r.qualified && r.rank != null);
-  const bestRankAt = (pts: number) => Math.min(...ranked.filter((r) => score(r) === pts).map((r) => Number(r.rank)));
-  let gap: null | { to: number; pts: number } = null;
-  const tiedAbove = ranked.filter((r) => score(r) === mine && Number(r.rank) < rank);
-  if (tiedAbove.length) gap = { to: bestRankAt(mine), pts: 1 };
-  else {
-    const higher = ranked.map(score).filter((p) => p > mine);
-    if (higher.length) {
-      const next = Math.min(...higher);
-      gap = { to: bestRankAt(next), pts: next - mine + 1 };
-    }
-  }
-  return { me, rank, points: mine, gap };
-}
+import { defaultDivision, useStrengthBoard } from "@/components/portal/strength-board";
 
 /** The top three of a board, in rank order. */
 export function topThree<T extends { rank: number | null; qualified?: boolean }>(rows: T[]): T[] {
@@ -86,23 +57,17 @@ function YouLine({ rank, value, note }: { rank: number | null; value?: string | 
  * as Rankings.
  */
 export function HomeLeaguePreviews() {
-  const viewerId = usePortalUserId() ?? null;
-  const { data: leagueRows = [], isPending: leaguePending } = useQuery({
-    // Same key and query as the Monthly board, so it's one fetch for both.
-    queryKey: ["athlete-rankings-monthly-raw", viewerId],
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_monthly_athlete_rankings", { _limit: 50, ...(viewerId ? { _as_user: viewerId } : {}) });
-      if (error) throw error;
-      return (data ?? []) as LeagueRow[];
-    },
-  });
+  // Same query (and cache) as the Monthly board in Crew → Rankings.
+  const { data: leagueRows = [], isPending: leaguePending } = usePerformanceLeague("current");
   const { data: board = [], isPending: boardPending } = useStrengthBoard();
 
-  const league = leaguePreview(leagueRows);
+  const leagueMe = leagueRows.find((r) => r.is_me) ?? null;
+  const standing = standingOf(leagueRows, leagueMe);
   const leagueTop = topThree(leagueRows);
-  const myTotal = board.find((r) => r.is_me && r.lift === "total") ?? null;
-  const division = myTotal?.sex ?? "all";
+  const boost = boostLine(leagueMe);
+  const month = leagueRows[0]?.month_start ?? `${leagueToday().slice(0, 7)}-01`;
+  // The board Rankings → Strength opens on: your division, pound for pound, total.
+  const division = defaultDivision(board);
   const { top: hallTop, me } = pickBoard(board, "p4p", "total", division, 3);
   const hall = meStatus(me, "p4p", "total", division);
   const ratio = me ? formatMultiple(me.bw_multiple) : null;
@@ -151,21 +116,28 @@ export function HomeLeaguePreviews() {
         className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className={page} aria-label="Monthly">
-          <div className={title}>{format(new Date(), "MMMM")} League</div>
+          <div className={title}>{monthName(month)} League</div>
           {leaguePending ? loading : leagueTop.length === 0 ? (
             <p className="text-[12px] text-muted-foreground">Nobody's ranked yet this month.</p>
           ) : (
             <ol className="space-y-1">
               {leagueTop.map((r, i) => (
-                <PodiumLine key={r.client_id} place={i + 1} name={r.display_name?.trim() || "Athlete"} value={`${formatLeaguePoints(score(r))} pts`} me={r.is_me} />
+                <PodiumLine key={r.client_id} place={i + 1} name={r.display_name?.trim() || "Athlete"} value={`${formatLeaguePoints(r.total_points)} pts`} me={r.is_me} />
               ))}
             </ol>
           )}
+          {/* final week only: the boost is what moves the board now */}
+          {!leaguePending && boost && (
+            <div className={cn("mt-2 flex min-w-0 items-center gap-1.5 text-[12px] font-bold", boost.tone === "ready" ? "text-emerald-600 dark:text-emerald-400" : "text-orange-600 dark:text-orange-400")}>
+              <Flame className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span className="min-w-0 truncate">{boost.text}</span>
+            </div>
+          )}
           {!leaguePending && (
             <YouLine
-              rank={league.rank}
-              value={league.rank ? `${formatLeaguePoints(league.points)} pts` : null}
-              note={league.rank ? (league.gap ? `${formatLeaguePoints(league.gap.pts)} pts to #${league.gap.to}` : "You're leading 🔥") : "Log your bodyweight to enter this month"}
+              rank={leagueMe?.qualified ? leagueMe.rank : null}
+              value={leagueMe?.qualified && leagueMe.rank != null ? `${formatLeaguePoints(leagueMe.total_points)} pts` : null}
+              note={standingText(standing, true)}
             />
           )}
         </div>
