@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Dumbbell, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -165,6 +165,20 @@ export function CommunityScreen({
   const navigate = useNavigate();
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // The URL hash drives Feed / Rankings while you're here, so the bar's
+  // Rankings shortcut (#rankings) and Crew's own button (no hash) switch the
+  // view without reloading the page, and the tabs below keep the hash in step
+  // so the bar lights the right one.
+  const routeHash = useRouterState({ select: (s) => s.location.hash });
+  // null: also apply the hash once on arrival (the router's, not window's).
+  const seenHash = useRef<string | null>(null);
+  useEffect(() => {
+    if (hideTabs || routeHash === seenHash.current) return;
+    seenHash.current = routeHash;
+    if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });
+    else if (!routeHash) setScope((sc) => (sc.kind === "rankings" ? { kind: "feed" } : sc));
+  }, [routeHash, hideTabs]);
   const canSwipeBack = inProfile || !!backTo;
   const leaveAuthor = () => {
     if (scope.kind !== "author" && scope.kind !== "you") return;
@@ -291,6 +305,7 @@ export function CommunityScreen({
               onClick={() => {
                 setScope({ kind: k });
                 window.scrollTo({ top: 0 });
+                void navigate({ to: ".", hash: k === "rankings" ? "rankings" : "", replace: true, resetScroll: false });
               }}
               className={cn("h-9 rounded-full px-3 text-[13px] font-bold transition-colors min-[360px]:px-3.5", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
             >
