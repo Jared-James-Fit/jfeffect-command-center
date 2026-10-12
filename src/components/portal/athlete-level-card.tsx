@@ -13,7 +13,6 @@ import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "
 import { ArrowLeft } from "lucide-react";
 import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints, leaguePointsFromEncoded } from "@/lib/league-points";
 import { RecordBadges } from "@/components/portal/record-badges";
-import { LeagueRecapButton } from "@/components/portal/league-recap";
 import { formatWeightLifted, type WeightUnit } from "@/lib/weight-lifted";
 import { useWeightUnit } from "@/lib/use-weight-unit";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -380,9 +379,10 @@ function usePerformanceLeague(view: "current" | "previous") {
 }
 
 /**
- * Below the Monthly board, folded: your month (points by source, Coach's Focus,
- * the Final Week Boost, the gap to the Top 10), last month's recap and final
- * standings, and how points work. One tap open, nothing to navigate.
+ * Right below the Monthly Top 10, open: your month (points by source, Coach's
+ * Focus, the Final Week Boost, the gap to the Top 10), last month's final
+ * standings and how points work. (Last month's recap banner sits at the top of
+ * Rankings.)
  */
 function YourMonthDetails({ onOpenPrevious }: { onOpenPrevious: () => void }) {
   const { data = [], isPending } = usePerformanceLeague("current");
@@ -394,12 +394,7 @@ function YourMonthDetails({ onOpenPrevious }: { onOpenPrevious: () => void }) {
   const gap = me?.qualified && me.rank > 10 && tenth ? Math.max(0, Number(tenth.xp ?? 0) - Number(me.xp ?? 0)) : 0;
   const prevName = format(new Date(previousLeagueMonth() + "T12:00:00"), "MMMM");
   return (
-    <details data-your-month className="group overflow-hidden rounded-2xl border bg-card">
-      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 px-4 text-[13px] font-black [&::-webkit-details-marker]:hidden">
-        <span className="min-w-0 truncate">Your month · breakdown, Coach's Focus, recap</span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
-      </summary>
-      <div className="space-y-3 border-t px-4 pb-4 pt-3">
+    <div data-your-month className="space-y-3 rounded-2xl border bg-card p-4">
         {isPending ? (
           <div className="py-4 text-center text-sm text-muted-foreground">Loading…</div>
         ) : me && !me.qualified ? (
@@ -417,7 +412,6 @@ function YourMonthDetails({ onOpenPrevious }: { onOpenPrevious: () => void }) {
           </div>
         ) : null}
         {boostMe?.qualified ? (finalWeek ? <><BoostHero me={boostMe} rows={boostRows} /><ThreatBanner rows={boostRows} me={boostMe} /></> : <BoostTeaser me={boostMe} />) : <BoostTeaser />}
-        <LeagueRecapButton />
         <button type="button" onClick={onOpenPrevious} className="flex min-h-11 w-full items-center justify-between rounded-xl bg-muted/40 px-3 text-left text-xs font-bold active:bg-muted">
           {prevName} final standings <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </button>
@@ -433,8 +427,7 @@ function YourMonthDetails({ onOpenPrevious }: { onOpenPrevious: () => void }) {
           </ul>
           <div className="mt-2 text-[11px] text-muted-foreground">{LEAGUE_RECORDS_NOTE} Resets on the 1st. Log your bodyweight once to join.</div>
         </div>
-      </div>
-    </details>
+    </div>
   );
 }
 
@@ -495,7 +488,6 @@ function RankingsView({ myStats, myBadgeCount, selected, onSelectedChange, initi
 
       {/* the page is this month; the sheet is last month's final standings, so no month switch here */}
 
-      <LeagueRecapButton />
 
       {view === "current" && boostMe?.qualified && (finalWeek
         ? <><BoostHero me={boostMe} rows={boostRows} /><ThreatBanner rows={boostRows} me={boostMe} /></>

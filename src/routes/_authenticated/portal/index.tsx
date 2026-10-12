@@ -338,6 +338,14 @@ function PortalHome() {
           </DeferRender>
         </section>
 
+        {/* ── Rankings ────────────────────────────────────────── */}
+        {/* one swipeable card: Monthly (default) and Strength; the feed lives in Crew */}
+        {client?.id && (
+          <SectionErrorBoundary label="Rankings">
+            <HomeLeaguePreviews />
+          </SectionErrorBoundary>
+        )}
+
         {/* ── Progress ────────────────────────────────────────── */}
         {client?.id && portalUserId ? (
           <section className="space-y-3" aria-label="Progress">
@@ -400,14 +408,6 @@ function PortalHome() {
         ) : clientLoading ? (
           <SectionSkeleton height="h-52" />
         ) : null}
-
-        {/* ── Rankings ────────────────────────────────────────── */}
-        {/* one swipeable card: Monthly (default) and Strength; the feed lives in Crew */}
-        {client?.id && (
-          <SectionErrorBoundary label="Rankings">
-            <HomeLeaguePreviews />
-          </SectionErrorBoundary>
-        )}
 
         {/* New-milestone reveals pop here, on the way in */}
         {client?.id && <LevelCelebrations clientId={client.id} />}

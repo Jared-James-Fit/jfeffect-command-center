@@ -33,13 +33,13 @@ describe("Home League previews", () => {
     expect(leaguePreview([row(1, 900, true), row(2, 100)]).gap).toBeNull();
     expect(leaguePreview([row(null, 0, true, false)]).rank).toBeNull();
   });
-  it("Home order: calendar, body cards, then one Rankings card (no feed shelf), then setup (only what's left to do)", () => {
+  it("Home order: calendar, one Rankings card (no feed shelf), body cards, then setup (only what's left to do)", () => {
     const src = readFileSync("src/routes/_authenticated/portal/index.tsx", "utf8");
     const at = (s: string) => src.indexOf(s);
-    expect(at("<UpcomingScheduleCard")).toBeLessThan(at("<SwipeCards"));
-    expect(at("<SwipeCards")).toBeLessThan(at("<HomeLeaguePreviews"));
+    expect(at("<UpcomingScheduleCard")).toBeLessThan(at("<HomeLeaguePreviews"));
+    expect(at("<HomeLeaguePreviews")).toBeLessThan(at("<SwipeCards"));
     expect(src).not.toContain("<CommunityHomeStrip");
-    expect(at("<HomeLeaguePreviews")).toBeLessThan(at("<InstallAppCard hideWhenDone />"));
+    expect(at("<SwipeCards")).toBeLessThan(at("<InstallAppCard hideWhenDone />"));
     expect(src).toContain("<NotificationSetupPrompt problemsOnly />");
     expect(src).toContain("<CalendarSyncCard hideWhenDone />");
   });

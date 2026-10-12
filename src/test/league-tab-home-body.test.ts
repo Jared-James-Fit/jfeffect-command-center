@@ -74,11 +74,11 @@ describe("Rankings", () => {
     expect(card).toContain('onClose={sheet.kind === "athlete" ? closeSheet : undefined}');
     expect(card).not.toContain("View Rankings");
   });
-  it("Monthly: breakdown, Coach's Focus, recap, last month's standings and rules fold under the board", () => {
+  it("Monthly: breakdown, Coach's Focus, last month's standings and rules under the board (recap sits atop Rankings)", () => {
     expect(card).toContain('<YourMonthDetails onOpenPrevious={() => setSheet({ kind: "previous" })} />');
     expect(card).toContain("<MonthBreakdown me={me as BoostLeagueRow} />");
     expect(card).toContain('{boostMe && <CoachFocus me={boostMe} className="mt-3" />}');
-    expect(card).toContain("<LeagueRecapButton />");
+    expect(hub).toContain("<LeagueRecapButton compact />");
     expect(card).toContain("final standings");
   });
   it("Strength: Top 10 on the page, Show all expands inline, All-time or Competition; no View Rankings", () => {

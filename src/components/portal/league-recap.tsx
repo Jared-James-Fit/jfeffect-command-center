@@ -732,39 +732,70 @@ export function LeagueRecapGate() {
   );
 }
 
-/** Entry point inside the league: replay last month's recap anytime. */
-export function LeagueRecapButton({ className }: { className?: string }) {
+/**
+ * Entry point inside the league: replay last month's recap anytime. `compact`
+ * (top of Rankings) is a slimmer banner with an ✕: dismissing hides it on this
+ * device until next month's recap.
+ */
+export function LeagueRecapButton({ className, compact = false }: { className?: string; compact?: boolean }) {
   const viewerId = usePortalUserId() ?? null;
   const month = previousLeagueMonth();
   const [open, setOpen] = useState(false);
+  const dismissKey = `jf-recap-dismissed:${month}`;
+  const [dismissed, setDismissed] = useState(() => {
+    if (!compact || typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem(dismissKey) === "1";
+    } catch {
+      return false;
+    }
+  });
   const { data: recap } = useQuery({
     queryKey: ["league-recap", month, viewerId],
     enabled: !!viewerId,
     staleTime: 10 * 60_000,
     queryFn: () => fetchLeagueRecap(month, viewerId),
   });
-  if (!recap) return null;
+  if (!recap || dismissed) return null;
+  const dismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(dismissKey, "1");
+    } catch {}
+  };
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={cn(
-          "group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl p-3 text-left text-white shadow-md transition active:scale-[0.99]",
-          className,
-        )}
-        style={{ background: "linear-gradient(120deg, #7f1d1d 0%, #b91c1c 45%, #4c1d95 100%)" }}
-      >
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15"><Clapperboard className="h-5 w-5" /></span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-black">Your {monthName(recap.month_start)} Recap</span>
-          <span className="block truncate text-xs text-white/75">
-            {recap.me.rank ? `${ordinal(recap.me.rank)} place · ` : ""}{recap.me.total_points} pts · see your rivals
+      <div className={cn("relative", className)}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={cn(
+            "group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl text-left text-white shadow-md transition active:scale-[0.99]",
+            compact ? "py-2 pl-2.5 pr-11" : "p-3",
+          )}
+          style={{ background: "linear-gradient(120deg, #7f1d1d 0%, #b91c1c 45%, #4c1d95 100%)" }}
+        >
+          <span className={cn("grid shrink-0 place-items-center rounded-xl bg-white/15", compact ? "h-8 w-8" : "h-10 w-10")}><Clapperboard className={compact ? "h-4 w-4" : "h-5 w-5"} /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-black">Your {monthName(recap.month_start)} Recap</span>
+            <span className="block truncate text-xs text-white/75">
+              {recap.me.rank ? `${ordinal(recap.me.rank)} place · ` : ""}{recap.me.total_points} pts · see your rivals
+            </span>
           </span>
-        </span>
-        <span className="text-xs font-black text-white/90">Play ▶</span>
-        <span aria-hidden className="jf-record-shine pointer-events-none absolute inset-y-0 -left-1/2 w-1/2" />
-      </button>
+          <span className="text-xs font-black text-white/90">Play ▶</span>
+          <span aria-hidden className="jf-record-shine pointer-events-none absolute inset-y-0 -left-1/2 w-1/2" />
+        </button>
+        {compact && (
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Dismiss recap"
+            className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-white/80 active:bg-white/15"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
       <LeagueRecapStory recap={recap} open={open} onClose={() => setOpen(false)} />
     </>
   );
