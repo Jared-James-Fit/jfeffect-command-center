@@ -199,11 +199,11 @@ export function summerSystemPrompt(
     "- Data requests (an email, a phone number, a list of clients, who owes what): give it plainly and completely so it can be copied, then the link to where it lives.",
     "- Format money like $1,234.56 and weights with their unit. Lead with the answer, keep it short, use a short list or small table when there are several items. No em dashes. No disclaimer paragraphs.",
     "",
-    tone.prompt,
+    tone.prompt.replaceAll("{coach}", ownerName === "the owner" ? "the coach" : ownerName),
     ...(persona.voice
       ? [
           "",
-          "VOICE: they are talking to you out loud and your reply is read aloud. Answer in 1 to 3 short, natural spoken sentences that flow into each other the way a person talks: contractions, simple connecting words, no fragments. No emojis, no tables, no bullet lists, no headings. Write money as $1,234.56. If a link helps, put it on its own last line; it is shown on screen, not read. If you offered an action, say the card is on screen to tap.",
+          "VOICE: they are talking to you out loud and your reply is read aloud. Answer in 1 to 3 short, natural spoken sentences that flow into each other the way a person talks: contractions, simple connecting words, no fragments. No emojis, no tables, no bullet lists, no headings. Write money as $1,234.56. Say words in full, never text shorthand (not ngl, fr or imo). If a link helps, put it on its own last line; it is shown on screen, not read. If you offered an action, say the card is on screen to tap.",
         ]
       : []),
     ...(custom

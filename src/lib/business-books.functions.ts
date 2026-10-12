@@ -450,7 +450,7 @@ export const getSummerProfile = createServerFn({ method: "GET" })
   });
 
 const SummerSettingsInput = z.object({
-  tone: z.enum(["girly_pop", "chill", "professional"]),
+  tone: z.enum(["like_me", "girly_pop", "chill", "professional"]),
   instructions: z.string().trim().max(2000).nullable(),
 });
 
