@@ -295,7 +295,9 @@ const REGISTRY: Entry[] = [
 export const STAFF_BAR: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Contact },
-  { to: "/admin/community", label: "Crew", icon: UsersRound, featured: true },
+  { to: "/admin/community", label: "Crew", icon: UsersRound, featured: true,
+    // the satellite on Crew's button: straight to the League tab
+    shortcut: { to: "/admin/community", hash: "tab=league", label: "League", icon: Trophy } },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
 ];

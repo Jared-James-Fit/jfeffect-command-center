@@ -21,7 +21,9 @@ describe("the coach's community, in one place", () => {
     // the Feed is the default (links to a post land there); #tab=league opens the League,
     // and the tab is kept in the hash so Back (e.g. from Athlete Records) returns to it
     expect(hub).toContain('if (/tab=league/.test(h) || /rankings/.test(h)) return "league";\n  return "feed";');
-    expect(hub).toContain('t === "feed" ? pathname + search : `${pathname}${search}#tab=${t}`');
+    expect(hub).toContain('void navigate({ to: ".", hash: t === "feed" ? "" : `tab=${t}`, replace: true, resetScroll: false });');
+    // the hash drives the tab while you're here (the bar's League shortcut, Crew's own button)
+    expect(hub).toContain("setPicked(tabFromHash(`#${routeHash}`));");
     expect(hub).toContain("<CommunityScreen hideTabs />");
     expect(hub).toContain("<UpcomingBirthdaysWidget windowDays={30} />");
     expect(hub).toContain('await act.mutateAsync({ kind: "note", body, poll, media });');

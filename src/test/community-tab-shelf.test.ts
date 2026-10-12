@@ -49,7 +49,7 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain(': "bg-gradient-to-b from-secondary to-card text-foreground inset-ring');
     // springy press, and the icon settles in when Crew opens
     expect(shell).toContain("group-active/tab:scale-[0.92]");
-    expect(shell).toContain('active && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]"');
+    expect(shell).toContain('lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]"');
     expect(read("src/styles.css")).toContain("@keyframes crew-pop {");
     // it shares the icon box with the other tabs, so its label lines up with theirs
     expect(shell).toContain('<div className={cn(BAR_ICON_BOX, "w-full")}>');
@@ -85,6 +85,23 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain('"relative grid h-[50px] w-[50px] place-items-center rounded-full"');
     // a whole 12px label line, placed after the size so tailwind-merge keeps it
     expect(shell).toContain('dense ? "text-[10px]" : "text-[10.5px]", "leading-3", active && "font-semibold")');
+  });
+
+  it("League has its own satellite on Crew's button: one tap each, one lit at a time", () => {
+    const visible = resolveVisibleBarItems(clientBottomNav, { more: false });
+    expect(visible[2].shortcut).toMatchObject({ to: "/portal/community", hash: "rankings", label: "Rankings" });
+    // lit while its view is open; Crew goes quiet then
+    expect(shell).toContain("const shortcutOn = !!shortcut && pathname === shortcut.to && hash.startsWith(shortcut.hash);");
+    expect(shell).toContain("const lit = active && !shortcutOn;");
+    // its own link beside Crew's (never nested), told apart by the hash, tap area growing away from the disc
+    expect(shell).toContain("if (!shortcut) return link;");
+    expect(shell).toMatch(/<Link\s+to=\{shortcut\.to\}\s+hash=\{shortcut\.hash\}\s+activeOptions=\{\{ includeHash: true \}\}/);
+    expect(shell).toContain("activeOptions={shortcut ? { includeHash: true } : undefined}");
+    expect(shell).toContain('"after:absolute after:-left-2.5 after:-top-2.5 after:bottom-0 after:right-0 after:content-[\'\']"');
+    // the Crew screen follows the hash, so the shortcut and Crew switch the view in place
+    const crew = read("src/components/community/community-screen.tsx");
+    expect(crew).toContain('if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });');
+    expect(crew).toContain('void navigate({ to: ".", hash: k === "rankings" ? "rankings" : "", replace: true, resetScroll: false });');
   });
 
   it("no community for this account: no centre button", () => {

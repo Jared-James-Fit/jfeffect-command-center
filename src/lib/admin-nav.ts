@@ -185,7 +185,9 @@ export const clientNav: NavItem[] = [
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
-  { to: "/portal/community", label: "Crew", icon: UsersRound, featured: true },
+  { to: "/portal/community", label: "Crew", icon: UsersRound, featured: true,
+    // the satellite on Crew's button: straight to Rankings (the League)
+    shortcut: { to: "/portal/community", hash: "rankings", label: "Rankings", icon: Trophy } },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
 ];
