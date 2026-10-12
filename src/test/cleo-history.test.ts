@@ -121,6 +121,11 @@ describe("Cleo program history", () => {
 });
 
 describe("Cleo's models", () => {
+  it("uses a model the gateway takes on /v1/chat/completions (not Claude)", async () => {
+    const { CLEO_PRIMARY_MODEL } = await import("@/lib/summer.server");
+    expect(CLEO_PRIMARY_MODEL).not.toMatch(/^anthropic\//);
+  });
+
   it("tries the strongest model first, then falls back", async () => {
     const { cleoModels } = await import("@/lib/summer.server");
     const list = cleoModels("anthropic/x", "google/gemini-3-flash-preview");
