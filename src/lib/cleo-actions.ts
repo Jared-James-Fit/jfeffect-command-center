@@ -168,8 +168,8 @@ export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: str
   book_appointment: { title: "Book an appointment", tool: "Book an appointment on the calendar (business time zone), optionally with a client and a video call." },
   assign_program_template: { title: "Assign a program", tool: "Put a client on a program template from the library, starting on a date. Its workouts land on their committed training days." },
   build_program: { title: "Build a program", tool: "Build a new training block for a client from scratch: weeks, days, and library exercises with prescriptions and weekly progression. Hidden from the client unless publish is true." },
-  edit_program_day: { title: "Edit a workout", tool: "Change one program day: update prescriptions, swap or add library exercises, remove rows. Can carry the change into the same day in later weeks." },
-  add_workout: { title: "Add a workout", tool: "Add a one-off workout with library exercises to a client's program and schedule it on a date." },
+  edit_program_day: { title: "Edit a workout", tool: "Change one program day: update prescriptions, swap or add library exercises, remove rows. Use this to add an exercise to a workout they already have (e.g. 'add calf raises at the end of today's workout': op add, scope this, on today's day id). Can carry the change into the same day in later weeks." },
+  add_workout: { title: "Add a workout", tool: "Add a separate, extra session on a date (a second workout that day, or a day they had nothing). Never use it to add exercises to a workout they already have; that's edit_program_day." },
   publish_program: { title: "Publish a program", tool: "Make a block visible to the client (publish) or hide it." },
   move_workout: { title: "Move a workout", tool: "Move a scheduled workout to another date." },
   correct_logged_exercise: { title: "Fix a logged exercise", tool: "Correct which exercise a client actually did on a day they already logged (e.g. they did barbell bench instead of the dumbbell incline). Only the exercise changes; every logged set (load, reps, RPE) stays exactly as entered." },
@@ -217,6 +217,8 @@ export type CleoActionView = {
   requestedBy: string;
   requesterName: string | null;
   createdAt: string;
+  /** Where to see it once it's done (an in-app /admin path). */
+  link: { href: string; label: string } | null;
 };
 
 /** Proposals go stale: the books, the calendar and the thread move on. */

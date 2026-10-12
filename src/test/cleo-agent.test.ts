@@ -133,3 +133,18 @@ describe("Cleo actions: who can do what", () => {
     expect(statusLabel("declined", "Jared")).toBe("Jared said no");
   });
 });
+
+describe("Cleo never answers with her own rules", () => {
+  it("spots a reply that just restates the formatting rules", async () => {
+    const { looksLikeLeakedInstructions } = await import("@/lib/summer-voice-text");
+    expect(looksLikeLeakedInstructions("1 to 3 short sentences. No list, no emoji, no markdown, no money symbols, no numbers at start of lines. Write money as $1,234.56. Put the link at the very end.")).toBe(true);
+    expect(looksLikeLeakedInstructions("VOICE: they are talking to you out loud")).toBe(true);
+  });
+
+  it("leaves real answers alone, even ones that mention a list or money", async () => {
+    const { looksLikeLeakedInstructions } = await import("@/lib/summer-voice-text");
+    expect(looksLikeLeakedInstructions("Jared is at 181 lb, down 1.2 lb this week. I put a card below to add calf raises to today's workout.")).toBe(false);
+    expect(looksLikeLeakedInstructions("Here's the list of who owes money: Marc owes $400.00.")).toBe(false);
+    expect(looksLikeLeakedInstructions("")).toBe(false);
+  });
+});

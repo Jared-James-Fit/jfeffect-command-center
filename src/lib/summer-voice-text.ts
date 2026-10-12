@@ -104,3 +104,23 @@ export function speechFromReply(text: string, maxChars = 700): string {
   const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
   return (end > maxChars * 0.4 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, "")).trim();
 }
+
+/** Phrases from Cleo's own formatting rules (summer-context.ts). */
+const RULE_PHRASES = [
+  /short (?:natural )?(?:spoken )?sentences/i, /\bno (?:list|lists|bullet)/i, /\bno emojis?\b/i, /\bno markdown\b/i,
+  /\bno tables\b/i, /\bno headings\b/i, /write money as/i, /\bno em dashes\b/i, /link (?:at|on) (?:the|its own) (?:very )?(?:end|last line)/i,
+  /\bno money symbols\b/i, /lead with the answer/i, /\bno numbers at (?:the )?start/i,
+];
+
+/**
+ * True when a reply is the model reading its own formatting rules back
+ * ("1 to 3 short sentences. No list, no emoji…") instead of answering.
+ * Seen when a tool turn ends without a real answer.
+ */
+export function looksLikeLeakedInstructions(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (/^(VOICE:|How you work|You are Cleo)/i.test(t)) return true;
+  return RULE_PHRASES.filter((r) => r.test(t)).length >= 2;
+}
+

@@ -519,18 +519,23 @@ export async function answerSummer(
     ...past.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content })),
     { role: "user" as const, content: input.message },
   ];
+  const { looksLikeLeakedInstructions } = await import("@/lib/summer-voice-text");
+  const usable = (t: string) => (looksLikeLeakedInstructions(t) ? "" : t.trim());
   const run = async (model: string) => {
     const r = await generateText({ model: gateway(model), system, messages: convo, tools, stopWhen: stepCountIs(20) });
-    if (r.text.trim()) return r;
+    const first = usable(r.text);
+    // A card is on screen: say so from the card itself rather than asking again.
+    if (first || proposed.length) return { text: first };
     // She used every step looking things up and never wrote back. Make her
     // answer from what she found, with no more tool calls.
-    return generateText({
+    const again = await generateText({
       model: gateway(model),
       system,
-      messages: [...convo, ...(r.response.messages as any[]), { role: "user" as const, content: "Answer me now from what you found and any card you set up. No more lookups." }],
+      messages: [...convo, ...(r.response.messages as any[]), { role: "user" as const, content: "Answer my question now from what you found. No more lookups." }],
       tools,
       toolChoice: "none",
     });
+    return { text: usable(again.text) };
   };
 
   let text = "";
@@ -551,7 +556,15 @@ export async function answerSummer(
     if (status === 402) throw new Error("AI credits are used up. Add credits in Lovable to keep using Cleo.");
     throw new Error(`AI request failed${status ? ` (${status})` : ""}: ${String(e?.message ?? e).slice(0, 200)}`);
   }
-  if (!text) text = proposed.length ? "It's ready for you below. Tap to confirm." : "I couldn't come up with an answer to that. Try asking it another way.";
+  if (!text && proposed.length) {
+    const { data: cards } = await (await import("@/integrations/supabase/client.server")).supabaseAdmin
+      .from("cleo_actions")
+      .select("summary")
+      .in("id", proposed);
+    const first = String((cards as any[] | null)?.[0]?.summary ?? "").split("\n")[0].replace(/[.:]$/, "");
+    text = first ? `Set up: ${first}. Tap Confirm below and it's done.` : "It's set up below. Tap Confirm and it's done.";
+  }
+  if (!text) text = "I couldn't come up with an answer to that. Try asking it another way.";
 
   // Saved only once there is an answer, so a failed call leaves no orphan question.
   const now = Date.now();
