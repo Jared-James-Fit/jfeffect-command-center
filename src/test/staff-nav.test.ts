@@ -5,14 +5,14 @@ import { STAFF_BAR, buildInternalNav, buildInternalNavCollapsed } from "@/lib/in
 const read = (p: string) => readFileSync(p, "utf8");
 
 describe("one staff app, laid out like the client app", () => {
-  it("every staff phone bar is Dashboard, Clients, League (raised, centre), Messages, Tasks: plain tabs", () => {
-    expect(STAFF_BAR.map((i) => i.label)).toEqual(["Dashboard", "Clients", "League", "Messages", "Tasks"]);
+  it("every staff phone bar is Dashboard, Clients, Crew (raised, centre), Messages, Tasks: plain tabs", () => {
+    expect(STAFF_BAR.map((i) => i.label)).toEqual(["Dashboard", "Clients", "Crew", "Messages", "Tasks"]);
     expect(STAFF_BAR.map((i) => i.to)).toEqual(["/admin", "/admin/clients", "/admin/community", "/admin/messages", "/admin/tasks"]);
     expect(STAFF_BAR.every((i) => !i.children && !!i.icon)).toBe(true);
-    expect(STAFF_BAR.filter((i) => i.featured).map((i) => i.label)).toEqual(["League"]);
+    expect(STAFF_BAR.filter((i) => i.featured).map((i) => i.label)).toEqual(["Crew"]);
   });
 
-  it("League rings and counts new posts for staff, like the client button", () => {
+  it("Crew rings and counts new posts for staff, like the client button", () => {
     const badges = read("src/hooks/use-client-nav-badges.ts");
     expect(badges).toContain("useCommunityActivity(enabled || (adminEnabled && !viewOnly))");
     expect(badges).toContain('map["/admin/community"] = { count: community.unseen };');

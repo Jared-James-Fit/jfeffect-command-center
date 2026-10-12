@@ -266,11 +266,15 @@ function HowPointsWork() {
           </li>
         ))}
       </ul>
+      {/* the tie rule gets its own line, so nobody has to dig for it */}
+      <div data-tiebreak-rule className="mt-2.5 rounded-lg bg-muted/50 px-2.5 py-2 text-xs">
+        <span className="font-black">🤝 Ties</span> · {TIEBREAK_NOTE}
+      </div>
       <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
         🔥 Final Week Boost: finish 90%+ of your prescribed workouts and your workout points are matched to the month's highest.
       </p>
       <p className="mt-1.5 pb-3 text-[11px] leading-snug text-muted-foreground">
-        {LEAGUE_RECORDS_NOTE} {TIEBREAK_NOTE} Resets on the 1st; log your bodyweight once to join.
+        {LEAGUE_RECORDS_NOTE} Resets on the 1st; log your bodyweight once to join.
       </p>
     </details>
   );

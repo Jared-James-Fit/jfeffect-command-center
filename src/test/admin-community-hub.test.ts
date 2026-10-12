@@ -26,7 +26,7 @@ describe("the coach's community, in one place", () => {
     // the composer lives on the page now, not at the bottom of the schedule
     expect(read("src/components/community/coach-weekly-posts.tsx")).not.toContain("Write a post for the crew");
   });
-  it("the dashboard has no community card: it's one tap away on the League button (a birthday draft to approve still shows)", () => {
+  it("the dashboard has no community card: it's one tap away on the Crew button (a birthday draft to approve still shows)", () => {
     expect(dash).not.toContain("CommunityPulseCard");
     expect(dash).toContain("<BirthdayPostsCard actionableOnly />");
     expect(dash).not.toContain("CommunityCoachCard");

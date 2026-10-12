@@ -288,14 +288,14 @@ const REGISTRY: Entry[] = [
 
 /**
  * Every staff account's phone bar (admin, coach), laid out like the client
- * app: plain tabs with League as the raised centre button (the crew's
- * league, the feed, daily and birthday posts, and the tools to run them).
- * More opens from the header.
+ * app: plain tabs with Crew as the raised centre button, named the same as the
+ * clients' (the league, the feed, daily and birthday posts, and the tools to
+ * run them). More opens from the header.
  */
 export const STAFF_BAR: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Users },
-  { to: "/admin/community", label: "League", icon: Trophy, featured: true },
+  { to: "/admin/community", label: "Crew", icon: Trophy, featured: true },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
 ];
@@ -313,8 +313,8 @@ export const FINANCE_PAYMENTS: NavItem = { to: "/admin/finance/payments", label:
 
 /**
  * The finance login's phone bar, laid out like every staff bar: its home,
- * Money (Books and Payments, switched at the top of the page), the League as
- * the raised centre button, Clients and Tasks. More opens from the header.
+ * Money (Books and Payments, switched at the top of the page), Crew as the
+ * raised centre button, Clients and Tasks. More opens from the header.
  */
 export const FINANCE_BAR: NavItem[] = [
   { to: FINANCE_HOME.to, label: "Home", icon: Wallet },
