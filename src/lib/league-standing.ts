@@ -3,8 +3,9 @@
  * Pure presentation over get_performance_league() rows: the database ranks
  * (points, then the tiebreak below), this only says what that means for you.
  *
- * Ranks are unique even on equal points, so a tie is said as a tie ("Tied
- * with Reece · ahead on tiebreak") instead of a made-up "1 pt to #1".
+ * Ranks are unique even on equal points (whoever reached the total first
+ * ranks higher), so a tie is said as a tie ("Tied with Reece · you got there
+ * first") instead of a made-up "1 pt to #1".
  */
 import { adherenceTarget, daysLeftInMonth, type LeagueRow } from "@/lib/league-boost";
 import { formatLeaguePoints } from "@/lib/league-points";
@@ -19,8 +20,8 @@ export type Standing =
   | { kind: "tied"; with: StandingRow }
   | { kind: "behind"; pts: number; of: StandingRow };
 
-/** Same order as league_month_scores(): points, then these, then name. */
-export const TIEBREAK_NOTE = "Tied on points? More record points wins, then more workouts, then fully logged workouts, then bodyweight logs.";
+/** Same order as league_month_scores(): points, then whoever reached that total first. */
+export const TIEBREAK_NOTE = "Tied on points? Whoever got there first ranks higher.";
 
 /** Everyone ranked this month, best first. */
 export function rankedRows<T extends StandingRow>(rows: T[]): T[] {
@@ -57,9 +58,9 @@ export function standingText(s: Standing, short = false): string {
     case "leading":
       return short ? `Leading by ${formatLeaguePoints(s.by)} pts` : `Leading ${s.over.display_name} by ${formatLeaguePoints(s.by)} pts`;
     case "tied-top":
-      return short ? "Tied on points" : `Tied with ${s.with.display_name} · you're ahead on tiebreak`;
+      return short ? "Tied · you were first" : `Tied with ${s.with.display_name} · you got there first`;
     case "tied":
-      return short ? `Tied with #${s.with.rank}` : `Tied with ${s.with.display_name} (#${s.with.rank}) · your next points pass them`;
+      return short ? `Tied with #${s.with.rank}` : `Tied with ${s.with.display_name} (#${s.with.rank}), who got there first · your next points pass them`;
     case "behind":
       return short ? `${formatLeaguePoints(s.pts)} pts behind #${s.of.rank}` : `${formatLeaguePoints(s.pts)} pts behind ${s.of.display_name} (#${s.of.rank})`;
   }
