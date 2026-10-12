@@ -4113,7 +4113,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           then the same lift's other cards — see dayRead). */}
       {showSuggestionCard && loadModel && loadPlan && (
         openSetCount === 0 && workedToday
-          ? <LoadSuggestionsDone own={dayRead?.own ?? null} />
+          ? <LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} />
           : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} />
       )}
       {row.manual_override && (row.load_kg || row.load_lb) && (

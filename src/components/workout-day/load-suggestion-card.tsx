@@ -200,15 +200,37 @@ export function LoadSuggestionsNudge({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
-/** Every set on the card is logged: how today ran vs the athlete's usual (no stale range). */
-export function LoadSuggestionsDone({ own }: { own: number | null }) {
-  if (own == null || !Number.isFinite(own)) return null;
-  const pct = Math.round((own - 1) * 100);
-  const read = Math.abs(own - 1) < 0.015 ? "right on your usual" : `${Math.abs(pct)}% ${pct > 0 ? "above" : "below"} your usual`;
+/**
+ * Every set on the card is logged: no stale "next set" range. Says it's done,
+ * how today ran vs the athlete's usual (when that can be read), and what to
+ * start with next time from today's sets — never a blank card while Suggest
+ * is on (a finished 20-rep calf raise used to show nothing at all).
+ */
+export function LoadSuggestionsDone({
+  own,
+  next = null,
+  plan = null,
+}: {
+  own: number | null;
+  /** Today's sets → the load for the plan next session. */
+  next?: LoadSuggestion | null;
+  plan?: { reps: number; rpe: number } | null;
+}) {
+  const pct = own != null && Number.isFinite(own) ? Math.round((own - 1) * 100) : null;
+  const read = pct == null ? null : Math.abs(own! - 1) < 0.015 ? "right on your usual" : `${Math.abs(pct)}% ${pct > 0 ? "above" : "below"} your usual`;
   return (
-    <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground" data-testid="load-suggestion-done">
-      <Check className="h-3 w-3 text-emerald-500" aria-hidden="true" />
-      All sets in · today ran <span className="font-semibold text-foreground">{read}</span>
+    <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted px-2 py-1.5 text-[11px] leading-snug text-muted-foreground" data-testid="load-suggestion-done">
+      <Check className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden="true" />
+      <span>
+        All sets in
+        {read && <> · today ran <span className="font-semibold text-foreground">{read}</span></>}
+        {next && (
+          <span className="block" data-testid="load-next-time">
+            Next time: <span className="text-sm font-black tabular-nums text-foreground">{fmtNum(next.target)} {next.unit}</span>
+            {plan && <> for {plan.reps} @ RPE {fmtNum(plan.rpe)}</>}
+          </span>
+        )}
+      </span>
     </div>
   );
 }

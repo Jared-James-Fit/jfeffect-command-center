@@ -54,8 +54,19 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 
 /** RTS chart: %1RM at RPE 10 for 1..12 reps. */
 const PCT_AT_RPE10 = [1.0, 0.955, 0.922, 0.892, 0.863, 0.837, 0.811, 0.786, 0.762, 0.739, 0.707, 0.68];
-/** Effective reps (reps + RIR) beyond which the chart stops being predictive. */
-const MAX_EFFECTIVE_REPS = 20;
+/**
+ * Effective reps (reps + RIR) the chart still answers for. Past 12 it is an
+ * Epley-shaped tail: rough as an absolute %1RM, but the model only uses it to
+ * move between nearby rep counts (shrunk by ALPHA), which is what a 10–20 rep
+ * calf raise or a 25-rep pump set needs.
+ */
+const MAX_EFFECTIVE_REPS = 30;
+/**
+ * Highest rep count a set (or a plan) is read at. Was 15, which threw out every
+ * 16–30 rep accessory set — 470 real sets in 8 weeks — so a 10–20 @ 9–10 calf
+ * raise logged at 20 reps never got a suggestion (Oct 2026).
+ */
+export const MAX_SET_REPS = 30;
 const HALF_LIFE_DAYS = 3;
 const HISTORY_WINDOW_DAYS = 56;
 const MAX_SESSIONS = 8;
@@ -166,7 +177,7 @@ export interface SetSample {
 
 /** RPE-adjusted e1RM for one set and how much to trust it (0..1). */
 export function setE1rm(s: SetSample): { e1rm: number; trust: number } | null {
-  if (!(s.load > 0) || !(s.reps >= 1) || s.reps > 15) return null;
+  if (!(s.load > 0) || !(s.reps >= 1) || s.reps > MAX_SET_REPS) return null;
   // Below RPE 4 is warm-up territory. RPE 4–6 counts, but its RIR guess is
   // weak, so it's trusted less (see below) and its own reps/RPE neighbours
   // dominate through the kernel.
@@ -563,13 +574,15 @@ export function planningTarget(input: {
 }): { reps: number; rpe: number } | null {
   const r = input.repTarget;
   const reps = r?.exact ?? (r?.min != null && r?.max != null ? Math.round((r.min + r.max) / 2) : r?.min ?? r?.max);
-  if (!reps || reps < 1 || reps > 15) return null;
+  if (!reps || reps < 1 || reps > MAX_SET_REPS) return null;
   const mid = (t: { exact?: number; min?: number; max?: number } | null | undefined) =>
     t?.exact ?? (t?.min != null && t?.max != null ? (t.min + t.max) / 2 : t?.min ?? t?.max ?? null);
   const rpe = mid(input.rpeTarget);
   const rir = mid(input.rirTarget);
   const effort = rpe != null ? rpe : rir != null ? 10 - rir : 8;
-  return { reps, rpe: Math.min(10, Math.max(MIN_RPE, Math.round(effort * 2) / 2)) };
+  const plan = { reps, rpe: Math.min(10, Math.max(MIN_RPE, Math.round(effort * 2) / 2)) };
+  // Past the chart (e.g. 30 reps @ RPE 7) there is nothing to plan with.
+  return percentOf1RM(plan.reps, 10 - plan.rpe) ? plan : null;
 }
 
 

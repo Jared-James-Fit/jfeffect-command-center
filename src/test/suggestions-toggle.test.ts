@@ -26,7 +26,16 @@ describe("suggestions: a switch on every exercise card, one state for the workou
     expect(wdv).toContain("openSetCount === 0 && workedToday");
     expect(renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: 1.034 }))).toContain("3% above your usual");
     expect(renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: 0.995 }))).toContain("right on your usual");
-    expect(renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: null }))).toBe("");
+    // Never blank while Suggest is on: done, plus where to start next time.
+    const bare = renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: null }));
+    expect(bare).toContain("All sets in");
+    expect(bare).not.toContain("your usual");
+    const next = renderToStaticMarkup(createElement(LoadSuggestionsDone, {
+      own: null, next: { low: 47.5, high: 52.5, target: 50, unit: "lb" }, plan: { reps: 15, rpe: 9.5 },
+    }));
+    expect(next).toMatch(/Next time: .*50(<!-- -->)? (<!-- -->)?lb/);
+    expect(next).toMatch(/15(<!-- -->)? @ RPE (<!-- -->)?9.5/);
+    expect(wdv).toContain("<LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} />");
   });
 
   it("is a per-device UI preference with a safe fallback", async () => {
