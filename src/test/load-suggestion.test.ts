@@ -51,12 +51,14 @@ describe("RPE chart", () => {
 });
 
 describe("buildLoadModel / suggestSetLoad", () => {
-  it("waits for a week of data before suggesting anything cold", () => {
+  it("one recent session gives an early estimate; a week of data a full one", () => {
     const one = buildLoadModel({ history: twoWeeks.filter((l) => l.sessionKey === "s2"), today: [], unit: "kg", now: NOW });
-    expect(one.status).toBe("calibrating");
-    expect(suggestSetLoad(one, { reps: 5, rpe: 8 })).toBeNull();
+    expect(one.status).toBe("ready");
+    expect(one.early).toBe(true);
+    expect(suggestSetLoad(one, { reps: 5, rpe: 8 })).not.toBeNull();
     const two = buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW });
     expect(two.status).toBe("ready");
+    expect(two.early).toBe(false);
   });
 
   it("suggests the athlete's recent load for the same reps/RPE, as a plate-loadable range", () => {
@@ -414,5 +416,33 @@ describe("live across cards: today's top set moves the lift's other cards", () =
     expect(m.source).toBe("today");
     expect(m.carried).toBe(true);
     expect(suggestSetLoad(m, { reps: 5, rpe: 8 })!.target).toBeLessThan(150);
+  });
+});
+
+describe("early estimate: one recent session is enough to suggest", () => {
+  // Larsen Press, Oct 2026: one session (185 lb x 7 @ 4) and Suggest showed nothing.
+  const larsen = [1, 2, 3].map(() => log("l1", 6, 84, 7, 4));
+
+  it("one recent session with an RPE suggests, labelled early, with a wider range", () => {
+    const m = buildLoadModel({ history: larsen, today: [], unit: "kg", now: NOW });
+    expect(m.status).toBe("ready");
+    expect(m.early).toBe(true);
+    const s = suggestSetLoad(m, { reps: 7, rpe: 5 })!;
+    expect(s.target).toBeGreaterThanOrEqual(82.5);
+    expect(s.target).toBeLessThanOrEqual(87.5);
+    expect(s.high - s.low).toBeGreaterThanOrEqual(10);
+  });
+
+  it("not from a session without any RPE, or one older than 4 weeks", () => {
+    expect(buildLoadModel({ history: [log("x", 6, 84, 7, null)], today: [], unit: "kg", now: NOW }).status).toBe("calibrating");
+    expect(buildLoadModel({ history: [log("x", 30, 84, 7, 6)], today: [], unit: "kg", now: NOW }).status).toBe("calibrating");
+  });
+
+  it("two sessions a week apart are a full (not early) suggestion", () => {
+    expect(buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW }).early).toBe(false);
+  });
+
+  it("an early estimate never drives another card's day read", () => {
+    expect(todayVsUsual({ history: larsen, sets: [{ load: 90, reps: 7, rpe: 6 }], unit: "kg", now: NOW })).toBeNull();
   });
 });

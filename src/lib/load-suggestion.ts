@@ -14,8 +14,10 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      number; the chart bridges the gap.
 //   3. Recent sessions dominate (3-day half-life, relative), so a program's
 //      heavy/light weeks and real progress show up quickly.
-//   4. History needs at least 2 sessions spanning a week before we suggest
-//      anything cold. Until then the athlete sees "calibrating".
+//   4. History needs at least 2 sessions spanning a week for a full cold
+//      suggestion. One recent session with an RPE (within 4 weeks) gives an
+//      "early estimate" with a wider range; with less, the card says what
+//      unlocks one.
 //   5. Once a set is logged TODAY, today's sets dominate (75%): the top set
 //      calibrates the back-offs, like RPE-based autoregulation. This works even
 //      for a brand-new exercise after its first set.
@@ -59,6 +61,9 @@ const HISTORY_WINDOW_DAYS = 56;
 const MAX_SESSIONS = 8;
 export const MIN_HISTORY_SESSIONS = 2;
 export const MIN_HISTORY_SPAN_DAYS = 6;
+/** Early estimate (thin history): the last session within 4 weeks, range at least ±8%. */
+export const EARLY_MAX_DAYS = 28;
+export const EARLY_SPREAD = 0.08;
 const DAY_MS = 86_400_000;
 
 /**
@@ -251,6 +256,8 @@ export interface LoadModel {
   dayFactor: number | null;
   /** True when "today" is this exercise's earlier sets on another card (no history of its own). */
   carried: boolean;
+  /** Cold suggestion from thin history (one recent session): wider range, labelled as early. */
+  early: boolean;
 }
 
 function weightedMean(values: Array<{ v: number; w: number }>): number | null {
@@ -285,7 +292,7 @@ export function buildLoadModel(input: {
   const readiness = input.readiness ?? NEUTRAL_READINESS;
 
   // ── History: every valid working set, grouped by session ──
-  const bySession = new Map<string, { at: number; sets: Array<Omit<ModelSample, "weight">> }>();
+  const bySession = new Map<string, { at: number; sets: Array<Omit<ModelSample, "weight">>; rated: boolean }>();
   const bwScales: number[] = [];
   for (const log of input.history) {
     if ((log.loadType ?? "external") !== "external" || log.isWorkingSet === false) continue;
@@ -299,14 +306,21 @@ export function buildLoadModel(input: {
     if (!est) continue;
     const bw = bodyweightScale(input.bodyweightKg, log.bodyweightKg);
     bwScales.push(bw);
-    const s = bySession.get(log.sessionKey) ?? { at, sets: [] };
+    const s = bySession.get(log.sessionKey) ?? { at, sets: [], rated: false };
     s.at = Math.max(s.at, at);
+    if (rpe != null) s.rated = true;
     s.sets.push({ e1rm: est.e1rm * bw, load: load * bw, reps, rpe: rpe ?? 8.5, trust: est.trust });
     bySession.set(log.sessionKey, s);
   }
   const sessions = Array.from(bySession.values()).sort((a, b) => b.at - a.at).slice(0, MAX_SESSIONS);
   const spanDays = sessions.length > 1 ? (sessions[0].at - sessions[sessions.length - 1].at) / DAY_MS : 0;
   const historyReady = sessions.length >= MIN_HISTORY_SESSIONS && spanDays >= MIN_HISTORY_SPAN_DAYS;
+  // Early estimate: one recent session (or two in the same week) with a
+  // logged RPE beats nothing — it is better evidence than a warm-up single.
+  // Wider range, labelled "Early estimate" (Larsen Press, Oct 2026: Suggest
+  // on, one session logged, and the card stayed blank).
+  const historyEarly = !historyReady && sessions.length > 0 && sessions.some((x) => x.rated) &&
+    (now - sessions[0].at) / DAY_MS <= EARLY_MAX_DAYS;
 
   // Today's real sets of this lift (other cards) replace the forecast from
   // the last review: both describe today, and the sets are evidence.
@@ -348,6 +362,7 @@ export function buildLoadModel(input: {
   const bodyweightScaleMean = bwScales.length ? bwScales.reduce((a, b) => a + b, 0) / bwScales.length : 1;
   const base = {
     unit, historySessions: sessions.length, staleDays, warmup, bodyweightScale: bodyweightScaleMean,
+    early: historyEarly && today.length === 0,
     dayFactor: historyReady && today.length === 0 ? dayFactor : null,
     carried: carried && today.length > 0,
   };
@@ -360,7 +375,7 @@ export function buildLoadModel(input: {
       readiness: NEUTRAL_READINESS, // today's sets already reflect readiness
     };
   }
-  if (historyReady) {
+  if (historyReady || historyEarly) {
     return {
       ...base, status: "ready", source: warmup ? "history_warmup" : "history", history, today: [],
       readiness: dayFactor ? NEUTRAL_READINESS : readiness,
@@ -458,7 +473,10 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
   // sets land inside it) rather than falsely precise.
   if (t && h) return { load: 0.75 * t.load + 0.25 * h.load, spread: clamp(h.spread / 2, TODAY_SPREAD, 0.05) };
   if (t) return { load: t.load, spread: TODAY_SPREAD };
-  if (h) return { load: h.load, spread: clamp(h.spread / 2, HISTORY_SPREAD, 0.07) };
+  if (h) {
+    const spread = clamp(h.spread / 2, HISTORY_SPREAD, 0.07);
+    return { load: h.load, spread: model.early ? Math.max(EARLY_SPREAD, spread) : spread };
+  }
   return null;
 }
 
@@ -575,7 +593,7 @@ export function todayVsUsual(input: {
   now?: Date;
 }): number | null {
   const model = buildLoadModel({ history: input.history, today: [], unit: input.unit, bodyweightKg: input.bodyweightKg, now: input.now });
-  if (model.status !== "ready" || model.source !== "history") return null;
+  if (model.status !== "ready" || model.source !== "history" || model.early) return null;
   let sum = 0;
   let weight = 0;
   let i = 0;
