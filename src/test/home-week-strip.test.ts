@@ -58,13 +58,31 @@ describe("every Home leads with its schedule", () => {
     const src = readFileSync("src/routes/_authenticated/m/index.tsx", "utf8");
     expect(at(src, "<MemberWeekCard")).toBeLessThan(at(src, "<HomeBodyweightCard"));
   });
-  it("the coach and member homes share the strip; the client Home is a day agenda (weeks live in Workouts)", () => {
+  it("every Home (client, coach, member) is the same day agenda, built from the shared pieces; weeks live in Workouts", () => {
     for (const f of [
+      "src/components/home/upcoming-schedule-card.tsx",
       "src/components/admin-calendar/dashboard-schedule-card.tsx",
       "src/components/member/member-week-card.tsx",
-    ]) expect(readFileSync(f, "utf8")).toContain("<WeekStrip");
+    ]) {
+      const src = readFileSync(f, "utf8");
+      expect(src).not.toContain("<WeekStrip");
+      expect(src).toContain('from "@/components/schedule/agenda"');
+      for (const piece of ["<AgendaCard>", "<AgendaHeader", "<AgendaRow", "<AgendaNextRow", "<AgendaFooter>"]) expect(src).toContain(piece);
+    }
+    // Today on a clock: the client and coach Homes mark "Now".
+    for (const f of ["src/components/home/upcoming-schedule-card.tsx", "src/components/admin-calendar/dashboard-schedule-card.tsx"]) {
+      expect(readFileSync(f, "utf8")).toContain("<NowLine />");
+    }
     const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
-    expect(client).not.toContain("<WeekStrip");
     expect(client).toContain("buildHomeAgenda(items, { today, maxUpcoming: HOME_UPCOMING_ROWS })");
+  });
+  it("the coach Home keeps its tools: session sheet, booking, Google toggle, live updates", () => {
+    const src = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
+    expect(src).toContain("<SessionActionsSheet");
+    expect(src).toContain("<PtSessionDialog");
+    expect(src).toContain("Book a session");
+    expect(src).toContain("Full calendar");
+    expect(src).toContain("GOOGLE_PREF_KEY");
+    expect(src).toContain('table: "pt_sessions"');
   });
 });

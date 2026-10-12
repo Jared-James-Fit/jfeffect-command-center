@@ -1,39 +1,62 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, ExternalLink, MapPin, Plus } from "lucide-react";
+import { CalendarPlus, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SessionActionsSheet, type ActionSession } from "@/components/schedule/session-actions-sheet";
-import { placeLabel, useGoogleCalendarStatus } from "@/lib/calendar-sources";
+import { placeLabel, useGoogleCalendarStatus, type KindFamily } from "@/lib/calendar-sources";
 import { listGoogleEventsRange } from "@/lib/google-cal.functions";
-import { addDaysISO, deviceTodayISO, fmtWallClock } from "@/lib/schedule-time";
-import { WeekStrip, weekDays } from "@/components/calendar/week-strip";
+import { addDaysISO, compactTimeRange, deviceTodayISO } from "@/lib/schedule-time";
+import {
+  AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading,
+  AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
+} from "@/components/schedule/agenda";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
 
 // Same switch as the Calendar page, so "Coaching | + Google" is one choice everywhere.
 const GOOGLE_PREF_KEY = "admin.calendar.includeGoogle";
+/** Days ahead the card looks, and how many of those rows it shows. */
+const AHEAD_DAYS = 7;
+const UPCOMING_ROWS = 4;
 
 type Session = ActionSession & { client: { full_name: string | null } | null };
 
-type Row =
-  | { kind: "session"; key: string; sort: string; s: Session }
-  | { kind: "appointment"; key: string; sort: string; title: string; who: string | null; time: string; end: string | null; place: string | null }
-  | { kind: "event"; key: string; sort: string; title: string; time: string | null; end: string | null; id: string }
-  | { kind: "google"; key: string; sort: string; title: string; time: string | null; end: string | null; place: string | null; link?: string };
+/** One thing on the schedule, whatever it came from. */
+type Row = {
+  key: string;
+  date: string;
+  /** Null = all day. */
+  startsAt: string | null;
+  endsAt: string | null;
+  family: KindFamily;
+  title: string;
+  /** What it is and where, after the time range. */
+  detail: string | null;
+  status?: string;
+  open:
+    | { kind: "session"; s: Session }
+    | { kind: "link"; to: string; params?: Record<string, string>; search?: Record<string, string> }
+    | { kind: "external"; href?: string };
+};
 
 function localDateOf(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+/** A wall-clock date + "HH:MM" as an instant on this device. */
+function wallToIso(date: string, time: string | null | undefined): string | null {
+  if (!time) return null;
+  const d = new Date(`${date}T${time.slice(0, 5)}:00`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 function placeOf(location: string | null | undefined, meetLink?: string | null): string | null {
   return placeLabel(location) ?? (meetLink ? "Google Meet" : null);
 }
-function clock(iso: string) {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+function joinDetail(...parts: Array<string | null | undefined | false>): string | null {
+  const s = parts.filter(Boolean).join(" · ");
+  return s || null;
 }
 function readGooglePref() {
   try {
@@ -43,56 +66,65 @@ function readGooglePref() {
   }
 }
 
-/** Start over end, the same for every row, so lengths are comparable at a glance. */
-function TimeColumn({ start, end, muted }: { start: string | null; end: string | null; muted?: boolean }) {
-  return (
-    <div className="w-[62px] shrink-0 text-right tabular-nums">
-      <div className={cn("text-xs", muted ? "font-semibold text-muted-foreground" : "font-bold")}>{start ?? "All day"}</div>
-      {start && end && <div className="text-[10px] text-muted-foreground">{end}</div>}
-    </div>
-  );
-}
-
 const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   Completed: { label: "Done", cls: "bg-emerald-500/15 text-emerald-500" },
   Missed: { label: "No-show", cls: "bg-destructive/15 text-destructive" },
   Cancelled: { label: "Cancelled", cls: "bg-secondary text-muted-foreground" },
 };
 
+function sessionRow(s: Session): Row {
+  const startsAt = wallToIso(s.session_date, s.start_time);
+  return {
+    key: `s:${s.id}`,
+    date: s.session_date,
+    startsAt,
+    endsAt: wallToIso(s.session_date, s.end_time),
+    family: "people",
+    title: s.client?.full_name ?? "Client",
+    detail: joinDetail(s.title || s.session_type || "Session", placeOf(s.location)),
+    status: s.status,
+    open: { kind: "session", s },
+  };
+}
+
+/** All day first, then by time. */
+function byTime(a: Row, b: Row) {
+  return (a.startsAt ? 1 : 0) - (b.startsAt ? 1 : 0) || (a.startsAt ?? "").localeCompare(b.startsAt ?? "") || a.title.localeCompare(b.title);
+}
+
 /**
- * The dashboard's schedule: the next 7 days as a strip, the picked day as a
- * time-ordered list. Tap a session to move / mark done / cancel it, tap Book
- * to add one on that day. Sits near the top of "Today" because it's the one
- * thing on the dashboard that's tied to the clock.
+ * The coach's Home schedule, in the same look as every other Home: today on a
+ * time column with a Now line, then the next few bookings, then "Book a
+ * session" and "Full calendar". Tap a session to move / mark done / cancel
+ * it. Sits at the top of "Today" because it's the one thing on the dashboard
+ * that's tied to the clock.
  */
 export function DashboardScheduleCard() {
   const qc = useQueryClient();
   const channelId = useId();
   const today = deviceTodayISO();
-  const [day, setDay] = useState(today);
   const [acting, setActing] = useState<Session | null>(null);
   const [booking, setBooking] = useState<string | null>(null);
   const [editing, setEditing] = useState<any>(null);
   const [withGoogle, setWithGoogle] = useState<boolean>(() => (typeof window === "undefined" ? false : readGooglePref()));
   const { data: gcal } = useGoogleCalendarStatus();
   const googleOn = withGoogle && !!gcal?.connected;
+  const nowMs = useNow();
 
-  // The Mon–Sun week the picked day is in (same week as the Workouts calendar).
-  const days = useMemo(() => weekDays(day), [day]);
-  const firstDay = days[0];
-  const lastDay = days[days.length - 1];
-  const windowStart = new Date(`${firstDay}T00:00:00`).toISOString();
+  // Today and the week ahead.
+  const lastDay = addDaysISO(today, AHEAD_DAYS);
+  const windowStart = new Date(`${today}T00:00:00`).toISOString();
   const windowEnd = new Date(`${addDaysISO(lastDay, 1)}T00:00:00`).toISOString();
 
   const { data: sessions = [], isLoading } = useQuery<Session[]>({
-    queryKey: ["dash-schedule-sessions", firstDay],
+    queryKey: ["dash-schedule-sessions", today],
     placeholderData: (prev) => prev,
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pt_sessions")
         .select("id, client_id, title, session_type, session_date, start_time, end_time, timezone, location, status, uses_credit, google_event_id, client:clients(full_name)")
-        .gte("session_date", firstDay)
+        .gte("session_date", today)
         .lte("session_date", lastDay)
         .neq("status", "Rescheduled")
         .order("session_date")
@@ -103,7 +135,7 @@ export function DashboardScheduleCard() {
   });
 
   const { data: appts = [] } = useQuery<any[]>({
-    queryKey: ["dash-schedule-appts", firstDay],
+    queryKey: ["dash-schedule-appts", today],
     placeholderData: (prev) => prev,
     staleTime: 60_000,
     queryFn: async () => {
@@ -118,31 +150,32 @@ export function DashboardScheduleCard() {
   });
 
   const { data: events = [] } = useQuery<any[]>({
-    queryKey: ["dash-schedule-events", firstDay],
+    queryKey: ["dash-schedule-events", today],
     placeholderData: (prev) => prev,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data } = await (supabase.from("events") as any)
         .select("id, name, event_date, start_time, end_time, status")
         .in("status", ["Active", "Draft"])
-        .gte("event_date", firstDay)
+        .gte("event_date", today)
         .lte("event_date", lastDay);
       return (data ?? []) as any[];
     },
   });
 
   const { data: googleEvents = [] } = useQuery<any[]>({
-    queryKey: ["dash-schedule-google", firstDay],
+    queryKey: ["dash-schedule-google", today],
     placeholderData: (prev) => prev,
     enabled: googleOn,
     staleTime: 5 * 60_000,
     queryFn: () => listGoogleEventsRange({ data: { timeMin: windowStart, timeMax: windowEnd } }) as Promise<any[]>,
   });
 
-  // When nothing's booked this week, still say when the next session is.
+  // Nothing booked this week: still say when the next session is.
+  const nothingAhead = !isLoading && !sessions.some((s) => s.status === "Scheduled" && s.session_date > today);
   const { data: nextSession } = useQuery<Session | null>({
     queryKey: ["dash-schedule-next", lastDay],
-    enabled: !isLoading && !sessions.some((s) => s.status === "Scheduled" && s.session_date >= today),
+    enabled: nothingAhead,
     queryFn: async () => {
       const { data } = await supabase
         .from("pt_sessions")
@@ -170,64 +203,63 @@ export function DashboardScheduleCard() {
     };
   }, [qc, channelId]);
 
-  const rowsByDay = useMemo(() => {
-    const m = new Map<string, Row[]>();
-    const push = (d: string, r: Row) => {
-      if (!m.has(d)) m.set(d, []);
-      m.get(d)!.push(r);
-    };
-    for (const s of sessions) push(s.session_date, { kind: "session", key: `s:${s.id}`, sort: s.start_time, s });
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = sessions.map(sessionRow);
     for (const a of appts) {
-      push(localDateOf(a.starts_at), {
-        kind: "appointment",
+      const who = a.client?.full_name ?? a.external_name ?? null;
+      const what = a.title || a.appointment_type || "Appointment";
+      out.push({
         key: `a:${a.id}`,
-        sort: new Date(a.starts_at).toTimeString().slice(0, 5),
-        title: a.title || a.appointment_type || "Appointment",
-        who: a.client?.full_name ?? a.external_name ?? null,
-        time: clock(a.starts_at),
-        end: a.ends_at ? clock(a.ends_at) : null,
-        place: placeOf(a.location, a.meet_link),
+        date: localDateOf(a.starts_at),
+        startsAt: a.starts_at,
+        endsAt: a.ends_at ?? null,
+        family: "people",
+        title: who ?? what,
+        detail: joinDetail(who ? what : null, placeOf(a.location, a.meet_link)),
+        open: { kind: "link", to: "/admin/calendar", search: { tab: "upcoming" } },
       });
     }
     for (const e of events) {
-      push(e.event_date, {
-        kind: "event",
+      out.push({
         key: `e:${e.id}`,
-        sort: e.start_time ?? "00:00",
+        date: e.event_date,
+        startsAt: wallToIso(e.event_date, e.start_time),
+        endsAt: wallToIso(e.event_date, e.end_time),
+        family: "coach",
         title: e.name,
-        time: e.start_time ? fmtWallClock(e.start_time) : null,
-        end: e.start_time && e.end_time ? fmtWallClock(e.end_time) : null,
-        id: e.id,
+        detail: "Event",
+        open: { kind: "link", to: "/admin/events/$id", params: { id: e.id } },
       });
     }
     if (googleOn) {
       for (const g of googleEvents) {
         const allDay = !!g.allDay;
-        const date = allDay ? String(g.start).slice(0, 10) : localDateOf(g.start);
-        push(date, {
-          kind: "google",
+        out.push({
           key: `g:${g.id}`,
-          sort: allDay ? "00:00" : new Date(g.start).toTimeString().slice(0, 5),
+          date: allDay ? String(g.start).slice(0, 10) : localDateOf(g.start),
+          startsAt: allDay ? null : g.start,
+          endsAt: allDay ? null : g.end ?? null,
+          family: "google",
           title: g.summary || "Busy",
-          time: allDay ? null : clock(g.start),
-          end: allDay || !g.end ? null : clock(g.end),
-          place: placeOf(g.location, g.hangoutLink),
-          link: g.htmlLink,
+          detail: joinDetail("Google", placeOf(g.location, g.hangoutLink)),
+          open: { kind: "external", href: g.htmlLink },
         });
       }
     }
-    for (const list of m.values()) list.sort((a, b) => a.sort.localeCompare(b.sort));
-    return m;
+    return out;
   }, [sessions, appts, events, googleEvents, googleOn]);
 
-  const rows = rowsByDay.get(day) ?? [];
-  // A dot per thing on that day's list: coaching items first, then Google (when shown).
-  const coachingCount = (d: string) =>
-    (rowsByDay.get(d) ?? []).filter((r) => (r.kind === "session" ? r.s.status === "Scheduled" : r.kind !== "google")).length;
-  const googleCount = (d: string) => (rowsByDay.get(d) ?? []).filter((r) => r.kind === "google").length;
-  const dayName = day === today
-    ? "today"
-    : `on ${new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`;
+  const todayRows = useMemo(() => rows.filter((r) => r.date === today).sort(byTime), [rows, today]);
+  const nowIndex = useMemo(() => nowLineIndex(todayRows, nowMs), [todayRows, nowMs]);
+  // Coming up: the next few live bookings after today (the next one further out when the week is empty).
+  const upcoming = useMemo(() => {
+    const ahead = rows
+      .filter((r) => r.date > today && r.status !== "Cancelled" && r.status !== "Missed")
+      .sort((a, b) => a.date.localeCompare(b.date) || byTime(a, b))
+      .slice(0, UPCOMING_ROWS);
+    if (!ahead.some((r) => r.open.kind === "session") && nextSession && ahead.length < UPCOMING_ROWS) ahead.push(sessionRow(nextSession));
+    return ahead;
+  }, [rows, today, nextSession]);
 
   const toggleGoogle = () => {
     const next = !withGoogle;
@@ -253,125 +285,81 @@ export function DashboardScheduleCard() {
   });
 
   return (
-    <Card className="border-border bg-card p-4">
-      <div className="mb-2.5 flex items-center justify-between gap-2">
-        <h2 className="flex min-w-0 items-center gap-2 text-[13px] font-bold tracking-tight">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" /> Schedule
-        </h2>
-        <div className="flex shrink-0 items-center gap-3">
-          <Button size="sm" className="h-7 bg-gradient-primary px-2.5 text-[11px] font-bold" onClick={() => setBooking(day)}>
-            <Plus className="mr-1 h-3.5 w-3.5" /> Book
-          </Button>
-          <Link to="/admin/calendar" className="text-[11px] font-semibold text-primary hover:underline">
-            Calendar →
-          </Link>
-        </div>
-      </div>
-
-      {/* Mon–Sun week strip: violet dots for coaching, sky for Google, today outlined */}
-      <WeekStrip
+    <AgendaCard>
+      <AgendaHeader
         today={today}
-        selected={day}
-        onSelect={setDay}
-        count={coachingCount}
-        extraCount={googleOn ? googleCount : undefined}
-        extraDotClass="bg-sky-400/80"
+        right={
+          gcal?.connected ? (
+            <button type="button" onClick={toggleGoogle} aria-pressed={withGoogle} className="shrink-0 text-[11px] font-semibold text-muted-foreground hover:text-foreground">
+              {withGoogle ? "Hide Google" : "Show Google"}
+            </button>
+          ) : null
+        }
       />
 
-      <div className="mt-3">
-        {isLoading ? (
-          <div className="h-16 animate-pulse rounded-lg bg-secondary/40" />
-        ) : rows.length === 0 ? (
-          <div className="rounded-lg bg-secondary/30 px-3 py-3 text-sm text-muted-foreground">
-            Nothing booked {dayName}.
-            {nextSession && day === today && !sessions.some((s) => s.status === "Scheduled" && s.session_date >= today) && (
-              <button type="button" className="mt-1 block text-left text-xs text-foreground/90" onClick={() => setActing(nextSession)}>
-                Next: <span className="font-semibold">{nextSession.client?.full_name ?? "Client"}</span> ·{" "}
-                {new Date(`${nextSession.session_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} at {fmtWallClock(nextSession.start_time)}
-              </button>
-            )}
-          </div>
+      <div className="mt-1.5">
+        {isLoading && !sessions.length ? (
+          <AgendaLoading />
+        ) : todayRows.length === 0 ? (
+          <AgendaEmpty>Nothing booked today.</AgendaEmpty>
         ) : (
-          <ul className="divide-y divide-border">
-            {rows.map((r) => (
-              <li key={r.key}>
-                {r.kind === "session" ? (
-                  <button type="button" onClick={() => setActing(r.s)} className="flex w-full items-center gap-3 py-2.5 text-left">
-                    <div className="w-[62px] shrink-0 text-right">
-                      <div className="text-xs font-bold tabular-nums">{fmtWallClock(r.s.start_time)}</div>
-                      <div className="text-[10px] text-muted-foreground tabular-nums">{fmtWallClock(r.s.end_time)}</div>
-                    </div>
-                    <span className="h-8 w-1 shrink-0 rounded-full bg-violet-400" aria-hidden />
-                    <div className="min-w-0 flex-1">
-                      <div className={cn("truncate text-sm font-bold", r.s.status === "Cancelled" && "text-muted-foreground line-through")}>
-                        {r.s.client?.full_name ?? "Client"}
-                      </div>
-                      <div className="flex min-w-0 items-center gap-1 truncate text-[11px] text-muted-foreground">
-                        <span className="truncate">{r.s.title || r.s.session_type || "Session"}</span>
-                        {r.s.location && (
-                          <>
-                            <MapPin className="ml-1 h-3 w-3 shrink-0" />
-                            <span className="truncate">{r.s.location.split(",")[0]}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {STATUS_CHIP[r.s.status] && (
-                      <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_CHIP[r.s.status].cls)}>
-                        {STATUS_CHIP[r.s.status].label}
-                      </span>
-                    )}
-                  </button>
-                ) : r.kind === "appointment" ? (
-                  <Link to="/admin/calendar" search={{ tab: "upcoming" } as any} className="flex items-center gap-3 py-2.5">
-                    <TimeColumn start={r.time} end={r.end} />
-                    <span className="h-8 w-1 shrink-0 rounded-full bg-blue-400" aria-hidden />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-bold">{r.who ?? r.title}</div>
-                      <div className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
-                        <span className="truncate">{r.title}</span>
-                        {r.place && (
-                          <>
-                            <MapPin className="ml-1 h-3 w-3 shrink-0" />
-                            <span className="truncate">{r.place}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                ) : r.kind === "event" ? (
-                  <Link to="/admin/events/$id" params={{ id: r.id }} className="flex items-center gap-3 py-2.5">
-                    <TimeColumn start={r.time} end={r.end} />
-                    <span className="h-8 w-1 shrink-0 rounded-full bg-primary" aria-hidden />
-                    <div className="min-w-0 flex-1 truncate text-sm font-bold">{r.title}</div>
-                  </Link>
-                ) : (
-                  <a href={r.link} target="_blank" rel="noreferrer" className="flex items-center gap-3 py-2.5 opacity-80">
-                    <TimeColumn start={r.time} end={r.end} muted />
-                    <span className="h-8 w-1 shrink-0 rounded-full bg-sky-400/70" aria-hidden />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-foreground/80">{r.title}</div>
-                      {r.place && (
-                        <div className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
-                          <MapPin className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{r.place}</span>
-                        </div>
-                      )}
-                    </div>
-                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  </a>
-                )}
+          <ol aria-label="Today">
+            {todayRows.map((r, i) => (
+              <li key={r.key} className="min-w-0">
+                {i === nowIndex && <NowLine />}
+                <RowOpen row={r} onSession={setActing} className={cn(AGENDA_ROW, hasEnded(r.startsAt, r.endsAt, nowMs) && "opacity-55")}>
+                  <AgendaRow
+                    time={r.startsAt ? startLabel(r.startsAt) : "All day"}
+                    timed={!!r.startsAt}
+                    accent={FAMILY_ACCENT[r.family]}
+                    title={r.title}
+                    quiet={r.family === "google"}
+                    struck={r.status === "Cancelled"}
+                    sub={joinDetail(r.startsAt ? compactTimeRange(r.startsAt, r.endsAt) : null, r.detail)}
+                    trailing={
+                      r.status && STATUS_CHIP[r.status] ? (
+                        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_CHIP[r.status].cls)}>{STATUS_CHIP[r.status].label}</span>
+                      ) : null
+                    }
+                    chevron
+                  />
+                </RowOpen>
               </li>
             ))}
-          </ul>
+            {nowIndex === todayRows.length && (
+              <li aria-hidden>
+                <NowLine />
+              </li>
+            )}
+          </ol>
         )}
       </div>
 
-      {gcal?.connected && (
-        <button type="button" onClick={toggleGoogle} className="mt-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground">
-          {withGoogle ? "Hide Google events" : "Show Google events too"}
+      <AgendaNext show={upcoming.length > 0}>
+        {upcoming.map((r, i) => (
+          <li key={r.key} className="min-w-0">
+            <RowOpen row={r} onSession={setActing} className={AGENDA_ROW}>
+              <AgendaNextRow
+                dayText={i === 0 || upcoming[i - 1].date !== r.date ? shortDay(r.date, today) : ""}
+                accent={FAMILY_ACCENT[r.family]}
+                time={r.startsAt ? startLabel(r.startsAt) : null}
+                title={r.title}
+                quiet={r.family === "google"}
+              />
+            </RowOpen>
+          </li>
+        ))}
+      </AgendaNext>
+
+      <AgendaFooter>
+        <button type="button" onClick={() => setBooking(today)} className={AGENDA_ACTION}>
+          <CalendarPlus className="h-4 w-4" /> Book a session
         </button>
-      )}
+        <Link to="/admin/calendar" className={AGENDA_LINK}>
+          Full calendar
+          <ChevronRight className="h-4 w-4" />
+        </Link>
+      </AgendaFooter>
 
       <SessionActionsSheet
         session={acting}
@@ -398,6 +386,30 @@ export function DashboardScheduleCard() {
         clientId={editing?.client_id}
         initialDate={booking}
       />
-    </Card>
+    </AgendaCard>
+  );
+}
+
+/** A row opens what it is: the session sheet, its page, or Google. */
+function RowOpen({ row, onSession, className, children }: { row: Row; onSession: (s: Session) => void; className?: string; children: ReactNode }) {
+  const o = row.open;
+  if (o.kind === "session") {
+    return (
+      <button type="button" onClick={() => onSession(o.s)} className={className}>
+        {children}
+      </button>
+    );
+  }
+  if (o.kind === "link") {
+    return (
+      <Link to={o.to as any} params={o.params as any} search={o.search as any} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <a href={o.href} target="_blank" rel="noreferrer" className={className}>
+      {children}
+    </a>
   );
 }
