@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   REACTION,
   SCOPE_WORD,
+  extraHoliday,
   extraScene,
   featuredLift,
   isRecapStats,
@@ -100,11 +101,14 @@ export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: C
   // Saturday: the picture says it, the words just sit under it. A photo of
   // the coach's own (the note's cover) takes the drawn scene's place.
   const scene = post.series === "saturday_spirit" && !cover ? extraScene(post.series_extra) : null;
+  // A holiday: its photo, unless the coach put their own on the post.
+  const holiday = post.series === "holiday" && !cover ? extraHoliday(post.series_extra) : null;
   return (
     <div className="px-4 pb-1 pt-1">
       {/* no "Saturday Spirit" style day label: the post speaks for itself */}
       {cover && <div className="-mx-1 mb-3 overflow-hidden rounded-2xl">{cover}</div>}
       {scene && isSpiritScene(scene) && <SpiritScene scene={scene} className="mb-3 rounded-2xl" />}
+      {holiday && <HolidayPhoto src={holiday.image} alt={holiday.name} />}
       {post.quote && (
         <figure className="mb-3 border-l-[3px] border-primary pl-3.5">
           <blockquote className="whitespace-pre-line text-[18px] font-semibold leading-[1.32] tracking-[-0.01em]">“{post.quote}”</blockquote>
@@ -113,7 +117,7 @@ export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: C
         </figure>
       )}
       {post.caption && (
-        <p className={cn("whitespace-pre-line leading-[1.45]", scene || cover ? "text-[17px] font-semibold" : "text-[15px]", clamp && "line-clamp-[8]")}>
+        <p className={cn("whitespace-pre-line leading-[1.45]", scene || cover || holiday ? "text-[17px] font-semibold" : "text-[15px]", clamp && "line-clamp-[8]")}>
           <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenPerson} />
         </p>
       )}
@@ -692,6 +696,17 @@ function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide
           </span>
         </button>
       )}
+    </div>
+  );
+}
+
+/** A holiday post's photo, 4:5 like a feed photo. If the file is missing the words stand alone. */
+function HolidayPhoto({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <div className="relative -mx-1 mb-3 overflow-hidden rounded-2xl bg-muted" style={{ aspectRatio: "4 / 5" }}>
+      <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} className="h-full w-full object-cover" />
     </div>
   );
 }
