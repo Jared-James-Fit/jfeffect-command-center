@@ -7,6 +7,6 @@ import { AdminCommunityHub } from "@/components/community/admin-community-hub";
  * `#birthday=<id>` or `#tab=birthdays` / `#tab=daily` opens that tab.
  */
 export const Route = createFileRoute("/_authenticated/admin/community")({
-  head: () => ({ meta: [{ title: "Community" }] }),
+  head: () => ({ meta: [{ title: "Crew" }] }),
   component: AdminCommunityHub,
 });

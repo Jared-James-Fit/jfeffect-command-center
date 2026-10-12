@@ -92,7 +92,7 @@ export function ReturnToDashboardPill() {
         "fixed z-40 inline-flex h-10 items-center gap-0.5 rounded-full pl-2 pr-3.5 text-sm font-semibold",
         "bg-card/90 text-foreground shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] ring-1 ring-border backdrop-blur-md",
         "transition active:scale-95 animate-in fade-in slide-in-from-bottom-2 duration-200",
-        "left-4 bottom-[calc(max(env(safe-area-inset-bottom),6px)+84px)] md:bottom-6 md:left-1/2 md:-translate-x-1/2",
+        "left-4 bottom-[calc(var(--mobile-bar-top)+14px)] md:bottom-6 md:left-1/2 md:-translate-x-1/2",
         threadOpen && "max-md:hidden",
       )}
       data-viewport-pinned

@@ -1468,11 +1468,11 @@ function TabletFlyoutRow({
 }
 
 /**
- * The bar's gap from the bottom edge. The home indicator needs ~13pt, not the
- * full 34pt safe area, so the bar sits low (~22pt on Face ID iPhones) instead
- * of floating mid-air; phones with no inset get 10px.
+ * The bar's gap from the bottom edge (--mobile-bar-bottom in styles.css). The
+ * home indicator needs ~13pt, not the full 34pt safe area, so the bar sits low
+ * (~22pt on Face ID iPhones) instead of floating mid-air; 10px with no inset.
  */
-const BAR_BOTTOM = "max(calc(env(safe-area-inset-bottom) - 12px), 10px)";
+const BAR_BOTTOM = "var(--mobile-bar-bottom)";
 
 /** The floating mobile tab bar (hidden from md up). */
 export function MobileBottomBar({ items, pathname, search, navBadges, onNavigate, moreOpen, onOpenMore }: {
@@ -1662,30 +1662,32 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
         aria-label={item.featured && badge?.count ? `${item.label}, ${badge.count} new` : undefined}
       >
         {item.featured ? (
-          // Raised centre button. It sits on the same icon line as the other
-          // tabs (so its label lines up) and only turns brand-red when it's
-          // the page you're on — otherwise it would read as selected.
+          // Raised centre button (Crew): a Cleo-style disc in the bar. It sits
+          // on the same icon line as the other tabs, so its label lines up.
+          // Away from Crew it's a quiet raised disc; on Crew it fills with the
+          // brand gradient (red means "you're here", never just "important").
           // A gradient ring means there's something new, like a story.
-          // 46px disc + 2px ring = an even 50px, so centring it never lands
-          // on a half pixel (iOS rounds those differently frame to frame).
+          // 50px disc + 3px cut-out ring = an even 56px, so centring it never
+          // lands on a half pixel (iOS rounds those differently frame to frame).
           <div className={cn(BAR_ICON_BOX, "w-full")}>
             <span
               data-featured-tab
               data-new={badge?.count ? "" : undefined}
               className={cn(
-                "absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[2px] transition-transform duration-150 group-active/tab:scale-95",
+                "absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[3px]",
+                "transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-active/tab:scale-[0.92]",
                 badge?.count ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-card",
               )}
             >
               <span
                 className={cn(
-                  "relative grid h-[46px] w-[46px] place-items-center rounded-full ring-2 ring-card transition-colors",
+                  "relative grid h-[50px] w-[50px] place-items-center rounded-full",
                   active
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/35"
-                    : "bg-secondary text-foreground shadow-md shadow-black/20 border border-primary/30",
+                    ? "bg-[image:var(--gradient-primary)] text-primary-foreground inset-ring inset-ring-white/15 shadow-[0_10px_24px_-8px_color-mix(in_oklab,var(--primary)_75%,transparent)]"
+                    : "bg-gradient-to-b from-secondary to-card text-foreground inset-ring inset-ring-foreground/10 shadow-[0_8px_20px_-8px_rgba(0,0,0,0.55)]",
                 )}
               >
-                <Icon className="h-6 w-6" />
+                <Icon className={cn("h-[26px] w-[26px]", active && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)]")} />
                 <BottomNavBadge badge={badge} />
               </span>
             </span>

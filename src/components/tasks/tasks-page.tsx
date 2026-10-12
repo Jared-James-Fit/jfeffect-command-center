@@ -637,7 +637,7 @@ export function TasksPage({
       {selectMode && effectiveSelected.length > 0 && (
         <div
           className="fixed left-3 right-3 z-50 md:left-auto md:right-8"
-          style={{ bottom: isMobile ? "calc(max(env(safe-area-inset-bottom), 6px) + 74px)" : "1.5rem" }}
+          style={{ bottom: isMobile ? "calc(var(--mobile-bar-top) + 8px)" : "1.5rem" }}
         >
           <div className="flex items-center gap-1.5 rounded-2xl border border-border bg-card/95 px-2.5 py-2 shadow-lg backdrop-blur">
             <span className="px-1 text-xs font-bold">{effectiveSelected.length}</span>

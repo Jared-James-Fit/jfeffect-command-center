@@ -47,7 +47,7 @@ describe("Home's Crew feed: newest first, a few, then the feed", () => {
   it("is called Feed, and the menu entry is Crew", () => {
     expect(entry).toContain(">Feed</span>");
     expect(entry).not.toMatch(/>\s*Community\s*</);
-    expect(read("src/lib/admin-nav.ts")).toContain('{ to: "/portal/community", label: "Crew", icon: Trophy, keywords:');
+    expect(read("src/lib/admin-nav.ts")).toContain('{ to: "/portal/community", label: "Crew", icon: UsersRound, keywords:');
   });
 });
 

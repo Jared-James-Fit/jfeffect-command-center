@@ -7,7 +7,7 @@ import {
   UserPlus, Library, Wrench, HelpCircle,
   ChefHat, Megaphone, Phone,
   ListChecks, LayoutGrid,
-  Heart, Flame, Trophy,
+  Heart, Flame, Trophy, UsersRound,
   Ticket,
   AlertCircle,
   Download,
@@ -167,7 +167,7 @@ export const clientNav: NavItem[] = [
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
   { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
-  { to: "/portal/community", label: "Crew", icon: Trophy, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","strength","community","members","shared workouts","posts","photos","reactions","activity"] },
+  { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","strength","community","members","shared workouts","posts","photos","reactions","activity"] },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
   { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
@@ -185,7 +185,7 @@ export const clientNav: NavItem[] = [
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
-  { to: "/portal/community", label: "Crew", icon: Trophy, featured: true },
+  { to: "/portal/community", label: "Crew", icon: UsersRound, featured: true },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
 ];
