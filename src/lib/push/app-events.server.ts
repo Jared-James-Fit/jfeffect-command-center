@@ -74,7 +74,7 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     to: "staff", category: "messages",
     title: (n) => `📅 ${n} requested a session`,
     body: () => "Tap to approve it or suggest another time.",
-    url: (id) => `/admin/messages?client=${id}`, rateMinutes: 10,
+    url: (id) => `/admin/messages?client=${id}`, rateMinutes: 60,
   },
   checkin_submitted: {
     to: "staff", category: "check_ins",
@@ -155,7 +155,7 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     to: "client", category: "messages",
     title: () => "Your session request",
     body: (coach) => `${coach} answered your session request. Tap to see it.`,
-    url: () => "/portal/messages", rateMinutes: 5,
+    url: () => "/portal/messages", rateMinutes: 60,
   },
   community_coach_recognition: {
     to: "client", category: "lift_reviews",

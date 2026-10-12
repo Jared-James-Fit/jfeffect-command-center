@@ -34,8 +34,9 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      top set in all but name and the best read of today there is, so from a
 //      logged RPE 7 up to 8 its own chart estimate takes over, until it alone
 //      sets the weight (210 kg × 1 @ 8 → 5 @ 4.5 = 165 kg, not 185 because
-//      recent sessions were heavier). Once a working set is logged today, that
-//      set takes over.
+//      recent sessions were heavier). It is monotonic in effort: the same
+//      warm-up rated harder never suggests more than it would rated a normal 7.
+//      Once a working set is logged today, that set takes over.
 // Backtested on ~2,800 real sets (scratch script, not shipped): median error
 // 8% cold, 4.4% once today's first set is in.
 // Pure: no I/O, fully unit tested.
@@ -396,22 +397,32 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
   // null otherwise). It nudges a history estimate, or — with no history — gives
   // a conservative first suggestion. See header note 8.
   if (model.warmup && !t) {
+    const softFor = (w: number) =>
+      h
+        ? {
+            load: h.load * (1 + WARMUP_NUDGE_WEIGHT * clamp(w / h.load - 1, WARMUP_NUDGE_DOWN, WARMUP_NUDGE_UP)),
+            spread: clamp(h.spread / 2, HISTORY_SPREAD, 0.07),
+          }
+        : {
+            load: Math.min(w * WARMUP_COLD_START_FACTOR, model.warmup!.load * WARMUP_COLD_START_MAX_RATIO),
+            spread: WARMUP_COLD_START_SPREAD,
+          };
     const w = model.warmup.e1rm * targetPct;
-    const soft = h
-      ? {
-          load: h.load * (1 + WARMUP_NUDGE_WEIGHT * clamp(w / h.load - 1, WARMUP_NUDGE_DOWN, WARMUP_NUDGE_UP)),
-          spread: clamp(h.spread / 2, HISTORY_SPREAD, 0.07),
-        }
-      : {
-          load: Math.min(w * WARMUP_COLD_START_FACTOR, model.warmup.load * WARMUP_COLD_START_MAX_RATIO),
-          spread: WARMUP_COLD_START_SPREAD,
-        };
+    const soft = softFor(w);
     // A hard warm-up is read like a set done today (header note 8).
     // Down as far as it says (backing off is the safe side), up by at most
     // WARMUP_HARD_MAX_UP over the soft estimate (a typo'd warm-up can't load the bar).
     const k = model.warmup.trust;
     const hard = Math.min(w, soft.load * (1 + WARMUP_HARD_MAX_UP));
-    return { load: k * hard + (1 - k) * soft.load, spread: k * TODAY_SPREAD + (1 - k) * soft.spread };
+    let load = k * hard + (1 - k) * soft.load;
+    // Monotonic: the same warm-up rated harder never suggests MORE than rated a
+    // normal 7 (the soft read). Otherwise "felt heavy" could out-weigh "felt
+    // smooth" whenever the warm-up implies more than recent sessions.
+    if (k > 0) {
+      const normal = warmupE1rm({ load: model.warmup.load, reps: model.warmup.reps, rpe: WARMUP_TRUST_FROM_RPE });
+      if (normal) load = Math.min(load, softFor(normal * targetPct).load);
+    }
+    return { load, spread: k * TODAY_SPREAD + (1 - k) * soft.spread };
   }
   // Spread floors are calibrated on real logs so the range is honest (most
   // sets land inside it) rather than falsely precise.

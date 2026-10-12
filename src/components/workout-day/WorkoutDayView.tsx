@@ -70,7 +70,7 @@ import {
 import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData, cachedUpdatedAt } from "@/lib/workout-plan-cache";
-import { WarmupRows, useWarmupSets } from "@/components/workout-day/final-warmup-input";
+import { E1rmChip, WarmupRows, useWarmupSets } from "@/components/workout-day/final-warmup-input";
 import { LoadSuggestionCard, LoadSuggestionsToggle } from "@/components/workout-day/load-suggestion-card";
 import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
@@ -78,7 +78,7 @@ import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
 import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
-import { offersLastWarmup, pickFinalWarmup } from "@/lib/final-warmup";
+import { offersLastWarmup, pickFinalWarmup, warmupInUnit } from "@/lib/final-warmup";
 import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
@@ -3497,6 +3497,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const warmupPrompt = warmupAllowed && rampsUp
     ? { suggested: warmupGauge?.suggested ?? null, tunes: !!warmupGauge }
     : null;
+  // The card's e1RM chip: today's logged working sets and warm-ups (external load only).
+  const e1rmSets = useMemo(() => {
+    // Compound lifts only: a rough 1RM on a curl or a raise is noise.
+    if (hideWeight || rowLoadType !== "external" || !offersLastWarmup(family, name)) return null;
+    const worked = existingResults
+      .filter((r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external")
+      .map((r: any) => ({ load: Number(displayLoadInUnit(r, activeUnit)), reps: Number(r.actual_reps), rpe: parseRpe(r.actual_rpe_num ?? r.actual_rpe) }))
+      .filter((x) => x.load > 0 && x.reps > 0);
+    const warm = warmupSets.map((w) => ({ ...warmupInUnit(w, activeUnit) }));
+    return [...worked, ...warm];
+  }, [hideWeight, rowLoadType, family, name, existingResults, warmupSets, activeUnit]);
   const tunedWarmupId =
     warmupGauge && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
 
@@ -3874,6 +3885,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             displayUnit={activeUnit}
             className="mt-0"
           />
+          {e1rmSets && <E1rmChip sets={e1rmSets} unit={activeUnit} />}
           {clientId && (
             <DeferredExerciseHistoryButton
               clientId={clientId}
