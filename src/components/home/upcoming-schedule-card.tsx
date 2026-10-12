@@ -1,9 +1,9 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
-import { CalendarDays, Check, ChevronRight, Dumbbell, Flag, Plus, UserRound } from "lucide-react";
+import { Check, ChevronRight, Plus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
@@ -34,21 +34,27 @@ function timeLabel(item: CalendarItem): string | null {
   return compactTimeRange(item.startsAt, item.endsAt);
 }
 
-type IconType = typeof Dumbbell;
-const FAMILY_ICON: Record<KindFamily, IconType> = {
-  training: Dumbbell,
-  people: UserRound,
-  coach: Flag,
-  google: CalendarDays,
-};
-const FAMILY_TINT: Record<KindFamily, string> = {
-  training: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400",
-  people: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-  coach: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  google: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
+/** A hairline in the item's colour family: the only colour on a row. */
+const FAMILY_ACCENT: Record<KindFamily, string> = {
+  training: "bg-cyan-500",
+  people: "bg-violet-500",
+  coach: "bg-amber-500",
+  google: "bg-slate-400/70",
 };
 
-/** "Block 1 — Volume 5s/7s · Week 2 of 5" for a workout row (same blocks as the Workouts page). */
+/** "7 AM", "12:30 PM": the time column (start only; the range is in the subline). */
+function startLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).replace(":00", "");
+}
+
+/** Ended (timed items only): earlier today, shown quieter so the day reads as moving forward. */
+function hasEnded(item: CalendarItem, nowMs: number): boolean {
+  if (!item.startsAt) return false;
+  const end = Date.parse(item.endsAt ?? "") || Date.parse(item.startsAt) + 60 * 60 * 1000;
+  return end < nowMs;
+}
+
+/** "Week 2 of 5 · Block 1 — Volume 5s/7s" for a workout row (same blocks as the Workouts page). */
 function workoutContext(raw: any): string | null {
   const block = (raw?.block?.name ?? "").trim();
   const wk = raw?.week?.week_index;
@@ -101,15 +107,16 @@ function RowLink({ item, links, className, children }: { item: CalendarItem; lin
 }
 
 /**
- * Client Home: the day at a glance.
+ * Client Home: today as a short agenda, then what's next.
  *
- * Today in full (today's workout leads, with its block and week and a Start /
- * Continue / Done action; then sessions, appointments, coach events and
- * Google events by time), then the next few days in brief. No week strip and
- * no dots: browsing weeks and months is the Workouts calendar's job, and the
- * Schedule page shows everything at once. Each row carries a small icon in
- * its colour family (training, sessions, coach, Google), the same families as
- * every calendar.
+ * A time column on the left and one line of colour per item (training,
+ * sessions, coach events, Google), nothing else competing: no week strip, no
+ * icon tiles, no tinted cards. Today reads top to bottom (all-day items, then
+ * by time, with earlier items quieter and a "Now" line), so it's obvious
+ * what's done and what's next. Today's workout says its week and block and
+ * offers Start / Continue / Done; titles wrap rather than cut off. "Coming up"
+ * shows the next 7 days under small date markers. Weeks, months and blocks
+ * stay on the Workouts calendar; everything at once is on the Schedule page.
  */
 export function UpcomingScheduleCard({ clientId, links = true }: {
   clientId: string | null | undefined;
@@ -129,21 +136,33 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   const today = isoToday();
   const [requesting, setRequesting] = useState(false);
   const agenda = useMemo(() => buildHomeAgenda(items, { today }), [items, today]);
-  const dateLine = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const nowMs = useNow();
+  const todayDate = new Date(`${today}T00:00:00`);
+  const weekday = todayDate.toLocaleDateString(undefined, { weekday: "long" });
+  const dayMonth = todayDate.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  // Where "Now" falls: before the first timed item that hasn't ended, when something comes before it.
+  const nowIndex = useMemo(() => {
+    const i = agenda.today.findIndex((it) => !!it.startsAt && !hasEnded(it, nowMs));
+    if (i > 0) return i;
+    if (i === -1 && agenda.today.some((it) => it.startsAt)) return agenda.today.length;
+    return -1;
+  }, [agenda.today, nowMs]);
 
   return (
-    <Card className="space-y-3 border-border bg-card p-3.5">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+    <Card className="border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground">Today</h3>
-          <div className="truncate text-sm font-bold">{dateLine}</div>
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Today</h3>
+          <div className="mt-0.5 truncate text-lg font-black leading-tight">
+            {weekday} <span className="font-semibold text-muted-foreground">{dayMonth}</span>
+          </div>
         </div>
-        {links && <div className="flex shrink-0 items-center gap-1">
+        {links && <div className="-mr-1.5 flex shrink-0 items-center">
           {/* one "+" for Book and Request */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" aria-label="Book or request a session" className="grid h-9 w-9 place-items-center rounded-full text-primary active:bg-muted">
-                <Plus className="h-4 w-4" />
+              <button type="button" aria-label="Book or request a session" className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground transition hover:text-foreground active:bg-muted">
+                <Plus className="h-[18px] w-[18px]" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
@@ -169,7 +188,8 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
           </DropdownMenu>
           <Link
             to="/portal/calendar"
-            className="inline-flex min-h-9 shrink-0 items-center gap-0.5 text-[11px] font-bold uppercase tracking-widest text-primary"
+            aria-label="Open your full schedule"
+            className="inline-flex min-h-9 shrink-0 items-center gap-0.5 rounded-full px-1.5 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
           >
             Schedule <ChevronRight className="h-3.5 w-3.5" />
           </Link>
@@ -177,43 +197,56 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
       </div>
 
       {/* Today */}
-      {isLoading && !items?.length ? (
-        <div className="h-14 animate-pulse rounded-xl bg-secondary/40" />
-      ) : agenda.today.length === 0 ? (
-        <p className="rounded-xl bg-secondary/30 px-3 py-3 text-sm text-muted-foreground">Nothing scheduled today. Recover well.</p>
-      ) : (
-        <ul className="space-y-1.5">
-          {agenda.today.map((item) => (
-            <li key={item.id} className="min-w-0">
-              <TodayRow item={item} links={links} />
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="mt-3">
+        {isLoading && !items?.length ? (
+          <div className="space-y-2" aria-hidden>
+            <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
+            <div className="h-10 animate-pulse rounded-lg bg-secondary/30" />
+          </div>
+        ) : agenda.today.length === 0 ? (
+          <p className="py-1 text-sm text-muted-foreground">Nothing scheduled today. A good day to recover.</p>
+        ) : (
+          <ol className="space-y-0.5" aria-label="Today">
+            {agenda.today.map((item, i) => (
+              <li key={item.id} className="min-w-0">
+                {i === nowIndex && <NowLine />}
+                <TodayRow item={item} links={links} past={hasEnded(item, nowMs)} />
+              </li>
+            ))}
+            {nowIndex === agenda.today.length && (
+              <li aria-hidden>
+                <NowLine />
+              </li>
+            )}
+          </ol>
+        )}
+      </div>
 
       {/* Coming up */}
       {agenda.upcoming.length > 0 && (
-        <div className="space-y-2 border-t border-border/60 pt-2.5">
-          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">Coming up</div>
-          {agenda.upcoming.map((day) => (
-            <div key={day.date} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2">
-              <div className="pt-1 text-[11px] font-bold text-muted-foreground">{dayLabel(day.date, today)}</div>
-              <ul className="min-w-0 space-y-1">
-                {day.items.map((item) => (
-                  <li key={item.id} className="min-w-0">
-                    <UpcomingRow item={item} links={links} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <div className="mt-3 border-t border-border/60 pt-3">
+          <div className="mb-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Coming up</div>
+          <ol className="space-y-2" aria-label="Coming up">
+            {agenda.upcoming.map((day) => (
+              <li key={day.date} className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-2">
+                <DateMarker date={day.date} today={today} />
+                <ul className="min-w-0 space-y-0.5">
+                  {day.items.map((item) => (
+                    <li key={item.id} className="min-w-0">
+                      <UpcomingRow item={item} links={links} />
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
           {agenda.moreUpcoming > 0 &&
             (links ? (
-              <Link to="/portal/calendar" className="block pl-[5rem] text-[11px] font-bold text-muted-foreground">
+              <Link to="/portal/calendar" className="mt-1.5 block pl-[3.75rem] text-xs font-semibold text-muted-foreground hover:text-foreground">
                 +{agenda.moreUpcoming} more this week
               </Link>
             ) : (
-              <p className="pl-[5rem] text-[11px] font-bold text-muted-foreground">+{agenda.moreUpcoming} more this week</p>
+              <p className="mt-1.5 pl-[3.75rem] text-xs font-semibold text-muted-foreground">+{agenda.moreUpcoming} more this week</p>
             ))}
         </div>
       )}
@@ -225,80 +258,111 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   );
 }
 
-function FamilyIcon({ item, size = "md" }: { item: CalendarItem; size?: "md" | "sm" }) {
-  const family = KIND_FAMILY[item.kind];
-  const Icon = FAMILY_ICON[family];
+/** Minute-accurate "now", so earlier items fade and the Now line moves through the day. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+}
+
+function NowLine() {
   return (
-    <span
-      className={cn(
-        "grid shrink-0 place-items-center rounded-lg",
-        FAMILY_TINT[family],
-        size === "md" ? "h-9 w-9" : "h-6 w-6 rounded-md",
-      )}
-      aria-hidden
-    >
-      <Icon className={size === "md" ? "h-4 w-4" : "h-3 w-3"} />
-    </span>
+    <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-x-2 py-0.5" aria-label="Now">
+      <span className="text-right text-[10px] font-black uppercase tracking-wider text-primary">Now</span>
+      <span className="flex items-center">
+        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+        <span className="h-px flex-1 bg-primary/50" />
+      </span>
+    </div>
   );
 }
 
-function TodayRow({ item, links }: { item: CalendarItem; links: boolean }) {
-  const time = timeLabel(item);
+/** "TUE / 13" (or "Tomorrow" above the number): where the coming days start. */
+function DateMarker({ date, today }: { date: string; today: string }) {
+  const d = new Date(`${date}T00:00:00`);
+  const tomorrow = dayLabel(date, today) === "Tomorrow";
+  return (
+    <div className="pt-1 text-right leading-none">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        {tomorrow ? "Tmrw" : d.toLocaleDateString(undefined, { weekday: "short" })}
+      </div>
+      <div className="mt-0.5 text-base font-black tabular-nums">{d.getDate()}</div>
+    </div>
+  );
+}
+
+function Accent({ item, className }: { item: CalendarItem; className?: string }) {
+  return <span aria-hidden className={cn("w-[3px] shrink-0 self-stretch rounded-full", FAMILY_ACCENT[KIND_FAMILY[item.kind]], className)} />;
+}
+
+function TodayRow({ item, links, past }: { item: CalendarItem; links: boolean; past: boolean }) {
   const google = item.kind === "google_event";
   const isWorkout = item.kind === "workout" && !!item.raw;
   const action = isWorkout ? workoutAction(item.raw) : null;
+  const range = timeLabel(item);
   const sub = isWorkout
     ? workoutContext(item.raw)
-    : [KIND_META[item.kind]?.label, placeLabel(item.location)].filter(Boolean).join(" · ");
+    : [range && range !== (item.startsAt ? startLabel(item.startsAt) : null) ? range : null, google ? "Google" : KIND_META[item.kind]?.label, placeLabel(item.location)]
+        .filter(Boolean)
+        .join(" · ");
+  // Workouts put their action on the second line, so the title gets the full width.
+  const trailing = action ? (
+    action.done ? (
+      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-500">
+        <Check className="h-3.5 w-3.5" strokeWidth={3} /> Done
+      </span>
+    ) : links ? (
+      <span className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full border border-primary/40 pl-2.5 pr-1.5 text-xs font-bold text-primary">
+        {action.label} <ChevronRight className="h-3.5 w-3.5" />
+      </span>
+    ) : null
+  ) : null;
   return (
     <RowLink
       item={item}
       links={links}
-      className={cn(
-        "rounded-xl border px-2.5 py-2 transition active:bg-secondary/40",
-        isWorkout ? "border-cyan-500/30 bg-cyan-500/5" : "border-border bg-secondary/20",
-        google && "border-transparent bg-transparent",
-      )}
+      className={cn("rounded-lg py-1.5 transition active:bg-secondary/40", past && "opacity-55")}
     >
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5">
-        <FamilyIcon item={item} />
-        <div className="min-w-0">
-          <div className={cn("truncate text-sm", google ? "font-medium text-foreground/80" : "font-bold")}>
-            {time && <span className="tabular-nums text-muted-foreground">{time} · </span>}
-            {agendaTitle(item)}
-          </div>
-          {sub && <div className="truncate text-[11px] text-muted-foreground">{sub}</div>}
+      <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-stretch gap-x-2">
+        <div className={cn("pt-0.5 text-right text-xs font-semibold tabular-nums", item.startsAt ? "text-foreground/80" : "text-muted-foreground")}>
+          {item.startsAt ? startLabel(item.startsAt) : item.kind === "workout" ? "Anytime" : "All day"}
         </div>
-        {action ? (
-          action.done ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-500">
-              <Check className="h-3.5 w-3.5" strokeWidth={3} /> Done
-            </span>
-          ) : links ? (
-            <span className="rounded-full bg-primary px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-primary-foreground">
-              {action.label}
-            </span>
-          ) : null
-        ) : itemLink(item, links) ? (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        ) : null}
+        <div className="flex min-w-0 gap-2.5">
+          <Accent item={item} />
+          <div className="min-w-0 flex-1 py-px">
+            <div className="flex items-start gap-2">
+              <div className={cn("min-w-0 flex-1 line-clamp-2 text-[15px] leading-snug", google ? "font-medium text-foreground/75" : "font-bold")}>
+                {agendaTitle(item)}
+              </div>
+              {!action && itemLink(item, links) && <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />}
+            </div>
+            {(sub || trailing) && (
+              <div className="mt-1 flex items-center gap-2">
+                <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{sub}</div>
+                {trailing}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </RowLink>
   );
 }
 
 function UpcomingRow({ item, links }: { item: CalendarItem; links: boolean }) {
-  const time = timeLabel(item);
   const google = item.kind === "google_event";
   const done = item.kind === "workout" && item.status === "Completed";
   return (
-    <RowLink item={item} links={links} className="rounded-lg px-1 py-0.5 transition active:bg-secondary/40">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
-        <FamilyIcon item={item} size="sm" />
-        <div className={cn("truncate text-[13px]", google ? "text-foreground/70" : "font-semibold")}>
-          {time && <span className="tabular-nums text-muted-foreground">{time} · </span>}
+    <RowLink item={item} links={links} className="rounded-md py-1 transition active:bg-secondary/40">
+      <div className="flex min-w-0 gap-2.5">
+        <Accent item={item} />
+        <div className={cn("min-w-0 line-clamp-2 text-sm leading-snug", google ? "text-foreground/70" : "font-semibold")}>
+          {item.startsAt && <span className="font-normal tabular-nums text-muted-foreground">{startLabel(item.startsAt)} </span>}
           {agendaTitle(item)}
-          {done && <span className="text-emerald-500"> · Done</span>}
+          {done && <span className="font-normal text-emerald-500"> · Done</span>}
         </div>
       </div>
     </RowLink>
