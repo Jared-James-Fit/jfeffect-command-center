@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CalendarPlus, Clock, Dumbbell, HelpCircle, Loader2, Phone, Ruler } from "lucide-react";
@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 
 const TYPE_ICON: Record<SessionRequestType, React.ElementType> = { training: Dumbbell, call: Phone, assessment: Ruler, other: HelpCircle };
 const LENGTHS = [30, 45, 60, 90];
+/** Short enough for four across a 360px phone. */
+const SHORT_TYPE: Record<SessionRequestType, string> = { training: "Training", call: "Call", assessment: "Assessment", other: "Other" };
 
 function localISO(offsetDays = 0): string {
   const d = new Date();
@@ -25,9 +27,34 @@ function localISO(offsetDays = 0): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** "Tmrw", "Wed 14": the next two weeks as one-tap day chips. */
+function nextDays(count = 14): Array<{ iso: string; top: string; day: string }> {
+  return Array.from({ length: count }, (_, i) => {
+    const iso = localISO(i);
+    const d = new Date(`${iso}T00:00:00`);
+    return {
+      iso,
+      top: i === 0 ? "Today" : i === 1 ? "Tmrw" : d.toLocaleDateString(undefined, { weekday: "short" }),
+      day: String(d.getDate()),
+    };
+  });
+}
+
+function summaryDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+function summaryTime(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).replace(":00", "");
+}
+
 /**
- * "Request a session": the client picks what, when and how long; it goes to their coach's
- * chat as a request card. Nothing is booked until the coach approves.
+ * "Request a session": what, which day, what time, how long. One screen,
+ * top to bottom, with the send button always in reach; the note and other
+ * times stay folded away unless wanted. It goes to the coach's chat as a
+ * request card; nothing is booked until the coach approves.
  */
 export function RequestSessionSheet({ open, onOpenChange, isPov = false, initialDate }: {
   open: boolean;
@@ -44,20 +71,25 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
   const [minutes, setMinutes] = useState(60);
   const [alt, setAlt] = useState("");
   const [note, setNote] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const days = useMemo(() => nextDays(14), [open]);
+  const otherDateRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setType("training"); setMinutes(60); setTime("09:00"); setAnyTime(false); setAlt(""); setNote("");
+    setType("training"); setMinutes(60); setTime("09:00"); setAnyTime(false); setAlt(""); setNote(""); setMoreOpen(false);
     const today = localISO(0);
-    setDate(initialDate && initialDate >= today ? initialDate : localISO(1));
+    setDate(initialDate && initialDate > today ? initialDate : localISO(1));
   }, [open, initialDate]);
 
   const pickType = (t: SessionRequestType) => {
     setType(t);
     setMinutes(REQUEST_TYPES.find((x) => x.value === t)?.minutes ?? 60);
+    if (t === "other") setMoreOpen(true);
   };
   const needsNote = type === "other" && !note.trim();
+  const dateInChips = days.some((d) => d.iso === date);
 
   const submit = async () => {
     if (isPov) return;
@@ -79,88 +111,125 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
     }
   };
 
-  const chip = (on: boolean) => cn(
-    "rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-95",
+  const seg = (on: boolean) => cn(
+    "flex min-h-11 items-center justify-center rounded-lg border px-2 text-sm font-semibold transition active:scale-[0.97]",
     on ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground",
   );
+  const summary = [
+    requestTypeLabel(type),
+    summaryDate(date),
+    anyTime ? "any time" : summaryTime(time),
+    `${minutes} min`,
+  ].join(" · ");
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto w-full max-w-lg space-y-4">
-          <SheetHeader className="text-left">
-            <SheetTitle className="text-left">Request a session</SheetTitle>
-            <SheetDescription className="text-left">
-              Pick what and when. Your coach approves it before it's booked.
-            </SheetDescription>
-          </SheetHeader>
+      <SheetContent side="bottom" className="flex max-h-[92dvh] flex-col gap-0 rounded-t-2xl p-0">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-5">
+          <div className="mx-auto w-full max-w-lg space-y-5">
+            <SheetHeader className="text-left">
+              <SheetTitle className="text-left">Request a session</SheetTitle>
+              <SheetDescription className="text-left">Your coach confirms it before it's booked.</SheetDescription>
+            </SheetHeader>
 
-          {isPov && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-              Preview only. Clients send requests from here; they show up as a card in your chat with them.
-            </p>
-          )}
+            {isPov && (
+              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+                Preview only. Clients send requests from here; they show up as a card in your chat with them.
+              </p>
+            )}
 
-          <div className="space-y-1.5">
-            <Label>What for?</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {REQUEST_TYPES.map((t) => {
-                const Icon = TYPE_ICON[t.value];
-                const on = type === t.value;
-                return (
-                  <button key={t.value} type="button" onClick={() => pickType(t.value)}
-                    className={cn("flex items-center gap-2 rounded-xl border p-2.5 text-left transition active:scale-[0.98]",
-                      on ? "border-primary bg-primary/10" : "border-border")}>
-                    <Icon className={cn("h-4 w-4 shrink-0", on ? "text-primary" : "text-muted-foreground")} />
-                    <span className="min-w-0">
-                      <span className={cn("block truncate text-sm font-semibold", on && "text-primary")}>{t.label}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">{t.hint}</span>
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Session type">
+                {REQUEST_TYPES.map((t) => {
+                  const Icon = TYPE_ICON[t.value];
+                  const on = type === t.value;
+                  return (
+                    <button key={t.value} type="button" role="radio" aria-checked={on} onClick={() => pickType(t.value)}
+                      className={cn(seg(on), "flex-col gap-1 px-0.5 py-2 text-xs")}>
+                      <Icon className="h-4 w-4" />
+                      <span className="max-w-full truncate text-[11px] leading-tight sm:text-xs">{SHORT_TYPE[t.value]}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="req-date">Day</Label>
-              <input id="req-date" type="date" value={date} min={localISO(0)} onChange={(e) => setDate(e.target.value)}
-                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-[16px]" />
+            <div className="space-y-2">
+              <Label>Day</Label>
+              <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="radiogroup" aria-label="Day">
+                {days.map((d) => {
+                  const on = date === d.iso;
+                  return (
+                    <button key={d.iso} type="button" role="radio" aria-checked={on} onClick={() => setDate(d.iso)}
+                      className={cn("flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-lg border transition active:scale-[0.97]",
+                        on ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
+                      <span className={cn("text-[10px] font-bold uppercase", on ? "text-primary-foreground/85" : "text-muted-foreground")}>{d.top}</span>
+                      <span className="text-base font-black tabular-nums">{d.day}</span>
+                    </button>
+                  );
+                })}
+                <label className={cn("relative flex h-14 shrink-0 cursor-pointer items-center justify-center rounded-lg border px-3 text-xs font-semibold",
+                  !dateInChips ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground")}>
+                  {dateInChips ? "Other date" : summaryDate(date)}
+                  <input ref={otherDateRef} type="date" value={date} min={localISO(0)} onChange={(e) => e.target.value && setDate(e.target.value)}
+                    aria-label="Pick another date" className="absolute inset-0 cursor-pointer opacity-0" />
+                </label>
+              </div>
             </div>
-            <div className="space-y-1.5">
+
+            <div className="space-y-2">
               <Label htmlFor="req-time">Time</Label>
-              <input id="req-time" type="time" value={time} step={900} disabled={anyTime} onChange={(e) => setTime(e.target.value)}
-                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-[16px] disabled:opacity-40" />
+              <div className="grid grid-cols-2 gap-2">
+                <input id="req-time" type="time" value={time} step={900} disabled={anyTime} onChange={(e) => setTime(e.target.value)}
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-[16px] disabled:opacity-40" />
+                <button type="button" onClick={() => setAnyTime((v) => !v)} className={seg(anyTime)} aria-pressed={anyTime}>
+                  <Clock className="mr-1.5 h-4 w-4" /> Any time
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => setAnyTime((v) => !v)} className={chip(anyTime)}>
-              <Clock className="mr-1 inline h-3 w-3" /> Any time that day
-            </button>
-            {LENGTHS.map((m) => (
-              <button key={m} type="button" onClick={() => setMinutes(m)} className={chip(minutes === m)}>{m} min</button>
-            ))}
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="req-alt">Other times that work (optional)</Label>
-            <input id="req-alt" value={alt} maxLength={300} onChange={(e) => setAlt(e.target.value)}
-              placeholder="e.g. Thursday after 5, or Saturday morning"
-              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-[16px]" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="req-note">{type === "other" ? "What's it for?" : "Anything your coach should know? (optional)"}</Label>
-            <textarea id="req-note" rows={2} value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)}
-              className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-[16px]" />
-          </div>
+            <div className="space-y-2">
+              <Label>Length</Label>
+              <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Length">
+                {LENGTHS.map((m) => (
+                  <button key={m} type="button" role="radio" aria-checked={minutes === m} onClick={() => setMinutes(m)} className={seg(minutes === m)}>
+                    {m} min
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <Button className="h-12 w-full bg-gradient-primary font-bold" disabled={busy || isPov || !date || needsNote} onClick={submit}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send request
-          </Button>
-          <p className="text-center text-[11px] text-muted-foreground">
-            Not booked yet — you'll get a message as soon as your coach approves it.
-          </p>
+            {moreOpen ? (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="req-note">{type === "other" ? "What's it for?" : "Note for your coach (optional)"}</Label>
+                  <textarea id="req-note" rows={2} value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)}
+                    className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-[16px]" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="req-alt">Other times that work (optional)</Label>
+                  <input id="req-alt" value={alt} maxLength={300} onChange={(e) => setAlt(e.target.value)}
+                    placeholder="e.g. Thursday after 5, or Saturday morning"
+                    className="h-11 w-full rounded-lg border border-border bg-background px-3 text-[16px]" />
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setMoreOpen(true)} className="text-sm font-semibold text-primary">
+                + Add a note or other times
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Always in reach: what's being asked for, and Send. */}
+        <div className="border-t border-border bg-background/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+          <div className="mx-auto w-full max-w-lg space-y-2">
+            <p className="truncate text-center text-xs text-muted-foreground">{summary}</p>
+            <Button className="h-12 w-full bg-gradient-primary font-bold" disabled={busy || isPov || !date || needsNote} onClick={submit}>
+              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send request
+            </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -171,7 +240,7 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
  * The client's open (and recently answered) requests on their Schedule, plus the button
  * to make a new one.
  */
-export function MySessionRequests({ clientId, isPov = false }: { clientId: string; isPov?: boolean }) {
+export function MySessionRequests({ clientId, isPov = false, children }: { clientId: string; isPov?: boolean; children?: React.ReactNode }) {
   const qc = useQueryClient();
   const channelId = useId();
   const withdraw = useServerFn(withdrawSessionRequest);
@@ -198,16 +267,14 @@ export function MySessionRequests({ clientId, isPov = false }: { clientId: strin
 
   return (
     <section className="space-y-2">
-      <Card className="flex items-center gap-3 p-3.5">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-          <CalendarPlus className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold">Request a session</div>
-          <div className="text-xs text-muted-foreground">Training, a call or an assessment. Your coach approves it.</div>
-        </div>
-        <Button size="sm" className="shrink-0 bg-gradient-primary font-bold" onClick={() => setOpen(true)}>Request</Button>
-      </Card>
+      {/* The section's one action, labelled in words. */}
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Sessions</h2>
+        <Button size="sm" className="h-9 gap-1.5 bg-gradient-primary font-bold" onClick={() => setOpen(true)}>
+          <CalendarPlus className="h-4 w-4" /> Request a session
+        </Button>
+      </div>
+      {children}
 
       {rows.length > 0 && (
         <ul className="space-y-1.5">

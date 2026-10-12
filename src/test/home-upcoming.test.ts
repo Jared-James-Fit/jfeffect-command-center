@@ -91,9 +91,9 @@ describe("client home upcoming summary", () => {
 describe("Home schedule card: today in full, then what's coming", () => {
   const src = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
   it("is an agenda (today, then the next days), not a week strip", () => {
-    expect(src).toContain("buildHomeAgenda(items, { today })");
+    expect(src).toContain("buildHomeAgenda(items, { today, maxUpcoming: HOME_UPCOMING_ROWS })");
     expect(src).toContain("agenda.today.map(");
-    expect(src).toContain("agenda.upcoming.map(");
+    expect(src).toContain("agenda.upcoming.flatMap(");
     expect(src).not.toContain("<WeekStrip");
   });
   it("reads as a timeline: time column, one colour line per item, a Now marker; no icon tiles or tinted cards", () => {
@@ -106,7 +106,9 @@ describe("Home schedule card: today in full, then what's coming", () => {
     expect(src).toContain("workoutContext(item.raw)");
     expect(src).toContain("workoutAction(item.raw)");
   });
-  it("Book and Request share one + button", () => {
-    expect(src).toContain('aria-label="Book or request a session"');
+  it("says what each action does in words: no bare + or Schedule button", () => {
+    expect(src).not.toContain('aria-label="Book or request a session"');
+    expect(src).toContain("Request a session");
+    expect(src).toContain("Full schedule");
   });
 });

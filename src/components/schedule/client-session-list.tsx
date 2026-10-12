@@ -135,10 +135,13 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
     }
   };
 
+  // Nothing booked: no empty box (the Sessions header above already offers a request).
+  if (!isLoading && sessions.length === 0 && calls.length === 0) return null;
+
   return (
     <section className="space-y-2">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Your sessions</h2>
+        <h2 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Booked</h2>
         {sessions.length > 0 && <span className="text-xs text-muted-foreground">{sessions.length} booked</span>}
       </div>
 

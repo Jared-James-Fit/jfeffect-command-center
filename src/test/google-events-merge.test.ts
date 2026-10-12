@@ -72,12 +72,13 @@ describe("Calendar page loads Google for the months on screen", async () => {
   const { googleFetchWindow } = await import("@/lib/calendar-sources");
 
   it("month view covers the padded grid", () => {
-    // October 2026 starts on a Thursday and ends on a Saturday.
-    expect(visibleRange("month", new Date(2026, 9, 9))).toEqual({ from: "2026-09-27", to: "2026-10-31" });
+    // Weeks start on Monday, like the Workouts calendar. October 2026 starts on
+    // a Thursday and ends on a Saturday.
+    expect(visibleRange("month", new Date(2026, 9, 9))).toEqual({ from: "2026-09-28", to: "2026-11-01" });
   });
 
-  it("week view is Sunday to Saturday", () => {
-    expect(visibleRange("week", new Date(2026, 9, 9))).toEqual({ from: "2026-10-04", to: "2026-10-10" });
+  it("week view is Monday to Sunday", () => {
+    expect(visibleRange("week", new Date(2026, 9, 9))).toEqual({ from: "2026-10-05", to: "2026-10-11" });
   });
 
   it("fetches whole months, including January when you page there", () => {

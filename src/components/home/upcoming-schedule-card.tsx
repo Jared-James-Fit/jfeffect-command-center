@@ -3,16 +3,17 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
-import { Check, ChevronRight, Plus } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { CalendarPlus, Check, ChevronRight } from "lucide-react";
 import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
-import { KIND_FAMILY, KIND_META, placeLabel, useClientCalendarSources, type CalendarItem, type KindFamily } from "@/lib/calendar-sources";
+import { KIND_FAMILY, KIND_META, placeLabel, scheduleTitle, useClientCalendarSources, type CalendarItem, type KindFamily } from "@/lib/calendar-sources";
 import { buildHomeAgenda } from "@/lib/home-upcoming";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { RequestSessionSheet } from "@/components/schedule/request-session-sheet";
+/** Rows in "next up" on Home; the rest is on the Schedule page. */
+const HOME_UPCOMING_ROWS = 3;
 
 function isoToday() {
   const d = new Date();
@@ -54,20 +55,11 @@ function hasEnded(item: CalendarItem, nowMs: number): boolean {
   return end < nowMs;
 }
 
-/** "Week 2 of 5 · Block 1 — Volume 5s/7s" for a workout row (same blocks as the Workouts page). */
+/** "Week 2 of 5" for a workout row; the block itself lives on the Workouts page. */
 function workoutContext(raw: any): string | null {
-  const block = (raw?.block?.name ?? "").trim();
   const wk = raw?.week?.week_index;
   const of = raw?.block?.weeks;
-  const week = wk ? `Week ${wk}${of ? ` of ${of}` : ""}` : null;
-  return [week, block || null].filter(Boolean).join(" · ") || null;
-}
-
-/** "Monday — Primary Squat" → "Primary Squat": the agenda already says which day it is. */
-function agendaTitle(item: CalendarItem): string {
-  if (item.kind !== "workout") return item.title;
-  const t = item.title.replace(/^(mon|tues|wednes|thurs|fri|satur|sun)day\s*[—–-]\s*/i, "").trim();
-  return t || item.title;
+  return wk ? `Week ${wk}${of ? ` of ${of}` : ""}` : null;
 }
 
 /** What today's workout asks for: Start / Continue / done. */
@@ -135,11 +127,10 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   });
   const today = isoToday();
   const [requesting, setRequesting] = useState(false);
-  const agenda = useMemo(() => buildHomeAgenda(items, { today }), [items, today]);
+  // A dashboard, not a calendar: today, then only the next few things.
+  const agenda = useMemo(() => buildHomeAgenda(items, { today, maxUpcoming: HOME_UPCOMING_ROWS }), [items, today]);
   const nowMs = useNow();
   const todayDate = new Date(`${today}T00:00:00`);
-  const weekday = todayDate.toLocaleDateString(undefined, { weekday: "long" });
-  const dayMonth = todayDate.toLocaleDateString(undefined, { day: "numeric", month: "short" });
   // Where "Now" falls: before the first timed item that hasn't ended, when something comes before it.
   const nowIndex = useMemo(() => {
     const i = agenda.today.findIndex((it) => !!it.startsAt && !hasEnded(it, nowMs));
@@ -148,65 +139,27 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
     return -1;
   }, [agenda.today, nowMs]);
 
+  const dateLine = todayDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const singleBook = bookable.length === 1 && !pov.viewAsClientId ? bookable[0] : null;
+
   return (
-    <Card className="border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Today</h3>
-          <div className="mt-0.5 truncate text-lg font-black leading-tight">
-            {weekday} <span className="font-semibold text-muted-foreground">{dayMonth}</span>
-          </div>
-        </div>
-        {links && <div className="-mr-1.5 flex shrink-0 items-center">
-          {/* one "+" for Book and Request */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button type="button" aria-label="Book or request a session" className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground transition hover:text-foreground active:bg-muted">
-                <Plus className="h-[18px] w-[18px]" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              {bookable.length > 0 && !pov.viewAsClientId && (
-                <DropdownMenuItem asChild className="min-h-11">
-                  {bookable.length === 1 ? (
-                    <Link
-                      to="/book/$slug"
-                      params={{ slug: bookable[0].slug }}
-                      search={{ name: "", email: "", phone: "", application_id: "", i: "" }}
-                    >
-                      Book a session
-                    </Link>
-                  ) : (
-                    <Link to="/portal/calendar">Book a session</Link>
-                  )}
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem className="min-h-11" onSelect={() => setRequesting(true)}>
-                Request a time
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Link
-            to="/portal/calendar"
-            aria-label="Open your full schedule"
-            className="inline-flex min-h-9 shrink-0 items-center gap-0.5 rounded-full px-1.5 text-xs font-semibold text-muted-foreground transition hover:text-foreground"
-          >
-            Schedule <ChevronRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>}
+    <Card className="border-border bg-card px-3.5 pb-2 pt-3">
+      <div className="flex items-baseline gap-2 px-0.5">
+        <h3 className="text-sm font-black">Today</h3>
+        <span className="truncate text-sm text-muted-foreground">{dateLine}</span>
       </div>
 
       {/* Today */}
-      <div className="mt-3">
+      <div className="mt-1.5">
         {isLoading && !items?.length ? (
-          <div className="space-y-2" aria-hidden>
-            <div className="h-10 animate-pulse rounded-lg bg-secondary/40" />
-            <div className="h-10 animate-pulse rounded-lg bg-secondary/30" />
+          <div className="space-y-1.5 py-1" aria-hidden>
+            <div className="h-9 animate-pulse rounded-lg bg-secondary/40" />
+            <div className="h-9 animate-pulse rounded-lg bg-secondary/30" />
           </div>
         ) : agenda.today.length === 0 ? (
-          <p className="py-1 text-sm text-muted-foreground">Nothing scheduled today. A good day to recover.</p>
+          <p className="px-0.5 py-1.5 text-sm text-muted-foreground">Nothing scheduled today. A good day to recover.</p>
         ) : (
-          <ol className="space-y-0.5" aria-label="Today">
+          <ol aria-label="Today">
             {agenda.today.map((item, i) => (
               <li key={item.id} className="min-w-0">
                 {i === nowIndex && <NowLine />}
@@ -222,32 +175,46 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
         )}
       </div>
 
-      {/* Coming up */}
+      {/* Next: the next few things only; the full schedule is one tap away. */}
       {agenda.upcoming.length > 0 && (
-        <div className="mt-3 border-t border-border/60 pt-3">
-          <div className="mb-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Coming up</div>
-          <ol className="space-y-2" aria-label="Coming up">
-            {agenda.upcoming.map((day) => (
-              <li key={day.date} className="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-2">
-                <DateMarker date={day.date} today={today} />
-                <ul className="min-w-0 space-y-0.5">
-                  {day.items.map((item) => (
-                    <li key={item.id} className="min-w-0">
-                      <UpcomingRow item={item} links={links} />
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
+        <div className="mt-1.5 border-t border-border/60 pt-1.5">
+          <ol aria-label="Coming up">
+            {agenda.upcoming.flatMap((day) =>
+              day.items.map((item, i) => (
+                <li key={item.id} className="min-w-0">
+                  <UpcomingRow item={item} links={links} dayText={i === 0 ? shortDay(day.date, today) : ""} />
+                </li>
+              )),
+            )}
           </ol>
-          {agenda.moreUpcoming > 0 &&
-            (links ? (
-              <Link to="/portal/calendar" className="mt-1.5 block pl-[3.75rem] text-xs font-semibold text-muted-foreground hover:text-foreground">
-                +{agenda.moreUpcoming} more this week
-              </Link>
-            ) : (
-              <p className="mt-1.5 pl-[3.75rem] text-xs font-semibold text-muted-foreground">+{agenda.moreUpcoming} more this week</p>
-            ))}
+        </div>
+      )}
+
+      {/* Actions, in words: ask for a session, or see everything. */}
+      {links && (
+        <div className="mt-1 flex items-center justify-between gap-2 border-t border-border/60 pt-1">
+          {singleBook ? (
+            <Link
+              to="/book/$slug"
+              params={{ slug: singleBook.slug }}
+              search={{ name: "", email: "", phone: "", application_id: "", i: "" }}
+              className="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-1 text-[13px] font-semibold text-primary"
+            >
+              <CalendarPlus className="h-4 w-4" /> Book a session
+            </Link>
+          ) : bookable.length > 1 && !pov.viewAsClientId ? (
+            <Link to="/portal/calendar" className="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-1 text-[13px] font-semibold text-primary">
+              <CalendarPlus className="h-4 w-4" /> Book a session
+            </Link>
+          ) : (
+            <button type="button" onClick={() => setRequesting(true)} className="inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-1 text-[13px] font-semibold text-primary">
+              <CalendarPlus className="h-4 w-4" /> Request a session
+            </button>
+          )}
+          <Link to="/portal/calendar" className="inline-flex min-h-10 items-center gap-0.5 whitespace-nowrap rounded-lg px-1 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
+            Full schedule
+            <ChevronRight className="h-4 w-4" />
+          </Link>
         </div>
       )}
 
@@ -256,6 +223,13 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
       )}
     </Card>
   );
+}
+
+/** "Tmrw", "Wed 14": the day for the first of its rows in the next-up list. */
+function shortDay(date: string, today: string): string {
+  if (dayLabel(date, today) === "Tomorrow") return "Tmrw";
+  const d = new Date(`${date}T00:00:00`);
+  return `${d.toLocaleDateString(undefined, { weekday: "short" })} ${d.getDate()}`;
 }
 
 /** Minute-accurate "now", so earlier items fade and the Now line moves through the day. */
@@ -270,26 +244,12 @@ function useNow(): number {
 
 function NowLine() {
   return (
-    <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-x-2 py-0.5" aria-label="Now">
+    <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-x-2" aria-label="Now">
       <span className="text-right text-[10px] font-black uppercase tracking-wider text-primary">Now</span>
       <span className="flex items-center">
         <span className="h-1.5 w-1.5 rounded-full bg-primary" />
         <span className="h-px flex-1 bg-primary/50" />
       </span>
-    </div>
-  );
-}
-
-/** "TUE / 13" (or "Tomorrow" above the number): where the coming days start. */
-function DateMarker({ date, today }: { date: string; today: string }) {
-  const d = new Date(`${date}T00:00:00`);
-  const tomorrow = dayLabel(date, today) === "Tomorrow";
-  return (
-    <div className="pt-1 text-right leading-none">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {tomorrow ? "Tmrw" : d.toLocaleDateString(undefined, { weekday: "short" })}
-      </div>
-      <div className="mt-0.5 text-base font-black tabular-nums">{d.getDate()}</div>
     </div>
   );
 }
@@ -315,7 +275,7 @@ function TodayRow({ item, links, past }: { item: CalendarItem; links: boolean; p
         <Check className="h-3.5 w-3.5" strokeWidth={3} /> Done
       </span>
     ) : links ? (
-      <span className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full border border-primary/40 pl-2.5 pr-1.5 text-xs font-bold text-primary">
+      <span className="inline-flex h-6 shrink-0 items-center gap-0.5 rounded-full bg-primary pl-2.5 pr-1.5 text-[11px] font-bold text-primary-foreground">
         {action.label} <ChevronRight className="h-3.5 w-3.5" />
       </span>
     ) : null
@@ -324,7 +284,7 @@ function TodayRow({ item, links, past }: { item: CalendarItem; links: boolean; p
     <RowLink
       item={item}
       links={links}
-      className={cn("rounded-lg py-1.5 transition active:bg-secondary/40", past && "opacity-55")}
+      className={cn("rounded-lg py-1 transition active:bg-secondary/40", past && "opacity-55")}
     >
       <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-stretch gap-x-2">
         <div className={cn("pt-0.5 text-right text-xs font-semibold tabular-nums", item.startsAt ? "text-foreground/80" : "text-muted-foreground")}>
@@ -334,13 +294,13 @@ function TodayRow({ item, links, past }: { item: CalendarItem; links: boolean; p
           <Accent item={item} />
           <div className="min-w-0 flex-1 py-px">
             <div className="flex items-start gap-2">
-              <div className={cn("min-w-0 flex-1 line-clamp-2 text-[15px] leading-snug", google ? "font-medium text-foreground/75" : "font-bold")}>
-                {agendaTitle(item)}
+              <div className={cn("min-w-0 flex-1 line-clamp-2 text-sm leading-snug", google ? "font-medium text-foreground/75" : "font-bold")}>
+                {scheduleTitle(item)}
               </div>
               {!action && itemLink(item, links) && <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />}
             </div>
             {(sub || trailing) && (
-              <div className="mt-1 flex items-center gap-2">
+              <div className="mt-0.5 flex items-center gap-2">
                 <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{sub}</div>
                 {trailing}
               </div>
@@ -352,17 +312,20 @@ function TodayRow({ item, links, past }: { item: CalendarItem; links: boolean; p
   );
 }
 
-function UpcomingRow({ item, links }: { item: CalendarItem; links: boolean }) {
+function UpcomingRow({ item, links, dayText }: { item: CalendarItem; links: boolean; dayText: string }) {
   const google = item.kind === "google_event";
   const done = item.kind === "workout" && item.status === "Completed";
   return (
     <RowLink item={item} links={links} className="rounded-md py-1 transition active:bg-secondary/40">
-      <div className="flex min-w-0 gap-2.5">
-        <Accent item={item} />
-        <div className={cn("min-w-0 line-clamp-2 text-sm leading-snug", google ? "text-foreground/70" : "font-semibold")}>
-          {item.startsAt && <span className="font-normal tabular-nums text-muted-foreground">{startLabel(item.startsAt)} </span>}
-          {agendaTitle(item)}
-          {done && <span className="font-normal text-emerald-500"> · Done</span>}
+      <div className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-x-2">
+        <div className="text-right text-xs font-semibold text-muted-foreground">{dayText}</div>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Accent item={item} className="h-4 self-center" />
+          <div className={cn("min-w-0 truncate text-[13px]", google ? "text-foreground/70" : "font-semibold")}>
+            {item.startsAt && <span className="font-normal tabular-nums text-muted-foreground">{startLabel(item.startsAt)} </span>}
+            {scheduleTitle(item)}
+            {done && <span className="font-normal text-emerald-500"> · Done</span>}
+          </div>
         </div>
       </div>
     </RowLink>
