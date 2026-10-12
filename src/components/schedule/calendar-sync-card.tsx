@@ -5,10 +5,13 @@ import { toast } from "sonner";
 import { AlertTriangle, CalendarPlus, CheckCircle2, ChevronDown, ChevronRight, Copy, Loader2, Send } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   disconnectGoogleCalendar,
   getMyCalendarFeed,
+  getMyGoogleCalendars,
+  setMyGoogleCalendars,
   getMyCalendarSyncStatus,
   startGoogleCalendarConnect,
   syncMyGoogleCalendarNow,
@@ -58,6 +61,8 @@ type GoogleStatus = {
   lastSyncedAt: string | null;
   error: string | null;
   events: number;
+  /** Their own Google events show in the app (read access allowed). */
+  showsGoogleEvents?: boolean;
 } | null;
 
 /** Connected Google Calendar counts as synced; otherwise the feed's own state. */
@@ -258,10 +263,10 @@ function CalendarSyncSheet({
   const choices = calendarChoices(platform, { googleConnect }).filter((c) => !(c.id === "google" && googleConnected));
   const phone = platform === "ios" || platform === "android";
 
-  const connectGoogle = async () => {
+  const connectGoogle = async (read = false) => {
     setOpeningGoogle(true);
     try {
-      const { url } = await startGoogleFn({ data: { returnTo: `${window.location.pathname}${window.location.search}` } });
+      const { url } = await startGoogleFn({ data: { returnTo: `${window.location.pathname}${window.location.search}`, read } });
       onStarted("Google sign-in");
       window.location.assign(url);
     } catch (e: any) {
@@ -385,9 +390,12 @@ function CalendarSyncSheet({
                 </a>
                 .
               </p>
-              <p className="text-xs leading-snug text-muted-foreground">
-                One-way sync: the app adds its schedule to Google. It doesn't import your personal Google events.
-              </p>
+              <GoogleEventsInApp
+                shows={!!google?.showsGoogleEvents}
+                isPov={isPov}
+                opening={openingGoogle}
+                onAllow={() => connectGoogle(true)}
+              />
               <Button type="button" size="sm" variant="outline" className="h-10 w-full sm:w-auto" disabled={isPov || syncing} onClick={syncNow}>
                 {syncing ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
                 {syncing ? "Syncing…" : "Sync now"}
@@ -425,7 +433,7 @@ function CalendarSyncSheet({
                     variant={primary ? "default" : "outline"}
                     className={btnClass}
                     disabled={isPov || openingGoogle}
-                    onClick={connectGoogle}
+                    onClick={() => connectGoogle()}
                   >
                     <span>{google?.revoked ? "Reconnect Google Calendar" : c.label}</span>
                     <span className="inline-flex items-center gap-1 text-[11px] font-medium opacity-70">
@@ -630,6 +638,83 @@ function OutlookOnPhone({ onSend, onSendWork }: { onSend: () => void; onSendWork
           Work or school account? Send this one instead
         </button>
       </p>
+    </div>
+  );
+}
+
+/**
+ * The other direction: their own Google events in the JF Effect calendar.
+ * Opt-in (asks Google for read access on top of the connection), read-only,
+ * and they pick which of their calendars show.
+ */
+function GoogleEventsInApp({ shows, isPov, opening, onAllow }: { shows: boolean; isPov: boolean; opening: boolean; onAllow: () => void }) {
+  const qc = useQueryClient();
+  const listFn = useServerFn(getMyGoogleCalendars);
+  const setFn = useServerFn(setMyGoogleCalendars);
+  const [saving, setSaving] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-google-calendars"],
+    enabled: shows && !isPov,
+    queryFn: () => listFn(),
+    staleTime: 60_000,
+  });
+
+  if (isPov) return null;
+
+  if (!shows || (data && !data.enabled)) {
+    return (
+      <div className="space-y-1.5 border-t border-emerald-500/20 pt-2">
+        <p className="text-xs leading-snug text-muted-foreground">
+          <b className="text-foreground">See your Google events here too.</b> Your own Google Calendar events show next to your
+          workouts and sessions in JF Effect. Only you see them, and the app never changes them.
+        </p>
+        <Button type="button" size="sm" variant="outline" className="h-10 w-full sm:w-auto" disabled={opening} onClick={onAllow}>
+          {opening ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+          Show my Google events
+        </Button>
+      </div>
+    );
+  }
+
+  const calendars = data?.calendars ?? [];
+  const toggle = async (id: string, on: boolean) => {
+    const ids = calendars.filter((c) => (c.id === id ? on : c.shown)).map((c) => c.id);
+    setSaving(true);
+    try {
+      await setFn({ data: { ids } });
+      await qc.invalidateQueries({ queryKey: ["my-google-calendars"] });
+      await qc.invalidateQueries({ queryKey: ["cal-client-google"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5 border-t border-emerald-500/20 pt-2">
+      <p className="text-xs leading-snug text-muted-foreground">
+        <b className="text-foreground">Your Google events show here too</b>, in grey. Only you see them, and changes in Google
+        show up within a few minutes. Pick which calendars:
+      </p>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading your calendars…
+        </div>
+      ) : (
+        <ul className="space-y-1">
+          {calendars.map((c) => (
+            <li key={c.id} className="flex min-h-[40px] items-center gap-2">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color ?? "#94a3b8" }} aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-xs">
+                {c.name}
+                {c.primary ? <span className="text-muted-foreground"> · main</span> : null}
+              </span>
+              <Switch checked={c.shown} disabled={saving} onCheckedChange={(on) => toggle(c.id, on)} aria-label={`Show ${c.name}`} />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
