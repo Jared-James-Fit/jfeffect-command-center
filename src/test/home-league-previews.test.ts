@@ -17,7 +17,7 @@ describe("Home League previews", () => {
   it("ties are said as ties, never a made-up '1 pt' (live October board: Reece and Jared both on 200)", () => {
     const board = (meRank: number) => [200, 200, 179, 175, 155].map((p, i) => row(i + 1, p, i + 1 === meRank));
     expect(standingOf(board(1))).toMatchObject({ kind: "tied-top", with: { rank: 2 } });
-    expect(standingText(standingOf(board(1)), true)).toBe("Tied on points");
+    expect(standingText(standingOf(board(1)), true)).toBe("Tied · you were first");
     expect(standingOf(board(2))).toMatchObject({ kind: "tied", with: { rank: 1 } });
     expect(standingText(standingOf(board(2)), true)).toBe("Tied with #1");
     expect(standingText(standingOf(board(3)), true)).toBe("21 pts behind #2");
