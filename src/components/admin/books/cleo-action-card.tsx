@@ -7,10 +7,10 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowUpRight, Check, Clock, Loader2, ShieldQuestion, X } from "lucide-react";
+import { ArrowUpRight, Check, Clock, Loader2, ShieldQuestion, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { decideCleoAction, getCleoActions } from "@/lib/business-books.functions";
+import { decideCleoAction, getCleoActions, undoCleoChange } from "@/lib/business-books.functions";
 import { statusLabel, type CleoActionView } from "@/lib/cleo-actions";
 
 type CleoActionsData = { actions: CleoActionView[]; approvals: CleoActionView[]; ownerName: string };
@@ -58,8 +58,26 @@ export function CleoActionCard({
   onOpen?: (href: string) => void;
 }) {
   const decide = useServerFn(decideCleoAction);
+  const undoFn = useServerFn(undoCleoChange);
   const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
+  // Undo asks once ("Undo this?") so a stray tap can't roll a program back.
+  const [confirmUndo, setConfirmUndo] = useState(false);
+
+  const undo = async () => {
+    if (!action.undo) return;
+    setBusy("undo");
+    try {
+      const r: any = await undoFn({ data: { versionId: action.undo.versionId } });
+      toast.success(r?.result ?? "Undone");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't undo that");
+    } finally {
+      setBusy(null);
+      setConfirmUndo(false);
+      await qc.invalidateQueries({ queryKey: KEY });
+    }
+  };
 
   const act = async (decision: "confirm" | "cancel" | "approve" | "decline") => {
     setBusy(decision);
@@ -91,10 +109,29 @@ export function CleoActionCard({
       </div>
       <p className="whitespace-pre-wrap text-sm text-foreground/90">{action.summary}</p>
       {action.status === "done" && action.result && <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400"><Check className="h-3.5 w-3.5" /> {action.result}</p>}
-      {action.status === "done" && action.link && onOpen && (
-        <Button size="sm" variant="outline" className="mt-2.5 h-8 border-primary/30 text-primary hover:bg-primary/10" onClick={() => onOpen(action.link!.href)}>
-          {action.link.label} <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
-        </Button>
+      {action.status === "done" && ((action.link && onOpen) || action.undo) && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          {action.link && onOpen && (
+            <Button size="sm" variant="outline" className="h-8 border-primary/30 text-primary hover:bg-primary/10" onClick={() => onOpen(action.link!.href)}>
+              {action.link.label} <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          )}
+          {action.undo && (action.undo.undone ? (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground"><Undo2 className="h-3.5 w-3.5" /> Undone</span>
+          ) : confirmUndo ? (
+            <span className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Undo this?</span>
+              <Button size="sm" variant="destructive" className="h-8" disabled={!!busy} onClick={() => void undo()}>
+                {busy === "undo" ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null} Yes, undo
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" disabled={!!busy} onClick={() => setConfirmUndo(false)}>No</Button>
+            </span>
+          ) : (
+            <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={() => setConfirmUndo(true)}>
+              <Undo2 className="mr-1 h-3.5 w-3.5" /> Undo
+            </Button>
+          ))}
+        </div>
       )}
       {action.status === "failed" && action.error && <p className="mt-1.5 text-xs text-destructive">{action.error}</p>}
       {asking && (

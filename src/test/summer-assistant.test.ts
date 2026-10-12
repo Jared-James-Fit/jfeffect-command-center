@@ -86,9 +86,15 @@ describe("leadAndRest", () => {
     expect(leadAndRest("You owe $445. It's due April 30.")).toEqual(["You owe $445. It's due April 30."]);
   });
 
-  it("splits a longer reply after an opening of at least a few words", () => {
+  it("keeps a normal spoken answer whole, since a seam is audible", () => {
     const text =
       "Okay. You've got $1,104.25 to set aside right now. GST is the biggest piece of that, and it's due at the end of the month, so move it this week.";
+    expect(leadAndRest(text)).toEqual([text]);
+  });
+
+  it("splits a long reply after an opening of at least a few words", () => {
+    const text =
+      "Okay. You've got $1,104.25 to set aside right now. GST is the biggest piece of that, and it's due at the end of the month, so move it this week. Income tax is the other part: about $2,300 so far this year, and your next instalment is due in December, so keep adding to the tax account every time a payment comes in. Everything else is up to date.";
     const [lead, rest] = leadAndRest(text);
     expect(lead).toBe("Okay. You've got $1,104.25 to set aside right now.");
     expect(`${lead} ${rest}`).toBe(text);

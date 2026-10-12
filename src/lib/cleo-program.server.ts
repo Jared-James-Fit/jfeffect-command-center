@@ -87,6 +87,21 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
       }),
     }),
 
+    program_history: tool({
+      description:
+        "A client's program history: every program or nutrition change Cleo made (newest first) with version ids, and whether it was already undone. Use it to undo a change (restore_program_version) or to answer what changed.",
+      inputSchema: z.object({ client_id: z.string().uuid() }),
+      execute: safe("the program history", async ({ client_id }) => {
+        const { listVersions } = await import("@/lib/cleo-history.server");
+        const list = await listVersions(db, client_id, 15);
+        if (!list.length) return "No changes in their program history yet.";
+        return [
+          "Program history (newest first):",
+          ...list.map((v) => `- ${v.createdAt.slice(0, 16).replace("T", " ")} UTC | ${v.kind} | version id ${v.id} | ${v.restoredAt ? "already undone" : v.canUndo ? "can undo" : "restore point"} | ${v.summary.split("\n").slice(0, 3).join(" / ").slice(0, 300)}`),
+        ].join("\n");
+      }),
+    }),
+
     program_templates: tool({
       description: "Program templates in the library (name, type, style, weeks, days per week) with their ids, for assigning a client a program.",
       inputSchema: z.object({ query: z.string().trim().max(60).optional() }),
@@ -131,11 +146,17 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
           ? rows<any>(await db.from("pl_days").select("*").in("week_id", shown.map((w) => w.id)).eq("archived", false).is("deleted_at", null).order("day_index"), "days")
           : [];
         const dayIds = days.map((d) => d.id);
-        const [rowRes, compRes] = await Promise.all([
+        const [rowRes, compRes, schedRes] = await Promise.all([
           dayIds.length ? db.from("pl_exercise_rows").select("*, exercises(name)").in("day_id", dayIds).order("sort_order") : Promise.resolve({ data: [], error: null }),
           dayIds.length ? db.from("pl_day_completions").select("day_id, completed_at, started_at, in_progress_at").in("day_id", dayIds) : Promise.resolve({ data: [], error: null }),
+          dayIds.length ? db.from("pl_scheduled_workouts").select("id, source_day_id, scheduled_date").eq("client_id", block.client_id).in("source_day_id", dayIds) : Promise.resolve({ data: [], error: null }),
         ]);
         const rws = rows<any>(rowRes as any, "rows");
+        // Where each day actually sits on their calendar (it may have been moved).
+        const onCalendar = new Map<string, string[]>();
+        for (const sw of rows<any>(schedRes as any, "scheduled workouts")) {
+          onCalendar.set(sw.source_day_id, [...(onCalendar.get(sw.source_day_id) ?? []), `${weekdayOf(sw.scheduled_date)} ${sw.scheduled_date} (scheduled workout id ${sw.id})`]);
+        }
         const touched = new Map<string, string>();
         for (const c of rows<any>(compRes as any, "completions")) {
           if (c.completed_at) touched.set(c.day_id, "DONE");
@@ -148,10 +169,13 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
         for (const w of shown) {
           lines.push(`Week ${w.week_index}${w.start_date ? ` (${w.start_date} to ${w.end_date ?? "?"})` : ""}${w.phase ? ` | ${w.phase}` : ""}:`);
           for (const d of days.filter((x) => x.week_id === w.id)) {
-            lines.push(`  Day ${d.day_index}${d.title ? ` "${d.title}"` : ""}${d.subtitle ? ` (${d.subtitle})` : ""} | day id ${d.id}${d.scheduled_date ? ` | ${d.scheduled_date}` : ""}${touched.has(d.id) ? ` | ${touched.get(d.id)} (locked)` : ""}${d.is_custom ? " | custom (not linked)" : ""}`);
-            for (const r of rws.filter((x) => x.day_id === d.id)) {
-              lines.push(`    - ${r.exercises?.name ?? r.exercise_name_override ?? "Exercise"} | row id ${r.id} | ${rxText(r) || "no prescription yet"}`);
-            }
+            const dayRows = rws.filter((x) => x.day_id === d.id);
+            const cal = onCalendar.get(d.id);
+            const when = cal?.length ? ` | on calendar: ${cal.join(", ")}` : d.scheduled_date ? ` | ${weekdayOf(d.scheduled_date)} ${d.scheduled_date}` : "";
+            lines.push(`  Day ${d.day_index}${d.title ? ` "${d.title}"` : ""}${d.subtitle ? ` (${d.subtitle})` : ""} | day id ${d.id}${when} | ${dayRows.length} exercise${dayRows.length === 1 ? "" : "s"}${touched.has(d.id) ? ` | ${touched.get(d.id)} (locked)` : ""}${d.is_custom ? " | custom extra workout (not linked)" : ""}`);
+            dayRows.forEach((r, i) => {
+              lines.push(`    ${i + 1}. ${r.exercises?.name ?? r.exercise_name_override ?? "Exercise"} | row id ${r.id} | ${rxText(r) || "no prescription yet"}`);
+            });
           }
         }
         if (!shown.length) lines.push("No weeks match.");
@@ -159,6 +183,10 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
       }),
     }),
   };
+}
+
+function weekdayOf(iso: string): string {
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", weekday: "short" });
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +210,7 @@ async function client(db: Db, id: string) {
 }
 
 /** Days the client has started or logged (never edited), among `dayIds`. */
-async function lockedDays(db: Db, dayIds: string[]): Promise<Set<string>> {
+export async function lockedDays(db: Db, dayIds: string[]): Promise<Set<string>> {
   if (!dayIds.length) return new Set();
   const [comps, rws] = await Promise.all([
     db.from("pl_day_completions").select("day_id, completed_at, started_at, in_progress_at").in("day_id", dayIds),
@@ -200,7 +228,7 @@ async function lockedDays(db: Db, dayIds: string[]): Promise<Set<string>> {
 }
 
 /** The day and, for scope "future", the same day in later weeks that aren't custom or locked. */
-async function targetDays(db: Db, dayId: string, scope: "this" | "future") {
+export async function targetDays(db: Db, dayId: string, scope: "this" | "future") {
   const { data: day } = await db.from("pl_days").select("id, week_id, day_index, title, is_custom").eq("id", dayId).maybeSingle();
   if (!day) throw new Error("I couldn't find that program day.");
   const { data: week } = await db.from("pl_weeks").select("id, block_id, week_index").eq("id", day.week_id).maybeSingle();
@@ -355,7 +383,7 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
 }
 
 /** The nutrition targets the coach edits now: the latest one that isn't archived. */
-async function currentTargets(db: Db, clientId: string) {
+export async function currentTargets(db: Db, clientId: string) {
   const { data } = await db
     .from("nutrition_targets")
     .select("*, nutrition_target_days(*)")

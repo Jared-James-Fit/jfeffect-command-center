@@ -8,11 +8,25 @@
  */
 import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
 import { buildAppContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot, type LinkEntry } from "@/lib/summer-app";
+import { z } from "zod";
 import { summerTone } from "@/lib/summer-persona";
+import { DEFAULT_CLEO_VOICE, isCleoVoice, type CleoVoice } from "@/lib/cleo-voices";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 /** Used when the main model refuses a tool step (see answerSummer). */
 const CLEO_FALLBACK_MODEL = "google/gemini-2.5-flash";
+/**
+ * Cleo's brain: the strongest model the gateway takes for careful, multi-step
+ * tool work (program edits especially). CLEO_AI_MODEL overrides it. If it's
+ * refused or too slow, the answer is retried down the list.
+ */
+export const CLEO_PRIMARY_MODEL = "anthropic/claude-sonnet-5";
+/** Longest the primary model gets before the answer moves to the next one. */
+const PRIMARY_TIMEOUT_MS = 70_000;
+
+export function cleoModels(primary = process.env.CLEO_AI_MODEL || CLEO_PRIMARY_MODEL, main = "google/gemini-3-flash-preview"): string[] {
+  return [...new Set([primary, main, CLEO_FALLBACK_MODEL].filter(Boolean))];
+}
 
 function settle<T>(res: { data: T | null; error: any }, fallback: T): T {
   return res.error || res.data == null ? fallback : res.data;
@@ -215,12 +229,20 @@ export async function transcribeAudio(b64: string, mime: string, names: string[]
 // voice when none answers.
 
 export const SUMMER_VOICE_STYLE =
-  "Voice: a calm, clear, warm woman's voice with a neutral North American accent, like a polished voice assistant. Delivery: smooth and even, relaxed conversational pace, never rushed. Let sentences flow into each other with natural, short pauses; no dramatic pitch swings, no sing-song, no breathiness. Read numbers and dollar amounts clearly and naturally.";
+  "Voice: calm, clear and smooth, a mid-range pitch that sounds neither male nor female, with a neutral North American accent, like a polished voice assistant. Delivery: even and relaxed, conversational pace, never rushed. Sentences flow into each other with short, natural pauses. No dramatic pitch swings, no sing-song, no breathiness, no vocal fry, no upspeak. Read numbers, weights and dollar amounts clearly and naturally.";
 
-/** OpenAI voices, best first. marin is the most natural; nova is the long-standing fallback. */
-const OPENAI_VOICES = ["marin", "nova"];
-/** Gemini's "smooth" prebuilt voice. */
-const GEMINI_VOICE = "Despina";
+/** Per voice: the provider voices (best first) and a line on top of the style. */
+const VOICE_PRESETS: Record<CleoVoice, { openai: string[]; gemini: string; style: string }> = {
+  neutral: { openai: ["alloy", "marin"], gemini: "Zephyr", style: "" },
+  soft: { openai: ["marin", "nova"], gemini: "Despina", style: " Tone: soft, gentle and warm." },
+  deep: { openai: ["cedar", "onyx"], gemini: "Algieba", style: " Tone: lower and calm, unhurried." },
+  bright: { openai: ["coral", "shimmer"], gemini: "Laomedeia", style: " Tone: clear and upbeat, a light smile in the voice." },
+};
+
+function preset(req: SpeechRequest) {
+  return VOICE_PRESETS[isCleoVoice(req.voice) ? req.voice : DEFAULT_CLEO_VOICE];
+}
+
 /** ElevenLabs "Sarah": soft, calm, American. Override with ELEVENLABS_VOICE_ID. */
 const ELEVENLABS_DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL";
 /** Their most natural model. eleven_flash_v2_5 trades a little quality for speed. */
@@ -231,7 +253,7 @@ const ELEVENLABS_DEFAULT_MODEL = "eleven_multilingual_v2";
  * text around this piece when a reply is spoken in parts, so the voice keeps
  * one intonation across the seam (ElevenLabs uses them; the others ignore them).
  */
-export type SpeechRequest = { text: string; rate?: number; prev?: string; next?: string };
+export type SpeechRequest = { text: string; rate?: number; prev?: string; next?: string; voice?: CleoVoice };
 
 type SpeechOk = { ok: true; audio: string; mime: string; provider: string };
 type SpeechFail = { ok: false; reason: string };
@@ -250,10 +272,12 @@ async function toBase64(buf: ArrayBuffer): Promise<string> {
  * The speed setting as words. The voice itself paces the speech, which sounds
  * far cleaner than the browser time-stretching the audio afterwards.
  */
-function styleFor(rate = 1): string {
-  if (rate <= 0.95) return `${SUMMER_VOICE_STYLE} Pace: a little slower than usual, unhurried.`;
-  if (rate >= 1.05) return `${SUMMER_VOICE_STYLE} Pace: a little brisker than usual, still clear.`;
-  return SUMMER_VOICE_STYLE;
+function styleFor(req: SpeechRequest): string {
+  const base = SUMMER_VOICE_STYLE + preset(req).style;
+  const rate = req.rate ?? 1;
+  if (rate <= 0.95) return `${base} Pace: a little slower than usual, unhurried.`;
+  if (rate >= 1.05) return `${base} Pace: a little brisker than usual, still clear.`;
+  return base;
 }
 
 async function audioResponse(res: Response): Promise<{ audio: string; mime: string } | { error: string; status?: number }> {
@@ -267,11 +291,11 @@ async function audioResponse(res: Response): Promise<{ audio: string; mime: stri
 
 async function speechEndpoint(url: string, headers: Record<string, string>, model: string, req: SpeechRequest) {
   let last: { error: string; status?: number } = { error: "no voice" };
-  for (const voice of OPENAI_VOICES) {
+  for (const voice of preset(req).openai) {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({ model, voice, input: req.text, instructions: styleFor(req.rate), response_format: "mp3" }),
+      body: JSON.stringify({ model, voice, input: req.text, instructions: styleFor(req), response_format: "mp3" }),
     });
     const r = await audioResponse(res);
     if ("audio" in r) return r;
@@ -322,16 +346,16 @@ function providers(): Provider[] {
       run: (req) => speechEndpoint(`${GATEWAY}/audio/speech`, { "Lovable-API-Key": lovable }, "openai/gpt-4o-mini-tts", req),
     });
     list.push({
-      name: "lovable:google/gemini-2.5-flash-preview-tts",
+      name: "lovable:google/gemini-2.5-flash-tts",
       run: async (req) => {
         const res = await fetch(`${GATEWAY}/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Lovable-API-Key": lovable },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash-preview-tts",
+            model: "google/gemini-2.5-flash-tts",
             modalities: ["audio"],
-            audio: { voice: GEMINI_VOICE, format: "wav" },
-            messages: [{ role: "user", content: `${styleFor(req.rate)}\n\nSay exactly this:\n${req.text}` }],
+            audio: { voice: preset(req).gemini, format: "wav" },
+            messages: [{ role: "user", content: `${styleFor(req)}\n\nSay exactly this:\n${req.text}` }],
           }),
         });
         if (!res.ok) return { error: (await res.text().catch(() => "")).slice(0, 160) || `HTTP ${res.status}`, status: res.status };
@@ -363,6 +387,7 @@ export async function synthesizeSpeech(req: SpeechRequest): Promise<SpeechOk | S
     rate: req.rate,
     prev: req.prev?.trim().slice(-600) || undefined,
     next: req.next?.trim().slice(0, 600) || undefined,
+    voice: isCleoVoice(req.voice) ? req.voice : DEFAULT_CLEO_VOICE,
   };
   if (!input.text) return { ok: false, reason: "nothing to say" };
   if (Date.now() < noVoiceUntil) return { ok: false, reason: "no voice provider available" };
@@ -402,7 +427,7 @@ export async function probeSpeechProviders(sample = "Hi, it's Cleo. Your books a
 // ---------------------------------------------------------------------------
 // One answer path for chat and voice.
 
-export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string };
+export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null };
 
 /**
  * `supabase` is what she reads with (the finance login's read-only admin
@@ -504,9 +529,24 @@ export async function answerSummer(
       }),
     ]),
   );
+  // A quick question with tappable answers, for when she has to know which
+  // thing they mean before she can set up the right card.
+  let choices = null as string[] | null;
+  const askChoice = tool({
+    description:
+      "Ask ONE short question with 2 to 4 tappable answers, when you can't tell which of a few things they mean and getting it wrong would change the wrong thing (e.g. add an exercise into their existing Monday workout vs a separate new workout card; only this week vs every week; which client). Put the likeliest answer first and keep each answer a few words. After calling it, ask the question in one short sentence and stop: no card in the same answer. Never ask what they already told you or what you can look up.",
+    inputSchema: z.object({
+      options: z.array(z.string().trim().min(1).max(60)).min(2).max(4),
+    }),
+    execute: async ({ options }: { options: string[] }) => {
+      if (proposed.length) return "You already put a card up in this answer; don't ask now.";
+      choices = [...new Set(options.map((o) => o.trim()))].slice(0, 4);
+      return "The answers are on screen as buttons. Now ask the question in one short sentence (when they are talking out loud, name the options in it) and stop.";
+    },
+  });
   const tz = BUSINESS_TZ;
   const { cleoProgramTools } = await import("@/lib/cleo-program.server");
-  const tools = { ...cleoReadTools({ db: supabase, tz, today: businessToday() }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools };
+  const tools = { ...cleoReadTools({ db: supabase, tz, today: businessToday() }), ...cleoProgramTools({ db: supabase, today: businessToday() }), ...actionTools, ask_choice: askChoice };
 
   // Gemini 3 needs its "thought signature" echoed back on every tool step.
   // The SDK keeps it under the provider's name but only sends back what's
@@ -522,11 +562,18 @@ export async function answerSummer(
   ];
   const { looksLikeLeakedInstructions } = await import("@/lib/summer-voice-text");
   const usable = (t: string) => (looksLikeLeakedInstructions(t) ? "" : t.trim());
-  const run = async (model: string) => {
-    const r = await generateText({ model: gateway(model), system, messages: convo, tools, stopWhen: stepCountIs(20) });
+  const run = async (model: string, timeoutMs?: number) => {
+    const r = await generateText({
+      model: gateway(model),
+      system,
+      messages: convo,
+      tools,
+      stopWhen: stepCountIs(20),
+      ...(timeoutMs ? { abortSignal: AbortSignal.timeout(timeoutMs) } : {}),
+    });
     const first = usable(r.text);
     // A card is on screen: say so from the card itself rather than asking again.
-    if (first || proposed.length) return { text: first };
+    if (first || proposed.length || choices) return { text: first };
     // She used every step looking things up and never wrote back. Make her
     // answer from what she found, with no more tool calls.
     const again = await generateText({
@@ -540,16 +587,23 @@ export async function answerSummer(
   };
 
   let text = "";
+  const models = cleoModels(undefined, books.BOOKS_AI_MODEL);
   try {
-    try {
-      text = (await run(books.BOOKS_AI_MODEL)).text.trim();
-    } catch (e: any) {
-      const status = e?.statusCode ?? e?.status ?? e?.lastError?.statusCode;
-      if (status !== 400) throw e;
-      console.warn("[cleo] retrying on the fallback model", String(e?.message ?? e).slice(0, 200));
-      const { discardProposals } = await import("@/lib/cleo-actions.server");
-      await discardProposals(userId, proposed.splice(0));
-      text = (await run(CLEO_FALLBACK_MODEL)).text.trim();
+    for (let i = 0; i < models.length; i++) {
+      try {
+        text = (await run(models[i], i === 0 && models.length > 1 ? PRIMARY_TIMEOUT_MS : undefined)).text.trim();
+        break;
+      } catch (e: any) {
+        const status = e?.statusCode ?? e?.status ?? e?.lastError?.statusCode;
+        const timedOut = e?.name === "TimeoutError" || e?.name === "AbortError";
+        // Refused (unknown model, a tool step it won't take), down or too slow: next model.
+        const retry = timedOut || status === 400 || status === 404 || status === 422 || (status >= 500 && status < 600);
+        if (!retry || i === models.length - 1) throw e;
+        console.warn(`[cleo] ${models[i]} failed (${timedOut ? "timeout" : status}); trying ${models[i + 1]}`, String(e?.message ?? e).slice(0, 200));
+        const { discardProposals } = await import("@/lib/cleo-actions.server");
+        await discardProposals(userId, proposed.splice(0));
+        choices = null;
+      }
     }
   } catch (e: any) {
     const status = e?.statusCode ?? e?.status ?? e?.lastError?.statusCode;
@@ -565,6 +619,7 @@ export async function answerSummer(
     const first = String((cards as any[] | null)?.[0]?.summary ?? "").split("\n")[0].replace(/[.:]$/, "");
     text = first ? `Set up: ${first}. Tap Confirm below and it's done.` : "It's set up below. Tap Confirm and it's done.";
   }
+  if (!text && choices) text = "Quick check before I change anything. Which one?";
   if (!text) text = "I couldn't come up with an answer to that. Try asking it another way.";
   // "Like me": a last pass so a polished reply still reads like his texts.
   if (summerTone(profile.data?.tone).value === "like_me") text = casualize(text);
@@ -575,9 +630,9 @@ export async function answerSummer(
     .from("summer_messages")
     .insert([
       { user_id: userId, role: "user", content: input.message, created_at: new Date(now).toISOString() },
-      { user_id: userId, role: "assistant", content: text, created_at: new Date(now + 1).toISOString() },
+      { user_id: userId, role: "assistant", content: text, created_at: new Date(now + 1).toISOString(), choices: choices && !proposed.length ? choices : null },
     ])
-    .select("id, role, content, created_at");
+    .select("id, role, content, created_at, choices");
   if (error) throw new Error(error.message);
   const rows = (saved ?? []) as SummerMsg[];
   const assistant = rows.find((r) => r.role === "assistant")!;

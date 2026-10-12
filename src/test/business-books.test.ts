@@ -104,7 +104,22 @@ describe("Cleo context", () => {
     const p = summerSystemPrompt();
     expect(p).toContain("Cleo");
     expect(p).toMatch(/Never invent/);
-    expect(p).toContain("she/her");
+    expect(p).toContain("you don't have a gender");
+    expect(p).not.toMatch(/You are a woman|your pronouns are she/);
+  });
+
+  it("knows who it is and how it started, without inventing details", () => {
+    const p = summerSystemPrompt({ ownerName: "Jared" });
+    expect(p).toMatch(/WHO YOU ARE: .*Jared built you into the app/);
+    expect(p).toMatch(/started as Summer, a bookkeeping helper/);
+    expect(p).toMatch(/Don't name a model or company/);
+  });
+
+  it("checks what a program change means before acting, and knows it can be undone", () => {
+    const p = summerSystemPrompt();
+    expect(p).toMatch(/INTO an existing workout or a SEPARATE extra workout card/);
+    expect(p).toMatch(/call ask_choice/);
+    expect(p).toMatch(/restore_program_version/);
   });
 
   it("defaults to talking like the owner and switches with their pick", () => {
