@@ -29,7 +29,35 @@ export const Route = createFileRoute("/api/public/hooks/summer-voice-check")({
             gatewayModels = String(e?.message ?? e).slice(0, 200);
           }
         }
-        return Response.json({ ok: attempts.some((a) => a.ok), attempts, gatewayModels });
+        // Can Cleo's models take a tool-calling chat request? (What answerSummer sends.)
+        const chatModels: Array<{ model: string; api: string; status: number; detail: string }> = [];
+        if (key) {
+          const { CLEO_PRIMARY_MODEL } = await import("@/lib/summer.server");
+          const tools = [{ type: "function", function: { name: "lookup", description: "Look something up.", parameters: { type: "object", properties: { q: { type: "string" } }, required: ["q"] } } }];
+          for (const model of [CLEO_PRIMARY_MODEL, "anthropic/claude-opus-5-5", "openai/gpt-5.5", "google/gemini-3.1-pro-preview"]) {
+            try {
+              const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+                body: JSON.stringify({ model, max_tokens: 40, tools, messages: [{ role: "system", content: "Be brief." }, { role: "user", content: "Say hi." }] }),
+              });
+              chatModels.push({ model, api: "chat", status: res.status, detail: (await res.text()).slice(0, 240) });
+            } catch (e: any) {
+              chatModels.push({ model, api: "chat", status: 0, detail: String(e?.message ?? e).slice(0, 200) });
+            }
+          }
+          try {
+            const res = await fetch("https://ai.gateway.lovable.dev/v1/messages", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Lovable-API-Key": key, "anthropic-version": "2023-06-01" },
+              body: JSON.stringify({ model: CLEO_PRIMARY_MODEL, max_tokens: 40, system: "Be brief.", messages: [{ role: "user", content: "Say hi." }] }),
+            });
+            chatModels.push({ model: CLEO_PRIMARY_MODEL, api: "messages", status: res.status, detail: (await res.text()).slice(0, 240) });
+          } catch (e: any) {
+            chatModels.push({ model: CLEO_PRIMARY_MODEL, api: "messages", status: 0, detail: String(e?.message ?? e).slice(0, 200) });
+          }
+        }
+        return Response.json({ ok: attempts.some((a) => a.ok), attempts, gatewayModels, chatModels });
       },
     },
   },
