@@ -7,17 +7,21 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink, MapPin, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { KIND_FAMILY, KIND_META, ctaLabel, placeLabel, type CalendarItem, type CalendarKind, type KindFamily } from "@/lib/calendar-sources";
+import { KIND_FAMILY, KIND_META, ctaLabel, placeLabel, scheduleTitle, type CalendarItem, type CalendarKind, type KindFamily } from "@/lib/calendar-sources";
 import { compactTimeRange, durationLabel } from "@/lib/schedule-time";
 import { CalendarEmptyState } from "./empty-state";
 
-type ViewMode = "month" | "week" | "day" | "upcoming";
+export type ViewMode = "month" | "week" | "day" | "upcoming";
+const VIEW_LABEL: Record<ViewMode, string> = { month: "Month", week: "Week", day: "Day", upcoming: "List" };
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function isoDate(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function addDays(d: Date, n: number) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
-function startOfWeek(d: Date) { const x = startOfDay(d); x.setDate(x.getDate() - x.getDay()); return x; } // Sunday-start
+/** Monday-start, like the Workouts calendar and every Home. */
+function startOfWeek(d: Date) { const x = startOfDay(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+/** Days before the 1st in a Monday-first grid. */
+function leadDays(monthStart: Date) { return (monthStart.getDay() + 6) % 7; }
 function startOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function endOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
 function fmtTime(iso?: string | null) {
@@ -29,7 +33,7 @@ function fmtFullDate(d: Date) {
   return d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 }
 
-const WEEKDAY_LABELS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const WEEKDAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 export type VisibleRange = { from: string; to: string };
 const UPCOMING_DAYS = 60;
@@ -47,7 +51,7 @@ export function visibleRange(view: ViewMode, cursor: Date): VisibleRange {
   }
   const monthStart = startOfMonth(cursor);
   const gridStart = startOfWeek(monthStart);
-  const totalCells = Math.ceil((endOfMonth(cursor).getDate() + monthStart.getDay()) / 7) * 7;
+  const totalCells = Math.ceil((endOfMonth(cursor).getDate() + leadDays(monthStart)) / 7) * 7;
   return { from: isoDate(gridStart), to: isoDate(addDays(gridStart, totalCells - 1)) };
 }
 
@@ -61,7 +65,10 @@ export function CalendarBoard({
   onItemSelect,
   renderItemActions,
   onRangeChange,
+  views = ["month", "week", "day", "upcoming"],
 }: {
+  /** Which views to offer (first one is the default). */
+  views?: ViewMode[];
   items: CalendarItem[];
   isLoading?: boolean;
   showClientName?: boolean;
@@ -76,8 +83,10 @@ export function CalendarBoard({
   /** The days on screen (yyyy-mm-dd, inclusive), so a source can load just those. */
   onRangeChange?: (range: VisibleRange) => void;
 }) {
-  const [view, setView] = useState<ViewMode>("month");
+  const [view, setView] = useState<ViewMode>(views[0] ?? "month");
   const [cursor, setCursor] = useState<Date>(() => startOfDay(new Date()));
+  // Month view: the tapped day, listed under the grid (today until they tap).
+  const [picked, setPicked] = useState<Date>(() => startOfDay(new Date()));
 
   const range = useMemo(() => visibleRange(view, cursor), [view, cursor]);
   useEffect(() => {
@@ -102,7 +111,14 @@ export function CalendarBoard({
   }, [items]);
 
   function shift(direction: -1 | 1) {
-    if (view === "month") setCursor((c) => new Date(c.getFullYear(), c.getMonth() + direction, 1));
+    if (view === "month") {
+      setCursor((c) => {
+        const next = new Date(c.getFullYear(), c.getMonth() + direction, 1);
+        const today = startOfDay(new Date());
+        setPicked(next.getMonth() === today.getMonth() && next.getFullYear() === today.getFullYear() ? today : next);
+        return next;
+      });
+    }
     else if (view === "week") setCursor((c) => addDays(c, 7 * direction));
     else if (view === "day") setCursor((c) => addDays(c, direction));
   }
@@ -124,10 +140,9 @@ export function CalendarBoard({
         <div className="flex flex-wrap items-center gap-2">
           <Tabs value={view} onValueChange={(v) => setView(v as ViewMode)}>
             <TabsList className="h-8">
-              <TabsTrigger value="month" className="text-xs">Month</TabsTrigger>
-              <TabsTrigger value="week" className="text-xs">Week</TabsTrigger>
-              <TabsTrigger value="day" className="text-xs">Day</TabsTrigger>
-              <TabsTrigger value="upcoming" className="text-xs">Upcoming</TabsTrigger>
+              {views.map((v) => (
+                <TabsTrigger key={v} value={v} className="text-xs">{VIEW_LABEL[v]}</TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
 
@@ -136,7 +151,7 @@ export function CalendarBoard({
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => shift(-1)} aria-label="Previous">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setCursor(startOfDay(new Date()))}>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setCursor(startOfDay(new Date())); setPicked(startOfDay(new Date())); }}>
                 Today
               </Button>
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => shift(1)} aria-label="Next">
@@ -170,7 +185,14 @@ export function CalendarBoard({
       ) : (
         <>
       {view === "month" && (
-        <MonthGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} onSelectDay={(d) => { setCursor(d); setView("day"); }} />
+        <>
+          <MonthGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} picked={picked} onSelectDay={setPicked} />
+          {/* The tapped day, in full: titles never have to fit a 45px cell. */}
+          <section className="space-y-2" aria-live="polite">
+            <h3 className="px-1 text-xs font-bold text-muted-foreground">{fmtFullDate(picked).replace(/,? \d{4}$/, "")}</h3>
+            <DayList date={picked} items={itemsByDate.get(isoDate(picked)) ?? []} onSelectItem={setSelected} showClientName={showClientName} onCreate={onCreate} compact />
+          </section>
+        </>
       )}
       {view === "week" && (
         <WeekGrid cursor={cursor} itemsByDate={itemsByDate} onSelectItem={setSelected} onCreate={onCreate} />
@@ -192,7 +214,7 @@ export function CalendarBoard({
 const FAMILY_LEGEND: Record<KindFamily, string> = {
   training: "Training",
   people: "Sessions",
-  coach: "Coach events",
+  coach: "Coach",
   google: "Google",
 };
 
@@ -205,7 +227,7 @@ function LegendRow({ items }: { items: CalendarItem[] }) {
   }, [items]);
   if (families.length < 2) return null;
   return (
-    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+    <div className="mt-2.5 flex flex-wrap gap-x-2.5 gap-y-1">
       {families.map((f) => {
         const kind = (Object.keys(KIND_FAMILY) as CalendarKind[]).find((k) => KIND_FAMILY[k] === f)!;
         return (
@@ -219,18 +241,24 @@ function LegendRow({ items }: { items: CalendarItem[] }) {
   );
 }
 
+/**
+ * The month at a glance. On phones each day shows up to three dots in the
+ * items' colour families (titles can't fit 45px; the tapped day is listed in
+ * full underneath); wider screens keep the title chips.
+ */
 function MonthGrid({
-  cursor, itemsByDate, onSelectItem, onSelectDay,
+  cursor, itemsByDate, onSelectItem, onSelectDay, picked,
 }: {
   cursor: Date;
   itemsByDate: Map<string, CalendarItem[]>;
   onSelectItem: (i: CalendarItem) => void;
   onSelectDay: (d: Date) => void;
+  picked: Date;
 }) {
   const monthStart = startOfMonth(cursor);
   const gridStart = startOfWeek(monthStart);
   const monthEnd = endOfMonth(cursor);
-  const totalCells = Math.ceil((monthEnd.getDate() + monthStart.getDay()) / 7) * 7;
+  const totalCells = Math.ceil((monthEnd.getDate() + leadDays(monthStart)) / 7) * 7;
   const today = isoDate(new Date());
 
   const cells: Date[] = [];
@@ -251,26 +279,38 @@ function MonthGrid({
           const dayItems = itemsByDate.get(dIso) ?? [];
           const visible = dayItems.slice(0, 3);
           const extra = dayItems.length - visible.length;
+          const isPicked = dIso === isoDate(picked);
           return (
             <button
               key={idx}
               type="button"
               onClick={() => onSelectDay(d)}
+              aria-pressed={isPicked}
+              aria-label={`${d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}${dayItems.length ? `, ${dayItems.length} item${dayItems.length === 1 ? "" : "s"}` : ""}`}
               className={cn(
-                "min-h-[72px] sm:min-h-[96px] border-b border-r border-border p-1 text-left align-top transition-colors",
+                "min-h-[52px] sm:min-h-[96px] border-b border-r border-border p-1 text-left align-top transition-colors",
                 !inMonth && "bg-background/30 text-muted-foreground/60",
-                isToday && "bg-primary/5",
+                isPicked && "bg-secondary/70",
               )}
             >
               <div className="flex items-center justify-between">
                 <span className={cn(
-                  "inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold",
-                  isToday ? "bg-primary text-primary-foreground" : "text-foreground/80",
+                  "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold tabular-nums",
+                  isToday ? "bg-primary text-primary-foreground" : isPicked ? "ring-1 ring-primary/70" : "text-foreground/80",
                 )}>
                   {d.getDate()}
                 </span>
               </div>
-              <div className="mt-1 space-y-0.5">
+              {/* phones: dots */}
+              {dayItems.length > 0 && (
+                <div className="mt-1 flex items-center gap-0.5 px-0.5 sm:hidden" aria-hidden>
+                  {visible.map((it) => (
+                    <span key={it.id} className={cn("h-1.5 w-1.5 rounded-full", KIND_META[it.kind].dot)} />
+                  ))}
+                  {extra > 0 && <span className="text-[9px] font-bold leading-none text-muted-foreground">+</span>}
+                </div>
+              )}
+              <div className="mt-1 hidden space-y-0.5 sm:block">
                 {visible.map((it) => (
                   <div
                     key={it.id}
@@ -280,7 +320,7 @@ function MonthGrid({
                       KIND_META[it.kind].chip,
                     )}
                   >
-                    {it.title}
+                    {scheduleTitle(it)}
                   </div>
                 ))}
                 {extra > 0 && (
@@ -315,7 +355,7 @@ function WeekGrid({
         return (
           <Card key={dIso} className={cn("border-border bg-card p-2", isToday && "ring-1 ring-primary/60")}>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{WEEKDAY_LABELS[d.getDay()]}</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{WEEKDAY_LABELS[(d.getDay() + 6) % 7]}</span>
               <span className="flex items-center gap-1">
                 <span className={cn("text-sm font-bold", isToday && "text-primary")}>{d.getDate()}</span>
                 {onCreate && (
@@ -363,8 +403,10 @@ function WeekGrid({
 }
 
 function DayList({
-  date, items, onSelectItem, showClientName, emptyHint, onCreate,
+  date, items, onSelectItem, showClientName, emptyHint, onCreate, compact = false,
 }: {
+  /** Under the month grid: a one-line empty state. */
+  compact?: boolean;
   date: Date;
   items: CalendarItem[];
   onSelectItem: (i: CalendarItem) => void;
@@ -378,6 +420,14 @@ function DayList({
       <Plus className="mr-2 h-4 w-4" /> Book on {dayName}
     </Button>
   ) : null;
+  if (items.length === 0 && compact) {
+    return (
+      <div className="space-y-2">
+        <p className="rounded-xl border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">Nothing scheduled.</p>
+        {bookButton}
+      </div>
+    );
+  }
   if (items.length === 0) {
     return (
       <div className="space-y-2">
@@ -403,7 +453,7 @@ function DayList({
 
 /** Week chips are tiny: lead with the client's name when there is one. */
 function showNameFirst(it: CalendarItem): string {
-  return it.kind === "pt_session" && it.clientName ? `${it.clientName.split(" ")[0]} · ${it.title}` : it.title;
+  return it.kind === "pt_session" && it.clientName ? `${it.clientName.split(" ")[0]} · ${it.title}` : scheduleTitle(it);
 }
 
 function UpcomingList({
@@ -455,27 +505,29 @@ function UpcomingList({
   );
 }
 
+/** One item: a line of its colour family, the title (two lines, never cut to one), then when / what. */
 function ItemRow({ item, onClick, showClientName }: { item: CalendarItem; onClick: () => void; showClientName?: boolean }) {
+  const when = item.startsAt ? compactTimeRange(item.startsAt, item.endsAt) : null;
+  const meta = [
+    when,
+    KIND_META[item.kind].label,
+    item.status && item.status !== "Scheduled" ? item.status : null,
+    showClientName ? item.clientName : null,
+  ].filter(Boolean).join(" · ");
   return (
     <li>
       <button
         type="button"
         onClick={onClick}
-        className="w-full rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-secondary/40"
+        className="flex w-full items-stretch gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-secondary/40"
       >
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className={cn("text-[10px]", KIND_META[item.kind].chip)}>{KIND_META[item.kind].label}</Badge>
-          {item.status && <Badge variant="outline" className="text-[10px]">{item.status}</Badge>}
-          {showClientName && item.clientName && <span className="text-[11px] text-muted-foreground">{item.clientName}</span>}
-          {item.startsAt && (
-            <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-              {compactTimeRange(item.startsAt, item.endsAt)}
-              {durationLabel(item.startsAt, item.endsAt) ? ` · ${durationLabel(item.startsAt, item.endsAt)}` : ""}
-            </span>
-          )}
-        </div>
-        <div className="mt-1 truncate text-sm font-semibold">{item.title}</div>
-        {item.subtitle && <div className="mt-0.5 truncate text-xs text-muted-foreground">{item.subtitle}</div>}
+        <span aria-hidden className={cn("w-[3px] shrink-0 rounded-full", KIND_META[item.kind].dot)} />
+        <span className="min-w-0 flex-1">
+          <span className="line-clamp-2 text-sm font-semibold leading-snug">{scheduleTitle(item)}</span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{meta}</span>
+          {item.subtitle && <span className="block truncate text-xs text-muted-foreground/80">{item.subtitle}</span>}
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 self-center text-muted-foreground/60" />
       </button>
     </li>
   );

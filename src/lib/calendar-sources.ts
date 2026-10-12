@@ -49,6 +49,13 @@ export type CalendarItem = {
   raw?: any;
 };
 
+/** "Monday — Primary Squat" → "Primary Squat": every schedule view already says which day it is. */
+export function scheduleTitle(item: { kind: CalendarKind; title: string }): string {
+  if (item.kind !== "workout") return item.title;
+  const t = item.title.replace(/^(mon|tues|wednes|thurs|fri|satur|sun)day\s*[—–-]\s*/i, "").trim();
+  return t || item.title;
+}
+
 /** Where, in a few words: an address's first line, or the kind of call for a link. */
 export function placeLabel(location: string | null | undefined): string | null {
   const loc = (location ?? "").trim();
