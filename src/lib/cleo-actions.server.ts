@@ -76,6 +76,10 @@ function when(date: string, time: string): string {
 
 /** The card's words, from the database. Throws when the thing doesn't exist or can't be done. */
 export async function describeAction(db: any, kind: CleoActionKind, p: any): Promise<string> {
+  if (kind === "restore_program_version") {
+    const { describeRestore } = await import("@/lib/cleo-history.server");
+    return describeRestore(await service(), p.version_id);
+  }
   const program = await import("@/lib/cleo-program.server");
   if (program.isProgramKind(kind)) return program.describeProgramAction(db, kind, p, businessToday());
   switch (kind) {
@@ -172,6 +176,10 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
       }
       case "set_nutrition_targets":
         return client(p.client_id, "nutrition", "Open their nutrition");
+      case "restore_program_version": {
+        const { data } = await (await service()).from("pl_program_versions").select("client_id, kind").eq("id", p.version_id).maybeSingle();
+        return data?.kind === "set_nutrition_targets" ? client(data?.client_id, "nutrition", "Open their nutrition") : training(data?.client_id);
+      }
     }
   } catch {
     return null;
@@ -199,6 +207,10 @@ export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoA
 /** Runs it with this actor's own session (same server functions and RLS as the app). */
 async function execute(actor: ActorCtx, kind: CleoActionKind, raw: unknown): Promise<string> {
   const p: any = CLEO_ACTION_PARAMS[kind].parse(raw);
+  if (kind === "restore_program_version") {
+    const { restoreVersion } = await import("@/lib/cleo-history.server");
+    return restoreVersion(actor, p.version_id);
+  }
   const program = await import("@/lib/cleo-program.server");
   if (program.isProgramKind(kind)) return program.executeProgramAction(actor, kind, p, businessToday());
   const sb = actor.supabase;
@@ -330,7 +342,15 @@ async function runClaimed(actor: ActorCtx, row: any, decidedBy: string | null) {
   try {
     const kind: unknown = row.kind;
     if (!isCleoActionKind(kind)) throw new Error("Unknown action.");
+    // Program history: the state right before, so it can be undone.
+    const history = await import("@/lib/cleo-history.server");
+    const params = CLEO_ACTION_PARAMS[kind].parse(row.params);
+    const before = await history.captureBefore(actor.supabase, kind, params).catch((e) => {
+      console.warn("[cleo] program history capture failed", e);
+      return null;
+    });
     const result = await execute(actor, kind, row.params);
+    if (before) await history.saveVersion(actor.supabase, before, kind, params, row.summary, row.id, actor.userId);
     await admin.from("cleo_actions").update({ status: "done", result, done_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...(decidedBy ? { decided_by: decidedBy, decided_at: new Date().toISOString() } : {}) }).eq("id", row.id);
     return { status: "done" as const, result };
   } catch (e) {
@@ -446,7 +466,8 @@ async function pushRequester(ownerId: string, row: any, outcome: "approved" | "d
   }
 }
 
-function toView(row: any, caller: Caller, names: Map<string, string>): CleoActionView {
+function toView(row: any, caller: Caller, names: Map<string, string>, versions: Map<string, any> = new Map()): CleoActionView {
+  const v = versions.get(row.id);
   const k: unknown = row.kind;
   const kind: CleoActionKind = isCleoActionKind(k) ? k : "create_task";
   return {
@@ -463,6 +484,7 @@ function toView(row: any, caller: Caller, names: Map<string, string>): CleoActio
     requesterName: names.get(row.requested_by) ?? null,
     createdAt: row.created_at,
     link: row.params?._link?.href && String(row.params._link.href).startsWith("/admin") ? { href: row.params._link.href, label: String(row.params._link.label ?? "Open") } : null,
+    undo: v && row.status === "done" ? { versionId: v.id, undone: !!v.restored_at } : null,
   };
 }
 
@@ -479,8 +501,15 @@ export async function listActions(actor: ActorCtx) {
   ]);
   const rows = [...(mine.data ?? []), ...(waiting.data ?? [])];
   const names = await firstNames([...new Set([...rows.map((r: any) => r.requested_by), ...owners])]);
+  // Restore points for this person's done changes (admins only: history is theirs to undo).
+  const versions = new Map<string, any>();
+  const doneIds = (mine.data ?? []).filter((r: any) => r.status === "done").map((r: any) => r.id);
+  if (caller.isAdmin && doneIds.length) {
+    const { data } = await admin.from("pl_program_versions").select("id, cleo_action_id, restored_at").in("cleo_action_id", doneIds);
+    for (const v of data ?? []) versions.set(v.cleo_action_id, v);
+  }
   return {
-    actions: (mine.data ?? []).map((r: any) => toView(r, caller, names)),
+    actions: (mine.data ?? []).map((r: any) => toView(r, caller, names, versions)),
     approvals: (waiting.data ?? []).map((r: any) => toView(r, caller, names)),
     ownerName: owners.map((id) => names.get(id)).find(Boolean) ?? "the owner",
   };
@@ -500,3 +529,11 @@ export async function discardProposals(userId: string, ids: string[]) {
   await admin.from("cleo_actions").delete().in("id", ids).eq("requested_by", userId).eq("status", "proposed").is("message_id", null);
 }
 
+
+/** The Undo on a done card: puts that change back right away (admins only). */
+export async function undoChange(actor: ActorCtx, versionId: string) {
+  const caller = await loadCaller(actor.supabase, actor.userId);
+  if (!caller.isAdmin) throw new Error("Only an admin can undo program changes.");
+  const { restoreVersion } = await import("@/lib/cleo-history.server");
+  return { result: await restoreVersion(actor, versionId) };
+}

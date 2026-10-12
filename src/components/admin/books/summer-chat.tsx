@@ -21,7 +21,7 @@ import { playAppSound, startThinkingSound } from "@/lib/app-sounds";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 import { CleoActionCard, CleoApprovals, useCleoActions } from "./cleo-action-card";
 
-type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string };
+type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null };
 /** "ready" = she answered and it's your turn: one tap keeps the conversation going. */
 type VoiceState = "idle" | "listening" | "thinking" | "speaking" | "ready";
 
@@ -451,6 +451,37 @@ export function SummerChat({
     }
   };
 
+  /**
+   * A tap on one of her quick answers. In a voice conversation it stays one:
+   * she answers out loud and it's your turn again after.
+   */
+  const pick = async (choice: string) => {
+    if (pending) return;
+    if (voiceState !== "ready") return void send(choice);
+    const turn = ++turnRef.current;
+    speaker.stop();
+    speaker.unlock(); // this tap lets her answer play
+    setPending(choice);
+    setVoiceState("thinking");
+    try {
+      const res = (await ask({ data: { message: choice, year, route, voice: true } })) as { user: Msg; assistant: Msg };
+      append([res.user, res.assistant]);
+      void cleo.refresh();
+      if (turn !== turnRef.current) return;
+      prefsRef.current = loadVoicePrefs();
+      if (prefsRef.current.autoplay) {
+        setPending(null);
+        setVoiceState("speaking");
+        await speak(res.assistant);
+      } else playAppSound("reply");
+    } catch (e: any) {
+      if (turn === turnRef.current) toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
+    } finally {
+      setPending(null);
+      if (turn === turnRef.current) setVoiceState("ready");
+    }
+  };
+
   const reset = async () => {
     try {
       await clear();
@@ -536,13 +567,33 @@ export function SummerChat({
               </div>
             </div>
           )}
-          {messages.map((m) => {
+          {messages.map((m, idx) => {
             const links = m.role === "assistant" ? extractLinks(m.content).filter((l) => l.internal).slice(0, 4) : [];
+            // Her quick question's answers, only while it's still the latest thing she said.
+            const choices = m.role === "assistant" && idx === messages.length - 1 && !pending ? (m.choices ?? []).filter(Boolean) : [];
             return (
               <div key={m.id} className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}>
                 <div className={cn("max-w-[88%] rounded-2xl px-3 py-2", m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted")}>
                   {m.role === "assistant" ? <SummerText text={m.content} onLink={openLink} /> : <p className="whitespace-pre-wrap">{m.content}</p>}
                 </div>
+                {choices.length > 0 && (
+                  <div className="mt-2 flex w-full max-w-[88%] flex-col gap-1.5" role="group" aria-label="Quick answers">
+                    {choices.map((c, i) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => void pick(c)}
+                        disabled={voiceState === "listening" || voiceState === "thinking"}
+                        className={cn(
+                          "min-h-10 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors disabled:opacity-50",
+                          i === 0 ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15" : "hover:bg-accent",
+                        )}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {m.role === "assistant" && cleo.forMessage(m.id).length > 0 && (
                   <div className="mt-1.5 w-full max-w-[88%] space-y-2">
                     {cleo.forMessage(m.id).map((a) => (

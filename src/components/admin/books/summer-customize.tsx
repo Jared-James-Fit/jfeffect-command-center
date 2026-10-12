@@ -1,3 +1,4 @@
+import { CLEO_VOICES, serverVoiceValue } from "@/lib/cleo-voices";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -87,7 +88,7 @@ export function SummerCustomizeDialog({
     setBusy(true);
     try {
       await save({ data: { tone, instructions: instructions.trim() || null } });
-      toast.success("Cleo's updated ✨ Ask her something to hear the new vibe.");
+      toast.success("Cleo's updated ✨ Ask Cleo something to hear the new vibe.");
       onSaved();
       onClose();
     } catch (e: any) {
@@ -103,12 +104,12 @@ export function SummerCustomizeDialog({
         <DialogHeader>
           <DialogTitle>Customize Cleo</DialogTitle>
           <DialogDescription>
-            Change how she talks any time. She always uses your real numbers, whatever the vibe.
+            Change how Cleo talks any time. Your real numbers are always used, whatever the vibe.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
-          <Label>Her vibe</Label>
+          <Label>Vibe</Label>
           <div className="grid gap-2" role="radiogroup" aria-label="Cleo's vibe">
             {SUMMER_TONES.map((t) => {
               const active = t.value === tone;
@@ -140,7 +141,7 @@ export function SummerCustomizeDialog({
 
         <div className="space-y-2">
           <div className="flex items-baseline justify-between">
-            <Label htmlFor="summer-instructions">Your instructions for her</Label>
+            <Label htmlFor="summer-instructions">Your instructions for Cleo</Label>
             <span className="text-[11px] tabular-nums text-muted-foreground">{instructions.length}/{SUMMER_INSTRUCTIONS_MAX}</span>
           </div>
           <Textarea
@@ -149,7 +150,7 @@ export function SummerCustomizeDialog({
             maxLength={SUMMER_INSTRUCTIONS_MAX}
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
-            placeholder="Anything about how she should talk to you, what to focus on, or how long her answers should be."
+            placeholder="Anything about how Cleo should talk to you, what to focus on, or how long answers should be."
           />
           <div className="flex flex-wrap gap-1.5">
             {SUMMER_INSTRUCTION_IDEAS.filter((i) => !instructions.includes(i)).map((idea) => (
@@ -163,24 +164,26 @@ export function SummerCustomizeDialog({
         <div className="space-y-3 rounded-lg border p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <Label htmlFor="summer-autoplay">Speak her answers out loud</Label>
-              <p className="text-xs text-muted-foreground">When you talk to her, she answers back by voice right away.</p>
+              <Label htmlFor="summer-autoplay">Speak answers out loud</Label>
+              <p className="text-xs text-muted-foreground">When you talk to Cleo, the answer comes back by voice right away.</p>
             </div>
             <Switch id="summer-autoplay" checked={voicePrefs.autoplay} onCheckedChange={(v) => updateVoice({ autoplay: v })} />
           </div>
           <div className="space-y-1.5">
-            <Label>Her voice</Label>
+            <Label>Voice</Label>
             <Select value={voicePrefs.voice} onValueChange={(v) => updateVoice({ voice: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
-                <SelectItem value="summer">Cleo</SelectItem>
+                {CLEO_VOICES.map((v) => (
+                  <SelectItem key={v.value} value={serverVoiceValue(v.value)}>Cleo · {v.label}</SelectItem>
+                ))}
                 {voices.map((v) => (
                   <SelectItem key={v.voiceURI} value={v.voiceURI}>{v.name} · {v.lang}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              "Cleo" is her own voice: calm, clear and natural. If it isn't available, this device's best English voice reads for her.
+              {CLEO_VOICES.find((v) => serverVoiceValue(v.value) === voicePrefs.voice)?.description ?? "A voice on this device."} The Cleo voices are clean and natural; if they aren't available, this device's best English voice reads instead.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -203,7 +206,7 @@ export function SummerCustomizeDialog({
               ))}
             </div>
             <Button type="button" variant="outline" size="sm" onClick={() => void testVoice()} disabled={testing}>
-              {testing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Volume2 className="mr-1.5 h-4 w-4" />} Test her voice
+              {testing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Volume2 className="mr-1.5 h-4 w-4" />} Test the voice
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">Voice settings are saved on this device.</p>

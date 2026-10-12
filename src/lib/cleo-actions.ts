@@ -123,6 +123,9 @@ export const CLEO_ACTION_PARAMS = {
     row_id: uuid.describe("The row the sets were logged against (row id from training_log or program_detail)."),
     exercise_id: uuid.describe("The library exercise they actually did, from exercise_library."),
   }),
+  restore_program_version: z.object({
+    version_id: uuid.describe("From program_history."),
+  }),
   set_nutrition_targets: z.object({
     client_id: uuid,
     days: z
@@ -173,6 +176,7 @@ export const CLEO_ACTION_INFO: Record<CleoActionKind, { title: string; tool: str
   publish_program: { title: "Publish a program", tool: "Make a block visible to the client (publish) or hide it." },
   move_workout: { title: "Move a workout", tool: "Move a scheduled workout to another date." },
   correct_logged_exercise: { title: "Fix a logged exercise", tool: "Correct which exercise a client actually did on a day they already logged (e.g. they did barbell bench instead of the dumbbell incline). Only the exercise changes; every logged set (load, reps, RPE) stays exactly as entered." },
+  restore_program_version: { title: "Undo a change", tool: "Undo one of the program or nutrition changes in a client's program history (version ids from program_history): puts days, exercises, dates, visibility or targets back the way they were. Days the client has since started or logged stay as trained." },
   set_nutrition_targets: { title: "Update nutrition", tool: "Set a client's nutrition targets: calories and macros for each day type, plus phase and notes. Replaces their current day list (or creates their first targets)." },
 };
 
@@ -219,6 +223,8 @@ export type CleoActionView = {
   createdAt: string;
   /** Where to see it once it's done (an in-app /admin path). */
   link: { href: string; label: string } | null;
+  /** Done program/nutrition changes: the restore point in program history. */
+  undo: { versionId: string; undone: boolean } | null;
 };
 
 /** Proposals go stale: the books, the calendar and the thread move on. */

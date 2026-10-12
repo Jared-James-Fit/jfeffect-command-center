@@ -358,12 +358,12 @@ export const getSummerMessages = createServerFn({ method: "GET" })
     const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { data, error } = await supabase
       .from("summer_messages")
-      .select("id, role, content, created_at")
+      .select("id, role, content, created_at, choices")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(60);
     if (error) throw new Error(error.message);
-    return ((data ?? []) as Array<{ id: string; role: "user" | "assistant"; content: string; created_at: string }>).reverse();
+    return ((data ?? []) as Array<{ id: string; role: "user" | "assistant"; content: string; created_at: string; choices: string[] | null }>).reverse();
   });
 
 const AskInput = z.object({
@@ -419,6 +419,7 @@ export const summerSpeech = createServerFn({ method: "POST" })
         rate: z.number().min(0.5).max(1.5).optional(),
         prev: z.string().max(1500).optional(),
         next: z.string().max(1500).optional(),
+        voice: z.enum(["neutral", "soft", "deep", "bright"]).optional(),
       })
       .parse(d),
   )
@@ -496,6 +497,15 @@ export const getCleoActions = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { listActions } = await import("@/lib/cleo-actions.server");
     return listActions(await cleoActor(context));
+  });
+
+/** Undo a change Cleo made, from its card (program history). */
+export const undoCleoChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ versionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { undoChange } = await import("@/lib/cleo-actions.server");
+    return undoChange(await cleoActor(context), data.versionId);
   });
 
 const CleoActionInput = z.object({ id: z.string().uuid(), decision: z.enum(["confirm", "cancel", "approve", "decline"]) });
