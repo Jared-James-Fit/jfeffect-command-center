@@ -32,3 +32,21 @@ describe("Cleo dictation", () => {
     expect(inbox).not.toContain("tap the phone");
   });
 });
+
+describe("Cleo's floating button", () => {
+  const fab = read("components/summer/summer-assistant.tsx");
+
+  it("has two visible targets: the bubble opens chat, the mic badge opens her listening", () => {
+    expect(fab).toContain('aria-label="Chat with Cleo"');
+    expect(fab).toContain('aria-label="Talk to Cleo"');
+    expect(fab).toMatch(/const talk = \(\) => \{[\s\S]*?show\(\{ dictate: true \}\)/);
+    // The bubble's tap toggles the chat; it never starts the mic on its own.
+    expect(fab).toMatch(/const click = \(\) => \{[\s\S]*?setOpen\(\(o\) => !o\);/);
+  });
+
+  it("shows the how-to hint only on the first few visits", () => {
+    expect(fab).toContain("const HINT_SHOWS = 3;");
+    expect(fab).toContain("Tap to chat");
+  });
+});
+
