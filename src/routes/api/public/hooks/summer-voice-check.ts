@@ -34,7 +34,7 @@ export const Route = createFileRoute("/api/public/hooks/summer-voice-check")({
         if (key) {
           const { CLEO_PRIMARY_MODEL } = await import("@/lib/summer.server");
           const tools = [{ type: "function", function: { name: "lookup", description: "Look something up.", parameters: { type: "object", properties: { q: { type: "string" } }, required: ["q"] } } }];
-          for (const model of [CLEO_PRIMARY_MODEL, "anthropic/claude-opus-5-5", "openai/gpt-5.5", "google/gemini-3.1-pro-preview"]) {
+          for (const model of [process.env.CLEO_AI_MODEL || CLEO_PRIMARY_MODEL]) {
             try {
               const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
                 method: "POST",
@@ -46,18 +46,31 @@ export const Route = createFileRoute("/api/public/hooks/summer-voice-check")({
               chatModels.push({ model, api: "chat", status: 0, detail: String(e?.message ?? e).slice(0, 200) });
             }
           }
+        }
+        // The same path answerSummer takes: the AI SDK, a tool call, then an answer.
+        let cleoRun: { model: string; ok: boolean; steps?: number; text?: string; error?: string } | null = null;
+        if (key) {
+          const { CLEO_PRIMARY_MODEL } = await import("@/lib/summer.server");
+          const model = process.env.CLEO_AI_MODEL || CLEO_PRIMARY_MODEL;
           try {
-            const res = await fetch("https://ai.gateway.lovable.dev/v1/messages", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Lovable-API-Key": key, "anthropic-version": "2023-06-01" },
-              body: JSON.stringify({ model: CLEO_PRIMARY_MODEL, max_tokens: 40, system: "Be brief.", messages: [{ role: "user", content: "Say hi." }] }),
+            const { generateText, stepCountIs, tool } = await import("ai");
+            const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+            const { z } = await import("zod");
+            const gateway = createOpenAICompatible({ name: "google", baseURL: "https://ai.gateway.lovable.dev/v1", headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" } });
+            const r = await generateText({
+              model: gateway(model),
+              system: "Use the tool to answer.",
+              messages: [{ role: "user", content: "What is the client's bodyweight? Use body_weight." }],
+              tools: { body_weight: tool({ description: "The client's latest bodyweight.", inputSchema: z.object({}), execute: async () => "181 lb" }) },
+              stopWhen: stepCountIs(3),
+              abortSignal: AbortSignal.timeout(45_000),
             });
-            chatModels.push({ model: CLEO_PRIMARY_MODEL, api: "messages", status: res.status, detail: (await res.text()).slice(0, 240) });
+            cleoRun = { model, ok: /181/.test(r.text), steps: r.steps.length, text: r.text.slice(0, 160) };
           } catch (e: any) {
-            chatModels.push({ model: CLEO_PRIMARY_MODEL, api: "messages", status: 0, detail: String(e?.message ?? e).slice(0, 200) });
+            cleoRun = { model, ok: false, error: String(e?.message ?? e).slice(0, 300) };
           }
         }
-        return Response.json({ ok: attempts.some((a) => a.ok), attempts, gatewayModels, chatModels });
+        return Response.json({ ok: attempts.some((a) => a.ok), attempts, gatewayModels, chatModels, cleoRun });
       },
     },
   },

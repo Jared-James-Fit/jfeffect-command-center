@@ -18,9 +18,11 @@ const CLEO_FALLBACK_MODEL = "google/gemini-2.5-flash";
 /**
  * Cleo's brain: the strongest model the gateway takes for careful, multi-step
  * tool work (program edits especially). CLEO_AI_MODEL overrides it. If it's
- * refused or too slow, the answer is retried down the list.
+ * refused or too slow, the answer is retried down the list. It has to take
+ * the gateway's /v1/chat/completions: Claude models there only take the
+ * native /v1/messages format, so they can't be used here.
  */
-export const CLEO_PRIMARY_MODEL = "anthropic/claude-sonnet-5";
+export const CLEO_PRIMARY_MODEL = "openai/gpt-5.5";
 /** Longest the primary model gets before the answer moves to the next one. */
 const PRIMARY_TIMEOUT_MS = 70_000;
 
