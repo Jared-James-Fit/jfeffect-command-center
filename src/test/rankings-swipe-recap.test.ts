@@ -52,6 +52,9 @@ describe("Monthly board: you first, one board, the rest folded", () => {
     expect(card.indexOf("final standings <ChevronRight")).toBeGreaterThan(card.indexOf('aria-label="Standings"'));
     expect(card).toContain('<details className="group px-4 py-1">');
     expect(card).toContain("{TIEBREAK_NOTE}");
+    // the tie rule is its own line in the rules, not buried in the fine print
+    expect(card).toContain("data-tiebreak-rule");
+    expect(card.indexOf("data-tiebreak-rule")).toBeLessThan(card.indexOf("Final Week Boost: finish 90%+"));
   });
   it("the Final Week Boost: a quiet progress line all month, the race card in the final week", () => {
     expect(card).toContain("me?.qualified && finalWeek ? (");
