@@ -82,8 +82,8 @@ export function RankingsHub() {
 
   return (
     <div data-league-hub className="space-y-3">
-      {/* last month's recap: compact, dismissible, only here */}
-      <LeagueRecapButton compact />
+      {/* last month's recap: always here at the top, replaced by next month's on the 1st */}
+      <LeagueRecapButton />
       <div className="flex items-center gap-2">
       <div className="grid flex-1 grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
         {([["monthly", "Monthly"], ["strength", "Strength"]] as const).map(([k, label]) => (

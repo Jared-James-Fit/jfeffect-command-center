@@ -262,6 +262,11 @@ function boardValue(r: StrengthRow, mode: BoardMode, unit: WeightUnit) {
  * (and who isn't ranked yet) in place. All-time or Competition (sanctioned meets)
  * like the full board. Tapping a lifter with a career opens it; Back closes.
  */
+/** Your division for the boards: from your own rows (any lift), else All. */
+export function defaultDivision(rows: StrengthRow[]): Division {
+  return rows.find((r) => r.is_me && r.sex)?.sex ?? "all";
+}
+
 export function StrengthBoardSlide() {
   // Tapping a powerlifter opens their career (the only sheet left).
   const [careerId, setCareerId] = useState<string | null>(null);
@@ -269,10 +274,11 @@ export function StrengthBoardSlide() {
   const [source, setSource] = useState<BoardSource>("all");
   const [mode, setMode] = useState<BoardMode>("p4p");
   const [lift, setLift] = useState<BoardLift>("total");
-  // Men first: the board people look for most; Women and All are one tap away.
-  const [division, setDivision] = useState<Division>("male");
+  // Opens on your own division (the board Home shows you); All if we don't know it yet.
+  const [picked, setDivision] = useState<Division | null>(null);
   const [showAll, setShowAll] = useState(false);
   const allTime = useStrengthBoard();
+  const division: Division = picked ?? defaultDivision(allTime.data ?? []);
   const meets = useMeetBoard();
   const roster = useStrengthRoster();
   const active = source === "all" ? allTime : meets;
@@ -320,21 +326,25 @@ export function StrengthBoardSlide() {
         </div>
 
         <div className="mx-3 mt-2 space-y-1">
-          <div className="grid grid-cols-2 rounded-full bg-muted/50 p-0.5 text-[11px] font-bold" role="tablist" aria-label="Lifts from">
-            {([["all", "All-time"], ["meets", "Competition"]] as const).map(([k, label]) => (
-              <button key={k} type="button" role="tab" aria-selected={source === k} onClick={() => pick(setSource)(k)}
-                className={cn("min-h-7 rounded-full transition", source === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 rounded-full bg-muted/50 p-0.5 text-[11px] font-bold" role="tablist" aria-label="Ranked by">
-            {([["p4p", "Pound for pound"], ["absolute", "Heaviest"]] as const).map(([k, label]) => (
-              <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => pick(setMode)(k)}
-                className={cn("min-h-7 rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
-                {label}
-              </button>
-            ))}
+          {/* how it's ranked, and (one tap) meets only: one row instead of two */}
+          <div className="flex items-center gap-1">
+            <div className="grid flex-1 grid-cols-2 rounded-full bg-muted/50 p-0.5 text-[11px] font-bold" role="tablist" aria-label="Ranked by">
+              {([["p4p", "Pound for pound", "P4P"], ["absolute", "Heaviest", "Heaviest"]] as const).map(([k, label, narrow]) => (
+                <button key={k} type="button" role="tab" aria-selected={mode === k} aria-label={label} onClick={() => pick(setMode)(k)}
+                  className={cn("min-h-7 whitespace-nowrap rounded-full transition", mode === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
+                  <span className="max-[359px]:hidden">{label}</span><span className="min-[360px]:hidden">{narrow}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-pressed={source === "meets"}
+              aria-label="Competition: sanctioned meets only"
+              onClick={() => pick(setSource)(source === "meets" ? "all" : "meets")}
+              className={cn("min-h-8 shrink-0 rounded-full border px-2.5 text-[11px] font-bold transition", source === "meets" ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground active:bg-muted")}
+            >
+              Meets only
+            </button>
           </div>
           <div className="flex items-center gap-1">
             <div className="flex flex-[2] gap-0.5" role="tablist" aria-label="Division">

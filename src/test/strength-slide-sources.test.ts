@@ -65,7 +65,7 @@ describe("Strength source switch", () => {
   it("both boards load up front, so switching is instant; any filter change folds Show all back", () => {
     expect(slide).toContain("const allTime = useStrengthBoard();");
     expect(slide).toContain("const meets = useMeetBoard();");
-    expect(slide).toContain("onClick={() => pick(setSource)(k)}");
+    expect(slide).toContain('onClick={() => pick(setSource)(source === "meets" ? "all" : "meets")}');
     expect(slide).toContain("onClick={() => pick(setMode)(k)}");
     expect(slide).toContain("onClick={() => pick(setDivision)(d)}");
     expect(slide).toContain("onClick={() => pick(setLift)(l.key)}");

@@ -40,11 +40,14 @@ export function RecordBadges({
   size = "sm",
   className,
   center = false,
+  best = false,
 }: {
   row: RecordCounts;
   size?: "xs" | "sm";
   className?: string;
   center?: boolean;
+  /** Only the best tier (one badge, never a second line): for tight rows. */
+  best?: boolean;
 }) {
   if (!hasRecords(row)) return null;
   const fresh = isFreshRecord(row.last_record_at);
@@ -54,7 +57,7 @@ export function RecordBadges({
     <div className={cn("flex flex-wrap items-center gap-1", center && "justify-center", className)}>
       {TIERS.map((t) => {
         const n = row[t.key] ?? 0;
-        if (n <= 0) return null;
+        if (n <= 0 || (best && t.key !== topKey)) return null;
         const Icon = t.icon;
         const live = fresh && t.key === topKey;
         return (
