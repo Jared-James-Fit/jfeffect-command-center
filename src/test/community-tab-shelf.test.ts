@@ -63,6 +63,19 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toMatch(/aria-hidden\s+data-mobile-bottom-nav\s+className="pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-background/);
   });
 
+  it("holds still while scrolling: only pinned to the visual viewport when zoomed or the keyboard is up", () => {
+    // Safari's toolbar show/hide and iOS sub-pixel insets move the visual viewport mid-scroll;
+    // chasing them a frame late made the raised Crew button wiggle
+    expect(shell).toContain("const dy = Math.round(window.innerHeight - (vv.height + vv.offsetTop));");
+    expect(shell).toContain("(zoomed || keyboard) && (dy > 0 || dx !== 0)");
+    expect(shell).not.toContain("dy > 0 || dx !== 0 || scale !== 1");
+    // even 50px disc, so centring it never lands on a half pixel
+    expect(shell).toContain('"absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[2px]');
+    expect(shell).toContain('"relative grid h-[46px] w-[46px] place-items-center rounded-full');
+    // a whole 12px label line, placed after the size so tailwind-merge keeps it
+    expect(shell).toContain('dense ? "text-[10px]" : "text-[10.5px]", "leading-3", active && "font-semibold")');
+  });
+
   it("no community for this account: no centre button", () => {
     expect(portal).toContain('community?.enabled === false ? clientBottomNav.filter((i) => i.to !== "/portal/community") : clientBottomNav');
   });
