@@ -196,6 +196,8 @@ const LOWERCASE_STARTS = new Set([
  */
 export function casualize(text: string): string {
   let t = String(text ?? "").replace(/\r\n/g, "\n");
+  // Ranges keep a plain hyphen (RPE 7–8 → 7-8), every other dash goes.
+  t = t.replace(/(\d)\s*[—–]\s*(\d)/g, "$1-$2");
   t = t.replace(/\s*[—–]\s*/g, " ");
   t = t.replace(/\s*;\s*/g, ". ");
   t = t.replace(/\b([Tt])hat['’]s\b/g, (_m, t1) => `${t1}hats`);

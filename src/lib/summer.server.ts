@@ -8,6 +8,7 @@
  */
 import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
 import { buildAppContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot, type LinkEntry } from "@/lib/summer-app";
+import { summerTone } from "@/lib/summer-persona";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 /** Used when the main model refuses a tool step (see answerSummer). */
@@ -433,7 +434,7 @@ export async function answerSummer(
   ]);
   // His saved voice (Admin → My Voice), for anything she writes as him.
   const { loadCoachVoice } = await import("@/lib/coach-voice.functions");
-  const { buildVoicePrompt } = await import("@/lib/coach-voice");
+  const { buildVoicePrompt, casualize } = await import("@/lib/coach-voice");
   const coachVoice = await loadCoachVoice(supabase);
 
   // The books (taxes, expenses, income) are the owner's, and the finance
@@ -565,6 +566,8 @@ export async function answerSummer(
     text = first ? `Set up: ${first}. Tap Confirm below and it's done.` : "It's set up below. Tap Confirm and it's done.";
   }
   if (!text) text = "I couldn't come up with an answer to that. Try asking it another way.";
+  // "Like me": a last pass so a polished reply still reads like his texts.
+  if (summerTone(profile.data?.tone).value === "like_me") text = casualize(text);
 
   // Saved only once there is an answer, so a failed call leaves no orphan question.
   const now = Date.now();

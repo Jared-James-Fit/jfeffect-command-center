@@ -107,9 +107,11 @@ describe("Cleo context", () => {
     expect(p).toContain("she/her");
   });
 
-  it("defaults to the girly pop voice and switches with the owner's pick", () => {
-    expect(summerSystemPrompt()).toMatch(/Gen Z girly pop/);
-    expect(summerSystemPrompt({ tone: "nonsense" })).toMatch(/Gen Z girly pop/);
+  it("defaults to talking like the owner and switches with their pick", () => {
+    expect(summerSystemPrompt({ ownerName: "Jared" })).toMatch(/talk the way Jared talks/);
+    expect(summerSystemPrompt()).toMatch(/talk the way the coach talks/);
+    expect(summerSystemPrompt({ tone: "nonsense" })).toMatch(/HOW IT MUST SOUND below/);
+    expect(summerSystemPrompt({ tone: "girly_pop" })).toMatch(/Gen Z girly pop/);
     const pro = summerSystemPrompt({ tone: "professional" });
     expect(pro).toMatch(/no slang, no emojis/);
     expect(pro).not.toMatch(/girly pop/);

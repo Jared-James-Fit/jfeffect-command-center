@@ -148,6 +148,7 @@ describe("Cleo's prompt", () => {
 
   it("switches to short spoken answers in voice mode", () => {
     expect(summerSystemPrompt({ voice: true })).toMatch(/VOICE: .*1 to 3 short/);
+    expect(summerSystemPrompt({ voice: true })).toMatch(/never text shorthand/);
   });
 });
 

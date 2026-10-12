@@ -20,6 +20,7 @@ describe("casualize", () => {
 
   it("keeps paragraphs and tidies spacing", () => {
     expect(casualize("Good week!\n\n\n\nThis week lets lock in")).toBe("good week!\n\nthis week lets lock in");
+    expect(casualize("Top sets at RPE 7–8, then 3 — 5 reps")).toBe("top sets at RPE 7-8, then 3-5 reps");
   });
 });
 
@@ -89,6 +90,12 @@ describe("wiring", () => {
     const reviews = readFileSync("src/lib/submission-reviews.functions.ts", "utf8");
     expect(reviews).toContain("voicePromptForClient(sb, row.client_id)");
     expect(reviews).toContain("safe.client_response = casualize(safe.client_response)");
+  });
+
+  it("Cleo's \"Like me\" tone is the default and cleans her replies the same way", () => {
+    const cleo = readFileSync("src/lib/summer.server.ts", "utf8");
+    expect(cleo).toContain('summerTone(profile.data?.tone).value === "like_me") text = casualize(text)');
+    expect(readFileSync("src/lib/summer-persona.ts", "utf8")).toContain('DEFAULT_SUMMER_TONE: SummerTone = "like_me"');
   });
 
   it("My Voice is reachable from settings tabs, the gear menu and search", () => {
