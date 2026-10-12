@@ -225,6 +225,15 @@
     max-width: 100%;
     height: auto;
   }
+  /* A grid track sized "auto" (every `grid` without a base grid-cols-*, i.e.
+     the phone layout of `grid md:grid-cols-3`) grows to its widest child's
+     min-content. One nowrap strip or long word then makes the whole column
+     wider than the phone, and the overflow clip above hides the right side of
+     every card. Letting grid children shrink keeps columns to the screen;
+     min-w-* utilities still override this. */
+  .grid > *, .inline-grid > * {
+    min-width: 0;
+  }
 }
 
 @utility bg-gradient-primary { background-image: var(--gradient-primary); }

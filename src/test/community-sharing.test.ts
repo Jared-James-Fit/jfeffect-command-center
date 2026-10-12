@@ -706,11 +706,15 @@ describe("Wednesday Wins shows a PR in the unit the athlete logs that lift in", 
 describe("weight units: a setting for clients, a tap on the community card", () => {
   const account = read("src/routes/_authenticated/portal/account.tsx");
   const unitCard = read("src/components/portal/weight-unit-card.tsx");
+  const unitPref = read("src/lib/weight-unit-pref.ts");
   const wins = read("src/components/community/wins-stats.tsx");
   it("clients can set their default unit in Account Settings", () => {
-    expect(account).toContain('<WeightUnitCard key={form.id} clientId={form.id} value={client?.preferred_weight_unit} />');
+    expect(account).toContain("<WeightUnitCard");
+    expect(account).toContain("confirmed={!!client?.weight_unit_confirmed_at}");
     expect(account).toContain('{ id: "units", label: "Units" }');
-    expect(unitCard).toContain('.update({ preferred_weight_unit: next })');
+    expect(unitCard).toContain("saveWeightUnitChoice({ clientId }, next)");
+    // the choice is stamped, so an explicit lb stops the "lb or kg?" prompt
+    expect(unitPref).toContain("preferred_weight_unit: unit, weight_unit_confirmed_at:");
   });
   const s: WinsStats = {
     week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,

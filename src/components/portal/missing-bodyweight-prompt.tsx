@@ -99,7 +99,7 @@ export function MissingBodyweightPrompt({ userId, defaultUnit = "lb" }: { userId
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!saving) setOpen(o); }}>
-      <SheetContent side="bottom" className="rounded-t-2xl px-5 pt-6" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+      <SheetContent side="bottom" hideCloseButton className="rounded-t-2xl px-5 pt-6" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
         <div className="mx-auto w-full max-w-md">
           <div className="mb-3 grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
             <Scale className="h-6 w-6" />
