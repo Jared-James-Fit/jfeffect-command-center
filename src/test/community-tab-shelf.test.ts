@@ -42,6 +42,18 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain('badge?.count ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-card"');
   });
 
+  it("the centre button is only brand-red on its own page, and every label sits on one line", () => {
+    // inactive it's neutral, so it never reads as the selected tab
+    expect(shell).toContain('? "bg-primary text-primary-foreground shadow-lg shadow-primary/35"\n                    : "bg-secondary text-foreground');
+    // it shares the icon box with the other tabs, so its label lines up with theirs
+    expect(shell).toContain('<div className={cn(BAR_ICON_BOX, "w-full")}>');
+    // the active underline is absolute: lighting a tab doesn't shift it
+    expect(shell).toContain('<span aria-hidden className="absolute bottom-0.5 left-1/2 h-[3px] w-4');
+    expect(shell).not.toContain("min-h-[64px]");
+    // --primary is oklch; hsl(var(--primary)) is an invalid colour
+    expect(shell).not.toContain("hsl(var(--primary)");
+  });
+
   it("no community for this account: no centre button", () => {
     expect(portal).toContain('community?.enabled === false ? clientBottomNav.filter((i) => i.to !== "/portal/community") : clientBottomNav');
   });

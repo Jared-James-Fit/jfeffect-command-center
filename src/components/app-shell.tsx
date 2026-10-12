@@ -937,57 +937,17 @@ export function AppShell({
         </main>
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}
-        {(() => {
+        <MobileBottomBar
           // Canonical contract: five buttons TOTAL, with "More" occupying one
           // of the five positions (never a fixed sixth button).
-          const visible = resolveVisibleBarItems(bottomItems, { more: !moreInHeader });
-          // A raised centre button pokes out of the bar, so the bar can't clip.
-          const raised = visible.some((i) => i.featured);
-          const cols = visible.length;
-          const gridCols =
-            cols === 5 ? "grid-cols-5" : cols === 4 ? "grid-cols-4" : cols === 3 ? "grid-cols-3" : "grid-cols-2";
-          // At 320px five columns give ~60px per slot — tighten padding so
-          // labels stay on one line and nothing clips.
-          const dense = cols >= 5;
-          // A plain tab stays lit on its sub-pages (a client's page keeps
-          // Clients lit); the deepest matching tab wins, and top-level homes
-          // like /admin only light up on themselves.
-          const prefixTo = barPrefixMatch(visible, pathname);
-          return (
-        <nav
-          data-mobile-bottom-nav
-          className={cn(
-            "fixed left-3 right-3 z-50 grid rounded-2xl border border-border bg-card/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
-            raised ? "overflow-visible" : "overflow-hidden",
-            dense ? "px-0.5" : "px-1",
-            gridCols,
-          )}
-          style={{ bottom: "max(env(safe-area-inset-bottom), 6px)" }}
-        >
-          {visible.map((item) =>
-            item.to === MORE_BAR_TO ? (
-              <MoreNavSlot
-                key="more"
-                dense={dense}
-                active={moreOpen}
-                onOpenMore={() => setMoreOpen(true)}
-              />
-            ) : (
-              <BottomNavSlot
-                key={(item.children ? "g:" : "") + item.to + ":" + item.label}
-                item={item}
-                pathname={pathname}
-                search={search}
-                navBadges={navBadges}
-                onNavigate={(to) => markNavSeen(user?.id, to)}
-                dense={dense}
-                prefixActive={prefixTo === item.to}
-              />
-            ),
-          )}
-        </nav>
-          );
-        })()}
+          items={resolveVisibleBarItems(bottomItems, { more: !moreInHeader })}
+          pathname={pathname}
+          search={search}
+          navBadges={navBadges}
+          onNavigate={(to) => markNavSeen(user?.id, to)}
+          moreOpen={moreOpen}
+          onOpenMore={() => setMoreOpen(true)}
+        />
       </div>
 
       {/* Mobile "More" sheet — full grouped menu + search */}
@@ -1501,6 +1461,74 @@ function TabletFlyoutRow({
   );
 }
 
+/** The floating mobile tab bar (hidden from md up). */
+export function MobileBottomBar({ items, pathname, search, navBadges, onNavigate, moreOpen, onOpenMore }: {
+  /** Already resolved to the visible slots (resolveVisibleBarItems). */
+  items: NavItem[];
+  pathname: string;
+  search?: Record<string, unknown>;
+  navBadges: Record<string, { count?: number; dot?: boolean }>;
+  onNavigate: (to: string) => void;
+  moreOpen: boolean;
+  onOpenMore: () => void;
+}) {
+  // A raised centre button pokes out of the bar, so the bar can't clip.
+  const raised = items.some((i) => i.featured);
+  const cols = items.length;
+  const gridCols =
+    cols === 5 ? "grid-cols-5" : cols === 4 ? "grid-cols-4" : cols === 3 ? "grid-cols-3" : "grid-cols-2";
+  // At 320px five columns give ~60px per slot — tighten padding so
+  // labels stay on one line and nothing clips.
+  const dense = cols >= 5;
+  // A plain tab stays lit on its sub-pages (a client's page keeps
+  // Clients lit); the deepest matching tab wins, and top-level homes
+  // like /admin only light up on themselves.
+  const prefixTo = barPrefixMatch(items, pathname);
+  return (
+    <nav
+      data-mobile-bottom-nav
+      className={cn(
+        // max-w keeps five tabs grouped on wide phones / small tablets.
+        "fixed inset-x-3 z-50 mx-auto grid max-w-md rounded-2xl border border-border bg-card/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
+        raised ? "overflow-visible" : "overflow-hidden",
+        dense ? "px-0.5" : "px-1",
+        gridCols,
+      )}
+      style={{ bottom: "max(env(safe-area-inset-bottom), 8px)" }}
+    >
+      {items.map((item) =>
+        item.to === MORE_BAR_TO ? (
+          <MoreNavSlot key="more" dense={dense} active={moreOpen} onOpenMore={onOpenMore} />
+        ) : (
+          <BottomNavSlot
+            key={(item.children ? "g:" : "") + item.to + ":" + item.label}
+            item={item}
+            pathname={pathname}
+            search={search}
+            navBadges={navBadges}
+            onNavigate={onNavigate}
+            dense={dense}
+            prefixActive={prefixTo === item.to}
+          />
+        ),
+      )}
+    </nav>
+  );
+}
+
+// Every bar slot shares one box, so icons and labels sit on the same lines
+// whichever tab is active (the underline is absolute and adds no height).
+const BAR_SLOT =
+  "relative flex min-h-[60px] flex-col items-center justify-center gap-1 px-0.5 py-1.5 font-medium transition-colors touch-manipulation select-none";
+const BAR_ICON_BOX = "relative grid h-6 place-items-center";
+const BAR_ICON = "h-[22px] w-[22px]";
+const barLabel = (dense?: boolean, active?: boolean) =>
+  cn("w-full px-0.5 text-center leading-[1.15] tracking-tight", dense ? "text-[10px]" : "text-[10.5px]", active && "font-semibold");
+
+function BarActiveMark() {
+  return <span aria-hidden className="absolute bottom-0.5 left-1/2 h-[3px] w-4 -translate-x-1/2 rounded-full bg-primary" />;
+}
+
 function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
   if (!badge) return null;
   if (badge.count != null && badge.count > 0) {
@@ -1539,13 +1567,13 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
           type="button"
           onClick={() => { try { window.dispatchEvent(new CustomEvent("open-command-palette")); } catch {} }}
           style={{ WebkitTapHighlightColor: "transparent" }}
-          className="relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium text-muted-foreground hover:text-foreground touch-manipulation select-none"
+          className={cn(BAR_SLOT, "text-muted-foreground hover:text-foreground")}
           aria-label="Search keywords"
         >
-          <div className="relative">
-            <Icon className="h-5 w-5" />
+          <div className={BAR_ICON_BOX}>
+            <Icon className={BAR_ICON} />
           </div>
-          <span className={"w-full px-0.5 text-center leading-tight tracking-tight " + (dense ? "text-[9px]" : "text-[9.5px]")}>{item.label}</span>
+          <span className={barLabel(dense)}>{item.label}</span>
         </button>
       );
     }
@@ -1555,13 +1583,13 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
           type="button"
           onClick={() => { try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {} }}
           style={{ WebkitTapHighlightColor: "transparent" }}
-          className="relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium text-warning hover:text-warning/80 touch-manipulation select-none"
+          className={cn(BAR_SLOT, "text-warning hover:text-warning/80")}
           aria-label="Open Client POV picker"
         >
-          <div className="relative">
-            <Icon className="h-5 w-5" />
+          <div className={BAR_ICON_BOX}>
+            <Icon className={BAR_ICON} />
           </div>
-          <span className={"w-full px-0.5 text-center leading-tight tracking-tight " + (dense ? "text-[9px]" : "text-[9.5px]")}>{item.label}</span>
+          <span className={barLabel(dense)}>{item.label}</span>
         </button>
       );
     }
@@ -1600,36 +1628,48 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
         }}
         style={{ WebkitTapHighlightColor: "transparent" }}
         className={cn(
-          "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors touch-manipulation select-none",
-          item.featured && "justify-end active:scale-95",
+          BAR_SLOT,
+          item.featured && "group/tab",
           active ? "text-primary" : "text-muted-foreground hover:text-foreground",
         )}
         aria-current={active ? "page" : undefined}
         aria-label={item.featured && badge?.count ? `${item.label}, ${badge.count} new` : undefined}
       >
         {item.featured ? (
-          // Raised centre button. A ring means there's something new, like a story.
-          <span
-            data-featured-tab
-            data-new={badge?.count ? "" : undefined}
-            className={cn(
-              "absolute left-1/2 top-0 -translate-x-1/2 -translate-y-[38%] rounded-full p-[2.5px] transition-transform",
-              badge?.count ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-card",
-            )}
-          >
-            <span className="relative grid h-[50px] w-[50px] place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/35 ring-[2.5px] ring-card">
-              <Icon className="h-6 w-6" />
-              <BottomNavBadge badge={badge} />
+          // Raised centre button. It sits on the same icon line as the other
+          // tabs (so its label lines up) and only turns brand-red when it's
+          // the page you're on — otherwise it would read as selected.
+          // A gradient ring means there's something new, like a story.
+          <div className={cn(BAR_ICON_BOX, "w-full")}>
+            <span
+              data-featured-tab
+              data-new={badge?.count ? "" : undefined}
+              className={cn(
+                "absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[2.5px] transition-transform duration-150 group-active/tab:scale-95",
+                badge?.count ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-card",
+              )}
+            >
+              <span
+                className={cn(
+                  "relative grid h-[46px] w-[46px] place-items-center rounded-full ring-2 ring-card transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/35"
+                    : "bg-secondary text-foreground shadow-md shadow-black/20 border border-primary/30",
+                )}
+              >
+                <Icon className="h-6 w-6" />
+                <BottomNavBadge badge={badge} />
+              </span>
             </span>
-          </span>
+          </div>
         ) : (
-          <div className="relative">
-            <Icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+          <div className={BAR_ICON_BOX}>
+            <Icon className={BAR_ICON} />
             <BottomNavBadge badge={badge} />
           </div>
         )}
-        <span className={cn("w-full px-0.5 text-center leading-tight tracking-tight", dense ? "text-[9px]" : "text-[9.5px]", item.featured && "font-bold")}>{item.label}</span>
-        {active && !item.featured && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
+        <span className={barLabel(dense, active || item.featured)}>{item.label}</span>
+        {active && !item.featured && <BarActiveMark />}
       </Link>
     );
   }
@@ -1665,14 +1705,11 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
           onClick={gesture.onClick}
           onContextMenu={(e) => e.preventDefault()}
           style={{ WebkitTapHighlightColor: "transparent" }}
-          className={cn(
-            "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium select-none touch-manipulation",
-            childActive ? "text-primary" : "text-muted-foreground",
-          )}
+          className={cn(BAR_SLOT, childActive ? "text-primary" : "text-muted-foreground")}
           aria-label={item.label}
         >
-          <div className="relative">
-            <Icon className={cn("h-5 w-5", childActive && "drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]")} />
+          <div className={BAR_ICON_BOX}>
+            <Icon className={BAR_ICON} />
             <BottomNavBadge badge={badge} />
             {/* multi-option indicator dots */}
             <span className="pointer-events-none absolute -top-1 left-1/2 flex -translate-x-1/2 gap-[2px]">
@@ -1681,8 +1718,8 @@ function BottomNavSlot({ item, pathname, search, navBadges, onNavigate, dense, p
               ))}
             </span>
           </div>
-          <span className={"w-full px-0.5 text-center leading-tight tracking-tight " + (dense ? "text-[9px]" : "text-[9.5px]")}>{item.label}</span>
-          {childActive && <span className="mt-0.5 h-0.5 w-5 rounded-full bg-primary" />}
+          <span className={barLabel(dense, childActive)}>{item.label}</span>
+          {childActive && <BarActiveMark />}
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -1783,14 +1820,13 @@ function MoreNavSlot({ active, onOpenMore, dense }: { active: boolean; onOpenMor
       type="button"
       onClick={onOpenMore}
       style={{ WebkitTapHighlightColor: "transparent" }}
-      className={cn(
-        "relative flex min-h-[64px] flex-col items-center justify-center gap-0.5 px-0.5 pt-2 pb-2 text-[10px] font-medium transition-colors touch-manipulation select-none",
-        active ? "text-primary" : "text-muted-foreground hover:text-foreground",
-      )}
+      className={cn(BAR_SLOT, active ? "text-primary" : "text-muted-foreground hover:text-foreground")}
       aria-label="More"
     >
-      <MoreHorizontal className={dense ? "h-[22px] w-[22px]" : "h-6 w-6"} />
-      <span className={cn("w-full px-0 text-center leading-tight tracking-tight", dense ? "text-[9px]" : "text-[9.5px]")}>More</span>
+      <div className={BAR_ICON_BOX}>
+        <MoreHorizontal className={BAR_ICON} />
+      </div>
+      <span className={barLabel(dense, active)}>More</span>
     </button>
   );
 }
