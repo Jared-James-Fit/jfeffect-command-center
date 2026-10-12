@@ -5,6 +5,7 @@ import { filterPrimaryProgramBlocks, isAtHomeBackupSessionBlock } from "@/lib/at
 import { isInactivePrimaryDay } from "@/lib/active-calendar";
 import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 import { compareWorkoutItemsBySchedule } from "@/lib/workout-today";
+import { fetchAllPages } from "@/lib/supabase-paginate";
 
 // ---------- Types ----------
 export type PrepStatus = "Planned" | "Active" | "Completed" | "Archived";
@@ -836,14 +837,17 @@ export async function getClientResults(
     if (dayIds.length === 0) return [];
     allowedDayIds = new Set(dayIds);
   }
-  const { data, error } = await sb
+  // Paged past the 1,000-row response cap: a single read silently returned a
+  // long-term client's OLDEST 1,000 sets, so this month, PRs and charts stalled.
+  const data = await fetchAllPages((from, to) => sb
     .from("pl_row_results")
     .select("id, set_index, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_reps, actual_rpe, actual_rir, mean_concentric_velocity_mps, is_bodyweight, load_type, notes, completed_at, completed_duration_seconds, row_id, pl_exercise_rows(exercise_id, exercise_name_override, day_id, purpose_label, movement_family, exercises(name, muscle_group, primary_muscle_group, muscle_groups, secondary_muscle_groups, counts_toward_volume, category))")
     .eq("client_id", clientId)
     .not("actual_reps", "is", null)
     .not("completed_at", "is", null)
-    .order("completed_at", { ascending: true });
-  if (error) throw error;
+    .order("completed_at", { ascending: true })
+    .order("id", { ascending: true })
+    .range(from, to));
   const mapped = (data ?? [])
     .filter((r: any) => {
       if (!allowedDayIds) return true;
@@ -1518,6 +1522,155 @@ export async function saveBlockAsTemplate(blockId: string, name: string, style: 
   });
 }
 
+type ProgramTree = {
+  visibleBlocks: any[];
+  weeks: any[];
+  days: any[];
+  exerciseRows: any[];
+  rowResults: any[];
+  completions: any[];
+  feedbacks: any[];
+  scheduledInstances: any[];
+};
+
+const SCHEDULED_INSTANCE_COLUMNS = "id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source, note, created_at";
+const ESTIMATE_ROW_COLUMNS = "id, day_id, sets, rest_seconds, time_profile, estimated_seconds_override";
+const LOGGED_SET_COLUMNS = "row_id, actual_load, actual_load_unit, actual_reps, completed_duration_seconds";
+
+/** Drops a nested embed from a row, returning [row without it, the embed]. */
+function unnest(row: any, key: string): [any, any[]] {
+  const { [key]: inner, ...rest } = row ?? {};
+  if (!Array.isArray(inner)) throw new Error(`program tree: missing ${key}`);
+  return [rest, inner];
+}
+
+/**
+ * The client's visible program in one round trip: blocks > weeks > days >
+ * exercise rows > their logged sets as one nested read, with completions (and
+ * feedback) and scheduled instances read by client alongside it. Nested rows
+ * aren't capped at 1,000 and no id list goes in the URL.
+ */
+async function loadProgramTreeNested(
+  clientId: string,
+  options: { includeAtHomeBackupSessions?: boolean },
+): Promise<ProgramTree> {
+  const [treeRes, completionRows, scheduledInstances] = await Promise.all([
+    sb
+      .from("pl_blocks")
+      .select(`*, pl_weeks(*, pl_days(*, pl_exercise_rows(${ESTIMATE_ROW_COLUMNS}, pl_row_results(${LOGGED_SET_COLUMNS}, client_id))))`)
+      .eq("client_id", clientId)
+      .eq("client_visible", true)
+      .neq("status", "Archived")
+      .eq("pl_weeks.pl_days.pl_exercise_rows.pl_row_results.client_id", clientId)
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true }),
+    fetchAllPages((from, to) =>
+      sb.from("pl_day_completions").select("*, pl_workout_feedback(completion_id)").eq("client_id", clientId).order("id").range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      sb.from("pl_scheduled_workouts").select(SCHEDULED_INSTANCE_COLUMNS).eq("client_id", clientId).order("id").range(from, to),
+    ),
+  ]);
+  if (treeRes.error) throw treeRes.error;
+  const blocks: any[] = [];
+  const weeks: any[] = [];
+  const days: any[] = [];
+  const exerciseRows: any[] = [];
+  const rowResults: any[] = [];
+  for (const rawBlock of (treeRes.data ?? []) as any[]) {
+    const [block, blockWeeks] = unnest(rawBlock, "pl_weeks");
+    blocks.push(block);
+    for (const rawWeek of blockWeeks) {
+      const [week, weekDays] = unnest(rawWeek, "pl_days");
+      weeks.push(week);
+      for (const rawDay of weekDays) {
+        const [day, dayRows] = unnest(rawDay, "pl_exercise_rows");
+        days.push(day);
+        for (const rawRow of dayRows) {
+          const [row, results] = unnest(rawRow, "pl_row_results");
+          exerciseRows.push(row);
+          for (const { client_id: _owner, ...rr } of results) rowResults.push(rr);
+        }
+      }
+    }
+  }
+  // Session blocks need client visibility so the unchanged canonical logger can
+  // read their cloned prescriptions through existing RLS. Exclude them by
+  // default from every primary-program consumer; the Workout calendar opts in
+  // explicitly to show them as additional At-Home Backup history items.
+  const visibleBlocks = filterPrimaryProgramBlocks(blocks, { includeSessions: options.includeAtHomeBackupSessions });
+  const visibleBlockIds = new Set<string>(visibleBlocks.map((b: any) => b.id));
+  const visibleWeeks = weeks
+    .filter((w) => visibleBlockIds.has(w.block_id))
+    .sort((a, b) => (a.week_index ?? 0) - (b.week_index ?? 0));
+  const visibleWeekIds = new Set<string>(visibleWeeks.map((w) => w.id));
+  const visibleDays = days
+    .filter((d) => visibleWeekIds.has(d.week_id))
+    .sort((a, b) => (a.day_index ?? 0) - (b.day_index ?? 0));
+  const completions: any[] = [];
+  const feedbacks: any[] = [];
+  for (const raw of completionRows as any[]) {
+    const [completion, fb] = unnest(raw, "pl_workout_feedback");
+    completions.push(completion);
+    feedbacks.push(...fb);
+  }
+  return { visibleBlocks, weeks: visibleWeeks, days: visibleDays, exerciseRows, rowResults, completions, feedbacks, scheduledInstances };
+}
+
+/** The same program, read level by level (the fallback if the nested read is refused). */
+async function loadProgramTreeStepwise(
+  clientId: string,
+  options: { includeAtHomeBackupSessions?: boolean },
+): Promise<ProgramTree> {
+  const empty: ProgramTree = { visibleBlocks: [], weeks: [], days: [], exerciseRows: [], rowResults: [], completions: [], feedbacks: [], scheduledInstances: [] };
+  const { data: blocks } = await sb
+    .from("pl_blocks")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("client_visible", true)
+    .neq("status", "Archived")
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
+  const visibleBlocks = filterPrimaryProgramBlocks(blocks ?? [], {
+    includeSessions: options.includeAtHomeBackupSessions,
+  });
+  const blockIds = visibleBlocks.map((b: any) => b.id);
+  if (!blockIds.length) return empty;
+  const { data: weeks } = await sb.from("pl_weeks").select("*").in("block_id", blockIds).order("week_index");
+  const weekIds = (weeks ?? []).map((w: any) => w.id);
+  const { data: days } = weekIds.length
+    ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index")
+    : { data: [] };
+  const dayIds = (days ?? []).filter((day: any) => !isInactivePrimaryDay(day)).map((d: any) => d.id);
+  const [completionsRes, exerciseRowsRes, scheduledInstancesRes] = dayIds.length
+    ? await Promise.all([
+        sb.from("pl_day_completions").select("*").in("day_id", dayIds).eq("client_id", clientId),
+        sb.from("pl_exercise_rows").select(ESTIMATE_ROW_COLUMNS).in("day_id", dayIds),
+        sb.from("pl_scheduled_workouts").select(SCHEDULED_INSTANCE_COLUMNS).eq("client_id", clientId).in("source_day_id", dayIds),
+      ])
+    : [{ data: [] as any[] }, { data: [] as any[] }, { data: [] as any[] }];
+  const rowIds = ((exerciseRowsRes.data ?? []) as any[]).map((r: any) => r.id);
+  const completionIds = ((completionsRes.data ?? []) as any[]).map((c: any) => c.id).filter(Boolean);
+  const [rowResultsRes, feedbacksRes] = await Promise.all([
+    rowIds.length
+      ? sb.from("pl_row_results").select(LOGGED_SET_COLUMNS).eq("client_id", clientId).in("row_id", rowIds)
+      : Promise.resolve({ data: [] as any[] }),
+    completionIds.length
+      ? sb.from("pl_workout_feedback").select("completion_id").in("completion_id", completionIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  return {
+    visibleBlocks,
+    weeks: weeks ?? [],
+    days: days ?? [],
+    exerciseRows: exerciseRowsRes.data ?? [],
+    rowResults: rowResultsRes.data ?? [],
+    completions: completionsRes.data ?? [],
+    feedbacks: feedbacksRes.data ?? [],
+    scheduledInstances: scheduledInstancesRes.data ?? [],
+  };
+}
+
 export async function getClientWorkouts(
   clientId: string,
   options: { includeAtHomeBackupSessions?: boolean } = {},
@@ -1528,28 +1681,11 @@ export async function getClientWorkouts(
   // a stable tiebreaker. Previously this used created_at only, causing the
   // workouts list/calendar to disagree with the block-view tab about which
   // block is "current".
-  const { data: blocks } = await sb
-    .from("pl_blocks")
-    .select("*")
-    .eq("client_id", clientId)
-    .eq("client_visible", true)
-    .neq("status", "Archived")
-    .order("sort_order", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true });
-  // Session blocks need client visibility so the unchanged canonical logger can
-  // read their cloned prescriptions through existing RLS. Exclude them by
-  // default from every primary-program consumer; the Workout calendar opts in
-  // explicitly to show them as additional At-Home Backup history items.
-  const visibleBlocks = filterPrimaryProgramBlocks(blocks ?? [], {
-    includeSessions: options.includeAtHomeBackupSessions,
-  });
-  const blockIds = visibleBlocks.map((b: any) => b.id);
-  if (!blockIds.length) return [];
-  const { data: weeks } = await sb.from("pl_weeks").select("*").in("block_id", blockIds).order("week_index");
-  const weekIds = (weeks ?? []).map((w: any) => w.id);
-  const { data: days } = weekIds.length
-    ? await sb.from("pl_days").select("*").in("week_id", weekIds).order("day_index")
-    : { data: [] };
+  const tree = (await loadProgramTreeNested(clientId, options).catch(() => null))
+    ?? (await loadProgramTreeStepwise(clientId, options));
+  const { visibleBlocks, weeks } = tree;
+  if (!visibleBlocks.length) return [];
+  const days = tree.days;
   // Archived or soft-deleted days never render on active workout surfaces —
   // primary program days included. This is what stops a removed day from
   // regenerating through the legacy derived-cadence fallback once its
@@ -1557,27 +1693,10 @@ export async function getClientWorkouts(
   // are untouched; history/audit readers query pl_days directly.
   const activeDays = (days ?? []).filter((day: any) => !isInactivePrimaryDay(day));
   const dayIds = activeDays.map((d: any) => d.id);
-  // Fire the two day-dependent reads (completions + exercise rows) in
-  // parallel — they don't depend on each other and previously added a
-  // serial round-trip each, which on mobile turned the workouts list
-  // into a ~2s blank state.
-  const [completionsRes, exerciseRowsRes, scheduledInstancesRes] = dayIds.length
-    ? await Promise.all([
-        sb.from("pl_day_completions").select("*").in("day_id", dayIds).eq("client_id", clientId),
-        // Estimate fields ride along (sets/rest/profile) so the workouts
-        // list can show a per-day duration estimate without a second query.
-        sb.from("pl_exercise_rows").select("id, day_id, sets, rest_seconds, time_profile, estimated_seconds_override").in("day_id", dayIds),
-        // Phase 2a: fetch instance-level schedule alongside prescriptions.
-        // Filtered to this client so we never merge another client's cards.
-        sb.from("pl_scheduled_workouts")
-          .select("id, client_id, source_day_id, scheduled_date, scheduled_time, order_index, schedule_source, note, created_at")
-          .eq("client_id", clientId)
-          .in("source_day_id", dayIds),
-      ])
-    : [{ data: [] as any[] }, { data: [] as any[] }, { data: [] as any[] }];
-  const { data: completions } = completionsRes;
-  const { data: exerciseRows } = exerciseRowsRes;
-  const { data: scheduledInstances } = scheduledInstancesRes;
+  const activeDayIds = new Set<string>(dayIds);
+  const completions = tree.completions.filter((c: any) => activeDayIds.has(c.day_id));
+  const exerciseRows = tree.exerciseRows.filter((r: any) => activeDayIds.has(r.day_id));
+  const scheduledInstances = tree.scheduledInstances.filter((s: any) => activeDayIds.has(s.source_day_id));
   const rowIdToDay = new Map<string, string>();
   const rowsByDay = new Map<string, RowForEstimate[]>();
   for (const r of (exerciseRows ?? []) as any[]) {
@@ -1586,24 +1705,9 @@ export async function getClientWorkouts(
     list.push(r);
     rowsByDay.set(r.day_id, list);
   }
-  const rowIds = Array.from(rowIdToDay.keys());
-  // Run the two completion-derived reads (logged-set counts + feedback
-  // presence) in parallel too — they're independent.
-  const completionIds = (completions ?? []).map((c: any) => c.id).filter(Boolean);
-  const [rowResultsRes, feedbacksRes] = await Promise.all([
-    rowIds.length
-      ? sb
-          .from("pl_row_results")
-          .select("row_id, actual_load, actual_load_unit, actual_reps, completed_duration_seconds")
-          .eq("client_id", clientId)
-          .in("row_id", rowIds)
-      : Promise.resolve({ data: [] as any[] }),
-    completionIds.length
-      ? sb.from("pl_workout_feedback").select("completion_id").in("completion_id", completionIds)
-      : Promise.resolve({ data: [] as any[] }),
-  ]);
-  const { data: rowResults } = rowResultsRes;
-  const { data: feedbacks } = feedbacksRes;
+  const rowResults = tree.rowResults.filter((rr: any) => rowIdToDay.has(rr.row_id));
+  const completionIdSet = new Set<string>(completions.map((c: any) => c.id));
+  const feedbacks = tree.feedbacks.filter((f: any) => completionIdSet.has(f.completion_id));
   const loggedSetsByDay = new Map<string, number>();
   for (const rr of (rowResults ?? []) as any[]) {
     const hasLoad = rr.actual_load != null && Number.isFinite(Number(rr.actual_load)) && Number(rr.actual_load) > 0;
@@ -1674,6 +1778,7 @@ export async function getClientWorkouts(
     if (!dayId) continue;
     const prog = computeWorkoutProgress((rowsByDay.get(dayId) ?? []) as any[], (resultsByDay.get(dayId) ?? []) as any[]);
     it.progress_pct = prog.pct;
+    it.progress = prog;
   }
   // Scheduled chronology is the canonical client-facing order. The shared
   // comparator falls back to program order only for genuinely unscheduled days.
