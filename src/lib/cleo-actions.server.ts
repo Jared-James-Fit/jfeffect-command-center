@@ -116,15 +116,80 @@ export async function describeAction(db: any, kind: CleoActionKind, p: any): Pro
   }
 }
 
+export type ActionLink = { href: string; label: string };
+
+/** The client a program row, day or block belongs to. */
+async function clientOfDay(db: any, dayId: string): Promise<string | null> {
+  const { data: d } = await db.from("pl_days").select("week_id").eq("id", dayId).maybeSingle();
+  if (!d) return null;
+  const { data: w } = await db.from("pl_weeks").select("block_id").eq("id", d.week_id).maybeSingle();
+  if (!w) return null;
+  const { data: b } = await db.from("pl_blocks").select("client_id").eq("id", w.block_id).maybeSingle();
+  return b?.client_id ?? null;
+}
+
+/** Where to look at the change once it's done. Never throws: a card without a link is fine. */
+export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise<ActionLink | null> {
+  try {
+    const client = (id: string | null | undefined, tab: string, label: string) => (id ? { href: `/admin/clients/${id}?tab=${tab}`, label } : null);
+    const training = (id: string | null | undefined) => client(id, "training", "Open their training");
+    switch (kind) {
+      case "create_task":
+      case "complete_task":
+        return { href: "/admin/tasks", label: "Open Tasks" };
+      case "send_message":
+      case "schedule_message":
+        return { href: `/admin/communication?tab=messages&client=${p.client_id}`, label: "Open the chat" };
+      case "add_client_note":
+        return client(p.client_id, "notes", "Open their notes");
+      case "mark_check_ins_reviewed":
+        return client(p.client_id, "summary", "Open their profile");
+      case "update_payment_status":
+      case "send_payment_link": {
+        const { data } = await db.from("purchase_records").select("client_id").eq("id", p.purchase_id).maybeSingle();
+        return client(data?.client_id, "purchases", "Open their purchases");
+      }
+      case "book_appointment":
+        return { href: "/admin/calendar", label: "Open Calendar" };
+      case "assign_program_template":
+      case "build_program":
+      case "add_workout":
+        return training(p.client_id);
+      case "edit_program_day":
+        return training(await clientOfDay(db, p.day_id));
+      case "correct_logged_exercise": {
+        const { data } = await db.from("pl_exercise_rows").select("day_id").eq("id", p.row_id).maybeSingle();
+        const cid = data?.day_id ? await clientOfDay(db, data.day_id) : null;
+        return cid ? { href: `/admin/client-programs/${cid}/history`, label: "Open workout history" } : null;
+      }
+      case "publish_program": {
+        const { data } = await db.from("pl_blocks").select("client_id").eq("id", p.block_id).maybeSingle();
+        return training(data?.client_id);
+      }
+      case "move_workout": {
+        const { data } = await db.from("pl_scheduled_workouts").select("client_id").eq("id", p.workout_id).maybeSingle();
+        return training(data?.client_id);
+      }
+      case "set_nutrition_targets":
+        return client(p.client_id, "nutrition", "Open their nutrition");
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /** A new card. Returns what Cleo should tell the person. */
 export async function proposeAction(actor: ActorCtx, caller: Caller, kind: CleoActionKind, raw: unknown) {
   const params = CLEO_ACTION_PARAMS[kind].parse(raw);
   const summary = await describeAction(actor.db, kind, params);
   const permission = actionPermission(kind, params);
+  // Kept with the params (the schema drops unknown keys when it runs).
+  const link = await actionLink(actor.db, kind, params);
   const admin = await service();
   const { data, error } = await admin
     .from("cleo_actions")
-    .insert({ requested_by: actor.userId, kind, params, summary, permission, status: "proposed" })
+    .insert({ requested_by: actor.userId, kind, params: { ...params, ...(link ? { _link: link } : {}) }, summary, permission, status: "proposed" })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
@@ -397,6 +462,7 @@ function toView(row: any, caller: Caller, names: Map<string, string>): CleoActio
     requestedBy: row.requested_by,
     requesterName: names.get(row.requested_by) ?? null,
     createdAt: row.created_at,
+    link: row.params?._link?.href && String(row.params._link.href).startsWith("/admin") ? { href: row.params._link.href, label: String(row.params._link.label ?? "Open") } : null,
   };
 }
 

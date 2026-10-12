@@ -17,6 +17,7 @@ import { extractLinks, tokenizeInline } from "@/lib/summer-voice-text";
 import { loadVoicePrefs, summerSpeaker, type ServerVoice, type SummerVoicePrefs } from "@/lib/summer-speaker";
 import { blobToBase64, micSupported, useSummerMic } from "@/hooks/use-summer-mic";
 import { isAudioSessionError } from "@/lib/audio-session";
+import { playAppSound, startThinkingSound } from "@/lib/app-sounds";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 import { CleoActionCard, CleoApprovals, useCleoActions } from "./cleo-action-card";
 
@@ -266,6 +267,10 @@ export function SummerChat({
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length, pending, open, voiceState]);
 
+  // A soft "working on it" sound while she thinks (typed or spoken).
+  const working = open && (!!pending || voiceState === "thinking");
+  useEffect(() => (working ? startThinkingSound() : undefined), [working]);
+
   const append = (rows: Msg[]) => qc.setQueryData<Msg[]>(["summer-messages"], (prev = []) => [...prev, ...rows]);
 
   const serverVoice = useCallback<ServerVoice>((text, ctx) => speechFn({ data: { text, ...ctx } }) as Promise<any>, [speechFn]);
@@ -337,6 +342,7 @@ export function SummerChat({
     void cleo.refresh();
     if (turn !== turnRef.current) return;
     prefsRef.current = loadVoicePrefs();
+    if (!prefsRef.current.autoplay) playAppSound("reply");
     if (prefsRef.current.autoplay) {
       setVoiceState("speaking");
       await speak(res.assistant);
@@ -387,6 +393,7 @@ export function SummerChat({
       const res = (await ask({ data: { message, year, route } })) as { user: Msg; assistant: Msg };
       append([res.user, res.assistant]);
       void cleo.refresh();
+      playAppSound("reply");
     } catch (e: any) {
       setDraft(message);
       toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
@@ -467,7 +474,7 @@ export function SummerChat({
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 text-sm">
           {isLoading && <div className="flex justify-center py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
-          {cleo.data && <CleoApprovals approvals={cleo.data.approvals} ownerName={cleo.data.ownerName} />}
+          {cleo.data && <CleoApprovals approvals={cleo.data.approvals} ownerName={cleo.data.ownerName} onOpen={(h) => openLink(h, true)} />}
           {!isLoading && messages.length === 0 && !pending && voiceState === "idle" && (
             <div className="space-y-3">
               <p className="text-muted-foreground">{tone.greeting}</p>
@@ -490,7 +497,7 @@ export function SummerChat({
                 {m.role === "assistant" && cleo.forMessage(m.id).length > 0 && (
                   <div className="mt-1.5 w-full max-w-[88%] space-y-2">
                     {cleo.forMessage(m.id).map((a) => (
-                      <CleoActionCard key={a.id} action={a} ownerName={cleo.data?.ownerName ?? "the owner"} />
+                      <CleoActionCard key={a.id} action={a} ownerName={cleo.data?.ownerName ?? "the owner"} onOpen={(h) => openLink(h, true)} />
                     ))}
                   </div>
                 )}

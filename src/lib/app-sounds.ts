@@ -11,7 +11,7 @@
  *    first user gesture
  */
 
-export type AppSound = "message" | "sent" | "notify" | "success" | "celebrate";
+export type AppSound = "message" | "sent" | "notify" | "success" | "celebrate" | "reply";
 
 const KEY = "jf-app-sounds";
 const listeners = new Set<(on: boolean) => void>();
@@ -103,6 +103,8 @@ const PATTERNS: Record<AppSound, (c: AudioContext, out: AudioNode, t: number) =>
   // Three rising notes — submitted / completed.
   success: (c, o, t) => { [659.25, 830.6, 987.8].forEach((f, i) => tone(c, o, t + i * 0.08, f, 0.3, 0.11)); },
   // Bright arpeggio + sparkle — PRs, level-ups.
+  // Soft rising pair, quieter than a message — Cleo's answer is in.
+  reply: (c, o, t) => { tone(c, o, t, 783.99, 0.32, 0.07); tone(c, o, t + 0.1, 1174.66, 0.5, 0.06); },
   celebrate: (c, o, t) => {
     [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(c, o, t + i * 0.07, f, i === 3 ? 0.7 : 0.25, 0.12, "triangle"));
     for (let i = 0; i < 5; i++) tone(c, o, t + 0.3 + i * 0.045, 2093 * Math.pow(2, (i * 3) / 12), 0.25, 0.035);
@@ -133,3 +135,61 @@ export function playAppSound(name: AppSound, opts: { force?: boolean } = {}) {
     PATTERNS[name](c, out, c.currentTime + 0.01);
   } catch { /* never let a sound break the UI */ }
 }
+
+/**
+ * Cleo's "working on it" sound: soft, slow bell notes drifting through a
+ * pentatonic set while she thinks. Very quiet, starts after a short pause
+ * (quick answers stay silent), follows the sounds toggle and the silent
+ * switch. Returns stop(), which fades it out.
+ */
+const THINK_NOTES = [659.25, 783.99, 987.77, 1174.66, 987.77, 783.99];
+export function startThinkingSound(): () => void {
+  if (typeof window === "undefined" || !appSoundsEnabled()) return () => {};
+  const c = getCtx();
+  if (!c) return () => {};
+  if (c.state !== "running") void c.resume().catch(() => {});
+  let master: GainNode | null = null;
+  let step = 0;
+  let timer = 0;
+  const note = () => {
+    if (!master || c.state !== "running" || document.visibilityState === "hidden") return;
+    const t = c.currentTime + 0.02;
+    const f = THINK_NOTES[step++ % THINK_NOTES.length];
+    // Slow attack and a long tail: a breath, not a beep.
+    const o = c.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(f, t);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.05, t + 0.18);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+    o.connect(g).connect(master);
+    o.start(t);
+    o.stop(t + 1.6);
+    tone(c, master, t, f * 2, 0.8, 0.008);
+  };
+  const begin = window.setTimeout(() => {
+    try {
+      master = c.createGain();
+      master.gain.value = 0.9;
+      master.connect(c.destination);
+      note();
+      timer = window.setInterval(note, 1100);
+    } catch { /* never let a sound break the UI */ }
+  }, 450);
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    window.clearTimeout(begin);
+    window.clearInterval(timer);
+    const m = master;
+    master = null;
+    if (!m) return;
+    try {
+      m.gain.setTargetAtTime(0, c.currentTime, 0.08);
+      window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, 600);
+    } catch { /* gone */ }
+  };
+}
+

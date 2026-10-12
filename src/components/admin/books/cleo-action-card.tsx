@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, Clock, Loader2, ShieldQuestion, X } from "lucide-react";
+import { ArrowUpRight, Check, Clock, Loader2, ShieldQuestion, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { decideCleoAction, getCleoActions } from "@/lib/business-books.functions";
@@ -48,7 +48,15 @@ const TONE: Record<CleoActionView["status"], string> = {
   cancelled: "text-muted-foreground",
 };
 
-export function CleoActionCard({ action, ownerName, mode = "mine" }: { action: CleoActionView; ownerName: string; mode?: "mine" | "approval" }) {
+export function CleoActionCard({
+  action, ownerName, mode = "mine", onOpen,
+}: {
+  action: CleoActionView;
+  ownerName: string;
+  mode?: "mine" | "approval";
+  /** Opens an in-app path (the chat's link handler). */
+  onOpen?: (href: string) => void;
+}) {
   const decide = useServerFn(decideCleoAction);
   const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
@@ -57,7 +65,9 @@ export function CleoActionCard({ action, ownerName, mode = "mine" }: { action: C
     setBusy(decision);
     try {
       const r: any = await decide({ data: { id: action.id, decision } });
-      if (r?.status === "done") toast.success(r.result ?? "Done");
+      if (r?.status === "done") {
+        toast.success(r.result ?? "Done", action.link && onOpen ? { action: { label: "Open", onClick: () => onOpen(action.link!.href) } } : undefined);
+      }
       else if (r?.status === "failed") toast.error(r.error ?? "That didn't work");
       else if (r?.status === "awaiting_approval") toast.success(`Sent to ${ownerName} for approval`);
       else if (r?.status === "declined") toast.success("Declined");
@@ -81,6 +91,11 @@ export function CleoActionCard({ action, ownerName, mode = "mine" }: { action: C
       </div>
       <p className="whitespace-pre-wrap text-sm text-foreground/90">{action.summary}</p>
       {action.status === "done" && action.result && <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400"><Check className="h-3.5 w-3.5" /> {action.result}</p>}
+      {action.status === "done" && action.link && onOpen && (
+        <Button size="sm" variant="outline" className="mt-2.5 h-8 border-primary/30 text-primary hover:bg-primary/10" onClick={() => onOpen(action.link!.href)}>
+          {action.link.label} <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+        </Button>
+      )}
       {action.status === "failed" && action.error && <p className="mt-1.5 text-xs text-destructive">{action.error}</p>}
       {asking && (
         <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
@@ -121,13 +136,13 @@ export function CleoActionCard({ action, ownerName, mode = "mine" }: { action: C
 }
 
 /** The owner's "waiting for your OK" list, pinned above the chat. */
-export function CleoApprovals({ approvals, ownerName }: { approvals: CleoActionView[]; ownerName: string }) {
+export function CleoApprovals({ approvals, ownerName, onOpen }: { approvals: CleoActionView[]; ownerName: string; onOpen?: (href: string) => void }) {
   if (!approvals.length) return null;
   return (
     <div className="space-y-2 rounded-2xl border border-amber-500/40 bg-amber-500/5 p-3">
       <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Waiting for your OK ({approvals.length})</p>
       {approvals.map((a) => (
-        <CleoActionCard key={a.id} action={a} ownerName={ownerName} mode="approval" />
+        <CleoActionCard key={a.id} action={a} ownerName={ownerName} mode="approval" onOpen={onOpen} />
       ))}
     </div>
   );
