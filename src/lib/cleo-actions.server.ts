@@ -161,6 +161,11 @@ export async function actionLink(db: any, kind: CleoActionKind, p: any): Promise
         return training(p.client_id);
       case "edit_program_day":
         return training(await clientOfDay(db, p.day_id));
+      case "remove_workout": {
+        if (p.day_id) return training(await clientOfDay(db, p.day_id));
+        const { data } = await db.from("pl_scheduled_workouts").select("client_id").eq("id", p.workout_id).maybeSingle();
+        return training(data?.client_id);
+      }
       case "correct_logged_exercise": {
         const { data } = await db.from("pl_exercise_rows").select("day_id").eq("id", p.row_id).maybeSingle();
         const cid = data?.day_id ? await clientOfDay(db, data.day_id) : null;

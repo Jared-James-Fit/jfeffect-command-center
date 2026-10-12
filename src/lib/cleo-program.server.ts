@@ -247,10 +247,50 @@ export async function targetDays(db: Db, dayId: string, scope: "this" | "future"
   return { block, week, origin: day, days: days.filter((d) => !locked.has(d.id)).sort((a, b) => a.week_index - b.week_index), lockedCount: days.filter((d) => locked.has(d.id)).length, originLocked: locked.has(day.id) };
 }
 
+/**
+ * What remove_workout takes away. An extra workout card (a custom day) goes
+ * completely: the card and its calendar entries. A regular program day only
+ * comes off the calendar; the day stays in the block. Never anything started
+ * or logged.
+ */
+export async function workoutToRemove(db: Db, p: { workout_id?: string; day_id?: string }) {
+  let instance: any = null;
+  let dayId = p.day_id ?? null;
+  if (p.workout_id) {
+    const { data } = await db.from("pl_scheduled_workouts").select("*").eq("id", p.workout_id).maybeSingle();
+    if (!data) throw new Error("I couldn't find that scheduled workout.");
+    instance = data;
+    dayId = data.source_day_id;
+  }
+  if (!dayId) throw new Error("Say which workout: a scheduled workout id or a day id from program_detail.");
+  const { data: day } = await db.from("pl_days").select("*").eq("id", dayId).maybeSingle();
+  if (!day) throw new Error("I couldn't find that workout.");
+  const { data: week } = await db.from("pl_weeks").select("block_id").eq("id", day.week_id).maybeSingle();
+  const { data: block } = week ? await db.from("pl_blocks").select("id, name, client_id").eq("id", week.block_id).maybeSingle() : { data: null };
+  if (!block?.client_id) throw new Error("That workout isn't on a client's program.");
+  const card = !!day.is_custom;
+  const scheduled = card
+    ? rows<any>(await db.from("pl_scheduled_workouts").select("*").eq("source_day_id", day.id), "scheduled workouts")
+    : instance
+    ? [instance]
+    : rows<any>(await db.from("pl_scheduled_workouts").select("*").eq("source_day_id", day.id).eq("client_id", block.client_id), "scheduled workouts");
+  if (!card && !scheduled.length) throw new Error("That program day isn't on their calendar. To take it out of the program itself, edit the program instead.");
+  if ((await lockedDays(db, [day.id])).has(day.id)) throw new Error("That workout has been started or logged, so it stays.");
+  if (scheduled.length) {
+    const { data: started } = await db
+      .from("pl_day_completions")
+      .select("completed_at, started_at, in_progress_at")
+      .in("scheduled_workout_id", scheduled.map((s) => s.id));
+    if ((started ?? []).some((c: any) => c.completed_at || c.started_at || c.in_progress_at)) throw new Error("That workout has been started or logged, so it stays.");
+  }
+  const dayRows = card ? rows<any>(await db.from("pl_exercise_rows").select("*").eq("day_id", day.id).order("sort_order"), "rows") : [];
+  return { card, day, rows: dayRows, scheduled, block, clientId: block.client_id as string };
+}
+
 // ---------------------------------------------------------------------------
 // Cards
 
-const PROGRAM_KINDS = ["assign_program_template", "build_program", "edit_program_day", "add_workout", "publish_program", "move_workout", "correct_logged_exercise", "set_nutrition_targets"] as const;
+const PROGRAM_KINDS = ["assign_program_template", "build_program", "edit_program_day", "add_workout", "remove_workout", "publish_program", "move_workout", "correct_logged_exercise", "set_nutrition_targets"] as const;
 export type ProgramKind = (typeof PROGRAM_KINDS)[number];
 export function isProgramKind(k: string): k is ProgramKind {
   return (PROGRAM_KINDS as readonly string[]).includes(k);
@@ -370,6 +410,16 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
       if (p.coach_notes) lines.push(`Staff note: ${p.coach_notes}`);
       lines.push(current && current.visible_to_client === false ? "Their targets are hidden from them." : `${clientLabel(c)} sees the new targets and gets a heads-up.`);
       return lines.join("\n");
+    }
+    case "remove_workout": {
+      const t = await workoutToRemove(db, p);
+      const c = await client(db, t.clientId);
+      const name = t.day.title ? `"${t.day.title}"` : `Day ${t.day.day_index ?? "?"}`;
+      const dates = [...new Set(t.scheduled.map((s: any) => s.scheduled_date as string))].sort().map(longDate);
+      const when = dates.length ? ` on ${dates.join(", ")}` : "";
+      return t.card
+        ? `Delete ${clientLabel(c)}'s extra workout ${name}${when}: the whole card${t.rows.length ? ` and its ${t.rows.length} exercise${t.rows.length === 1 ? "" : "s"}` : ""}. Nothing in it was logged. You can undo it.`
+        : `Take ${clientLabel(c)}'s ${name}${when} off their calendar. The day stays in "${t.block.name}". You can undo it.`;
     }
     case "move_workout": {
       const { data: w } = await db.from("pl_scheduled_workouts").select("id, client_id, scheduled_date, source_day_id").eq("id", p.workout_id).maybeSingle();
@@ -649,6 +699,22 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
         }
       }
       return "Nutrition targets updated.";
+    }
+    case "remove_workout": {
+      // Checked again now: nothing started or logged since the card went up.
+      const t = await workoutToRemove(sb, p);
+      if (t.card) {
+        if (t.scheduled.length) {
+          const { error: se } = await sb.from("pl_scheduled_workouts").delete().in("id", t.scheduled.map((x: any) => x.id));
+          if (se) throw new Error(se.message);
+        }
+        const { error } = await sb.from("pl_days").delete().eq("id", t.day.id);
+        if (error) throw new Error(error.message);
+        return "Workout card deleted.";
+      }
+      const { removeScheduledWorkout } = await import("@/lib/scheduled-workouts.functions");
+      for (const x of t.scheduled) await removeScheduledWorkout({ data: { instanceId: x.id } });
+      return "Taken off their calendar.";
     }
     case "move_workout": {
       const { moveScheduledWorkout } = await import("@/lib/scheduled-workouts.functions");
