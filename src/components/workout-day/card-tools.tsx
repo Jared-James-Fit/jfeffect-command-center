@@ -42,10 +42,13 @@ export function E1rmChip({
       aria-expanded={open}
       onClick={onToggle}
       className={cn(chip, chipState(open))}
-      aria-label={best ? `Estimated 1RM about ${fmt(best.e1rm)} ${unit}` : "e1RM calculator"}
+      aria-label={best ? `Today's estimated 1RM: about ${fmt(best.e1rm)} ${unit}` : "e1RM calculator"}
     >
       <Gauge className={cn("h-3.5 w-3.5", open ? "text-primary" : "text-muted-foreground")} aria-hidden="true" />
-      {best ? <>e1RM <span className="font-black">≈{fmt(best.e1rm)}</span></> : "e1RM"}
+      {/* Reads like the Last time chip: a quiet label, then the number with
+          its unit ("≈415" alone looked like a code). */}
+      <span className={cn(best && "text-[11px] font-bold", best && !open && "text-muted-foreground")}>e1RM</span>
+      {best && <span className="font-black">{fmt(best.e1rm)} {unit}</span>}
     </button>
   );
 }
