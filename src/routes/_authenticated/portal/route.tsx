@@ -11,6 +11,7 @@ import { HomeScreenSetupGate } from "@/components/home-screen-setup-gate";
 import { FormPopupGate } from "@/components/form-popup-gate";
 import { LegalAcceptanceGate } from "@/components/legal/legal-acceptance-gate";
 import { LeagueRecapGate } from "@/components/portal/league-recap";
+import { WeightUnitPrompt } from "@/components/portal/weight-unit-prompt";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useCommunityActivity } from "@/lib/community.queries";
 
@@ -42,6 +43,8 @@ function PortalLayout() {
             <FormPopupGate />
             <HomeScreenSetupGate />
             <LegalAcceptanceGate />
+            {/* lb or kg, asked until answered (lb meanwhile). */}
+            <WeightUnitPrompt />
           </>
         )}
         {/* Previous month's League Recap — first week of each month, once. */}

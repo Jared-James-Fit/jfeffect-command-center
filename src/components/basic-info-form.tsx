@@ -87,11 +87,11 @@ export function BasicInfoForm({
       <div className="grid gap-3 md:grid-cols-2">
         <div>
           <Label>First name *</Label>
-          <Input value={values.first_name ?? ""} onChange={(e) => onChange({ first_name: e.target.value })} />
+          <Input autoComplete="given-name" value={values.first_name ?? ""} onChange={(e) => onChange({ first_name: e.target.value })} />
         </div>
         <div>
           <Label>Last name *</Label>
-          <Input value={values.last_name ?? ""} onChange={(e) => onChange({ last_name: e.target.value })} />
+          <Input autoComplete="family-name" value={values.last_name ?? ""} onChange={(e) => onChange({ last_name: e.target.value })} />
         </div>
         {showOptional && (
           <div className="md:col-span-2">
@@ -108,7 +108,7 @@ export function BasicInfoForm({
         )}
         <div>
           <Label>Phone number *</Label>
-          <Input value={values.phone ?? ""} onChange={(e) => onChange({ phone: e.target.value })} placeholder="(555) 123-4567" />
+          <Input type="tel" inputMode="tel" autoComplete="tel" value={values.phone ?? ""} onChange={(e) => onChange({ phone: e.target.value })} placeholder="(555) 123-4567" />
         </div>
         <div>
           <Label>Time zone *</Label>
@@ -167,19 +167,19 @@ export function BasicInfoForm({
       <div className="grid gap-3 md:grid-cols-2">
         <div className="md:col-span-2">
           <Label>Mailing address *</Label>
-          <Input value={values.address ?? ""} onChange={(e) => onChange({ address: e.target.value })} placeholder="Street address" />
+          <Input autoComplete="street-address" value={values.address ?? ""} onChange={(e) => onChange({ address: e.target.value })} placeholder="Street address" />
         </div>
         <div>
           <Label>City *</Label>
-          <Input value={values.city ?? ""} onChange={(e) => onChange({ city: e.target.value })} />
+          <Input autoComplete="address-level2" value={values.city ?? ""} onChange={(e) => onChange({ city: e.target.value })} />
         </div>
         <div>
           <Label>Province / State</Label>
-          <Input value={values.province ?? ""} onChange={(e) => onChange({ province: e.target.value })} />
+          <Input autoComplete="address-level1" value={values.province ?? ""} onChange={(e) => onChange({ province: e.target.value })} />
         </div>
         <div>
           <Label>Postal / ZIP code</Label>
-          <Input value={values.postal_code ?? ""} onChange={(e) => onChange({ postal_code: e.target.value })} />
+          <Input autoComplete="postal-code" autoCapitalize="characters" value={values.postal_code ?? ""} onChange={(e) => onChange({ postal_code: e.target.value })} />
         </div>
         <div>
           <Label>Country *</Label>
@@ -190,17 +190,17 @@ export function BasicInfoForm({
         </div>
       </div>
 
-      <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-4">
+      <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-3 sm:p-4">
         <div className="text-xs uppercase tracking-widest text-muted-foreground">Emergency contact *</div>
         <p className="text-[11px] text-muted-foreground">Required — someone we can reach if anything urgent happens during training.</p>
         <div className="grid gap-3 md:grid-cols-2">
           <div>
             <Label>Contact name *</Label>
-            <Input value={values.emergency_contact_name ?? ""} onChange={(e) => onChange({ emergency_contact_name: e.target.value })} />
+            <Input autoComplete="off" value={values.emergency_contact_name ?? ""} onChange={(e) => onChange({ emergency_contact_name: e.target.value })} />
           </div>
           <div>
             <Label>Contact phone *</Label>
-            <Input value={values.emergency_contact_phone ?? ""} onChange={(e) => onChange({ emergency_contact_phone: e.target.value })} placeholder="(555) 123-4567" />
+            <Input type="tel" inputMode="tel" autoComplete="off" value={values.emergency_contact_phone ?? ""} onChange={(e) => onChange({ emergency_contact_phone: e.target.value })} placeholder="(555) 123-4567" />
           </div>
         </div>
       </div>

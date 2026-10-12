@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, CreditCard, Settings, Trash2, CheckCircle2, AlertTriangle, Clock, Briefcase, Calendar } from "lucide-react";
-import { isBasicInfoComplete, isIntakeLiftsComplete } from "@/lib/basic-info";
+import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isNative } from "@/platform";
 import { toast } from "sonner";
 import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
@@ -33,6 +33,10 @@ import { WeightUnitCard } from "@/components/portal/weight-unit-card";
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
 });
+
+function jumpToSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 const PROFILE_FIELDS = ["first_name", "last_name", "preferred_name", "phone", "address", "city", "province", "postal_code", "country", "timezone", "date_of_birth", "sex", "height_cm", "preferred_height_unit", "emergency_contact_name", "emergency_contact_phone", ...SOCIAL_FIELDS] as const;
 
@@ -193,48 +197,47 @@ function AccountPage() {
     setForm({ ...form, profile_picture_url: path });
   };
 
+  const sections = [
+    { id: "basic-information", label: "Basic Info" },
+    { id: "profile-picture", label: "Photo" },
+    { id: "units", label: "Units" },
+    { id: "training-schedule", label: "Schedule" },
+    { id: "goals-setup", label: "Goals" },
+    { id: "coaching-agreement", label: "Agreement" },
+    { id: "notifications", label: "Notifications" },
+    { id: "devices", label: "Devices" },
+    { id: "install-app", label: "Install App" },
+    { id: "social-media", label: "Social" },
+    { id: "password", label: "Password" },
+    ...(!isImpersonating ? [{ id: "legal-safety", label: "Legal" }] : []),
+    ...(!isNative() ? [{ id: "billing", label: "Billing" }] : []),
+    { id: "delete-account", label: "Delete" },
+  ];
+
   return (
     <>
       <PageHeader
         title="Account Settings"
-        subtitle="Manage your contact info, profile picture, and password."
+        subtitle="Your details, units, schedule, notifications and password."
         actions={<SavedIndicator state={saveState} />}
       />
-      <div className="grid gap-5 px-4 py-4 md:gap-6 md:p-8 md:grid-cols-3">
-        {/* Sticky quick-jump navigation so clients can find any section
-            fast on mobile without scrolling through the whole page. */}
+      <div className="grid grid-cols-1 gap-4 px-4 py-4 md:grid-cols-3 md:gap-6 md:p-8">
+        {/* Sticky quick-jump navigation, in page order, so any section is one tap away on a phone. */}
         <div className="md:col-span-3 sticky top-14 z-20 -mx-4 md:-mx-8 md:top-20">
-          <div className="border-y border-border bg-background/95 px-4 py-2 backdrop-blur md:px-8">
+          <nav aria-label="Account sections" className="border-y border-border bg-background/95 px-4 py-2 backdrop-blur md:px-8">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {[
-                { id: "basic-information", label: "Basic Info" },
-                { id: "profile-picture", label: "Photo" },
-                { id: "units", label: "Units" },
-                { id: "training-schedule", label: "Schedule" },
-                { id: "goals-setup", label: "Goals" },
-                { id: "password", label: "Password" },
-                { id: "devices", label: "Devices" },
-                { id: "notifications", label: "Notifications" },
-                { id: "install-app", label: "Install App" },
-                { id: "coaching-agreement", label: "Agreement" },
-                { id: "legal-safety", label: "Legal" },
-                { id: "billing", label: "Billing" },
-                { id: "delete-account", label: "Delete" },
-              ].map((s) => (
+              {sections.map((s) => (
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => {
-                    const el = document.getElementById(s.id);
-                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
+                  onClick={() => jumpToSection(s.id)}
                   className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary"
                 >
                   {s.label}
                 </button>
               ))}
             </div>
-          </div>
+          </nav>
         </div>
 
         {/* ── Profile Status ── */}
@@ -248,19 +251,24 @@ function AccountPage() {
 
         {form.info_update_requested && (
           <Card className="border-warning/40 bg-warning/10 p-4 md:col-span-3">
-            <div className="flex items-start gap-3">
-              <ShieldAlert className="h-5 w-5 text-warning" />
-              <div>
-                <div className="font-bold">Your coach asked you to review your account info</div>
-                <div className="text-xs text-muted-foreground">Please double-check the fields below and hit Save to confirm.</div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <ShieldAlert className="h-5 w-5 shrink-0 text-warning" />
+                <div className="min-w-0">
+                  <div className="font-bold">Your coach asked you to review your account info</div>
+                  <div className="text-xs text-muted-foreground">Fix anything that's out of date below, then confirm.</div>
+                </div>
               </div>
+              <Button size="sm" className="shrink-0" onClick={() => void flushNow()}>
+                <CheckCircle2 className="mr-1.5 h-4 w-4" />Everything's correct
+              </Button>
             </div>
           </Card>
         )}
 
         <SectionErrorBoundary label="Basic Information" className="md:col-span-2">
-          <Card id="basic-information" className="border-border bg-card p-6 md:col-span-2 space-y-4 scroll-mt-24">
-            <div className="flex items-center justify-between">
+          <Card id="basic-information" className="border-border bg-card p-4 sm:p-6 md:col-span-2 space-y-4 scroll-mt-32">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
               <SavedIndicator state={saveState} />
             </div>
@@ -278,7 +286,7 @@ function AccountPage() {
         </SectionErrorBoundary>
 
         <SectionErrorBoundary label="Profile Picture">
-          <Card id="profile-picture" className="border-border bg-card p-6 space-y-3 scroll-mt-32">
+          <Card id="profile-picture" className="border-border bg-card p-4 sm:p-6 space-y-3 scroll-mt-32">
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
             <ProfilePictureCapture
               mode="client"
@@ -295,25 +303,12 @@ function AccountPage() {
 
         <div id="units" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Weight units">
-            <WeightUnitCard key={form.id} clientId={form.id} value={client?.preferred_weight_unit} />
-          </SectionErrorBoundary>
-        </div>
-
-        <SectionErrorBoundary label="Social Media" className="md:col-span-3">
-          <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
-            <div>
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media (optional)</h3>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Add just your username/handle — no full URLs needed. Leave any field blank to skip.
-              </p>
-            </div>
-            <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
-          </Card>
-        </SectionErrorBoundary>
-
-        <div id="password" className="md:col-span-3 scroll-mt-32">
-          <SectionErrorBoundary label="Change Password">
-            <ChangePasswordCard />
+            <WeightUnitCard
+              key={`${form.id}:${client?.preferred_weight_unit}:${client?.weight_unit_confirmed_at ?? ""}`}
+              clientId={form.id}
+              value={client?.preferred_weight_unit}
+              confirmed={!!client?.weight_unit_confirmed_at}
+            />
           </SectionErrorBoundary>
         </div>
 
@@ -325,9 +320,9 @@ function AccountPage() {
 
         {/* Goals & Training Setup — links to the dedicated goals-setup page */}
         <div id="goals-setup" className="md:col-span-3 scroll-mt-32">
-          <Card className="border-border bg-card p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
+          <Card className="border-border bg-card p-4 sm:p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
                 <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Goals &amp; Training Setup</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Your training goals, experience level, equipment, nutrition preferences, and coaching setup.
@@ -337,11 +332,9 @@ function AccountPage() {
                 <GoalsSetupStatusBadge clientId={(client as any).id} />
               )}
             </div>
-            <Link to="/portal/goals-setup">
-              <Button className="w-full sm:w-auto" size="lg">
-                View &amp; Update Profile &amp; Goals
-              </Button>
-            </Link>
+            <Button asChild className="w-full sm:w-auto" size="lg">
+              <Link to="/portal/goals-setup">View &amp; update Goals &amp; Setup</Link>
+            </Button>
           </Card>
         </div>
 
@@ -360,19 +353,11 @@ function AccountPage() {
           </SectionErrorBoundary>
         </div>
 
-        {/* Legal status/consents come from the signed-in session, so in coach
-            "View as client" they'd be the coach's, not the client's. */}
-        {!isImpersonating && (
-          <div id="legal-safety" className="md:col-span-3 scroll-mt-32">
-            <SectionErrorBoundary label="Legal & Safety">
-              <ClientLegalSafety />
-            </SectionErrorBoundary>
-          </div>
-        )}
-
-        <div id="install-app" className="md:col-span-3 scroll-mt-32">
-          <SectionErrorBoundary label="Install App">
-            <InstallAppCard />
+        <div id="notifications" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Push Notifications">
+            <div className="space-y-4">
+              <PushNotificationCard />
+            </div>
           </SectionErrorBoundary>
         </div>
 
@@ -382,11 +367,39 @@ function AccountPage() {
           </SectionErrorBoundary>
         </div>
 
-        <div id="notifications" className="md:col-span-3 scroll-mt-32">
-          <SectionErrorBoundary label="Push Notifications">
-            <PushNotificationCard />
+        <div id="install-app" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Install App">
+            <InstallAppCard />
           </SectionErrorBoundary>
         </div>
+
+        <SectionErrorBoundary label="Social Media" className="md:col-span-3">
+          <Card id="social-media" className="border-border bg-card p-4 sm:p-6 md:col-span-3 space-y-4 scroll-mt-32">
+            <div>
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media (optional)</h3>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Add just your username/handle — no full URLs needed. Leave any field blank to skip.
+              </p>
+            </div>
+            <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
+          </Card>
+        </SectionErrorBoundary>
+
+        <div id="password" className="md:col-span-3 scroll-mt-32">
+          <SectionErrorBoundary label="Change Password">
+            <ChangePasswordCard />
+          </SectionErrorBoundary>
+        </div>
+
+        {/* Legal status/consents come from the signed-in session, so in coach
+            "View as client" they'd be the coach's, not the client's. */}
+        {!isImpersonating && (
+          <div id="legal-safety" className="md:col-span-3 scroll-mt-32">
+            <SectionErrorBoundary label="Legal & Safety">
+              <ClientLegalSafety />
+            </SectionErrorBoundary>
+          </div>
+        )}
 
         {/* ── Billing & Subscription — hidden on native (purchases not available in Android app) ── */}
         {!isNative() && (
@@ -399,7 +412,7 @@ function AccountPage() {
 
         {/* ── Delete Account — required by Google Play and Apple App Store policies ── */}
         <div id="delete-account" className="md:col-span-3 scroll-mt-32">
-          <Card className="border-destructive/30 bg-card p-6 space-y-3">
+          <Card className="border-destructive/30 bg-card p-4 sm:p-6 space-y-3">
             <div className="flex items-center gap-2">
               <Trash2 className="h-4 w-4 text-destructive" />
               <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Delete Account</h3>
@@ -431,11 +444,14 @@ function ProfileStatusCard({
 
   const basicOk = isBasicInfoComplete(client);
   const goalsOk = !!(goalsStatus?.completed_at || goalsStatus?.main_goal);
+  const unitsOk = !!client.weight_unit_confirmed_at;
+  const photoOk = !!client.profile_picture_url && !client.profile_picture_needs_update;
+  const scheduleOk = !!client.training_schedule_completed;
 
   let status: "complete" | "missing" | "review";
   if (infoUpdateRequested) {
     status = "review";
-  } else if (!basicOk || !goalsOk) {
+  } else if (!basicOk || !goalsOk || !unitsOk || !photoOk || !scheduleOk) {
     status = "missing";
   } else {
     status = "complete";
@@ -444,9 +460,8 @@ function ProfileStatusCard({
   // Build a granular, plain-English list of every missing field so the
   // client sees exactly what to fix instead of a vague "Information Missing".
   const isFilled = (v: any) => v !== null && v !== undefined && String(v).trim() !== "";
-  const isPositive = (v: any) => Number(v) > 0;
 
-  type MissingItem = { key: string; label: string; section: "basic" | "lifts" | "goals" };
+  type MissingItem = { key: string; label: string; section: "basic" | "profile-picture" | "units" | "training-schedule" | "goals" };
   const missing: MissingItem[] = [];
 
   if (!isFilled(client.first_name)) missing.push({ key: "first_name", label: "First name", section: "basic" });
@@ -461,34 +476,20 @@ function ProfileStatusCard({
   if (!isFilled(client.emergency_contact_name)) missing.push({ key: "ec_name", label: "Emergency contact name", section: "basic" });
   if (!isFilled(client.emergency_contact_phone)) missing.push({ key: "ec_phone", label: "Emergency contact phone", section: "basic" });
 
-  if (!isIntakeLiftsComplete(client)) {
-    if (client.intake_lifts_known === false) {
-      if (!isPositive(client.intake_squat_5rm)) missing.push({ key: "sq5", label: "Squat × 5 max", section: "lifts" });
-      if (!isPositive(client.intake_bench_5rm)) missing.push({ key: "bn5", label: "Bench × 5 max", section: "lifts" });
-      if (!isPositive(client.intake_deadlift_5rm)) missing.push({ key: "dl5", label: "Deadlift × 5 max", section: "lifts" });
-    } else {
-      if (client.intake_lift_unit !== "kg" && client.intake_lift_unit !== "lb") {
-        missing.push({ key: "unit", label: "Lift units (lb or kg)", section: "lifts" });
-      }
-      if (!isPositive(client.intake_squat_1rm)) missing.push({ key: "sq1", label: "Squat 1-rep max", section: "lifts" });
-      if (!isPositive(client.intake_bench_1rm)) missing.push({ key: "bn1", label: "Bench 1-rep max", section: "lifts" });
-      if (!isPositive(client.intake_deadlift_1rm)) missing.push({ key: "dl1", label: "Deadlift 1-rep max", section: "lifts" });
-    }
-  }
+  if (!photoOk) missing.push({ key: "photo", label: "Profile photo", section: "profile-picture" });
+  if (!unitsOk) missing.push({ key: "units", label: "Weight units (lb or kg)", section: "units" });
+  if (!scheduleOk) missing.push({ key: "schedule", label: "Training schedule", section: "training-schedule" });
 
   if (!goalsOk) missing.push({ key: "goals", label: "Goals & Training setup", section: "goals" });
 
-  const hasBasic = missing.some((m) => m.section === "basic" || m.section === "lifts");
+  const hasBasic = missing.some((m) => m.section === "basic");
   const hasGoals = missing.some((m) => m.section === "goals");
 
-  const jumpTo = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const chipClass = "inline-block rounded-full border border-amber-500/40 bg-background/60 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 transition";
 
   return (
     <Card className={[
-      "p-5 space-y-4",
+      "p-4 sm:p-5 space-y-4",
       status === "complete" ? "border-emerald-500/30 bg-emerald-500/5" :
       status === "review" ? "border-amber-500/40 bg-amber-500/10" :
       "border-amber-500/40 bg-amber-500/10",
@@ -514,7 +515,7 @@ function ProfileStatusCard({
           )}
           {status === "review" && (
             <p className="text-xs text-muted-foreground mt-1">
-              Double-check your details below — autosave will confirm them for your coach.
+              Fix anything that's out of date below, then tap "Everything's correct".
             </p>
           )}
         </div>
@@ -533,32 +534,35 @@ function ProfileStatusCard({
           <ul className="flex flex-wrap gap-1.5">
             {missing.map((m) => (
               <li key={m.key}>
-                <button
-                  type="button"
-                  onClick={() => jumpTo(m.section === "goals" ? "" : "basic-information")}
-                  className="rounded-full border border-amber-500/40 bg-background/60 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 transition"
-                >
-                  {m.label}
-                </button>
+                {m.section === "goals" ? (
+                  <Link to="/portal/goals-setup" className={chipClass}>{m.label}</Link>
+                ) : (
+                  <button type="button" onClick={() => jumpToSection(m.section === "basic" ? "basic-information" : m.section)} className={chipClass}>
+                    {m.label}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
           <div className="flex flex-wrap gap-2 pt-1">
+            {!unitsOk && (
+              <Button size="sm" onClick={() => jumpToSection("units")} className="bg-amber-500 hover:bg-amber-600 text-white">
+                Choose lb or kg
+              </Button>
+            )}
             {hasBasic && (
               <Button
                 size="sm"
-                onClick={() => jumpTo("basic-information")}
+                onClick={() => jumpToSection("basic-information")}
                 className="bg-amber-500 hover:bg-amber-600 text-white"
               >
                 Fix basic info
               </Button>
             )}
             {hasGoals && (
-              <Link to="/portal/goals-setup">
-                <Button size="sm" variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
-                  Complete Goals & Training
-                </Button>
-              </Link>
+              <Button asChild size="sm" variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
+                <Link to="/portal/goals-setup">Complete Goals & Training</Link>
+              </Button>
             )}
           </div>
         </>
@@ -682,8 +686,8 @@ function GoalsSetupStatusBadge({ clientId }: { clientId: string }) {
     staleTime: 5 * 60_000,
   });
 
-  if (!data) return <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/30">Not started</Badge>;
-  if (data.completed_at) return <Badge variant="outline" className="text-xs text-emerald-500 border-emerald-500/30">Complete</Badge>;
-  if (data.main_goal) return <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/30">In progress</Badge>;
-  return <Badge variant="outline" className="text-xs text-muted-foreground">Not started</Badge>;
+  if (!data) return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-amber-500 border-amber-500/30">Not started</Badge>;
+  if (data.completed_at) return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-emerald-500 border-emerald-500/30">Complete</Badge>;
+  if (data.main_goal) return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-amber-500 border-amber-500/30">In progress</Badge>;
+  return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">Not started</Badge>;
 }
