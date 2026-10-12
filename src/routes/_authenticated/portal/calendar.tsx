@@ -58,7 +58,7 @@ function SchedulePage() {
   return (
     <>
       <PageHeader title="Schedule" subtitle="Your sessions, training and key dates." />
-      <div className="space-y-6 p-4 sm:p-6 md:p-8">
+      <div className="space-y-5 p-4 sm:p-6 md:p-8">
         {isImpersonating && (
           <Card className="border-amber-500/40 bg-amber-500/10 p-3 text-amber-200">
             <div className="flex items-start gap-2 text-xs">
@@ -71,8 +71,12 @@ function SchedulePage() {
           </Card>
         )}
 
-        {client?.id && <ClientBookCard />}
-        {client?.id && <MySessionRequests clientId={client.id} isPov={isImpersonating} />}
+        {/* Sessions: request (always), book (when the coach opened booking), what's pending and booked. */}
+        {client?.id && (
+          <MySessionRequests clientId={client.id} isPov={isImpersonating}>
+            <ClientBookCard />
+          </MySessionRequests>
+        )}
         {client?.id && <ClientSessionList clientId={client.id} />}
 
         <section className="space-y-2">
@@ -81,6 +85,7 @@ function SchedulePage() {
             items={items}
             isLoading={isLoading}
             onRangeChange={(r) => setRange({ from: r.from, to: r.to })}
+            views={["month", "week", "upcoming"]}
             emptyHint="Workouts, sessions, check-ins and coach events show up here as they're scheduled."
             renderItemActions={(item, close) =>
               item.kind === "pt_session" && item.status === "Scheduled" ? (

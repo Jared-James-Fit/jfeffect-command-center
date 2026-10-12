@@ -65,6 +65,6 @@ describe("every Home leads with its schedule", () => {
     ]) expect(readFileSync(f, "utf8")).toContain("<WeekStrip");
     const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
     expect(client).not.toContain("<WeekStrip");
-    expect(client).toContain("buildHomeAgenda(items, { today })");
+    expect(client).toContain("buildHomeAgenda(items, { today, maxUpcoming: HOME_UPCOMING_ROWS })");
   });
 });
