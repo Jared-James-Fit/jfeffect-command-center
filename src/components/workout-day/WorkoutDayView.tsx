@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -31,7 +31,7 @@ import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
-import { TrainingHelpButton, TrainingHelpSheet } from "@/components/training-help-sheet";
+import { TrainingHelpSheet } from "@/components/training-help-sheet";
 import { WarmupButton } from "@/components/warmup-sheet";
 import { dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
 import { formatClientDayNotes, formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
@@ -69,8 +69,9 @@ import {
 import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData, cachedUpdatedAt } from "@/lib/workout-plan-cache";
-import { WarmupRows, useWarmupSets } from "@/components/workout-day/final-warmup-input";
-import { CalculatorPanel, E1rmChip, E1rmPanel, type CardTool } from "@/components/workout-day/card-tools";
+import { WarmupRows, bestE1rm, useWarmupSets } from "@/components/workout-day/final-warmup-input";
+import { planRestore, setPayload, snapshotOf, type CardSet, type CardSnapshot } from "@/lib/card-history";
+import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
 import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge } from "@/components/workout-day/load-suggestion-card";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
@@ -88,9 +89,9 @@ import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row"
 import {
   DeferredExerciseHistoryButton,
   DeferredExerciseHowToButton,
-  DeferredQuickSwapButton,
+  DeferredQuickSwapSheet,
 } from "@/components/workout-day/deferred-exercise-actions";
-import { WorkoutToolsProvider, WorkoutToolsButton } from "@/components/workout-tools/workout-tools";
+import { WorkoutToolsProvider, WorkoutToolsButton, useWorkoutToolsActions } from "@/components/workout-tools/workout-tools";
 import { WorkoutAddExercise } from "@/components/workout-day/workout-add-exercise";
 import { addExerciseToWorkout, reorderWorkoutExercises, removeExerciseFromWorkout } from "@/lib/quick-swap.functions";
 import { convertWeight } from "@/lib/progress-metrics";
@@ -812,7 +813,7 @@ function WorkoutDay({
     return () => cancelAnimationFrame(frame);
   }, [rowsLoaded, rows.length]);
 
-  const { data: results = [] } = useQuery({
+  const { data: results = [], isSuccess: resultsLoaded, isFetching: resultsFetching } = useQuery({
     queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId],
     enabled: !!client?.id && (rows as any[]).length > 0,
     // Logged sets belong to one scheduled instance: never show another
@@ -2436,6 +2437,7 @@ function WorkoutDay({
                       blockId={blockId}
                       topSetBasis={topSetBasisForRow(r, rowIndex)}
                       existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
+                      resultsReady={resultsLoaded && !resultsFetching}
                       existingNote={notesByRowId.get(r.id)}
                       notesLoading={notesLoading}
                       readonly={readonly}
@@ -2657,6 +2659,10 @@ function WorkoutDay({
               exerciseRows={rows as any[]}
               className="h-7 min-h-0 px-2.5 text-xs"
             />
+            {/* Calculator, e1RM, timer, stopwatch, tally — for the whole workout. */}
+            {!readonly && (
+              <WorkoutToolsButton unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"} />
+            )}
           </div>
         )}
 
@@ -2745,6 +2751,7 @@ function WorkoutDay({
                     blockId={blockId}
                       topSetBasis={topSetBasisForRow(r, rowIndex)}
                     existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
+                      resultsReady={resultsLoaded && !resultsFetching}
                     existingNote={notesByRowId.get(r.id)}
                     notesLoading={notesLoading}
                     readonly={readonly}
@@ -3172,7 +3179,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3233,7 +3240,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     const detail = removing?.completed_at || removing
       ? " This set has logged data and it will be deleted."
       : "";
-    if (!window.confirm(`Remove set ${setIndex} from ${name}?${detail} This can't be undone.`)) return;
+    if (!window.confirm(`Remove set ${setIndex} from ${name}?${detail} (Undo is in this exercise's ⋯ menu.)`)) return;
 
     const previous = setCount;
     const next = previous - 1;
@@ -3260,6 +3267,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
 
       const { error: rowError } = await sb.from("pl_exercise_rows").update({ sets: next }).eq("id", row.id);
       if (rowError) throw rowError;
+      // The rows below moved up a slot: show their values now. A row's
+      // recent-save guard would otherwise keep the removed set's numbers on
+      // screen (set 2 still showing the old set 2 over what is now set 3).
+      const shifted = existingResults
+        .filter((x: any) => Number(x.set_index) !== setIndex)
+        .map((x: any) => (Number(x.set_index) > setIndex ? { ...x, set_index: Number(x.set_index) - 1 } : x));
+      setRestore((r) => ({ token: (r?.token ?? 0) + 1, sets: snapshotOf(shifted, next).sets }));
+      for (let i = setIndex; i <= previous; i++) clearLocalDraft(`workout-set:${row.id}:${clientId}:${i}`);
       await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
       await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
       onChange();
@@ -3547,7 +3562,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const warmupAllowed =
     !hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;
   const warmupEligible = warmupAllowed && !coachOwnsLoad && !!loadPlan;
-  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
+  const { sets: warmupSets, save: saveWarmup, remove: removeWarmup, replaceAll: replaceWarmups, ready: warmupsReady, atLimit: warmupAtLimit } = useWarmupSets(row.id, clientId, adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? null : null);
   const [warmupForm, setWarmupForm] = useState<string | null>(null);
   // Only the first card of a lift asks for the last warm-up (see warmedUpRowIds).
   const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name), [warmedUp, family, name]);
@@ -3605,10 +3620,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const warmupPrompt = warmupAllowed && rampsUp
     ? { suggested: warmupGauge?.suggested ?? null, tunes: !!warmupGauge }
     : null;
-  // Chip-row tools (e1RM, calculator): one open at a time, under the chips.
-  const [cardTool, setCardTool] = useState<CardTool | null>(null);
-  const toggleCardTool = (t: CardTool) => setCardTool((cur) => (cur === t ? null : t));
-  // The card's e1RM chip: today's logged working sets and warm-ups (external load only).
+  // Today's best set for Workout Tools → e1RM: logged working sets and
+  // warm-ups (external load only), one tap to fill it in.
   const e1rmSets = useMemo(() => {
     // Compound lifts only: a rough 1RM on a curl or a raise is noise.
     if (hideWeight || rowLoadType !== "external" || !offersLastWarmup(family, name)) return null;
@@ -3619,6 +3632,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     const warm = warmupSets.map((w) => ({ ...warmupInUnit(w, activeUnit) }));
     return [...worked, ...warm];
   }, [hideWeight, rowLoadType, family, name, existingResults, warmupSets, activeUnit]);
+  const toolsActions = useWorkoutToolsActions();
+  const e1rmBest = useMemo(() => (e1rmSets ? bestE1rm(e1rmSets, activeUnit) : null), [e1rmSets, activeUnit]);
+  useEffect(() => {
+    toolsActions?.reportE1rm(row.id, e1rmBest
+      ? { rowId: row.id, name, order: movePosition ?? position ?? 0, unit: activeUnit, e1rm: e1rmBest.e1rm, from: e1rmBest.from }
+      : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toolsActions, row.id, name, movePosition, position, activeUnit, e1rmBest?.e1rm, e1rmBest?.from.load, e1rmBest?.from.reps, e1rmBest?.from.rpe]);
+  useEffect(() => () => toolsActions?.reportE1rm(row.id, null), [toolsActions, row.id]);
   const tunedWarmupId =
     warmupGauge && (loadModel?.source === "warmup" || loadModel?.source === "history_warmup") ? heaviestWarmupId : null;
 
@@ -3715,6 +3737,82 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     reps: string;
     rpe: string;
   } | null>(null);
+
+  // ── Undo / redo / reset (the ⋯ menu) ──────────────────────────────────
+  // The card's logged sets, set count and warm-ups are its state; each
+  // settled change is a step (see use-card-history). A restore writes a
+  // snapshot back through the same paths as logging, and the rows show it
+  // straight away (`restore`) instead of waiting on the refetch.
+  const [restore, setRestore] = useState<{ token: number; sets: CardSet[] } | null>(null);
+  const cardSnapshot = useMemo(
+    () => snapshotOf(existingResults, setCount, warmupSets),
+    [existingResults, setCount, warmupSets],
+  );
+  const applyCardSnapshot = async (target: CardSnapshot, current: CardSnapshot) => {
+    if (!clientId) return;
+    const plan = planRestore(existingResults as Array<{ id: string; set_index: number }>, current, target);
+    if (plan.setCount != null && adapter?.kind !== "member") {
+      const { error } = await sb.from("pl_exercise_rows").update({ sets: plan.setCount }).eq("id", row.id);
+      if (error) throw error;
+      setSessionSetCount(plan.setCount);
+    }
+    for (const id of plan.deletes) {
+      if (adapter) await adapter.deleteRowResult(id);
+      else {
+        const { error } = await sb.from("pl_row_results").delete().eq("id", id);
+        if (error) throw error;
+      }
+    }
+    for (const { id, set } of plan.upserts) {
+      const body: Record<string, any> = withMemberWorkoutIndexes({ row_id: row.id, client_id: clientId, ...setPayload(set) }, adapter, dayId);
+      if (adapter) await adapter.upsertPlRowResultRaw(body, id);
+      else {
+        const { error } = id
+          ? await sb.from("pl_row_results").update(body).eq("id", id)
+          : await sb.from("pl_row_results").upsert(body, { onConflict: "client_id,row_id,set_index" });
+        if (error) throw error;
+      }
+    }
+    if (plan.warmups) await replaceWarmups(plan.warmups);
+    // Nothing typed-but-unsaved may come back over the restored sets, and
+    // restored values count as typed, not filled from above.
+    for (let i = 1; i <= Math.max(current.setCount, target.setCount); i++) clearLocalDraft(`workout-set:${row.id}:${clientId}:${i}`);
+    cascadeOriginRef.current.clear();
+    durationOriginRef.current.clear();
+    setRestore((r) => ({ token: (r?.token ?? 0) + 1, sets: target.sets }));
+    await Promise.all([
+      qc.refetchQueries({ queryKey: ["pl-day-results", dayId] }),
+      plan.setCount != null ? qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] }) : null,
+    ]);
+    onChange();
+  };
+  const cardHistory = useCardHistory({
+    storeKey: `${row.id}:${clientId ?? ""}:${adapter?.kind === "client" ? adapter.ref.scheduledWorkoutId ?? dayId : dayId}`,
+    snapshot: cardSnapshot,
+    ready: resultsReady && warmupsReady && !readonly && !!clientId,
+    apply: applyCardSnapshot,
+  });
+  const runCardHistory = async (action: CardHistoryAction) => {
+    try {
+      if (!(await cardHistory.run(action))) return;
+      if (action === "reset") {
+        toast.success(`${name} reset`, {
+          description: "Cleared back to how it started.",
+          action: { label: "Undo", onClick: () => void runCardHistory("undo") },
+        });
+      } else {
+        toast(action === "undo" ? "Undone" : "Redone", {
+          description: name,
+          duration: 2500,
+          action: { label: action === "undo" ? "Redo" : "Undo", onClick: () => void runCardHistory(action === "undo" ? "redo" : "undo") },
+        });
+      }
+    } catch (error: any) {
+      toast.error(error?.message ?? "Couldn't change this exercise. Try again.");
+    }
+  };
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Timer results follow the same controlled downward cascade as weight:
   // blank / auto-derived sets below adopt the value, manual ones are protected.
@@ -3996,7 +4094,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             displayUnit={activeUnit}
             className="mt-0"
           />
-          {e1rmSets && <E1rmChip sets={e1rmSets} unit={activeUnit} open={cardTool === "e1rm"} onToggle={() => toggleCardTool("e1rm")} />}
           {clientId && (
             <DeferredExerciseHistoryButton
               clientId={clientId}
@@ -4010,8 +4107,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           {canSuggest && !readonly && <LoadSuggestionsChip highlight={!!suggestNudge} />}
         </div>
       )}
-      {/* Card tools open right under their button, one at a time. */}
-      {cardTool === "e1rm" && e1rmSets && <E1rmPanel sets={e1rmSets} unit={activeUnit} onClose={() => setCardTool(null)} />}
       {canSuggest && !readonly && suggestNudge && !showSuggestionCard && <LoadSuggestionsNudge onDismiss={suggestNudge} />}
       {/* Off by default; the Suggest chip on any card turns it on for every
           card. Live: it recalculates on every set saved (this card's sets,
@@ -4061,33 +4156,56 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         hasNote={hasNote}
         onOpenNote={() => setNotesOpen(true)}
         moreMenu={(
-          <DropdownMenuContent align="start" className="w-52 rounded-xl p-1.5">
+          <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5">
+            {!readonly && clientId && (
+              <>
+                {/* Undo / Redo stay open so a few taps walk back several steps. */}
+                <div className="grid grid-cols-2 gap-1">
+                  <DropdownMenuItem
+                    data-testid="card-undo"
+                    disabled={!cardHistory.canUndo || cardHistory.busy}
+                    onSelect={(e) => { e.preventDefault(); void runCardHistory("undo"); }}
+                    aria-label={`Undo last change to ${name}`}
+                    className="h-10 justify-center rounded-lg font-semibold"
+                  >
+                    <Undo2 className="mr-1.5 h-4 w-4" /> Undo
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    data-testid="card-redo"
+                    disabled={!cardHistory.canRedo || cardHistory.busy}
+                    onSelect={(e) => { e.preventDefault(); void runCardHistory("redo"); }}
+                    aria-label={`Redo change to ${name}`}
+                    className="h-10 justify-center rounded-lg font-semibold"
+                  >
+                    <Redo2 className="mr-1.5 h-4 w-4" /> Redo
+                  </DropdownMenuItem>
+                </div>
+                <DropdownMenuItem
+                  data-testid="card-reset"
+                  disabled={!cardHistory.canReset || cardHistory.busy}
+                  onSelect={() => void runCardHistory("reset")}
+                  className="items-start rounded-lg py-2"
+                >
+                  <RotateCcw className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                  <span className="flex flex-col leading-tight">
+                    <span>Reset exercise</span>
+                    <span className="text-[11px] text-muted-foreground">Clear everything logged here</span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem onSelect={() => setSwapOpen(true)} className="rounded-lg">
+              <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
+            </DropdownMenuItem>
             {cues && (
               <DropdownMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
                 {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
                 {cuesOpen ? "Hide cues" : "Show cues"}
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem asChild>
-              <TrainingHelpButton size="sm" variant="ghost" className="h-9 w-full justify-start rounded-lg px-2 text-sm font-normal" />
-            </DropdownMenuItem>
-            {!readonly && (
-              <DropdownMenuItem asChild>
-                <WorkoutToolsButton context={name} />
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <DeferredQuickSwapButton
-                rowId={row.id}
-                exerciseId={exerciseId}
-                exerciseName={name}
-                muscleGroup={exercise?.muscle_group ?? null}
-                category={exercise?.category ?? null}
-                equipment={(exercise as any)?.equipment ?? null}
-                difficulty={(exercise as any)?.difficulty ?? null}
-                swapContext={swapContext}
-              />
+            <DropdownMenuItem onSelect={() => setHelpOpen(true)} className="rounded-lg">
+              <HelpCircle className="mr-2 h-4 w-4" /> Training help
             </DropdownMenuItem>
             {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
               <>
@@ -4133,9 +4251,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             onStart={() => beginWorkoutSession(dayId)}
           />
         ) : null}
-        calculator={{ open: cardTool === "calc", onToggle: () => toggleCardTool("calc") }}
+        onCalculator={toolsActions ? () => toolsActions.open({ tool: "calc", unit: activeUnit }) : null}
       />
-      {cardTool === "calc" && <CalculatorPanel unit={activeUnit} onClose={() => setCardTool(null)} />}
+      <DeferredQuickSwapSheet
+        open={swapOpen}
+        onOpenChange={setSwapOpen}
+        rowId={row.id}
+        exerciseId={exerciseId}
+        exerciseName={name}
+        muscleGroup={exercise?.muscle_group ?? null}
+        category={exercise?.category ?? null}
+        equipment={(exercise as any)?.equipment ?? null}
+        difficulty={(exercise as any)?.difficulty ?? null}
+        swapContext={swapContext}
+      />
+      <TrainingHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
       {!readonly && !trackingType.includes("time") && clientId && (() => {
         const firstSet = existingResults.find((x: any) => x.set_index === 1);
         const firstLoad = firstSet?.actual_load;
@@ -4354,6 +4484,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               onFieldCascade={cascadeFieldFromSet}
               forceHydrateToken={fillToken}
               forcedFill={fillSnapshot}
+              restore={restore}
               readonly={readonly}
               unit={activeUnit}
               hideWeight={hideWeight}
@@ -4676,6 +4807,7 @@ function SetRow({
   isNextSet = true,
   repeat = null, onApplyToRemaining, forceHydrateToken = 0,
   forcedFill = null,
+  restore = null,
   cascade = null,
   autoFilled = false,
   onCascadeFromSet,
@@ -4735,6 +4867,8 @@ function SetRow({
   /** Snapshot of values just written by Fill All Sets — used to bypass
    *  the cache race when force-hydrating. */
   forcedFill?: { load: string; reps: string; rpe: string; unit: "kg" | "lb"; loadType?: LoadType; includeFirst?: boolean } | null;
+  /** Undo / redo / reset from the card's ⋯ menu: the sets just written (a set missing here was cleared). */
+  restore?: { token: number; sets: CardSet[] } | null;
   /** Broadcast of a cascade the parent just applied + persisted. */
   cascade?: {
     token: number;
@@ -5069,6 +5203,38 @@ function SetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cascade?.token]);
 
+  // Undo / redo / reset (the card's ⋯ menu): show the restored set now — or,
+  // for a cleared set, a fresh one with the prescribed reps/RPE — drop any
+  // unsaved draft, and adopt it as the saved baseline so nothing writes back.
+  // Only a new token applies, never one that was already there at mount.
+  const seenRestoreRef = useRef(restore?.token ?? 0);
+  // 0 idle · 1 restore applied (values not rendered yet) · 2 rendered: adopt as saved
+  const restoreCleanRef = useRef<0 | 1 | 2>(0);
+  const [, setRestoreSettled] = useState(0);
+  useEffect(() => {
+    if (!restore || restore.token === seenRestoreRef.current) return;
+    seenRestoreRef.current = restore.token;
+    const found = restore.sets.find((x) => x.set_index === setIndex);
+    const src: any = found ? setPayload(found) : null;
+    recentlySavedRef.current = false;
+    if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+    committedLoadRef.current = null;
+    setFocusedField(null);
+    setOptimisticComplete(false);
+    if (draftKey) clearLocalDraft(draftKey);
+    setLoadPaired(fmtLoad(displayLoadInUnit(src, unit)));
+    setLoadType(src ? resolveLoadType(src.load_type, src.is_bodyweight) : defaultLoadType);
+    setReps(src?.actual_reps != null ? String(src.actual_reps) : prescribedRepsStr);
+    setRpe(src?.actual_rpe_num != null ? String(src.actual_rpe_num) : src?.actual_rpe ?? prescribedRpeStr);
+    setRepsEdited(src?.actual_reps != null);
+    setRpeEdited(src?.actual_rpe_num != null || !!src?.actual_rpe);
+    setVelocity(src?.mean_concentric_velocity_mps != null ? String(src.mean_concentric_velocity_mps) : "");
+    setDurationSec(src?.completed_duration_seconds != null ? Number(src.completed_duration_seconds) : null);
+    restoreCleanRef.current = 1;
+    setRestoreSettled((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restore?.token]);
+
   const value = useMemo(() => ({ load, reps, rpe, velocity, unit: loadUnit, bw, loadType }), [load, reps, rpe, velocity, loadUnit, bw, loadType]);
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
@@ -5307,6 +5473,18 @@ function SetRow({
   // Keep the forward-ref synced with the latest autosave handle so the
   // unit-toggle effect above can call markClean() / retry() safely.
   saveRef.current = save;
+  // A restore's values are the saved state. Its state updates render on the
+  // next pass, so adopt them there — after the autosave hook has seen them —
+  // never in the restore's own pass (that would adopt the old values and
+  // count the restored ones as unsaved). Then one more render so the row's
+  // save badge reads the clean state.
+  useEffect(() => {
+    if (restoreCleanRef.current === 0) return;
+    if (restoreCleanRef.current === 1) { restoreCleanRef.current = 2; return; }
+    restoreCleanRef.current = 0;
+    save.markClean();
+    setRestoreSettled((n) => n + 1);
+  });
 
   // Canonical "commit now" signal for the inline weight cell.
   //

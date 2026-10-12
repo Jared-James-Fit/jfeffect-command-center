@@ -1,5 +1,11 @@
 /**
- * Generic client Workout Tools — Tally / Stopwatch / Timer.
+ * Workout Tools — one sheet for the whole workout, not any one exercise:
+ *
+ *   Lifting math       Calculator · e1RM (rough 1-rep max)
+ *   Timers & counting  Timer · Stopwatch · Tally
+ *
+ * Opened from the Tools button at the top of the workout (and an exercise's
+ * calculator button, straight onto the Calculator in that card's unit).
  *
  * Deliberately isolated from the prescribed Rest timer
  * (`RestTimerButton` + `ActiveRestTimerProvider`): separate provider,
@@ -8,16 +14,16 @@
  * completion, PRs or analytics.
  *
  * State lives at the WorkoutDayView level (one provider per open workout),
- * survives a brief refresh through sessionStorage, and is dropped when the
- * workout view unmounts for a different day.
+ * timers/tally survive a brief refresh through sessionStorage, and all of it
+ * is dropped when the workout view unmounts for a different day.
  */
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { Minus, Plus, RotateCcw, Play, Pause, Timer as TimerIcon, Hash, Wrench, ChevronDown } from "lucide-react";
+import { Calculator, ChevronDown, ChevronLeft, ChevronRight, Gauge, Hash, Minus, Pause, Play, Plus, RotateCcw, Timer as TimerIcon, Watch, Wrench } from "lucide-react";
 import {
   type StopwatchState,
   type TimerState,
@@ -37,9 +43,21 @@ import {
   timerRunning,
   addTimerSeconds,
 } from "@/lib/workout-tools/timing";
+import { CALC_START, calcReducer } from "@/lib/calculator";
+import type { WarmupUnit } from "@/lib/final-warmup";
+import { CalculatorTool, E1rmTool, type E1rmPick } from "@/components/workout-tools/lifting-math";
 
-type ToolKey = "tally" | "stopwatch" | "timer";
+export type ToolKey = "calc" | "e1rm" | "timer" | "stopwatch" | "tally";
 type View = ToolKey | "picker" | null;
+
+/** Plain-language names and one-line jobs — the picker and each tool's header use the same words. */
+export const TOOLS: Record<ToolKey, { title: string; desc: string }> = {
+  calc: { title: "Calculator", desc: "Plate math, % of a max, kg ⇄ lb" },
+  e1rm: { title: "e1RM", desc: "Rough 1-rep max from weight × reps @ RPE" },
+  timer: { title: "Timer", desc: "Count down an interval, hold or stretch" },
+  stopwatch: { title: "Stopwatch", desc: "Time a carry, hold or cardio" },
+  tally: { title: "Tally", desc: "Count reps, rounds or anything" },
+};
 
 type ToolsState = {
   tally: number;
@@ -53,15 +71,20 @@ const initialState = (): ToolsState => ({
   timer: emptyTimer(60),
 });
 
-type Ctx = {
-  open: (context?: string | null) => void;
-  hasActive: boolean;
+export type OpenToolsOptions = { tool?: ToolKey; unit?: WarmupUnit };
+type Actions = {
+  open: (options?: OpenToolsOptions) => void;
+  /** An exercise card reports today's best e1RM set (null = none) for the e1RM tool's one-tap picks. */
+  reportE1rm: (rowId: string, pick: E1rmPick | null) => void;
 };
 
-const WorkoutToolsContext = React.createContext<Ctx | null>(null);
+// Two contexts: the actions never change (exercise cards use them without
+// re-rendering every second while a timer runs); the status does.
+const ActionsContext = React.createContext<Actions | null>(null);
+const StatusContext = React.createContext<{ hasActive: boolean } | null>(null);
 
-export function useWorkoutTools(): Ctx | null {
-  return React.useContext(WorkoutToolsContext);
+export function useWorkoutToolsActions(): Actions | null {
+  return React.useContext(ActionsContext);
 }
 
 function storageKey(scopeKey: string) {
@@ -103,7 +126,7 @@ function isToolActive(s: ToolsState, now: number) {
 }
 
 /** Which single tool the floating pill should represent. */
-export function pillTool(s: ToolsState, now = Date.now()): ToolKey | null {
+export function pillTool(s: ToolsState, now = Date.now()): "timer" | "stopwatch" | "tally" | null {
   if (timerRunning(s.timer, now)) return "timer";
   if (stopwatchRunning(s.stopwatch)) return "stopwatch";
   const active = isToolActive(s, now);
@@ -111,6 +134,19 @@ export function pillTool(s: ToolsState, now = Date.now()): ToolKey | null {
   if (active.stopwatch) return "stopwatch";
   if (active.tally) return "tally";
   return null;
+}
+
+/** What a timing tool is doing right now, for its picker row ("1:23 left"). */
+export function toolStatus(tool: "timer" | "stopwatch" | "tally", s: ToolsState, now = Date.now()): string | null {
+  if (tool === "tally") return s.tally > 0 ? String(s.tally) : null;
+  if (tool === "stopwatch") {
+    const ms = stopwatchElapsedMs(s.stopwatch, now);
+    if (stopwatchRunning(s.stopwatch)) return formatClock(ms);
+    return ms > 0 ? `Paused ${formatClock(ms)}` : null;
+  }
+  if (timerDone(s.timer, now)) return "Done";
+  if (timerRunning(s.timer, now)) return `${formatClock(timerRemainingMs(s.timer, now))} left`;
+  return s.timer.pausedRemainingMs != null ? `Paused ${formatClock(s.timer.pausedRemainingMs)}` : null;
 }
 
 function safeVibrate(pattern: number | number[]) {
@@ -127,7 +163,12 @@ export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string;
   const isMobile = useIsMobile();
   const [state, setState] = React.useState<ToolsState>(() => initialState());
   const [view, setView] = React.useState<View>(null);
-  const [context, setContext] = React.useState<string | null>(null);
+  const [unit, setUnit] = React.useState<WarmupUnit>("lb");
+  const [calc, pressCalc] = React.useReducer(calcReducer, CALC_START);
+  const [picks, setPicks] = React.useState<E1rmPick[]>([]);
+  // Opening e1RM again starts it fresh on today's sets.
+  const [e1rmKey, setE1rmKey] = React.useState(0);
+  const picksRef = React.useRef(new Map<string, E1rmPick>());
   const [, forceTick] = React.useReducer((n: number) => n + 1, 0);
   const doneFiredRef = React.useRef(false);
 
@@ -135,6 +176,7 @@ export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string;
   React.useEffect(() => {
     setState(readState(scopeKey));
     setView(null);
+    picksRef.current.clear();
   }, [scopeKey]);
 
   // Persist for brief refresh / foreground survival only.
@@ -178,20 +220,31 @@ export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string;
     if (!timerIsDone) doneFiredRef.current = false;
   }, [timerIsDone]);
 
-  const ctx = React.useMemo<Ctx>(
+  const go = React.useCallback((next: View) => {
+    if (next === "e1rm") {
+      setPicks(Array.from(picksRef.current.values()).sort((a, b) => a.order - b.order));
+      setE1rmKey((k) => k + 1);
+    }
+    setView(next);
+  }, []);
+
+  const actions = React.useMemo<Actions>(
     () => ({
-      open: (label?: string | null) => {
-        setContext(label ?? null);
-        setView("picker");
+      open: (options) => {
+        if (options?.unit) setUnit(options.unit);
+        go(options?.tool ?? "picker");
       },
-      hasActive: pillTool(state, now) != null,
+      reportE1rm: (rowId, pick) => {
+        if (pick) picksRef.current.set(rowId, pick);
+        else picksRef.current.delete(rowId);
+      },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state, now],
+    [go],
   );
 
   const pill = pillTool(state, now);
   const showPill = pill != null && view === null;
+  const status = React.useMemo(() => ({ hasActive: pill != null }), [pill]);
 
   const pillLabel =
     pill === "tally"
@@ -202,104 +255,124 @@ export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string;
           ? `Timer ${formatClock(timerRemainingMs(state.timer, now))}`
           : "";
 
+  const tool = view && view !== "picker" ? view : null;
+  const title = tool ? TOOLS[tool].title : "Workout Tools";
+  const description = tool ? TOOLS[tool].desc : "For any part of your workout. Nothing here is saved to your log.";
+  // One back control, never two: on the list it closes the sheet; inside a
+  // tool it says "Tools" and returns to the list.
+  const backPill = (
+    <button
+      type="button"
+      onClick={() => (tool ? setView("picker") : setView(null))}
+      aria-label={tool ? "Back to all tools" : "Back"}
+      data-testid={tool ? "tools-back" : "tools-close"}
+      className="absolute left-3 top-3 z-20 inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground shadow-sm backdrop-blur transition hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <ChevronLeft className="h-4 w-4" />
+      <span>{tool ? "Tools" : "Back"}</span>
+    </button>
+  );
+  const back = tool && (
+    <button
+      type="button"
+      onClick={() => setView("picker")}
+      className="-ml-2 inline-flex h-8 w-fit items-center rounded-full pl-1 pr-2.5 text-sm font-semibold text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+      data-testid="tools-back"
+    >
+      <ChevronLeft className="h-4 w-4" /> All tools
+    </button>
+  );
+
   const body = (
     <ToolsBody
       view={view}
-      setView={setView}
+      go={go}
       state={state}
       setState={setState}
-      context={context}
+      unit={unit}
+      calc={calc}
+      pressCalc={pressCalc}
+      picks={picks}
+      e1rmKey={e1rmKey}
       onClose={() => setView(null)}
     />
   );
 
   return (
-    <WorkoutToolsContext.Provider value={ctx}>
-      {children}
+    <ActionsContext.Provider value={actions}>
+      <StatusContext.Provider value={status}>
+        {children}
 
-      {isMobile ? (
-        <Sheet open={view != null} onOpenChange={(o) => !o && setView(null)}>
-          <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
-            <SheetHeader className="text-left">
-              <SheetTitle className="text-base">Workout Tools</SheetTitle>
-            </SheetHeader>
-            {body}
-          </SheetContent>
-        </Sheet>
-      ) : (
-        <Dialog open={view != null} onOpenChange={(o) => !o && setView(null)}>
-          <DialogContent className="max-w-xs p-4">
-            <DialogHeader>
-              <DialogTitle className="text-base">Workout Tools</DialogTitle>
-            </DialogHeader>
-            {body}
-          </DialogContent>
-        </Dialog>
-      )}
+        {isMobile ? (
+          <Sheet open={view != null} onOpenChange={(o) => !o && setView(null)}>
+            <SheetContent hideCloseButton side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
+              {backPill}
+              <SheetHeader className="space-y-0.5 text-left">
+                <SheetTitle className="text-base">{title}</SheetTitle>
+                <SheetDescription className="text-xs">{description}</SheetDescription>
+              </SheetHeader>
+              {body}
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <Dialog open={view != null} onOpenChange={(o) => !o && setView(null)}>
+            <DialogContent className="max-w-sm p-4">
+              <DialogHeader className="space-y-0.5 text-left">
+                {back}
+                <DialogTitle className="text-base">{title}</DialogTitle>
+                <DialogDescription className="text-xs">{description}</DialogDescription>
+              </DialogHeader>
+              {body}
+            </DialogContent>
+          </Dialog>
+        )}
 
-      {showPill && (
-        <button
-          type="button"
-          aria-label={`Reopen Workout Tools (${pillLabel})`}
-          onClick={() => setView(pill)}
-          className="fixed left-1/2 z-40 -translate-x-1/2 rounded-full border border-border bg-background/95 px-3 py-1.5 text-xs font-bold shadow-lg backdrop-blur transition hover:bg-accent"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}
-        >
-          {pillLabel}
-        </button>
-      )}
-    </WorkoutToolsContext.Provider>
+        {showPill && (
+          <button
+            type="button"
+            aria-label={`Reopen Workout Tools (${pillLabel})`}
+            onClick={() => setView(pill)}
+            className="fixed left-1/2 z-40 -translate-x-1/2 rounded-full border border-border bg-background/95 px-3 py-1.5 text-xs font-bold shadow-lg backdrop-blur transition hover:bg-accent"
+            style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}
+          >
+            {pillLabel}
+          </button>
+        )}
+      </StatusContext.Provider>
+    </ActionsContext.Provider>
   );
 }
 
 function ToolsBody({
   view,
-  setView,
+  go,
   state,
   setState,
-  context,
+  unit,
+  calc,
+  pressCalc,
+  picks,
+  e1rmKey,
   onClose,
 }: {
   view: View;
-  setView: (v: View) => void;
+  go: (v: View) => void;
   state: ToolsState;
   setState: React.Dispatch<React.SetStateAction<ToolsState>>;
-  context: string | null;
+  unit: WarmupUnit;
+  calc: React.ComponentProps<typeof CalculatorTool>["state"];
+  pressCalc: React.ComponentProps<typeof CalculatorTool>["press"];
+  picks: E1rmPick[];
+  e1rmKey: number;
   onClose: () => void;
 }) {
-  if (view === "picker" || view == null) {
-    return (
-      <div className="mt-2 space-y-2">
-        {context && <div className="text-xs font-medium text-muted-foreground">{context}</div>}
-        <PickerRow
-          icon={<Hash className="h-4 w-4" />}
-          title="Tally"
-          desc="Count sets, reps, rounds or anything else."
-          ariaLabel="Open Tally"
-          onClick={() => setView("tally")}
-        />
-        <PickerRow
-          icon={<Play className="h-4 w-4" />}
-          title="Stopwatch"
-          desc="Count time up."
-          ariaLabel="Start Stopwatch"
-          onClick={() => setView("stopwatch")}
-        />
-        <PickerRow
-          icon={<TimerIcon className="h-4 w-4" />}
-          title="Timer"
-          desc="Set a countdown."
-          ariaLabel="Start Timer"
-          onClick={() => setView("timer")}
-        />
-      </div>
-    );
-  }
+  if (view === "picker" || view == null) return <ToolsPicker state={state} go={go} />;
+  if (view === "calc") return <div className="mt-2"><CalculatorTool unit={unit} state={calc} press={pressCalc} /></div>;
+  if (view === "e1rm") return <div className="mt-2"><E1rmTool key={e1rmKey} picks={picks} defaultUnit={unit} /></div>;
 
   if (view === "tally") {
     return (
       <TallyPanel
-        context={context}
         value={state.tally}
         onChange={(v) => setState((s) => ({ ...s, tally: v }))}
         onMinimize={onClose}
@@ -311,7 +384,6 @@ function ToolsBody({
   if (view === "stopwatch") {
     return (
       <StopwatchPanel
-        context={context}
         value={state.stopwatch}
         onChange={(v) => setState((s) => ({ ...s, stopwatch: v }))}
         onMinimize={onClose}
@@ -321,7 +393,6 @@ function ToolsBody({
 
   return (
     <TimerPanel
-      context={context}
       value={state.timer}
       onChange={(v) => setState((s) => ({ ...s, timer: v }))}
       onMinimize={onClose}
@@ -329,59 +400,89 @@ function ToolsBody({
   );
 }
 
+/** The tool list: grouped by job, each with a plain one-line description and what it's doing now. */
+export function ToolsPicker({ state, go }: { state: ToolsState; go: (v: View) => void }) {
+  const now = Date.now();
+  const row = (key: ToolKey, icon: React.ReactNode, status: string | null = null) => (
+    <PickerRow key={key} icon={icon} title={TOOLS[key].title} desc={TOOLS[key].desc} status={status} onClick={() => go(key)} />
+  );
+  return (
+    <div className="mt-2 space-y-3" data-testid="tools-picker">
+      <ToolGroup title="Lifting math">
+        {row("calc", <Calculator className="h-4 w-4" />)}
+        {row("e1rm", <Gauge className="h-4 w-4" />)}
+      </ToolGroup>
+      <ToolGroup title="Timers & counting">
+        {row("timer", <TimerIcon className="h-4 w-4" />, toolStatus("timer", state, now))}
+        {row("stopwatch", <Watch className="h-4 w-4" />, toolStatus("stopwatch", state, now))}
+        {row("tally", <Hash className="h-4 w-4" />, toolStatus("tally", state, now))}
+      </ToolGroup>
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        Rest timers are separate: they start from each exercise&apos;s rest button.
+      </p>
+    </div>
+  );
+}
+
+function ToolGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className="mb-1 px-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{title}</h3>
+      <div className="overflow-hidden rounded-xl border border-border divide-y divide-border">{children}</div>
+    </section>
+  );
+}
+
 function PickerRow({
   icon,
   title,
   desc,
-  ariaLabel,
+  status,
   onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   desc: string;
-  ariaLabel: string;
+  status: string | null;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      aria-label={ariaLabel}
+      aria-label={`Open ${title}${status ? ` (${status})` : ""}`}
       onClick={onClick}
-      className="flex w-full items-start gap-3 rounded-xl border border-border px-3 py-2.5 text-left transition hover:bg-accent"
+      className="flex min-h-[3.25rem] w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-accent active:bg-accent"
     >
-      <span className="mt-0.5 text-muted-foreground">{icon}</span>
-      <span className="min-w-0">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">{icon}</span>
+      <span className="min-w-0 flex-1">
         <span className="block text-sm font-bold">{title}</span>
         <span className="block text-xs text-muted-foreground">{desc}</span>
       </span>
+      {status && (
+        <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-bold tabular-nums text-primary">{status}</span>
+      )}
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
     </button>
   );
 }
 
-function PanelShell({ context, children }: { context: string | null; children: React.ReactNode }) {
-  return (
-    <div className="mt-2 space-y-3">
-      {context && <div className="text-xs font-medium text-muted-foreground">{context}</div>}
-      {children}
-    </div>
-  );
+function PanelShell({ children }: { children: React.ReactNode }) {
+  return <div className="mt-2 space-y-3">{children}</div>;
 }
 
 function TallyPanel({
-  context,
   value,
   onChange,
   onMinimize,
   onClose,
 }: {
-  context: string | null;
   value: number;
   onChange: (v: number) => void;
   onMinimize: () => void;
   onClose: () => void;
 }) {
   return (
-    <PanelShell context={context}>
+    <PanelShell>
       <div className="flex items-center justify-between gap-3">
         <Button
           variant="outline"
@@ -430,12 +531,10 @@ function TallyPanel({
 }
 
 function StopwatchPanel({
-  context,
   value,
   onChange,
   onMinimize,
 }: {
-  context: string | null;
   value: StopwatchState;
   onChange: (v: StopwatchState) => void;
   onMinimize: () => void;
@@ -443,7 +542,7 @@ function StopwatchPanel({
   const running = stopwatchRunning(value);
   const elapsed = stopwatchElapsedMs(value);
   return (
-    <PanelShell context={context}>
+    <PanelShell>
       <div aria-live="polite" className="text-center text-4xl font-black tabular-nums">
         {formatClock(elapsed)}
       </div>
@@ -477,12 +576,10 @@ const PRESETS = [
 ];
 
 function TimerPanel({
-  context,
   value,
   onChange,
   onMinimize,
 }: {
-  context: string | null;
   value: TimerState;
   onChange: (v: TimerState) => void;
   onMinimize: () => void;
@@ -496,7 +593,7 @@ function TimerPanel({
   const setDuration = (totalSec: number) => onChange(emptyTimer(Math.max(0, Math.min(3600, totalSec))));
 
   return (
-    <PanelShell context={context}>
+    <PanelShell>
       <div
         aria-live="polite"
         className={cn("text-center text-4xl font-black tabular-nums", done && "text-primary")}
@@ -592,20 +689,25 @@ function StepField({
   );
 }
 
-/** Small secondary-row entry point rendered on each active client exercise card. */
-export function WorkoutToolsButton({ context, className }: { context?: string | null; className?: string }) {
-  const tools = useWorkoutTools();
+/**
+ * The workout's Tools button (top of the workout, next to Warm-Up). A dot
+ * shows while a timer, stopwatch or tally is going.
+ */
+export function WorkoutToolsButton({ unit, className }: { unit?: WarmupUnit; className?: string }) {
+  const tools = useWorkoutToolsActions();
+  const status = React.useContext(StatusContext);
   if (!tools) return null;
   return (
     <Button
       size="sm"
       variant="outline"
-      aria-label="Open Workout Tools"
-      onClick={() => tools.open(context ?? null)}
+      aria-label="Open Workout Tools: calculator, e1RM, timer, stopwatch, tally"
+      onClick={() => tools.open({ unit })}
       className={cn("h-7 rounded-full px-2.5 text-xs", className)}
+      data-testid="workout-tools-button"
     >
       <Wrench className="mr-1 h-3 w-3" /> Tools
-      {tools.hasActive && <span aria-hidden className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />}
+      {status?.hasActive && <span aria-hidden className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />}
     </Button>
   );
 }
