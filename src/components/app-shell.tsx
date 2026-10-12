@@ -1461,6 +1461,13 @@ function TabletFlyoutRow({
   );
 }
 
+/**
+ * The bar's gap from the bottom edge. The home indicator needs ~13pt, not the
+ * full 34pt safe area, so the bar sits low (~22pt on Face ID iPhones) instead
+ * of floating mid-air; phones with no inset get 10px.
+ */
+const BAR_BOTTOM = "max(calc(env(safe-area-inset-bottom) - 12px), 10px)";
+
 /** The floating mobile tab bar (hidden from md up). */
 export function MobileBottomBar({ items, pathname, search, navBadges, onNavigate, moreOpen, onOpenMore }: {
   /** Already resolved to the visible slots (resolveVisibleBarItems). */
@@ -1485,34 +1492,45 @@ export function MobileBottomBar({ items, pathname, search, navBadges, onNavigate
   // like /admin only light up on themselves.
   const prefixTo = barPrefixMatch(items, pathname);
   return (
-    <nav
-      data-mobile-bottom-nav
-      className={cn(
-        // max-w keeps five tabs grouped on wide phones / small tablets.
-        "fixed inset-x-3 z-50 mx-auto grid max-w-md rounded-2xl border border-border bg-card/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
-        raised ? "overflow-visible" : "overflow-hidden",
-        dense ? "px-0.5" : "px-1",
-        gridCols,
-      )}
-      style={{ bottom: "max(env(safe-area-inset-bottom), 8px)" }}
-    >
-      {items.map((item) =>
-        item.to === MORE_BAR_TO ? (
-          <MoreNavSlot key="more" dense={dense} active={moreOpen} onOpenMore={onOpenMore} />
-        ) : (
-          <BottomNavSlot
-            key={(item.children ? "g:" : "") + item.to + ":" + item.label}
-            item={item}
-            pathname={pathname}
-            search={search}
-            navBadges={navBadges}
-            onNavigate={onNavigate}
-            dense={dense}
-            prefixActive={prefixTo === item.to}
-          />
-        ),
-      )}
-    </nav>
+    <>
+      {/* Fades the page out under the bar, so content never shows as a hard
+          strip below it. Tagged like the bar so it hides / pins with it. */}
+      <div
+        aria-hidden
+        data-mobile-bottom-nav
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-background via-background/85 to-transparent md:hidden"
+        style={{ height: `calc(${BAR_BOTTOM} + 44px)` }}
+      />
+      <nav
+        data-mobile-bottom-nav
+        className={cn(
+          // Same 16px gutter as the page, so its edges line up with the cards;
+          // max-w keeps five tabs grouped on wide phones / small tablets.
+          "fixed inset-x-4 z-50 mx-auto grid max-w-md rounded-2xl border border-border bg-card/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
+          raised ? "overflow-visible" : "overflow-hidden",
+          dense ? "px-0.5" : "px-1",
+          gridCols,
+        )}
+        style={{ bottom: BAR_BOTTOM }}
+      >
+        {items.map((item) =>
+          item.to === MORE_BAR_TO ? (
+            <MoreNavSlot key="more" dense={dense} active={moreOpen} onOpenMore={onOpenMore} />
+          ) : (
+            <BottomNavSlot
+              key={(item.children ? "g:" : "") + item.to + ":" + item.label}
+              item={item}
+              pathname={pathname}
+              search={search}
+              navBadges={navBadges}
+              onNavigate={onNavigate}
+              dense={dense}
+              prefixActive={prefixTo === item.to}
+            />
+          ),
+        )}
+      </nav>
+    </>
   );
 }
 
