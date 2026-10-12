@@ -69,7 +69,8 @@ import {
 import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData, cachedUpdatedAt } from "@/lib/workout-plan-cache";
-import { E1rmChip, WarmupRows, useWarmupSets } from "@/components/workout-day/final-warmup-input";
+import { WarmupRows, useWarmupSets } from "@/components/workout-day/final-warmup-input";
+import { CalculatorPanel, E1rmChip, E1rmPanel, type CardTool } from "@/components/workout-day/card-tools";
 import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge } from "@/components/workout-day/load-suggestion-card";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
@@ -3604,6 +3605,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const warmupPrompt = warmupAllowed && rampsUp
     ? { suggested: warmupGauge?.suggested ?? null, tunes: !!warmupGauge }
     : null;
+  // Chip-row tools (e1RM, calculator): one open at a time, under the chips.
+  const [cardTool, setCardTool] = useState<CardTool | null>(null);
+  const toggleCardTool = (t: CardTool) => setCardTool((cur) => (cur === t ? null : t));
   // The card's e1RM chip: today's logged working sets and warm-ups (external load only).
   const e1rmSets = useMemo(() => {
     // Compound lifts only: a rough 1RM on a curl or a raise is noise.
@@ -3992,7 +3996,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             displayUnit={activeUnit}
             className="mt-0"
           />
-          {e1rmSets && <E1rmChip sets={e1rmSets} unit={activeUnit} />}
+          {e1rmSets && <E1rmChip sets={e1rmSets} unit={activeUnit} open={cardTool === "e1rm"} onToggle={() => toggleCardTool("e1rm")} />}
           {clientId && (
             <DeferredExerciseHistoryButton
               clientId={clientId}
@@ -4006,6 +4010,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           {canSuggest && !readonly && <LoadSuggestionsChip highlight={!!suggestNudge} />}
         </div>
       )}
+      {/* Card tools open right under their button, one at a time. */}
+      {cardTool === "e1rm" && e1rmSets && <E1rmPanel sets={e1rmSets} unit={activeUnit} onClose={() => setCardTool(null)} />}
       {canSuggest && !readonly && suggestNudge && !showSuggestionCard && <LoadSuggestionsNudge onDismiss={suggestNudge} />}
       {/* Off by default; the Suggest chip on any card turns it on for every
           card. Live: it recalculates on every set saved (this card's sets,
@@ -4127,7 +4133,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             onStart={() => beginWorkoutSession(dayId)}
           />
         ) : null}
+        calculator={{ open: cardTool === "calc", onToggle: () => toggleCardTool("calc") }}
       />
+      {cardTool === "calc" && <CalculatorPanel unit={activeUnit} onClose={() => setCardTool(null)} />}
       {!readonly && !trackingType.includes("time") && clientId && (() => {
         const firstSet = existingResults.find((x: any) => x.set_index === 1);
         const firstLoad = firstSet?.actual_load;

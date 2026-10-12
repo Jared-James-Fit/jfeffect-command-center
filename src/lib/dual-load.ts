@@ -16,8 +16,11 @@ function trim(n: number): string {
 export function formatDualLoad(value: number, unit: "kg" | "lb"): string {
   if (!Number.isFinite(value)) return "";
   if (unit === "lb") {
+    // A kg prescription shown in lb (175 kg → 385.81 lb) reads to the nearest
+    // half pound; a real lb prescription (225, 132.5) is unchanged by it.
+    const lb = Math.round(value * 2) / 2;
     const kg = Math.round((value / LB_PER_KG) * 2) / 2;
-    return `${trim(value)} lb / ${trim(kg)} kg`;
+    return `${trim(lb)} lb / ${trim(kg)} kg`;
   }
   const lb = Math.round(value * LB_PER_KG);
   return `${trim(lb)} lb / ${trim(value)} kg`;

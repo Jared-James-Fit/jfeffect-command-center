@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calculator, Flame, Pencil, X } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Flame, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -433,70 +432,6 @@ function WarmupForm({
   );
 }
 
-/**
- * e1RM, on its own: a small chip on the exercise card. It reads today's best
- * logged set (weight × reps @ RPE) as a rough 1RM; tap it for a quick
- * calculator. Nothing is saved — a guide, not a tested max.
- */
-export function E1rmChip({
-  sets,
-  unit,
-  className,
-}: {
-  /** Today's logged sets (working and warm-up), in `unit`. */
-  sets: Array<{ load: number; reps: number; rpe: number | null }>;
-  unit: WarmupUnit;
-  className?: string;
-}) {
-  const best = bestE1rm(sets, unit);
-  const [load, setLoad] = useState("");
-  const [reps, setReps] = useState("");
-  const [rpe, setRpe] = useState<number | null>(8);
-  const start = best?.from ?? null;
-  const l = Number((load || (start ? fmt(start.load) : "")).replace(",", "."));
-  const r = Number(reps || (start ? String(start.reps) : ""));
-  const calc = estimateOneRepMax({ load: l, reps: r, rpe: rpe ?? (start?.rpe ?? null) }, unit);
-  const cell = "h-9 w-full rounded-md border border-input bg-background px-1 text-center text-base font-bold tabular-nums placeholder:text-muted-foreground/50";
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          data-testid="e1rm-chip"
-          className={cn("inline-flex h-7 items-center gap-1 rounded-full border border-border bg-background px-2.5 text-xs font-semibold tabular-nums text-foreground transition active:scale-[0.97]", className)}
-          aria-label={best ? `Estimated 1RM about ${fmt(best.e1rm)} ${unit}` : "e1RM calculator"}
-        >
-          <Calculator className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-          {best ? <>e1RM <span className="font-black">≈{fmt(best.e1rm)}</span></> : "e1RM"}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="bottom" align="start" className="w-[17rem] space-y-2 p-3">
-        <div className="text-xs font-bold">Rough 1RM</div>
-        <div className="grid grid-cols-[1.4fr_auto_1fr] items-center gap-1.5">
-          <input inputMode="decimal" value={load} placeholder={start ? fmt(start.load) : unit} onChange={(e) => setLoad(e.target.value.replace(/[^0-9.,]/g, "").slice(0, 6))} className={cell} aria-label={`Weight in ${unit}`} />
-          <span className="text-xs font-bold text-muted-foreground">×</span>
-          <input inputMode="numeric" value={reps} placeholder={start ? String(start.reps) : "reps"} onChange={(e) => setReps(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))} className={cell} aria-label="Reps" />
-        </div>
-        <div className="grid grid-cols-5 gap-1" role="radiogroup" aria-label="RPE">
-          {[6, 7, 8, 9, 10].map((v) => (
-            <button key={v} type="button" role="radio" aria-checked={rpe === v} onClick={() => setRpe(v)}
-              className={cn("h-8 rounded-md border text-xs font-bold", rpe === v ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
-              @{v}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-baseline justify-between rounded-md bg-muted/50 px-2.5 py-1.5" aria-live="polite">
-          <span className="text-[11px] text-muted-foreground">{rpe != null ? repsLeftLabel(rpe) : "pick an RPE"}</span>
-          <span className="text-base font-black tabular-nums" data-testid="e1rm-result">{calc != null ? `≈ ${fmt(calc)} ${unit}` : "—"}</span>
-        </div>
-        <p className="text-[10px] leading-snug text-muted-foreground">
-          {best ? `Today's best: ${fmt(best.from.load)} × ${best.from.reps} @ ${fmt(best.from.rpe!)}. ` : ""}A guide from weight × reps @ RPE, not a tested max. Nothing is saved.
-        </p>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 /** Today's highest rough 1RM from sets with an RPE (6+, ≤10 reps), and the set it came from. */
 export function bestE1rm(
   sets: Array<{ load: number; reps: number; rpe: number | null }>,
@@ -515,7 +450,7 @@ export function bestE1rm(
  * current value into the placeholder so the first digit replaces it, and
  * leaving it blank keeps the old value (a blank never wipes a number).
  */
-function ReplaceInput({
+export function ReplaceInput({
   value,
   onValue,
   clean,

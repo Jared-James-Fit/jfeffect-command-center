@@ -1,14 +1,16 @@
 import type { ReactNode } from "react";
-import { MoreHorizontal, StickyNote } from "lucide-react";
+import { Calculator, MoreHorizontal, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 /**
- * The How To · Note · More · Rest row on every workout exercise card.
+ * The How To · Note · More · Calculator · Rest row on every workout exercise
+ * card.
  *
- * Four controls, all 40px round targets, so the row fits one line at any phone
- * width. Rarer actions (cues, swap, reorder) live in More. It is a size
- * container: labels drop before anything wraps.
+ * Round 40px targets, so the row fits one line at any phone width. Rarer
+ * actions (cues, swap, reorder) live in More. It is a size container: labels
+ * drop before anything wraps.
  */
 export function ExerciseActionRow({
   name,
@@ -17,6 +19,7 @@ export function ExerciseActionRow({
   onOpenNote,
   moreMenu,
   rest,
+  calculator = null,
 }: {
   name: string;
   howTo: ReactNode | null;
@@ -25,6 +28,8 @@ export function ExerciseActionRow({
   /** DropdownMenuContent for "More" (cues, help, swap, reorder). */
   moreMenu: ReactNode;
   rest: ReactNode | null;
+  /** The plain calculator under this row (card-tools.tsx). */
+  calculator?: { open: boolean; onToggle: () => void } | null;
 }) {
   const round =
     "relative h-10 w-10 shrink-0 rounded-full border border-border bg-card p-0 text-muted-foreground @max-[20rem]:h-9 @max-[20rem]:w-9 [&_svg]:size-[18px]";
@@ -53,6 +58,20 @@ export function ExerciseActionRow({
           </DropdownMenuTrigger>
           {moreMenu}
         </DropdownMenu>
+        {calculator && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            data-testid="calc-chip"
+            className={cn(round, calculator.open && "border-primary/50 bg-primary/10 text-primary hover:text-primary")}
+            onClick={calculator.onToggle}
+            aria-expanded={calculator.open}
+            aria-label="Calculator"
+          >
+            <Calculator className="h-4 w-4" />
+          </Button>
+        )}
         {rest && <div className="ml-auto flex min-w-0 shrink-0 justify-end">{rest}</div>}
       </div>
     </div>
