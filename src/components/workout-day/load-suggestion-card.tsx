@@ -34,14 +34,17 @@ export function LoadSuggestionCard({
   fromName?: string | null;
 }) {
   if (model.status === "calibrating" || !hint) {
-    // No usable history yet: the set table's warm-up row is the way to a first
-    // number, so don't add a dead-end note above it.
-    if (warmup) return null;
-    if (model.historySessions === 0) return null;
+    // Suggest is on but there's no number yet: say why and what unlocks one
+    // (a blank card read as broken). The warm-up row, when offered, is the
+    // fastest way to a first number, so point at it rather than repeat it.
+    const why = model.historySessions === 0 ? "No logs of this lift yet" : "No recent logs of this lift with an RPE";
+    const next = warmup
+      ? "log your last warm-up below and it sets today's weight."
+      : "log your first set with an RPE and the rest get a live suggestion.";
     return (
-      <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-        <Target className="h-3 w-3" aria-hidden="true" />
-        Load suggestions unlock after a week of logs with RPE
+      <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted px-2 py-1.5 text-[11px] leading-snug text-muted-foreground" data-testid="load-suggestion-pending">
+        <Target className="mt-px h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+        <span><span className="font-semibold text-foreground">{why}</span> · {next}</span>
       </div>
     );
   }
@@ -54,7 +57,9 @@ export function LoadSuggestionCard({
       : model.source === "history_warmup"
         ? "your recent sessions, nudged by your final warm-up"
         : model.source === "history"
-      ? dayPct !== 0
+      ? model.early
+        ? `your ${model.historySessions === 1 ? "one recent session" : "recent sessions"} of this lift — an early estimate that sharpens every session`
+        : dayPct !== 0
         ? `your recent sessions, adjusted ${daySigned} for how today's ${fromName ?? "earlier"} sets moved`
         : model.readiness.reasons.length
         ? `your recent sessions, eased a little for ${model.readiness.reasons[0]}`
@@ -72,6 +77,7 @@ export function LoadSuggestionCard({
     model.source === "warmup" ? { text: "From warm-up", live: false }
       : model.source === "history_warmup" ? { text: "Warm-up tuned", live: false }
       : model.source === "today" || model.source === "blend" ? { text: "Live", live: true }
+      : model.early ? { text: "Early estimate", live: false }
       : dayPct !== 0 ? { text: `Live ${daySigned}`, live: true }
       : null;
   return (

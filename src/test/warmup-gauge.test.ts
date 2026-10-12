@@ -36,10 +36,18 @@ describe("suggestion card with the warm-up row", () => {
     expect(render({ suggested: null }, { ...model, source: "history_warmup" })).toContain("Warm-up tuned");
     expect(render({ suggested: null }, { ...model, source: "warmup", historySessions: 0 })).toContain("From warm-up");
   });
-  it("no history yet: nothing above the table — the W row is the way to a first number", () => {
-    expect(render({ suggested: null }, { ...model, status: "calibrating", historySessions: 3 }, null)).toBe("");
+  it("Suggest on but no number yet: never blank — points at the warm-up row when it's offered", () => {
+    const html = render({ suggested: null }, { ...model, status: "calibrating", historySessions: 0 }, null);
+    expect(html).toContain('data-testid="load-suggestion-pending"');
+    expect(html).toContain("No logs of this lift yet");
+    expect(html).toContain("log your last warm-up below and it sets today&#x27;s weight.");
   });
-  it("no warm-up offered: the calibrating note stays", () => {
-    expect(render(null, { ...model, status: "calibrating", historySessions: 3 }, null)).toContain("Load suggestions unlock");
+  it("no warm-up offered: the first logged set unlocks live suggestions", () => {
+    const html = render(null, { ...model, status: "calibrating", historySessions: 3 }, null);
+    expect(html).toContain("No recent logs of this lift with an RPE");
+    expect(html).toContain("log your first set with an RPE and the rest get a live suggestion.");
+  });
+  it("an early estimate says so", () => {
+    expect(render(null, { ...model, early: true, historySessions: 1 })).toContain("Early estimate");
   });
 });
