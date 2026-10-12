@@ -8,6 +8,7 @@
  * and a session that's cancelled or removed is deleted from Google.
  */
 import type { FeedEvent } from "@/lib/ics-feed";
+import { mergeGoogleCalendarLists } from "@/lib/session-conflicts";
 
 /** Only calendars this app creates: never the client's other calendars or events. */
 export const CLIENT_GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.app.created";
@@ -307,4 +308,116 @@ export function setupProblemMessage(check: Pick<GoogleSetupCheck, "problem" | "r
     default:
       return `Google rejected the sign-in setup (${check.problem}). Check the client in Google Cloud → Google Auth Platform → Clients.`;
   }
+}
+
+// ---- Showing the client's own Google events in the app (read-only) ---------
+//
+// Opt-in, on top of the connection above: read access to their calendar list
+// and events. Events are read live when they look at their calendar and never
+// stored, written or changed.
+
+export const CLIENT_GCAL_READ_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+  "https://www.googleapis.com/auth/calendar.events.readonly",
+];
+
+/** Both read permissions are in what Google granted (space-separated scope string). */
+export function hasGoogleReadAccess(granted: string | null | undefined): boolean {
+  const have = new Set((granted ?? "").split(/\s+/).filter(Boolean));
+  return CLIENT_GCAL_READ_SCOPES.every((s) => have.has(s));
+}
+
+/** Feed items have uids like `pt-<id>@jfeffect.com`: a subscribed JF Effect feed, already shown. */
+const FEED_UID = /@jfeffect\.com$/i;
+
+export type GoogleReadEvent = {
+  id: string;
+  iCalUID?: string | null;
+  status?: string | null;
+  summary?: string | null;
+  location?: string | null;
+  hangoutLink?: string | null;
+  htmlLink?: string | null;
+  transparency?: string | null;
+  start?: { date?: string | null; dateTime?: string | null } | null;
+  end?: { date?: string | null; dateTime?: string | null } | null;
+  originalStartTime?: { date?: string | null; dateTime?: string | null } | null;
+  attendees?: Array<{ self?: boolean | null; responseStatus?: string | null }> | null;
+  extendedProperties?: { private?: Record<string, string> | null; shared?: Record<string, string> | null } | null;
+};
+
+/** What the app shows for one of their Google events. */
+export type ImportedGoogleEvent = {
+  id: string;
+  calendarId: string;
+  calendarName: string | null;
+  summary: string;
+  location: string | null;
+  hangoutLink: string | null;
+  htmlLink: string | null;
+  allDay: boolean;
+  /** dateTime ISO, or yyyy-mm-dd for all-day */
+  start: string;
+  end: string | null;
+};
+
+/**
+ * The client's Google events worth showing next to their JF Effect items:
+ * never what JF Effect already shows (its own calendar, events it wrote, a
+ * subscribed JF Effect feed, or the Google copy of an appointment/session it
+ * invited them to), never cancelled or declined, and each occurrence once
+ * even when it's on two calendars.
+ */
+export function pickImportedEvents(input: {
+  lists: Array<{ id: string; name?: string | null; items: GoogleReadEvent[] }>;
+  jfCalendarId?: string | null;
+  /** Google event ids JF Effect created for this client's appointments, sessions and events. */
+  appEventIds?: Iterable<string>;
+}): ImportedGoogleEvent[] {
+  const appIds = new Set(input.appEventIds ?? []);
+  const names = new Map(input.lists.map((l) => [l.id, l.name ?? null]));
+  const mine = (e: GoogleReadEvent) => {
+    if (e.extendedProperties?.private?.jf === "1") return true;
+    if (e.iCalUID && FEED_UID.test(e.iCalUID)) return true;
+    // Recurring instances are "<id>_<time>"; invite copies share the organiser's id.
+    const base = e.id.split("_")[0];
+    if (appIds.has(e.id) || appIds.has(base)) return true;
+    if (e.iCalUID && appIds.has(e.iCalUID.replace(/@google\.com$/i, ""))) return true;
+    return false;
+  };
+  const declined = (e: GoogleReadEvent) => (e.attendees ?? []).some((a) => a.self && a.responseStatus === "declined");
+  const lists = input.lists
+    .filter((l) => l.id !== input.jfCalendarId)
+    .map((l) => ({ id: l.id, items: l.items.filter((e) => !mine(e) && !declined(e)) }));
+  return mergeGoogleCalendarLists(lists as any).map(({ calendarId, event }) => {
+    const e = event as GoogleReadEvent;
+    const allDay = !e.start?.dateTime;
+    return {
+      id: `${calendarId}:${e.id}`,
+      calendarId,
+      calendarName: names.get(calendarId) ?? null,
+      summary: (e.summary ?? "").trim() || "Busy",
+      location: (e.location ?? "").trim() || null,
+      hangoutLink: e.hangoutLink ?? null,
+      htmlLink: e.htmlLink ?? null,
+      allDay,
+      start: (allDay ? e.start?.date : e.start?.dateTime) as string,
+      end: (allDay ? e.end?.date : e.end?.dateTime) ?? null,
+    };
+  });
+}
+
+/** Which of their calendars to show: what they picked (still existing), else their main one. */
+export function visibleCalendarIds(
+  calendars: Array<{ id: string; primary?: boolean | null }>,
+  chosen: string[] | null | undefined,
+  jfCalendarId?: string | null,
+): string[] {
+  const usable = calendars.filter((c) => c.id !== jfCalendarId);
+  if (chosen) {
+    const ids = new Set(usable.map((c) => c.id));
+    return chosen.filter((id) => ids.has(id));
+  }
+  const primary = usable.find((c) => c.primary);
+  return primary ? [primary.id] : [];
 }

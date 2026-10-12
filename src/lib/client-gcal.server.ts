@@ -10,8 +10,14 @@ import {
   CLIENT_GCAL_DESCRIPTION,
   CLIENT_GCAL_NAME,
   CLIENT_GCAL_SCOPE,
+  CLIENT_GCAL_READ_SCOPES,
   CLIENT_GCAL_SCOPES,
   FULL_CHECK_MS,
+  hasGoogleReadAccess,
+  pickImportedEvents,
+  visibleCalendarIds,
+  type GoogleReadEvent,
+  type ImportedGoogleEvent,
   SYNC_WINDOW_PAST_MS,
   authErrorCode,
   canonicalOrigin,
@@ -69,12 +75,13 @@ export function oauthOrigin(): string {
   return canonicalOrigin(process.env.PUBLIC_APP_URL || process.env.SITE_URL);
 }
 
-export async function clientAuthorizeUrl(origin: string, state: string): Promise<string> {
+/** `read`: also ask to show their own Google events in the app (read-only, opt-in). */
+export async function clientAuthorizeUrl(origin: string, state: string, opts: { read?: boolean } = {}): Promise<string> {
   const params = new URLSearchParams({
     client_id: googleClientCreds().clientId,
     redirect_uri: buildOAuthRedirectUri(origin),
     response_type: "code",
-    scope: CLIENT_GCAL_SCOPES.join(" "),
+    scope: [...CLIENT_GCAL_SCOPES, ...(opts.read ? CLIENT_GCAL_READ_SCOPES : [])].join(" "),
     access_type: "offline",
     // Always hand back a refresh token, and let people with several Google
     // accounts pick the one their phone uses.
@@ -532,6 +539,9 @@ export async function completeClientConnect(
       access_token: tokens.access_token,
       token_expires_at: new Date(Date.now() + (Number(tokens.expires_in || 3600) - 30) * 1000).toISOString(),
       calendar_id: calendarId,
+      // What Google actually granted: read access is optional and can be
+      // unticked on Google's consent screen.
+      granted_scopes: tokens.scope ?? null,
       status: "connected",
       last_sync_hash: null,
       last_error: null,
@@ -587,7 +597,7 @@ export async function disconnectClientCalendar(admin: Admin, clientId: string): 
 export async function clientGoogleStatus(admin: Admin, clientId: string) {
   const { data: row } = await admin
     .from(TABLE)
-    .select("google_email, status, last_synced_at, last_error, event_count")
+    .select("google_email, status, last_synced_at, last_error, event_count, granted_scopes")
     .eq("client_id", clientId)
     .maybeSingle();
   const available = await clientGoogleReady(admin).catch(() => false);
@@ -599,5 +609,141 @@ export async function clientGoogleStatus(admin: Admin, clientId: string) {
     lastSyncedAt: (row?.last_synced_at as string | null) ?? null,
     error: row?.status === "error" ? ((row?.last_error as string | null) ?? null) : null,
     events: Number(row?.event_count ?? 0),
+    /** Their own Google events show in the app (they allowed read access). */
+    showsGoogleEvents: !!row && row.status !== "revoked" && hasGoogleReadAccess(row?.granted_scopes as string | null),
   };
+}
+
+// ---- Their own Google events, shown in the app (read-only) ---------------------
+//
+// Read live when they look at their calendar, never stored or written: the
+// only things kept are which calendars to show (show_calendar_ids, null = their
+// main one) and what Google granted (granted_scopes).
+
+/** Lost read access (they removed it in their Google account): stop offering it until they allow it again. */
+async function dropReadAccess(admin: Admin, row: any): Promise<void> {
+  const kept = String(row.granted_scopes ?? "")
+    .split(/\s+/)
+    .filter((s) => s && !CLIENT_GCAL_READ_SCOPES.includes(s))
+    .join(" ");
+  await admin.from(TABLE).update({ granted_scopes: kept || null }).eq("client_id", row.client_id).eq("refresh_token", row.refresh_token);
+}
+
+/** Google said the permission itself is missing (not a rate limit or outage). */
+function permissionGone(r: { status: number; data: any }): boolean {
+  if (r.status === 401) return true;
+  if (r.status !== 403) return false;
+  const reason = String(r.data?.error?.errors?.[0]?.reason ?? "");
+  return reason === "insufficientPermissions" || /insufficient/i.test(String(r.data?.error?.message ?? ""));
+}
+
+async function readableRow(admin: Admin, clientId: string): Promise<any | null> {
+  const { data: row } = await admin.from(TABLE).select("*").eq("client_id", clientId).maybeSingle();
+  if (!row || row.status === "revoked" || !hasGoogleReadAccess(row.granted_scopes)) return null;
+  return row;
+}
+
+type GoogleCalendarEntry = { id: string; name: string; primary: boolean; color: string | null };
+
+async function calendarList(admin: Admin, row: any, token: string): Promise<GoogleCalendarEntry[] | null> {
+  const r = await google(token, `${API}/users/me/calendarList?minAccessRole=reader&maxResults=250&fields=items(id,summary,summaryOverride,primary,backgroundColor,hidden)`);
+  if (permissionGone(r)) {
+    await dropReadAccess(admin, row);
+    return null;
+  }
+  if (!r.ok) throw new Error(`Google calendar list failed (${r.data?.error?.message || r.status})`);
+  return ((r.data?.items ?? []) as any[])
+    .filter((c) => c.id && c.id !== row.calendar_id)
+    .map((c) => ({ id: c.id, name: c.summaryOverride || c.summary || c.id, primary: !!c.primary, color: c.backgroundColor ?? null }));
+}
+
+/** Their Google calendars (not the JF Effect one) and which are shown. */
+export async function listClientGoogleCalendars(admin: Admin, clientId: string) {
+  const row = await readableRow(admin, clientId);
+  if (!row) return { enabled: false as const, calendars: [] };
+  const token = await accessTokenFor(admin, row);
+  const cals = await calendarList(admin, row, token);
+  if (!cals) return { enabled: false as const, calendars: [] };
+  const shown = new Set(visibleCalendarIds(cals, row.show_calendar_ids, row.calendar_id));
+  return {
+    enabled: true as const,
+    calendars: cals
+      .sort((a, b) => Number(b.primary) - Number(a.primary) || a.name.localeCompare(b.name))
+      .map((c) => ({ ...c, shown: shown.has(c.id) })),
+  };
+}
+
+export async function setClientGoogleCalendars(admin: Admin, clientId: string, ids: string[]) {
+  const { error } = await admin.from(TABLE).update({ show_calendar_ids: ids }).eq("client_id", clientId);
+  if (error) throw new Error(error.message);
+}
+
+/** Google event ids JF Effect itself created for this client (their invite copies are already shown). */
+async function appEventIds(admin: Admin, clientId: string): Promise<string[]> {
+  const [a, p] = await Promise.all([
+    admin.from("appointments").select("google_event_id").eq("client_id", clientId).not("google_event_id", "is", null),
+    admin.from("pt_sessions").select("google_event_id").eq("client_id", clientId).not("google_event_id", "is", null),
+  ]);
+  return [...(a.data ?? []), ...(p.data ?? [])].map((r: any) => r.google_event_id as string).filter(Boolean);
+}
+
+async function readCalendarEvents(token: string, calendarId: string, timeMin: string, timeMax: string): Promise<GoogleReadEvent[] | null> {
+  const items: GoogleReadEvent[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < 5; page++) {
+    const q = new URLSearchParams({
+      timeMin,
+      timeMax,
+      singleEvents: "true",
+      orderBy: "startTime",
+      maxResults: "250",
+      fields:
+        "nextPageToken,items(id,iCalUID,status,summary,location,hangoutLink,htmlLink,transparency,start,end,originalStartTime,attendees(self,responseStatus),extendedProperties/private)",
+    });
+    if (pageToken) q.set("pageToken", pageToken);
+    const r = await google(token, `${API}/calendars/${encodeURIComponent(calendarId)}/events?${q}`);
+    // Calendar removed or unshared since they picked it: just skip it.
+    if (r.status === 404 || r.status === 410) return null;
+    if (!r.ok) throw Object.assign(new Error(`Google events failed (${r.data?.error?.message || r.status})`), { permissionGone: permissionGone(r) });
+    items.push(...((r.data?.items ?? []) as GoogleReadEvent[]));
+    pageToken = r.data?.nextPageToken;
+    if (!pageToken) break;
+  }
+  return items;
+}
+
+/**
+ * Their Google events between timeMin and timeMax (ISO), minus anything JF
+ * Effect already shows. A calendar that can't be read is skipped, not fatal.
+ */
+export async function listClientGoogleEvents(
+  admin: Admin,
+  clientId: string,
+  range: { timeMin: string; timeMax: string },
+): Promise<{ enabled: boolean; events: ImportedGoogleEvent[]; partial: boolean }> {
+  const row = await readableRow(admin, clientId);
+  if (!row) return { enabled: false, events: [], partial: false };
+  const token = await accessTokenFor(admin, row);
+  const cals = await calendarList(admin, row, token);
+  if (!cals) return { enabled: false, events: [], partial: false };
+  const ids = visibleCalendarIds(cals, row.show_calendar_ids, row.calendar_id);
+  if (!ids.length) return { enabled: true, events: [], partial: false };
+  const names = new Map(cals.map((c) => [c.id, c.name]));
+  let partial = false;
+  const [lists, appIds] = await Promise.all([
+    Promise.all(
+      ids.map(async (id) => {
+        try {
+          const items = await readCalendarEvents(token, id, range.timeMin, range.timeMax);
+          return { id, name: names.get(id) ?? null, items: items ?? [] };
+        } catch (e: any) {
+          if (e?.permissionGone) await dropReadAccess(admin, row);
+          partial = true;
+          return { id, name: names.get(id) ?? null, items: [] };
+        }
+      }),
+    ),
+    appEventIds(admin, clientId),
+  ]);
+  return { enabled: true, events: pickImportedEvents({ lists, jfCalendarId: row.calendar_id, appEventIds: appIds }), partial };
 }

@@ -343,7 +343,9 @@ export const getMyCalendarSyncStatus = createServerFn({ method: "POST" })
  */
 export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ returnTo: z.string().max(300).optional() }).parse(d ?? {}))
+  .inputValidator((d: unknown) =>
+    z.object({ returnTo: z.string().max(300).optional(), read: z.boolean().optional() }).parse(d ?? {}),
+  )
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
     const mine = await ownOrLinkedClient(userId);
@@ -358,7 +360,58 @@ export const startGoogleCalendarConnect = createServerFn({ method: "POST" })
     const { signOAuthState } = await import("@/lib/google-cal.server");
     const { safeReturnPath } = await import("@/lib/client-gcal");
     const state = signOAuthState({ kind: "client_cal", client_id: mine.id, user_id: userId, ret: safeReturnPath(data.returnTo) });
-    return { url: await clientAuthorizeUrl(oauthOrigin(), state) };
+    return { url: await clientAuthorizeUrl(oauthOrigin(), state, { read: !!data.read }) };
+  });
+
+/**
+ * The client's own Google events for the calendar on screen (read-only, opt-in).
+ * Private to them: only ever for the signed-in person's own client account,
+ * never a coach previewing it.
+ */
+export const getMyGoogleEvents = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ clientId: z.string().uuid(), timeMin: z.string().datetime({ offset: true }), timeMax: z.string().datetime({ offset: true }) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { userId } = context as any;
+    const mine = await ownOrLinkedClient(userId);
+    if (!mine || mine.id !== data.clientId) return { enabled: false, events: [], partial: false };
+    // At most ~4 months per request.
+    if (Date.parse(data.timeMax) - Date.parse(data.timeMin) > 130 * 86_400_000) throw new Error("Range too long.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { listClientGoogleEvents } = await import("@/lib/client-gcal.server");
+    try {
+      return await listClientGoogleEvents(supabaseAdmin as any, mine.id, { timeMin: data.timeMin, timeMax: data.timeMax });
+    } catch {
+      // Google unreachable or access gone: the calendar still works without them.
+      return { enabled: true, events: [], partial: true };
+    }
+  });
+
+/** Their Google calendars and which ones show in the app. */
+export const getMyGoogleCalendars = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { userId } = context as any;
+    const mine = await ownOrLinkedClient(userId);
+    if (!mine) return { enabled: false as const, calendars: [] };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { listClientGoogleCalendars } = await import("@/lib/client-gcal.server");
+    return listClientGoogleCalendars(supabaseAdmin as any, mine.id);
+  });
+
+export const setMyGoogleCalendars = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ ids: z.array(z.string().min(1).max(300)).max(50) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as any;
+    const mine = await ownOrLinkedClient(userId);
+    if (!mine) throw new Error("Only clients can choose calendars.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { setClientGoogleCalendars } = await import("@/lib/client-gcal.server");
+    await setClientGoogleCalendars(supabaseAdmin as any, mine.id, data.ids);
+    return { ok: true };
   });
 
 /** Disconnect Google Calendar: removes the JF Effect calendar from their Google account. */

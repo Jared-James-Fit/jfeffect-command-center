@@ -41,7 +41,9 @@ function SchedulePage() {
     enabled: !!portalUserId,
     queryFn: async () => (await supabase.from("clients").select("*").eq("user_id", portalUserId!).maybeSingle()).data,
   });
-  const { items, isLoading } = useClientCalendarSources(client?.id);
+  // Days on screen, so their Google events load for the month they're looking at.
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null);
+  const { items, isLoading } = useClientCalendarSources(client?.id, { googleRange: range });
   const [changing, setChanging] = useState<any>(null);
   // In-app booking replaces the old per-client external booking link when it's set up.
   const pov = usePovArgs();
@@ -78,6 +80,7 @@ function SchedulePage() {
           <CalendarBoard
             items={items}
             isLoading={isLoading}
+            onRangeChange={(r) => setRange({ from: r.from, to: r.to })}
             emptyHint="Workouts, sessions, check-ins and coach events show up here as they're scheduled."
             renderItemActions={(item, close) =>
               item.kind === "pt_session" && item.status === "Scheduled" ? (

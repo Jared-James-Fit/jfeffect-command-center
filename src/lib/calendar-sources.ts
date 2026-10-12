@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getClientWorkouts } from "@/lib/pl-programs";
 import { resolveWeekDayDates } from "@/lib/workout-today";
 import { listGoogleEventsRange, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
+import { getMyGoogleEvents } from "@/lib/schedule.functions";
 import { resolveClientWeekDays, type ResolvedWorkoutDate } from "@/lib/resolved-client-days";
 import { toLocalISO } from "@/lib/today";
 import { cardioActivityLabel } from "@/lib/cardio-activity";
@@ -110,8 +111,30 @@ function timeFromTimeStr(t?: string | null): string | null {
 /* ============================================================
  * CLIENT
  * ============================================================ */
-export function useClientCalendarSources(clientId: string | null | undefined) {
+export function useClientCalendarSources(
+  clientId: string | null | undefined,
+  opts: {
+    /** Days on screen; their Google events load for these months. Default: last month to two months out. */
+    googleRange?: { from: string; to: string } | null;
+  } = {},
+) {
   const enabled = !!clientId;
+
+  // The client's own Google events (read-only, opt-in, never stored). The
+  // server answers only for the signed-in person's own account, so a coach
+  // previewing a client never sees them. Refreshed on focus and every 5
+  // minutes so added, moved and cancelled events show up on their own.
+  const googleWindow = googleFetchWindow(opts.googleRange);
+  const googleQ = useQuery({
+    queryKey: ["cal-client-google", clientId, googleWindow.timeMin, googleWindow.timeMax],
+    enabled,
+    queryFn: () => getMyGoogleEvents({ data: { clientId: clientId!, ...googleWindow } }),
+    staleTime: 2 * 60_000,
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
 
   const eventsQ = useQuery({
     queryKey: ["cal-client-events", clientId],
@@ -499,8 +522,27 @@ export function useClientCalendarSources(clientId: string | null | undefined) {
       }
     }
 
+    // Their own Google events: read-only, tap opens them in Google.
+    for (const g of googleQ.data?.events ?? []) {
+      if (!g.start) continue;
+      const startISO = g.allDay ? `${g.start}T00:00:00` : g.start;
+      out.push({
+        id: `gcal:${g.id}`,
+        kind: "google_event",
+        date: toLocalDate(startISO),
+        startsAt: g.allDay ? null : g.start,
+        endsAt: g.allDay ? null : g.end,
+        title: g.summary,
+        subtitle: g.calendarName ?? (g.allDay ? "All day" : null),
+        location: g.location || (g.hangoutLink ? "Google Meet" : null),
+        status: null,
+        href: null,
+        raw: { ...g, html_link: g.htmlLink, meet_link: g.hangoutLink ?? null, external_url: g.htmlLink },
+      });
+    }
+
     return out.sort((a, b) => (a.date + (a.startsAt ?? "")).localeCompare(b.date + (b.startsAt ?? "")));
-  }, [eventsQ.data, importantQ.data, apptsQ.data, ptQ.data, workoutsQ.data, checkinsQ.data, cardioQ.data]);
+  }, [eventsQ.data, importantQ.data, apptsQ.data, ptQ.data, workoutsQ.data, checkinsQ.data, cardioQ.data, googleQ.data]);
 
   return {
     items,
