@@ -18,7 +18,7 @@ type Db = any;
 
 /** Kinds that get a restore point. */
 export const VERSIONED_KINDS = [
-  "edit_program_day", "add_workout", "move_workout", "correct_logged_exercise",
+  "edit_program_day", "add_workout", "remove_workout", "move_workout", "correct_logged_exercise",
   "publish_program", "build_program", "assign_program_template", "set_nutrition_targets",
 ] as const;
 export type VersionedKind = (typeof VERSIONED_KINDS)[number];
@@ -41,6 +41,8 @@ export type Snapshot = {
   scheduled?: { id: string; scheduled_date: string; scheduled_time: string | null; order_index: number | null };
   /** set_nutrition_targets: the targets before (null = there were none). */
   nutrition?: { target: any | null };
+  /** remove_workout: what was taken away (the card and its rows, or just calendar entries). */
+  removed?: { day: any | null; rows: any[]; scheduled: any[] };
   /** What the change created (add_workout's day, a new block). */
   created?: { day_id?: string; block_id?: string };
 };
@@ -101,6 +103,10 @@ export async function captureBefore(sb: Db, kind: CleoActionKind, p: any): Promi
     }
     case "set_nutrition_targets":
       return { clientId: p.client_id, blockId: null, snapshot: { v: 1, nutrition: { target: await program.currentTargets(sb, p.client_id) } }, startedAt };
+    case "remove_workout": {
+      const t = await program.workoutToRemove(sb, p);
+      return { clientId: t.clientId, blockId: t.block.id, snapshot: { v: 1, removed: { day: t.card ? t.day : null, rows: t.rows, scheduled: t.scheduled } }, startedAt };
+    }
     case "add_workout":
     case "build_program":
     case "assign_program_template":
@@ -185,6 +191,7 @@ export async function describeRestore(db: Db, versionId: string): Promise<string
     move_workout: "Move the workout back to its old date",
     set_nutrition_targets: "Put the nutrition targets back",
     add_workout: "Remove the added workout (only if it hasn't been started)",
+    remove_workout: "Put the deleted workout back on their calendar",
     build_program: "Hide the new block from the client (it stays in their training to delete if you want)",
     assign_program_template: "Hide the assigned block from the client (it stays in their training to delete if you want)",
   };
@@ -296,6 +303,32 @@ export async function restoreVersion(actor: { supabase: Db; userId: string }, ve
         const { error } = await sb.from("pl_days").delete().eq("id", dayId);
         if (error) throw new Error(error.message);
         text = "Removed the added workout.";
+        break;
+      }
+      case "remove_workout": {
+        const r = snap.removed;
+        if (!r) throw new Error("Nothing to put back.");
+        const strip = ({ updated_at: _u, ...row }: any) => row;
+        if (r.day) {
+          const { data: still } = await sb.from("pl_days").select("id").eq("id", r.day.id).maybeSingle();
+          if (!still) {
+            const { error } = await sb.from("pl_days").insert(strip(r.day));
+            if (error) throw new Error(error.message);
+            if (r.rows.length) {
+              const { error: re } = await sb.from("pl_exercise_rows").insert(r.rows.map(strip));
+              if (re) throw new Error(re.message);
+            }
+          }
+        }
+        const ids = r.scheduled.map((x: any) => x.id);
+        const { data: there } = ids.length ? await sb.from("pl_scheduled_workouts").select("id").in("id", ids) : { data: [] };
+        const have = new Set(((there ?? []) as any[]).map((x) => x.id));
+        const missing = r.scheduled.filter((x: any) => !have.has(x.id)).map(strip);
+        if (missing.length) {
+          const { error } = await sb.from("pl_scheduled_workouts").insert(missing);
+          if (error) throw new Error(error.message);
+        }
+        text = r.day ? "Workout card put back." : "Back on their calendar.";
         break;
       }
       case "build_program":

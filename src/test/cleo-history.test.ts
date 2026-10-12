@@ -111,6 +111,37 @@ describe("Cleo program history", () => {
     expect(tables.pl_program_versions[0].restored_at).toBeNull();
   });
 
+  it("deletes an extra workout card completely, and Undo puts it back", async () => {
+    tables.pl_days.push({ id: "extra", week_id: "w1", day_index: 6, title: "Calf Finisher", is_custom: true, scheduled_date: "2026-10-12" });
+    tables.pl_exercise_rows.push(row("rx", 0, "calf", { day_id: "extra" }));
+    tables.pl_scheduled_workouts = [{ id: "s-extra", client_id: "c1", source_day_id: "extra", scheduled_date: "2026-10-12" }];
+    const program = await import("@/lib/cleo-program.server");
+    const h = await import("@/lib/cleo-history.server");
+
+    const card = await program.describeProgramAction(db, "remove_workout", { workout_id: "s-extra" }, "2026-10-12");
+    expect(card).toMatch(/Delete .*extra workout "Calf Finisher".*whole card/);
+
+    const cap = await h.captureBefore(db, "remove_workout", { workout_id: "s-extra" });
+    expect(await program.executeProgramAction({ supabase: db, userId: "u1" }, "remove_workout", { workout_id: "s-extra" }, "2026-10-12")).toBe("Workout card deleted.");
+    expect(tables.pl_days.some((d) => d.id === "extra")).toBe(false);
+    expect(tables.pl_scheduled_workouts).toHaveLength(0);
+    // The Monday workout is untouched.
+    expect(tables.pl_days.some((d) => d.id === DAY)).toBe(true);
+
+    await h.saveVersion(db, cap!, "remove_workout", { workout_id: "s-extra" }, card, null, "u1");
+    expect(await h.restoreVersion({ supabase: db, userId: "u1" }, tables.pl_program_versions[0].id)).toBe("Workout card put back.");
+    expect(tables.pl_days.find((d) => d.id === "extra")?.title).toBe("Calf Finisher");
+    expect(tables.pl_scheduled_workouts.map((x) => x.id)).toEqual(["s-extra"]);
+  });
+
+  it("won't delete a workout that was started", async () => {
+    tables.pl_days.push({ id: "extra", week_id: "w1", day_index: 6, title: "Calf Finisher", is_custom: true });
+    tables.pl_scheduled_workouts = [{ id: "s-extra", client_id: "c1", source_day_id: "extra", scheduled_date: "2026-10-12" }];
+    tables.pl_day_completions.push({ day_id: "extra", scheduled_workout_id: "s-extra", started_at: "2026-10-12T20:00:00Z" });
+    const program = await import("@/lib/cleo-program.server");
+    await expect(program.describeProgramAction(db, "remove_workout", { workout_id: "s-extra" }, "2026-10-12")).rejects.toThrow(/started or logged/);
+  });
+
   it("only versions program and nutrition changes", async () => {
     const h = await import("@/lib/cleo-history.server");
     expect(h.isVersionedKind("edit_program_day")).toBe(true);
