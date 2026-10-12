@@ -3,6 +3,7 @@
  * chat), SMS, or a link the admin copies. Server-only.
  */
 import { STAFF_ROLE_INFO, staffInviteMessage, type InvitableRole } from "@/lib/staff-roles";
+import { withLinkHeadsUp } from "@/lib/sms-identity";
 
 export function genSetupToken(len = 32) {
   const arr = new Uint8Array(len);
@@ -61,7 +62,7 @@ export async function sendInviteSms(opts: {
         "X-Connection-Api-Key": twilioKey,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({ To: toPhone, From: settings.from_phone, Body: body }).toString(),
+      body: new URLSearchParams({ To: toPhone, From: settings.from_phone, Body: withLinkHeadsUp(body) }).toString(),
     });
     const data: any = await res.json().catch(() => ({}));
     if (!res.ok) {

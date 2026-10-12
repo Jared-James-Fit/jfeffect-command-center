@@ -972,3 +972,13 @@ html[data-page-fab] .summer-fab { bottom: calc(max(env(safe-area-inset-bottom), 
   .summer-fab { bottom: 1.5rem; }
   html[data-page-fab] .summer-fab { bottom: 5.5rem; }
 }
+
+/* SlowLoadHint: fades in after 4s, without waiting for JavaScript. Only the
+   delay matters, so reduced-motion (which shortens the duration) still works. */
+.slow-load-hint {
+  animation: slow-load-hint-in 400ms ease-out 4s both;
+}
+@keyframes slow-load-hint-in {
+  from { opacity: 0; visibility: hidden; }
+  to { opacity: 1; visibility: visible; }
+}

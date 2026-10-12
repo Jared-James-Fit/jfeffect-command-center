@@ -18,6 +18,7 @@ import {
   looksLikeEmail,
 } from "./account-recovery.constants";
 import { assertAdminView } from "@/lib/permissions.server";
+import { withLinkHeadsUp } from "@/lib/sms-identity";
 
 // ─────────────────────────────── helpers (server-only) ──────────────────────
 
@@ -59,7 +60,7 @@ async function sendViaTwilio(
       "X-Connection-Api-Key": twilioKey,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: body }).toString(),
+    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: withLinkHeadsUp(body) }).toString(),
   });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || `twilio_${res.status}`);

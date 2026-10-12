@@ -2,6 +2,7 @@ import * as React from 'react'
 import {
   Body, Button, Container, Head, Heading, Html, Link, Preview, Section, Text, Hr,
 } from '@react-email/components'
+import { LinkHeadsUp } from './link-heads-up'
 import type { TemplateEntry } from './registry'
 
 export interface MembershipOnboardingProps {
@@ -48,6 +49,7 @@ const MembershipOnboardingEmail = (p: MembershipOnboardingProps) => {
             <Button style={button} href={setupOrLogin}>
               {p.setup_link ? 'Finish setting up your account' : 'Log in to the app'}
             </Button>
+            <LinkHeadsUp />
           </Section>
 
           <Heading as="h2" style={h2}>What you signed up for</Heading>

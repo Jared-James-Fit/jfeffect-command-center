@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { SlowLoadHint } from "@/components/slow-load-hint";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -179,7 +180,12 @@ function ResetPage() {
             <span className="text-lg font-black tracking-tight">JF EFFECT</span>
           </div>
           <Card className="border-border bg-card/60 p-6 backdrop-blur-sm">
-            {phase === "loading" && <p className="text-sm text-muted-foreground">Verifying your link…</p>}
+            {phase === "loading" && (
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Verifying your link…</p>
+                <SlowLoadHint />
+              </div>
+            )}
             {phase === "confirm" && (
               <div className="space-y-4 text-center">
                 <h2 className="text-xl font-black tracking-tight">Reset your password</h2>

@@ -2,6 +2,7 @@ import * as React from 'react'
 import {
   Body, Button, Container, Head, Heading, Html, Link, Preview, Section, Text, Hr,
 } from '@react-email/components'
+import { LinkHeadsUp } from './link-heads-up'
 import type { TemplateEntry } from './registry'
 
 export interface SetupReminderProps {
@@ -39,6 +40,7 @@ const SetupReminderEmail = (p: SetupReminderProps) => {
 
           <Section style={ctaSection}>
             <Button style={button} href={installUrl}>Install JF Effect on my phone</Button>
+            <LinkHeadsUp />
           </Section>
 
           <Text style={text}>

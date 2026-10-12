@@ -10,6 +10,7 @@ import {
   Preview,
   Text,
 } from '@react-email/components'
+import { LinkHeadsUp } from './link-heads-up'
 
 interface RecoveryEmailProps {
   siteName: string
@@ -34,6 +35,7 @@ export const RecoveryEmail = ({
         <Button style={button} href={confirmationUrl}>
           Reset My Password
         </Button>
+        <LinkHeadsUp />
         <Text style={footer}>
           If you didn't request a password reset, you can safely ignore this
           email. Your password will not be changed.

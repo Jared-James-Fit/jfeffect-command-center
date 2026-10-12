@@ -4,7 +4,7 @@ import { mintShareLinkForPurchase } from "@/lib/payment-share.server";
 import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertPermission } from "@/lib/permissions.server";
-import { CLIENT_COACH_EMBED, resolveCoachName, smsSender } from "@/lib/sms-identity";
+import { CLIENT_COACH_EMBED, resolveCoachName, smsSender, withLinkHeadsUp } from "@/lib/sms-identity";
 
 /* ============================================================
  * Shared helpers (duplicated from sms.functions.ts to keep this
@@ -36,7 +36,7 @@ async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
       "X-Connection-Api-Key": twilioKey,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: body }).toString(),
+    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: withLinkHeadsUp(body) }).toString(),
   });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || `Twilio error (${res.status})`);

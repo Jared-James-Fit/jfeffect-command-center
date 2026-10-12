@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { SlowLoadHint } from "@/components/slow-load-hint";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -125,8 +126,11 @@ function Welcome() {
           </div>
 
           {state.kind === "loading" && (
-            <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Setting up your membership…
+            <div className="mt-5 space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Setting up your membership…
+              </div>
+              <SlowLoadHint />
             </div>
           )}
 

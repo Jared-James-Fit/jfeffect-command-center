@@ -11,6 +11,7 @@ import {
   Preview,
   Text,
 } from '@react-email/components'
+import { LinkHeadsUp } from './link-heads-up'
 
 interface EmailChangeEmailProps {
   siteName: string
@@ -53,6 +54,7 @@ export const EmailChangeEmail = ({
         <Button style={button} href={confirmationUrl}>
           Confirm Email Change
         </Button>
+        <LinkHeadsUp />
         <Text style={footer}>
           If you didn't request this change, please secure your account
           immediately.

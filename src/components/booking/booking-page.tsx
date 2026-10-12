@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SlowLoadHint } from "@/components/slow-load-hint";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -256,8 +257,9 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
   if (pageLoading || !tz) {
     return (
       <Shell>
-        <div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-1 text-center text-sm text-muted-foreground">
+          <span className="flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…</span>
+          <SlowLoadHint />
         </div>
       </Shell>
     );
