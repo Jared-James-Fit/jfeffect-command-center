@@ -12,6 +12,7 @@ import {
   Text,
   Hr,
 } from '@react-email/components'
+import { LinkHeadsUp } from './link-heads-up'
 import type { TemplateEntry } from './registry'
 
 export interface AgreementSignedProps {
@@ -64,6 +65,7 @@ const AgreementSignedEmail = (p: AgreementSignedProps) => {
             <Button style={button} href={viewUrl}>
               View my signed copy
             </Button>
+            <LinkHeadsUp />
           </Section>
 
           <Text style={text}>

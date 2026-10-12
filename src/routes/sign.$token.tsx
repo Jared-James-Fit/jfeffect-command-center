@@ -1,4 +1,5 @@
 import { createFileRoute, useParams } from "@tanstack/react-router";
+import { SlowLoadHint } from "@/components/slow-load-hint";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getGuestSigningContext, submitGuestSignature } from "@/lib/native-agreements.functions";
@@ -42,7 +43,7 @@ function SignPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (isLoading) return <div className="max-w-2xl mx-auto p-6">Loading…</div>;
+  if (isLoading) return <div className="max-w-2xl mx-auto space-y-1 p-6"><p>Loading…</p><SlowLoadHint /></div>;
   if (error) return (
     <div className="max-w-2xl mx-auto p-6">
       <Card className="p-6">

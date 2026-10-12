@@ -74,3 +74,21 @@ export function smsSegments(text: string): number {
 
 /** Supabase embed that pulls a client's assigned coach alongside the client row. */
 export const CLIENT_COACH_EMBED = "coach:coaches!clients_assigned_coach_id_fkey(first_name, full_name, archived, status)";
+
+/** Said wherever we send someone a link: a cold open can be slow, so they don't give up. */
+export const LINK_HEADS_UP = "The link can take up to a minute to load.";
+
+/** A link into our own app (jfeffect.com, or the lovable.app host), not Meet / YouTube etc. */
+const APP_LINK = /https?:\/\/([a-z0-9-]+\.)*(jfeffect\.com|lovable\.app)(\/|\b)/i;
+
+/**
+ * Add the link heads-up to a text with a link into the app (once, before "Reply STOP…"
+ * so the opt-out stays last). Plain ASCII, so it never tips a text into 70-char unicode
+ * parts.
+ */
+export function withLinkHeadsUp(body: string): string {
+  if (!APP_LINK.test(body) || body.includes(LINK_HEADS_UP)) return body;
+  const stop = body.search(/\s*Reply STOP\b/i);
+  if (stop === -1) return `${body.trimEnd()} ${LINK_HEADS_UP}`;
+  return `${body.slice(0, stop).trimEnd()} ${LINK_HEADS_UP} ${body.slice(stop).trimStart()}`;
+}

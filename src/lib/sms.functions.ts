@@ -7,7 +7,7 @@ import {
   reminderLookbackMs,
   SMS_CLIENT_COOLDOWN_MS,
 } from "@/lib/sms-reminder-rules";
-import { CLIENT_COACH_EMBED, renderSmsTemplate, resolveCoachName, smsSender } from "@/lib/sms-identity";
+import { CLIENT_COACH_EMBED, renderSmsTemplate, resolveCoachName, smsSender, withLinkHeadsUp } from "@/lib/sms-identity";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
@@ -50,7 +50,7 @@ export async function sendViaTwilio(toPhone: string, fromPhone: string, body: st
       "X-Connection-Api-Key": twilioKey,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: body }).toString(),
+    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: withLinkHeadsUp(body) }).toString(),
   });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) {

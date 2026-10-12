@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { withLinkHeadsUp } from "@/lib/sms-identity";
 
 /**
  * The schedule tick (pg_cron, every 5 minutes): appointment reminders, PT
@@ -113,7 +114,7 @@ async function sendSms(to: string, from: string, body: string) {
       "X-Connection-Api-Key": twilioKey,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ To: to, From: from, Body: body }).toString(),
+    body: new URLSearchParams({ To: to, From: from, Body: withLinkHeadsUp(body) }).toString(),
   });
   if (!res.ok) {
     const t = await res.text().catch(() => "");

@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { SlowLoadHint } from "@/components/slow-load-hint";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -75,7 +76,10 @@ function StaffSetupPage() {
           </div>
         )}
         {token && !invite && !isError && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Checking your invite…</div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Checking your invite…</div>
+            <SlowLoadHint />
+          </div>
         )}
         {invite?.valid && (
           <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); void submit(); }}>

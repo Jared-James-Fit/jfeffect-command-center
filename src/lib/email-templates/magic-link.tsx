@@ -10,6 +10,7 @@ import {
   Preview,
   Text,
 } from '@react-email/components'
+import { LinkHeadsUp } from './link-heads-up'
 
 interface MagicLinkEmailProps {
   siteName: string
@@ -33,6 +34,7 @@ export const MagicLinkEmail = ({
         <Button style={button} href={confirmationUrl}>
           Log In
         </Button>
+        <LinkHeadsUp />
         <Text style={footer}>
           If you didn't request this link, you can safely ignore this email.
         </Text>

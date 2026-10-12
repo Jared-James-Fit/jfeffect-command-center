@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { CLIENT_COACH_EMBED, resolveCoachName } from "@/lib/sms-identity";
+import { CLIENT_COACH_EMBED, resolveCoachName, withLinkHeadsUp } from "@/lib/sms-identity";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
@@ -33,7 +33,7 @@ async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
       "X-Connection-Api-Key": twilioKey,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: body }).toString(),
+    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: withLinkHeadsUp(body) }).toString(),
   });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || `Twilio error (${res.status})`);

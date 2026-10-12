@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { SlowLoadHint } from "@/components/slow-load-hint";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { supabase } from "@/integrations/supabase/client";
@@ -188,7 +189,12 @@ function SetupPage() {
 
   return (
     <Shell>
-      {phase === "loading" && <p className="text-sm text-muted-foreground">Verifying your link…</p>}
+      {phase === "loading" && (
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Verifying your link…</p>
+                <SlowLoadHint />
+              </div>
+            )}
 
       {phase === "confirm" && (
         <div className="space-y-4 text-center">

@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { SMS_TAGS, renderSmsTemplate, smsSegments, unknownSmsTags } from "@/lib/sms-identity";
+import { SMS_TAGS, renderSmsTemplate, smsSegments, unknownSmsTags, withLinkHeadsUp } from "@/lib/sms-identity";
 import { cn } from "@/lib/utils";
 
 type ExtraTag = { tag: string; label: string; sample: string };
@@ -26,7 +26,8 @@ export function SmsTemplateField({
   const ref = useRef<HTMLTextAreaElement>(null);
   const tags = [...SMS_TAGS, ...extraTags];
   const sample: Record<string, string> = Object.fromEntries(tags.map((t) => [t.tag.slice(1, -1), t.sample]));
-  const preview = renderSmsTemplate(value, { ...sample, coach: coach ?? "", brand: brand ?? "" });
+  // What's actually sent: an app link also gets the "can take a minute" heads-up.
+  const preview = withLinkHeadsUp(renderSmsTemplate(value, { ...sample, coach: coach ?? "", brand: brand ?? "" }));
   const unknown = unknownSmsTags(value, extraTags.map((t) => t.tag.slice(1, -1)));
   const segments = smsSegments(preview);
 
