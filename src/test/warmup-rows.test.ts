@@ -156,8 +156,9 @@ describe("e1RM: its own compact chip", () => {
     expect(best?.e1rm).toBe(estimateOneRepMax({ load: 145, reps: 5, rpe: 8.5 }, "kg"));
     const html = renderToStaticMarkup(createElement(E1rmChip, { sets: [{ load: 145, reps: 5, rpe: 8.5 }], unit: "kg", open: false, onToggle() {} }));
     expect(html).toContain('data-testid="e1rm-chip"');
-    expect(html).toContain(`≈${best!.e1rm}`);
-    expect(renderToStaticMarkup(createElement(E1rmChip, { sets: [], unit: "kg", open: false, onToggle() {} }))).toMatch(/e1RM<\/button>/);
+    expect(html).toMatch(new RegExp(`>${best!.e1rm}(<!-- -->)? (<!-- -->)?kg<`));
+    expect(html).not.toContain("≈");
+    expect(renderToStaticMarkup(createElement(E1rmChip, { sets: [], unit: "kg", open: false, onToggle() {} }))).toMatch(/>e1RM<\/span><\/button>/);
   });
   it("sits in the card header on compound lifts, fed by today's sets and warm-ups", () => {
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
