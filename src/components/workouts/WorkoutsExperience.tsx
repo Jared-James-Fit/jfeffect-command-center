@@ -82,6 +82,7 @@ import {
 } from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 import { WeekStrip, statusDotClass } from "@/components/workouts/week-strip";
+import { WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import type { ProgramRoadmap } from "@/lib/training-roadmap";
@@ -801,7 +802,7 @@ function MonthGrid({
                 )}>
                   {format(d, "d")}
                 </span>
-                <span className={cn("h-1.5 w-1.5 rounded-full", statusDotClass(status))} />
+                <WorkoutStatusMark mark={dayMark(list)} />
               </div>
               {title && (
                 <span className="mt-1 line-clamp-2 text-[10px] leading-tight text-muted-foreground">

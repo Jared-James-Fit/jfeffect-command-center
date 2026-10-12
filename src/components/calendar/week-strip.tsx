@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WorkoutStatusMark, type WorkoutMark } from "@/components/workouts/workout-status-mark";
 
 /**
  * The week strip shared by every Home: coach dashboard, client Home, member Home.
@@ -17,6 +18,7 @@ export function WeekStrip({
   dotClass = "bg-violet-400",
   extraCount,
   extraDotClass = "bg-sky-400",
+  workoutMark,
 }: {
   today: string;
   /** yyyy-mm-dd: the picked day; its Mon–Sun week is shown. */
@@ -27,6 +29,8 @@ export function WeekStrip({
   /** Second kind of dot after the main ones (e.g. Google events), same 3-dot cap. */
   extraCount?: (day: string) => number;
   extraDotClass?: string;
+  /** The day's workout status (same mark as the Workouts calendar), shown before the other dots. */
+  workoutMark?: (day: string) => WorkoutMark | null;
 }) {
   const days = weekDays(selected);
   const first = new Date(`${days[0]}T00:00:00`);
@@ -62,8 +66,9 @@ export function WeekStrip({
           const date = new Date(`${d}T00:00:00`);
           const main = count(d);
           const extra = extraCount?.(d) ?? 0;
-          const n = main + extra;
-          const dots = Array.from({ length: Math.min(n, 3) }, (_, i) => (i < main ? dotClass : extraDotClass));
+          const wm = workoutMark?.(d) ?? null;
+          const n = main + extra + (wm ? 1 : 0);
+          const dots = Array.from({ length: Math.min(main + extra, wm ? 2 : 3) }, (_, i) => (i < main ? dotClass : extraDotClass));
           const isSelected = d === selected;
           const isToday = d === today;
           return (
@@ -89,7 +94,8 @@ export function WeekStrip({
                 {date.toLocaleDateString(undefined, { weekday: "short" })}
               </span>
               <span className={cn("text-sm font-black tabular-nums", !isSelected && isToday && "text-primary")}>{date.getDate()}</span>
-              <span className="flex h-1.5 items-center gap-0.5" aria-hidden>
+              <span className="flex h-2.5 items-center gap-0.5" aria-hidden={!wm}>
+                {wm && <WorkoutStatusMark mark={wm} onPrimary={isSelected} />}
                 {dots.map((cls, i) => (
                   <span key={i} className={cn("h-1.5 w-1.5 rounded-full", isSelected ? "bg-primary-foreground" : cls)} />
                 ))}

@@ -1,3 +1,4 @@
+import { computeWorkoutProgress } from "@/lib/workout-progress";
 import { supabase } from "@/integrations/supabase/client";
 import { mergeScheduledInstances } from "@/lib/scheduled-instances-merge";
 import { filterPrimaryProgramBlocks, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
@@ -1658,6 +1659,22 @@ export async function getClientWorkouts(
     feedbackCompletionIds: feedbackSet,
     loggedSetsByDay,
   });
+  // Logged-vs-prescribed sets per day (the workout screen's own calculation),
+  // for the calendars' in-progress ring.
+  const resultsByDay = new Map<string, any[]>();
+  for (const rr of (rowResults ?? []) as any[]) {
+    const dayId = rowIdToDay.get(rr.row_id);
+    if (!dayId) continue;
+    const list = resultsByDay.get(dayId) ?? [];
+    list.push(rr);
+    resultsByDay.set(dayId, list);
+  }
+  for (const it of items) {
+    const dayId = it.day?.id;
+    if (!dayId) continue;
+    const prog = computeWorkoutProgress((rowsByDay.get(dayId) ?? []) as any[], (resultsByDay.get(dayId) ?? []) as any[]);
+    it.progress_pct = prog.pct;
+  }
   // Scheduled chronology is the canonical client-facing order. The shared
   // comparator falls back to program order only for genuinely unscheduled days.
   items.sort(compareWorkoutItemsBySchedule);

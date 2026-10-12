@@ -9,6 +9,8 @@ export type WorkoutItem = {
   completion: any;
   /** Count of logged sets for this day; >0 with no completion = in-progress. */
   logged_sets_count?: number;
+  /** 0–100: logged vs prescribed sets (computeWorkoutProgress), for the calendars' in-progress ring. */
+  progress_pct?: number;
   /**
    * Pre-resolved estimated duration (minutes) for this day, computed at
    * item build time in getClientWorkouts (coach override → day estimate →
