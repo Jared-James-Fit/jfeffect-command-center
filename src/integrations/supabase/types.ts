@@ -3860,11 +3860,13 @@ export type Database = {
           created_at: string
           event_count: number
           google_email: string | null
+          granted_scopes: string | null
           last_checked_at: string | null
           last_error: string | null
           last_sync_hash: string | null
           last_synced_at: string | null
           refresh_token: string
+          show_calendar_ids: string[] | null
           status: string
           token_expires_at: string | null
           updated_at: string
@@ -3877,11 +3879,13 @@ export type Database = {
           created_at?: string
           event_count?: number
           google_email?: string | null
+          granted_scopes?: string | null
           last_checked_at?: string | null
           last_error?: string | null
           last_sync_hash?: string | null
           last_synced_at?: string | null
           refresh_token: string
+          show_calendar_ids?: string[] | null
           status?: string
           token_expires_at?: string | null
           updated_at?: string
@@ -3894,11 +3898,13 @@ export type Database = {
           created_at?: string
           event_count?: number
           google_email?: string | null
+          granted_scopes?: string | null
           last_checked_at?: string | null
           last_error?: string | null
           last_sync_hash?: string | null
           last_synced_at?: string | null
           refresh_token?: string
+          show_calendar_ids?: string[] | null
           status?: string
           token_expires_at?: string | null
           updated_at?: string
@@ -17474,6 +17480,183 @@ export type Database = {
           },
         ]
       }
+      pl_program_versions: {
+        Row: {
+          block_id: string | null
+          cleo_action_id: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          payload: Json
+          restore_note: string | null
+          restored_at: string | null
+          restored_by: string | null
+          source: string
+          summary: string
+        }
+        Insert: {
+          block_id?: string | null
+          cleo_action_id?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          payload?: Json
+          restore_note?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          source?: string
+          summary: string
+        }
+        Update: {
+          block_id?: string | null
+          cleo_action_id?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          payload?: Json
+          restore_note?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          source?: string
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_program_versions_cleo_action_id_fkey"
+            columns: ["cleo_action_id"]
+            isOneToOne: false
+            referencedRelation: "cleo_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_program_versions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_program_versions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      pl_roadmap_notes: {
+        Row: {
+          ai_label: string | null
+          ai_style: string | null
+          ai_summary: string | null
+          block_id: string
+          client_id: string
+          coach_label: string | null
+          coach_summary: string | null
+          created_at: string
+          edited_at: string | null
+          edited_by: string | null
+          generated_at: string | null
+          hidden: boolean
+          id: string
+          source_hash: string | null
+          updated_at: string
+          week_id: string | null
+        }
+        Insert: {
+          ai_label?: string | null
+          ai_style?: string | null
+          ai_summary?: string | null
+          block_id: string
+          client_id: string
+          coach_label?: string | null
+          coach_summary?: string | null
+          created_at?: string
+          edited_at?: string | null
+          edited_by?: string | null
+          generated_at?: string | null
+          hidden?: boolean
+          id?: string
+          source_hash?: string | null
+          updated_at?: string
+          week_id?: string | null
+        }
+        Update: {
+          ai_label?: string | null
+          ai_style?: string | null
+          ai_summary?: string | null
+          block_id?: string
+          client_id?: string
+          coach_label?: string | null
+          coach_summary?: string | null
+          created_at?: string
+          edited_at?: string | null
+          edited_by?: string | null
+          generated_at?: string | null
+          hidden?: boolean
+          id?: string
+          source_hash?: string | null
+          updated_at?: string
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_roadmap_notes_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_roadmap_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_roadmap_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "pl_roadmap_notes_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "pl_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_roadmap_queue: {
+        Row: {
+          attempts: number
+          block_id: string
+          last_error: string | null
+          queued_at: string
+        }
+        Insert: {
+          attempts?: number
+          block_id: string
+          last_error?: string | null
+          queued_at?: string
+        }
+        Update: {
+          attempts?: number
+          block_id?: string
+          last_error?: string | null
+          queued_at?: string
+        }
+        Relationships: []
+      }
       pl_row_results: {
         Row: {
           actual_load: number | null
@@ -20737,6 +20920,88 @@ export type Database = {
           },
         ]
       }
+      session_requests: {
+        Row: {
+          alt_times: string | null
+          client_id: string
+          created_at: string
+          decline_reason: string | null
+          duration_minutes: number
+          id: string
+          message_id: string | null
+          note: string | null
+          preferred_date: string
+          preferred_time: string | null
+          pt_session_id: string | null
+          request_type: string
+          requested_by: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          timezone: string | null
+        }
+        Insert: {
+          alt_times?: string | null
+          client_id: string
+          created_at?: string
+          decline_reason?: string | null
+          duration_minutes?: number
+          id?: string
+          message_id?: string | null
+          note?: string | null
+          preferred_date: string
+          preferred_time?: string | null
+          pt_session_id?: string | null
+          request_type: string
+          requested_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          timezone?: string | null
+        }
+        Update: {
+          alt_times?: string | null
+          client_id?: string
+          created_at?: string
+          decline_reason?: string | null
+          duration_minutes?: number
+          id?: string
+          message_id?: string | null
+          note?: string | null
+          preferred_date?: string
+          preferred_time?: string | null
+          pt_session_id?: string | null
+          request_type?: string
+          requested_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          timezone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "session_requests_pt_session_id_fkey"
+            columns: ["pt_session_id"]
+            isOneToOne: false
+            referencedRelation: "pt_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       setup_prompt_dismissals: {
         Row: {
           created_at: string
@@ -21579,6 +21844,7 @@ export type Database = {
       }
       summer_messages: {
         Row: {
+          choices: Json | null
           content: string
           created_at: string
           id: string
@@ -21586,6 +21852,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          choices?: Json | null
           content: string
           created_at?: string
           id?: string
@@ -21593,6 +21860,7 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          choices?: Json | null
           content?: string
           created_at?: string
           id?: string
@@ -23159,6 +23427,8 @@ export type Database = {
       }
       coach_manageable_pl_day_ids: { Args: never; Returns: string[] }
       coach_voice_words: { Args: { _key: string }; Returns: string[] }
+      coached_client_ids: { Args: never; Returns: string[] }
+      coached_member_ids: { Args: never; Returns: string[] }
       coaching_agreement_record_signature: { Args: { p: Json }; Returns: Json }
       coaching_agreement_resign_below_version: { Args: never; Returns: string }
       community_activity: { Args: never; Returns: Json }
@@ -23462,6 +23732,7 @@ export type Database = {
         Returns: undefined
       }
       community_profile: { Args: { _user_id: string }; Returns: Json }
+      community_public_day_name: { Args: { _title: string }; Returns: string }
       community_public_session_title: {
         Args: { _at: string; _client_id: string; _day_id: string }
         Returns: string
@@ -24135,6 +24406,19 @@ export type Database = {
           sets: number
         }[]
       }
+      get_strength_board_roster: {
+        Args: { _as_user?: string }
+        Returns: {
+          avatar_url: string
+          client_id: string
+          display_name: string
+          is_alumni: boolean
+          is_coach: boolean
+          is_me: boolean
+          person: string
+          sex: string
+        }[]
+      }
       get_strength_board_tops: {
         Args: never
         Returns: {
@@ -24619,6 +24903,7 @@ export type Database = {
         Returns: string
       }
       pl_recompute_week_status: { Args: { _week_id: string }; Returns: string }
+      pl_roadmap_enqueue: { Args: { _block_ids: string[] }; Returns: undefined }
       pl_row_has_unsupported_blocks: {
         Args: { p_row_id: string }
         Returns: boolean
@@ -24824,6 +25109,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      rls_evaluate_once: { Args: { _table?: string }; Returns: number }
+      rls_once_expr: { Args: { e: string }; Returns: string }
       run_league_automation: { Args: never; Returns: Json }
       run_messenger_checkin_automation: { Args: never; Returns: Json }
       run_payment_setup_reminders: {
