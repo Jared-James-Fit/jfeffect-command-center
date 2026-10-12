@@ -75,9 +75,12 @@ describe("canonical purpose-label contract", () => {
   });
 
   it("keeps the client workout experience and admin preview bound to the stored purpose_label", () => {
-    const clientSource = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
+    // The client sees roles in the day preview and Block View, both through the shared deriver.
+    const clientSource = readFileSync("src/components/client-block-view.tsx", "utf8");
+    const deriver = readFileSync("src/lib/exercise-metadata.ts", "utf8");
     const previewSource = readFileSync("src/components/workout/shared/inline-workout-preview.tsx", "utf8");
-    expect(clientSource).toContain("purpose_label");
+    expect(clientSource).toContain("deriveWeeklyPurposeLabelByRowId");
+    expect(deriver).toContain("explicit `purpose_label` stored on the row (coach override) wins");
     expect(previewSource).toContain("purpose_label");
   });
 

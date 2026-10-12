@@ -8,7 +8,7 @@ import { ScheduleManagerShell } from "@/components/schedule/ScheduleManagerShell
 import { MissedWorkoutCard } from "@/components/schedule/MissedWorkoutCard";
 
 export const Route = createFileRoute("/_authenticated/portal/schedule")({
-  head: () => ({ meta: [{ title: "Training Schedule" }] }),
+  head: () => ({ meta: [{ title: "Move workouts" }] }),
   component: SchedulePage,
 });
 
@@ -24,7 +24,7 @@ function SchedulePage() {
   }
   return (
     <div className="space-y-4 px-3 sm:px-6 py-4 max-w-6xl mx-auto">
-      <PageHeader title="Training Schedule" subtitle="Move, drag, or bulk reschedule your workouts. Your program & logs are never modified." />
+      <PageHeader title="Move workouts" subtitle="Move one workout or several at once. Your program and logged workouts never change." />
       <MissedWorkoutCard clientId={client.id} />
       <ScheduleManagerShell clientId={client.id} mode="client" />
     </div>

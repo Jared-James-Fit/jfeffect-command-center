@@ -88,15 +88,17 @@ describe("client home upcoming summary", () => {
   });
 });
 
-describe("Home schedule card: the list is always the selected day", () => {
+describe("Home schedule card: today in full, then what's coming", () => {
   const src = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
-  it("shows the selected day's items (today by default), never a different day under today", () => {
-    expect(src).toContain("const rows = dayItems.slice(0, MAX_DAY_ROWS);");
-    expect(src).not.toContain("selectHomeUpcoming(");
-    expect(src).toContain('const heading = isToday ? "Today" : dayLabel(selected, today);');
+  it("is an agenda (today, then the next days), not a week strip", () => {
+    expect(src).toContain("buildHomeAgenda(items, { today })");
+    expect(src).toContain("agenda.today.map(");
+    expect(src).toContain("agenda.upcoming.map(");
+    expect(src).not.toContain("<WeekStrip");
   });
-  it("a clear day offers the next day with something on it, and tapping it selects that day", () => {
-    expect(src).toContain("onClick={() => setSelected(nextDay)}");
+  it("today's workout carries its block, week and Start / Continue / Done", () => {
+    expect(src).toContain("workoutContext(item.raw)");
+    expect(src).toContain("workoutAction(item.raw)");
   });
   it("Book and Request share one + button", () => {
     expect(src).toContain('aria-label="Book or request a session"');
