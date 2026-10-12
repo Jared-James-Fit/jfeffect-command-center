@@ -27,8 +27,9 @@ describe("suggestion card with the warm-up row", () => {
 
   it("leaves the warm-up to the set table (no second prompt on the card)", () => {
     const html = render({ suggested: { load: 195, reps: 2 } });
-    expect(html).toContain("215–235 lb");
-    expect(html).toContain("Suggested");
+    expect(html).toMatch(/data-testid="load-target">225(<!-- -->)? (<!-- -->)?lb</);
+    expect(html).toContain("215–235");
+    expect(html).not.toContain('data-testid="load-badge"');
     expect(html).not.toContain("warmup-gauge");
   });
   it("says when a logged warm-up tuned the number", () => {

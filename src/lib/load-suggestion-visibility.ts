@@ -1,10 +1,9 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * Whether exercise cards show the full suggested-load card (range + fast/slow
- * audible). Off by default to keep the logger clean — the suggested weight
- * still sits faded in the next set's weight cell. One toggle at the top of the
- * workout flips every card at once; remembered on this device (a UI
+ * Whether exercise cards show the suggested-load card (range + fast/slow
+ * audible). Off by default to keep the logger clean. The "Suggest" chip on any
+ * exercise card flips every card at once; remembered on this device (a UI
  * preference, not data).
  */
 const KEY = "jf.workout.showLoadSuggestions";
@@ -41,4 +40,17 @@ export function useShowLoadSuggestions(): [boolean, (next: boolean) => void] {
     () => false,
   );
   return [show, setShowLoadSuggestions];
+}
+
+/** feature_announcement_views key: the athlete has turned suggestions on at least once. */
+export const LOAD_SUGGESTIONS_TRIED_KEY = "load_suggestions_tried";
+
+// "Not now" on the try-it nudge lasts until the app is reloaded (module state),
+// so it comes back on the next launch only while it was never tried.
+let nudgeDismissed = false;
+export function suggestionsNudgeDismissed(): boolean {
+  return nudgeDismissed;
+}
+export function dismissSuggestionsNudgeForNow() {
+  nudgeDismissed = true;
 }

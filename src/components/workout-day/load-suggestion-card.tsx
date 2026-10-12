@@ -1,4 +1,4 @@
-import { Info, Target } from "lucide-react";
+import { Check, Info, Target, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -23,12 +23,15 @@ export function LoadSuggestionCard({
   model,
   plan,
   warmup = null,
+  fromName = null,
 }: {
   hint: LoadSuggestion | null;
   model: LoadModel;
   plan: { reps: number; rpe: number };
   /** Last-warm-up tip — offered only before the first working set (the set table holds the warm-up row). */
   warmup?: WarmupGauge | null;
+  /** The card today's adjustment comes from (model.dayFactor), e.g. "Competition Squat". */
+  fromName?: string | null;
 }) {
   if (model.status === "calibrating" || !hint) {
     // No usable history yet: the set table's warm-up row is the way to a first
@@ -42,40 +45,63 @@ export function LoadSuggestionCard({
       </div>
     );
   }
-  const range = hint.low === hint.high
-    ? `${fmtNum(hint.target)} ${hint.unit}`
-    : `${fmtNum(hint.low)}–${fmtNum(hint.high)} ${hint.unit}`;
+  const range = hint.low === hint.high ? null : `${fmtNum(hint.low)}–${fmtNum(hint.high)}`;
+  const dayPct = model.dayFactor ? Math.round((model.dayFactor - 1) * 100) : 0;
+  const daySigned = `${dayPct > 0 ? "+" : "−"}${Math.abs(dayPct)}%`;
   const why =
     model.source === "warmup"
       ? "your final warm-up (first time on this lift, so kept conservative)"
       : model.source === "history_warmup"
         ? "your recent sessions, nudged by your final warm-up"
         : model.source === "history"
-      ? model.readiness.reasons.length
+      ? dayPct !== 0
+        ? `your recent sessions, adjusted ${daySigned} for how today's ${fromName ?? "earlier"} sets moved`
+        : model.readiness.reasons.length
         ? `your recent sessions, eased a little for ${model.readiness.reasons[0]}`
         : model.staleDays
           ? `your recent sessions, eased back after ${Math.round(model.staleDays / 7)} weeks off`
           : `your last ${Math.min(model.historySessions, 8)} sessions`
-      : "the sets you've logged today";
+      : model.carried
+        ? "your earlier sets of this lift today (no history of this card yet)"
+        : model.source === "blend"
+          ? "the sets you've logged today, checked against your recent sessions"
+          : "the sets you've logged today";
   const audible = audibleStep(hint.target, hint.unit);
-  const label =
-    model.source === "warmup" ? "From warm-up" : model.source === "history_warmup" ? "Warm-up tuned" : "Suggested";
+  // The badge says when the number is live — moved by what's been logged today.
+  const badge: { text: string; live: boolean } | null =
+    model.source === "warmup" ? { text: "From warm-up", live: false }
+      : model.source === "history_warmup" ? { text: "Warm-up tuned", live: false }
+      : model.source === "today" || model.source === "blend" ? { text: "Live", live: true }
+      : dayPct !== 0 ? { text: `Live ${daySigned}`, live: true }
+      : null;
   return (
     <div className="mt-1.5 overflow-hidden rounded-lg border border-primary/25 bg-primary/5" data-testid="load-suggestion">
     <div className="flex items-center gap-2 px-2.5 py-1.5">
       <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
       <div className="min-w-0 flex-1 leading-tight">
-        <div className="text-sm font-bold tabular-nums text-foreground">
-          {range}
-          <span className="ml-1.5 text-[11px] font-medium text-muted-foreground">
-            {plan.reps} {plan.reps === 1 ? "rep" : "reps"} @ RPE {fmtNum(plan.rpe)}
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-base font-black tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
+          <span className="truncate text-[11px] font-medium text-muted-foreground">
+            {plan.reps} @ RPE {fmtNum(plan.rpe)}
           </span>
+          {badge && (
+            <span
+              data-testid="load-badge"
+              className={cn(
+                "ml-auto shrink-0 rounded-full px-1.5 py-px text-[10px] font-bold",
+                badge.live ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {badge.live && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-current align-middle" aria-hidden="true" />}
+              {badge.text}
+            </span>
+          )}
         </div>
-        <div className="truncate text-[11px] text-muted-foreground" data-testid="load-audible">
-          {label}<span aria-hidden="true"> · </span>
+        <div className="truncate text-[11px] tabular-nums text-muted-foreground" data-testid="load-audible">
+          {range && <>{range}<span aria-hidden="true"> · </span></>}
           <span className="font-semibold text-emerald-600 dark:text-emerald-400">▲ Fast +{fmtNum(audible)}</span>
           <span aria-hidden="true"> · </span>
-          <span className="font-semibold text-amber-600 dark:text-amber-400">▼ Slow −{fmtNum(audible)} {hint.unit}</span>
+          <span className="font-semibold text-amber-600 dark:text-amber-400">▼ Slow −{fmtNum(audible)}</span>
         </div>
       </div>
       <Popover>
@@ -115,25 +141,68 @@ export function LoadSuggestionCard({
 }
 
 /**
- * One tap at the top of the workout shows / hides the suggested-load card on
- * every exercise. Off by default; the faded "◎" weight in each next set stays.
+ * The on/off switch on every exercise card that can suggest. One switch for
+ * the whole workout: turning it on here turns it on for every card. Off by
+ * default.
  */
-export function LoadSuggestionsToggle({ className }: { className?: string }) {
+export function LoadSuggestionsChip({ highlight = false, className }: { highlight?: boolean; className?: string }) {
   const [show, setShow] = useShowLoadSuggestions();
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={show}
+      aria-label="Weight suggestions on every exercise"
       onClick={() => setShow(!show)}
-      aria-pressed={show}
-      data-testid="load-suggestions-toggle"
+      data-testid="load-suggestions-chip"
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition active:scale-[0.98]",
-        show ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-background text-foreground",
+        "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold transition active:scale-[0.97]",
+        show ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-background text-foreground",
+        highlight && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
         className,
       )}
     >
       <Target className="h-3.5 w-3.5" aria-hidden="true" />
-      {show ? "Hide suggestions" : "Show suggestions"}
+      Suggest
+      <span aria-hidden="true" className={cn("relative h-3.5 w-6 rounded-full transition-colors", show ? "bg-primary" : "bg-muted-foreground/35")}>
+        <span className={cn("absolute top-0.5 h-2.5 w-2.5 rounded-full bg-background shadow-sm transition-all", show ? "left-3" : "left-0.5")} />
+      </span>
     </button>
+  );
+}
+
+/**
+ * "Try it" — the first card that can suggest, until the athlete has turned
+ * suggestions on once. "Not now" hides it until the app is next opened.
+ */
+export function LoadSuggestionsNudge({ onDismiss }: { onDismiss: () => void }) {
+  const [, setShow] = useShowLoadSuggestions();
+  return (
+    <div role="note" data-testid="load-suggestions-nudge" className="mt-1.5 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 py-1.5 pl-2.5 pr-1">
+      <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+      <div className="min-w-0 flex-1 leading-tight">
+        <div className="text-xs font-bold text-foreground">New: live weight suggestions</div>
+        <div className="text-[11px] text-muted-foreground">Updates after every set you log. Turn off anytime.</div>
+      </div>
+      <button type="button" onClick={() => setShow(true)} className="h-8 shrink-0 rounded-full bg-primary px-3.5 text-xs font-bold text-primary-foreground active:scale-[0.97]">
+        Try it
+      </button>
+      <button type="button" onClick={onDismiss} aria-label="Not now" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+/** Every set on the card is logged: how today ran vs the athlete's usual (no stale range). */
+export function LoadSuggestionsDone({ own }: { own: number | null }) {
+  if (own == null || !Number.isFinite(own)) return null;
+  const pct = Math.round((own - 1) * 100);
+  const read = Math.abs(own - 1) < 0.015 ? "right on your usual" : `${Math.abs(pct)}% ${pct > 0 ? "above" : "below"} your usual`;
+  return (
+    <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground" data-testid="load-suggestion-done">
+      <Check className="h-3 w-3 text-emerald-500" aria-hidden="true" />
+      All sets in · today ran <span className="font-semibold text-foreground">{read}</span>
+    </div>
   );
 }

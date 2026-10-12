@@ -143,14 +143,11 @@ export function matchHistoryLogs(
     : normalizedName
       ? logs.filter((log) => normalizeExerciseHistoryName(log.exerciseName) === normalizedName)
       : [];
-  const other = matches.filter((log) => log.sessionKey !== currentSessionKey && occurredAtMs(log) > 0);
-  // A named role (a back-off, a primer) learns from the same role when there's
-  // enough of it (2+ sessions): a sumo back-off isn't predicted from the
-  // conventional top set it follows.
-  const role = normalizeRole(identity.purposeLabel);
-  if (!role) return other;
-  const sameRole = other.filter((log) => normalizeRole(log.purposeLabel) === role);
-  return new Set(sameRole.map((log) => log.sessionKey)).size >= 2 ? sameRole : other;
+  // All of the lift's sessions, not just this card's role: a role's own
+  // history is thin and often light (a top set wave-loaded at RPE 4 predicted
+  // 243 lb for 5 @ 5.5 when 315 @ 6 was the truth). The engine's reps/RPE
+  // kernel already leans on the most similar sets.
+  return matches.filter((log) => log.sessionKey !== currentSessionKey && occurredAtMs(log) > 0);
 }
 
 /** Select one Last Time set per current workout row from a single history batch. */

@@ -70,8 +70,8 @@ import { WorkoutUndoProvider } from "@/lib/workout-undo";
 import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData, cachedUpdatedAt } from "@/lib/workout-plan-cache";
 import { E1rmChip, WarmupRows, useWarmupSets } from "@/components/workout-day/final-warmup-input";
-import { LoadSuggestionCard, LoadSuggestionsToggle } from "@/components/workout-day/load-suggestion-card";
-import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
+import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge } from "@/components/workout-day/load-suggestion-card";
+import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
 import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
 import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
@@ -115,6 +115,8 @@ import {
   type LoadSuggestion,
   type Readiness,
 } from "@/lib/load-suggestion";
+import { computeDayReads, type DayRead, type DayReadRow } from "@/lib/workout-day-read";
+import { hasSeenFeature, markFeatureSeen } from "@/lib/feature-seen";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
 import { isSetLogComplete } from "@/lib/set-completion";
 import { planCascade, type CascadeOrigin, type CascadeSetState } from "@/lib/set-cascade";
@@ -1023,6 +1025,34 @@ function WorkoutDay({
     return map;
   }, [previousLiftIdentities, previousLiftLogs, currentHistorySessionKey, bodyweightSeries]);
 
+  // Live across cards: how today's logged sets of each lift compare with its
+  // history, so a back-off or variation adapts to the top set before its own
+  // first set (load-suggestion.ts, note 9). Recomputes on every set save (the
+  // results cache is patched optimistically).
+  const dayReadByRow = useMemo(() => {
+    const input: DayReadRow[] = (rows as any[]).map((r) => {
+      const family = r.exercises?.movement_family;
+      return {
+        rowId: r.id,
+        name: r.exercises?.name ?? r.exercise_name_override ?? "this lift",
+        exerciseKey: String(r.exercises?.id ?? r.exercise_id ?? r.id),
+        family: isMainLiftFamily(family) ? family : null,
+        history: loadHistoryByRow.get(r.id) ?? null,
+        sets: (results as any[])
+          .filter((x) => x.row_id === r.id && x.completed_at && resolveLoadType(x.load_type, x.is_bodyweight) === "external")
+          .sort((a, b) => a.set_index - b.set_index)
+          .map((x) => ({
+            load: Number(displayLoadInUnit(x, "kg")),
+            reps: Number(x.actual_reps),
+            rpe: parseRpe(x.actual_rpe_num ?? x.actual_rpe),
+            at: Date.parse(x.completed_at),
+          }))
+          .filter((x) => x.load > 0 && x.reps > 0),
+      };
+    });
+    return computeDayReads(input, bodyweightNowKg);
+  }, [rows, results, loadHistoryByRow, bodyweightNowKg]);
+
   // Predicted readiness from the most recent OTHER workout review. Only v2
   // reviews carry a real session RPE (legacy ones mapped status → fake RPE).
   const { data: lastReview = null } = useQuery({
@@ -1511,6 +1541,41 @@ function WorkoutDay({
       action: { label: "Undo", onClick: () => void restorePreviousUnit() },
     });
   };
+
+  // "Try live suggestions" — shown on the first card that can suggest, once
+  // per app load, until the athlete turns suggestions on once (tried state is
+  // server-side, so it never nags on another device). Never in coach preview.
+  const [showSuggestions] = useShowLoadSuggestions();
+  const suggestUserId = !isImpersonating ? authUser?.id ?? null : null;
+  const { data: suggestionsTried = true } = useQuery({
+    queryKey: ["feature-seen", LOAD_SUGGESTIONS_TRIED_KEY, suggestUserId],
+    enabled: !!suggestUserId,
+    staleTime: Infinity,
+    retry: 1,
+    queryFn: () => hasSeenFeature(suggestUserId!, LOAD_SUGGESTIONS_TRIED_KEY),
+  });
+  useEffect(() => {
+    if (!showSuggestions || !suggestUserId || suggestionsTried !== false) return;
+    qc.setQueryData(["feature-seen", LOAD_SUGGESTIONS_TRIED_KEY, suggestUserId], true);
+    void markFeatureSeen(suggestUserId, LOAD_SUGGESTIONS_TRIED_KEY);
+  }, [showSuggestions, suggestUserId, suggestionsTried, qc]);
+  const [suggestNudgeHidden, setSuggestNudgeHidden] = useState(suggestionsNudgeDismissed);
+  const [suggestEligible, setSuggestEligible] = useState<string[]>([]);
+  const reportSuggestEligible = useCallback((rowId: string, eligible: boolean) => {
+    setSuggestEligible((prev) => {
+      const has = prev.includes(rowId);
+      if (eligible === has) return prev;
+      return eligible ? [...prev, rowId] : prev.filter((id) => id !== rowId);
+    });
+  }, []);
+  const suggestNudgeRowId =
+    suggestUserId && suggestionsTried === false && !showSuggestions && !suggestNudgeHidden && !completion?.completed_at
+      ? ((rows as any[]).find((r) => suggestEligible.includes(r.id))?.id ?? null)
+      : null;
+  const hideSuggestNudge = useCallback(() => {
+    dismissSuggestionsNudgeForNow();
+    setSuggestNudgeHidden(true);
+  }, []);
 
   const unitForRow = (r: any): WUnit => {
     return resolvedUnitMap[`row:${r.id}`] ?? unit;
@@ -2359,6 +2424,9 @@ function WorkoutDay({
                       clientId={client?.id}
                       previousLift={previousLiftByRow.get(r.id) ?? null}
                       warmedUp={warmedUpRowIds.has(r.id)}
+                      dayRead={dayReadByRow.get(r.id) ?? null}
+                      suggestNudge={suggestNudgeRowId === r.id ? hideSuggestNudge : null}
+                      onSuggestEligible={reportSuggestEligible}
                       repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
                       bodyweightKg={bodyweightNowKg}
@@ -2588,7 +2656,6 @@ function WorkoutDay({
               exerciseRows={rows as any[]}
               className="h-7 min-h-0 px-2.5 text-xs"
             />
-            <LoadSuggestionsToggle />
           </div>
         )}
 
@@ -2666,6 +2733,9 @@ function WorkoutDay({
                     clientId={client?.id}
                     previousLift={previousLiftByRow.get(r.id) ?? null}
                       warmedUp={warmedUpRowIds.has(r.id)}
+                      dayRead={dayReadByRow.get(r.id) ?? null}
+                      suggestNudge={suggestNudgeRowId === r.id ? hideSuggestNudge : null}
+                      onSuggestEligible={reportSuggestEligible}
                     repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
                       bodyweightKg={bodyweightNowKg}
@@ -3101,7 +3171,7 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, warmedUp = false, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; warmedUp?: boolean; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, topSetBasis = null, previousLift = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3493,8 +3563,21 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         rpe: parseRpe(r.actual_rpe_num ?? r.actual_rpe),
       }))
       .filter((x) => x.load > 0 && x.reps > 0);
-    return buildLoadModel({ history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel, bodyweightKg });
-  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg]);
+    // Live across cards: today's sets of this lift on other cards (dayRead).
+    const toUnit = (kg: number) => (activeUnit === "kg" ? kg : kg * 2.2046226218);
+    const carryToday = (dayRead?.carryKg ?? []).map((x) => ({ ...x, load: toUnit(x.load) }));
+    return buildLoadModel({
+      history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel, bodyweightKg,
+      dayFactor: dayRead?.factor ?? null, carryToday,
+    });
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg, dayRead]);
+  // Every card that can suggest gets the on/off chip (one switch for the whole
+  // workout). Doesn't wait for history so the chip never pops in late.
+  const canSuggest = !hideWeight && !coachOwnsLoad && rowLoadType === "external" && !!loadPlan;
+  useEffect(() => {
+    onSuggestEligible?.(row.id, canSuggest);
+    return () => onSuggestEligible?.(row.id, false);
+  }, [onSuggestEligible, row.id, canSuggest]);
   const loadHint = useMemo<LoadSuggestion | null>(
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
@@ -3920,12 +4003,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               className="w-auto h-7 rounded-full px-2.5 text-xs"
             />
           )}
+          {canSuggest && !readonly && <LoadSuggestionsChip highlight={!!suggestNudge} />}
         </div>
       )}
-      {/* Off by default (the "◎" weight in the next set carries the number);
-          the workout-level toggle opens it on every card. */}
+      {canSuggest && !readonly && suggestNudge && !showSuggestionCard && <LoadSuggestionsNudge onDismiss={suggestNudge} />}
+      {/* Off by default; the Suggest chip on any card turns it on for every
+          card. Live: it recalculates on every set saved (this card's sets,
+          then the same lift's other cards — see dayRead). */}
       {showSuggestionCard && loadModel && loadPlan && (
-        <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} />
+        openSetCount === 0 && workedToday
+          ? <LoadSuggestionsDone own={dayRead?.own ?? null} />
+          : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} />
       )}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge

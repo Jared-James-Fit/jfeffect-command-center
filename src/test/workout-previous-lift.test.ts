@@ -81,9 +81,8 @@ describe("same lift twice in a workout: each card keeps its own role", () => {
     expect(m.get("back")?.normalizedKg).toBe(143);
   });
 
-  it("the back-off's suggestion learns from back-offs once there are 2 sessions of them", () => {
-    expect(matchHistoryLogs(ids[1], logs, "today").map((l) => l.id)).toEqual(["b1", "b2"]);
-    expect(matchHistoryLogs(ids[1], logs.filter((l) => l.id !== "b1"), "today")).toHaveLength(3);
+  it("the suggestion still learns from the whole lift (a role's own history is thin and often light)", () => {
+    expect(matchHistoryLogs(ids[1], logs, "today")).toHaveLength(4);
   });
 
   it("only the first card of a lift asks for the last warm-up", () => {

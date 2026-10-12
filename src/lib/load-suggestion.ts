@@ -37,6 +37,14 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      recent sessions were heavier). It is monotonic in effort: the same
 //      warm-up rated harder never suggests more than it would rated a normal 7.
 //      Once a working set is logged today, that set takes over.
+//   9. LIVE ACROSS CARDS: a lift's other cards today (back-offs, a paused or
+//      tempo variation after the top set) start from their own history, then
+//      move by how today's sets of that lift compared with what history
+//      predicted ("today ran +3%"): the top set is the day's readiness test.
+//      Same exercise trusts it 80%, a variation of the family 50%, capped at
+//      ±8%, and it replaces the predicted readiness from the last review (real
+//      sets beat a forecast). A lift with no history of its own starts from
+//      today's earlier sets of the same exercise instead.
 // Backtested on ~2,800 real sets (scratch script, not shipped): median error
 // 8% cold, 4.4% once today's first set is in.
 // Pure: no I/O, fully unit tested.
@@ -239,6 +247,10 @@ export interface LoadModel {
   bodyweightScale: number;
   /** The athlete's final warm-up, when given and no working set is logged yet today. */
   warmup: { e1rm: number; load: number; reps: number; trust: number } | null;
+  /** Today's read from this lift's other cards, applied to a cold suggestion (1 = as usual). */
+  dayFactor: number | null;
+  /** True when "today" is this exercise's earlier sets on another card (no history of its own). */
+  carried: boolean;
 }
 
 function weightedMean(values: Array<{ v: number; w: number }>): number | null {
@@ -262,6 +274,10 @@ export function buildLoadModel(input: {
   warmup?: WarmupSet | null;
   /** Today's smoothed bodyweight (kg); history logs carry theirs in `bodyweightKg`. */
   bodyweightKg?: number | null;
+  /** How today's other cards of this lift ran vs history (see dayFactorFrom). Cold suggestions only. */
+  dayFactor?: number | null;
+  /** Earlier sets of this exercise today on other cards — used only when this card has no history. */
+  carryToday?: SetSample[];
   now?: Date;
 }): LoadModel {
   const { unit } = input;
@@ -292,8 +308,13 @@ export function buildLoadModel(input: {
   const spanDays = sessions.length > 1 ? (sessions[0].at - sessions[sessions.length - 1].at) / DAY_MS : 0;
   const historyReady = sessions.length >= MIN_HISTORY_SESSIONS && spanDays >= MIN_HISTORY_SPAN_DAYS;
 
+  // Today's real sets of this lift (other cards) replace the forecast from
+  // the last review: both describe today, and the sets are evidence.
+  const dayFactor = input.dayFactor && Number.isFinite(input.dayFactor) && input.dayFactor > 0 && input.today.length === 0
+    ? input.dayFactor
+    : null;
   let staleDays: number | null = null;
-  let scale = readiness.multiplier;
+  let scale = dayFactor ?? readiness.multiplier;
   if (sessions.length > 0) {
     const daysSince = (now - sessions[0].at) / DAY_MS;
     if (daysSince > 21) {
@@ -312,8 +333,10 @@ export function buildLoadModel(input: {
   );
 
   // ── Today: sets already done on this row (need a logged RPE to calibrate) ──
+  // A brand-new lift's back-off borrows the top set it follows (same exercise).
+  const carried = input.today.length === 0 && !historyReady && (input.carryToday?.length ?? 0) > 0;
   const today: ModelSample[] = [];
-  input.today.forEach((s, i) => {
+  (carried ? input.carryToday! : input.today).forEach((s, i) => {
     const est = setE1rm(s);
     if (est && s.rpe != null && est.trust >= 0.7) {
       today.push({ e1rm: est.e1rm, load: s.load, reps: s.reps, rpe: s.rpe, trust: est.trust, weight: i + 1 });
@@ -323,7 +346,11 @@ export function buildLoadModel(input: {
   const wE1rm = input.warmup ? warmupE1rm(input.warmup) : null;
   const warmup = wE1rm && input.warmup && today.length === 0 ? { e1rm: wE1rm, load: input.warmup.load, reps: input.warmup.reps, trust: warmupTrust(input.warmup.rpe) } : null;
   const bodyweightScaleMean = bwScales.length ? bwScales.reduce((a, b) => a + b, 0) / bwScales.length : 1;
-  const base = { unit, historySessions: sessions.length, staleDays, warmup, bodyweightScale: bodyweightScaleMean };
+  const base = {
+    unit, historySessions: sessions.length, staleDays, warmup, bodyweightScale: bodyweightScaleMean,
+    dayFactor: historyReady && today.length === 0 ? dayFactor : null,
+    carried: carried && today.length > 0,
+  };
   if (today.length > 0) {
     return {
       ...base, status: "ready",
@@ -334,7 +361,10 @@ export function buildLoadModel(input: {
     };
   }
   if (historyReady) {
-    return { ...base, status: "ready", source: warmup ? "history_warmup" : "history", history, today: [], readiness };
+    return {
+      ...base, status: "ready", source: warmup ? "history_warmup" : "history", history, today: [],
+      readiness: dayFactor ? NEUTRAL_READINESS : readiness,
+    };
   }
   // No usable history: a warm-up is the only same-day signal there is, which is
   // exactly when a brand-new lift needs a first suggestion.
@@ -524,3 +554,45 @@ export function planningTarget(input: {
   return { reps, rpe: Math.min(10, Math.max(MIN_RPE, Math.round(effort * 2) / 2)) };
 }
 
+
+// ── Live across cards (header note 9) ─────────────────────────────────────
+export const DAY_FACTOR_MAX = 0.08;
+export const DAY_FACTOR_TRUST_SAME = 0.8;
+export const DAY_FACTOR_TRUST_FAMILY = 0.5;
+
+/**
+ * How today's logged sets of a lift compare with what its recent sessions
+ * predicted for the same reps @ RPE: 1.03 = moving 3% better than usual.
+ * Only sets with an RPE of 6+ count (easier ratings are too loose), and the
+ * first sets weigh most (later sets carry fatigue). Null without enough
+ * history or a usable set.
+ */
+export function todayVsUsual(input: {
+  history: PreviousLiftLog[];
+  sets: SetSample[];
+  unit: "kg" | "lb";
+  bodyweightKg?: number | null;
+  now?: Date;
+}): number | null {
+  const model = buildLoadModel({ history: input.history, today: [], unit: input.unit, bodyweightKg: input.bodyweightKg, now: input.now });
+  if (model.status !== "ready" || model.source !== "history") return null;
+  let sum = 0;
+  let weight = 0;
+  let i = 0;
+  for (const s of input.sets) {
+    if (s.rpe == null || s.rpe < 6 || s.rpe > 10 || !(s.load > 0) || !(s.reps >= 1) || s.reps > 12) continue;
+    const est = estimateFor(model, Math.round(s.reps), s.rpe);
+    if (!est || !(est.load > 0)) continue;
+    const w = 1 / (1 + i++);
+    sum += (s.load / est.load) * w;
+    weight += w;
+  }
+  return weight > 0 ? sum / weight : null;
+}
+
+/** Today's read → the factor applied to another card of the lift. */
+export function dayFactorFrom(ratio: number | null | undefined, trust: number): number | null {
+  if (ratio == null || !Number.isFinite(ratio) || ratio <= 0) return null;
+  const shift = Math.min(DAY_FACTOR_MAX, Math.max(-DAY_FACTOR_MAX, (ratio - 1) * trust));
+  return Math.abs(shift) < 0.005 ? null : 1 + shift;
+}
