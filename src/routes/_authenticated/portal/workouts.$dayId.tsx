@@ -7,7 +7,7 @@ import { AlertTriangle } from "lucide-react";
 import { WorkoutDayView } from "@/components/workout-day/WorkoutDayView";
 import { createClientAdapter } from "@/lib/workout-context/client-adapter";
 import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 import { parseLocalDate } from "@/lib/today";
@@ -80,9 +80,17 @@ function RouteComponent() {
   // adapter once Phase B (query swap) lands.
   const portalUserId = usePortalUserId();
   const { client: povClient } = useClientImpersonation();
+  const qc = useQueryClient();
   const { data: ownClient } = useQuery({
     queryKey: ["portal-route-my-client", portalUserId],
     enabled: !!portalUserId && !povClient?.id,
+    // Coming from the Workouts list, its client lookup is already in hand: the
+    // logger's reads can start on the first frame instead of after a lookup.
+    initialData: () => {
+      const listed = qc.getQueryData<{ id?: string } | null>(["portal-workouts-client", portalUserId]);
+      return listed?.id && portalUserId ? { id: listed.id, user_id: portalUserId } : undefined;
+    },
+    initialDataUpdatedAt: () => qc.getQueryState(["portal-workouts-client", portalUserId])?.dataUpdatedAt,
     queryFn: async () =>
       (await supabase.from("clients").select("id, user_id").eq("user_id", portalUserId!).maybeSingle()).data,
   });
@@ -142,7 +150,7 @@ function RouteComponent() {
     }
   }, [shouldResolveLegacy, legacyCandidates, dayId, navigate, search]);
 
-  const { data: dayRow } = useQuery({
+  const { data: dayRow, isFetched: dayRowFetched } = useQuery({
     queryKey: ["portal-workout-day-cardio-date", dayId],
     enabled: !!dayId,
     queryFn: async () =>
@@ -215,7 +223,8 @@ function RouteComponent() {
         messagesPath: "/portal/messages",
       }}
     >
-      {clientId && (
+      {/* wait for the day's date, or cardio loads once for today and again for the real date */}
+      {clientId && dayRowFetched && (
         <ClientCardioSection
           clientId={clientId}
           dayContext="unknown"

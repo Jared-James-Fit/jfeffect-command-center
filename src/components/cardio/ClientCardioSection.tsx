@@ -12,12 +12,14 @@
  * Admin/coach view is read-only.
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Loader2, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CardioCompletionCard } from "./CardioCompletionCard";
 import { getClientWorkouts } from "@/lib/pl-programs";
+import { isAtHomeBackupClient, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
+import type { WorkoutItem } from "@/lib/workout-today";
 import { mondayWeekDates, resolveClientWeekDays, resolveWorkoutDatesFromItems } from "@/lib/resolved-client-days";
 import { parseLocalDate, todayLocalISO, toLocalISO } from "@/lib/today";
 
@@ -38,6 +40,7 @@ export function ClientCardioSection({
   readonly?: boolean;
 }) {
   const dateStr = date ? toLocalISO(date) : todayLocalISO();
+  const qc = useQueryClient();
   const { data: resolved, isLoading } = useQuery({
     queryKey: ["client-cardio-resolved", clientId, dateStr],
     enabled: !!clientId,
@@ -62,7 +65,13 @@ export function ClientCardioSection({
         (supabase.from("nutrition_day_overrides") as any)
           .select("override_date,day_label")
           .eq("client_id", clientId),
-        getClientWorkouts(clientId),
+        // The Workouts screen's own list (same key and loader): a cached copy is
+        // reused instead of re-running the whole program chain for every date.
+        qc.fetchQuery({
+          queryKey: ["my-workouts", clientId],
+          queryFn: () => getClientWorkouts(clientId, { includeAtHomeBackupSessions: isAtHomeBackupClient(clientId) }) as Promise<WorkoutItem[]>,
+          staleTime: 60_000,
+        }).then((items) => items.filter((it) => !isAtHomeBackupSessionBlock(it.block))),
       ]);
       if (targetsRes.error) throw targetsRes.error;
       const targetDate = parseLocalDate(dateStr) ?? new Date();
@@ -85,8 +94,8 @@ export function ClientCardioSection({
         : null;
       return { day, target };
     },
-    staleTime: 0,
-    refetchOnMount: "always",
+    // every cardio / schedule edit invalidates this key, so a minute is safe
+    staleTime: 60_000,
   });
 
   const filteredTargets = resolved?.target ? [resolved.target] : [];

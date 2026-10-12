@@ -63,11 +63,16 @@ export function computeWorkoutProgress(
 export function useWorkoutProgress(
   dayId?: string | null,
   clientId?: string | null,
+  /** The same numbers from the workouts list (getClientWorkouts) and when it loaded: no request while that's fresh. */
+  fromList?: { progress?: WorkoutProgress | null; updatedAt?: number } | null,
 ) {
+  const seeded = fromList?.progress && fromList.updatedAt ? fromList : null;
   return useQuery({
     queryKey: ["workout-progress", dayId, clientId],
     enabled: !!dayId && !!clientId,
     staleTime: 15_000,
+    initialData: seeded?.progress ?? undefined,
+    initialDataUpdatedAt: seeded?.updatedAt,
     queryFn: async (): Promise<WorkoutProgress> => {
       const [rowsRes, resultsRes] = await Promise.all([
         supabase.from("pl_exercise_rows").select("id, sets").eq("day_id", dayId!),

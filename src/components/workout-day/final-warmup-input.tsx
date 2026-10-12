@@ -12,6 +12,51 @@ const sb = supabase as any;
 const MAX_WARMUPS = 8;
 
 /**
+ * Every exercise card asks for its warm-ups as it mounts; the asks made in the
+ * same tick for one workout go out as one request instead of one per exercise.
+ */
+type WarmupWaiter = { resolve: (rows: WarmupSetRow[]) => void; reject: (e: unknown) => void };
+const warmupBatches = new Map<string, Map<string, WarmupWaiter[]>>();
+
+function loadWarmupSets(rowId: string, clientId: string, scheduledWorkoutId: string | null): Promise<WarmupSetRow[]> {
+  const batchKey = `${clientId}|${scheduledWorkoutId ?? ""}`;
+  let batch = warmupBatches.get(batchKey);
+  if (!batch) {
+    const fresh = new Map<string, WarmupWaiter[]>();
+    warmupBatches.set(batchKey, fresh);
+    batch = fresh;
+    setTimeout(() => {
+      warmupBatches.delete(batchKey);
+      void flushWarmupBatch(fresh, clientId, scheduledWorkoutId);
+    }, 0);
+  }
+  const waiters = batch.get(rowId) ?? [];
+  batch.set(rowId, waiters);
+  return new Promise((resolve, reject) => waiters.push({ resolve, reject }));
+}
+
+async function flushWarmupBatch(batch: Map<string, WarmupWaiter[]>, clientId: string, scheduledWorkoutId: string | null) {
+  try {
+    let q = sb.from("pl_warmup_sets").select("id,row_id,load,unit,reps,rpe,created_at")
+      .in("row_id", Array.from(batch.keys())).eq("client_id", clientId);
+    q = scheduledWorkoutId ? q.eq("scheduled_workout_id", scheduledWorkoutId) : q.is("scheduled_workout_id", null);
+    const { data } = await q.order("created_at", { ascending: true }).throwOnError();
+    const byRow = new Map<string, any[]>();
+    for (const r of (data ?? []) as any[]) {
+      const list = byRow.get(r.row_id) ?? [];
+      list.push(r);
+      byRow.set(r.row_id, list);
+    }
+    for (const [rowId, waiters] of batch) {
+      const rows = (byRow.get(rowId) ?? []).map(normalizeWarmupRow).filter((r): r is WarmupSetRow => !!r);
+      for (const w of waiters) w.resolve(rows);
+    }
+  } catch (e) {
+    for (const waiters of batch.values()) for (const w of waiters) w.reject(e);
+  }
+}
+
+/**
  * Logged warm-up sets for one exercise card (pl_warmup_sets — never counted as
  * work). Keyed to the workout instance like the logged sets, so a program day
  * that repeats weekly doesn't show last week's warm-ups.
@@ -23,13 +68,7 @@ export function useWarmupSets(rowId: string, clientId: string | null | undefined
     queryKey: key,
     enabled: !!clientId && !!rowId,
     staleTime: 60_000,
-    queryFn: async (): Promise<WarmupSetRow[]> => {
-      let q = sb.from("pl_warmup_sets").select("id,load,unit,reps,rpe,created_at")
-        .eq("row_id", rowId).eq("client_id", clientId);
-      q = scheduledWorkoutId ? q.eq("scheduled_workout_id", scheduledWorkoutId) : q.is("scheduled_workout_id", null);
-      const { data } = await q.order("created_at", { ascending: true }).throwOnError();
-      return ((data ?? []) as any[]).map(normalizeWarmupRow).filter((r): r is WarmupSetRow => !!r);
-    },
+    queryFn: () => loadWarmupSets(rowId, clientId!, scheduledWorkoutId),
   });
   const sets = data ?? [];
   const refresh = () => qc.invalidateQueries({ queryKey: key });

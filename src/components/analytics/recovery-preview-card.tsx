@@ -105,45 +105,97 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       const since7 = new Date(now); since7.setDate(now.getDate() - 7);
       const since14 = new Date(now); since14.setDate(now.getDate() - 14);
 
+      // Every read below is independent (the schedule only needs the block's
+      // start date), so they all start now and run side by side instead of one
+      // after another (~8 round trips became 2).
       // Blocks for "current block avg"
-      const { data: blocks } = await (supabase as any)
+      const blocksP = Promise.resolve((supabase as any)
         .from("pl_blocks")
         .select("id, start_date, end_date, status, archived, sort_order, created_at, source_template_block_key")
         .eq("client_id", clientId)
-        .order("sort_order", { ascending: true });
-      const curBlock = pickCurrentBlock((blocks ?? []).filter(isPrimaryProgramBlock) as any[]);
-
+        .order("sort_order", { ascending: true }));
       // Series of readiness scores
-      const series = await fetchRecoveryScoreSeries(
+      const seriesP = fetchRecoveryScoreSeries(
         supabase as any,
         clientId,
         since180.toISOString(),
       );
-
+      seriesP.catch(() => {}); // still thrown where it's awaited below
       // Reviews for sleep / recovery-feel / pain samples
-      const { data: reviews } = await (supabase as any)
+      const reviewsP = Promise.resolve((supabase as any)
         .from("member_workout_reviews")
         .select(
           "review_submitted_at, sleep_bucket, recovery_today, pain, member_plan_enrollments!inner(client_id)",
         )
         .eq("member_plan_enrollments.client_id", clientId)
         .gte("review_submitted_at", since180.toISOString())
-        .order("review_submitted_at", { ascending: true });
-
+        .order("review_submitted_at", { ascending: true }));
       // Feedback for sleep buckets (keyed via completion→client_id already scoped)
-      const { data: feedback } = await (supabase as any)
+      const feedbackP = Promise.resolve((supabase as any)
         .from("pl_workout_feedback")
         .select("created_at, sleep_bucket, recovery_today, pain, client_id")
         .eq("client_id", clientId)
-        .gte("created_at", since180.toISOString());
-
+        .gte("created_at", since180.toISOString()));
       // Completions
-      const { data: comps } = await (supabase as any)
+      const compsP = Promise.resolve((supabase as any)
         .from("pl_day_completions")
         .select("completed_at")
         .eq("client_id", clientId)
         .not("completed_at", "is", null)
-        .gte("completed_at", since180.toISOString());
+        .gte("completed_at", since180.toISOString()));
+      // Training-load sets (last 35 days)
+      const setRowsP = Promise.resolve((supabase as any)
+        .from("pl_row_results")
+        .select(
+          "completed_at, actual_reps, actual_rpe, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, is_bodyweight, load_type",
+        )
+        .eq("client_id", clientId)
+        .not("actual_reps", "is", null)
+        .gte("completed_at", since35.toISOString()));
+      const weekStartEarly = (() => {
+        const x = new Date(now);
+        x.setHours(0, 0, 0, 0);
+        x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+        return x;
+      })();
+      const ymdEarly = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const cardioWeekEndEarly = new Date(weekStartEarly); cardioWeekEndEarly.setDate(weekStartEarly.getDate() + 7);
+      const cardioP = Promise.all([
+        (supabase as any)
+          .from("cardio_completions")
+          .select("completed, skipped, completed_date")
+          .eq("client_id", clientId)
+          .gte("completed_date", ymdEarly(weekStartEarly))
+          .lt("completed_date", ymdEarly(cardioWeekEndEarly)),
+        (supabase as any)
+          .from("cardio_targets")
+          .select("frequency_per_week, status, enabled, start_date, end_date")
+          .eq("client_id", clientId)
+          .neq("status", "Archived"),
+      ]);
+      cardioP.catch(() => {});
+      // The schedule window reaches back to the current block's start, so it
+      // follows the blocks read (the only chained step).
+      const schedP = blocksP.then(({ data: blocks }: any) => {
+        const cur = pickCurrentBlock((blocks ?? []).filter(isPrimaryProgramBlock) as any[]);
+        const eightWeeksBack = new Date(weekStartEarly); eightWeeksBack.setDate(weekStartEarly.getDate() - 8 * 7);
+        const bStart = cur?.start_date ? new Date(cur.start_date) : null;
+        const lower = bStart && bStart < eightWeeksBack ? bStart : eightWeeksBack;
+        return (supabase as any)
+          .from("pl_scheduled_workouts")
+          .select("scheduled_date, original_date")
+          .eq("client_id", clientId)
+          .gte("scheduled_date", ymdEarly(lower));
+      });
+      schedP.catch(() => {});
+
+      const { data: blocks } = await blocksP;
+      const curBlock = pickCurrentBlock((blocks ?? []).filter(isPrimaryProgramBlock) as any[]);
+      const series = await seriesP;
+      const { data: reviews } = await reviewsP;
+      const { data: feedback } = await feedbackP;
+      const { data: comps } = await compsP;
       const completedTs: number[] = (comps ?? []).map((c: any) => new Date(c.completed_at).getTime());
       const workouts7d = completedTs.filter((t: number) => t >= since7.getTime()).length;
       const completed30d = completedTs.filter((t: number) => t >= since30.getTime()).length;
@@ -185,20 +237,10 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       const weekStartISO = ymd(weekStart);
       const weekEndISO = ymd(weekEnd);
 
-      // Fetch scheduled workouts back to the earlier of (block start, 8 weeks ago).
-      const eightWeeksAgo = new Date(weekStart); eightWeeksAgo.setDate(weekStart.getDate() - 8 * 7);
-      const blockStartDate = curBlock?.start_date ? new Date(curBlock.start_date) : null;
-      const schedLowerBound = blockStartDate && blockStartDate < eightWeeksAgo
-        ? blockStartDate
-        : eightWeeksAgo;
-
+      // Scheduled workouts back to the earlier of (block start, 8 weeks ago): schedP above.
       let scheduledRows: Array<{ scheduled_date: string; original_date: string | null }> = [];
       try {
-        const { data: sched } = await (supabase as any)
-          .from("pl_scheduled_workouts")
-          .select("scheduled_date, original_date")
-          .eq("client_id", clientId)
-          .gte("scheduled_date", ymd(schedLowerBound));
+        const { data: sched } = await schedP;
         scheduledRows = (sched ?? []) as typeof scheduledRows;
       } catch { scheduledRows = []; }
 
@@ -225,19 +267,7 @@ export function RecoveryPreviewCard({ clientId }: Props) {
       // ── Cardio adherence for the current week (supporting signal) ──────
       let cardioWeek: { weekPrescribed: number; weekCompleted: number; weekSkipped: number } | null = null;
       try {
-        const [cardioCompRes, cardioTargetRes] = await Promise.all([
-          (supabase as any)
-            .from("cardio_completions")
-            .select("completed, skipped, completed_date")
-            .eq("client_id", clientId)
-            .gte("completed_date", weekStartISO)
-            .lt("completed_date", weekEndISO),
-          (supabase as any)
-            .from("cardio_targets")
-            .select("frequency_per_week, status, enabled, start_date, end_date")
-            .eq("client_id", clientId)
-            .neq("status", "Archived"),
-        ]);
+        const [cardioCompRes, cardioTargetRes] = await cardioP;
         // Canonical cardio math — shared with the Cardio Analytics section so
         // readiness and analytics can never report different adherence.
         const cRows = (cardioCompRes?.data ?? []) as CardioCompletionRow[];
@@ -326,14 +356,7 @@ export function RecoveryPreviewCard({ clientId }: Props) {
 
       // Training load: sets, tonnage, avg RPE for last 7 vs last 28 days.
       const LB_PER_KG = 2.2046226;
-      const { data: setRows } = await (supabase as any)
-        .from("pl_row_results")
-        .select(
-          "completed_at, actual_reps, actual_rpe, actual_load, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, is_bodyweight, load_type",
-        )
-        .eq("client_id", clientId)
-        .not("actual_reps", "is", null)
-        .gte("completed_at", since35.toISOString());
+      const { data: setRows } = await setRowsP;
       const setsAll = ((setRows ?? []) as any[]).map((r) => {
         let load_lb = 0;
         if (r.normalized_lb != null) load_lb = Number(r.normalized_lb) || 0;

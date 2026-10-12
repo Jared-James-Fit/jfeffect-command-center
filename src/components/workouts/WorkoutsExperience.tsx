@@ -893,7 +893,10 @@ function SelectedDayCard({
 
   // NOTE: must be called before any early return to preserve hook order
   // across rest days (item === null) and active days.
-  const { data: progress } = useWorkoutProgress(item?.day?.id, clientId);
+  // Seeded from the list's own numbers (and its load time), so a card only
+  // asks the server when that copy has gone stale.
+  const listUpdatedAt = qc.getQueryState(["my-workouts", clientId])?.dataUpdatedAt;
+  const { data: progress } = useWorkoutProgress(item?.day?.id, clientId, { progress: item?.progress, updatedAt: listUpdatedAt });
 
   // Reset = the server's instance-scoped, undoable "Not Started" (see
   // WorkoutStatusSheet / workout_set_status) — never a client-side delete.

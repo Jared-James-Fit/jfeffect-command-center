@@ -15,10 +15,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { exerciseAccent } from "@/components/program-builder";
 import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { formatDualLoad } from "@/lib/dual-load";
-import { resolveMovementFamily } from "@/lib/exercise-family";
+import { familyStripeClass, resolveMovementFamily } from "@/lib/exercise-family";
 import {
   derivePurposeLabels,
   effectiveRestSeconds,
@@ -392,6 +391,19 @@ export function WorkoutDayView({
 }
 
 const sb = supabase as any;
+
+// Sets this device just wrote ("rowId:setIndex" -> when). Live sync skips its
+// own echo: the save already refetched the day's results.
+const ownResultWrites = new Map<string, number>();
+function markOwnResultWrite(rowId: unknown, setIndex: unknown) {
+  const now = Date.now();
+  for (const [k, t] of ownResultWrites) if (now - t > 10_000) ownResultWrites.delete(k);
+  ownResultWrites.set(`${rowId}:${setIndex}`, now);
+}
+function isOwnResultEcho(row: any): boolean {
+  const t = row ? ownResultWrites.get(`${row.row_id}:${row.set_index}`) : undefined;
+  return t !== undefined && Date.now() - t < 10_000;
+}
 
 /**
  * Derive the swap-persistence target for an exercise row. Members
@@ -852,8 +864,9 @@ function WorkoutDay({
       "workout-previous-lifts",
       adapter?.kind ?? "client",
       historyOwnerId,
-      dayId,
-      scheduledWorkoutId,
+      // A client's history depends only on who and which lifts, so days that
+      // share lifts share one download (a member's is read per enrollment day).
+      adapter?.kind === "member" ? dayId : null,
       previousLiftIdentityKey,
     ],
     enabled: secondaryHydrationReady && !!historyOwnerId && previousLiftIdentities.length > 0,
@@ -1087,6 +1100,7 @@ function WorkoutDay({
           // Only invalidate when the changed row belongs to this workout day.
           const changedRowId: string | undefined =
             payload?.new?.row_id ?? payload?.old?.row_id;
+          if (isOwnResultEcho(payload?.new)) return;
           if (!changedRowId || rowIds.includes(changedRowId)) {
             qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
           }
@@ -1659,10 +1673,19 @@ function WorkoutDay({
   );
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
-    qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-    // Keep LAST TIME + the History sheet in step with what was just logged.
-    qc.invalidateQueries({ queryKey: ["workout-previous-lifts"] });
+    // A set save refetches the day's results itself just before calling this;
+    // don't fetch them a second time.
+    const resultsAge = Math.min(
+      ...qc.getQueryCache().findAll({ queryKey: ["pl-day-results", dayId] }).map((q) => Date.now() - q.state.dataUpdatedAt),
+    );
+    if (!(resultsAge < 1500)) qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+    // Starting the session is the only change a set makes to the completion row.
+    if (!completion?.in_progress_at) qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
+    // LAST TIME and the PR checks leave out this session, so a new set can't
+    // change them: mark them stale (fresh on the next open) instead of
+    // re-downloading the whole lift history after every set.
+    qc.invalidateQueries({ queryKey: ["workout-previous-lifts"], refetchType: "none" });
+    // The History sheet only refetches while it's open.
     qc.invalidateQueries({ queryKey: ["exercise-history"] });
     beginSessionOnAction();
     markInProgress();
@@ -2015,9 +2038,10 @@ function WorkoutDay({
         qc.invalidateQueries({ queryKey: ["schedule"] }),
         qc.invalidateQueries({ queryKey: ["resolved-client-days"] }),
         qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] }),
-        // Finishing a workout makes today's sets history: LAST TIME and the
-        // History sheet must refresh without a reload or re-login.
-        qc.invalidateQueries({ queryKey: ["workout-previous-lifts"] }),
+        // Finishing a workout makes today's sets history: the next workout's
+        // LAST TIME must show them (stale now, fetched on open; this one
+        // leaves its own session out, so the recap needn't wait on it).
+        qc.invalidateQueries({ queryKey: ["workout-previous-lifts"], refetchType: "none" }),
         qc.invalidateQueries({ queryKey: ["exercise-history"] }),
 
       ]);
@@ -3335,7 +3359,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     : null;
   // One colour rule for every screen: the exercise's movement family.
   const family = resolveMovementFamily(exMeta, row.movement_family);
-  const accent = exerciseAccent(exMeta, null, row.movement_family);
+  const accent = familyStripeClass(exMeta, row.movement_family);
   const category = resolveCategory(exMeta);
   const effectiveRest = effectiveRestSeconds(
     { rest_seconds_override: row.rest_seconds_override, rest_seconds: row.rest_seconds },
@@ -5106,6 +5130,7 @@ function SetRow({
             status: existing.completed_at ? "completed" : null,
           }
         : { weight: null, reps: null, rpe: null, unit: null, status: null };
+      markOwnResultWrite(payload.row_id, payload.set_index);
       try {
       if (existing) {
         if (adapter) {

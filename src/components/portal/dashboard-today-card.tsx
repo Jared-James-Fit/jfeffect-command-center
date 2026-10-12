@@ -39,7 +39,9 @@ export function DashboardTodayCard({ clientId }: { clientId: string }) {
   });
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ["my-workouts", clientId],
+    // Its own entry under "my-workouts" (still refreshed with it): this is a
+    // lighter list than the Workouts screen's, so the two must never share one.
+    queryKey: ["my-workouts", clientId, "today"],
     queryFn: () => getClientTodayItems(clientId),
     enabled: !!clientId,
   });

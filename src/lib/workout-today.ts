@@ -11,6 +11,8 @@ export type WorkoutItem = {
   logged_sets_count?: number;
   /** 0–100: logged vs prescribed sets (computeWorkoutProgress), for the calendars' in-progress ring. */
   progress_pct?: number;
+  /** The full logged-vs-prescribed numbers behind progress_pct (saves each card its own request). */
+  progress?: import("@/lib/workout-progress").WorkoutProgress;
   /**
    * Pre-resolved estimated duration (minutes) for this day, computed at
    * item build time in getClientWorkouts (coach override → day estimate →
