@@ -103,6 +103,9 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   const nowIndex = useMemo(() => nowLineIndex(agenda.today, nowMs), [agenda.today, nowMs]);
   const singleBook = bookable.length === 1 && !pov.viewAsClientId ? bookable[0] : null;
 
+  const dateLine = todayDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const singleBook = bookable.length === 1 && !pov.viewAsClientId ? bookable[0] : null;
+
   return (
     <AgendaCard>
       <AgendaHeader today={today} />
