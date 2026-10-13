@@ -48,6 +48,8 @@ export type StudioPost = {
   extras?: PostSlide[] | null;
   /** The post's GIF and voice memo already (editing it). */
   attach?: PostAttachInitial | null;
+  /** Editing a post that already has a photo / card up front: no new photo keeps it. */
+  hasCover?: boolean;
   onPost: (a: StudioPostArgs) => Promise<void>;
 };
 
@@ -283,6 +285,17 @@ export function ShareStudio({
   };
 
   const shooting = open && phase === "shoot";
+  // Bumped to start the camera again (iOS ends it when you switch apps or lock the phone).
+  const [camTry, setCamTry] = useState(0);
+  const restarts = useRef(0);
+  useEffect(() => {
+    if (open) restarts.current = 0;
+  }, [open]);
+  const restartCamera = () => {
+    if (restarts.current >= 3) return setStatus("fallback");
+    restarts.current += 1;
+    setCamTry((n) => n + 1);
+  };
   useEffect(() => {
     if (!shooting || !video) return;
     let cancelled = false;
@@ -291,6 +304,8 @@ export function ShareStudio({
       return;
     }
     setStatus("starting");
+    // still nothing after a while (a stuck camera): the phone's own camera instead; a late start still goes live
+    const slow = setTimeout(() => !cancelled && setStatus((st) => (st === "starting" ? "fallback" : st)), 8000);
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false })
       .then(async (stream) => {
@@ -298,6 +313,10 @@ export function ShareStudio({
         stop();
         streamRef.current = stream;
         video.srcObject = stream;
+        // ended by the system (not by us: stop() doesn't fire this): start again once we're back on screen
+        stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+          if (!cancelled && streamRef.current === stream && document.visibilityState === "visible") restartCamera();
+        });
         try {
           await video.play();
         } catch {
@@ -305,13 +324,32 @@ export function ShareStudio({
         }
         if (!cancelled) setStatus("live");
       })
-      .catch(() => !cancelled && setStatus("fallback"));
+      .catch(() => !cancelled && setStatus("fallback"))
+      .finally(() => clearTimeout(slow));
     return () => {
       cancelled = true;
+      clearTimeout(slow);
       stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shooting, video, facing]);
+  }, [shooting, video, facing, camTry]);
+  // Back from another app: a camera the system ended starts again, a paused one plays on.
+  useEffect(() => {
+    if (!shooting) return;
+    const wake = () => {
+      if (document.visibilityState !== "visible" || !streamRef.current) return;
+      const track = streamRef.current.getVideoTracks()[0];
+      if (!track || track.readyState === "ended") restartCamera();
+      else if (video?.paused) void video.play().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("pageshow", wake);
+    return () => {
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("pageshow", wake);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shooting, video]);
   useEffect(() => {
     if (!open) stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -445,6 +483,8 @@ export function ShareStudio({
   };
   const shoot = () => {
     if (!canShoot) return;
+    // the camera's still coming up: a tap here must not throw you into the phone's camera
+    if (status === "starting") return;
     if (status !== "live") return capRef.current?.click();
     if (count != null) return cancelCount();
     if (!timer) return capture();
@@ -565,6 +605,8 @@ export function ShareStudio({
   const postPhoto = async (carousel: boolean): Promise<File | null> => {
     if (!card) return finalPhoto();
     const bare = card.look === "plain" || (post?.showHideLoads && hideLoads);
+    // editing without a new photo: the post keeps the one it has (a bare card never replaces it)
+    if (!shot && post?.hasCover) return null;
     if (!shot && (!carousel || bare)) return null;
     if (shot && bare) return finalPhoto();
     const FEED_H = 1350;
@@ -609,7 +651,15 @@ export function ShareStudio({
       setPosted(true);
       setTimeout(onClose, 900);
     } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't post. Try again.");
+      if (e?.posted) {
+        // the post is up (only the GIF / voice memo missed): its photos are the post's now
+        tray.commit();
+        void clearDraft();
+        draftOff.current = true;
+        setPosted(true);
+        setTimeout(onClose, 900);
+        toast.warning(e.message);
+      } else toast.error(e?.message ?? "Couldn't post. Try again.");
     } finally {
       setBusy(null);
     }

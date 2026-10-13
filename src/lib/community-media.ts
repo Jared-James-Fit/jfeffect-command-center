@@ -237,7 +237,9 @@ export async function signCommunityPaths(paths: (string | null | undefined)[]): 
     else missing.push(p);
   }
   if (missing.length) {
-    const { data } = await supabase.storage.from(COMMUNITY_BUCKET).createSignedUrls(missing, 60 * 60);
+    // a failed batch throws, so the query retries instead of caching blank photos
+    const { data, error } = await supabase.storage.from(COMMUNITY_BUCKET).createSignedUrls(missing, 60 * 60);
+    if (error) throw error;
     for (const row of data ?? []) {
       if (row.path && row.signedUrl) {
         urlCache.set(row.path, { url: row.signedUrl, expiresAt: now + TTL_MS });

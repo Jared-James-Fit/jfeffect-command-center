@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Activity, ChevronRight } from "lucide-react";
+import { Activity, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
@@ -76,12 +76,18 @@ export function ActivitySection({ posts, unit, viewerIsStaff, onOpen, onOpenAuth
       </ul>
 
       <Sheet open={all} onOpenChange={setAll}>
-        <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-0 pb-safe-bottom pt-5">
-          <SheetHeader className="px-5 text-left">
-            <SheetTitle>Activity</SheetTitle>
-            <SheetDescription>
-              Every session the crew finished{people > 0 ? `, ${people} ${people === 1 ? "person" : "people"} this week` : ""}. Tap ❤️ to celebrate.
-            </SheetDescription>
+        <SheetContent side="bottom" hideCloseButton className="max-h-[88dvh] gap-0 overflow-y-auto overscroll-contain rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[520px]">
+          {/* our own close: the sheet's floating Back pill sat on top of the title */}
+          <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 px-5 pb-1 pt-4 text-left">
+            <div className="min-w-0">
+              <SheetTitle className="text-[16px] font-black">Activity</SheetTitle>
+              <SheetDescription className="text-[12px]">
+                Every session the crew finished{people > 0 ? `, ${people} ${people === 1 ? "person" : "people"} this week` : ""}. Tap ❤️ to celebrate.
+              </SheetDescription>
+            </div>
+            <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
+              <X className="h-4 w-4" />
+            </SheetClose>
           </SheetHeader>
           <div className="mt-2">
             {days.map((d) => (

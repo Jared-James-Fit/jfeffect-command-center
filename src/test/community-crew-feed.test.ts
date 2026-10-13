@@ -114,6 +114,8 @@ describe("the share nudge", () => {
   });
   it("sits after the posts in Home's swipe (before More) and after the second post in the feed", () => {
     expect(entry).toContain('cards.push(<ShareNudge key="nudge" surface="home" unit={unit} />);');
-    expect(screen).toContain('{canShare && i === Math.min(1, ownPosts.length - 1) && <ShareNudge surface="feed" unit={unit} />}');
+    expect(screen).toContain('{canShare && !following && i === Math.min(1, feedPosts.length - 1) && <ShareNudge surface="feed" unit={unit} />}');
+    // its camera stays up even when posting makes the nudge go away
+    expect(nudge).toContain("if (!show && !engaged) return null;");
   });
 });

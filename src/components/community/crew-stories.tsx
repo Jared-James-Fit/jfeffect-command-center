@@ -9,6 +9,7 @@ import { useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.que
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { markPostViewed } from "@/components/community/post-views";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useFollowState } from "@/lib/community-social";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
@@ -28,11 +29,12 @@ const FRAME_MS = 5000;
  */
 export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, lead }: { posts: CommunityPost[]; unit: "kg" | "lb"; viewerIsStaff: boolean; onOpenPost: (id: string) => void; lead?: React.ReactNode }) {
   const [seenNow, setSeenNow] = useState<Set<string>>(() => new Set());
+  const { data: follows } = useFollowState();
   const groups = useMemo(() => {
-    const g = crewStories(posts);
+    const g = crewStories(posts, Date.now(), new Set(follows?.following ?? []));
     // what's been watched since the feed loaded counts too
     return g.map((x) => ({ ...x, unseen: x.items.some((p) => !p.seen && !seenNow.has(p.id)) }));
-  }, [posts, seenNow]);
+  }, [posts, seenNow, follows]);
   const [open, setOpen] = useState<number | null>(null);
   // the order is fixed while watching (rings change as you go)
   const frozen = useRef<StoryGroup<CommunityPost>[]>([]);

@@ -37,6 +37,8 @@ const DO_NOT_PERSIST_PREFIXES = [
   "direct-threads",
   "crew-threads",
   "community-activity",
+  // Who you follow: per person, and the keys aren't per-user.
+  "community-follows",
   "client-nav-badges",
   "conversation",
   "notifications",

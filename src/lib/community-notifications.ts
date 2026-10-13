@@ -1,13 +1,14 @@
 import { supabase } from "@/integrations/supabase/client";
 import { reactionEmoji, type CommunityAuthor } from "@/lib/community";
 
-/** One line in the bell: a post's reactions, one comment / reply, or a comment's likes. */
+/** One line in the bell: a post's reactions, one comment / reply, a comment's likes, or a new follower. */
 export type CommunityNotice = {
   key: string;
-  kind: "reaction" | "comment" | "reply" | "comment_like";
-  /** The post (reactions) or the comment the line is about: what read state hangs on. */
+  kind: "reaction" | "comment" | "reply" | "comment_like" | "follow";
+  /** The post (reactions), the comment, or the follower (follow) the line is about: what read state hangs on. */
   anchor: string;
-  post_id: string;
+  /** null for a follow */
+  post_id: string | null;
   comment_id: string | null;
   count: number;
   at: string;
@@ -24,6 +25,12 @@ export type CommunityNotice = {
 export const OPEN_POST_EVENT = "community:open-post";
 export function openCommunityPost(postId: string) {
   window.dispatchEvent(new CustomEvent(OPEN_POST_EVENT, { detail: postId }));
+}
+
+/** Open someone's profile from anywhere (a follow notice): the community screen listens for this. */
+export const OPEN_PERSON_EVENT = "community:open-person";
+export function openCommunityPerson(userId: string) {
+  window.dispatchEvent(new CustomEvent(OPEN_PERSON_EVENT, { detail: userId }));
 }
 
 const THING = { workout: "workout", lockin: "lock-in", post: "post" } as const;
@@ -58,6 +65,8 @@ export function communityNoticeText(n: CommunityNotice): { title: string; body: 
       return { title: `${who} replied to your comment`, body: said };
     case "comment_like":
       return { title: `${who} liked your comment`, body: said };
+    case "follow":
+      return { title: `${who} started following you`, body: "" };
   }
 }
 

@@ -66,6 +66,9 @@ export function ShareNudge({ surface, unit, className }: { surface: Surface; uni
   const { data: today } = useTodaySession(nudge.show && !isImpersonating);
   const ref = useRef<HTMLDivElement | null>(null);
   const { show, seen } = nudge;
+  // Once they tap Share, the camera lives inside this card: posting makes the
+  // nudge go away, and the card must not take the open camera with it.
+  const [engaged, setEngaged] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -82,7 +85,7 @@ export function ShareNudge({ surface, unit, className }: { surface: Surface; uni
     return () => io.disconnect();
   }, [show, seen]);
 
-  if (!show) return null;
+  if (!show && !engaged) return null;
   const lock = !!today;
   const Icon = lock ? Lock : Camera;
   const title = lock ? "Lock in today's session" : "Share a session with the crew";
@@ -98,9 +101,11 @@ export function ShareNudge({ surface, unit, className }: { surface: Surface; uni
       <div
         ref={ref}
         data-share-nudge="home"
+        onClickCapture={() => setEngaged(true)}
         className={cn(
           "relative flex h-full w-[74%] shrink-0 snap-start flex-col justify-between overflow-hidden rounded-[20px] border border-primary/20 bg-[radial-gradient(120%_80%_at_100%_0%,rgba(239,51,64,0.16),transparent_60%)] bg-card p-4",
           className,
+          !show && "hidden",
         )}
       >
         {notNow}
@@ -116,7 +121,7 @@ export function ShareNudge({ surface, unit, className }: { surface: Surface; uni
     );
   }
   return (
-    <div ref={ref} data-share-nudge="feed" className={cn("relative flex gap-3 rounded-3xl border border-primary/20 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(239,51,64,0.12),transparent_60%)] bg-card p-4 pr-10", className)}>
+    <div ref={ref} data-share-nudge="feed" onClickCapture={() => setEngaged(true)} className={cn("relative flex gap-3 rounded-3xl border border-primary/20 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(239,51,64,0.12),transparent_60%)] bg-card p-4 pr-10", className, !show && "hidden")}>
       {notNow}
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
         <Icon className="h-5 w-5" />

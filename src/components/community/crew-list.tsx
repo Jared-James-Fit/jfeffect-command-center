@@ -2,6 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge } from "@/components/community/post-card";
+import { FollowButton } from "@/components/community/follow-button";
 import { communityIsoDow, trainedLabel, trainingSinceLabel, type CommunityAuthor, type CommunityMember } from "@/lib/community";
 import { useCommunityMembers, useCommunityProfile, useCrewGoal } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
@@ -99,7 +100,8 @@ function CrewRow({ m, today, onOpen }: { m: CommunityMember; today: number; onOp
   const about = m.bio || (m.author.is_coach ? m.author.title || "Coach · JF Effect" : null) || trainingSinceLabel(m.training_since) || "In the JF crew";
   const days = m.week_days ?? [];
   return (
-    <button type="button" data-crew-row onClick={() => onOpen(m.author)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-muted">
+    <div data-crew-row className="flex w-full items-center gap-2 pr-3">
+    <button type="button" onClick={() => onOpen(m.author)} className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3.5 text-left active:bg-muted">
       <span className={cn("shrink-0 rounded-full", m.live && "ring-2 ring-red-500 ring-offset-2 ring-offset-card")}>
         <UserAvatar src={m.author.avatar_url} name={m.author.name} size={44} expandable={false} />
       </span>
@@ -108,6 +110,8 @@ function CrewRow({ m, today, onOpen }: { m: CommunityMember; today: number; onOp
           <span className="truncate text-[15px] font-bold">{m.author.name}</span>
           {m.author.is_coach && <CoachBadge />}
           {m.live && <span className="rounded-[5px] bg-red-500 px-1 text-[9px] font-black uppercase leading-[14px] text-white">Live</span>}
+          {/* the week, beside the name, so the line under it gets the full width */}
+          {days.length > 0 && <span className="ml-auto shrink-0 pl-1 max-[359px]:hidden"><WeekDots days={days} today={today} /></span>}
         </span>
         <span className="block truncate text-[12px] text-muted-foreground">
           {m.live ? (
@@ -119,7 +123,8 @@ function CrewRow({ m, today, onOpen }: { m: CommunityMember; today: number; onOp
           {about}
         </span>
       </span>
-      {days.length > 0 && <WeekDots days={days} today={today} />}
     </button>
+    <FollowButton userId={m.author.user_id} name={m.author.name} size="sm" tone="soft" />
+    </div>
   );
 }
