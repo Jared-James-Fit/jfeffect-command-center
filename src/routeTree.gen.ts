@@ -242,6 +242,7 @@ import { Route as ApiPublicHooksActionCentreTickRouteImport } from './routes/api
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './routes/api/public/hooks/birthday-notifications'
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
+import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
@@ -1608,6 +1609,12 @@ const ApiPublicHooksCleanupPendingSignupsRoute =
     path: '/api/public/hooks/cleanup-pending-signups',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksCleoAttachmentsSweepRoute =
+  ApiPublicHooksCleoAttachmentsSweepRouteImport.update({
+    id: '/api/public/hooks/cleo-attachments-sweep',
+    path: '/api/public/hooks/cleo-attachments-sweep',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksClientCalendarsTickRoute =
   ApiPublicHooksClientCalendarsTickRouteImport.update({
     id: '/api/public/hooks/client-calendars-tick',
@@ -2010,6 +2017,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
+  '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -2271,6 +2279,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
+  '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -2538,6 +2547,7 @@ export interface FileRoutesById {
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
+  '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
@@ -2805,6 +2815,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
+    | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
@@ -3066,6 +3077,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
+    | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
@@ -3332,6 +3344,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
+    | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/lift-archive-tick'
@@ -3426,6 +3439,7 @@ export interface RootRouteChildren {
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksBirthdayNotificationsRoute: typeof ApiPublicHooksBirthdayNotificationsRoute
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
+  ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
@@ -5082,6 +5096,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksCleanupPendingSignupsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/cleo-attachments-sweep': {
+      id: '/api/public/hooks/cleo-attachments-sweep'
+      path: '/api/public/hooks/cleo-attachments-sweep'
+      fullPath: '/api/public/hooks/cleo-attachments-sweep'
+      preLoaderRoute: typeof ApiPublicHooksCleoAttachmentsSweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/client-calendars-tick': {
       id: '/api/public/hooks/client-calendars-tick'
       path: '/api/public/hooks/client-calendars-tick'
@@ -6032,6 +6053,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksBirthdayNotificationsRoute,
   ApiPublicHooksCleanupPendingSignupsRoute:
     ApiPublicHooksCleanupPendingSignupsRoute,
+  ApiPublicHooksCleoAttachmentsSweepRoute:
+    ApiPublicHooksCleoAttachmentsSweepRoute,
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,

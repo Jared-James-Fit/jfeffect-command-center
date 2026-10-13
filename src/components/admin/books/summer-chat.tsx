@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  ArrowUp, ArrowUpRight, Check, Copy, History, Keyboard, Loader2, Mic, SlidersHorizontal, Sparkles, Square, SquarePen, Volume2, X,
+  ArrowUp, ArrowUpRight, Check, Copy, History, Keyboard, Loader2, Mic, Paperclip, SlidersHorizontal, Sparkles, Square, SquarePen, Volume2, X,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,10 @@ import { playAppSound, startThinkingSound } from "@/lib/app-sounds";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 import { CleoActionCard, CleoApprovals, useCleoActions } from "./cleo-action-card";
 import { CHATS_KEY, CleoChatHistory } from "./cleo-chat-history";
+import { AttachmentTray, MessageAttachments, useAttachmentTray, workingLabel } from "./cleo-attachments-ui";
+import { ATTACH_ACCEPT, type CleoAttachment } from "@/lib/cleo-attachments";
 
-type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null };
+type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; attachments?: CleoAttachment[] | null };
 type ChatData = { chat: CleoChat | null; messages: Msg[] };
 /**
  * Which chat is on screen. "current": the latest chat if it's had a message
@@ -170,9 +172,11 @@ function clock(ms: number): string {
  * talk again. Nothing listens without a tap.
  */
 function DictationPanel({
-  state, level, elapsedMs, onSend, onTalk, onStop, onCancel,
+  state, level, elapsedMs, onSend, onTalk, onStop, onCancel, files = 0,
 }: {
   state: VoiceState;
+  /** Attachments that go with what's said. */
+  files?: number;
   level: number;
   elapsedMs: number;
   /** Listening: send what was said. */
@@ -230,6 +234,7 @@ function DictationPanel({
           </p>
           <p className="-mt-2 text-center text-xs text-muted-foreground">
             {left < 30_000 ? `Sends by itself in ${Math.ceil(left / 1000)}s` : "Take your time. Pauses are fine. Tap Send when you're done."}
+            {files > 0 && <span className="mt-0.5 block font-medium text-foreground">Your {files === 1 ? "attachment goes" : `${files} attachments go`} with it.</span>}
           </p>
           <div className="flex w-full max-w-xs gap-2">
             <Button variant="outline" className="h-11 flex-1" onClick={onCancel}>
@@ -297,6 +302,13 @@ export function SummerChat({
   const tone = summerTone(persona.tone);
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState("");
+  // Photos, videos and files waiting to go with the next message (typed or spoken).
+  const tray = useAttachmentTray();
+  const trayRef = useRef(tray);
+  trayRef.current = tray;
+  const fileRef = useRef<HTMLInputElement>(null);
+  /** What Cleo is doing while it answers ("Watching your video…"). */
+  const [pendingNote, setPendingNote] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [copied, setCopied] = useState<string | null>(null);
@@ -402,9 +414,11 @@ export function SummerChat({
       return;
     }
     setVoiceState("thinking");
+    // Anything in the tray goes with what was said.
+    const atts = trayRef.current.busy ? [] : trayRef.current.ready;
     let res: any;
     try {
-      res = await askVoice({ data: { audio: await blobToBase64(take.blob), mime: take.mime, year, route, chatId: sendTo() } });
+      res = await askVoice({ data: { audio: await blobToBase64(take.blob), mime: take.mime, year, route, chatId: sendTo(), ...(atts.length ? { attachments: atts } : {}) } });
     } catch (e: any) {
       if (turn === turnRef.current) {
         toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
@@ -421,6 +435,7 @@ export function SummerChat({
     }
     // Saved either way: the question was asked and answered.
     append([res.user, res.assistant], res.chatId);
+    if (atts.length) trayRef.current.clear();
     void cleo.refresh();
     if (turn !== turnRef.current) return;
     prefsRef.current = loadVoicePrefs();
@@ -474,12 +489,20 @@ export function SummerChat({
 
   const send = async (text: string) => {
     const message = text.trim();
-    if (!message || pending) return;
-    setPending(message);
+    const atts = tray.ready;
+    if ((!message && !atts.length) || pending) return;
+    if (tray.busy) {
+      toast.message("Still uploading. Send again in a sec.");
+      return;
+    }
+    // A zero-width space keeps "pending" truthy for an attachments-only message.
+    setPending(message || "\u200b");
+    setPendingNote(workingLabel(atts));
     setDraft("");
     try {
-      const res = (await ask({ data: { message, year, route, chatId: sendTo() } })) as { user: Msg; assistant: Msg; chatId: string };
+      const res = (await ask({ data: { message, year, route, chatId: sendTo(), ...(atts.length ? { attachments: atts } : {}) } })) as { user: Msg; assistant: Msg; chatId: string };
       append([res.user, res.assistant], res.chatId);
+      if (atts.length) tray.clear();
       void cleo.refresh();
       playAppSound("reply");
     } catch (e: any) {
@@ -487,6 +510,7 @@ export function SummerChat({
       toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
     } finally {
       setPending(null);
+      setPendingNote(null);
     }
   };
 
@@ -649,7 +673,14 @@ export function SummerChat({
             return (
               <div key={m.id} className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}>
                 <div className={cn("max-w-[88%] rounded-2xl px-3 py-2", m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted")}>
-                  {m.role === "assistant" ? <SummerText text={m.content} onLink={openLink} /> : <p className="whitespace-pre-wrap">{m.content}</p>}
+                  {m.role === "assistant" ? (
+                    <SummerText text={m.content} onLink={openLink} />
+                  ) : (
+                    <>
+                      {m.attachments?.length ? <MessageAttachments attachments={m.attachments} /> : null}
+                      {m.content && <p className="whitespace-pre-wrap">{m.content}</p>}
+                    </>
+                  )}
                 </div>
                 {choices.length > 0 && (
                   <div className="mt-2 flex w-full max-w-[88%] flex-col gap-1.5" role="group" aria-label="Quick answers">
@@ -717,11 +748,13 @@ export function SummerChat({
           })}
           {pending && (
             <>
-              <div className="flex justify-end">
-                <div className="max-w-[88%] whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-primary-foreground">{pending}</div>
-              </div>
+              {pending.trim() && pending !== "\u200b" && (
+                <div className="flex justify-end">
+                  <div className="max-w-[88%] whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-primary-foreground">{pending}</div>
+                </div>
+              )}
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {ASSISTANT_NAME} is on it{tone.value === "girly_pop" ? " 💅" : "…"}
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {pendingNote ?? `${ASSISTANT_NAME} is on it${tone.value === "girly_pop" ? " 💅" : "…"}`}
               </div>
             </>
           )}
@@ -738,6 +771,7 @@ export function SummerChat({
               onTalk={startDictation}
               onStop={stopSpeaking}
               onCancel={stopVoice}
+              files={tray.ready.length}
             />
           </div>
         ) : (
@@ -745,7 +779,30 @@ export function SummerChat({
             className="border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
             onSubmit={(e) => { e.preventDefault(); void send(draft); }}
           >
+            <AttachmentTray items={tray.items} onRemove={tray.remove} />
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              accept={ATTACH_ACCEPT}
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) tray.add(e.target.files);
+                e.target.value = "";
+              }}
+            />
             <div className="flex items-end gap-2">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-10 w-10 shrink-0 rounded-full"
+                onClick={() => fileRef.current?.click()}
+                disabled={!!pending}
+                aria-label="Attach photos, videos or files"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
               {canTalk && (
                 <Button
                   type="button"
@@ -765,16 +822,24 @@ export function SummerChat({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(draft); }
                 }}
+                onPaste={(e) => {
+                  // A pasted screenshot or file goes in the tray.
+                  const pasted = Array.from(e.clipboardData?.files ?? []);
+                  if (pasted.length) {
+                    e.preventDefault();
+                    tray.add(pasted);
+                  }
+                }}
                 rows={1}
                 placeholder={`Ask ${ASSISTANT_NAME} anything…`}
                 className="max-h-32 min-h-10 resize-none"
                 disabled={!!pending}
               />
-              <Button type="submit" size="icon" className="h-10 w-10 shrink-0 rounded-full" disabled={!draft.trim() || !!pending} aria-label="Send">
+              <Button type="submit" size="icon" className="h-10 w-10 shrink-0 rounded-full" disabled={(!draft.trim() && !tray.ready.length) || !!pending || tray.busy} aria-label="Send">
                 <ArrowUp className="h-4 w-4" />
               </Button>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Tap the mic and talk as long as you like; tap Send when you're done. {ASSISTANT_NAME} can look anything up, and does things only after you tap Confirm.</p>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Talk, type, or attach photos, videos and files for {ASSISTANT_NAME} to look at. {ASSISTANT_NAME} does things only after you tap Confirm.</p>
           </form>
         )}
         </>
