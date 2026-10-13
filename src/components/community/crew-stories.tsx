@@ -4,12 +4,15 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { crewStories, isPulsePost, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, crewStories, isPulsePost, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { markPostViewed } from "@/components/community/post-views";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useFollowState } from "@/lib/community-social";
+import { useAuth } from "@/lib/auth";
+import { useDirectThreads, useMessageAuthor } from "@/lib/direct-chats";
+import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
@@ -135,6 +138,8 @@ function StoryViewer({
   // what's shown this sitting, and the end card once it's all been watched
   const watched = useRef(new Set<string>());
   const [end, setEnd] = useState<StoryEnd<CommunityPost> | null>(null);
+  // writing a reply (or picking a quick reaction): the story waits
+  const [composing, setComposing] = useState(false);
 
   const next = () => {
     if (!group) return onClose();
@@ -172,9 +177,9 @@ function StoryViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post?.id]);
 
-  // the clock (stopped on the end card)
+  // the clock (stopped on the end card, and while replying)
   useEffect(() => {
-    if (!post || paused || end) return;
+    if (!post || paused || end || composing) return;
     let raf = 0;
     let last = performance.now();
     const tick = (t: number) => {
@@ -185,7 +190,7 @@ function StoryViewer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [post?.id, paused, end]);
+  }, [post?.id, paused, end, composing]);
   useEffect(() => {
     if (progress >= 1 && !end) next();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,7 +199,12 @@ function StoryViewer({
   if (!group || !post) return null;
 
   const onDown = (e: React.PointerEvent) => {
-    if ((e.target as Element).closest("button, a")) return;
+    if ((e.target as Element).closest("button, a, input, textarea")) return;
+    // replying: a tap on the story just puts the keyboard away
+    if (composing) {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      return;
+    }
     press.current = { x: e.clientX, y: e.clientY, t: Date.now() };
     holdTimer.current = window.setTimeout(() => setPaused(true), 220);
   };
@@ -207,6 +217,8 @@ function StoryViewer({
     if (!p) return;
     const dy = e.clientY - p.y;
     if (dy > 80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return onClose();
+    // swipe up: the post itself (the workout, comments)
+    if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return onOpenPost(post.id);
     if (wasHold || Date.now() - p.t > 220) return;
     if (p.x < window.innerWidth / 3) prev();
     else next();
@@ -217,6 +229,13 @@ function StoryViewer({
       <DialogContent
         className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,900px)] sm:max-w-[460px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => {
+          // Esc while replying puts the keyboard away, it doesn't close the stories
+          if (composing) {
+            e.preventDefault();
+            (document.activeElement as HTMLElement | null)?.blur?.();
+          }
+        }}
       >
         {end ? (
           <StoryEndCard
@@ -233,7 +252,7 @@ function StoryViewer({
         ) : (
         <>
         <DialogTitle className="sr-only">{group.author.name}'s story</DialogTitle>
-        <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe down to close.</DialogDescription>
+        <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe up for the post, swipe down to close. Reply or send a quick reaction at the bottom.</DialogDescription>
         <div
           className="relative flex min-h-0 flex-1 select-none flex-col touch-none"
           onPointerDown={onDown}
@@ -266,7 +285,7 @@ function StoryViewer({
             </div>
           </div>
 
-          <StoryActions post={post} viewerIsStaff={viewerIsStaff} onOpen={() => onOpenPost(post.id)} />
+          <StoryBar post={post} viewerIsStaff={viewerIsStaff} onOpen={() => onOpenPost(post.id)} onComposing={setComposing} />
         </div>
         </>
         )}
@@ -317,38 +336,209 @@ function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) 
   );
 }
 
-/** Celebrate it right here (the same heart as everywhere), or open it with its comments. */
-function StoryActions({ post, viewerIsStaff, onOpen }: { post: CommunityPost; viewerIsStaff: boolean; onOpen: () => void }) {
+/** The two in the bar, and the eight that open with the keyboard (Instagram's quick reactions): gym-flavoured for a win. */
+const QUICK_WIN = ["🔥", "💪", "👏", "🙌", "😤", "🐐", "💯", "🎉"];
+const QUICK_POST = ["😍", "😂", "🔥", "👏", "😮", "🙌", "💯", "🎉"];
+
+/**
+ * The bar under a story, as on Instagram / TikTok: "Message Alyssa…" with
+ * two quick emoji in it, and the heart. Tapping the field pauses the story
+ * and opens eight quick reactions; one tap sends it (with a shower of it on
+ * screen), or type and Send. It all goes privately, the same way as Message
+ * on a post (useMessageAuthor): member to member as a message request, a
+ * coach and their client in their coach chat; the other person sees
+ * "Replied to your story" with the moment. Swipe up (or View workout) opens
+ * the post itself.
+ */
+function StoryBar({ post, viewerIsStaff, onOpen, onComposing }: { post: CommunityPost; viewerIsStaff: boolean; onOpen: () => void; onComposing: (on: boolean) => void }) {
+  const { role } = useAuth();
+  const { isImpersonating } = useClientImpersonation();
   const react = useReact(post, viewerIsStaff);
+  const send = useMessageAuthor();
   const win = isPulsePost(post);
   const mine = post.my_reaction;
+  const first = post.author.name.split(" ")[0];
+  const staff = role === "admin" || role === "coach";
+  // the same rule as Message on a post (coaches use team chat with each other)
+  const canMessage = !post.is_mine && !(post.author.is_coach && staff);
+  // a request that's waiting on them can't take more until they reply
+  const { data: threads = [] } = useDirectThreads(canMessage && !staff && !post.author.is_coach);
+  const thread = threads.find((t) => t.other.user_id === post.author.user_id) ?? null;
+  const full = !!thread?.outgoing && thread.left === 0;
+  const quick = win ? QUICK_WIN : QUICK_POST;
+
+  const [text, setText] = useState("");
+  const [focused, setFocused] = useState(false);
   const [pop, setPop] = useState(0);
-  const give = () => {
-    if (!mine) setPop((n) => n + 1);
+  const [shower, setShower] = useState<{ id: number; emoji: string } | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const blurTimer = useRef<number | undefined>(undefined);
+  const view = useVisualViewportBox(focused);
+  const lift = view?.keyboard ? Math.max(0, window.innerHeight - view.top - view.height) : 0;
+
+  // a new moment starts clean
+  useEffect(() => {
+    setText("");
+    setSent(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
+  useEffect(() => {
+    onComposing(focused || text.trim().length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused, text]);
+  useEffect(() => () => onComposing(false), [onComposing]);
+  useEffect(() => {
+    if (!sent) return;
+    const t = window.setTimeout(() => setSent(null), 2200);
+    return () => window.clearTimeout(t);
+  }, [sent]);
+
+  const like = () => {
+    if (!mine) {
+      setPop((n) => n + 1);
+      navigator.vibrate?.(8);
+    }
     react.mutate(mine ? null : "heart", { onError: () => toast.error("Couldn't send that") });
   };
+  const deliver = async (body: string, emoji?: string) => {
+    const b = body.trim();
+    if (!b || send.isPending) return;
+    if (isImpersonating) return void toast.message(PREVIEW_ONLY_MESSAGE);
+    if (full) return void toast.message(`You can message ${first} again once they reply`);
+    if (emoji) {
+      setShower({ id: Date.now(), emoji });
+      navigator.vibrate?.(10);
+    }
+    input.current?.blur();
+    setText("");
+    try {
+      const r = await send.mutateAsync({ postId: post.id, body: b, story: true });
+      setSent(r.route === "direct" && r.status === "request" ? `Sent to ${first} as a message request` : `Sent to ${first}`);
+    } catch (e: any) {
+      setText(emoji ? "" : b);
+      toast.error(e?.message ?? "That didn't send. Try again.");
+    }
+  };
+  const onFocus = () => {
+    window.clearTimeout(blurTimer.current);
+    setFocused(true);
+  };
+  // a beat later, so tapping a quick reaction still lands
+  const onBlur = () => {
+    blurTimer.current = window.setTimeout(() => setFocused(false), 160);
+  };
+  // keep the keyboard up while a quick reaction is tapped
+  const keepFocus = (e: React.MouseEvent) => e.preventDefault();
+
   const caption = !win && post.media_type ? post.caption?.trim() : null;
+  const typing = text.trim().length > 0;
   return (
-    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-4 pt-10" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.9rem)" }}>
-      {caption && <p className="mb-3 line-clamp-3 whitespace-pre-wrap text-[15px] leading-snug">{caption}</p>}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={give}
-          aria-pressed={!!mine}
-          className={cn("inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-[14px] font-black active:scale-95", mine ? "bg-white/15 text-white" : "bg-white text-black")}
-          aria-label={mine ? "Take it back" : win ? "Celebrate" : "Like"}
+    <>
+      {/* typing: the story dims, eight quick reactions in the middle */}
+      {focused && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 px-8 backdrop-blur-md animate-in fade-in duration-150"
+          // centred in what the keyboard leaves free, above the bar
+          style={{ paddingBottom: lift ? lift + 76 : 0 }}
+          data-story-quick
         >
-          <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
-            {mine && mine !== "heart" ? <span className="text-[18px] leading-none">{reactionEmoji(mine)}</span> : <Heart className={cn("h-5 w-5", mine && "fill-[#ef3340] text-[#ef3340]")} />}
-          </span>
-          {mine ? (win ? "Celebrated" : "Liked") : win ? "Celebrate" : "Like"}
-        </button>
-        <button type="button" onClick={onOpen} className="ml-auto inline-flex h-11 items-center gap-1 rounded-full bg-white/15 px-4 text-[14px] font-bold active:scale-95">
-          {win ? "View workout" : "View post"} <ChevronRight className="h-4 w-4" />
-        </button>
+          {!typing && (
+            <div className="w-full max-w-[320px] text-center">
+              <p className="mb-4 text-[13px] font-bold text-white/70">Quick reactions</p>
+              <div className="grid grid-cols-4 gap-y-4">
+                {quick.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onMouseDown={keepFocus}
+                    onClick={() => void deliver(e, e)}
+                    className="mx-auto grid h-16 w-16 place-items-center rounded-full text-[40px] leading-none active:scale-90"
+                    aria-label={`Send ${e} to ${first}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* what was sent: a shower of it */}
+      {shower && (
+        <div key={shower.id} className="pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-hidden onAnimationEnd={(e) => e.target === e.currentTarget.lastChild && setShower(null)}>
+          {[12, 30, 50, 68, 84, 22, 58, 76].map((x, i) => (
+            <span key={i} className="story-emoji-rise absolute bottom-24 text-[44px]" style={{ left: `${x}%`, animationDelay: `${i * 70}ms`, fontSize: i % 3 === 0 ? 56 : 40 }}>
+              {shower.emoji}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div
+        className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-10 transition-[bottom] duration-150"
+        style={{ bottom: lift, paddingBottom: lift ? "0.6rem" : "max(env(safe-area-inset-bottom), 0.75rem)" }}
+        data-story-bar
+      >
+        {!focused && (
+          <div className="mb-3 px-1">
+            {caption && <p className="mb-2.5 line-clamp-3 whitespace-pre-wrap text-[15px] leading-snug">{caption}</p>}
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={onOpen} className="inline-flex h-8 items-center gap-0.5 rounded-full bg-white/15 pl-3 pr-2 text-[13px] font-bold backdrop-blur-sm active:scale-95">
+                {win ? "View workout" : "View post"} <ChevronRight className="h-4 w-4" />
+              </button>
+              {sent && <span className="min-w-0 truncate text-[13px] font-semibold text-white/85 animate-in fade-in duration-200" data-story-sent>✓ {sent}</span>}
+            </div>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          {canMessage ? (
+            <div className={cn("flex h-12 min-w-0 flex-1 items-center rounded-full border pl-4 pr-1", focused ? "border-white bg-black/40" : "border-white/50")}>
+              <input
+                ref={input}
+                value={text}
+                onChange={(e) => setText(e.target.value.slice(0, 2000))}
+                onFocus={onFocus}
+                onBlur={onBlur}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    void deliver(text);
+                  }
+                }}
+                disabled={full}
+                enterKeyHint="send"
+                placeholder={full ? `You can message ${first} again once they reply` : `Message ${first}…`}
+                className="h-full min-w-0 flex-1 select-text bg-transparent text-[16px] text-white outline-none placeholder:text-white/80 disabled:placeholder:text-white/55"
+                aria-label={`Message ${post.author.name}`}
+              />
+              {typing ? (
+                <button type="button" onMouseDown={keepFocus} onClick={() => void deliver(text)} disabled={send.isPending} className="h-10 shrink-0 rounded-full px-3 text-[15px] font-black active:scale-95 disabled:opacity-50" data-story-send>
+                  Send
+                </button>
+              ) : (
+                !full &&
+                quick.slice(0, 2).map((e) => (
+                  <button key={e} type="button" onMouseDown={keepFocus} onClick={() => void deliver(e, e)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[24px] leading-none active:scale-90" aria-label={`Send ${e} to ${first}`} data-story-emoji>
+                    {e}
+                  </button>
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="flex-1" />
+          )}
+          {!focused && (
+            <button type="button" onClick={like} aria-pressed={!!mine} aria-label={mine ? "Take it back" : win ? "Celebrate" : "Like"} className="grid h-12 w-12 shrink-0 place-items-center rounded-full active:scale-90" data-story-heart>
+              <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
+                {mine && mine !== "heart" ? <span className="text-[28px] leading-none">{reactionEmoji(mine)}</span> : <Heart className={cn("h-[30px] w-[30px]", mine && "fill-[#ef3340] text-[#ef3340]")} strokeWidth={1.8} />}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

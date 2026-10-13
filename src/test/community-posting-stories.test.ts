@@ -103,6 +103,35 @@ describe("Crew Stories", () => {
     expect(read("supabase/migrations/20261101110000_community_post_seen.sql")).toContain("'seen', EXISTS");
   });
 
+  describe("replying to a story", () => {
+    const viewer = read("src/components/community/crew-stories.tsx");
+    const sql = read("supabase/migrations/20261102090000_community_story_reply.sql");
+    it("a message field with two quick emoji and the heart, like Instagram / TikTok; eight more open with the keyboard", () => {
+      expect(viewer).toContain('const QUICK_WIN = ["🔥", "💪", "👏", "🙌", "😤", "🐐", "💯", "🎉"];');
+      expect(viewer).toContain("quick.slice(0, 2).map((e) =>");
+      expect(viewer).toContain("placeholder={full ? `You can message ${first} again once they reply` : `Message ${first}…`}");
+      expect(viewer).toContain("<StoryBar post={post} viewerIsStaff={viewerIsStaff} onOpen={() => onOpenPost(post.id)} onComposing={setComposing} />");
+    });
+    it("the story waits while you write; a tap or Esc puts the keyboard away; swipe up opens the post", () => {
+      expect(viewer).toContain("if (!post || paused || end || composing) return;");
+      expect(viewer).toContain("if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return onOpenPost(post.id);");
+      expect(viewer).toContain("onEscapeKeyDown={(e) => {");
+    });
+    it("goes the same private way as Message on a post, tagged as a story; never as a client the coach is previewing", () => {
+      expect(viewer).toContain("await send.mutateAsync({ postId: post.id, body: b, story: true });");
+      expect(viewer).toContain("if (isImpersonating) return void toast.message(PREVIEW_ONLY_MESSAGE);");
+      expect(viewer).toContain("const canMessage = !post.is_mine && !(post.author.is_coach && staff);");
+      expect(read("src/lib/direct-chats.ts")).toContain("...(story ? { _story: true } : {})");
+      expect(read("src/components/community/post-chat-card.tsx")).toContain('const what = att.story ? "story" : "post";');
+    });
+    it("the server: one function with an optional story flag (older apps still call it with two), the moment as the note", () => {
+      expect(sql).toContain("'community_message_author(_post_id uuid, _body text, _story boolean DEFAULT false)'");
+      expect(sql).toContain("DROP FUNCTION public.community_message_author(uuid, text);");
+      expect(sql).toContain("CASE WHEN coalesce(_story, false) THEN nullif(p.win_label, '') END");
+      expect(sql).toContain("REVOKE ALL ON FUNCTION public.community_message_author(uuid, text, boolean) FROM PUBLIC, anon;");
+    });
+  });
+
   describe("the end of the stories", () => {
     const pr = { prs: [{ exercise_name: "Squat", reps: 3, load_kg: 140, scope: "atpr" }], pr_count: 1 };
     const feed = [
@@ -148,7 +177,7 @@ describe("Crew Stories", () => {
       expect(viewer).toContain("setEnd(storyEnd(groups, posts, watched.current));");
       expect(viewer).not.toContain("} else onClose();");
       // the clock stops on it
-      expect(viewer).toContain("if (!post || paused || end) return;");
+      expect(viewer).toContain("if (!post || paused || end || composing) return;");
       // swipe down closes it, but never from the camera opened on top of it
       expect(viewer).toContain("if (!e.currentTarget.contains(e.target as Node)) return;");
       const screen = read("src/components/community/community-screen.tsx");

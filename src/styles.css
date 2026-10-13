@@ -844,6 +844,17 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
 }
 .community-burst { animation: community-burst 0.85s ease-out forwards; }
 
+/* Stories: a quick reaction you send rises up the screen (Instagram's shower). */
+@keyframes story-emoji-rise {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translateY(-62vh) scale(1.15) rotate(-8deg); opacity: 0; }
+}
+.story-emoji-rise { animation: story-emoji-rise 1.15s cubic-bezier(0.2, 0.7, 0.3, 1) forwards; opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .story-emoji-rise { animation-duration: 0.01s; }
+}
+
 /* Reactions: the heart pops when you give one; hold it for the other four. */
 @keyframes community-pop {
   0% { transform: scale(1); }

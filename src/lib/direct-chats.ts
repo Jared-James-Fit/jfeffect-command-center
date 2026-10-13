@@ -64,12 +64,12 @@ export type MessageRoute =
   | { route: "direct"; group_id: string; message_id: string; status: "request" | "active" }
   | { route: "coach" | "client"; message_id: string; client_id: string };
 
-/** Reply to a post in Messenger. The database decides where it goes. */
+/** Reply to a post (or a story: "Replied to your story") in Messenger. The database decides where it goes. */
 export function useMessageAuthor() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ postId, body }: { postId: string; body: string }): Promise<MessageRoute> => {
-      const { data, error } = await db.rpc("community_message_author", { _post_id: postId, _body: body });
+    mutationFn: async ({ postId, body, story }: { postId: string; body: string; story?: boolean }): Promise<MessageRoute> => {
+      const { data, error } = await db.rpc("community_message_author", { _post_id: postId, _body: body, ...(story ? { _story: true } : {}) });
       if (error) throw new Error(friendlyError(error.message));
       return data as MessageRoute;
     },

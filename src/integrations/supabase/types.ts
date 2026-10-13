@@ -23404,7 +23404,7 @@ export type Database = {
       }
       community_members: { Args: never; Returns: Json }
       community_message_author: {
-        Args: { _body: string; _post_id: string }
+        Args: { _body: string; _post_id: string; _story?: boolean }
         Returns: Json
       }
       community_my_archived: { Args: never; Returns: Json }
