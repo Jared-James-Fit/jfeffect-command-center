@@ -536,7 +536,8 @@ export function MessagesInbox({
 
   const selected = clients.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateMap.get(selectedId) : undefined;
-  const { peerLive: selectedClientLive } = useChatPresence(selectedId, "admin");
+  // "Live in chat" for the client only while I actually have their chat open.
+  const { peerLive: selectedClientLive } = useChatPresence(selectedId, "admin", tab !== "groups" && !!selected);
 
   // A client is "active in the app" if they've pinged within the last 3 min.
   const isClientActive = (last_active_at?: string | null) => {

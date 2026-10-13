@@ -69,6 +69,8 @@ export type PinnedChat = {
   renderThread: (p: { onBack: () => void }) => ReactNode;
   markUnread?: () => void | Promise<void>;
   markRead?: () => void | Promise<void>;
+  /** Told when its conversation opens or closes (presence: "live" only while open). */
+  onOpenChange?: (open: boolean) => void;
 };
 
 type ChatFilter = "all" | "unread" | "groups" | "people";
@@ -365,6 +367,13 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
     // Only on opening: marking the open chat unread on a wide screen sticks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  const onPinnedOpenChange = pinned?.onOpenChange;
+  const pinnedOpen = pinnedSelected && !draftTo;
+  useEffect(() => {
+    onPinnedOpenChange?.(pinnedOpen);
+  }, [pinnedOpen, onPinnedOpenChange]);
+  useEffect(() => () => onPinnedOpenChange?.(false), [onPinnedOpenChange]);
 
   const myMembership = selected ? membershipRows.find((m) => m.group_id === selected.id) : undefined;
   const isAdminOfGroup = asAdmin || myMembership?.role === "admin";
