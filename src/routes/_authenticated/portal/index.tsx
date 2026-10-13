@@ -16,6 +16,7 @@ import { ClientActionRequestModal } from "@/components/client-action-request-mod
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { InstallAppCard } from "@/components/portal/install-app-card";
 import { UpcomingScheduleCard } from "@/components/home/upcoming-schedule-card";
+import { PickPlanCard } from "@/components/portal/pick-plan-card";
 import { ProgressSummaryCard } from "@/components/progress/progress-summary-card";
 import { HomeWaterCard } from "@/components/home/home-water-card";
 import { BodyweightSummaryCard } from "@/components/portal/bodyweight-summary-card";
@@ -305,6 +306,11 @@ function PortalHome() {
           {client?.id && (
             <SectionErrorBoundary label="Upcoming schedule">
               <UpcomingScheduleCard clientId={client.id} />
+            </SectionErrorBoundary>
+          )}
+          {client?.id && isSelfServe && (
+            <SectionErrorBoundary label="Pick a plan">
+              <PickPlanCard clientId={client.id} />
             </SectionErrorBoundary>
           )}
 

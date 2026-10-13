@@ -42,6 +42,7 @@ import { InlineWorkoutPreview } from "@/components/workout/shared/inline-workout
 import { usePreviewOpen } from "@/lib/preview-open-store";
 import { InlineWorkoutEditor } from "@/components/workout/shared/inline-workout-editor";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useServiceTier } from "@/lib/service-tier";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { useWorkoutProgress } from "@/lib/workout-progress";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
@@ -451,7 +452,7 @@ export function WorkoutsExperience({
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading your schedule…
               </Card>
             ) : dayItems.length === 0 ? (
-              <EmptyState />
+              <EmptyState mode={mode} />
             ) : (
               <>
                 <div className="flex items-center justify-end">
@@ -1466,7 +1467,7 @@ function BlockViewTab({
 
   const block = blocks.find((b: any) => b.id === selectedBlockId) ?? defaultBlock;
   if (!block) {
-    return <EmptyState />;
+    return <EmptyState mode={mode} />;
   }
 
   return (
@@ -1494,7 +1495,12 @@ function BlockViewTab({
 /* Empty state                                                            */
 /* ---------------------------------------------------------------------- */
 
-function EmptyState() {
+function EmptyState({ mode }: { mode?: string }) {
+  if (mode === "self") return <SelfEmptyState />;
+  return <CoachedEmptyState />;
+}
+
+function CoachedEmptyState() {
   return (
     <Card className="p-10 text-center">
       <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-muted">
@@ -1503,6 +1509,25 @@ function EmptyState() {
       <p className="mt-3 text-sm text-muted-foreground">
         No workouts assigned yet. Your coach will publish your block soon.
       </p>
+    </Card>
+  );
+}
+
+/** The athlete's own Workouts page: a JF member picks a plan; a coaching client waits on their coach. */
+function SelfEmptyState() {
+  const { isSelfServe } = useServiceTier();
+  if (!isSelfServe) return <CoachedEmptyState />;
+  return (
+    <Card className="p-10 text-center">
+      <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-primary/10">
+        <ClipboardList className="h-6 w-6 text-primary" />
+      </div>
+      <p className="mt-3 text-sm text-muted-foreground">
+        No plan yet. Pick one from the Plan Library and Week 1 lands here.
+      </p>
+      <Button asChild size="sm" className="mt-3">
+        <Link to="/portal/plans">Browse plans</Link>
+      </Button>
     </Card>
   );
 }

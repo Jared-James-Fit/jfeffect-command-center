@@ -167,7 +167,8 @@ function FolderRow({
   );
 }
 
-function flatBlocks(payload: any): Array<{ name: string; weeks: any[] }> {
+/** A plan payload (blocks_data / weeks_data / days) as blocks of weeks, for previews. */
+export function flatBlocks(payload: any): Array<{ name: string; weeks: any[] }> {
   if (!payload) return [];
   if (Array.isArray(payload.blocks_data) && payload.blocks_data.length) {
     return payload.blocks_data.map((b: any, i: number) => ({
