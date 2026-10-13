@@ -78,3 +78,71 @@ export async function getMicStream(constraints: MediaTrackConstraints | boolean 
     }
   }
 }
+
+// ------------------------------------------------------------------ video & audio playback
+
+/**
+ * Why demo videos were sometimes silent: UI sounds put the page on "ambient"
+ * (so they mix with the user's music and follow the silent switch), and on
+ * iOS that category is page-wide, so a demo video or a chat video played with
+ * the Ring/Silent switch on came out silent. While any media with sound is
+ * on screen we hold "playback" (like YouTube: plays through the silent
+ * switch) and put the page back to what it was once the last one closes.
+ */
+let holds = 0;
+let baseType: AudioSessionType | null = null;
+
+/** The type the page sits at when nothing is playing (app-sounds sets "ambient"). Applied later if media is holding. */
+export function setBaseAudioSessionType(type: AudioSessionType) {
+  if (holds > 0) baseType = type;
+  else setAudioSessionType(type);
+}
+
+/** Hold "playback" while media with sound is up. Returns the release (safe to call twice). */
+export function holdPlaybackSession(): () => void {
+  if (holds++ === 0) baseType = setAudioSessionType("playback");
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    holds = Math.max(0, holds - 1);
+    if (holds === 0) {
+      if (baseType && baseType !== "playback") setAudioSessionType(baseType);
+      baseType = null;
+    }
+  };
+}
+
+/** For tests. */
+export function playbackHolds() {
+  return holds;
+}
+
+let mediaWatchInstalled = false;
+/**
+ * Native <video>/<audio> anywhere in the app: hold "playback" while one is
+ * playing with sound (muted feed autoplays don't count; unmuting does).
+ */
+export function installMediaPlaybackSession(doc: Document | undefined = typeof document === "undefined" ? undefined : document) {
+  if (mediaWatchInstalled || !doc) return;
+  mediaWatchInstalled = true;
+  const held = new WeakSet<HTMLMediaElement>();
+  const audible = (el: HTMLMediaElement) => !el.paused && !el.ended && !el.muted && el.volume > 0;
+  const start = (e: Event) => {
+    const el = e.target as HTMLMediaElement | null;
+    if (!el || typeof (el as any).paused !== "boolean" || held.has(el) || !audible(el)) return;
+    held.add(el);
+    const release = holdPlaybackSession();
+    // On the element itself: a player removed mid-play still fires its pause
+    // here (a document listener never hears a detached element).
+    const stop = () => {
+      if (audible(el)) return;
+      for (const type of STOP_EVENTS) el.removeEventListener(type, stop);
+      held.delete(el);
+      release();
+    };
+    for (const type of STOP_EVENTS) el.addEventListener(type, stop);
+  };
+  for (const type of ["play", "playing", "volumechange"]) doc.addEventListener(type, start, true);
+}
+const STOP_EVENTS = ["pause", "ended", "emptied", "volumechange", "abort"] as const;

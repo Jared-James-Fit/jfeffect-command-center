@@ -11,6 +11,8 @@
  *    first user gesture
  */
 
+import { installMediaPlaybackSession, setBaseAudioSessionType } from "@/lib/audio-session";
+
 export type AppSound = "message" | "sent" | "notify" | "success" | "celebrate" | "reply";
 
 const KEY = "jf-app-sounds";
@@ -53,10 +55,9 @@ function getCtx(): AudioContext | null {
   if (!ctx) {
     const C = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!C) return null;
-    try {
-      const session = (navigator as any).audioSession;
-      if (session && "type" in session) session.type = "ambient";
-    } catch { /* not supported */ }
+    // "ambient": UI sounds mix with the user's music and follow the silent
+    // switch. Media with sound holds "playback" over it (audio-session.ts).
+    setBaseAudioSessionType("ambient");
     ctx = new C();
   }
   return ctx;
@@ -77,7 +78,10 @@ function installUnlock() {
   window.addEventListener("pointerdown", unlock, true);
   window.addEventListener("keydown", unlock, true);
 }
-if (typeof window !== "undefined") installUnlock();
+if (typeof window !== "undefined") {
+  installUnlock();
+  installMediaPlaybackSession();
+}
 
 function tone(c: AudioContext, out: AudioNode, t: number, freq: number, dur: number, vel: number, type: OscillatorType = "sine", to?: number) {
   const o = c.createOscillator();

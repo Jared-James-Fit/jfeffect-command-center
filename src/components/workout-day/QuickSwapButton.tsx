@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ExerciseDemoVideo } from "@/components/exercise-demo-video";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -332,19 +333,6 @@ function HighlightedName({ text, tokens }: { text: string; tokens: readonly stri
   return <HighlightedExerciseName text={text} terms={tokens} />;
 }
 
-function youtubeEmbed(url: string | null | undefined): string | null {
-  if (!url) return null;
-  // Match v=ID or youtu.be/ID or /embed/ID
-  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{6,})/);
-  return m ? `https://www.youtube.com/embed/${m[1]}?autoplay=1&rel=0&modestbranding=1` : null;
-}
-
-function vimeoAutoplay(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}autoplay=1&title=0&byline=0&portrait=0`;
-}
-
 function ExerciseRowCard({
   ex,
   reason,
@@ -358,9 +346,10 @@ function ExerciseRowCard({
 }) {
   const [playing, setPlaying] = useState(false);
   const meta = [muscleLabel(ex), ex.equipment].filter(Boolean).join(" · ");
-  const vimeoSrc = vimeoAutoplay(ex.vimeo_embed_url);
-  const ytSrc = !vimeoSrc ? youtubeEmbed(ex.youtube_url) : null;
-  const hasVideo = !!(vimeoSrc || ytSrc);
+  // The demo plays on a tap of its own play button, with sound (an iOS
+  // autoplay inside the preview is always muted).
+  const demoUrl = [ex.vimeo_embed_url, ex.youtube_url].find((u) => typeof u === "string" && u.trim()) ?? null;
+  const hasVideo = !!demoUrl;
   const cues = (ex.cues ?? "").trim();
   const mistakes = (ex.common_mistakes ?? "").trim();
 
@@ -394,16 +383,7 @@ function ExerciseRowCard({
       </div>
       {playing && hasVideo && (
         <div className="border-t border-border px-3 pb-3 pt-2">
-          <div className="relative w-full overflow-hidden rounded-md bg-black" style={{ aspectRatio: "16 / 9" }}>
-            <iframe
-              src={(vimeoSrc ?? ytSrc) as string}
-              title={`${ex.name} demonstration`}
-              loading="lazy"
-              allow="autoplay; fullscreen; picture-in-picture"
-              allowFullScreen
-              className="absolute inset-0 h-full w-full"
-            />
-          </div>
+          <ExerciseDemoVideo url={demoUrl as string} title={`${ex.name} demonstration`} className="rounded-md border-0" />
           {(cues || mistakes) && (
             <div className="mt-2 space-y-1.5 text-[12px] leading-snug">
               {cues && (
