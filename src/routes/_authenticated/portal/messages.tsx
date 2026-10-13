@@ -6,9 +6,8 @@ import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation"
 import { Card } from "@/components/ui/card";
 import { MessageThread } from "@/components/message-thread";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
-import { GroupChatsPane, useMyGroupSummary } from "@/components/group-chats-pane";
+import { GroupChatsPane, type PinnedChat } from "@/components/group-chats-pane";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +20,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Phone, MessageSquare, AlertTriangle, Mail } from "lucide-react";
+import { Phone, MessageSquare, AlertTriangle, Mail, ChevronLeft } from "lucide-react";
+import { formatDistanceToNowStrict, isToday, format } from "date-fns";
 import { UserAvatar } from "@/components/user-avatar";
 import { markUnread } from "@/lib/messages";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,17 +33,6 @@ export const Route = createFileRoute("/_authenticated/portal/messages")({
 
 function ClientMessages() {
   const portalUserId = usePortalUserId();
-  // Push links land here as ?tab=groups#group=<id>: open Chats, not Coach Chat.
-  const [tab, setTab] = useState<"coach" | "groups">(() => {
-    if (typeof window === "undefined") return "coach";
-    return /(?:^|[?&])tab=groups\b/.test(window.location.search) || /group=/.test(window.location.hash) ? "groups" : "coach";
-  });
-  useEffect(() => {
-    const onHash = () => { if (/group=/.test(window.location.hash)) setTab("groups"); };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-  const groupSummary = useMyGroupSummary();
   const [confirm, setConfirm] = useState<null | "call" | "sms">(null);
   const qc = useQueryClient();
 
@@ -81,34 +70,85 @@ function ClientMessages() {
     },
   });
 
+  // Coach row preview: latest message + whether it's unread for me.
+  const { data: coachLast } = useQuery({
+    queryKey: ["coach-chat-last", client?.id],
+    enabled: !!client?.id,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("messages")
+        .select("body, sender_role, created_at, read_by_client_at, attachments")
+        .eq("client_id", client!.id)
+        .eq("is_internal_note", false)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as { body: string | null; sender_role: string; created_at: string; read_by_client_at: string | null; attachments: any[] | null } | null;
+    },
+  });
+  useEffect(() => {
+    if (!client?.id) return;
+    const ch = supabase
+      .channel(`coach-chat-row-${client.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `client_id=eq.${client.id}` }, () => {
+        qc.invalidateQueries({ queryKey: ["coach-chat-last", client.id] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [client?.id, qc]);
+
   const coachName = coach?.full_name ?? "Coach Jared";
   const coachTel = coach?.phone ? String(coach.phone).replace(/[^+\d]/g, "") : "";
   const callEnabled = !!client?.coach_call_access_enabled && !!coachTel;
   const smsEnabled = !!client?.coach_sms_access_enabled && !!coachTel;
 
-  return (
-    <div
-      className="fixed inset-x-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
-      style={{
-        // Anchor the chat to the iOS Visual Viewport. --vv-h / --vv-top are
-        // updated live by useKeyboardOpen() so the container shrinks and
-        // re-positions when the on-screen keyboard opens (100dvh alone does
-        // NOT shrink on iOS Safari, which is what creates the dead black
-        // gap above the keyboard). Falls back to 100dvh on browsers without
-        // the Visual Viewport API.
-        // NOTE: --shell-topbar-h only measures the topbar's content row; on
-        // notched devices the topbar also has env(safe-area-inset-top) of
-        // padding above it. Include that inset here so the fixed messenger
-        // starts BELOW the "Client Portal" top bar instead of covering it.
-        top: "calc(var(--vv-top, 0px) + var(--shell-topbar-h, 0px))",
-        height:
-          "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
-      }}
-    >
-      {/* Slim chat header — coach identity, not a giant page hero */}
-      <header
-        className="flex items-center gap-2.5 border-b border-border bg-card/80 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6"
+  const coachUnread = !!coachLast && coachLast.sender_role !== "client" && !coachLast.read_by_client_at;
+  const coachPreview = coachLast
+    ? `${coachLast.sender_role === "client" ? "You: " : ""}${coachLast.body?.trim() || (coachLast.attachments?.length ? "Attachment" : "")}`
+    : "Message your coach";
+  const coachWhen = coachLast
+    ? isToday(new Date(coachLast.created_at)) ? format(new Date(coachLast.created_at), "h:mm a") : formatDistanceToNowStrict(new Date(coachLast.created_at), { addSuffix: false })
+    : "";
+
+  const pinned: PinnedChat = {
+    id: "coach",
+    renderRow: ({ selected, onClick }) => (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "flex w-full items-center gap-3 border-b border-border/60 px-3 py-3 text-left transition hover:bg-secondary/40",
+          selected && "bg-secondary/60",
+        )}
       >
+        <span className="relative shrink-0">
+          <UserAvatar src={coach?.profile_picture_url ?? null} name={coachName} size={44} ring expandable={false} />
+          {coachLive && <span className="absolute bottom-0 right-0"><LiveDot /></span>}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center justify-between gap-2">
+            <span className={cn("truncate text-[15px]", coachUnread ? "font-bold" : "font-semibold")}>{coachName}</span>
+            <span className={cn("shrink-0 text-[11px]", coachUnread ? "font-semibold text-primary" : "text-muted-foreground")}>{coachWhen}</span>
+          </span>
+          <span className="mt-0.5 flex items-center gap-2">
+            <span className={cn("flex-1 truncate text-[13px]", coachUnread ? "text-foreground" : "text-muted-foreground")}>{coachPreview}</span>
+            {coachUnread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />}
+          </span>
+        </span>
+      </button>
+    ),
+    renderThread: ({ onBack }) => (
+      <>
+      <header
+        className="flex items-center gap-2.5 border-b border-border bg-card/80 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6"
+      >
+        {onBack && (
+          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 md:hidden" onClick={onBack} aria-label="All chats">
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+        )}
         <span className="relative shrink-0">
           <UserAvatar
             src={coach?.profile_picture_url ?? null}
@@ -172,53 +212,45 @@ function ClientMessages() {
           </Button>
         )}
       </header>
-
-      {/* Coach Chat | Chats toggle: only when they're in a group or have a 1:1 chat / request */}
-      {groupSummary.hasGroups && (
-        <div className="flex items-center justify-center gap-2 border-b border-border bg-card/60 px-3 py-2">
-          <div className="inline-flex rounded-full bg-secondary/60 p-0.5 text-xs">
-            <button
-              onClick={() => setTab("coach")}
-              className={cn(
-                "rounded-full px-3 py-1 font-semibold transition",
-                tab === "coach" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
-              )}
-            >
-              Coach Chat
-            </button>
-            <button
-              onClick={() => setTab("groups")}
-              className={cn(
-                "relative rounded-full px-3 py-1 font-semibold transition",
-                tab === "groups" ? "bg-primary text-primary-foreground" : "text-muted-foreground",
-              )}
-            >
-              Chats
-              {groupSummary.unread > 0 && (
-                <Badge className="ml-1 h-4 min-w-[16px] rounded-full px-1 text-[10px]">
-                  {groupSummary.unread}
-                </Badge>
-              )}
-            </button>
+        {!client ? (
+          <div className="p-6">
+            <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
+              Your coach hasn't set up your profile yet. Messaging will be available once they do.
+            </Card>
           </div>
-        </div>
-      )}
+        ) : (
+          <MessageThread clientId={client.id} role="client" fullBleed />
+        )}
+      </>
+    ),
+  };
 
-      {tab === "groups" ? (
-        <div className="min-h-0 flex-1">
-          <GroupChatErrorBoundary>
-            <GroupChatsPane asAdmin={false} />
-          </GroupChatErrorBoundary>
-        </div>
-      ) : !client ? (
-        <div className="p-6">
-          <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
-            Your coach hasn't set up your profile yet. Messaging will be available once they do.
-          </Card>
-        </div>
-      ) : (
-        <MessageThread clientId={client.id} role="client" fullBleed />
-      )}
+  return (
+    <div
+      className="fixed inset-x-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:h-full md:flex-1"
+      style={{
+        // Anchor the chat to the iOS Visual Viewport. --vv-h / --vv-top are
+        // updated live by useKeyboardOpen() so the container shrinks and
+        // re-positions when the on-screen keyboard opens (100dvh alone does
+        // NOT shrink on iOS Safari, which is what creates the dead black
+        // gap above the keyboard). Falls back to 100dvh on browsers without
+        // the Visual Viewport API.
+        // NOTE: --shell-topbar-h only measures the topbar's content row; on
+        // notched devices the topbar also has env(safe-area-inset-top) of
+        // padding above it. Include that inset here so the fixed messenger
+        // starts BELOW the "Client Portal" top bar instead of covering it.
+        top: "calc(var(--vv-top, 0px) + var(--shell-topbar-h, 0px))",
+        height:
+          "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
+      }}
+    >
+      {/* One inbox, like iMessage: the coach chat pinned on top, then groups
+          and 1:1 chats by most recent. Only chat? It opens straight into it. */}
+      <div className="min-h-0 flex-1">
+        <GroupChatErrorBoundary>
+          <GroupChatsPane asAdmin={false} pinned={pinned} />
+        </GroupChatErrorBoundary>
+      </div>
 
       <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>

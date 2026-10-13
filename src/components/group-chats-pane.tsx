@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,7 +30,18 @@ import { crewThreadsKey, isCrewUnread, useCrewThreads } from "@/lib/crew-chats";
 import { CreateCrewSheet, CrewChatView, CrewRow } from "@/components/crew-chat";
 import { listenChannel } from "@/lib/realtime-channel";
 
-export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
+/**
+ * A conversation that isn't a group (the client's chat with their coach),
+ * pinned at the top of the same list so every chat lives in one inbox.
+ */
+export type PinnedChat = {
+  id: string;
+  renderRow: (p: { selected: boolean; onClick: () => void }) => ReactNode;
+  /** onBack is null when there's no list to go back to (only this chat). */
+  renderThread: (p: { onBack: (() => void) | null }) => ReactNode;
+};
+
+export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?: PinnedChat }) {
   const { user, role } = useAuth();
   // Coach "View as client": show the client's groups and read state.
   const { isImpersonating } = useClientImpersonation();
@@ -59,20 +70,22 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
     return () => window.removeEventListener("hashchange", readHash);
   }, []);
 
-  const { data: groups = [] } = useQuery({
+  const { data: groups = [], isFetched: groupsFetched } = useQuery({
     queryKey: ["chat-groups", asAdmin],
     queryFn: () => (asAdmin ? listAllGroupsForAdmin() : listMyGroups()),
   });
 
   // Member-to-member chats (and requests). Private to the two people, so
   // never in the coach's list or in "View as client".
-  const { data: rawDirects } = useDirectThreads(!asAdmin && !isImpersonating);
+  const directsQ = useDirectThreads(!asAdmin && !isImpersonating);
+  const rawDirects = directsQ.data;
   const directs = Array.isArray(rawDirects) ? rawDirects : [];
   const requests = directs.filter((t) => t.incoming);
   const directChats = directs.filter((t) => !t.incoming);
   const me = viewerId ?? user?.id ?? null;
   // Group chats members started (and invites to them): same privacy as DMs.
-  const { data: rawCrews } = useCrewThreads(!asAdmin && !isImpersonating);
+  const crewsQ = useCrewThreads(!asAdmin && !isImpersonating);
+  const rawCrews = crewsQ.data;
   const crews = Array.isArray(rawCrews) ? rawCrews : [];
   const crewInvites = crews.filter((t) => t.status === "invited");
   const crewChats = crews.filter((t) => t.status === "joined");
@@ -212,6 +225,20 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
   }, [visibleGroups, directChats, crewChats]);
 
   const selected = groupRows.find((g) => g.id === selectedId);
+  const pinnedSelected = !!pinned && selectedId === pinned.id;
+  const anySelected = !!(selected || selectedDirect || selectedCrew || pinnedSelected);
+  const othersReady = groupsFetched
+    && (directsQ.isFetched || directsQ.fetchStatus === "idle")
+    && (crewsQ.isFetched || crewsQ.fetchStatus === "idle");
+  const hasOtherChats = listRows.length > 0 || requestCount > 0;
+  // Open the pinned chat by itself when it's the only one (nothing to pick
+  // from), and on wide screens where list and chat sit side by side.
+  useEffect(() => {
+    if (!pinned || selectedId || !othersReady) return;
+    if (typeof window !== "undefined" && /group=/.test(window.location.hash)) return;
+    const wide = typeof window !== "undefined" && window.matchMedia?.("(min-width: 768px)").matches;
+    if (!hasOtherChats || wide) setSelectedId(pinned.id);
+  }, [pinned, selectedId, othersReady, hasOtherChats]);
   const myMembership = selected ? membershipRows.find((m) => m.group_id === selected.id) : undefined;
   const isAdminOfGroup = asAdmin || myMembership?.role === "admin";
   const canPost = (() => {
@@ -244,7 +271,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
       {/* Sidebar list */}
       <aside className={cn(
         "flex w-full flex-col border-r border-border bg-card md:w-[300px] md:shrink-0",
-        selected || selectedDirect || selectedCrew ? "hidden md:flex" : "flex",
+        anySelected ? "hidden md:flex" : "flex",
       )}>
         {showRequests && !asAdmin ? (
           <RequestsList
@@ -257,7 +284,7 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
           />
         ) : (<>
         <header className="flex items-center justify-between border-b border-border px-3 py-2">
-          <div className="text-sm font-bold tracking-tight">{asAdmin ? "Group chats" : "Chats"}</div>
+          <div className={cn("font-bold tracking-tight", pinned ? "text-lg" : "text-sm")}>{asAdmin ? "Group chats" : pinned ? "Messages" : "Chats"}</div>
           {!asAdmin && !isImpersonating && (
             <Button size="sm" variant="ghost" onClick={() => setCrewOpen(true)}>
               <Plus className="mr-1 h-3 w-3" /> New group
@@ -317,9 +344,10 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
               onClick={() => setShowRequests(true)}
             />
           )}
+          {pinned && !selectMode && pinned.renderRow({ selected: pinnedSelected, onClick: () => setSelectedId(pinned.id) })}
           {listRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
-              {asAdmin ? "No groups yet. Create one to get started." : "No chats yet. Start a group, or tap the send icon on someone's post to message them."}
+              {asAdmin ? "No groups yet. Create one to get started." : pinned ? "Group chats and chats with other members show up here too." : "No chats yet. Start a group, or tap the send icon on someone's post to message them."}
             </div>
           ) : listRows.map((row) => row.crew ? (
             <CrewRow
@@ -388,8 +416,10 @@ export function GroupChatsPane({ asAdmin }: { asAdmin: boolean }) {
       </aside>
 
       {/* Thread pane */}
-      <section className={cn("flex min-w-0 flex-1 flex-col", selected || selectedDirect || selectedCrew ? "flex" : "hidden md:flex")}>
-        {selectedCrew && !asAdmin ? (
+      <section className={cn("flex min-w-0 flex-1 flex-col", anySelected ? "flex" : "hidden md:flex")}>
+        {pinnedSelected && pinned ? (
+          pinned.renderThread({ onBack: hasOtherChats ? () => setSelectedId(null) : null })
+        ) : selectedCrew && !asAdmin ? (
           <CrewChatView key={selectedCrew.group_id} thread={selectedCrew} onBack={() => setSelectedId(null)} />
         ) : selectedDirect && !asAdmin ? (
           <DirectChatView key={selectedDirect.group_id} thread={selectedDirect} onBack={() => setSelectedId(null)} />
