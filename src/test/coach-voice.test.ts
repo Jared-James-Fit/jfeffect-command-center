@@ -76,6 +76,12 @@ describe("normalizeVoiceProfile", () => {
     expect(p.rules).toBe(DEFAULT_VOICE.rules);
   });
 
+  it("never uses fr (he doesn't say it)", () => {
+    expect(DEFAULT_VOICE.everyday).not.toContain("fr");
+    expect(DEFAULT_VOICE.banned).toContain("fr");
+    expect(DEFAULT_VOICE.examples.join(" ")).not.toMatch(/\bfr\b/);
+  });
+
   it("survives junk", () => {
     expect(normalizeVoiceProfile(null)).toEqual(DEFAULT_VOICE);
     expect(normalizeVoiceProfile({ everyday: "nope", examples: [1, ""] }).examples).toEqual(["1"]);

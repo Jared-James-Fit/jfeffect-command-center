@@ -21,6 +21,7 @@ import { calcAge, formatHeight, type HeightUnit } from "@/lib/basic-info";
 import { sexLabel } from "@/lib/athlete-sex";
 import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 import { resolveTiming } from "@/lib/analytics/training-time";
+import { programContextText } from "@/lib/program-context";
 
 const phaseSchema = z.enum(NUTRITION_PHASES.filter((p) => p !== "Custom") as [string, ...string[]]);
 const workoutMealsSchema = z.enum(["auto", "pre_post", "post_only", "pre_only", "none"]);
@@ -135,11 +136,14 @@ async function runPlan(
   workoutMealsOverride?: WorkoutMealsMode | null,
 ) {
   const { sub, qas } = await loadQAs(sb, submissionId);
-  const [coach, basics, history] = await Promise.all([
+  const { loadProgramContext } = await import("@/lib/program-context.server");
+  const [coach, basics, history, program] = await Promise.all([
     coachSettings(sb, sub.client_id),
     loadClientBasics(sb, sub.client_id),
     // Never let a history lookup block the plan.
     loadTrainingPattern(sb, sub.client_id).catch(() => null),
+    // Which block / week they're in, so fuel matches training demand.
+    loadProgramContext(sb, sub.client_id),
   ]);
   const selected = phaseOverride ?? coach.phase;
   const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
@@ -160,7 +164,7 @@ async function runPlan(
     const t = await generateText({
       model: gateway(modelId),
       system: TARGETS_PROMPT,
-      prompt: targetsUserPrompt(basics, qas, selected),
+      prompt: targetsUserPrompt(basics, qas, selected, programContextText(program)),
     });
     const targetsText = cleanAiText(t.text);
 

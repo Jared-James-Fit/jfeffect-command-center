@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import {
+  CalendarRange,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { markCheckinReviewed, refreshReviewQueries, reopenCheckinReview, reviewedViaLabel } from "@/lib/checkin-review";
 import { ClientFormSheet } from "@/components/forms/client-form-sheet";
 import { playAppSound } from "@/lib/app-sounds";
+import { weekChip } from "@/lib/program-context";
 import {
   analyzeMessengerCheckin,
   getMessengerCheckin,
@@ -673,6 +675,32 @@ export function MessengerCheckinSubmissionCard({
           <div className={cn("text-xs", FORM_MUTED)}>AI-assisted coach summary</div>
         </div>
       </div>
+
+      {(() => {
+        // What the AI knew about the program when it wrote this.
+        const program = (data as any)?.context_snapshot?.program;
+        const next = program?.next_week;
+        if (!next && !program?.this_week) return null;
+        return (
+          <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-[11px] leading-snug">
+            <CalendarRange className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0">
+              {next ? (
+                <>
+                  <span className="font-semibold">Up next:</span> {next.block} · {weekChip(next)}
+                  {program?.next_block ? <span className={FORM_MUTED}> (new block)</span> : null}
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">Just trained:</span> {program.this_week.block} · {weekChip(program.this_week)}
+                  <span className={FORM_MUTED}> · nothing programmed after this</span>
+                </>
+              )}
+              {program?.meet ? <span className={FORM_MUTED}> · meet in {program.meet.days_out}d</span> : null}
+            </span>
+          </div>
+        );
+      })()}
 
       {analysis ? (
         <div className="mt-3 space-y-2">
