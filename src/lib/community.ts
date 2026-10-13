@@ -1568,16 +1568,17 @@ export function pickWorkoutWin(s: Pick<WorkoutShareStats, "prs" | "pr_count" | "
 export const STORY_WINDOW_MS = 24 * 3_600_000;
 
 /**
- * Worth a story: anything a person posted themselves, and the automatic
- * workout posts only when the session had a real moment in it (a PR, a
- * monthly milestone, a 3rd+ session of the week). A routine "session done"
- * or plain top set never takes over the rail.
+ * Worth a story: everything shared with the crew, like Instagram: what people
+ * post themselves and every finished session (posted for them when automatic
+ * sharing is on), a PR or a routine day alike; the win just makes its frame
+ * louder. Who-sees-it on the post still decides (coach-only or private never).
  */
-export function storyWorthy(p: Pick<CommunityPost, "auto" | "stats" | "visibility">): boolean {
-  if (p.visibility !== "community") return false;
-  if (!isPulsePost(p)) return true;
-  return isRealWin(pickWorkoutWin(p.stats!, "kg").kind);
+export function storyWorthy(p: Pick<CommunityPost, "visibility">): boolean {
+  return p.visibility === "community";
 }
+
+/** Activity's opening card: the crew's week in numbers. */
+export type ActivityCover = { prs: number; sessions: number; athletes: number; faces: CommunityAuthor[] };
 
 export type StoryGroup<T> = {
   author: CommunityAuthor;
@@ -1586,35 +1587,59 @@ export type StoryGroup<T> = {
   latest: number;
   /** The Activity bubble played as a story: many people's sessions (each frame shows its athlete). */
   activity?: boolean;
+  /** Plays first, before the moments (Activity's week in numbers). */
+  cover?: ActivityCover;
+  /** Your own story (you see who saw it; nothing to reply to). */
+  mine?: boolean;
 };
 
 /** The Activity story's bubble stands in for an author. */
 export const ACTIVITY_STORY_AUTHOR: CommunityAuthor = { user_id: "activity", name: "Activity", avatar_url: null, is_coach: false };
-export const ACTIVITY_STORY_MAX = 30;
+export const ACTIVITY_STORY_MAX = 20;
 
 /**
- * Activity, played like a story: everyone else's finished sessions from the
- * last day, oldest first (the newest 30 when it's busy); on a day with none,
- * the week's wins. Never your own.
+ * Activity, played like a story, is the week you might have missed: the
+ * crew's wins (PRs, milestones, streaks) from earlier in the week, the ones
+ * that have already left people's stories (the last day is in those, so it
+ * never plays the same thing twice). Oldest first, the newest 20. Never yours.
  */
 export function activityStory<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "is_mine" | "seen">>(posts: T[], now = Date.now()): T[] {
-  const theirs = posts.filter((p) => !p.is_mine && isPulsePost(p));
   const age = (p: T) => now - new Date(p.created_at).getTime();
-  let items = theirs.filter((p) => age(p) <= STORY_WINDOW_MS);
-  if (!items.length) items = theirs.filter((p) => age(p) <= 7 * 86_400_000 && isRealWin(pickWorkoutWin(p.stats!, "kg").kind));
+  const items = posts.filter(
+    (p) => !p.is_mine && isPulsePost(p) && age(p) > STORY_WINDOW_MS && age(p) <= 7 * 86_400_000 && isRealWin(pickWorkoutWin(p.stats!, "kg").kind),
+  );
   return [...items].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, ACTIVITY_STORY_MAX).reverse();
 }
 
-export function activityStoryGroup<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "is_mine" | "seen">>(posts: T[], seenNow: ReadonlySet<string>, now = Date.now()): StoryGroup<T> | null {
+/** Activity as a story: its week-in-numbers card, then the week's earlier wins. Null on a week with no sessions. */
+export function activityStoryGroup<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "is_mine" | "seen" | "author">>(
+  posts: T[],
+  seenNow: ReadonlySet<string>,
+  now = Date.now(),
+): StoryGroup<T> | null {
+  // the same numbers as the bubble's tag and the list: every finished session this week
+  const sessions = posts.filter((p) => isPulsePost(p));
+  const week = activityWeekSummary(sessions, now);
+  if (week.sessions === 0) return null;
+  const { faces, people } = activityFaces(sessions, 6, now);
   const items = activityStory(posts, now);
-  if (!items.length) return null;
   return {
     author: ACTIVITY_STORY_AUTHOR,
     items,
     unseen: items.some((p) => !p.seen && !seenNow.has(p.id)),
-    latest: new Date(items[items.length - 1].created_at).getTime(),
+    latest: items.length ? new Date(items[items.length - 1].created_at).getTime() : now,
     activity: true,
+    cover: { prs: week.prs, sessions: week.sessions, athletes: people, faces },
   };
+}
+
+/** Your own last day of stories (you see them first, with who saw each). */
+export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "visibility" | "is_mine" | "seen" | "author">>(posts: T[], now = Date.now()): StoryGroup<T> | null {
+  const items = posts
+    .filter((p) => p.is_mine && storyWorthy(p) && now - new Date(p.created_at).getTime() <= STORY_WINDOW_MS)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  if (!items.length) return null;
+  return { author: items[0].author, items, unseen: false, latest: new Date(items[items.length - 1].created_at).getTime(), mine: true };
 }
 
 /**
@@ -1677,7 +1702,8 @@ export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "au
   const stillNew: number[] = [];
   const named = new Set<string>();
   groups.forEach((g, i) => {
-    const w = g.items.filter((p) => watched.has(p.id) && !seenOrder.some((q) => q.id === p.id));
+    if (g.mine) return;
+    const w = g.items.filter((p) => !p.is_mine && watched.has(p.id) && !seenOrder.some((q) => q.id === p.id));
     if (w.length) {
       // whose moments they were (Activity's are many people's)
       for (const p of w) {

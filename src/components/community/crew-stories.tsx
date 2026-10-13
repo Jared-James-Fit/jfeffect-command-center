@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Heart, Play, X } from "lucide-react";
+import { Activity, Check, ChevronRight, Eye, Heart, Play, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, activityStoryGroup, crewStories, isPulsePost, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, activityStoryGroup, crewStories, isPulsePost, myStory, type ActivityCover, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
-import { markPostViewed } from "@/components/community/post-views";
+import { ViewersSheet, markPostViewed } from "@/components/community/post-views";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useFollowState } from "@/lib/community-social";
 import { useAuth } from "@/lib/auth";
@@ -59,25 +59,38 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
   }, [posts, seenNow, follows]);
   // Activity, played like a story: first in the row (after Post), then the people
   const actGroup = useMemo(() => (activity ? activityStoryGroup(posts, seenNow) : null), [activity, posts, seenNow]);
+  // yours: what you shared in the last day (a finished session posts itself), with who saw it
+  const mine = useMemo(() => myStory(posts), [posts]);
   const [open, setOpen] = useState<number | null>(null);
   // the order is fixed while watching (rings change as you go)
   const frozen = useRef<StoryGroup<CommunityPost>[]>([]);
-  if (!groups.length && !activity) return null;
-  /** i = a person's bubble; -1 = Activity. */
+  if (!groups.length && !activity && !mine) return null;
+  /** i = a person's bubble; -1 = Activity; -2 = yours. */
   const watch = (i: number) => {
-    frozen.current = actGroup ? [actGroup, ...groups] : groups;
-    setOpen(i + (actGroup ? 1 : 0));
+    const all = [...(actGroup ? [actGroup] : []), ...(mine ? [mine] : []), ...groups];
+    frozen.current = all;
+    setOpen(i === -1 ? 0 : i === -2 ? (actGroup ? 1 : 0) : i + (actGroup ? 1 : 0) + (mine ? 1 : 0));
   };
   return (
     <>
       <div className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-4 sm:px-4" data-story-rail data-no-swipe-back aria-label="Crew stories">
         {lead}
+        {mine && (
+          <button type="button" onClick={() => watch(-2)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label="Your story" data-story-mine>
+            <span className="grid h-[64px] w-[64px] place-items-center rounded-full bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)] p-[2.5px]">
+              <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
+                <UserAvatar src={mine.author.avatar_url} name={mine.author.name} size={54} expandable={false} />
+              </span>
+            </span>
+            <span className="w-full truncate text-center text-[11px] font-bold">Your story</span>
+          </button>
+        )}
         {activity && (
           <ActivityBubble
             posts={activity.posts}
             weekComplete={activity.weekComplete}
             unseen={!!actGroup?.unseen}
-            // nothing from the last day or the week's wins to play: straight to the list
+            // no sessions this week at all: straight to the list
             onClick={() => (actGroup ? watch(-1) : activity.onList())}
           />
         )}
@@ -153,11 +166,18 @@ function StoryViewer({
 }) {
   const { isImpersonating } = useClientImpersonation();
   const firstUnseen = (g: StoryGroup<CommunityPost>) => Math.max(0, g.items.findIndex((p) => !p.seen));
+  // frames: Activity opens on its cover (frame 0), then its moments
+  const lead = (g: StoryGroup<CommunityPost>) => (g.cover ? 1 : 0);
+  const frames = (g: StoryGroup<CommunityPost>) => lead(g) + g.items.length;
+  const startAt = (g: StoryGroup<CommunityPost>) => (g.cover ? 0 : firstUnseen(g));
   const [gi, setGi] = useState(start);
-  const [ii, setIi] = useState(() => (groups[start] ? firstUnseen(groups[start]) : 0));
+  const [ii, setIi] = useState(() => (groups[start] ? startAt(groups[start]) : 0));
   const group = groups[gi];
+  const atCover = !!group?.cover && ii === 0;
+  const item = group && !atCover ? group.items[ii - lead(group)] : undefined;
   // the live copy (reactions land on it while it's showing)
-  const post = group ? posts.find((p) => p.id === group.items[ii]?.id) ?? group.items[ii] : null;
+  const post = item ? posts.find((p) => p.id === item.id) ?? item : null;
+  const frameKey = atCover ? `cover:${gi}` : post?.id;
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const press = useRef<{ x: number; y: number; t: number } | null>(null);
@@ -184,16 +204,17 @@ function StoryViewer({
 
   const next = () => {
     if (!group) return close();
-    if (ii < group.items.length - 1) return setIi(ii + 1);
+    if (ii < frames(group) - 1) return setIi(ii + 1);
     // on to the next person with something not watched this time (a PR already seen in
-    // Activity doesn't skip their photo), from where that starts; else the end card
+    // Activity doesn't skip their photo), from where that starts; else the end card.
+    // Your own story never plays itself after someone else's.
     const fresh = (p: CommunityPost) => !watched.current.has(p.id);
-    const j = groups.findIndex((g, k) => k > gi && g.items.some(fresh));
+    const j = groups.findIndex((g, k) => k > gi && !g.mine && g.items.some(fresh));
     if (j >= 0) {
       const items = groups[j].items;
       const at = items.findIndex((p) => fresh(p) && !p.seen);
       setGi(j);
-      setIi(at >= 0 ? at : Math.max(0, items.findIndex(fresh)));
+      setIi(lead(groups[j]) + (at >= 0 ? at : Math.max(0, items.findIndex(fresh))));
     } else {
       setPaused(false);
       setEnd(storyEnd(groups, posts, watched.current));
@@ -202,29 +223,30 @@ function StoryViewer({
   const watchFrom = (j: number) => {
     setEnd(null);
     setGi(j);
-    setIi(firstUnseen(groups[j]));
+    setIi(startAt(groups[j]));
   };
   const prev = () => {
     if (ii > 0) setIi(ii - 1);
     else if (gi > 0) {
       setGi(gi - 1);
-      setIi(groups[gi - 1].items.length - 1);
+      setIi(frames(groups[gi - 1]) - 1);
     } else setProgress(0);
   };
 
   // count it seen the moment it shows (never as the coach previewing a client)
   useEffect(() => {
-    if (!post) return;
+    if (!frameKey) return;
     setProgress(0);
+    if (!post) return;
     watched.current.add(post.id);
     onSeen(post.id);
     if (!isImpersonating) markPostViewed(post.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post?.id]);
+  }, [frameKey]);
 
   // the clock (stopped on the end card, and while replying)
   useEffect(() => {
-    if (!post || paused || end || composing) return;
+    if (!frameKey || paused || end || composing) return;
     let raf = 0;
     let last = performance.now();
     const tick = (t: number) => {
@@ -235,15 +257,17 @@ function StoryViewer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [post?.id, paused, end, composing]);
+  }, [frameKey, paused, end, composing]);
   useEffect(() => {
     if (progress >= 1 && !end) next();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress]);
 
-  if (!group || !post) return null;
+  if (!group || (!post && !atCover)) return null;
 
   const onDown = (e: React.PointerEvent) => {
+    // never from a sheet opened on top (who viewed it): it isn't the story
+    if (!e.currentTarget.contains(e.target as Node)) return;
     if ((e.target as Element).closest("button, a, input, textarea")) return;
     // replying: a tap on the story just puts the keyboard away
     if (composing) {
@@ -294,8 +318,8 @@ function StoryViewer({
     if (!p) return;
     const dy = e.clientY - p.y;
     if (dy > 80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return close();
-    // swipe up: the post itself (the workout, comments)
-    if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return onOpenPost(post.id);
+    // swipe up: the post itself (the workout, comments); on Activity's cover, the whole week
+    if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return post ? onOpenPost(post.id) : onActivityList?.();
     if (wasHold || Date.now() - p.t > 220) return;
     if (p.x < window.innerWidth / 3) prev();
     else next();
@@ -312,7 +336,7 @@ function StoryViewer({
         transition: drag.settle ? `transform 210ms ${ease}, border-radius 210ms ${ease}` : "none",
       }
     : undefined;
-  const who = group.activity ? post.author : group.author;
+  const who = post && group.activity ? post.author : group.author;
 
   return (
     <Dialog open onOpenChange={(o) => !o && close()}>
@@ -343,7 +367,7 @@ function StoryViewer({
           />
         ) : (
         <>
-        <DialogTitle className="sr-only">{group.activity ? "Crew activity" : `${group.author.name}'s story`}</DialogTitle>
+        <DialogTitle className="sr-only">{group.activity ? "Crew activity" : group.mine ? "Your story" : `${group.author.name}'s story`}</DialogTitle>
         <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe up for the post, swipe down to close. Reply or send a quick reaction at the bottom.</DialogDescription>
         <div
           className="relative flex min-h-0 flex-1 select-none flex-col touch-none"
@@ -360,26 +384,32 @@ function StoryViewer({
           }}
           data-story-viewer
         >
-          <StoryFrame post={post} unit={unit} />
+          {post ? <StoryFrame post={post} unit={unit} /> : <ActivityCoverFrame cover={group.cover!} more={group.items.length} />}
 
           {/* top: progress, who, close */}
           <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6" style={{ paddingTop: "max(env(safe-area-inset-top), 0.6rem)" }}>
             <div className="flex gap-1">
-              {group.items.map((p, i) => (
-                <span key={p.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/30">
+              {Array.from({ length: frames(group) }, (_, i) => (
+                <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/30">
                   <span className="block h-full bg-white" style={{ width: `${i < ii ? 100 : i === ii ? progress * 100 : 0}%` }} />
                 </span>
               ))}
             </div>
             <div className="mt-2.5 flex items-center gap-2">
               {/* Activity: each moment is someone's session, so it names them */}
-              <UserAvatar src={who.avatar_url} name={who.name} size={32} expandable={false} />
+              {post ? (
+                <UserAvatar src={who.avatar_url} name={who.name} size={32} expandable={false} />
+              ) : (
+                <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-white">
+                  <ActivityGlyph className="[&>svg]:h-4 [&>svg]:w-4" />
+                </span>
+              )}
               <span className="min-w-0">
                 <span className="flex items-baseline gap-2">
-                  <span className="truncate text-[14px] font-bold">{who.name.split(" ")[0]}</span>
-                  <span className="shrink-0 text-[12px] text-white/70">{postTimeLabel(post.created_at)}</span>
+                  <span className="truncate text-[14px] font-bold">{post ? (group.mine ? "Your story" : who.name.split(" ")[0]) : "Crew activity"}</span>
+                  <span className="shrink-0 text-[12px] text-white/70">{post ? postTimeLabel(post.created_at) : "This week"}</span>
                 </span>
-                {group.activity && <span className="block text-[11px] font-semibold leading-tight text-white/65">Crew activity</span>}
+                {group.activity && post && <span className="block text-[11px] font-semibold leading-tight text-white/65">Crew activity · earlier this week</span>}
               </span>
               {group.activity && onActivityList && (
                 <button type="button" onClick={onActivityList} className="ml-auto h-8 shrink-0 rounded-full bg-white/15 px-3 text-[12px] font-bold backdrop-blur-sm active:scale-95" data-story-activity-all>
@@ -392,13 +422,95 @@ function StoryViewer({
             </div>
           </div>
 
-          <StoryBar post={post} viewerIsStaff={viewerIsStaff} onOpen={() => onOpenPost(post.id)} onComposing={setComposing} />
+          {!post ? (
+            // the cover: the whole week as a list
+            onActivityList && (
+              <div className="absolute inset-x-0 bottom-0 px-4" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }}>
+                <button type="button" onClick={onActivityList} className="flex h-12 w-full items-center justify-center gap-1 rounded-full bg-white text-[15px] font-black text-black active:scale-[0.98]" data-story-cover-all>
+                  See the whole week <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )
+          ) : post.is_mine ? (
+            <MyStoryBar post={post} onOpen={() => onOpenPost(post.id)} onHold={setComposing} />
+          ) : (
+            <StoryBar post={post} viewerIsStaff={viewerIsStaff} onOpen={() => onOpenPost(post.id)} onComposing={setComposing} />
+          )}
         </div>
         </>
         )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Activity's first frame: the crew's week in numbers, before its best moments. */
+function ActivityCoverFrame({ cover, more }: { cover: ActivityCover; more: number }) {
+  const prs = cover.prs > 0;
+  return (
+    <div className="flex flex-1 flex-col justify-center bg-zinc-950 bg-[radial-gradient(110%_70%_at_85%_8%,rgba(245,158,11,0.30),transparent_60%)] px-7" data-story-frame="cover">
+      <span className="inline-flex items-center gap-1.5 text-[13px] font-black uppercase tracking-[0.16em] text-amber-300">
+        <Activity className="h-5 w-5" /> This week in the crew
+      </span>
+      <span className="font-display mt-4 block text-[104px] leading-[0.85] tabular-nums">{prs ? cover.prs : cover.sessions}</span>
+      <span className="font-display block text-[40px] uppercase leading-none text-amber-300">{prs ? (cover.prs === 1 ? "PR" : "PRs") : cover.sessions === 1 ? "session" : "sessions"}</span>
+      <span className="mt-4 block text-[17px] font-bold text-white/85">
+        {prs && `${cover.sessions} ${cover.sessions === 1 ? "session" : "sessions"} · `}
+        {cover.athletes} {cover.athletes === 1 ? "athlete" : "athletes"}
+      </span>
+      {cover.faces.length > 0 && (
+        <span className="mt-5 flex -space-x-2">
+          {cover.faces.map((a) => (
+            <span key={a.user_id} className="rounded-full ring-[3px] ring-zinc-950">
+              <UserAvatar src={a.avatar_url} name={a.name} size={40} expandable={false} />
+            </span>
+          ))}
+        </span>
+      )}
+      {more > 0 && <span className="mt-6 block text-[14px] font-semibold text-white/60">Next: {more} {more === 1 ? "win" : "wins"} from earlier this week</span>}
+    </div>
+  );
+}
+
+/** Your own story: who's seen it and the hearts (nothing to reply to). Tap Seen by for the names. */
+function MyStoryBar({ post, onOpen, onHold }: { post: CommunityPost; onOpen: () => void; onHold: (on: boolean) => void }) {
+  const [viewers, setViewers] = useState(false);
+  // the story waits while the list is open
+  useEffect(() => {
+    onHold(viewers);
+  }, [viewers, onHold]);
+  useEffect(() => () => onHold(false), [onHold]);
+  const v = post.views;
+  const hearts = post.reaction_count ?? 0;
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-30 flex items-center gap-2 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-10" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.85rem)" }} data-story-mine-bar>
+      <button
+        type="button"
+        onClick={() => v?.count && setViewers(true)}
+        disabled={!v?.count}
+        className="flex h-11 min-w-0 items-center gap-2 rounded-full bg-white/15 pl-2 pr-4 text-[14px] font-bold backdrop-blur-sm active:scale-95 disabled:active:scale-100"
+        aria-label={v?.count ? `Seen by ${v.count}. See who` : "No views yet"}
+      >
+        {v?.faces.length ? (
+          <span className="flex shrink-0 -space-x-1.5">
+            {v.faces.slice(0, 3).map((a) => (
+              <span key={a.user_id} className="rounded-full ring-2 ring-black/60">
+                <UserAvatar src={a.avatar_url} name={a.name} size={26} expandable={false} />
+              </span>
+            ))}
+          </span>
+        ) : (
+          <Eye className="ml-1.5 h-5 w-5 shrink-0" />
+        )}
+        <span className="truncate">{v?.count ? `Seen by ${v.count}` : "No views yet"}</span>
+      </button>
+      {hearts > 0 && <span className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full bg-white/15 px-3.5 text-[14px] font-bold backdrop-blur-sm">❤️ {hearts}</span>}
+      <button type="button" onClick={onOpen} className="ml-auto inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full bg-white/15 pl-4 pr-3 text-[14px] font-bold backdrop-blur-sm active:scale-95">
+        {isPulsePost(post) ? "Workout" : "Post"} <ChevronRight className="h-4 w-4" />
+      </button>
+      <ViewersSheet postId={viewers ? post.id : null} onClose={() => setViewers(false)} />
+    </div>
   );
 }
 

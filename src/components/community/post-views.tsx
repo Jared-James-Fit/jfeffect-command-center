@@ -155,7 +155,7 @@ export function PostViewsRow({ post, onOpenAuthor }: { post: CommunityPost; onOp
 }
 
 /** Who viewed your post, newest first; people who view privately are counted, not named. */
-function ViewersSheet({ postId, onClose, onOpenAuthor }: { postId: string | null; onClose: () => void; onOpenAuthor?: (a: CommunityAuthor) => void }) {
+export function ViewersSheet({ postId, onClose, onOpenAuthor }: { postId: string | null; onClose: () => void; onOpenAuthor?: (a: CommunityAuthor) => void }) {
   const { data, isLoading } = usePostViewers(postId);
   const setPrivate = useSetPrivateViews();
   return (
