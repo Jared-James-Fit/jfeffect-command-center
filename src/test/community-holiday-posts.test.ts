@@ -64,13 +64,15 @@ describe("holiday posts", () => {
   });
 
   it("short, in the coach's texting voice, and the whole caption shows in the feed", () => {
-    const short = read("supabase/migrations/20261117090000_community_holiday_posts_short.sql");
+    const short = read("supabase/migrations/20261118090000_community_holiday_posts_no_commas.sql");
     const bodies = [...short.matchAll(/^  \('([a-z_]+)',\n'((?:[^']|'')*)'\)/gm)].map((m) => ({
       key: m[1],
       body: m[2].replace(/''/g, "'"),
     }));
     expect(bodies.map((b) => b.key).sort()).toEqual(holidays.map((h) => h.key).sort());
-    expect(short).toContain("CHECK (char_length(body) <= 160)");
+    expect(read("supabase/migrations/20261117090000_community_holiday_posts_short.sql")).toContain(
+      "CHECK (char_length(body) <= 160)",
+    );
     const banned = [
       "navigating",
       "it's clear that",
@@ -88,6 +90,7 @@ describe("holiday posts", () => {
       "one thing for today",
       "—",
       ";",
+      ",",
     ];
     for (const b of bodies) {
       expect(b.body.length, b.key).toBeLessThanOrEqual(160);
@@ -97,7 +100,10 @@ describe("holiday posts", () => {
       expect(b.body.replace(/ONE/g, ""), b.key).toBe(b.body.replace(/ONE/g, "").toLowerCase());
       for (const w of banned) expect(b.body.toLowerCase(), `${b.key}: ${w}`).not.toContain(w);
     }
-    // never cut off with "more" in the feed
+    // regular post font, and never cut off with "more" in the feed
+    expect(read("src/components/community/post-card.tsx")).toContain(
+      '(scene || cover) && post.series !== "holiday" ? "text-[17px] font-semibold" : "text-[15px]"',
+    );
     expect(read("src/components/community/post-card.tsx")).toContain(
       'clamp && post.series !== "holiday" && "line-clamp-[8]"',
     );
