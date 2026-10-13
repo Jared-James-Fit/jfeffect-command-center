@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { crewStories, storyWorthy, STORY_WINDOW_MS } from "@/lib/community";
+import { crewStories, namesLine, storyEnd, storyWorthy, STORY_WINDOW_MS } from "@/lib/community";
 import { holdsMapOrSet, shouldPersistQuery } from "@/lib/query-persister";
 import { draftWorthKeeping } from "@/lib/post-draft";
 
@@ -101,5 +101,59 @@ describe("Crew Stories", () => {
     expect(screen).toContain('variant="bubble"');
     expect(read("src/components/community/crew-stories.tsx")).toContain("markPostViewed(post.id)");
     expect(read("supabase/migrations/20261101110000_community_post_seen.sql")).toContain("'seen', EXISTS");
+  });
+
+  describe("the end of the stories", () => {
+    const pr = { prs: [{ exercise_name: "Squat", reps: 3, load_kg: 140, scope: "atpr" }], pr_count: 1 };
+    const feed = [
+      post("f1", "fionna", 2),
+      pulse("v1", "vicky", 3, pr),
+      post("m1", "marc", 5, false, { my_reaction: "heart" }),
+      post("n1", "nicole", 4),
+      post("older", "dwayne", 30), // not a story any more, not seen: new in the feed
+      post("seenfeed", "dwayne", 40, true),
+      post("lastweek", "dwayne", 24 * 9),
+      pulse("routine", "dwayne", 1, {}), // routine sessions never count as new posts
+      post("mine", "jared", 2, false, { is_mine: true, views: { count: 9, faces: [] } }),
+    ];
+    const groups = crewStories(feed, now);
+
+    it("names who you watched, offers the bubbles you didn't get to, and a heart for what you skipped (wins first)", () => {
+      const watched = new Set(groups.filter((g) => g.author.user_id !== "nicole").flatMap((g) => g.items.map((p) => p.id)));
+      const end = storyEnd(groups, feed, watched, now);
+      expect(end.moments).toBe(3);
+      expect(end.people.map((a) => a.user_id).sort()).toEqual(["fionna", "marc", "vicky"]);
+      expect(end.stillNew.map((i) => groups[i].author.user_id)).toEqual(["nicole"]);
+      // Marc already has your heart
+      expect(end.celebrate).toEqual(["v1", "f1"]);
+      expect(end.feedNew.map((p) => p.id)).toEqual(["older"]);
+      expect(end.mine?.id).toBe("mine");
+    });
+    it("at most 3 hearts; with nothing of yours it offers Add yours", () => {
+      const many = [1, 2, 3, 4, 5].map((i) => post(`p${i}`, `p${i}person`, i));
+      const g = crewStories(many, now);
+      const end = storyEnd(g, many, new Set(many.map((p) => p.id)), now);
+      expect(end.celebrate).toHaveLength(3);
+      expect(end.mine).toBeNull();
+      expect(end.stillNew).toEqual([]);
+    });
+    it("names read naturally", () => {
+      expect(namesLine([{ name: "Vicky Smith" }])).toBe("Vicky");
+      expect(namesLine([{ name: "Vicky" }, { name: "Marc A" }])).toBe("Vicky and Marc");
+      expect(namesLine([{ name: "Vicky" }, { name: "Marc" }, { name: "Fionna" }])).toBe("Vicky, Marc and 1 other");
+      expect(namesLine([{ name: "Vicky" }, { name: "Marc" }, { name: "Fionna" }, { name: "Nicole" }])).toBe("Vicky, Marc and 2 others");
+    });
+    it("the last story leads to the end card, never a hard exit; it can take you on to the feed or into the camera", () => {
+      const viewer = read("src/components/community/crew-stories.tsx");
+      expect(viewer).toContain("setEnd(storyEnd(groups, posts, watched.current));");
+      expect(viewer).not.toContain("} else onClose();");
+      // the clock stops on it
+      expect(viewer).toContain("if (!post || paused || end) return;");
+      // swipe down closes it, but never from the camera opened on top of it
+      expect(viewer).toContain("if (!e.currentTarget.contains(e.target as Node)) return;");
+      const screen = read("src/components/community/community-screen.tsx");
+      expect(screen).toContain("onJumpTo={setJumpTo}");
+      expect(screen).toContain('addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} /> : null}');
+    });
   });
 });

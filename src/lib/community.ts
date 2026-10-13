@@ -1603,3 +1603,67 @@ export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | 
   const f = (g: StoryGroup<T>) => Number(!!followed?.has(g.author.user_id));
   return groups.sort((a, b) => Number(b.unseen) - Number(a.unseen) || f(b) - f(a) || b.latest - a.latest);
 }
+
+/** What the end of the stories offers (only what's there; every part can be empty). */
+export type StoryEnd<T> = {
+  /** Whose moments you just watched, in the order you saw them. */
+  people: CommunityAuthor[];
+  moments: number;
+  /** Rail bubbles still ringed that you didn't get to this time (their index in the rail). */
+  stillNew: number[];
+  /** Moments you watched but didn't celebrate: real wins first, at most 3. */
+  celebrate: string[];
+  /** Posts in the feed you haven't seen yet (this week, not in the stories). */
+  feedNew: T[];
+  /** Your own latest story moment, so you can see how it's doing. */
+  mine: T | null;
+};
+
+const STORY_END_FEED_MS = 7 * 86_400_000;
+
+/**
+ * The card after the last story: instead of dropping you back on the feed,
+ * it points at the next good thing. More stories you didn't watch, a heart
+ * for the ones you skipped past, the feed posts you haven't seen, and your
+ * own story (or a nudge to add one). `posts` is the live feed, so reactions
+ * given here show straight away.
+ */
+export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author" | "my_reaction">>(
+  groups: StoryGroup<T>[],
+  posts: T[],
+  watched: ReadonlySet<string>,
+  now = Date.now(),
+): StoryEnd<T> {
+  const live = new Map(posts.map((p) => [p.id, p]));
+  const inStories = new Set(groups.flatMap((g) => g.items.map((p) => p.id)));
+  const people: CommunityAuthor[] = [];
+  const seenOrder: T[] = [];
+  const stillNew: number[] = [];
+  groups.forEach((g, i) => {
+    const w = g.items.filter((p) => watched.has(p.id));
+    if (w.length) {
+      people.push(g.author);
+      seenOrder.push(...w);
+    } else if (g.unseen) stillNew.push(i);
+  });
+  const isWin = (p: T) => isPulsePost(p) && isRealWin(pickWorkoutWin(p.stats!, "kg").kind);
+  const celebrate = seenOrder
+    .map((p) => live.get(p.id) ?? p)
+    .filter((p) => !p.is_mine && !p.my_reaction)
+    .sort((a, b) => Number(isWin(b)) - Number(isWin(a)))
+    .slice(0, 3)
+    .map((p) => p.id);
+  const feedNew = posts.filter((p) => !p.is_mine && !p.seen && !isPulsePost(p) && !inStories.has(p.id) && now - new Date(p.created_at).getTime() < STORY_END_FEED_MS);
+  const mine = posts
+    .filter((p) => p.is_mine && storyWorthy(p) && now - new Date(p.created_at).getTime() <= STORY_WINDOW_MS)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
+  return { people, moments: seenOrder.length, stillNew, celebrate, feedNew, mine };
+}
+
+/** "Vicky", "Vicky and Marc", "Vicky, Marc and 2 others". */
+export function namesLine(people: Pick<CommunityAuthor, "name">[]): string {
+  const first = people.map((p) => p.name.split(" ")[0]);
+  if (first.length <= 2) return first.join(" and ");
+  const rest = first.length - 2;
+  return `${first[0]}, ${first[1]} and ${rest} ${rest === 1 ? "other" : "others"}`;
+}
