@@ -55,7 +55,8 @@ describe("writing a poll", () => {
     expect(hub).toContain("allowPoll");
     expect(hub).toContain('await act.mutateAsync({ kind: "note", body, poll, media });');
     expect(editor).toContain('placeholder={poll ? "Ask the crew something…" : undefined}');
-    expect(editor).toContain("disabled={saving || !trimmed || !pollReady || draft.tray.uploading > 0 || att.recorder.recording}");
+    // words are needed unless it's a member's photo post (never for a poll: the text is the question)
+    expect(editor).toContain("disabled={saving || (!trimmed && !(wordsOptional && !poll && draft.tray.items.length > 0)) || !pollReady || draft.tray.uploading > 0 || att.recorder.recording}");
     // a poll (and photos) only go when there are some
     expect(queries).toContain('...(a.poll?.length ? { _poll: a.poll } : {}),');
     expect(queries).toContain('...(a.media?.length ? { _media: a.media } : {}),');
