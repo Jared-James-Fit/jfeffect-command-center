@@ -25,17 +25,46 @@ export function messagesBadgeCount(s: MessagesBadgeSources): number {
   return n(s.coachMessages) + n(s.liftFeedback) + n(s.directThreads) + n(s.crewThreads) + n(s.groupThreads);
 }
 
-/** Number of coach groups with a message from someone else newer than my last read. */
-export function unreadGroupCount(
+/** Coach groups with a message from someone else newer than my last read. */
+export function unreadGroupIds(
   memberships: { group_id: string; last_read_at: string | null }[],
   messages: { group_id: string; sender_id: string | null; created_at: string }[],
   me: string,
-): number {
+): Set<string> {
   const lastRead = new Map(memberships.map((m) => [m.group_id, m.last_read_at ? Date.parse(m.last_read_at) : 0]));
   const unread = new Set<string>();
   for (const msg of messages) {
     if (!lastRead.has(msg.group_id) || msg.sender_id === me) continue;
     if (Date.parse(msg.created_at) > (lastRead.get(msg.group_id) ?? 0)) unread.add(msg.group_id);
   }
-  return unread.size;
+  return unread;
+}
+
+/** Number of coach groups with a message from someone else newer than my last read. */
+export function unreadGroupCount(
+  memberships: { group_id: string; last_read_at: string | null }[],
+  messages: { group_id: string; sender_id: string | null; created_at: string }[],
+  me: string,
+): number {
+  return unreadGroupIds(memberships, messages, me).size;
+}
+
+/**
+ * Chats that count toward the badge, after my own chat settings: something
+ * new or marked unread, but not muted (Hide Alerts) and not deleted from my
+ * list. A chat with no settings counts exactly as before.
+ */
+export function waitingChatCount(
+  chats: { key: string; unread: boolean; at?: string | null }[],
+  prefs: ReadonlyMap<string, { muted: boolean; hidden_at: string | null; unread_at: string | null }>,
+): number {
+  let n = 0;
+  for (const c of chats) {
+    const p = prefs.get(c.key);
+    if (!p) { if (c.unread) n += 1; continue; }
+    if (p.muted) continue;
+    if (p.hidden_at && (!c.at || Date.parse(c.at) <= Date.parse(p.hidden_at))) continue;
+    if (c.unread || p.unread_at) n += 1;
+  }
+  return n;
 }

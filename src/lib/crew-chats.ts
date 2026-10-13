@@ -151,7 +151,8 @@ export function useInviteToCrew(groupId: string) {
   });
 }
 
-export type CrewAction = "join" | "decline" | "leave" | "report";
+/** "block": turn the invite down and block whoever sent it (silent). */
+export type CrewAction = "join" | "decline" | "leave" | "report" | "block";
 
 export function useCrewRespond(groupId: string) {
   const done = useInvalidateCrews();
@@ -172,10 +173,11 @@ export function useCrewRespond(groupId: string) {
       }
       return data as { ok: boolean };
     },
-    onSuccess: () => {
+    onSuccess: (_d, { action }) => {
       done(groupId);
       qc.invalidateQueries({ queryKey: ["group-memberships"] });
       qc.invalidateQueries({ queryKey: ["group-members", groupId] });
+      if (action === "block") qc.invalidateQueries({ queryKey: ["chat-blocked-people"] });
     },
   });
 }

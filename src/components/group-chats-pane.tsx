@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,11 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X, Pencil, Search } from "lucide-react";
+import {
+  BellOff, Check, ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X, Pencil, Search, ShieldOff, SquarePen, MailOpen,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   listMyGroups, listAllGroupsForAdmin, listMyGroupMemberships,
-  listGroupMemberProfiles, type GroupMemberProfile,
+  listGroupMemberProfiles, markGroupRead, type GroupMemberProfile,
   type ChatGroup,
 } from "@/lib/group-chats";
 import { deleteGroupChats, updateGroupChat } from "@/lib/group-chats.functions";
@@ -24,27 +33,62 @@ import { ManageGroupDialog } from "@/components/manage-group-dialog";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { useGroupPresence } from "@/hooks/use-group-presence";
 import { LiveDot } from "@/hooks/use-chat-presence";
-import { directThreadsKey, isUnread, useDirectThreads } from "@/lib/direct-chats";
+import { directThreadsKey, isUnread, previewLine, useDirectThreads, type DirectThread } from "@/lib/direct-chats";
 import { DirectChatView, DirectRow, RequestsEntry, RequestsList } from "@/components/direct-chat";
-import { crewThreadsKey, isCrewUnread, useCrewThreads } from "@/lib/crew-chats";
-import { CreateCrewSheet, CrewChatView, CrewRow } from "@/components/crew-chat";
+import { crewPreview, crewThreadsKey, isCrewUnread, useCrewThreads, type CrewThread } from "@/lib/crew-chats";
+import { CreateCrewSheet, CrewChatView, CrewFaces, CrewRow } from "@/components/crew-chat";
 import { listenChannel } from "@/lib/realtime-channel";
+import { fmtTime } from "@/components/chat-shared";
+import type { CommunityAuthor } from "@/lib/community";
+import {
+  MAX_PINS, deletePatch, isHidden, isMarkedUnread, isMuted, isPinned, pinnedKeys, useChatPrefs, useSetChatPrefs,
+  type ChatPrefPatch,
+} from "@/lib/chat-prefs";
+import {
+  BlockedPeopleSheet, ChatActionsSheet, ChatRowShell, NewMessageSheet, NewRequestView, PinTile, swipeActionsFor,
+  type ChatMenuAction, type ChatMenuTarget,
+} from "@/components/messages/inbox-parts";
 
 /**
- * A conversation that isn't a group (the client's chat with their coach),
- * pinned at the top of the same list so every chat lives in one inbox.
+ * A conversation that isn't a group (the client's chat with their coach).
+ * It's always pinned first, iMessage style: it can be marked unread, but
+ * never unpinned, muted or deleted.
  */
 export type PinnedChat = {
   id: string;
-  renderRow: (p: { selected: boolean; onClick: () => void }) => ReactNode;
-  /** onBack is null when there's no list to go back to (only this chat). */
-  renderThread: (p: { onBack: (() => void) | null }) => ReactNode;
+  name: string;
+  avatarUrl: string | null;
+  live?: boolean;
+  /** The list row's second line. */
+  preview: string;
+  /** When the latest message was sent, already formatted. */
+  when: string;
+  unread?: boolean;
   /** What search matches against (name + latest message). */
   searchText?: string;
-  unread?: boolean;
+  renderThread: (p: { onBack: () => void }) => ReactNode;
+  markUnread?: () => void | Promise<void>;
+  markRead?: () => void | Promise<void>;
 };
 
 type ChatFilter = "all" | "unread" | "groups" | "people";
+
+type VisibleGroup = { group: ChatGroup; last: any; unread: number };
+
+/** One chat in the list, whatever kind it is. */
+type Row = {
+  key: string;
+  at: string;
+  title: string;
+  preview: string;
+  search: string;
+  group?: VisibleGroup;
+  direct?: DirectThread;
+  crew?: CrewThread;
+  unread: boolean;
+  muted: boolean;
+  pinned: boolean;
+};
 
 export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?: PinnedChat }) {
   const { user, role } = useAuth();
@@ -60,6 +104,16 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
   const deleteGroupsFn = useServerFn(deleteGroupChats);
   const renameGroupFn = useServerFn(updateGroupChat);
   const isAdmin = role === "admin";
+  // Pins, Hide Alerts, Delete, Mark as Unread and New message are the
+  // signed-in person's own. Not while a coach is viewing as a client.
+  const canEdit = !isImpersonating;
+  const { prefs } = useChatPrefs(canEdit, { live: true });
+  const setPrefs = useSetChatPrefs();
+  const [menu, setMenu] = useState<ChatMenuTarget | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ChatMenuTarget[] | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [draftTo, setDraftTo] = useState<CommunityAuthor | null>(null);
+  const [blockedOpen, setBlockedOpen] = useState(false);
 
   // Deep-link support: /portal/messages#group=<uuid> or
   // /admin/communication?tab=groups#group=<uuid> auto-selects the group so
@@ -154,7 +208,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
   });
 
   const resyncGroups = () => {
-    for (const k of ["chat-groups", "group-memberships", "group-last-messages", "group-unread", "direct-threads", "crew-threads"]) {
+    for (const k of ["chat-groups", "group-memberships", "group-last-messages", "group-unread", "direct-threads", "crew-threads", "chat-thread-prefs"]) {
       qc.invalidateQueries({ queryKey: [k] });
     }
   };
@@ -203,7 +257,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
     return () => { supabase.removeChannel(ch); };
   }, [qc]);
 
-  const visibleGroups = useMemo(() => {
+  const visibleGroups = useMemo((): VisibleGroup[] => {
     return groupRows
       .map((g) => {
         const last = (lastMsgByGroup as Record<string, any>)?.[g.id];
@@ -219,64 +273,99 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
       });
   }, [groupRows, lastMsgByGroup, lastReadByGroup, user?.id, viewerId]);
 
-  // Coach groups, member groups and 1:1 chats in one list, newest activity first.
-  const listRows = useMemo(() => {
-    const rows: Array<{ at: string; group?: (typeof visibleGroups)[number]; direct?: (typeof directChats)[number]; crew?: (typeof crewChats)[number] }> = [
-      ...visibleGroups.map((g) => ({ at: g.last?.created_at ?? g.group.updated_at ?? "", group: g })),
-      ...directChats.map((t) => ({ at: t.last_at, direct: t })),
-      ...crewChats.map((t) => ({ at: t.last_at, crew: t })),
-    ];
+  // Coach groups, member groups and 1:1 chats in one list, newest activity
+  // first. A chat you deleted stays off until someone writes again.
+  const allRows = useMemo((): Row[] => {
+    const rows: Row[] = [];
+    const add = (r: Omit<Row, "muted" | "pinned" | "unread"> & { natural: boolean }) => {
+      if (canEdit && isHidden(prefs, r.key, r.at)) return;
+      const { natural, ...rest } = r;
+      rows.push({
+        ...rest,
+        unread: natural || (canEdit && isMarkedUnread(prefs, r.key)),
+        muted: canEdit && isMuted(prefs, r.key),
+        pinned: canEdit && isPinned(prefs, r.key),
+      });
+    };
+    for (const g of visibleGroups) {
+      add({
+        key: g.group.id, at: g.last?.created_at ?? g.group.updated_at ?? "", title: g.group.name,
+        preview: g.last?.body || "No messages yet", search: `${g.group.name} ${g.last?.body ?? ""}`,
+        group: g, natural: !!g.unread,
+      });
+    }
+    for (const t of directChats) {
+      add({
+        key: t.group_id, at: t.last_at, title: t.other?.name ?? "Member", preview: previewLine(t, me),
+        search: `${t.other?.name ?? ""} ${t.last?.body ?? ""}`, direct: t, natural: isUnread(t, me),
+      });
+    }
+    for (const t of crewChats) {
+      add({
+        key: t.group_id, at: t.last_at, title: t.name, preview: crewPreview(t, me),
+        search: `${t.name} ${t.last?.body ?? ""}`, crew: t, natural: isCrewUnread(t, me),
+      });
+    }
     return rows.sort((a, b) => b.at.localeCompare(a.at));
-  }, [visibleGroups, directChats, crewChats]);
+  }, [visibleGroups, directChats, crewChats, prefs, canEdit, me]);
 
   // Search + filter, the same way for every messenger list.
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ChatFilter>("all");
   const q = query.trim().toLowerCase();
   const matches = (text: string) => !q || text.toLowerCase().includes(q);
-  const shownRows = useMemo(() => listRows.filter((row) => {
-    if (row.group) {
-      if (filter === "people") return false;
-      if (filter === "unread" && !row.group.unread) return false;
-      return matches(`${row.group.group.name} ${row.group.last?.body ?? ""}`);
-    }
-    if (row.crew) {
-      if (filter === "people") return false;
-      if (filter === "unread" && !isCrewUnread(row.crew, me)) return false;
-      return matches(`${row.crew.name} ${row.crew.last?.body ?? ""}`);
-    }
-    if (row.direct) {
-      if (filter === "groups") return false;
-      if (filter === "unread" && !isUnread(row.direct, me)) return false;
-      return matches(`${row.direct.other?.name ?? ""} ${row.direct.last?.body ?? ""}`);
-    }
-    return false;
+  const filtering = !!q || filter !== "all";
+  const shownRows = useMemo(() => allRows.filter((row) => {
+    if (filter === "people" && !row.direct) return false;
+    if (filter === "groups" && row.direct) return false;
+    if (filter === "unread" && !row.unread) return false;
+    return matches(row.search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [listRows, filter, q, me]);
+  }), [allRows, filter, q]);
   const showPinned = !!pinned
     && filter !== "groups"
     && (filter !== "unread" || !!pinned.unread)
     && matches(pinned.searchText ?? "");
-  const filtering = !!q || filter !== "all";
   const filterChips: Array<[ChatFilter, string]> = asAdmin
     ? [["all", "All"], ["unread", "Unread"]]
     : [["all", "All"], ["unread", "Unread"], ["groups", "Groups"], ["people", "People"]];
 
+  // Pinned chats sit on top as faces (the coach always first); the list
+  // below is everything else. Searching or selecting shows plain rows.
+  const pinnedRows = useMemo(
+    () => pinnedKeys(prefs).map((k) => allRows.find((r) => r.key === k)).filter((r): r is Row => !!r),
+    [prefs, allRows],
+  );
+  const showGrid = !filtering && !selectMode && (!!pinned || pinnedRows.length > 0);
+  const listRows = showGrid ? shownRows.filter((r) => !r.pinned) : shownRows;
+
   const selected = groupRows.find((g) => g.id === selectedId);
   const pinnedSelected = !!pinned && selectedId === pinned.id;
-  const anySelected = !!(selected || selectedDirect || selectedCrew || pinnedSelected);
+  const anySelected = !!(selected || selectedDirect || selectedCrew || pinnedSelected || draftTo);
   const othersReady = groupsFetched
     && (directsQ.isFetched || directsQ.fetchStatus === "idle")
     && (crewsQ.isFetched || crewsQ.fetchStatus === "idle");
-  const hasOtherChats = listRows.length > 0 || requestCount > 0;
-  // Open the pinned chat by itself when it's the only one (nothing to pick
-  // from), and on wide screens where list and chat sit side by side.
+  const hasOtherChats = allRows.length > 0 || requestCount > 0;
+  // Open the pinned chat by itself when it's the only one, and on wide
+  // screens where list and chat sit side by side. Once: going back shows the
+  // list (with compose and New group), it doesn't bounce into the chat again.
+  const autoOpened = useRef(false);
   useEffect(() => {
-    if (!pinned || selectedId || !othersReady) return;
+    if (!pinned || autoOpened.current || selectedId || !othersReady) return;
+    autoOpened.current = true;
     if (typeof window !== "undefined" && /group=/.test(window.location.hash)) return;
     const wide = typeof window !== "undefined" && window.matchMedia?.("(min-width: 768px)").matches;
     if (!hasOtherChats || wide) setSelectedId(pinned.id);
   }, [pinned, selectedId, othersReady, hasOtherChats]);
+
+  // Opening a chat you marked unread clears the mark.
+  useEffect(() => {
+    if (!selectedId || !canEdit || !isMarkedUnread(prefs, selectedId)) return;
+    setPrefs.mutate([{ key: selectedId, patch: { unread_at: null } }]);
+    // Only on opening: marking the open chat unread on a wide screen sticks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
   const myMembership = selected ? membershipRows.find((m) => m.group_id === selected.id) : undefined;
   const isAdminOfGroup = asAdmin || myMembership?.role === "admin";
   const canPost = (() => {
@@ -304,6 +393,211 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
     }
   };
 
+  /* ------------------------------ chat actions ------------------------------ */
+
+  const openChat = (key: string) => {
+    setDraftTo(null);
+    setSelectedId(key);
+  };
+  const closeChat = () => {
+    setDraftTo(null);
+    setSelectedId(null);
+  };
+  const toggleChecked = (key: string) =>
+    setChecked((s) => { const n = { ...s }; if (n[key]) delete n[key]; else n[key] = true; return n; });
+
+  const rowAvatar = (r: Row, size: number) => r.direct ? (
+    <UserAvatar src={r.direct.other?.avatar_url ?? null} name={r.title} size={size} expandable={false} />
+  ) : r.crew ? (
+    <CrewFaces faces={r.crew.faces} size={size} />
+  ) : (
+    <GroupFaces groupId={r.key} size={size} />
+  );
+  const targetFor = (r: Row): ChatMenuTarget => ({
+    key: r.key,
+    title: r.title,
+    avatar: rowAvatar(r, 44),
+    preview: r.preview,
+    pinned: r.pinned,
+    muted: r.muted,
+    unread: r.unread,
+    canPin: true,
+    canMute: true,
+    // Coach-run groups for staff have a real (permanent) delete in Select.
+    canDelete: !asAdmin,
+  });
+  const coachTarget: ChatMenuTarget | null = pinned ? {
+    key: pinned.id,
+    title: pinned.name,
+    avatar: <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={44} ring expandable={false} />,
+    preview: pinned.preview,
+    fixed: true,
+    pinned: true,
+    muted: false,
+    unread: !!pinned.unread,
+    canPin: false,
+    canMute: false,
+    canDelete: false,
+  } : null;
+
+  const save = (changes: Array<{ key: string; patch: ChatPrefPatch }>, done?: string) =>
+    setPrefs.mutate(changes, {
+      onSuccess: () => { if (done) toast.success(done); },
+      onError: (e: any) => toast.error(e?.message ?? "That didn't save. Try again."),
+    });
+
+  /** Read it for real (the other side's "Seen" moves, as it would by opening it). */
+  const markRowRead = async (key: string) => {
+    const row = allRows.find((r) => r.key === key);
+    if (!row || !me || !(row.group?.unread || (row.direct && isUnread(row.direct, me)) || (row.crew && isCrewUnread(row.crew, me)))) return;
+    try {
+      await markGroupRead(key, me);
+    } finally {
+      for (const k of ["group-memberships", "group-unread", "direct-threads", "crew-threads", "client-nav-badges"]) {
+        qc.invalidateQueries({ queryKey: [k] });
+      }
+    }
+  };
+
+  const runAction = async (a: ChatMenuAction, t: ChatMenuTarget) => {
+    setMenu(null);
+    const now = new Date().toISOString();
+    if (t.fixed) {
+      try {
+        if (a === "unread") await pinned?.markUnread?.();
+        if (a === "read") await pinned?.markRead?.();
+      } catch (e: any) {
+        toast.error(e?.message ?? "That didn't save. Try again.");
+      }
+      return;
+    }
+    switch (a) {
+      case "pin":
+        if (pinnedRows.length >= MAX_PINS) { toast.message(`You can pin up to ${MAX_PINS} chats. Unpin one first.`); return; }
+        save([{ key: t.key, patch: { pinned_at: now, hidden_at: null } }]);
+        return;
+      case "unpin":
+        save([{ key: t.key, patch: { pinned_at: null } }]);
+        return;
+      case "unread":
+        save([{ key: t.key, patch: { unread_at: now } }]);
+        if (t.key === selectedId) setSelectedId(null);
+        return;
+      case "read":
+        if (isMarkedUnread(prefs, t.key)) save([{ key: t.key, patch: { unread_at: null } }]);
+        await markRowRead(t.key);
+        return;
+      case "mute":
+        save([{ key: t.key, patch: { muted: true } }], `No alerts from ${t.title}`);
+        return;
+      case "unmute":
+        save([{ key: t.key, patch: { muted: false } }], "Alerts are back on");
+        return;
+      case "delete":
+        setConfirmDelete([t]);
+        return;
+    }
+  };
+
+  const doDelete = () => {
+    const targets = confirmDelete ?? [];
+    setConfirmDelete(null);
+    if (!targets.length) return;
+    const now = new Date().toISOString();
+    save(targets.map((t) => ({ key: t.key, patch: deletePatch(now) })), targets.length === 1 ? "Chat deleted" : `${targets.length} chats deleted`);
+    if (selectedId && targets.some((t) => t.key === selectedId)) setSelectedId(null);
+    setChecked({});
+    setSelectMode(false);
+  };
+
+  const selectedRows = allRows.filter((r) => checked[r.key]);
+  const readSelected = async () => {
+    const rows = selectedRows.length ? selectedRows : allRows.filter((r) => r.unread);
+    const marked = rows.filter((r) => isMarkedUnread(prefs, r.key));
+    if (marked.length) save(marked.map((r) => ({ key: r.key, patch: { unread_at: null } })));
+    await Promise.all(rows.map((r) => markRowRead(r.key)));
+    setChecked({});
+    setSelectMode(false);
+  };
+
+  const rowView = (r: Row) => {
+    const leading = selectMode && !asAdmin ? <SelectDot on={!!checked[r.key]} /> : undefined;
+    const onClick = () => (selectMode ? toggleChecked(r.key) : openChat(r.key));
+    if (r.crew) return <CrewRow thread={r.crew} me={me} selected={selectedId === r.key && !selectMode} onClick={onClick} unread={r.unread} muted={r.muted} leading={leading} />;
+    if (r.direct) return <DirectRow thread={r.direct} me={me} selected={selectedId === r.key && !selectMode} onClick={onClick} unread={r.unread} muted={r.muted} leading={leading} />;
+    const { group, last } = r.group!;
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        className={cn(
+          "flex w-full cursor-pointer items-start gap-2 border-b border-border/60 px-3 py-2.5 text-left transition hover:bg-secondary/40",
+          selectedId === group.id && !selectMode && "bg-secondary/60",
+          selectMode && checked[group.id] && "bg-primary/10",
+          group.archived && "opacity-60",
+        )}
+      >
+        {selectMode && asAdmin && (
+          <Checkbox
+            className="mt-1"
+            checked={!!checked[group.id]}
+            onCheckedChange={(v) => setChecked((s) => { const n = { ...s }; if (v) n[group.id] = true; else delete n[group.id]; return n; })}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
+        {leading && <span className="self-center">{leading}</span>}
+        <GroupCover groupId={group.id} myRole={myPresenceRole} />
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className={cn("truncate text-sm", r.unread ? "font-bold" : "font-semibold")}>
+              {group.name}
+            </span>
+            <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+              {r.muted && <BellOff className="h-3 w-3" aria-label="Alerts hidden" />}
+              {group.archived && <Archive className="h-3 w-3" />}
+              {last?.created_at && fmtTime(last.created_at)}
+            </span>
+          </div>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className={cn("flex-1 truncate text-xs", r.unread ? "text-foreground" : "text-muted-foreground")}>
+              {last?.body || "No messages yet"}
+            </span>
+            {r.unread && (
+              <Badge className="h-4 min-w-[16px] rounded-full px-1 text-[10px]">1</Badge>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const coachRow = pinned && (
+    <button
+      type="button"
+      onClick={() => openChat(pinned.id)}
+      className={cn(
+        "flex w-full items-center gap-3 border-b border-border/60 px-3 py-3 text-left transition hover:bg-secondary/40",
+        pinnedSelected && "bg-secondary/60",
+      )}
+    >
+      <span className="relative shrink-0">
+        <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={44} ring expandable={false} />
+        {pinned.live && <span className="absolute bottom-0 right-0"><LiveDot /></span>}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center justify-between gap-2">
+          <span className={cn("truncate text-[15px]", pinned.unread ? "font-bold" : "font-semibold")}>{pinned.name}</span>
+          <span className={cn("shrink-0 text-[11px]", pinned.unread ? "font-semibold text-primary" : "text-muted-foreground")}>{pinned.when}</span>
+        </span>
+        <span className="mt-0.5 flex items-center gap-2">
+          <span className={cn("flex-1 truncate text-[13px]", pinned.unread ? "text-foreground" : "text-muted-foreground")}>{pinned.preview}</span>
+          {pinned.unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />}
+        </span>
+      </span>
+    </button>
+  );
+
   return (
     <div className="flex h-full min-h-0 w-full">
       {/* Sidebar list */}
@@ -317,18 +611,13 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
             crews={crewInvites}
             me={me}
             selectedId={selectedId}
-            onOpen={setSelectedId}
+            onOpen={openChat}
             onBack={() => { setShowRequests(false); if (openedRequest) setSelectedId(null); }}
           />
         ) : (<>
-        <header className="flex items-center justify-between border-b border-border px-3 py-2">
-          <div className={cn("font-bold tracking-tight", pinned ? "text-lg" : "text-sm")}>{asAdmin ? "Group chats" : pinned ? "Messages" : "Chats"}</div>
-          {!asAdmin && !isImpersonating && (
-            <Button size="sm" variant="ghost" onClick={() => setCrewOpen(true)}>
-              <Plus className="mr-1 h-3 w-3" /> New group
-            </Button>
-          )}
-          {asAdmin && (
+        {asAdmin ? (
+          <header className="flex items-center justify-between border-b border-border px-3 py-2">
+            <div className="text-sm font-bold tracking-tight">Group chats</div>
             <div className="flex items-center gap-1">
               {isAdmin && (
                 <Button
@@ -345,8 +634,40 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
                 <Plus className="mr-1 h-3 w-3" /> New
               </Button>
             </div>
-          )}
-        </header>
+          </header>
+        ) : (
+          <header className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center border-b border-border px-2 py-1.5">
+            <div>
+              {canEdit && (selectMode ? (
+                <Button size="sm" variant="ghost" className="h-9 px-2 font-semibold text-primary" onClick={() => { setSelectMode(false); setChecked({}); }}>
+                  Done
+                </Button>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="ghost" className="h-9 px-2 font-semibold text-primary">Edit</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    <DropdownMenuItem onClick={() => { setSelectMode(true); setChecked({}); }} disabled={allRows.length === 0}>
+                      <CheckSquare className="mr-2 h-4 w-4" /> Select Chats
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setBlockedOpen(true)}>
+                      <ShieldOff className="mr-2 h-4 w-4" /> Blocked
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ))}
+            </div>
+            <div className="text-center text-lg font-bold tracking-tight">{pinned ? "Messages" : "Chats"}</div>
+            <div className="flex justify-end">
+              {canEdit && !selectMode && (
+                <Button size="icon" variant="ghost" className="h-9 w-9 text-primary" onClick={() => setComposeOpen(true)} aria-label="New message" title="New message">
+                  <SquarePen className="h-5 w-5" />
+                </Button>
+              )}
+            </div>
+          </header>
+        )}
         <div className="space-y-2 border-b border-border px-3 py-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -383,7 +704,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
             ))}
           </div>
         </div>
-        {selectMode && isAdmin && (
+        {selectMode && isAdmin && asAdmin && (
           <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-3 py-1.5">
             <span className="text-xs font-semibold">
               {Object.keys(checked).length} selected
@@ -418,89 +739,95 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
               onClick={() => setShowRequests(true)}
             />
           )}
-          {showPinned && pinned && !selectMode && pinned.renderRow({ selected: pinnedSelected, onClick: () => setSelectedId(pinned.id) })}
-          {shownRows.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              {filtering ? (showPinned ? "" : "No chats match.") : asAdmin ? "No groups yet. Create one to get started." : pinned ? "Group chats and chats with other members show up here too." : "No chats yet. Start a group, or tap the send icon on someone's post to message them."}
-            </div>
-          ) : shownRows.map((row) => row.crew ? (
-            <CrewRow
-              key={row.crew.group_id}
-              thread={row.crew}
-              me={me}
-              selected={selectedId === row.crew.group_id}
-              onClick={() => setSelectedId(row.crew!.group_id)}
-            />
-          ) : row.direct ? (
-            <DirectRow
-              key={row.direct.group_id}
-              thread={row.direct}
-              me={me}
-              selected={selectedId === row.direct.group_id}
-              onClick={() => setSelectedId(row.direct!.group_id)}
-            />
-          ) : row.group && (({ group, last, unread }) => (
-            <div
-              key={group.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                if (selectMode) {
-                  setChecked((s) => { const n = { ...s }; if (n[group.id]) delete n[group.id]; else n[group.id] = true; return n; });
-                } else {
-                  setSelectedId(group.id);
-                }
-              }}
-              className={cn(
-                "flex w-full cursor-pointer items-start gap-2 border-b border-border/60 px-3 py-2.5 text-left transition hover:bg-secondary/40",
-                selectedId === group.id && !selectMode && "bg-secondary/60",
-                selectMode && checked[group.id] && "bg-primary/10",
-                group.archived && "opacity-60",
-              )}
-            >
-              {selectMode && (
-                <Checkbox
-                  className="mt-1"
-                  checked={!!checked[group.id]}
-                  onCheckedChange={(v) => setChecked((s) => { const n = { ...s }; if (v) n[group.id] = true; else delete n[group.id]; return n; })}
-                  onClick={(e) => e.stopPropagation()}
+          {showGrid && (
+            <div className="flex flex-wrap justify-center border-b border-border/60 px-2 py-2" aria-label="Pinned chats">
+              {pinned && (
+                <PinTile
+                  name={pinned.name}
+                  avatar={<UserAvatar src={pinned.avatarUrl} name={pinned.name} size={60} ring expandable={false} />}
+                  unread={!!pinned.unread}
+                  live={pinned.live}
+                  selected={pinnedSelected}
+                  onOpen={() => openChat(pinned.id)}
+                  onHold={canEdit && coachTarget ? () => setMenu(coachTarget) : undefined}
                 />
               )}
-              <GroupCover groupId={group.id} myRole={myPresenceRole} />
-              <div className="min-w-0 flex-1 overflow-hidden">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={cn("truncate text-sm", unread ? "font-bold" : "font-semibold")}>
-                    {group.name}
-                  </span>
-                  {group.archived && <Archive className="h-3 w-3 text-muted-foreground" />}
-                </div>
-                <div className="mt-0.5 flex items-center gap-1.5">
-                  <span className={cn("flex-1 truncate text-xs", unread ? "text-foreground" : "text-muted-foreground")}>
-                    {last?.body || "No messages yet"}
-                  </span>
-                  {unread > 0 && (
-                    <Badge className="h-4 min-w-[16px] rounded-full px-1 text-[10px]">{unread}</Badge>
-                  )}
-                </div>
-              </div>
+              {pinnedRows.map((r) => (
+                <PinTile
+                  key={r.key}
+                  name={r.title}
+                  avatar={rowAvatar(r, 60)}
+                  unread={r.unread}
+                  muted={r.muted}
+                  selected={selectedId === r.key}
+                  onOpen={() => openChat(r.key)}
+                  onHold={canEdit ? () => setMenu(targetFor(r)) : undefined}
+                />
+              ))}
             </div>
-          ))(row.group))}
+          )}
+          {showPinned && !showGrid && !selectMode && coachRow}
+          {listRows.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              {filtering ? (showPinned ? "" : "No chats match.")
+                : asAdmin ? "No groups yet. Create one to get started."
+                  : pinned ? (pinnedRows.length ? "" : "Chats with other members show up here. Tap the pencil to message someone or start a group.")
+                    : "No chats yet. Start a group, or tap the send icon on someone's post to message them."}
+            </div>
+          ) : listRows.map((r) => {
+            const t = targetFor(r);
+            return (
+              <ChatRowShell
+                key={r.key}
+                onHold={canEdit && !selectMode ? () => setMenu(t) : undefined}
+                swipe={canEdit && !selectMode && !asAdmin ? swipeActionsFor(t, (a) => void runAction(a, t)) : undefined}
+              >
+                {rowView(r)}
+              </ChatRowShell>
+            );
+          })}
         </div>
+        {selectMode && !asAdmin && (
+          <div className="flex items-center justify-between border-t border-border bg-card px-4 py-2 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+            <Button type="button" variant="ghost" className="font-semibold text-primary" onClick={() => void readSelected()}>
+              <MailOpen className="mr-1.5 h-4 w-4" /> {selectedRows.length ? "Read" : "Read All"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="font-semibold text-destructive"
+              disabled={selectedRows.length === 0}
+              onClick={() => setConfirmDelete(selectedRows.map(targetFor))}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" /> Delete{selectedRows.length ? ` (${selectedRows.length})` : ""}
+            </Button>
+          </div>
+        )}
         </>)}
       </aside>
 
       {/* Thread pane */}
       <section className={cn("flex min-w-0 flex-1 flex-col", anySelected ? "flex" : "hidden md:flex")}>
-        {pinnedSelected && pinned ? (
-          pinned.renderThread({ onBack: hasOtherChats ? () => setSelectedId(null) : null })
+        {draftTo && !asAdmin ? (
+          <NewRequestView
+            key={draftTo.user_id}
+            to={draftTo}
+            onBack={closeChat}
+            onSent={async (groupId) => {
+              await qc.refetchQueries({ queryKey: directThreadsKey });
+              openChat(groupId);
+            }}
+          />
+        ) : pinnedSelected && pinned ? (
+          pinned.renderThread({ onBack: closeChat })
         ) : selectedCrew && !asAdmin ? (
-          <CrewChatView key={selectedCrew.group_id} thread={selectedCrew} onBack={() => setSelectedId(null)} />
+          <CrewChatView key={selectedCrew.group_id} thread={selectedCrew} onBack={closeChat} />
         ) : selectedDirect && !asAdmin ? (
-          <DirectChatView key={selectedDirect.group_id} thread={selectedDirect} onBack={() => setSelectedId(null)} />
+          <DirectChatView key={selectedDirect.group_id} thread={selectedDirect} onBack={closeChat} />
         ) : selected ? (
           <>
             <header className="flex items-center gap-2 border-b border-border bg-card/80 px-3 py-2 backdrop-blur md:px-4">
-              <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setSelectedId(null)}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={closeChat}>
                 <ChevronLeft className="h-5 w-5" />
               </Button>
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
@@ -557,11 +884,68 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
       </section>
 
       {asAdmin && <CreateGroupDialog open={createOpen} onOpenChange={setCreateOpen} />}
-      {!asAdmin && <CreateCrewSheet open={crewOpen} onOpenChange={setCrewOpen} onCreated={(id) => { setShowRequests(false); setSelectedId(id); }} />}
+      {!asAdmin && <CreateCrewSheet open={crewOpen} onOpenChange={setCrewOpen} onCreated={(id) => { setShowRequests(false); openChat(id); }} />}
+      {!asAdmin && canEdit && (
+        <NewMessageSheet
+          open={composeOpen}
+          onOpenChange={setComposeOpen}
+          me={me}
+          directs={directs}
+          crews={crews}
+          onOpenThread={(t) => { if (t.incoming) setShowRequests(true); openChat(t.group_id); }}
+          onDraft={(to) => { setSelectedId(null); setDraftTo(to); }}
+          onNewGroup={() => setCrewOpen(true)}
+        />
+      )}
+      {!asAdmin && canEdit && <BlockedPeopleSheet open={blockedOpen} onOpenChange={setBlockedOpen} />}
+      <ChatActionsSheet target={menu} onClose={() => setMenu(null)} onAction={(a, t) => void runAction(a, t)} />
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDelete && confirmDelete.length > 1 ? `Delete ${confirmDelete.length} chats?` : `Delete ${confirmDelete?.[0]?.title ?? "this chat"}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              It comes off your list. If someone writes again, it comes back. Nobody's told, and you stay in any group chats (open one and tap Leave to leave).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={doDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {selected && (asAdmin || isAdminOfGroup) && (
         <ManageGroupDialog open={manageOpen} onOpenChange={setManageOpen} group={selected} />
       )}
     </div>
+  );
+}
+
+/** The round check iMessage shows while selecting chats. */
+function SelectDot({ on }: { on: boolean }) {
+  return (
+    <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border-2", on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40")}>
+      {on && <Check className="h-3.5 w-3.5" />}
+    </span>
+  );
+}
+
+/** A coach-run group's face for pins and the hold menu: two members, or a group icon. */
+function GroupFaces({ groupId, size }: { groupId: string; size: number }) {
+  const { data: rawMembers = [] } = useQuery({
+    queryKey: ["group-member-profiles", groupId],
+    queryFn: () => listGroupMemberProfiles(groupId),
+    staleTime: 60_000,
+  });
+  const members = Array.isArray(rawMembers) ? (rawMembers as GroupMemberProfile[]) : [];
+  return (
+    <CrewFaces
+      faces={members.slice(0, 2).map((m) => ({ user_id: m.user_id, name: m.full_name ?? "Member", avatar_url: m.avatar_url ?? null }))}
+      size={size}
+    />
   );
 }
 

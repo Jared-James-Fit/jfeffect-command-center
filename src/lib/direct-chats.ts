@@ -116,14 +116,78 @@ export function useRespondToChat() {
       qc.invalidateQueries({ queryKey: ["chat-groups"] });
       qc.invalidateQueries({ queryKey: ["group-memberships"] });
       qc.invalidateQueries({ queryKey: ["group-unread"] });
+      if (action === "block" || action === "report") qc.invalidateQueries({ queryKey: blockedPeopleKey });
       if (action !== "accept") qc.invalidateQueries({ queryKey: ["group-messages"] });
+    },
+  });
+}
+
+/**
+ * "New message" to someone in the community (chat_direct_start). Same rules
+ * as replying to their post: a request they read without you knowing, text
+ * only, a few lines until they answer, and only so many new people a day.
+ */
+export function useStartDirect() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, body }: { userId: string; body: string }) => {
+      const { data, error } = await db.rpc("chat_direct_start", { _user_id: userId, _body: body });
+      if (error) throw new Error(friendlyError(error.message));
+      return data as { group_id: string; message_id: string; status: "request" | "active" };
+    },
+    onSuccess: (r) => {
+      void (async () => {
+        try {
+          const ev = await import("@/lib/push/events.functions");
+          await ev.notifyNewGroupMessage({ data: { messageId: r.message_id } });
+        } catch (e) {
+          console.warn("[push] new message push failed", e);
+        }
+      })();
+      qc.invalidateQueries({ queryKey: ["group-messages", r.group_id] });
+    },
+  });
+}
+
+export type BlockedPerson = CommunityAuthor & { blocked_at: string };
+export const blockedPeopleKey = ["chat-blocked-people"] as const;
+
+/** People I've blocked. Only I can see this list. */
+export function useBlockedPeople(enabled = true) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: blockedPeopleKey,
+    enabled: enabled && !!user,
+    staleTime: 60_000,
+    queryFn: async (): Promise<BlockedPerson[]> => {
+      const { data, error } = await db.rpc("chat_blocked_people");
+      if (error) return [];
+      return Array.isArray(data) ? (data as BlockedPerson[]) : [];
+    },
+  });
+}
+
+/** Block (or unblock) a person: their messages and invites stop reaching me. They're never told. */
+export function useBlockPerson() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, blocked }: { userId: string; blocked: boolean }) => {
+      const { error } = await db.rpc("chat_block_person", { _user_id: userId, _blocked: blocked });
+      if (error) throw new Error(friendlyError(error.message));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: blockedPeopleKey });
+      qc.invalidateQueries({ queryKey: directThreadsKey });
+      qc.invalidateQueries({ queryKey: ["crew-threads"] });
     },
   });
 }
 
 /** Database messages → words a person would say. */
 export function friendlyError(message: string) {
+  if (/request_daily_limit/.test(message)) return "That's a lot of new people for one day. You can message more tomorrow.";
   if (/request_limit/.test(message)) return "You can send more once they reply.";
+  if (/pin_limit/.test(message)) return "You can pin up to 8 chats. Unpin one first.";
   if (/row-level security|violates/i.test(message)) return "That didn't send. Try again in a moment.";
   return message;
 }

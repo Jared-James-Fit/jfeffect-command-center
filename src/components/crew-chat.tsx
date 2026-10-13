@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, Flag, Loader2, LogOut, MoreHorizontal, Pencil, Search, UserPlus, Users, X } from "lucide-react";
+import { Bell, BellOff, Check, ChevronLeft, Flag, Loader2, LogOut, MoreHorizontal, Pencil, Search, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -21,6 +21,7 @@ import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { fmtTime } from "@/components/chat-shared";
 import { useCommunityMembers } from "@/lib/community.queries";
 import type { CommunityAuthor } from "@/lib/community";
+import { isMuted, useChatPrefs, useSetChatPrefs } from "@/lib/chat-prefs";
 import {
   crewPreview, crewSubtitle, isCrewUnread, useCreateCrew, useCrewPeople, useCrewRespond,
   useInviteToCrew, useRemoveFromCrew, useRenameCrew, type CrewAction, type CrewPerson, type CrewThread,
@@ -42,7 +43,7 @@ export function CrewFaces({ faces, size = 36 }: { faces: Pick<CommunityAuthor, "
   if (two.length === 1) return <UserAvatar src={two[0].avatar_url} name={two[0].name} size={size} expandable={false} />;
   const s = Math.round(size * 0.72);
   return (
-    <span className="relative shrink-0" style={{ width: size, height: size }}>
+    <span className="relative block shrink-0" style={{ width: size, height: size }}>
       <span className="absolute right-0 top-0"><UserAvatar src={two[0].avatar_url} name={two[0].name} size={s} expandable={false} /></span>
       <span className="absolute bottom-0 left-0 rounded-full ring-2 ring-card"><UserAvatar src={two[1].avatar_url} name={two[1].name} size={s} expandable={false} /></span>
     </span>
@@ -50,8 +51,19 @@ export function CrewFaces({ faces, size = 36 }: { faces: Pick<CommunityAuthor, "
 }
 
 /** A member-made group chat in the Chats list (or an invite in Requests). */
-export function CrewRow({ thread, me, selected, onClick }: { thread: CrewThread; me: string | null | undefined; selected: boolean; onClick: () => void }) {
-  const unread = isCrewUnread(thread, me);
+export function CrewRow({ thread, me, selected, onClick, unread: markedUnread, muted, leading }: {
+  thread: CrewThread;
+  me: string | null | undefined;
+  selected: boolean;
+  onClick: () => void;
+  /** Overrides the computed state (Mark as Unread). */
+  unread?: boolean;
+  /** Hide Alerts is on. */
+  muted?: boolean;
+  /** Shown before the faces (a checkbox while selecting). */
+  leading?: ReactNode;
+}) {
+  const unread = markedUnread ?? isCrewUnread(thread, me);
   return (
     <button
       type="button"
@@ -61,11 +73,15 @@ export function CrewRow({ thread, me, selected, onClick }: { thread: CrewThread;
         selected && "bg-secondary/60",
       )}
     >
+      {leading}
       <CrewFaces faces={thread.faces} />
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="flex items-center justify-between gap-2">
           <span className={cn("truncate text-sm", unread ? "font-bold" : "font-semibold")}>{thread.name}</span>
-          {thread.last && <span className="shrink-0 text-[10px] text-muted-foreground">{fmtTime(thread.last.created_at)}</span>}
+          <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+            {muted && <BellOff className="h-3 w-3" aria-label="Alerts hidden" />}
+            {thread.last && fmtTime(thread.last.created_at)}
+          </span>
         </div>
         <div className="mt-0.5 flex items-center gap-1.5">
           <span className={cn("flex-1 truncate text-xs", unread ? "text-foreground" : "text-muted-foreground")}>{crewPreview(thread, me)}</span>
@@ -132,7 +148,7 @@ function PeoplePicker({ exclude, room, picked, onChange }: { exclude: Set<string
   );
 }
 
-function TallSheet({ open, onOpenChange, title, sub, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; sub: string; children: ReactNode }) {
+export function TallSheet({ open, onOpenChange, title, sub, children }: { open: boolean; onOpenChange: (o: boolean) => void; title: string; sub: string; children: ReactNode }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" hideCloseButton className="mx-auto flex h-[88dvh] max-w-lg flex-col gap-0 rounded-t-3xl p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
@@ -310,8 +326,11 @@ function InviteBar({ thread, busy, onAction, onPeople }: { thread: CrewThread; b
         <Button type="button" variant="secondary" className="h-11 rounded-xl font-bold" disabled={busy} onClick={() => onAction("decline")}>Decline</Button>
         <Button type="button" className="h-11 rounded-xl font-bold" disabled={busy} onClick={() => onAction("join")}>Join</Button>
       </div>
-      <div className="flex justify-center">
-        <button type="button" className="py-1 text-[12px] font-semibold text-muted-foreground hover:text-destructive" disabled={busy} onClick={() => onAction("report")}>Report</button>
+      <div className="flex items-center justify-center gap-5 text-[12px] font-semibold text-muted-foreground">
+        {thread.invited_by && (
+          <button type="button" className="py-1 hover:text-destructive" disabled={busy} onClick={() => onAction("block")}>Block {thread.invited_by}</button>
+        )}
+        <button type="button" className="py-1 hover:text-destructive" disabled={busy} onClick={() => onAction("report")}>Report</button>
       </div>
     </div>
   );
@@ -332,6 +351,9 @@ export function CrewChatView({ thread, onBack }: { thread: CrewThread; onBack: (
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const joined = thread.status === "joined";
+  const { prefs } = useChatPrefs();
+  const setPrefs = useSetChatPrefs();
+  const muted = isMuted(prefs, thread.group_id);
 
   // Opening an invite counts as having looked (privately: the inviter can't
   // tell), even when nobody's said anything yet.
@@ -345,7 +367,12 @@ export function CrewChatView({ thread, onBack }: { thread: CrewThread; onBack: (
     try {
       await respond.mutateAsync({ action });
       if (action === "join") return;
-      toast.success(action === "decline" ? "Invite declined" : action === "leave" ? "You left the chat" : "Reported. Your coach has it.");
+      toast.success(
+        action === "decline" ? "Invite declined"
+          : action === "leave" ? "You left the chat"
+            : action === "block" ? `${thread.invited_by ?? "They"} is blocked`
+              : "Reported. Your coach has it.",
+      );
       onBack();
     } catch (e: any) {
       toast.error(e?.message ?? "That didn't work. Try again.");
@@ -383,6 +410,17 @@ export function CrewChatView({ thread, onBack }: { thread: CrewThread; onBack: (
             <DropdownMenuItem onClick={() => setPeopleOpen(true)}><Users className="mr-2 h-4 w-4" /> People</DropdownMenuItem>
             {joined && <DropdownMenuItem onClick={() => setInviteOpen(true)}><UserPlus className="mr-2 h-4 w-4" /> Invite people</DropdownMenuItem>}
             {joined && thread.is_owner && <DropdownMenuItem onClick={doRename}><Pencil className="mr-2 h-4 w-4" /> Rename</DropdownMenuItem>}
+            {joined && (
+              <DropdownMenuItem
+                onClick={() => setPrefs.mutate([{ key: thread.group_id, patch: { muted: !muted } }], {
+                  onSuccess: () => toast.success(muted ? "Alerts are back on" : "No alerts from this chat"),
+                  onError: (e: any) => toast.error(e?.message ?? "That didn't save."),
+                })}
+              >
+                {muted ? <Bell className="mr-2 h-4 w-4" /> : <BellOff className="mr-2 h-4 w-4" />}
+                {muted ? "Show Alerts" : "Hide Alerts"}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             {joined && <DropdownMenuItem onClick={() => setConfirm("leave")}><LogOut className="mr-2 h-4 w-4" /> Leave</DropdownMenuItem>}
             <DropdownMenuItem onClick={() => setConfirm("report")} className="text-destructive focus:text-destructive"><Flag className="mr-2 h-4 w-4" /> Report</DropdownMenuItem>
@@ -411,11 +449,16 @@ export function CrewChatView({ thread, onBack }: { thread: CrewThread; onBack: (
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirm === "decline" ? "Decline this invite?" : confirm === "leave" ? `Leave ${thread.name}?` : "Report this chat?"}
+              {confirm === "decline" ? "Decline this invite?"
+                : confirm === "leave" ? `Leave ${thread.name}?`
+                  : confirm === "block" ? `Block ${thread.invited_by ?? "them"}?`
+                    : "Report this chat?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm === "decline"
                 ? "It disappears from your requests. Nobody's told."
+                : confirm === "block"
+                  ? `This invite goes away, and ${thread.invited_by ?? "they"} can't message you or add you to group chats again. Nobody's told.`
                 : confirm === "leave"
                   ? thread.is_owner
                     ? "You started it, so the person who's been in it longest takes it over. You can be invited back."
@@ -426,10 +469,10 @@ export function CrewChatView({ thread, onBack }: { thread: CrewThread; onBack: (
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className={cn(confirm === "report" && "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
+              className={cn((confirm === "report" || confirm === "block") && "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
               onClick={() => confirm && act(confirm)}
             >
-              {confirm === "decline" ? "Decline" : confirm === "leave" ? "Leave" : "Report"}
+              {confirm === "decline" ? "Decline" : confirm === "leave" ? "Leave" : confirm === "block" ? "Block" : "Report"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
