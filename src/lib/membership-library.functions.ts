@@ -356,7 +356,8 @@ export const getListingAnalytics = createServerFn({ method: "POST" })
     const [previews, downloads, imports, audit] = await Promise.all([
       supabaseAdmin.from("member_plan_events").select("id", { count: "exact", head: true }).eq("plan_id", data.planId).eq("event_type","preview"),
       supabaseAdmin.from("member_plan_events").select("id", { count: "exact", head: true }).eq("plan_id", data.planId).eq("event_type","pdf_download"),
-      supabaseAdmin.from("member_plan_enrollments").select("id, member_id, started_at, status", { count: "exact" }).eq("plan_id", data.planId).order("started_at", { ascending: false }).limit(50),
+      // a start (old enrollment or Start plan) logs an "import" event
+      supabaseAdmin.from("member_plan_events").select("id, member_id, created_at", { count: "exact" }).eq("plan_id", data.planId).eq("event_type", "import").order("created_at", { ascending: false }).limit(50),
       supabaseAdmin.from("member_plan_audit").select("*").eq("plan_id", data.planId).order("created_at",{ ascending: false}).limit(20),
     ]);
     return {
@@ -368,7 +369,7 @@ export const getListingAnalytics = createServerFn({ method: "POST" })
     };
   });
 
-/* ---------- Member: preview, save, pdf, import-with-schedule ---------- */
+/* ---------- Member: preview, save, pdf ---------- */
 
 /**
  * List programs in the Membership Library that the current member can see.
@@ -492,78 +493,8 @@ export const listSavedPlans = createServerFn({ method: "GET" })
     return { ids: (data ?? []).map((r: any) => r.plan_id as string) };
   });
 
-export const enrollLibraryPlan = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({
-    planId: z.string().uuid(),
-    startDate: z.string().nullable().optional(),
-    trainingDays: z.array(z.string()).default([]),
-    importMode: z.enum(["full","partial"]).default("full"),
-    selection: z.any().optional(),
-    confirmReplace: z.boolean().optional(),
-  }).parse(i))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    await assertMemberCanReadProtected(supabase, userId);
-    const { member, plan } = await memberAccessGate(supabase, userId, data.planId);
-    const { data: active } = await supabase
-      .from("member_plan_enrollments")
-      .select("*").eq("member_id", member.id).eq("status","Active").maybeSingle();
-    if (active && !data.confirmReplace) {
-      return { conflict: true, activeEnrollmentId: active.id, activePlanId: active.plan_id };
-    }
-    if (active && data.confirmReplace) {
-      await supabase.from("member_plan_enrollments").update({ status: "Abandoned" }).eq("id", active.id);
-    }
-    const { data: row, error } = await supabase.from("member_plan_enrollments").insert({
-      member_id: member.id,
-      plan_id: plan.id,
-      status: "Active",
-      current_week: 1,
-      workouts_completed: 0,
-      workouts_total: plan.workouts_total ?? 0,
-      source_version: plan.published_version ?? null,
-      start_date: data.startDate ?? null,
-      training_days: data.trainingDays ?? [],
-      import_mode: data.importMode,
-      selection_json: data.selection ?? null,
-    }).select("*").single();
-    if (error) throw new Error(error.message);
-    await supabase.from("member_plan_events").insert({
-      plan_id: plan.id, member_id: member.id, event_type: "import",
-      metadata: { import_mode: data.importMode, version: plan.published_version ?? null },
-    });
-    // bump imports_count (best-effort, via admin to bypass RLS)
-    try {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      await supabaseAdmin
-        .from("member_plans")
-        .update({ imports_count: (plan.imports_count ?? 0) + 1 } as any)
-        .eq("id", plan.id);
-    } catch { /* counter increment is best-effort */ }
-    return { conflict: false, enrollmentId: row.id };
-  });
-
-export const checkForUpdates = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context;
-    const { data: member } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
-    if (!member) return { updates: [] };
-    const { data: enrollments } = await supabase
-      .from("member_plan_enrollments")
-      .select("id, plan_id, source_version, status, member_plans(published_version, name)")
-      .eq("member_id", member.id);
-    const updates = (enrollments ?? []).filter((e: any) => {
-      const pv = e.member_plans?.published_version ?? null;
-      return pv != null && e.source_version != null && pv > e.source_version;
-    }).map((e: any) => ({
-      enrollmentId: e.id, planId: e.plan_id,
-      name: e.member_plans?.name, currentVersion: e.source_version,
-      latestVersion: e.member_plans?.published_version,
-    }));
-    return { updates };
-  });
+// Starting a plan: startLibraryPlan (member-plan-start.functions.ts) copies it
+// into the member's own program; member_plan_enrollments is history only.
 
 /* ---------- PDF download ---------- */
 

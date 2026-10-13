@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 const membershipLeaf = readFileSync("src/components/admin/membership-leaf.tsx", "utf8");
 const programLibrary = readFileSync("src/route-pages/_authenticated/admin/program-library.tsx", "utf8");
 const programming = readFileSync("src/routes/_authenticated/admin/programming.tsx", "utf8");
-const support = readFileSync("src/routes/_authenticated/m/support.tsx", "utf8");
+const support = readFileSync("src/routes/_authenticated/portal/support.tsx", "utf8");
 const nutrition = readFileSync("src/components/nutrition/NutritionDashboard.tsx", "utf8");
 const calc = readFileSync("src/components/nutrition/MacroCalculatorDialog.tsx", "utf8");
 const macroCalc = calc;

@@ -120,10 +120,29 @@ until there are members; ship 1–2 first.
    and T-Bar Row have no honest match). `member_plans` stays the listing; its
    payload is only the preview. Members with no plan see "Pick your plan" on
    Home and Workouts.
-3. **Retire `/m` duplicates.** Member tables are empty, so: read-only, then
-   drop once Phase 2 is verified.
+3. **Retire `/m` duplicates — shipped.** `/m` is the redirect layout, an
+   index and a catch-all (so every old link still lands in the portal) plus
+   the Fillout completion landing. The member screens, the member workout
+   adapter, the member start / log / complete / reschedule / enroll server
+   functions and the components only they used are gone; live links that
+   still pointed into `/m` go straight to the portal (members' recipe links
+   were one). The member-only workout tables (`member_plan_enrollments`,
+   `member_plan_day_schedule`, `member_set_logs`, `member_workout_completions`,
+   `member_workout_reviews`, `member_exercise_swaps` / `_notes` /
+   `_unit_prefs`) are read-only history: members keep SELECT, admin policies
+   stay (exercise merges still re-point old rows), nothing deleted (3 old
+   enrollments, 0 logged sets). Drop them in Phase 5 once this has run.
+   Kept on purpose: member nutrition (`member_nutrition_targets`, meal logs,
+   presets, supplements) is a live self-calculate feature, not a duplicate:
+   coaching targets are coach-written in `nutrition_targets`.
 4. **One builder.** One library, one assign path, publish-to-membership as a
    toggle (needs Jared's top-3 list).
 5. **Delete list.** 4 "coming soon" membership admin pages, 5 redirect-only
    routes, duplicate settings pages, `admin/programs` stub, unreachable
    `coach/programs`, the unused `unified_workouts` flag, dead builder exports.
+   From Phase 3: the unreachable member branches in shared workout code
+   (`WorkoutDayView`, `QuickSwapButton`, `workout-completion.functions`,
+   `deferred-exercise-actions`, `use-workout-heartbeat`, `member-swap.functions`),
+   `home-bodyweight-card` (its bodyweight tests move to the portal card),
+   `canRequestProgressReviewForMember`, `updateMyMarketingPrefs`,
+   `listAdminLibrary`, and dropping the read-only member workout tables.

@@ -329,7 +329,7 @@ function PortalHome() {
           )}
           {client?.id && (
             <SectionErrorBoundary label="Sex prompt">
-              <SexPromptCard enabled={role === "client"} />
+              <SexPromptCard enabled={role === "client" || role === "member"} />
             </SectionErrorBoundary>
           )}
 

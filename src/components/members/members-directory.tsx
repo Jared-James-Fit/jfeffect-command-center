@@ -102,7 +102,7 @@ function useEnterMemberApp(returnTo: string) {
         qc.invalidateQueries({ queryKey: MEMBERS_KEY }),
       ]);
       toast.success(done);
-      navigate({ to: "/m" });
+      navigate({ to: "/portal" });
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't open the member app");
     } finally {

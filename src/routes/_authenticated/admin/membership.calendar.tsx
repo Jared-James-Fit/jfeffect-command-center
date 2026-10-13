@@ -39,11 +39,16 @@ function MembershipCalendarPage() {
     },
   });
 
-  const enrollmentsQ = useQuery({
-    queryKey: ["membership-cal-enrollments"],
+  // plan starts: every start (old enrollment or Start plan) logs an "import" event
+  const planStartsQ = useQuery({
+    queryKey: ["membership-cal-plan-starts"],
     queryFn: async () => {
-      const { data } = await (supabase.from("member_plan_enrollments") as any)
-        .select("id,member_id,plan_id,status,started_at,completed_at,workouts_completed,workouts_total,member_plans!inner(id,name)");
+      const { data } = await (supabase.from("member_plan_events") as any)
+        .select("id,member_id,plan_id,created_at,member_plans!inner(id,name)")
+        .eq("event_type", "import")
+        .not("member_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(500);
       return (data ?? []) as any[];
     },
   });
@@ -105,40 +110,23 @@ function MembershipCalendarPage() {
       if (m.hold_plan_started_at) push("hold", m.hold_plan_started_at, `${name} — placed on hold`, "Hold started");
     }
 
-    for (const e of (enrollmentsQ.data ?? [])) {
+    for (const e of (planStartsQ.data ?? [])) {
       const m = memberById.get(e.member_id);
       const name = m?.full_name ?? "Member";
       const planName = e.member_plans?.name ?? "Plan";
-      if (e.started_at) {
-        out.push({
-          id: `enroll-start:${e.id}`,
-          kind: "membership_event",
-          date: toLocalDate(e.started_at),
-          startsAt: e.started_at,
-          title: `${name} — started ${planName}`,
-          subtitle: `Enrollment · ${e.workouts_completed}/${e.workouts_total} workouts`,
-          status: e.status,
-          clientId: e.member_id,
-          clientName: name,
-          href: { to: "/admin/members/$memberId", params: { memberId: e.member_id } },
-          raw: e,
-        });
-      }
-      if (e.completed_at) {
-        out.push({
-          id: `enroll-complete:${e.id}`,
-          kind: "membership_event",
-          date: toLocalDate(e.completed_at),
-          startsAt: e.completed_at,
-          title: `${name} — completed ${planName}`,
-          subtitle: `${e.workouts_completed}/${e.workouts_total} workouts`,
-          status: "Completed",
-          clientId: e.member_id,
-          clientName: name,
-          href: { to: "/admin/members/$memberId", params: { memberId: e.member_id } },
-          raw: e,
-        });
-      }
+      out.push({
+        id: `plan-start:${e.id}`,
+        kind: "membership_event",
+        date: toLocalDate(e.created_at),
+        startsAt: e.created_at,
+        title: `${name} — started ${planName}`,
+        subtitle: "Plan Library",
+        status: "Started",
+        clientId: e.member_id,
+        clientName: name,
+        href: { to: "/admin/members/$memberId", params: { memberId: e.member_id } },
+        raw: e,
+      });
     }
 
     for (const b of (billingQ.data ?? [])) {
@@ -179,9 +167,9 @@ function MembershipCalendarPage() {
     }
 
     return out.sort((a, b) => (a.date + (a.startsAt ?? "")).localeCompare(b.date + (b.startsAt ?? "")));
-  }, [membersQ.data, enrollmentsQ.data, billingQ.data, googleQ.data, includeGoogle, googleConnected]);
+  }, [membersQ.data, planStartsQ.data, billingQ.data, googleQ.data, includeGoogle, googleConnected]);
 
-  const isLoading = membersQ.isLoading || enrollmentsQ.isLoading || billingQ.isLoading;
+  const isLoading = membersQ.isLoading || planStartsQ.isLoading || billingQ.isLoading;
 
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
@@ -215,7 +203,7 @@ function MembershipCalendarPage() {
 
   return (
     <>
-      <PageHeader title="Membership Calendar" subtitle="Trial ends, renewals, enrollments, cancellations, and billing events." />
+      <PageHeader title="Membership Calendar" subtitle="Trial ends, renewals, plan starts, cancellations, and billing events." />
       <div className="p-3 sm:p-6 md:p-8 space-y-4">
         <Card className="border-border bg-card p-3 sm:p-4">
           <CalendarBoard
@@ -223,7 +211,7 @@ function MembershipCalendarPage() {
             isLoading={isLoading}
             showClientName
             toolbar={toolbar}
-            emptyHint="Trials, renewals, enrollments, and billing events will appear here as members are added."
+            emptyHint="Trials, renewals, plan starts, and billing events will appear here as members are added."
           />
         </Card>
       </div>

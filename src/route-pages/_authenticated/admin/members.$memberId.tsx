@@ -129,7 +129,7 @@ export function MemberProfileWorkspace({
         qc.invalidateQueries({ queryKey: ["current-member-access"] }),
       ]);
       toast.success(`Showing the member app with ${member.full_name || member.email}'s access`);
-      navigate({ to: "/m" });
+      navigate({ to: "/portal" });
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
   const onCopySetupLink = async () => {

@@ -98,7 +98,7 @@ export function PovQuickToggle({
       setPovFlag("app_member");
       await qc.invalidateQueries({ queryKey: ["m-me"] });
       toast.success("Switched to Member view");
-      navigate({ to: "/m" });
+      navigate({ to: "/portal" });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to switch");
     } finally {

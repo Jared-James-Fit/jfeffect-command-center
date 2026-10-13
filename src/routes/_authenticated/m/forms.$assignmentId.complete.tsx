@@ -95,7 +95,7 @@ function FormCompletePage() {
 
   return (
     <>
-      <PageHeader title="Form Submitted" backTo="/m" backLabel="Home" />
+      <PageHeader title="Form Submitted" backTo="/portal" backLabel="Home" />
       <div className="mx-auto max-w-xl space-y-4 p-4 md:p-8">
         <Card className="p-6">
           <div className="flex items-start gap-3">
@@ -141,7 +141,7 @@ function FormCompletePage() {
               Confirm Submission
             </Button>
           )}
-          <Button variant="outline" onClick={() => navigate({ to: "/m" })}>
+          <Button variant="outline" onClick={() => navigate({ to: "/portal" })}>
             <Home className="mr-1 h-4 w-4" /> Return Home
           </Button>
           {isSubmitted && (

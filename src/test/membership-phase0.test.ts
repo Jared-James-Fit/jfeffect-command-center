@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
 import { isMemberAccessActive } from "@/lib/memberAccess";
-import { memberRowToPlRow } from "@/lib/workout-context/member-adapter";
 
 const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
 
@@ -32,26 +31,6 @@ describe("membership access (Phase 0)", () => {
     expect(sql).toContain("'active', 'trialing', 'admin_granted', 'complimentary'");
     expect(sql).toContain("'active (cancels at period end)'");
     expect(sql).toContain("subscription_status IN ('Trialing', 'Active', 'Complimentary')");
-  });
-});
-
-describe("member plans read what the builder publishes", () => {
-  it("names, reps and loads from reps_text / exercise_name_override / load_lb", () => {
-    const row = memberRowToPlRow({ row: { sets: 3, reps_text: "8-12", exercise_name_override: "Back Squat", load_lb: 135, sort_order: 0 }, exerciseIndex: 0, dayId: "d" }) as any;
-    expect(row.reps_text).toBe("8-12");
-    expect(row.exercises.name).toBe("Back Squat");
-    expect(row.exercise_name_override).toBe("Back Squat");
-    expect(row.load_lb).toBe(135);
-    const kg = memberRowToPlRow({ row: { sets: 3, reps_text: "5", exercise_name_override: "Bench", load_kg: 60 }, exerciseIndex: 1, dayId: "d" }) as any;
-    expect(kg.load_kg).toBe(60);
-    expect(kg.load_unit).toBe("kg");
-  });
-
-  it("older payloads (reps / load / exercise) still work", () => {
-    const row = memberRowToPlRow({ row: { sets: 2, reps: 10, exercise: "Row", load: 50 }, exerciseIndex: 0, dayId: "d" }) as any;
-    expect(row.reps_text).toBe("10");
-    expect(row.exercises.name).toBe("Row");
-    expect(row.load_lb).toBe(50);
   });
 });
 

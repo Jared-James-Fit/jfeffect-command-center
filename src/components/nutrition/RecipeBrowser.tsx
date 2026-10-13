@@ -18,7 +18,7 @@ import { RecipeCard } from "./RecipeCard";
 import { getRecipeCardMeta } from "@/lib/recipe-meta";
 
 /**
- * Single recipe browser used by both members (/m/nutrition) and coaching
+ * Single recipe browser used by both members (portal Nutrition) and coaching
  * clients (/portal/recipes, /portal/nutrition-targets). Same data, same UI.
  */
 
@@ -236,8 +236,7 @@ export function RecipeBrowser({ viewer, userId, goals = [], profile }: RecipeBro
   const toggle = (v: string) =>
     setFilters((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));
 
-  const detailPath =
-    viewer === "member" ? "/m/nutrition/$recipeId" : "/portal/recipes/$recipeId";
+  const detailPath = "/portal/recipes/$recipeId";
 
   return (
     <section className="space-y-4">

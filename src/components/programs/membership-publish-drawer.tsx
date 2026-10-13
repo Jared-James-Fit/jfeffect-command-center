@@ -177,7 +177,7 @@ export function MembershipPublishDrawer({
           {hasUpdate && <Badge variant="secondary">Update Available (template v{template.payload_revision})</Badge>}
           {planId && (
             <a
-              href={`/m/plans/${planId}?preview=admin`}
+              href={`/portal/plans/${planId}`}
               target="_blank" rel="noreferrer"
               className="ml-auto text-xs underline text-muted-foreground hover:text-foreground"
             >Preview as member ↗</a>

@@ -80,7 +80,7 @@ function MembershipDashboard() {
       await qc.invalidateQueries({ queryKey: ["m-me"] });
       await qc.invalidateQueries({ queryKey: ["current-member-access"] });
       toast.success("Viewing the member app as your test member");
-      navigate({ to: "/m" });
+      navigate({ to: "/portal" });
     } catch (e: any) {
       toast.error(e?.message ?? "Could not enter POV");
     } finally {
