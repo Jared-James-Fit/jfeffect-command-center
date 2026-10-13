@@ -93,6 +93,28 @@ jobs:
           PYEOF
           grep -n "minSdkVersion" android/variables.gradle
 
+      # Camera and microphone for the web page (Post camera, lift videos, Cleo,
+      # voice notes). Capacitor passes the page's request on as Android's own
+      # "Allow" popup, but only for permissions the app declares; without these
+      # Android refuses silently. Not required hardware, so no device is excluded.
+      - name: Declare camera and microphone permissions
+        run: |
+          python3 << 'PYEOF'
+          app = "android/app/src/main/AndroidManifest.xml"
+          m = open(app).read()
+          add = ""
+          for perm in ("android.permission.CAMERA", "android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"):
+              if perm not in m:
+                  add += f'    <uses-permission android:name="{perm}" />\n'
+          for feat in ("android.hardware.camera", "android.hardware.microphone"):
+              if feat not in m:
+                  add += f'    <uses-feature android:name="{feat}" android:required="false" />\n'
+          m = m.replace("</manifest>", add + "</manifest>", 1)
+          open(app, "w").write(m)
+          assert "android.permission.CAMERA" in open(app).read()
+          print("✅ Camera and microphone permissions declared")
+          PYEOF
+
       - name: Run cap sync
         run: |
           npx cap sync android 2>&1 | tail -10

@@ -160,6 +160,36 @@ jobs:
             echo "⚠️ Info.plist not found at $INFOPLIST"
           fi
 
+      # ── Privacy purpose strings (always) ────────────────────────────────────
+      # iOS kills the app outright (it looks like a crash) the moment the web page
+      # opens the camera, microphone or photo library without these. `cap add ios`
+      # regenerates Info.plist every build, so they're set here on every build,
+      # not inside an optional step. With them, iOS shows its own "Allow" popup
+      # the first time each is needed and remembers the answer (Capacitor grants
+      # the page's request itself, so there's no second website prompt).
+      - name: Set camera, microphone and photo purpose strings
+        run: |
+          python3 << 'PYEOF'
+          import plistlib
+          info = "ios/App/App/Info.plist"
+          with open(info, "rb") as f:
+              pl = plistlib.load(f)
+          strings = {
+              "NSCameraUsageDescription": "JF Effect uses the camera when you take a photo or video for a post, record a lift video, take a progress photo or set your profile picture.",
+              "NSMicrophoneUsageDescription": "JF Effect uses the microphone when you talk to Cleo, record a voice note or record a video with sound.",
+              "NSPhotoLibraryUsageDescription": "JF Effect opens your photos when you choose one to post, send in a message or use as your profile picture.",
+              "NSPhotoLibraryAddUsageDescription": "JF Effect saves photos and share cards to your library when you tap Save.",
+          }
+          pl.update(strings)
+          with open(info, "wb") as f:
+              plistlib.dump(pl, f)
+          with open(info, "rb") as f:
+              check = plistlib.load(f)
+          missing = [k for k in strings if not check.get(k)]
+          assert not missing, f"purpose strings missing: {missing}"
+          print("✅ Purpose strings set: " + ", ".join(strings))
+          PYEOF
+
       - name: Install Pillow for icon generation
         run: python3 -m pip install --break-system-packages Pillow
 
@@ -228,12 +258,7 @@ jobs:
               pl = plistlib.load(f)
           pl["NSHealthShareUsageDescription"] = "JF Effect reads your sleep, heart rate, HRV, steps and active energy so your coach can program around your recovery."
           pl["NSHealthUpdateUsageDescription"] = "JF Effect does not write to Apple Health. This permission is listed because the health library supports it."
-          # Microphone and camera: the website asks for them inside the app (talking
-          # to Cleo, voice notes, recording lift videos). Capacitor approves the
-          # page's request itself, so iOS asks the person once, ever, instead of a
-          # website prompt every time. Without these strings iOS refuses the mic.
-          pl["NSMicrophoneUsageDescription"] = "JF Effect uses the microphone when you talk to Cleo or record a voice note."
-          pl["NSCameraUsageDescription"] = "JF Effect uses the camera when you record a lift video or take a progress photo."
+          # (camera / microphone / photos are set for every build in their own step)
           with open(info, "wb") as f:
               plistlib.dump(pl, f)
 
@@ -246,7 +271,7 @@ jobs:
           c, n = re.subn(r"(INFOPLIST_FILE = App/Info\.plist;)", r"CODE_SIGN_ENTITLEMENTS = App/App.entitlements;\n\t\t\t\t\1", c)
           assert n >= 1, "App target build settings not found"
           open(pbx, "w").write(c)
-          print(f"✅ HealthKit enabled (pod linked, purpose strings, entitlement on {n} configs); microphone and camera purpose strings set")
+          print(f"✅ HealthKit enabled (pod linked, purpose strings, entitlement on {n} configs)")
           PYEOF
           grep -n "CapgoCapacitorHealth" ios/App/Podfile
 
