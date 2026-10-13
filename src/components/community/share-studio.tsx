@@ -734,7 +734,7 @@ export function ShareStudio({
                   <Camera className="h-10 w-10" />
                 </button>
                 <div className="text-[15px] font-black">Take a photo</div>
-                <p className="max-w-[260px] text-[12px] text-white/70">The live camera isn't on here, so this opens your phone's camera. Allow camera access in settings to shoot right in the app.</p>
+                <p className="max-w-[260px] text-[12px] text-white/70">The live camera isn't on, so this opens your phone's camera. To shoot right in the app, turn on Camera for JF Effect in your phone's Settings (Settings › JF Effect › Camera).</p>
               </div>
             )}
 
