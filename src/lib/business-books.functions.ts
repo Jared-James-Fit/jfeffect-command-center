@@ -350,20 +350,41 @@ export const syncStripeFees = createServerFn({ method: "POST" })
 // ---------------------------------------------------------------------------
 // Cleo
 
+const ChatId = z.string().uuid();
+
+/** A chat and its messages. No chatId: the current chat (the latest, if it's had a message in the last 6 hours), else a fresh one. */
 export const getSummerMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d: unknown) => z.object({ chatId: ChatId.nullish() }).parse(d ?? {}))
+  .handler(async ({ data, context }) => {
     const { userId } = context as any;
     // The admin, or the finance login (view-only: its own Cleo, nothing else).
-    const { db: supabase, viewOnly } = await assertAdminView(context as any);
-    const { data, error } = await supabase
-      .from("summer_messages")
-      .select("id, role, content, created_at, choices")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(60);
-    if (error) throw new Error(error.message);
-    return ((data ?? []) as Array<{ id: string; role: "user" | "assistant"; content: string; created_at: string; choices: string[] | null }>).reverse();
+    const { db: supabase } = await assertAdminView(context as any);
+    const { openChat } = await import("@/lib/cleo-chats.server");
+    return openChat(supabase, userId, data.chatId);
+  });
+
+/** Cleo's History: every chat from the last year, newest first; `q` searches what was said. */
+export const listSummerChats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ q: z.string().max(120).nullish() }).parse(d ?? {}))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
+    const { listChats } = await import("@/lib/cleo-chats.server");
+    return listChats(supabase, userId, data.q);
+  });
+
+/** Delete one of your Cleo chats, or all of them (chatId null). */
+export const deleteSummerChat = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ chatId: ChatId.nullable() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as any;
+    const { db: supabase } = await assertAdminView(context as any);
+    const { deleteChats } = await import("@/lib/cleo-chats.server");
+    await deleteChats(supabase, userId, data.chatId);
+    return { ok: true };
   });
 
 const AskInput = z.object({
@@ -371,6 +392,7 @@ const AskInput = z.object({
   year: z.number().int().min(2000).max(2100).optional(),
   route: z.string().max(300).optional(),
   voice: z.boolean().optional(),
+  chatId: ChatId.nullish(),
 });
 
 export const askSummer = createServerFn({ method: "POST" })
@@ -381,7 +403,7 @@ export const askSummer = createServerFn({ method: "POST" })
     // The admin, or the finance login (view-only: its own Cleo, nothing else).
     const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { answerSummer } = await import("@/lib/summer.server");
-    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly, own: (context as any).supabase });
+    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly, own: (context as any).supabase, chatId: data.chatId });
   });
 
 const VoiceInput = z.object({
@@ -390,6 +412,7 @@ const VoiceInput = z.object({
   mime: z.string().max(80),
   year: z.number().int().min(2000).max(2100).optional(),
   route: z.string().max(300).optional(),
+  chatId: ChatId.nullish(),
 });
 
 /** Talk to Cleo: hear the question, answer it in voice mode. */
@@ -404,8 +427,8 @@ export const askSummerVoice = createServerFn({ method: "POST" })
     const { data: people } = await supabase.from("clients").select("full_name").not("full_name", "is", null).limit(400);
     const names = ((people ?? []) as Array<{ full_name: string | null }>).map((c) => (c.full_name ?? "").trim()).filter(Boolean);
     const transcript = await transcribeAudio(data.audio, data.mime, names);
-    if (!transcript) return { transcript: "", user: null, assistant: null };
-    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly, own: (context as any).supabase });
+    if (!transcript) return { transcript: "", user: null, assistant: null, chatId: data.chatId ?? null };
+    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly, own: (context as any).supabase, chatId: data.chatId });
     return { transcript, ...res };
   });
 
@@ -466,17 +489,6 @@ export const saveSummerSettings = createServerFn({ method: "POST" })
     const { error } = await supabase
       .from("summer_profiles")
       .upsert({ user_id: userId, tone: data.tone, instructions: data.instructions || null, updated_at: new Date().toISOString() });
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
-
-export const clearSummer = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { userId } = context as any;
-    // The admin, or the finance login (view-only: its own Cleo, nothing else).
-    const { db: supabase, viewOnly } = await assertAdminView(context as any);
-    const { error } = await supabase.from("summer_messages").delete().eq("user_id", userId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

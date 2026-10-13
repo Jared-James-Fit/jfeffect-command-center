@@ -429,7 +429,7 @@ export async function probeSpeechProviders(sample = "Hi, it's Cleo. Your books a
 // ---------------------------------------------------------------------------
 // One answer path for chat and voice.
 
-export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null };
+export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; chat_id?: string | null };
 
 /**
  * `supabase` is what she reads with (the finance login's read-only admin
@@ -439,8 +439,8 @@ export type SummerMsg = { id: string; role: "user" | "assistant"; content: strin
 export async function answerSummer(
   supabase: any,
   userId: string,
-  input: { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; own?: any },
-): Promise<{ user: SummerMsg; assistant: SummerMsg }> {
+  input: { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; own?: any; chatId?: string | null },
+): Promise<{ user: SummerMsg; assistant: SummerMsg; chatId: string }> {
   const books = await import("@/lib/business-books.server");
   const { buildSummerContext, summerSystemPrompt } = await import("@/lib/summer-context");
   const { buildOpenSalesContext } = await import("@/lib/summer-app");
@@ -449,12 +449,17 @@ export async function answerSummer(
     books.isBusinessOwner(supabase, userId),
     loadAppSnapshot(supabase).catch(() => EMPTY_APP_SNAPSHOT),
     summerLinkCatalog(),
-    supabase
-      .from("summer_messages")
-      .select("role, content")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(16),
+    // Only this chat: a new chat starts with a clean slate, so an old topic
+    // never leaks into a new answer.
+    input.chatId
+      ? supabase
+          .from("summer_messages")
+          .select("role, content")
+          .eq("user_id", userId)
+          .eq("chat_id", input.chatId)
+          .order("created_at", { ascending: false })
+          .limit(16)
+      : Promise.resolve({ data: [], error: null }),
     supabase.from("summer_profiles").select("tone, instructions").eq("user_id", userId).maybeSingle(),
     supabase.from("profiles").select("full_name").eq("id", userId).maybeSingle(),
     ownerFirstName(),
@@ -626,15 +631,18 @@ export async function answerSummer(
   // "Like me": a last pass so a polished reply still reads like his texts.
   if (summerTone(profile.data?.tone).value === "like_me") text = casualize(text);
 
-  // Saved only once there is an answer, so a failed call leaves no orphan question.
+  // Saved only once there is an answer, so a failed call leaves no orphan
+  // question (or empty chat). A new chat is named after its first question.
+  const { chatFor, MESSAGE_COLS } = await import("@/lib/cleo-chats.server");
+  const chatId = await chatFor(supabase, userId, input.chatId, input.message);
   const now = Date.now();
   const { data: saved, error } = await supabase
     .from("summer_messages")
     .insert([
-      { user_id: userId, role: "user", content: input.message, created_at: new Date(now).toISOString() },
-      { user_id: userId, role: "assistant", content: text, created_at: new Date(now + 1).toISOString(), choices: choices && !proposed.length ? choices : null },
+      { user_id: userId, chat_id: chatId, role: "user", content: input.message, created_at: new Date(now).toISOString() },
+      { user_id: userId, chat_id: chatId, role: "assistant", content: text, created_at: new Date(now + 1).toISOString(), choices: choices && !proposed.length ? choices : null },
     ])
-    .select("id, role, content, created_at, choices");
+    .select(MESSAGE_COLS);
   if (error) throw new Error(error.message);
   const rows = (saved ?? []) as SummerMsg[];
   const assistant = rows.find((r) => r.role === "assistant")!;
@@ -642,7 +650,7 @@ export async function answerSummer(
     const { attachToMessage } = await import("@/lib/cleo-actions.server");
     await attachToMessage(userId, proposed, assistant.id);
   }
-  return { user: rows.find((r) => r.role === "user")!, assistant };
+  return { user: rows.find((r) => r.role === "user")!, assistant, chatId };
 }
 
 function firstName(full: string | null | undefined): string | null {

@@ -4,14 +4,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  ArrowUp, ArrowUpRight, Check, Copy, Keyboard, Loader2, Mic, RotateCcw, SlidersHorizontal, Sparkles, Square, Volume2, X,
+  ArrowUp, ArrowUpRight, Check, Copy, History, Keyboard, Loader2, Mic, SlidersHorizontal, Sparkles, Square, SquarePen, Volume2, X,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { ASSISTANT_NAME } from "@/lib/business-books";
-import { askSummer, askSummerVoice, clearSummer, getSummerMessages, summerSpeech } from "@/lib/business-books.functions";
+import { askSummer, askSummerVoice, getSummerMessages, summerSpeech } from "@/lib/business-books.functions";
+import { chatTitle, isCurrentChat, type CleoChat } from "@/lib/cleo-chats";
 import { summerTone } from "@/lib/summer-persona";
 import { extractLinks, tokenizeInline } from "@/lib/summer-voice-text";
 import { loadVoicePrefs, summerSpeaker, type ServerVoice, type SummerVoicePrefs } from "@/lib/summer-speaker";
@@ -20,8 +21,17 @@ import { isAudioSessionError } from "@/lib/audio-session";
 import { playAppSound, startThinkingSound } from "@/lib/app-sounds";
 import { SummerCustomizeDialog, type SummerPersona } from "./summer-customize";
 import { CleoActionCard, CleoApprovals, useCleoActions } from "./cleo-action-card";
+import { CHATS_KEY, CleoChatHistory } from "./cleo-chat-history";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null };
+type ChatData = { chat: CleoChat | null; messages: Msg[] };
+/**
+ * Which chat is on screen. "current": the latest chat if it's had a message
+ * in the last 6 hours, else a fresh one. "new": a fresh chat (made with its
+ * first answer). "chat": one opened from History.
+ */
+type ChatView = { kind: "current" } | { kind: "new" } | { kind: "chat"; id: string };
+const chatKey = (v: ChatView) => ["summer-chat", v.kind === "chat" ? v.id : v.kind];
 /** "ready" = she answered and it's your turn: one tap keeps the conversation going. */
 type VoiceState = "idle" | "listening" | "thinking" | "speaking" | "ready";
 
@@ -284,7 +294,6 @@ export function SummerChat({
   const ask = useServerFn(askSummer);
   const askVoice = useServerFn(askSummerVoice);
   const speechFn = useServerFn(summerSpeech);
-  const clear = useServerFn(clearSummer);
   const tone = summerTone(persona.tone);
   const [customizing, setCustomizing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -299,12 +308,28 @@ export function SummerChat({
   const canTalk = typeof window !== "undefined" && micSupported();
   const cleo = useCleoActions(open);
 
-  const { data: messages = [], isLoading } = useQuery({
-    queryKey: ["summer-messages"],
-    queryFn: () => load() as Promise<Msg[]>,
-    enabled: open,
+  const [view, setView] = useState<ChatView>({ kind: "current" });
+  const [showHistory, setShowHistory] = useState(false);
+  const { data: chatData, isLoading } = useQuery({
+    queryKey: chatKey(view),
+    queryFn: () => load({ data: { chatId: view.kind === "chat" ? view.id : null } }) as Promise<ChatData>,
+    enabled: open && view.kind !== "new",
     staleTime: 60_000,
   });
+  const messages: Msg[] = view.kind === "new" ? [] : chatData?.messages ?? [];
+  const activeChat = view.kind === "new" ? null : chatData?.chat ?? null;
+  // What a reply lands on, read at the moment it lands (voice turns are async).
+  const shownRef = useRef<{ chatId: string | null; messages: Msg[]; chat: CleoChat | null }>({ chatId: null, messages: [], chat: null });
+  shownRef.current = { chatId: activeChat?.id ?? null, messages, chat: activeChat };
+
+  // Opening Cleo shows the chat you're in (or a fresh one after a 6-hour gap).
+  useEffect(() => {
+    if (!open) return;
+    setShowHistory(false);
+    setView({ kind: "current" });
+    void qc.invalidateQueries({ queryKey: chatKey({ kind: "current" }) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -314,7 +339,21 @@ export function SummerChat({
   const working = open && (!!pending || voiceState === "thinking");
   useEffect(() => (working ? startThinkingSound() : undefined), [working]);
 
-  const append = (rows: Msg[]) => qc.setQueryData<Msg[]>(["summer-messages"], (prev = []) => [...prev, ...rows]);
+  /** A question and its answer were saved: show them in their chat (a new chat now has an id). */
+  const append = (rows: Msg[], chatId: string) => {
+    const shown = shownRef.current;
+    const key = chatKey({ kind: "chat", id: chatId });
+    qc.setQueryData<ChatData>(key, (old) => {
+      const base = old?.messages ?? (shown.chatId === chatId ? shown.messages : []);
+      const now = rows[rows.length - 1]?.created_at ?? new Date().toISOString();
+      const chat = old?.chat ?? (shown.chat?.id === chatId ? shown.chat : null) ?? { id: chatId, title: chatTitle(rows[0]?.content ?? ""), preview: null, created_at: now, last_message_at: now };
+      return { chat: { ...chat, last_message_at: now }, messages: [...base, ...rows] };
+    });
+    setView({ kind: "chat", id: chatId });
+    void qc.invalidateQueries({ queryKey: CHATS_KEY });
+  };
+  /** The chat a new question goes into (null: a fresh one, made with the answer). */
+  const sendTo = () => shownRef.current.chatId;
 
   const serverVoice = useCallback<ServerVoice>((text, ctx) => speechFn({ data: { text, ...ctx } }) as Promise<any>, [speechFn]);
 
@@ -365,7 +404,7 @@ export function SummerChat({
     setVoiceState("thinking");
     let res: any;
     try {
-      res = await askVoice({ data: { audio: await blobToBase64(take.blob), mime: take.mime, year, route } });
+      res = await askVoice({ data: { audio: await blobToBase64(take.blob), mime: take.mime, year, route, chatId: sendTo() } });
     } catch (e: any) {
       if (turn === turnRef.current) {
         toast.error(e?.message ?? `${ASSISTANT_NAME} couldn't answer that`);
@@ -381,7 +420,7 @@ export function SummerChat({
       return;
     }
     // Saved either way: the question was asked and answered.
-    append([res.user, res.assistant]);
+    append([res.user, res.assistant], res.chatId);
     void cleo.refresh();
     if (turn !== turnRef.current) return;
     prefsRef.current = loadVoicePrefs();
@@ -439,8 +478,8 @@ export function SummerChat({
     setPending(message);
     setDraft("");
     try {
-      const res = (await ask({ data: { message, year, route } })) as { user: Msg; assistant: Msg };
-      append([res.user, res.assistant]);
+      const res = (await ask({ data: { message, year, route, chatId: sendTo() } })) as { user: Msg; assistant: Msg; chatId: string };
+      append([res.user, res.assistant], res.chatId);
       void cleo.refresh();
       playAppSound("reply");
     } catch (e: any) {
@@ -464,8 +503,8 @@ export function SummerChat({
     setPending(choice);
     setVoiceState("thinking");
     try {
-      const res = (await ask({ data: { message: choice, year, route, voice: true } })) as { user: Msg; assistant: Msg };
-      append([res.user, res.assistant]);
+      const res = (await ask({ data: { message: choice, year, route, voice: true, chatId: sendTo() } })) as { user: Msg; assistant: Msg; chatId: string };
+      append([res.user, res.assistant], res.chatId);
       void cleo.refresh();
       if (turn !== turnRef.current) return;
       prefsRef.current = loadVoicePrefs();
@@ -482,13 +521,18 @@ export function SummerChat({
     }
   };
 
-  const reset = async () => {
-    try {
-      await clear();
-      qc.setQueryData(["summer-messages"], []);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not clear");
-    }
+  /** New chat: a clean slate. The one you were in stays in History. */
+  const newChat = () => {
+    if (voiceState !== "idle") stopVoice();
+    setShowHistory(false);
+    setDraft("");
+    setView({ kind: "new" });
+  };
+
+  const openFromHistory = (chat: CleoChat) => {
+    if (voiceState !== "idle") stopVoice();
+    setShowHistory(false);
+    setView({ kind: "chat", id: chat.id });
   };
 
   const copy = async (m: Msg) => {
@@ -540,21 +584,52 @@ export function SummerChat({
                   <span className="sr-only sm:not-sr-only">Talk</span>
                 </Button>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn("h-8 text-xs", showHistory ? "text-primary" : "text-muted-foreground")}
+                onClick={() => {
+                  if (!showHistory && voiceState !== "idle") stopVoice();
+                  setShowHistory((v) => !v);
+                }}
+                aria-label="Chat history"
+                aria-pressed={showHistory}
+              >
+                <History className="h-3.5 w-3.5 sm:mr-1" /><span className="sr-only sm:not-sr-only">History</span>
+              </Button>
+              {(messages.length > 0 || showHistory) && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={newChat} aria-label="New chat">
+                  <SquarePen className="h-3.5 w-3.5 sm:mr-1" /><span className="sr-only sm:not-sr-only">New chat</span>
+                </Button>
+              )}
               <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setCustomizing(true)} aria-label="Customize Cleo">
                 <SlidersHorizontal className="h-3.5 w-3.5 sm:mr-1" /><span className="sr-only sm:not-sr-only">Customize</span>
               </Button>
-              {messages.length > 0 && (
-                <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => void reset()} aria-label="New chat">
-                  <RotateCcw className="h-3.5 w-3.5 sm:mr-1" /><span className="sr-only sm:not-sr-only">New chat</span>
-                </Button>
-              )}
             </div>
           </div>
         </SheetHeader>
 
+        {showHistory ? (
+          <CleoChatHistory
+            activeId={activeChat?.id ?? null}
+            onOpen={openFromHistory}
+            onBack={() => setShowHistory(false)}
+            onDeleted={(id) => {
+              if (id === null || id === activeChat?.id) setView({ kind: "new" });
+              if (id) qc.removeQueries({ queryKey: chatKey({ kind: "chat", id }) });
+              else qc.removeQueries({ queryKey: ["summer-chat"] });
+            }}
+          />
+        ) : (
+        <>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 text-sm">
           {isLoading && <div className="flex justify-center py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
           {cleo.data && <CleoApprovals approvals={cleo.data.approvals} ownerName={cleo.data.ownerName} onOpen={(h) => openLink(h, true)} />}
+          {activeChat && messages.length > 0 && !isCurrentChat(activeChat.last_message_at) && (
+            <p className="mx-auto w-fit rounded-full bg-muted px-3 py-1 text-center text-[11px] text-muted-foreground">
+              Chat from {new Date(activeChat.last_message_at).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}. Reply to pick it back up.
+            </p>
+          )}
           {!isLoading && messages.length === 0 && !pending && voiceState === "idle" && (
             <div className="space-y-3">
               <p className="text-muted-foreground">{tone.greeting}</p>
@@ -701,6 +776,8 @@ export function SummerChat({
             </div>
             <p className="mt-1.5 text-[11px] text-muted-foreground">Tap the mic and talk as long as you like; tap Send when you're done. {ASSISTANT_NAME} can look anything up, and does things only after you tap Confirm.</p>
           </form>
+        )}
+        </>
         )}
         <SummerCustomizeDialog open={customizing} onClose={() => setCustomizing(false)} persona={persona} onSaved={onPersonaSaved} />
       </SheetContent>
