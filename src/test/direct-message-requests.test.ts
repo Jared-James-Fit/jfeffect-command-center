@@ -132,10 +132,15 @@ describe("the Chats list", () => {
     expect(pane).toContain("count={requestCount}");
     expect(pane).toContain("useDirectThreads(!asAdmin && !isImpersonating)");
   });
-  it("Messenger: 'Chats' tab, and push links open it", () => {
+  it("Messenger: one inbox (coach pinned on top, then every chat), and push links open the chat", () => {
     const page = read("src/routes/_authenticated/portal/messages.tsx");
-    expect(page).toContain("              Chats\n");
-    expect(page).toContain("/(?:^|[?&])tab=groups\\b/.test(window.location.search)");
+    const pane = read("src/components/group-chats-pane.tsx");
+    expect(page).toContain("<GroupChatsPane asAdmin={false} pinned={pinned} />");
+    expect(page).not.toContain("Coach Chat");
+    expect(pane).toContain("pinned.renderRow({ selected: pinnedSelected");
+    // #group=<id> push links still land in that chat, not the coach chat.
+    expect(pane).toContain('if (typeof window !== "undefined" && /group=/.test(window.location.hash)) return;');
+    expect(pane).toContain("const m = window.location.hash.match(/group=([0-9a-f-]{36})/i);");
   });
   it("posts get a Message button (not on your own, not coach-to-coach)", () => {
     const card = read("src/components/community/post-card.tsx");
