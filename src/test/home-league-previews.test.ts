@@ -27,7 +27,7 @@ describe("Home League previews", () => {
     expect(topThree([row(3, 1), row(1, 3), row(null, 9, false, false), row(2, 2), row(4, 0)]).map((r) => r.rank)).toEqual([1, 2, 3]);
     const src = readFileSync("src/components/portal/home-league-previews.tsx", "utf8");
     expect(src).toContain('const MEDALS = ["🥇", "🥈", "🥉"];');
-    expect(src).toContain('<span className="truncate">Hall of Strength</span>');
+    expect(src).toContain('title={<span className="truncate">Hall of Strength</span>}');
   });
   it("first place says the lead; alone on the board; not qualified shows no rank", () => {
     expect(standingText(standingOf([row(1, 900, true), row(2, 100)]), true)).toBe("Leading by 800 pts");
@@ -45,13 +45,18 @@ describe("Home League previews", () => {
     expect(src).toContain("<NotificationSetupPrompt problemsOnly />");
     expect(src).toContain("<CalendarSyncCard hideWhenDone />");
   });
-  it("the Rankings card: Monthly first, swipe to Strength, dots, one Live mark, View all opens the page you're on", () => {
+  it("Rankings is laid out like Progress: section label, League first then Hall of Strength tabs, one Live mark, each card's View all opens its page", () => {
     const src = readFileSync("src/components/portal/home-league-previews.tsx", "utf8");
-    expect(src).toContain('useState<Slide>("monthly")');
-    expect(src).toContain("snap-x snap-mandatory");
-    expect(src).toContain('aria-label="Rankings page"');
+    expect(src).toContain("<HomeSectionLabel>");
+    expect(src).toContain("<SwipeCards");
+    expect(src).toContain("remember={false}");
+    expect(src.indexOf('{ key: "league", label: "League", node: league }')).toBeLessThan(src.indexOf('{ key: "strength", label: "Hall of Strength", node: strength }'));
     expect(src.match(/animate-ping/g)?.length).toBe(1);
-    expect(src).toContain('hash={slide === "strength" ? "rankings=strength" : "rankings"}');
+    expect(src).toContain('hash="rankings">');
+    expect(src).toContain('hash="rankings=strength">');
+    // the same label component as Home → Progress
+    const home = readFileSync("src/routes/_authenticated/portal/index.tsx", "utf8");
+    expect(home).toContain("<HomeSectionLabel>Progress</HomeSectionLabel>");
     expect(src).not.toMatch(/setInterval|setTimeout/);
     expect(src).toContain('pickBoard(board, "p4p", "total", division, 3)');
     // one league query for Home and Crew → Rankings; the board you land on is the one Home shows

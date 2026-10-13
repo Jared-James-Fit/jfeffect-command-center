@@ -1,5 +1,6 @@
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { HomeLeaguePreviews } from "@/components/portal/home-league-previews";
+import { HomeSectionLabel } from "@/components/portal/home-section-label";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -322,7 +323,7 @@ function PortalHome() {
         </section>
 
         {/* ── Rankings ────────────────────────────────────────── */}
-        {/* one swipeable card: Monthly (default) and Strength; the feed lives in Crew */}
+        {/* laid out like Progress: League (first) and Hall of Strength tabs; the feed lives in Crew */}
         {client?.id && (
           <SectionErrorBoundary label="Rankings">
             <HomeLeaguePreviews />
@@ -332,7 +333,7 @@ function PortalHome() {
         {/* ── Progress ────────────────────────────────────────── */}
         {client?.id && portalUserId ? (
           <section className="space-y-3" aria-label="Progress">
-            <SectionLabel>Progress</SectionLabel>
+            <HomeSectionLabel>Progress</HomeSectionLabel>
             {/* weigh-in first (most clients log it), then water and progress, one swipe apart */}
             <DeferRender placeholderHeight="h-52">
               <SwipeCards
@@ -451,9 +452,4 @@ function NoProfileCard() {
       </p>
     </div>
   );
-}
-
-/** A Home section's name: small, quiet, the same everywhere. */
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <h2 className="px-1 text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">{children}</h2>;
 }
