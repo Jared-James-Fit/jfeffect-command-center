@@ -42,12 +42,13 @@ import { PostViewsRow, usePostViewTracker } from "@/components/community/post-vi
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
 import { PostExtras } from "@/components/community/post-attach";
+import { NoteCaption } from "@/components/community/note-caption";
 import { PollCard } from "@/components/community/poll";
 import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
 import { useAuth } from "@/lib/auth";
 import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
 import { SharedCommentCard, openCommunityPost } from "@/components/community/shared-comment";
-import { CollaboratorsSheet, MentionText } from "@/components/community/mentions";
+import { CollaboratorsSheet } from "@/components/community/mentions";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -95,9 +96,10 @@ export function CoachBadge({ className }: { className?: string }) {
 /**
  * A coach's note (Monday Motivation, Finish Strong Friday, or a one-off):
  * a quiet series label, the featured quote with its speaker, then the words.
- * `clamp` keeps long notes tidy in the feed; the detail shows everything.
- * Every coach post reads in the regular post font, with or without a picture.
- * Holiday posts are never clamped (they're kept to 160 characters).
+ * `clamp` (the feed): the words show whole unless they're long, and then stop
+ * at the end of a sentence with "… more" (NoteCaption); the detail shows
+ * everything. Every coach post reads in the regular post font, with or
+ * without a picture.
  */
 export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: CommunityPost; clamp?: boolean; onOpenPerson?: (a: CommunityAuthor) => void; cover?: ReactNode }) {
   // Saturday: the picture says it, the words just sit under it. A photo of
@@ -118,11 +120,7 @@ export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: C
           {post.quote_author && <figcaption className="mt-1.5 text-[12px] font-semibold text-muted-foreground">{post.quote_author}</figcaption>}
         </figure>
       )}
-      {post.caption && (
-        <p className={cn("whitespace-pre-line text-[15px] leading-[1.45]", clamp && post.series !== "holiday" && "line-clamp-[8]")}>
-          <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenPerson} />
-        </p>
-      )}
+      {post.caption && <NoteCaption text={post.caption} mentions={post.mentions} onOpenPerson={onOpenPerson} clamp={clamp} />}
       <PostExtras post={post} className="mt-3" />
       {post.poll && <PollCard post={post} onOpenPerson={onOpenPerson} className="mb-2" />}
     </div>
