@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ActionButton } from "@/components/action-button";
-import { updateDay, updateRow, deleteRow } from "@/lib/pl-programs";
+import { updateDay, updateRow, deleteRow, loggedIds } from "@/lib/pl-programs";
+import { toast } from "sonner";
 import { syncProgramDaySchedule } from "@/lib/scheduled-workouts.functions";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { toLocalISO } from "@/lib/today";
@@ -305,8 +306,13 @@ export function InlineWorkoutEditor({
     // 3) Rows — delete removed, update changed, insert new, normalize order
     const origRows = origRowsRef.current;
     const keepIds = new Set(rows.filter((r) => r._dbId).map((r) => r._dbId));
+    // an exercise the client already logged stays (workout history is never deleted)
+    const logged = await loggedIds("row", origRows.filter((or) => !keepIds.has(or.id)).map((or) => or.id));
     for (const or of origRows) {
-      if (!keepIds.has(or.id)) await deleteRow(or.id);
+      if (!keepIds.has(or.id) && !logged.has(or.id)) await deleteRow(or.id);
+    }
+    if (logged.size) {
+      toast(`Kept ${logged.size} exercise${logged.size === 1 ? "" : "s"} the client already logged`, { description: "Workout history is never deleted." });
     }
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];

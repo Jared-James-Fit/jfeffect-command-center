@@ -68,9 +68,9 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
     if (!pending) return;
     setBusy(true);
     try {
-      if (pending.kind === "prep") await deletePrep(pending.id);
-      else await deleteBlock(pending.id);
-      toast.success(`Removed "${pending.label}"`);
+      const outcome = pending.kind === "prep" ? (await deletePrep(pending.id), "deleted") : await deleteBlock(pending.id);
+      if (outcome === "archived") toast.success(`Archived "${pending.label}"`, { description: "It has logged workouts, so its history stays." });
+      else toast.success(`Removed "${pending.label}"`);
       setPending(null);
       invalidate();
     } catch (e: any) {
@@ -82,15 +82,15 @@ export function AssignedProgramsCard({ clientId, mode }: { clientId: string; mod
 
   const confirmBulkRemove = async () => {
     setBusy(true);
-    let ok = 0, fail = 0;
+    let ok = 0, fail = 0, kept = 0;
     try {
       for (const id of selectedBlocks) {
-        try { await deleteBlock(id); ok++; } catch { fail++; }
+        try { if ((await deleteBlock(id)) === "archived") kept++; ok++; } catch { fail++; }
       }
       for (const id of selectedPreps) {
         try { await deletePrep(id); ok++; } catch { fail++; }
       }
-      if (ok) toast.success(`Removed ${ok} item${ok === 1 ? "" : "s"}`);
+      if (ok) toast.success(`Removed ${ok} item${ok === 1 ? "" : "s"}`, kept ? { description: `${kept} with logged workouts ${kept === 1 ? "was" : "were"} archived instead, so the history stays.` } : undefined);
       if (fail) toast.error(`${fail} failed to remove`);
       clearSelection();
       setBulkConfirm(false);

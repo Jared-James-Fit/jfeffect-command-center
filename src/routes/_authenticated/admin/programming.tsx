@@ -213,9 +213,9 @@ function AssignedClientsPanel({ templateId }: { templateId: string }) {
     if (!confirm(`Unassign "${a.label}" from ${a.clientName ?? "this client"}? This deletes the assignment.`)) return;
     setBusyId(a.id);
     try {
-      if (a.kind === "prep") await deletePrep(a.id);
-      else await deleteBlock(a.id);
-      toast.success("Unassigned");
+      const outcome = a.kind === "prep" ? (await deletePrep(a.id), "deleted") : await deleteBlock(a.id);
+      if (outcome === "archived") toast.success("Archived", { description: "It has logged workouts, so the client's history stays." });
+      else toast.success("Unassigned");
       qc.invalidateQueries({ queryKey: ["pl-template-assignments", templateId] });
       qc.invalidateQueries({ queryKey: ["admin-finder-assignments"] });
       qc.invalidateQueries({ queryKey: ["pl-preps", a.clientId] });

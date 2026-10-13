@@ -387,7 +387,7 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
     try { await syncSharedTemplatesToLibrary(supabaseAdmin); } catch { /* best-effort */ }
     const { data: member } = await supabaseAdmin
       .from("app_members")
-      .select("id, status, subscription_status, account_type, manual_access_override, manual_access_disabled, access_end_date, in_grace")
+      .select("id, status, subscription_status, account_type, manual_access_override, manual_access_disabled, access_end_date, in_grace, cancel_at, current_period_end")
       .eq("user_id", userId)
       .maybeSingle();
     if (!member) return { plans: [] };
@@ -424,7 +424,7 @@ async function memberAccessGate(supabase: any, userId: string, planId: string) {
   const [{ data: member }, { data: plan }] = await Promise.all([
     supabase
       .from("app_members")
-      .select("id, status, subscription_status, account_type, manual_access_override, manual_access_disabled, access_end_date, in_grace")
+      .select("id, status, subscription_status, account_type, manual_access_override, manual_access_disabled, access_end_date, in_grace, cancel_at, current_period_end")
       .eq("user_id", userId)
       .maybeSingle(),
     supabase.from("member_plans").select("*").eq("id", planId).maybeSingle(),

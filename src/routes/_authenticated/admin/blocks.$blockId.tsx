@@ -9,7 +9,7 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
 import {
-  getBlockTree, updateBlock, addWeek as addWeekFn, deleteWeek, addDay as addDayFn, updateDay,
+  getBlockTree, updateBlock, addWeek as addWeekFn, deleteWeek, addDay as addDayFn, updateDay, loggedIds,
   deleteDay, updateRow, deleteRow,
   listClientBlocks,
 } from "@/lib/pl-programs";
@@ -149,6 +149,58 @@ function deduplicateDbIds(payload: any) {
 }
 
 /**
+ * Puts back (in place, at its old position) every week, workout and exercise
+ * the coach removed that a client already trained: the database refuses to
+ * delete logged training, so the save keeps it instead of failing. Returns
+ * how many came back of each.
+ */
+async function restoreLoggedParts(origWeeks: any[], curWeeks: any[]): Promise<{ weeks: number; days: number; rows: number }> {
+  const clone = (x: any) => JSON.parse(JSON.stringify(x));
+  const curW = new Map(curWeeks.filter((w) => w._dbId).map((w) => [w._dbId, w]));
+  const removedWeeks: string[] = [];
+  const removedDays: string[] = [];
+  const removedRows: string[] = [];
+  for (const ow of origWeeks) {
+    const cw = curW.get(ow._dbId);
+    if (!cw) { removedWeeks.push(ow._dbId); continue; }
+    const curD = new Map((cw.days ?? []).filter((d: any) => d._dbId).map((d: any) => [d._dbId, d]));
+    for (const od of ow.days ?? []) {
+      const cd: any = curD.get(od._dbId);
+      if (!cd) { removedDays.push(od._dbId); continue; }
+      const curR = new Set((cd.rows ?? []).filter((r: any) => r._dbId).map((r: any) => r._dbId));
+      for (const orr of od.rows ?? []) if (!curR.has(orr._dbId)) removedRows.push(orr._dbId);
+    }
+  }
+  const [weeks, days, rows] = await Promise.all([loggedIds("week", removedWeeks), loggedIds("day", removedDays), loggedIds("row", removedRows)]);
+  const put = (list: any[], item: any, at: number) => list.splice(Math.min(at, list.length), 0, clone(item));
+  origWeeks.forEach((ow, wi) => {
+    if (weeks.has(ow._dbId)) return void put(curWeeks, ow, wi);
+    const cw = curW.get(ow._dbId);
+    if (!cw) return;
+    cw.days = cw.days ?? [];
+    (ow.days ?? []).forEach((od: any, di: number) => {
+      if (days.has(od._dbId)) return void put(cw.days, od, di);
+      const cd = cw.days.find((d: any) => d._dbId === od._dbId);
+      if (!cd) return;
+      cd.rows = cd.rows ?? [];
+      (od.rows ?? []).forEach((orr: any, ri: number) => {
+        if (rows.has(orr._dbId)) put(cd.rows, orr, ri);
+      });
+    });
+  });
+  const n = { weeks: weeks.size, days: days.size, rows: rows.size };
+  if (n.weeks + n.days + n.rows > 0) {
+    const parts = [
+      n.weeks ? `${n.weeks} week${n.weeks === 1 ? "" : "s"}` : null,
+      n.days ? `${n.days} workout${n.days === 1 ? "" : "s"}` : null,
+      n.rows ? `${n.rows} exercise${n.rows === 1 ? "" : "s"}` : null,
+    ].filter(Boolean);
+    toast(`Kept ${parts.join(", ")} the client already logged`, { description: "Workout history is never deleted." });
+  }
+  return n;
+}
+
+/**
  * Non-destructive diff + apply. Preserves DB ids (and the per-row completion
  * history) whenever possible. Mutates `current` so newly-inserted entities get
  * their fresh `_dbId` attached.
@@ -166,6 +218,12 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
   // `_sourceDbId` is cleared after a successful clone so re-saving never
   // duplicates blocks (idempotency: clone runs exactly once per paste).
   const blockCloneMappings: Array<{ source_row_id: string; dest_row_id: string; carrier: any }> = [];
+
+  // Anything a client already trained stays: a logged week, workout or
+  // exercise the coach removed goes back where it was (its history is never
+  // deleted), so the rest of the save numbers around it.
+  const restored = await restoreLoggedParts(origWeeks, curWeeks);
+  if (!current.weeks_data) current.weeks_data = curWeeks;
 
   // Delete weeks the user removed
   const keepWeekIds = new Set(curWeeks.filter((w) => w._dbId).map((w) => w._dbId));
@@ -329,6 +387,7 @@ async function applyPayloadDiff(blockId: string, originalTree: any, current: any
       delete (m.carrier as any)._sourceDbId;
     }
   }
+  return { restored: restored.weeks + restored.days + restored.rows };
 }
 
 function BlockEditor() {
@@ -587,7 +646,10 @@ function BlockEditor() {
     // need to swap the payload reference afterwards — keeping the same object
     // identity preserves scroll position, input focus, and prevents the editor
     // from re-rendering every cell after autosave.
-    await applyPayloadDiff(blockId, originalTreeRef.current, payload, clientIdFromTree ?? null);
+    const { restored } = await applyPayloadDiff(blockId, originalTreeRef.current, payload, clientIdFromTree ?? null);
+    // Logged parts the coach removed were put back into the payload: show them
+    // (the one time a save re-renders the builder).
+    if (restored) setPayload((p: any) => (p ? { ...p } : p));
     // Refresh just the snapshot used for future diffs. Do NOT replace `payload`
     // here — that would re-render the entire builder mid-edit and bounce the
     // coach's scroll position / blur the active input.

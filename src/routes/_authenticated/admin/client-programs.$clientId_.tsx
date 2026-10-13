@@ -479,9 +479,10 @@ function BlockGroup({
     setBusy(true);
     let ok = 0;
     let fail = 0;
+    let kept = 0;
     for (const id of targetIds) {
       try {
-        await deleteBlock(id);
+        if ((await deleteBlock(id)) === "archived") kept++;
         ok++;
       } catch (e: any) {
         fail++;
@@ -492,7 +493,9 @@ function BlockGroup({
     setSelected(new Set());
     setConfirmSelected(false);
     setConfirmWipe(false);
-    if (ok > 0) toast.success(`Deleted ${ok} workout${ok === 1 ? "" : "s"}`);
+    if (ok > 0) {
+      toast.success(`Deleted ${ok} workout${ok === 1 ? "" : "s"}`, kept ? { description: `${kept} with logged workouts ${kept === 1 ? "was" : "were"} archived instead, so the client's history stays.` } : undefined);
+    }
     if (fail > 0) toast.error(`Failed to delete ${fail} workout${fail === 1 ? "" : "s"}`);
     onRefresh();
   };

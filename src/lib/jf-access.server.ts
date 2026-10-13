@@ -15,7 +15,7 @@ export async function assertMemberCanReadProtected(supabase: any, userId: string
   // Member?
   const { data: m } = await supabase
     .from("app_members")
-    .select("account_type,subscription_status,status,manual_access_override,manual_access_disabled,access_end_date,in_grace")
+    .select("account_type,subscription_status,status,manual_access_override,manual_access_disabled,access_end_date,in_grace,cancel_at,current_period_end")
     .eq("user_id", userId)
     .maybeSingle();
   if (!m) {
