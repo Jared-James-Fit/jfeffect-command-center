@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ExerciseDemoVideo } from "@/components/exercise-demo-video";
 import { MOVEMENT_FAMILIES, MOVEMENT_FAMILY_COLOR_NAME, MOVEMENT_FAMILY_LABEL, resolveMovementFamily } from "@/lib/exercise-family";
 import { FamilyDot } from "@/components/exercise-order-badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,6 +46,17 @@ export type ControlCenterActions = {
   onDelete: (e: any) => void;
   busyId?: string | null;
 };
+
+/** Every exercise by id, so a row can name (and preview) the demo it borrows. */
+const LibraryById = createContext<Map<string, LibraryExercise>>(new Map());
+
+/** The exercise whose demo this one borrows (only while it has no video of its own). */
+function useBorrowedDemo(e: LibraryExercise): LibraryExercise | null {
+  const byId = useContext(LibraryById);
+  if (videoStatus(e) === "video" || !e.demo_exercise_id) return null;
+  const demo = byId.get(e.demo_exercise_id) ?? null;
+  return demo && videoStatus(demo) === "video" ? demo : null;
+}
 
 export function ExerciseLibraryControlCenter({
   exercises,
@@ -202,6 +214,7 @@ export function ExerciseLibraryControlCenter({
   }, [hits, view]);
 
   return (
+    <LibraryById.Provider value={byId}>
     <div className="space-y-3 px-3 py-4 sm:px-6 md:px-8">
       {/* Health summary — every number is a one-tap filter. */}
       <div className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
@@ -337,6 +350,7 @@ export function ExerciseLibraryControlCenter({
         )}
       </Dialog>
     </div>
+    </LibraryById.Provider>
   );
 }
 
@@ -376,7 +390,9 @@ function Pill({ children, tone = "neutral", onClick, title }: {
 
 function VideoBadge({ e, onPreview }: { e: LibraryExercise; onPreview: () => void }) {
   const v = videoStatus(e);
+  const borrowed = useBorrowedDemo(e);
   if (v === "video") return <Pill tone="good" onClick={onPreview} title="Preview demo"><Play className="h-2.5 w-2.5 fill-current" /> Video</Pill>;
+  if (borrowed) return <Pill tone="warn" onClick={onPreview} title={`No video of its own yet: clients see the ${borrowed.name} demo`}><Play className="h-2.5 w-2.5 fill-current" /> Borrowed demo</Pill>;
   if (v === "broken") return <Pill tone="alert" title="Video link is flagged or unusable"><AlertTriangle className="h-2.5 w-2.5" /> Broken video</Pill>;
   return <Pill tone="warn"><VideoOff className="h-2.5 w-2.5" /> No video</Pill>;
 }
@@ -707,14 +723,18 @@ function UsageDetail({ exerciseId }: { exerciseId: string }) {
 /* ------------------------------------------------------------------ */
 
 function VideoPreviewDialog({ exercise }: { exercise: LibraryExercise }) {
-  const url = exerciseVideoUrl(exercise);
+  const borrowed = useBorrowedDemo(exercise);
+  const url = exerciseVideoUrl(exercise) ?? (borrowed ? exerciseVideoUrl(borrowed) : null);
   return (
     <DialogContent className="max-w-2xl p-3 sm:p-4">
       <DialogHeader><DialogTitle className="pr-6 text-base">{exercise.name}</DialogTitle></DialogHeader>
+      {borrowed && (
+        <p className="text-[12px] leading-snug text-muted-foreground">
+          No video of its own yet, so clients see the <span className="font-semibold text-foreground">{borrowed.name}</span> demo (labelled). Upload one and it takes over.
+        </p>
+      )}
       {url ? (
-        <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
-          <iframe src={previewEmbedUrl(url)} title={`${exercise.name} demo`} className="h-full w-full" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen />
-        </div>
+        <ExerciseDemoVideo url={previewEmbedUrl(url)} title={`${exercise.name} demo`} className="rounded-lg border-0" />
       ) : <div className="text-sm text-muted-foreground">No video attached.</div>}
     </DialogContent>
   );

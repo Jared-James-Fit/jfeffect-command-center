@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { useExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
+import { exerciseGuideKey, fetchExerciseGuide, guideVideoUrl } from "@/lib/exercise-guide";
+import { ExerciseDemoVideo } from "@/components/exercise-demo-video";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -11,23 +11,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-
-const GUIDE_COLUMNS =
-  "id,name,video_url,vimeo_embed_url,secondary_vimeo_embed_url,youtube_url,active_video_set,cues,common_mistakes,muscle_group,category";
-
-type ExerciseGuide = {
-  id: string;
-  name: string | null;
-  video_url: string | null;
-  vimeo_embed_url: string | null;
-  secondary_vimeo_embed_url: string | null;
-  youtube_url: string | null;
-  active_video_set: string | null;
-  cues: string | string[] | null;
-  common_mistakes: string | string[] | null;
-  muscle_group: string | null;
-  category: string | null;
-};
 
 export default function DeferredExerciseHowToSheet({
   exerciseId,
@@ -38,32 +21,17 @@ export default function DeferredExerciseHowToSheet({
   fallbackName: string;
   onClose: () => void;
 }) {
+  // Usually already in the cache: the How To button starts this on touch-down.
   const { data: exercise = null, isLoading } = useQuery({
-    queryKey: ["workout-exercise-guide", exerciseId ?? fallbackName],
-    queryFn: async () => {
-      const query = supabase.from("exercises").select(GUIDE_COLUMNS);
-      // Unlinked rows resolve through the library (exact name or alias) so an
-      // alias shows its canonical exercise's demo video.
-      let id = exerciseId ?? null;
-      if (!id && fallbackName) {
-        const { data: resolved } = await (supabase as any).rpc("resolve_exercise_id", { _name: fallbackName });
-        id = (resolved as string | null) ?? null;
-      }
-      const { data, error } = id
-        ? await query.eq("id", id).maybeSingle()
-        : await query.eq("name", fallbackName).maybeSingle();
-      if (error) throw error;
-      return data as unknown as ExerciseGuide | null;
-    },
+    queryKey: exerciseGuideKey(exerciseId, fallbackName),
+    queryFn: () => fetchExerciseGuide(exerciseId, fallbackName),
     staleTime: 10 * 60_000,
   });
   const { data: globalSet } = useExerciseVideoSetGlobal();
-  const videoSrc = exercise
-    ? getExerciseVideoSource(exercise, { globalOverride: globalSet ?? null })
-    : null;
-  const directVideo =
-    exercise?.video_url ?? exercise?.vimeo_embed_url ?? exercise?.youtube_url ?? null;
-  const hasPrimary = videoSrc && videoSrc.status !== "coming_soon" && !!videoSrc.url;
+  const ownUrl = guideVideoUrl(exercise, globalSet ?? null);
+  // Not uploaded yet: the closest exercise's demo, labelled as such.
+  const borrowedUrl = !ownUrl && exercise?.borrowed ? guideVideoUrl(exercise.borrowed, globalSet ?? null) : null;
+  const videoUrl = ownUrl ?? borrowedUrl;
   const name = exercise?.name ?? fallbackName;
   const cues = exercise?.cues ?? null;
   const mistakes = exercise?.common_mistakes ?? null;
@@ -100,22 +68,15 @@ export default function DeferredExerciseHowToSheet({
               className="aspect-video animate-pulse rounded-xl border bg-muted"
               aria-label="Loading exercise guide"
             />
-          ) : hasPrimary ? (
-            <iframe
-              src={videoSrc!.url!}
-              title={`${name} video`}
-              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-              allowFullScreen
-              className="aspect-video w-full rounded-xl border bg-black"
-            />
-          ) : directVideo ? (
-            <iframe
-              src={toEmbedUrl(directVideo)}
-              title={`${name} video`}
-              allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-              allowFullScreen
-              className="aspect-video w-full rounded-xl border bg-black"
-            />
+          ) : videoUrl ? (
+            <div className="space-y-1.5">
+              <ExerciseDemoVideo url={videoUrl} title={`${name} video`} />
+              {borrowedUrl && exercise?.borrowed && (
+                <p data-borrowed-demo className="text-[12px] leading-snug text-muted-foreground">
+                  Showing the <span className="font-semibold text-foreground">{exercise.borrowed.name}</span> demo: same movement. This exercise's own video is on its way.
+                </p>
+              )}
+            </div>
           ) : (
             <div className="grid aspect-video w-full place-items-center rounded-xl border border-dashed bg-black/40 text-sm text-muted-foreground">
               Video coming soon.
@@ -144,25 +105,4 @@ function GuideText({ title, value }: { title: string; value: string | string[] }
       </p>
     </section>
   );
-}
-
-function toEmbedUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname.includes("youtube.com") && parsed.pathname === "/watch") {
-      const id = parsed.searchParams.get("v");
-      if (id) return `https://www.youtube.com/embed/${id}?playsinline=1`;
-    }
-    if (parsed.hostname === "youtu.be") {
-      const id = parsed.pathname.replace("/", "");
-      if (id) return `https://www.youtube.com/embed/${id}?playsinline=1`;
-    }
-    if (parsed.hostname.includes("vimeo.com") && !parsed.hostname.includes("player.")) {
-      const id = parsed.pathname.replace("/", "");
-      if (id) return `https://player.vimeo.com/video/${id}`;
-    }
-  } catch {
-    return url;
-  }
-  return url;
 }

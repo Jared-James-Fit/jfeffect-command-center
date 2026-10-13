@@ -11,6 +11,7 @@ import { getExerciseVideoSource } from "@/lib/exercise-video";
 import { useExerciseVideoSetGlobal } from "@/hooks/use-exercise-video-set";
 import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
 import { HighlightedExerciseName } from "@/components/exercise-search-highlight";
+import { ExerciseDemoVideo } from "@/components/exercise-demo-video";
 
 export const Route = createFileRoute("/_authenticated/portal/exercises")({
   component: ExerciseLibrary,
@@ -176,13 +177,5 @@ function ExerciseVideo({ exercise }: { exercise: any }) {
       </div>
     );
   }
-  return (
-    <iframe
-      src={src.url}
-      title={`${exercise.name} video`}
-      allow="autoplay; fullscreen; picture-in-picture"
-      allowFullScreen
-      className="mt-4 w-full aspect-video rounded-xl border border-border bg-black"
-    />
-  );
+  return <ExerciseDemoVideo url={src.url} title={`${exercise.name} video`} className="mt-4 border-border" />;
 }

@@ -1,7 +1,10 @@
 import { Suspense, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, History, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chunkFailureAction, lazyWithRetry, type ChunkFallbackContext } from "@/lib/lazy-chunk";
+import { exerciseGuideKey, fetchExerciseGuide } from "@/lib/exercise-guide";
+import { warmDemoPlayer } from "@/lib/demo-video";
 
 // A failed chunk fetch stays inside the action row as a small retry chip; it
 // never escalates to the full-page reload screen.
@@ -116,15 +119,28 @@ export function DeferredExerciseHowToButton({
   className?: string;
 }) {
   const [requested, setRequested] = useState(false);
+  const qc = useQueryClient();
   useIdleActionPreload();
+  // Touch-down starts everything the sheet needs: its code, the exercise's
+  // guide (video link, cues) and the connection to the video player, so the
+  // demo is already loading by the time the sheet is up.
+  const warm = () => {
+    void LazyExerciseHowToSheet.preload();
+    warmDemoPlayer();
+    void qc.prefetchQuery({
+      queryKey: exerciseGuideKey(exerciseId, fallbackName),
+      queryFn: () => fetchExerciseGuide(exerciseId, fallbackName),
+      staleTime: 10 * 60_000,
+    });
+  };
 
   const button = (loading: boolean) => (
     <Button
       size="sm"
       variant="outline"
       onClick={() => setRequested(true)}
-      onPointerDown={() => void LazyExerciseHowToSheet.preload()}
-      onFocus={() => void LazyExerciseHowToSheet.preload()}
+      onPointerDown={warm}
+      onFocus={warm}
       aria-busy={loading || undefined}
       className={className ?? "h-7 rounded-full px-2.5 text-xs"}
     >

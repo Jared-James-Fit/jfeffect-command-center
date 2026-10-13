@@ -26,6 +26,8 @@ export type LibraryExercise = SearchableExercise & {
   secondary_vimeo_embed_url?: string | null;
   video_migration_status?: string | null;
   quality_warning?: string | null;
+  /** No video of its own yet: How To plays this exercise's demo (labelled). */
+  demo_exercise_id?: string | null;
   created_at?: string | null;
 };
 

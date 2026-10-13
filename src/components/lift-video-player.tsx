@@ -5,6 +5,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { usePlaybackSession } from "@/hooks/use-playback-session";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -34,6 +35,9 @@ export function LiftVideoPlayer({
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [slow, setSlow] = useState(false);
   const [useEmbedFallback, setUseEmbedFallback] = useState(false);
+  // The embedded (Drive) player: the page can't see its play events, so hold
+  // normal playback audio while it's up (the <video> path is watched globally).
+  usePlaybackSession(useEmbedFallback && !!embedFallbackUrl);
   const [retryKey, setRetryKey] = useState(0);
   const [incompatible, setIncompatible] = useState(false);
   const [orientation, setOrientation] = useState<"portrait" | "landscape" | "unknown">(

@@ -4,6 +4,7 @@ import { getEmbedUrl } from "@/lib/recipe-format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Loader2 } from "lucide-react";
+import { usePlaybackSession } from "@/hooks/use-playback-session";
 
 export function BroadcastVoicePlayer({ voicePath, voiceUrl, transcript }: { voicePath?: string | null; voiceUrl?: string | null; transcript?: string | null }) {
   const [url, setUrl] = useState<string | null>(voiceUrl ?? null);
@@ -35,6 +36,18 @@ export function BroadcastVoicePlayer({ voicePath, voiceUrl, transcript }: { voic
   );
 }
 
+/** An embedded (YouTube / Vimeo) broadcast: sound plays through the iPhone silent switch while it's up. */
+function EmbeddedBroadcastVideo({ embed }: { embed: string }) {
+  usePlaybackSession(true);
+  return (
+    <Card className="overflow-hidden">
+      <div className="aspect-video w-full">
+        <iframe src={embed} className="h-full w-full" allow="accelerometer; encrypted-media; picture-in-picture; fullscreen" allowFullScreen title="Broadcast video" />
+      </div>
+    </Card>
+  );
+}
+
 export function BroadcastVideoPlayer({ videoPath, videoUrl }: { videoPath?: string | null; videoUrl?: string | null }) {
   const [signed, setSigned] = useState<string | null>(null);
   useEffect(() => {
@@ -44,13 +57,7 @@ export function BroadcastVideoPlayer({ videoPath, videoUrl }: { videoPath?: stri
   if (videoUrl) {
     const embed = getEmbedUrl(videoUrl);
     if (embed) {
-      return (
-        <Card className="overflow-hidden">
-          <div className="aspect-video w-full">
-            <iframe src={embed} className="h-full w-full" allow="accelerometer; encrypted-media; picture-in-picture" allowFullScreen title="Broadcast video" />
-          </div>
-        </Card>
-      );
+      return <EmbeddedBroadcastVideo embed={embed} />;
     }
     return (
       <Button asChild variant="outline" className="w-full">
