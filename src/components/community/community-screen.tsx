@@ -398,7 +398,9 @@ export function CommunityScreen({
             unit={unit}
             viewerIsStaff={viewerIsStaff}
             onOpenPost={(id) => setDetailId(id)}
+            onJumpTo={setJumpTo}
             lead={canShare ? <ShareWorkoutButton unit={unit} label="Post" variant="bubble" previewOnly={previewOnly} /> : null}
+            addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} /> : null}
           />
           {!hideTabs && followingIds.size > 0 && (
             <div className="flex gap-1.5" role="tablist" aria-label="Show posts from">
