@@ -96,6 +96,7 @@ export function CoachBadge({ className }: { className?: string }) {
  * A coach's note (Monday Motivation, Finish Strong Friday, or a one-off):
  * a quiet series label, the featured quote with its speaker, then the words.
  * `clamp` keeps long notes tidy in the feed; the detail shows everything.
+ * Holiday posts are never clamped (they're kept to 160 characters).
  */
 export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: CommunityPost; clamp?: boolean; onOpenPerson?: (a: CommunityAuthor) => void; cover?: ReactNode }) {
   // Saturday: the picture says it, the words just sit under it. A photo of
@@ -117,7 +118,7 @@ export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: C
         </figure>
       )}
       {post.caption && (
-        <p className={cn("whitespace-pre-line leading-[1.45]", scene || cover || holiday ? "text-[17px] font-semibold" : "text-[15px]", clamp && "line-clamp-[8]")}>
+        <p className={cn("whitespace-pre-line leading-[1.45]", scene || cover || holiday ? "text-[17px] font-semibold" : "text-[15px]", clamp && post.series !== "holiday" && "line-clamp-[8]")}>
           <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenPerson} />
         </p>
       )}
