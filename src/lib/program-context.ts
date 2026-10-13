@@ -8,6 +8,7 @@
  */
 import { buildProgramRoadmap, type RoadmapNoteRow } from "@/lib/training-roadmap";
 import { isReservedAtHomeBackupBlock } from "@/lib/at-home-backup";
+import { trainingReadoutText, type TrainingReadout } from "@/lib/training-readout";
 
 export type ProgramWeek = {
   week_id: string;
@@ -56,6 +57,10 @@ export type ProgramContext = {
   next_block: ProgramBlockInfo | null;
   this_week: ProgramWeek | null;
   next_week: ProgramWeek | null;
+  /** The meet's weight class, with the 7-day bodyweight average when known (loader). */
+  weight_class?: { class: string; bodyweight?: string | null; gap?: string | null } | null;
+  /** Per-lift logged vs prescribed + next week's prescription (loader). */
+  readout?: TrainingReadout | null;
 };
 
 const clean = (s: unknown) => {
@@ -166,6 +171,29 @@ export function programContextFor(input: {
     next_block: nextWeek && thisWeek && nextWeek.block_id !== thisWeek.block_id ? info(nextWeek.block_id) : null,
     this_week: thisWeek,
     next_week: nextWeek,
+    weight_class: rm.meet && clean(prep?.weight_class) ? { class: clean(prep?.weight_class)! } : null,
+  };
+}
+
+/** "57 kg", "M 66kg", "-74", "198 lb" → the limit in kg. */
+export function weightClassKg(text: string | null | undefined): number | null {
+  const m = String(text ?? "").match(/(\d+(?:\.\d+)?)\s*(kg|lb|lbs)?/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return /lb/i.test(m[2] ?? "") ? n / 2.2046226 : n;
+}
+
+/** Bodyweight vs the class limit (7-day average, kg). */
+export function weightClassGap(cls: string, avgKg: number | null, unit: "kg" | "lb") {
+  const limit = weightClassKg(cls);
+  if (avgKg == null || limit == null) return { class: cls, bodyweight: null, gap: null };
+  const show = (kg: number) => (unit === "lb" ? `${(kg * 2.2046226).toFixed(1)} lb` : `${kg.toFixed(1)} kg`);
+  const diff = avgKg - limit;
+  return {
+    class: cls,
+    bodyweight: show(avgKg),
+    gap: diff > 0 ? `${show(diff)} over the class` : `${show(-diff)} under the class`,
   };
 }
 
@@ -192,7 +220,15 @@ export function publicProgramContext(ctx: ProgramContext | null) {
   if (!ctx) return null;
   const block = (b: ProgramBlockInfo | null) => (b ? { ...b, coach_notes: undefined } : null);
   const week = (w: ProgramWeek | null) => (w ? { ...w, week_id: undefined, block_id: undefined, notes: undefined } : null);
-  return { ...ctx, block: block(ctx.block), next_block: block(ctx.next_block), this_week: week(ctx.this_week), next_week: week(ctx.next_week) };
+  return {
+    ...ctx,
+    block: block(ctx.block),
+    next_block: block(ctx.next_block),
+    this_week: week(ctx.this_week),
+    next_week: week(ctx.next_week),
+    // Prompt-only detail; the card doesn't need it stored.
+    readout: undefined,
+  };
 }
 
 const fmtDay = (iso: string | null) =>
@@ -223,7 +259,7 @@ function blockLines(title: string, b: ProgramBlockInfo): string[] {
 }
 
 /** The program as plain lines for a prompt. Empty string when there's nothing. */
-export function programContextText(ctx: ProgramContext | null): string {
+export function programContextText(ctx: ProgramContext | null, opts: { readout?: boolean } = {}): string {
   if (!ctx || (!ctx.this_week && !ctx.next_week && !ctx.block)) return "";
   const head = [
     `PROGRAM: ${ctx.program ?? "current training program"}`,
@@ -237,16 +273,28 @@ export function programContextText(ctx: ProgramContext | null): string {
   if (ctx.next_week) lines.push(weekLine("UPCOMING WEEK", ctx.next_week));
   else lines.push("UPCOMING WEEK: nothing programmed yet");
   if (ctx.next_block) lines.push(...blockLines("NEW BLOCK STARTS NEXT WEEK", ctx.next_block));
+  if (ctx.weight_class) {
+    const w = ctx.weight_class;
+    lines.push(`WEIGHT CLASS: ${w.class}${w.bodyweight ? ` · 7-day avg bodyweight ${w.bodyweight}${w.gap ? ` (${w.gap})` : ""}` : ""}${ctx.meet ? ` · ${ctx.meet.days_out} days to the meet` : ""}`);
+  }
+  const readout = opts.readout === false ? "" : trainingReadoutText(ctx.readout);
+  if (readout) lines.push(readout);
   return lines.join("\n");
 }
 
-/** How the AI should use it (check-in replies and form reviews). */
+/** How the AI should use it (check-in replies and form reviews). Read like a powerlifting coach. */
 export const PROGRAM_CONTEXT_RULES = [
-  "PROGRAM CONTEXT is the coach's real plan: the week they just trained and the week coming up.",
-  "Use it so the reply knows where they are. Tie the goals for the new week to the UPCOMING WEEK's focus (more volume, heavier top sets, higher RPE, deload, taper, meet week, a new block starting).",
-  "Mention where they are only when it helps (\"last week of the volume block\", \"intensity goes up next week\"), never recite the whole plan.",
-  "Only use what's written there. Never invent sets, reps, RPEs, percentages or exercises.",
-  "If the check-in shows a problem (pain, poor sleep, missed sessions), say how to handle next week's focus with it, but don't rewrite the program.",
+  "PROGRAM CONTEXT is the coach's real plan and the client's logged training. Read it like a powerlifting coach.",
+  "Squat, bench and deadlift are judged separately. Name the lift when something stands out; never lump them into \"training\".",
+  "RPE vs plan is the readiness signal. A top set 1+ RPE over plan means more fatigue than planned or a load that's too heavy: next week the RPE target is the cap and the load floats down to hit it. Back-offs over plan matter more than one grindy top set. Consistently under plan means room to push load at the same RPE. On plan = it's working, say so.",
+  "In submaximal blocks (top sets RPE 5-7) read \"vs last time\": the same load × reps at a lower RPE means they're adapting; a higher RPE at the same load means fatigue is building. e1RM is only given for reliable sets (RPE 7+, 8 reps or fewer) and only against this block; a percent or two either way is noise.",
+  "Sets still to come this week are not missed. Only call work missed when its day has passed with nothing logged, and say which lift lost it. Comp lifts and their primary work come first; accessories and GPP are the first thing to cut.",
+  "Tie the new week's goals to NEXT WEEK'S PRESCRIPTION and the upcoming week's focus: name the actual change (top set RPE 5-6 → 6-7, more sets, a deload, a new block, heavier singles) and what to do with it.",
+  "Match recovery to demand. Poor sleep, high stress, low energy or pain going into a harder week: keep top sets at the RPE cap, drop a back-off set if RPE runs away, never grind. Going into a deload or taper: recover, don't add work. Never fix a problem by adding volume.",
+  "Pain or injury on a lift: keep it simple and plain (don't push through sharp pain, tell the coach). Don't prescribe rehab or swap exercises.",
+  "Weight class: if a meet is coming and the 7-day average is over the class, flag the gap with the days out for the coach. Don't prescribe a cut.",
+  "Only use what's written. Never invent sets, reps, RPEs, loads, percentages or exercises, and don't rewrite the program.",
+  "Mention where they are in the program only when it helps (\"last week of the volume block\", \"intensity goes up next week\"); never recite it. Put lift-by-lift execution notes in coach_notes.",
   "If there is no program context, don't guess where they are.",
 ].join("\n");
 

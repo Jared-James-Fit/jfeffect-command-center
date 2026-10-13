@@ -85,6 +85,18 @@ describe("wiring", () => {
     expect(checkins).toContain("loadProgramContext(sb, row.client_id, periodStart ? isoDateAdd(periodStart, 3) : null)");
     expect(checkins).toContain("program: publicProgramContext(program)");
     expect(readFileSync("src/lib/submission-reviews.functions.ts", "utf8")).toContain("PROGRAM CONTEXT:");
-    expect(readFileSync("src/lib/nutrition-ai-plans.functions.ts", "utf8")).toContain("programContextText(program)");
+    expect(readFileSync("src/lib/nutrition-ai-plans.functions.ts", "utf8")).toContain("programContextText(program, { readout: false })");
+  });
+});
+
+import { weightClassGap, weightClassKg } from "@/lib/program-context";
+
+describe("weight class", () => {
+  it("parses classes and reports the gap from the 7-day average", () => {
+    expect(weightClassKg("57 kg")).toBe(57);
+    expect(weightClassKg("M 66kg")).toBe(66);
+    expect(Math.round(weightClassKg("198 lb")!)).toBe(90);
+    expect(weightClassGap("57 kg", 58.24, "kg")).toEqual({ class: "57 kg", bodyweight: "58.2 kg", gap: "1.2 kg over the class" });
+    expect(weightClassGap("57 kg", null, "kg").gap).toBeNull();
   });
 });

@@ -164,7 +164,7 @@ async function runPlan(
     const t = await generateText({
       model: gateway(modelId),
       system: TARGETS_PROMPT,
-      prompt: targetsUserPrompt(basics, qas, selected, programContextText(program)),
+      prompt: targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false })),
     });
     const targetsText = cleanAiText(t.text);
 
