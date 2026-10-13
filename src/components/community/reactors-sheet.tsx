@@ -10,10 +10,13 @@ export function ReactorsSheet({
   postId,
   onClose,
   onOpenAuthor,
+  title = "Reactions",
 }: {
   postId: string | null;
   onClose: () => void;
   onOpenAuthor?: (a: CommunityAuthor) => void;
+  /** "Celebrated by" on a workout's own row. */
+  title?: string;
 }) {
   const { data, isLoading } = usePostReactors(postId);
   return (
@@ -21,7 +24,7 @@ export function ReactorsSheet({
       <SheetContent side="bottom" hideCloseButton className="max-h-[70dvh] gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="text-[16px] font-black">Reactions{data ? ` · ${data.length}` : ""}</SheetTitle>
+            <SheetTitle className="text-[16px] font-black">{title}{data ? ` · ${data.length}` : ""}</SheetTitle>
             <SheetDescription className="text-[12px]">Everyone who reacted to this</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">

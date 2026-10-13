@@ -10,7 +10,8 @@ const HOLD_MS = 380;
  * The like button: tap for ❤️ (tap again to take it back), hold for
  * 👍 ‼️ 🔥 😂. Shows your reaction once you've given one, and how many.
  */
-export function ReactionButton({ post, onReact }: { post: CommunityPost; onReact: (p: CommunityPost, next: ReactionKey | null) => void }) {
+export function ReactionButton({ post, onReact, size = "md", align = "left" }: { post: CommunityPost; onReact: (p: CommunityPost, next: ReactionKey | null) => void; size?: "md" | "sm"; align?: "left" | "right" }) {
+  const sm = size === "sm";
   const [open, setOpen] = useState(false);
   const [pop, setPop] = useState(0);
   const timer = useRef<number | null>(null);
@@ -25,7 +26,14 @@ export function ReactionButton({ post, onReact }: { post: CommunityPost; onReact
   useEffect(() => cancel, []);
   const choose = (next: ReactionKey | null) => {
     setOpen(false);
-    if (next) setPop((n) => n + 1);
+    if (next) {
+      setPop((n) => n + 1);
+      try {
+        navigator.vibrate?.(8);
+      } catch {
+        /* no haptics here */
+      }
+    }
     onReact(post, next);
   };
 
@@ -68,26 +76,29 @@ export function ReactionButton({ post, onReact }: { post: CommunityPost; onReact
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${mine ? `You reacted ${reactionEmoji(mine) ?? ""}. Tap to remove` : "Like"}${total ? `, ${total}` : ""}. Hold for more reactions`}
-        className="flex h-11 min-w-11 select-none items-center justify-center gap-1.5 rounded-full px-2.5 transition-transform [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90"
+        className={cn(
+          "flex select-none items-center justify-center rounded-full transition-transform [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90",
+          sm ? "h-10 min-w-10 gap-1 px-2" : "h-11 min-w-11 gap-1.5 px-2.5",
+        )}
       >
         <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
           {mine === "heart" ? (
-            <Heart className="h-[26px] w-[26px] fill-[#ef3340] text-[#ef3340]" strokeWidth={2} />
+            <Heart className={cn(sm ? "h-[21px] w-[21px]" : "h-[26px] w-[26px]", "fill-[#ef3340] text-[#ef3340]")} strokeWidth={2} />
           ) : mine ? (
-            <span className="text-[22px] leading-none">{reactionEmoji(mine)}</span>
+            <span className={cn(sm ? "text-[18px]" : "text-[22px]", "leading-none")}>{reactionEmoji(mine)}</span>
           ) : (
-            <Heart className="h-[26px] w-[26px] text-foreground/80" strokeWidth={2} />
+            <Heart className={cn(sm ? "h-[21px] w-[21px]" : "h-[26px] w-[26px]", "text-foreground/80")} strokeWidth={2} />
           )}
         </span>
-        {total > 0 && <span className={cn("text-[14px] font-black tabular-nums", mine ? "text-foreground" : "text-muted-foreground")}>{total}</span>}
+        {total > 0 && <span className={cn(sm ? "text-[12px]" : "text-[14px]", "font-black tabular-nums", mine ? "text-foreground" : "text-muted-foreground")}>{total}</span>}
       </button>
-      {open && <ReactionPicker current={mine} onPick={(k) => choose(k === mine ? null : k)} onClose={() => setOpen(false)} />}
+      {open && <ReactionPicker current={mine} align={align} onPick={(k) => choose(k === mine ? null : k)} onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
 /** The five, in a little pill above the heart. Tap one; tap outside to close. */
-function ReactionPicker({ current, onPick, onClose }: { current: ReactionKey | null; onPick: (k: ReactionKey) => void; onClose: () => void }) {
+function ReactionPicker({ current, onPick, onClose, align = "left" }: { current: ReactionKey | null; onPick: (k: ReactionKey) => void; onClose: () => void; align?: "left" | "right" }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -106,7 +117,7 @@ function ReactionPicker({ current, onPick, onClose }: { current: ReactionKey | n
         }}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClose()}
       />
-      <div role="menu" aria-label="Reactions" className="community-picker absolute bottom-full left-0 z-50 mb-1.5 flex items-center gap-0.5 rounded-full border border-border/70 bg-card px-1.5 py-1 shadow-xl">
+      <div role="menu" aria-label="Reactions" className={cn("community-picker absolute bottom-full z-50 mb-1.5 flex items-center gap-0.5 rounded-full border border-border/70 bg-card px-1.5 py-1 shadow-xl", align === "right" ? "right-0" : "left-0")}>
         {REACTIONS.map((r, i) => (
           <button
             key={r.key}

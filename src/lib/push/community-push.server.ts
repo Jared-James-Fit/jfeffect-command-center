@@ -29,6 +29,8 @@ export type ClaimedPush = {
   others: number;
   media_type: string | null;
   post_kind: "workout" | "lockin" | "post";
+  /** What the post was about ("Belt Squat PR"), when it was a real moment. */
+  win?: string | null;
 };
 
 /** The words on the lockscreen. */
@@ -37,8 +39,13 @@ export function communityPushCopy(n: ClaimedPush): { title: string; body: string
   const thing = THING[n.post_kind] ?? "post";
   const crowd = n.others > 0 ? `${name} and ${n.others} ${n.others === 1 ? "other" : "others"}` : name;
   switch (n.kind) {
-    case "reaction":
-      return { title: n.others > 0 ? `${crowd} reacted to your ${thing}` : `${name} reacted ${EMOJI[n.emoji ?? ""] ?? "❤️"} to your ${thing}`, body: "Tap to see it." };
+    case "reaction": {
+      // a PR or milestone says what it was for; a plain heart is a like
+      const heart = (n.emoji ?? "heart") === "heart";
+      if (n.win) return { title: `${crowd} celebrated your ${n.win} ${n.others > 0 || heart ? "❤️" : EMOJI[n.emoji ?? ""] ?? "❤️"}`, body: "Tap to see who." };
+      if (n.others > 0) return { title: `${crowd} ${heart ? "liked" : "reacted to"} your ${thing}`, body: "Tap to see who." };
+      return { title: heart ? `${name} liked your ${thing}` : `${name} reacted ${EMOJI[n.emoji ?? ""] ?? "❤️"} to your ${thing}`, body: "Tap to see it." };
+    }
     case "comment":
       return {
         title: n.media_type === "audio" ? `${name} left a voice memo on your ${thing}` : n.media_type === "gif" ? `${name} sent a GIF on your ${thing}` : `${name} commented on your ${thing}`,
