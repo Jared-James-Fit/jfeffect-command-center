@@ -20,7 +20,7 @@ import { CrewList } from "@/components/community/crew-list";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { activityNeedsMore, isPulsePost, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
-import { ActivitySection } from "@/components/community/pulse-strip";
+import { ActivityBubble } from "@/components/community/pulse-strip";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
@@ -101,7 +101,7 @@ export function CommunityScreen({
 
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
-  // Automatic Activity sits in one section at the top; the posts people made follow, newest first
+  // Automatic Activity is one bubble in the story row; the posts people made are the feed, newest first
   const activity = useMemo(() => posts.filter((p) => isPulsePost(p)), [posts]);
   const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);
   // All (the whole crew, like a Strava club) or Following (just the people you follow, and you).
@@ -267,7 +267,7 @@ export function CommunityScreen({
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
-  // The first page is small: read on until the Activity section holds the whole week
+  // The first page is small: read on until Activity holds the whole week
   const pageCount = feed.data?.pages.length ?? 0;
   const readAhead = scope.kind === "feed" && feed.isSuccess && !feed.isError && activityNeedsMore(posts, !!hasNextPage, pageCount);
   useEffect(() => {
@@ -401,6 +401,20 @@ export function CommunityScreen({
             onJumpTo={setJumpTo}
             lead={canShare ? <ShareWorkoutButton unit={unit} label="Post" variant="bubble" previewOnly={previewOnly} /> : null}
             addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} /> : null}
+            // Following narrows things to people you follow; Activity is the whole crew, so it steps aside
+            after={activity.length > 0 && !following ? (
+              <ActivityBubble
+                posts={activity}
+                onOpenAuthor={openAuthor}
+                unit={unit}
+                viewerIsStaff={viewerIsStaff}
+                onOpen={openPost}
+                weekComplete={activityWeekComplete}
+                hasMore={!!hasNextPage}
+                loadingMore={isFetchingNextPage}
+                onLoadMore={() => void fetchNextPage()}
+              />
+            ) : null}
           />
           {!hideTabs && followingIds.size > 0 && (
             <div className="flex gap-1.5" role="tablist" aria-label="Show posts from">
@@ -421,27 +435,12 @@ export function CommunityScreen({
               ))}
             </div>
           )}
-          {activity.length > 0 && !following && (
-            <FeedItem index={0}>
-              <ActivitySection
-                posts={activity}
-                onOpenAuthor={openAuthor}
-                unit={unit}
-                viewerIsStaff={viewerIsStaff}
-                onOpen={openPost}
-                weekComplete={activityWeekComplete}
-                hasMore={!!hasNextPage}
-                loadingMore={isFetchingNextPage}
-                onLoadMore={() => void fetchNextPage()}
-              />
-            </FeedItem>
-          )}
           {following && feedPosts.length === 0 && (
             <EmptyNote title="Nothing new from people you follow" body="Their posts land here. The whole crew is under All." action={<Button type="button" variant="outline" className="w-full" onClick={() => setOnly("all")}>Show all posts</Button>} />
           )}
           {feedPosts.map((p, i) => (
             <Fragment key={p.id}>
-            <FeedItem index={i + (activity.length > 0 && !following ? 1 : 0)} data-post-id={p.id} className={cn("scroll-mt-20 transition-shadow duration-700 sm:rounded-3xl", flash === p.id && "ring-2 ring-primary")}>
+            <FeedItem index={i} data-post-id={p.id} className={cn("scroll-mt-20 transition-shadow duration-700 sm:rounded-3xl", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
               post={p}
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}

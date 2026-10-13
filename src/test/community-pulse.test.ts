@@ -73,12 +73,22 @@ describe("Activity: one section at the top of the feed", () => {
     expect(activityNeedsMore([own("a", 1)], false, 1, now)).toBe(false);
     expect(activityNeedsMore([own("a", 1)], true, 5, now)).toBe(false);
   });
-  it("the feed puts Activity first, then the posts people made, newest first", () => {
+  it("Activity is a bubble right after Post in the story row (no card above the feed); the feed is the posts people made", () => {
     const screen = readFileSync("src/components/community/community-screen.tsx", "utf8");
     expect(screen).toContain("const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);");
-    expect(screen.indexOf("<ActivitySection")).toBeLessThan(screen.indexOf("{feedPosts.map((p, i) => ("));
-    // Following narrows the posts to people you follow (Activity is the whole crew, so it steps aside)
-    expect(screen).toContain("{activity.length > 0 && !following && (");
+    expect(screen).toContain("after={activity.length > 0 && !following ? (");
+    expect(screen.indexOf("<ActivityBubble")).toBeGreaterThan(screen.indexOf("<StoryRail"));
+    expect(screen.indexOf("<ActivityBubble")).toBeLessThan(screen.indexOf("{feedPosts.map((p, i) => ("));
+    expect(screen).not.toContain("ActivitySection");
+    const rail = readFileSync("src/components/community/crew-stories.tsx", "utf8");
+    expect(rail).toContain("{lead}\n        {after}");
+    // a quiet day (no stories) still shows Post + Activity
+    expect(rail).toContain("if (!groups.length && !after) return null;");
+    const bubble = readFileSync("src/components/community/pulse-strip.tsx", "utf8");
+    // Wins first; a week with no wins opens on All; the ring is lit only while there's a win from the last day
+    expect(bubble).toContain('const shownView = wins.length ? view : "all";');
+    expect(bubble).toContain('for (const p of shownView === "wins" ? wins : posts) {');
+    expect(bubble).toContain("const fresh = wins.some((p) => Date.now() - new Date(p.created_at).getTime() < 86_400_000);");
   });
 });
 describe("Home shows a couple of Pulses at most", () => {

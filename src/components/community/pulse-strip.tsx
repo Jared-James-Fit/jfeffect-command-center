@@ -1,28 +1,30 @@
-import { useState } from "react";
-import { Activity, ChevronRight, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Activity, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { activityDay, activityFaces, activityPreview, activityWeekSummary, isRealWin, pickWorkoutWin, postTimeLabel, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { activityDay, activityFaces, activityWeekSummary, isRealWin, pickWorkoutWin, postTimeLabel, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { ReactionButton } from "@/components/community/reaction-button";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 
 /**
- * Feed → Activity: the crew's finished sessions (posted by themselves), in
- * one slim card at the top of the feed. It leads with the week's real wins
- * (PRs, milestones, streaks), never a wall of routine sessions; See all has
- * every session, by day.
+ * Feed → Activity: the crew's finished sessions (posted by themselves), as
+ * ONE bubble in the story row, right after "Post", so they take no room from
+ * the feed (the stories already spotlight the last day's wins). Its tag is
+ * the week's PRs; its ring lights up while there's a win from the last day.
+ * Tap it: the week in numbers, then its Wins (PRs, milestones, streaks; never
+ * a wall of routine sessions) or All, by day.
  *
  * Celebrating is the app's own like: tap the heart (hold for 👍 ‼️ 🔥 😂),
  * same as any post, so it's one gesture everywhere. On your own rows you see
  * who celebrated (faces + count; tap for everyone). The face opens the
  * athlete, the row opens the workout.
  */
-export function ActivitySection({ posts, unit, viewerIsStaff, onOpen, onOpenAuthor, weekComplete = true, hasMore, loadingMore, onLoadMore }: {
+export function ActivityBubble({ posts, unit, viewerIsStaff, onOpen, onOpenAuthor, weekComplete = true, hasMore, loadingMore, onLoadMore }: {
   posts: CommunityPost[];
   /** Everything from the last 7 days is loaded (otherwise the count reads "N+"). */
   weekComplete?: boolean;
@@ -37,8 +39,15 @@ export function ActivitySection({ posts, unit, viewerIsStaff, onOpen, onOpenAuth
 }) {
   const [all, setAll] = useState(false);
   const [listFor, setListFor] = useState<string | null>(null);
-  const { rows } = activityPreview(posts);
+  const wins = useMemo(() => posts.filter((p) => !!p.stats && isRealWin(pickWorkoutWin(p.stats, "kg").kind)), [posts]);
+  const [view, setView] = useState<"wins" | "all">("wins");
+  // a week with no wins yet opens on everything
+  const shownView = wins.length ? view : "all";
   const week = activityWeekSummary(posts);
+  // lit like an unseen story only while there's a win from the last day; grey like a seen one otherwise
+  const fresh = wins.some((p) => Date.now() - new Date(p.created_at).getTime() < 86_400_000);
+  // the bubble's tag: this week's PRs (the headline), else its sessions
+  const tag = week.prs > 0 ? `${week.prs}${weekComplete ? "" : "+"} PR${week.prs === 1 && weekComplete ? "" : "s"}` : week.sessions > 0 ? `${week.sessions}${weekComplete ? "" : "+"}` : null;
   const { people } = activityFaces(posts);
   const plus = weekComplete ? "" : "+";
   const open = (p: CommunityPost) => {
@@ -53,42 +62,72 @@ export function ActivitySection({ posts, unit, viewerIsStaff, onOpen, onOpenAuth
     : undefined;
   // See all, by day
   const days: { label: string; posts: CommunityPost[] }[] = [];
-  for (const p of posts) {
+  for (const p of shownView === "wins" ? wins : posts) {
     const label = activityDay(p.created_at);
     if (days[days.length - 1]?.label === label) days[days.length - 1].posts.push(p);
     else days.push({ label, posts: [p] });
   }
   return (
-    <section data-activity className="overflow-hidden rounded-3xl border border-border/80 bg-card">
-      <button type="button" onClick={() => setAll(true)} className="flex w-full items-center gap-2 px-3.5 pb-1 pt-2.5 text-left active:bg-muted/50" aria-label="See all activity">
-        <Activity className="h-4 w-4 shrink-0 text-primary" />
-        <span className="text-[13px] font-black">Activity</span>
-        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
-          {week.sessions}{plus} {week.sessions === 1 && weekComplete ? "session" : "sessions"}
-          {week.prs > 0 ? ` · ${week.prs}${plus} PR${week.prs === 1 && weekComplete ? "" : "s"}` : ""} this week
+    <>
+      <button
+        type="button"
+        data-activity
+        onClick={() => setAll(true)}
+        className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95"
+        aria-label={`Crew activity this week: ${week.sessions}${plus} sessions, ${week.prs}${plus} PRs`}
+      >
+        <span data-fresh={fresh ? "" : undefined} className={cn("relative grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", fresh ? "bg-[conic-gradient(from_200deg,#f59e0b,#ef3340,#f59e0b)]" : "bg-border")}>
+          <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
+            <span className="grid h-full w-full place-items-center rounded-full bg-gradient-to-br from-amber-400/25 via-primary/15 to-transparent">
+              <Activity className="h-6 w-6 text-primary" strokeWidth={2.5} aria-hidden />
+            </span>
+          </span>
+          {tag && (
+            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-background bg-primary px-1.5 text-[9px] font-black leading-[14px] text-primary-foreground tabular-nums">
+              {tag}
+            </span>
+          )}
         </span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="w-full truncate text-center text-[11px] font-bold">Activity</span>
       </button>
-      <ul className="divide-y divide-border/50 pb-1">
-        {rows.map((p) => (
-          <ActivityRow key={p.id} post={p} unit={unit} viewerIsStaff={viewerIsStaff} onOpen={onOpen} onOpenAuthor={onOpenAuthor} onCelebrators={setListFor} />
-        ))}
-      </ul>
 
       <Sheet open={all} onOpenChange={setAll}>
         <SheetContent side="bottom" hideCloseButton className="max-h-[88dvh] gap-0 overflow-y-auto overscroll-contain rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[520px]">
           {/* our own close: the sheet's floating Back pill sat on top of the title */}
           <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 px-5 pb-1 pt-4 text-left">
             <div className="min-w-0">
-              <SheetTitle className="text-[16px] font-black">Activity</SheetTitle>
+              <SheetTitle className="text-[16px] font-black">Crew activity</SheetTitle>
               <SheetDescription className="text-[12px]">
-                Every session the crew finished{people > 0 ? `, ${people} ${people === 1 ? "person" : "people"} this week` : ""}. Tap ❤️ to celebrate.
+                Every session the crew finished. Tap ❤️ to celebrate; they'll hear about it.
               </SheetDescription>
             </div>
             <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
               <X className="h-4 w-4" />
             </SheetClose>
           </SheetHeader>
+          <div className="mx-5 mt-3 px-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">This week</div>
+          <div className="mx-5 mt-1.5 grid grid-cols-3 gap-2 text-center">
+            {([
+              [`${week.prs}${plus}`, week.prs === 1 && weekComplete ? "PR" : "PRs"],
+              [`${week.sessions}${plus}`, week.sessions === 1 && weekComplete ? "session" : "sessions"],
+              [`${people}${plus}`, people === 1 && weekComplete ? "athlete" : "athletes"],
+            ] as const).map(([n, label]) => (
+              <div key={label} className="rounded-xl bg-muted/50 px-1 py-2">
+                <div className="text-lg font-black leading-tight tabular-nums">{n}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
+              </div>
+            ))}
+          </div>
+          {wins.length > 0 && (
+            <div className="mx-5 mt-3 grid grid-cols-2 rounded-full bg-muted p-1 text-[13px] font-bold" role="tablist" aria-label="Show">
+              {([["wins", `Wins · ${wins.length}`], ["all", `All · ${posts.length}`]] as const).map(([k, label]) => (
+                <button key={k} type="button" role="tab" aria-selected={shownView === k} onClick={() => setView(k)}
+                  className={cn("h-9 rounded-full transition-colors", shownView === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="mt-2">
             {days.map((d) => (
               <section key={d.label}>
@@ -111,7 +150,7 @@ export function ActivitySection({ posts, unit, viewerIsStaff, onOpen, onOpenAuth
         </SheetContent>
       </Sheet>
       <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={openAuthor} title="Celebrated by" />
-    </section>
+    </>
   );
 }
 
