@@ -39,6 +39,10 @@ describe("crew activity notifications", () => {
     expect(crowdName([vicky, nicole], 2)).toBe("Vicky and Nicole");
     expect(crowdName([vicky, nicole], 4)).toBe("Vicky and 3 others");
     expect(communityNoticeText(notice({ count: 3, actors: [vicky, nicole], emojis: ["heart", "fire"] })).title).toBe("Vicky and 2 others reacted ❤️🔥 to your workout");
+    // hearts read as a like; a real moment reads as what it was for
+    expect(communityNoticeText(notice({ count: 2, actors: [vicky, nicole], emojis: ["heart"] })).title).toBe("Vicky and Nicole liked your workout");
+    expect(communityNoticeText(notice({ count: 3, actors: [vicky, nicole], emojis: ["heart"], win: "Belt Squat PR" })).title).toBe("Vicky and 2 others celebrated your Belt Squat PR");
+    expect(communityNoticeText(notice({ emojis: ["fire"], win: "10th session this month" })).title).toBe("Vicky celebrated your 10th session this month 🔥");
     expect(communityNoticeText(notice({ kind: "comment", snippet: "Strong!", comment_id: "c" }))).toEqual({ title: "Vicky commented on your workout", body: "“Strong!”" });
     expect(communityNoticeText(notice({ kind: "reply", media_type: "audio", comment_id: "c" }))).toEqual({ title: "Vicky replied to your comment", body: "🎤 Voice memo" });
   });
@@ -47,6 +51,9 @@ describe("crew activity notifications", () => {
     expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.community_claim_pushes(uuid) TO service_role;");
     expect(communityPushCopy(push({}))).toEqual({ title: "Vicky reacted 🔥 to your workout", body: "Tap to see it." });
     expect(communityPushCopy(push({ others: 2 })).title).toBe("Vicky and 2 others reacted to your workout");
+    expect(communityPushCopy(push({ emoji: "heart" }))).toEqual({ title: "Vicky liked your workout", body: "Tap to see it." });
+    expect(communityPushCopy(push({ emoji: "heart", others: 3, win: "Belt Squat PR" }))).toEqual({ title: "Vicky and 3 others celebrated your Belt Squat PR ❤️", body: "Tap to see who." });
+    expect(communityPushCopy(push({ win: "Belt Squat PR" })).title).toBe("Vicky celebrated your Belt Squat PR 🔥");
     expect(communityPushCopy(push({ kind: "comment", media_type: "audio", post_kind: "lockin" })).title).toBe("Vicky left a voice memo on your lock-in");
     expect(communityPushCopy(push({ kind: "reply" })).title).toBe("Vicky replied to your comment");
   });
@@ -63,9 +70,17 @@ describe("crew activity notifications", () => {
     expect(coveredByCoachRecognition(push({ actor_is_staff: true, kind: "reply" }))).toBe(false);
     expect(coveredByCoachRecognition(push({ actor_is_staff: false }))).toBe(false);
   });
-  it("celebrating someone's PR is one tap", () => {
+  it("celebrating is the one heart everywhere (no separate Props / Celebrate buttons)", () => {
     const card = read("src/components/community/post-card.tsx");
-    expect(card).toContain("const celebrate = !post.is_mine && !post.my_reaction && !post.auto && (post.stats?.pr_count ?? 0) > 0;");
-    expect(card).toContain('onClick={() => onReact(post, "fire")}');
+    expect(card).not.toContain("data-celebrate");
+    expect(card).not.toContain("🔥 Props");
+    expect(read("src/components/community/pulse-strip.tsx")).toContain('<ReactionButton post={post} onReact={give} size="sm" align="right" />');
+    expect(read("src/components/community/crew-stories.tsx")).toContain('react.mutate(mine ? null : "heart"');
+  });
+  it("the bell and the push say what was celebrated (worked out once per post)", () => {
+    const sql = read("supabase/migrations/20261101120000_community_recognition.sql");
+    expect(sql).toContain("RETURN left(st->'prs'->0->>'exercise_name', 60) || ' PR';");
+    expect(sql).toContain("PERFORM public.community_fill_win_label(NEW.post_id);");
+    expect(sql).toContain("'win', nullif(p.win_label, ''),");
   });
 });

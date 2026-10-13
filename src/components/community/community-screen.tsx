@@ -423,6 +423,7 @@ export function CommunityScreen({
             <FeedItem index={0}>
               <ActivitySection
                 posts={activity}
+                onOpenAuthor={openAuthor}
                 unit={unit}
                 viewerIsStaff={viewerIsStaff}
                 onOpen={openPost}

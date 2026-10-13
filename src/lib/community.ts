@@ -1421,7 +1421,46 @@ export function isPulsePost(p: { auto?: boolean; stats?: unknown }): boolean {
 }
 
 /** Activity rows the top of the feed shows before "View all". */
-export const ACTIVITY_PREVIEW_ROWS = 2;
+export const ACTIVITY_PREVIEW_ROWS = 3;
+
+/** A moment worth celebrating, not a routine session: a PR, a monthly milestone, a 3rd+ session of the week. */
+export function isRealWin(kind: WorkoutWin["kind"]): boolean {
+  return kind === "pr" || kind === "month" || kind === "week";
+}
+
+/**
+ * The Activity rows on the feed: the week's real wins first (newest first),
+ * so a routine "session done" never pushes a PR out of sight; when there are
+ * none yet, the latest sessions so the section isn't empty. The rest (and
+ * every routine session) is a tap away in See all.
+ */
+export function activityPreview<T extends { created_at: string; stats?: unknown; auto?: boolean }>(posts: T[], max = ACTIVITY_PREVIEW_ROWS, now = Date.now()): { rows: T[]; hidden: number } {
+  const week = posts.filter((p) => now - new Date(p.created_at).getTime() < 7 * 86_400_000);
+  const wins = week.filter((p) => p.stats && isRealWin(pickWorkoutWin(p.stats as WorkoutShareStats, "kg").kind));
+  const rows = (wins.length ? wins : week.length ? week : posts).slice(0, max);
+  return { rows, hidden: Math.max(0, week.length - rows.length) };
+}
+
+/** Who trained this week (newest first, one face each), for the Activity header. */
+export function activityFaces<T extends { created_at: string; author: CommunityAuthor }>(posts: T[], max = 4, now = Date.now()): { faces: CommunityAuthor[]; people: number } {
+  const seen = new Map<string, CommunityAuthor>();
+  for (const p of posts) {
+    if (now - new Date(p.created_at).getTime() >= 7 * 86_400_000) continue;
+    if (!seen.has(p.author.user_id)) seen.set(p.author.user_id, p.author);
+  }
+  return { faces: [...seen.values()].slice(0, max), people: seen.size };
+}
+
+/** "Today", "Yesterday", "Monday", then "Oct 3": the day headers in See all. */
+export function activityDay(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((start(now) - start(d)) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
 /**
  * Whether the feed should read another page for the Activity section: the first
@@ -1537,8 +1576,7 @@ export const STORY_WINDOW_MS = 24 * 3_600_000;
 export function storyWorthy(p: Pick<CommunityPost, "auto" | "stats" | "visibility">): boolean {
   if (p.visibility !== "community") return false;
   if (!isPulsePost(p)) return true;
-  const kind = pickWorkoutWin(p.stats!, "kg").kind;
-  return kind === "pr" || kind === "month" || kind === "week";
+  return isRealWin(pickWorkoutWin(p.stats!, "kg").kind);
 }
 
 export type StoryGroup<T> = { author: CommunityAuthor; items: T[]; unseen: boolean; latest: number };

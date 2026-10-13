@@ -17,6 +17,8 @@ export type CommunityNotice = {
   snippet: string | null;
   media_type: string | null;
   post_kind: "workout" | "lockin" | "post";
+  /** What the post was about ("Belt Squat PR", "10th session this month"), when it was a real moment. */
+  win?: string | null;
 };
 
 /** Open a post from anywhere: the community screen, when it's up, listens for this. */
@@ -51,8 +53,11 @@ export function communityNoticeText(n: CommunityNotice): { title: string; body: 
     : n.media_type === "audio" ? "🎤 Voice memo" : n.media_type === "gif" ? "GIF" : n.media_type ? "Photo" : "";
   switch (n.kind) {
     case "reaction": {
-      const faces = n.emojis.map((e) => reactionEmoji(e)).filter(Boolean).slice(0, 3).join("");
-      return { title: `${who} reacted${faces ? ` ${faces}` : ""} to your ${thing}`, body: "" };
+      // just hearts reads as a like; a PR or milestone reads as what it was for
+      const onlyHearts = n.emojis.every((e) => e === "heart");
+      const faces = onlyHearts ? "" : n.emojis.map((e) => reactionEmoji(e)).filter(Boolean).slice(0, 3).join("");
+      if (n.win) return { title: `${who} celebrated your ${n.win}${faces ? ` ${faces}` : ""}`, body: "" };
+      return { title: onlyHearts ? `${who} liked your ${thing}` : `${who} reacted ${faces} to your ${thing}`, body: "" };
     }
     case "comment":
       return { title: `${who} commented on your ${thing}`, body: said };

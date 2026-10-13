@@ -126,6 +126,7 @@ BEGIN
       'emojis', coalesce(to_jsonb(g.emojis), '[]'::jsonb),
       'snippet', (SELECT left(c.body, 90) FROM public.community_comments c WHERE c.id = g.comment_id),
       'media_type', (SELECT c.media_type FROM public.community_comments c WHERE c.id = g.comment_id),
+      'win', nullif(p.win_label, ''),
       'post_kind', CASE WHEN p.kind = 'note' THEN 'post' WHEN p.locked_in_at IS NOT NULL THEN 'lockin' WHEN p.completion_id IS NOT NULL THEN 'workout' ELSE 'post' END
     ) ORDER BY g.latest DESC), '[]'::jsonb)
     INTO v_out

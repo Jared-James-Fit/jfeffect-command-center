@@ -261,12 +261,16 @@ function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) 
   );
 }
 
-/** Cheer it right here (🔥 for a win, ❤️ for a post), or open it with its comments. */
+/** Celebrate it right here (the same heart as everywhere), or open it with its comments. */
 function StoryActions({ post, viewerIsStaff, onOpen }: { post: CommunityPost; viewerIsStaff: boolean; onOpen: () => void }) {
   const react = useReact(post, viewerIsStaff);
   const win = isPulsePost(post);
   const mine = post.my_reaction;
-  const give = () => react.mutate(mine ? null : win ? "fire" : "heart", { onError: () => toast.error("Couldn't send that") });
+  const [pop, setPop] = useState(0);
+  const give = () => {
+    if (!mine) setPop((n) => n + 1);
+    react.mutate(mine ? null : "heart", { onError: () => toast.error("Couldn't send that") });
+  };
   const caption = !win && post.media_type ? post.caption?.trim() : null;
   return (
     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-4 pt-10" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.9rem)" }}>
@@ -277,9 +281,12 @@ function StoryActions({ post, viewerIsStaff, onOpen }: { post: CommunityPost; vi
           onClick={give}
           aria-pressed={!!mine}
           className={cn("inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-[14px] font-black active:scale-95", mine ? "bg-white/15 text-white" : "bg-white text-black")}
-          aria-label={mine ? "Take it back" : win ? "Give props" : "Like"}
+          aria-label={mine ? "Take it back" : win ? "Celebrate" : "Like"}
         >
-          {win ? <>{mine ? `${reactionEmoji(mine) ?? "🔥"} Sent` : "🔥 Props"}</> : <><Heart className={cn("h-5 w-5", mine && "fill-red-500 text-red-500")} /> {mine ? "Liked" : "Like"}</>}
+          <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
+            {mine && mine !== "heart" ? <span className="text-[18px] leading-none">{reactionEmoji(mine)}</span> : <Heart className={cn("h-5 w-5", mine && "fill-[#ef3340] text-[#ef3340]")} />}
+          </span>
+          {mine ? (win ? "Celebrated" : "Liked") : win ? "Celebrate" : "Like"}
         </button>
         <button type="button" onClick={onOpen} className="ml-auto inline-flex h-11 items-center gap-1 rounded-full bg-white/15 px-4 text-[14px] font-bold active:scale-95">
           {win ? "View workout" : "View post"} <ChevronRight className="h-4 w-4" />
