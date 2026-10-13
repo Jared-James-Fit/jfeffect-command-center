@@ -81,9 +81,12 @@ describe("Activity: one section at the top of the feed", () => {
     expect(screen.indexOf("<ActivitySheet")).toBeLessThan(screen.indexOf("{feedPosts.map((p, i) => ("));
     expect(screen).not.toContain("ActivitySection");
     const rail = readFileSync("src/components/community/crew-stories.tsx", "utf8");
-    expect(rail).toContain("{lead}\n        {activity && (");
+    // Post, then your story (when you have one), then Activity, then the people
+    expect(rail.indexOf("{lead}")).toBeLessThan(rail.indexOf("{mine && ("));
+    expect(rail.indexOf("{mine && (")).toBeLessThan(rail.indexOf("{activity && ("));
+    expect(rail.indexOf("{activity && (")).toBeLessThan(rail.indexOf("{groups.map((g, i) => ("));
     // a quiet day (no stories) still shows Post + Activity
-    expect(rail).toContain("if (!groups.length && !activity) return null;");
+    expect(rail).toContain("if (!groups.length && !activity && !mine) return null;");
     // it plays like a story; with nothing to play it opens the list
     expect(rail).toContain("onClick={() => (actGroup ? watch(-1) : activity.onList())}");
     const bubble = readFileSync("src/components/community/pulse-strip.tsx", "utf8");

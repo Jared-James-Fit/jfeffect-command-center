@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { ACTIVITY_STORY_MAX, activityStory, activityStoryGroup, crewStories, namesLine, storyEnd, storyWorthy, STORY_WINDOW_MS } from "@/lib/community";
+import { ACTIVITY_STORY_MAX, activityStory, activityStoryGroup, crewStories, myStory, namesLine, storyEnd, storyWorthy, STORY_WINDOW_MS } from "@/lib/community";
 import { holdsMapOrSet, shouldPersistQuery } from "@/lib/query-persister";
 import { draftWorthKeeping } from "@/lib/post-draft";
 
@@ -72,13 +72,19 @@ describe("Crew Stories", () => {
   const pulse = (id: string, who: string, h: number, o: object, seen = false) => ({ id, author: author(who), created_at: at(h), auto: true, stats: stats(o), visibility: "community", is_mine: false, seen }) as any;
   const post = (id: string, who: string, h: number, seen = false, extra: object = {}) => ({ id, author: author(who), created_at: at(h), auto: false, stats: null, visibility: "community", is_mine: false, seen, ...extra }) as any;
 
-  it("only real moments from the automatic posts: a PR, a milestone, a streak; never a routine session", () => {
+  it("every session shared with the crew posts itself as a story (a PR or a routine day), like Instagram; never coach-only or private", () => {
     expect(storyWorthy(pulse("a", "vicky", 1, { prs: [{ exercise_name: "Squat", reps: 3, load_kg: 140, scope: "atpr" }], pr_count: 1 }))).toBe(true);
-    expect(storyWorthy(pulse("b", "vicky", 1, { week_sessions: 3 }))).toBe(true);
-    expect(storyWorthy(pulse("c", "vicky", 1, {}))).toBe(false); // a top set
-    expect(storyWorthy(pulse("d", "vicky", 1, { top_lift: null }))).toBe(false); // session done
+    expect(storyWorthy(pulse("c", "vicky", 1, {}))).toBe(true); // a top set
+    expect(storyWorthy(pulse("d", "vicky", 1, { top_lift: null }))).toBe(true); // session done
     expect(storyWorthy(post("e", "marc", 1))).toBe(true);
     expect(storyWorthy(post("f", "marc", 1, false, { visibility: "coach" }))).toBe(false);
+    expect(storyWorthy(post("g", "marc", 1, false, { visibility: "private" }))).toBe(false);
+  });
+  it("your own story: your last day, oldest first, with nothing older", () => {
+    const g = myStory([post("me2", "jared", 2, false, { is_mine: true }), { ...pulse("me1", "jared", 5, {}), is_mine: true }, post("old", "jared", 30, false, { is_mine: true }), post("x", "marc", 1)], now)!;
+    expect(g.mine).toBe(true);
+    expect(g.items.map((p) => p.id)).toEqual(["me1", "me2"]);
+    expect(myStory([post("x", "marc", 1)], now)).toBeNull();
   });
   it("one bubble a person, their last day in order, unseen first, never your own", () => {
     const g = crewStories([
@@ -89,10 +95,11 @@ describe("Crew Stories", () => {
       post("me", "jared", 1, false, { is_mine: true }),
       pulse("routine", "nicole", 1, {}),
     ], now);
-    expect(g.map((x) => x.author.user_id)).toEqual(["vicky", "marc"]);
-    expect(g[1].items.map((p) => p.id)).toEqual(["m1", "m2"]);
-    expect(g[0].unseen).toBe(true);
-    expect(g[1].unseen).toBe(false);
+    // Nicole's routine session is a story too
+    expect(g.map((x) => x.author.user_id)).toEqual(["nicole", "vicky", "marc"]);
+    expect(g[2].items.map((p) => p.id)).toEqual(["m1", "m2"]);
+    expect(g[1].unseen).toBe(true);
+    expect(g[2].unseen).toBe(false);
     expect(STORY_WINDOW_MS).toBe(24 * 3600e3);
   });
   it("sits at the top of the feed with your own + first; seen comes from the server", () => {
@@ -105,22 +112,31 @@ describe("Crew Stories", () => {
 
   describe("Activity, played like a story", () => {
     const pr = { prs: [{ exercise_name: "Squat", reps: 3, load_kg: 140, scope: "atpr" }], pr_count: 1 };
-    it("the crew's sessions from the last day, oldest first, never your own; at most 30", () => {
-      const feed = [pulse("a", "vicky", 2, {}), pulse("b", "marc", 5, pr), pulse("old", "nicole", 30, {}), { ...pulse("mine", "jared", 1, {}), is_mine: true }, post("note", "fionna", 1)];
+    it("the week you might have missed: earlier wins (the last day is in people's stories already), oldest first, never yours; at most 20", () => {
+      const feed = [
+        pulse("today", "vicky", 2, pr), // in Vicky's story
+        pulse("routine", "nicole", 30, {}),
+        pulse("b", "marc", 50, pr),
+        pulse("a", "fionna", 30, { week_sessions: 4 }),
+        { ...pulse("mine", "jared", 40, pr), is_mine: true },
+        pulse("lastweek", "dwayne", 24 * 9, pr),
+      ];
       expect(activityStory(feed, now).map((p) => p.id)).toEqual(["b", "a"]);
-      const busy = Array.from({ length: 40 }, (_, i) => pulse(`s${i}`, `p${i}`, i * 0.5, {}));
+      const busy = Array.from({ length: 30 }, (_, i) => pulse(`s${i}`, `p${i}`, 25 + i, pr));
       const s = activityStory(busy, now);
       expect(s).toHaveLength(ACTIVITY_STORY_MAX);
-      // the newest 30, still oldest first
+      // the newest 20, still oldest first
       expect(s[s.length - 1].id).toBe("s0");
     });
-    it("a quiet day plays the week's wins; nothing at all, nothing to play", () => {
-      const feed = [pulse("routine", "vicky", 30, {}), pulse("pr", "marc", 50, pr), pulse("lastweek", "nicole", 24 * 9, pr)];
-      expect(activityStory(feed, now).map((p) => p.id)).toEqual(["pr"]);
-      expect(activityStoryGroup([pulse("routine", "vicky", 30, {})], new Set(), now)).toBeNull();
+    it("it opens on the week in numbers (the same as its tag and the list); a week with no sessions has nothing to play", () => {
+      const feed = [pulse("today", "vicky", 2, pr), pulse("b", "marc", 50, pr), pulse("r", "nicole", 3, {}), post("note", "fionna", 1)];
+      const g = activityStoryGroup(feed, new Set(), now)!;
+      expect(g.cover).toMatchObject({ prs: 2, sessions: 3, athletes: 3 });
+      expect(g.items.map((p) => p.id)).toEqual(["b"]);
+      expect(activityStoryGroup([post("note", "fionna", 1)], new Set(), now)).toBeNull();
     });
-    it("its ring is lit while there's one you haven't watched; the end card names the people in it", () => {
-      const feed = [pulse("a", "vicky", 2, {}), pulse("b", "marc", 5, pr, true)];
+    it("its ring is lit while there's an earlier win you haven't watched; the end card names the people in it", () => {
+      const feed = [pulse("a", "vicky", 30, pr), pulse("b", "marc", 50, pr, true)];
       const g = activityStoryGroup(feed, new Set(), now)!;
       expect(g.activity).toBe(true);
       expect(g.unseen).toBe(true);
@@ -131,7 +147,11 @@ describe("Crew Stories", () => {
     });
     it("each moment names its athlete; All activity opens the week as a list", () => {
       const viewer = read("src/components/community/crew-stories.tsx");
-      expect(viewer).toContain("const who = group.activity ? post.author : group.author;");
+      expect(viewer).toContain("const who = post && group.activity ? post.author : group.author;");
+      expect(viewer).toContain("<ActivityCoverFrame cover={group.cover!} more={group.items.length} />");
+      // yours: who saw it, never a reply box; it never plays itself after someone else's
+      expect(viewer).toContain("<MyStoryBar post={post} onOpen={() => onOpenPost(post.id)} onHold={setComposing} />");
+      expect(viewer).toContain("const j = groups.findIndex((g, k) => k > gi && !g.mine && g.items.some(fresh));");
       expect(viewer).toContain("data-story-activity-all");
     });
   });
@@ -161,8 +181,8 @@ describe("Crew Stories", () => {
       expect(viewer).toContain("<StoryBar post={post} viewerIsStaff={viewerIsStaff} onOpen={() => onOpenPost(post.id)} onComposing={setComposing} />");
     });
     it("the story waits while you write; a tap or Esc puts the keyboard away; swipe up opens the post", () => {
-      expect(viewer).toContain("if (!post || paused || end || composing) return;");
-      expect(viewer).toContain("if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return onOpenPost(post.id);");
+      expect(viewer).toContain("if (!frameKey || paused || end || composing) return;");
+      expect(viewer).toContain("if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return post ? onOpenPost(post.id) : onActivityList?.();");
       expect(viewer).toContain("onEscapeKeyDown={(e) => {");
     });
     it("goes the same private way as Message on a post, tagged as a story; never as a client the coach is previewing", () => {
@@ -198,11 +218,13 @@ describe("Crew Stories", () => {
     it("names who you watched, offers the bubbles you didn't get to, and a heart for what you skipped (wins first)", () => {
       const watched = new Set(groups.filter((g) => g.author.user_id !== "nicole").flatMap((g) => g.items.map((p) => p.id)));
       const end = storyEnd(groups, feed, watched, now);
-      expect(end.moments).toBe(3);
-      expect(end.people.map((a) => a.user_id).sort()).toEqual(["fionna", "marc", "vicky"]);
+      // Dwayne's routine session is a story now too
+      expect(end.moments).toBe(4);
+      expect(end.people.map((a) => a.user_id).sort()).toEqual(["dwayne", "fionna", "marc", "vicky"]);
       expect(end.stillNew.map((i) => groups[i].author.user_id)).toEqual(["nicole"]);
       // Marc already has your heart
-      expect(end.celebrate).toEqual(["v1", "f1"]);
+      expect(end.celebrate[0]).toBe("v1");
+      expect([...end.celebrate].sort()).toEqual(["f1", "routine", "v1"]);
       expect(end.feedNew.map((p) => p.id)).toEqual(["older"]);
       expect(end.mine?.id).toBe("mine");
     });
@@ -225,7 +247,7 @@ describe("Crew Stories", () => {
       expect(viewer).toContain("setEnd(storyEnd(groups, posts, watched.current));");
       expect(viewer).not.toContain("} else onClose();");
       // the clock stops on it
-      expect(viewer).toContain("if (!post || paused || end || composing) return;");
+      expect(viewer).toContain("if (!frameKey || paused || end || composing) return;");
       // swipe down closes it, but never from the camera opened on top of it
       expect(viewer).toContain("if (!e.currentTarget.contains(e.target as Node)) return;");
       const screen = read("src/components/community/community-screen.tsx");
