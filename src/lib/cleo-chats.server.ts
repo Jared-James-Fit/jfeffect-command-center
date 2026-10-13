@@ -3,13 +3,14 @@
  * client (RLS: each person only ever sees their own chats).
  */
 import { chatTitle, isCurrentChat, type CleoChat } from "@/lib/cleo-chats";
+import { attachmentPaths, type CleoAttachment } from "@/lib/cleo-attachments";
 
 type Db = any;
 
 const CHAT_COLS = "id, title, preview, created_at, last_message_at";
-export const MESSAGE_COLS = "id, role, content, created_at, choices, chat_id";
+export const MESSAGE_COLS = "id, role, content, created_at, choices, chat_id, attachments";
 
-export type ChatMessage = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices: string[] | null; chat_id: string | null };
+export type ChatMessage = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices: string[] | null; chat_id: string | null; attachments?: CleoAttachment[] | null };
 
 async function getChat(db: Db, userId: string, id: string): Promise<CleoChat | null> {
   const { data, error } = await db.from("summer_chats").select(CHAT_COLS).eq("id", id).eq("user_id", userId).maybeSingle();
@@ -31,7 +32,8 @@ export async function openChat(db: Db, userId: string, chatId?: string | null): 
   if (!chat) return { chat: null, messages: [] };
   const { data, error } = await db.from("summer_messages").select(MESSAGE_COLS).eq("chat_id", chat.id).order("created_at", { ascending: false }).limit(200);
   if (error) throw new Error(error.message);
-  return { chat, messages: ((data ?? []) as ChatMessage[]).reverse() };
+  const { withAttachmentUrls } = await import("@/lib/cleo-attachments.server");
+  return { chat, messages: await withAttachmentUrls(((data ?? []) as ChatMessage[]).reverse()) };
 }
 
 /** The chat a new message goes into: the one asked for (if it's theirs), else a new one named after the message. */
@@ -71,6 +73,20 @@ export async function listChats(db: Db, userId: string, q?: string | null): Prom
 
 /** Delete one chat (its messages go with it), or every chat when `chatId` is null. */
 export async function deleteChats(db: Db, userId: string, chatId: string | null): Promise<void> {
+  // The chat's attached files go with it.
+  let q = db.from("summer_messages").select("attachments").eq("user_id", userId).not("attachments", "is", null);
+  if (chatId) q = q.eq("chat_id", chatId);
+  const { data: withFiles } = await q.limit(2000);
+  const paths = ((withFiles ?? []) as Array<{ attachments: CleoAttachment[] | null }>).flatMap((m) => (m.attachments ?? []).flatMap(attachmentPaths)).filter((p) => p.startsWith(`${userId}/`));
+  await deleteChatRows(db, userId, chatId);
+  // Only once the chat is gone (the daily sweep catches anything missed).
+  if (paths.length) {
+    const { removeAttachmentFiles } = await import("@/lib/cleo-attachments.server");
+    await removeAttachmentFiles(paths).catch((e) => console.warn("[cleo] attachment cleanup failed", e));
+  }
+}
+
+async function deleteChatRows(db: Db, userId: string, chatId: string | null): Promise<void> {
   if (chatId) {
     const { error } = await db.from("summer_chats").delete().eq("id", chatId).eq("user_id", userId);
     if (error) throw new Error(error.message);

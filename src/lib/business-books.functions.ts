@@ -12,6 +12,7 @@ import { EXPENSE_CATEGORIES, PICKABLE_CATEGORIES } from "@/lib/business-expense-
 import { RECEIPTS_BUCKET, type ExpenseRow } from "@/lib/business-books";
 import { businessToday } from "@/lib/billing-schedule";
 import { assertAdminView } from "@/lib/permissions.server";
+import { AttachmentsInput } from "@/lib/cleo-attachments";
 
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const CategoryKey = z.string().refine((k) => EXPENSE_CATEGORIES.some((c) => c.key === k), "Unknown category");
@@ -387,13 +388,17 @@ export const deleteSummerChat = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const AskInput = z.object({
-  message: z.string().trim().min(1).max(4000),
-  year: z.number().int().min(2000).max(2100).optional(),
-  route: z.string().max(300).optional(),
-  voice: z.boolean().optional(),
-  chatId: ChatId.nullish(),
-});
+const AskInput = z
+  .object({
+    message: z.string().trim().max(4000),
+    year: z.number().int().min(2000).max(2100).optional(),
+    route: z.string().max(300).optional(),
+    voice: z.boolean().optional(),
+    chatId: ChatId.nullish(),
+    /** Photos, videos, PDFs, text files (cleo-attachments.ts); paths must be in the sender's own folder. */
+    attachments: AttachmentsInput.optional(),
+  })
+  .refine((d) => d.message.length > 0 || (d.attachments?.length ?? 0) > 0, "Type a message or attach something.");
 
 export const askSummer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -403,7 +408,7 @@ export const askSummer = createServerFn({ method: "POST" })
     // The admin, or the finance login (view-only: its own Cleo, nothing else).
     const { db: supabase, viewOnly } = await assertAdminView(context as any);
     const { answerSummer } = await import("@/lib/summer.server");
-    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly, own: (context as any).supabase, chatId: data.chatId });
+    return answerSummer(supabase, userId, { message: data.message, year: data.year, route: data.route, voice: data.voice, finance: viewOnly, own: (context as any).supabase, chatId: data.chatId, attachments: data.attachments });
   });
 
 const VoiceInput = z.object({
@@ -413,6 +418,7 @@ const VoiceInput = z.object({
   year: z.number().int().min(2000).max(2100).optional(),
   route: z.string().max(300).optional(),
   chatId: ChatId.nullish(),
+  attachments: AttachmentsInput.optional(),
 });
 
 /** Talk to Cleo: hear the question, answer it in voice mode. */
@@ -428,7 +434,7 @@ export const askSummerVoice = createServerFn({ method: "POST" })
     const names = ((people ?? []) as Array<{ full_name: string | null }>).map((c) => (c.full_name ?? "").trim()).filter(Boolean);
     const transcript = await transcribeAudio(data.audio, data.mime, names);
     if (!transcript) return { transcript: "", user: null, assistant: null, chatId: data.chatId ?? null };
-    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly, own: (context as any).supabase, chatId: data.chatId });
+    const res = await answerSummer(supabase, userId, { message: transcript, year: data.year, route: data.route, voice: true, finance: viewOnly, own: (context as any).supabase, chatId: data.chatId, attachments: data.attachments });
     return { transcript, ...res };
   });
 

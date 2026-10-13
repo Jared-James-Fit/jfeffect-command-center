@@ -10,6 +10,7 @@ import { BUSINESS_TZ, businessToday } from "@/lib/billing-schedule";
 import { buildAppContext, clientLabel, EMPTY_APP_SNAPSHOT, type AppSnapshot, type LinkEntry } from "@/lib/summer-app";
 import { z } from "zod";
 import { summerTone } from "@/lib/summer-persona";
+import { MAX_ATTACHMENTS, type CleoAttachment } from "@/lib/cleo-attachments";
 import { DEFAULT_CLEO_VOICE, isCleoVoice, type CleoVoice } from "@/lib/cleo-voices";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
@@ -429,7 +430,7 @@ export async function probeSpeechProviders(sample = "Hi, it's Cleo. Your books a
 // ---------------------------------------------------------------------------
 // One answer path for chat and voice.
 
-export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; chat_id?: string | null };
+export type SummerMsg = { id: string; role: "user" | "assistant"; content: string; created_at: string; choices?: string[] | null; chat_id?: string | null; attachments?: CleoAttachment[] | null };
 
 /**
  * `supabase` is what she reads with (the finance login's read-only admin
@@ -439,9 +440,15 @@ export type SummerMsg = { id: string; role: "user" | "assistant"; content: strin
 export async function answerSummer(
   supabase: any,
   userId: string,
-  input: { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; own?: any; chatId?: string | null },
+  input: { message: string; year?: number | null; voice?: boolean; route?: string | null; finance?: boolean; own?: any; chatId?: string | null; attachments?: CleoAttachment[] },
 ): Promise<{ user: SummerMsg; assistant: SummerMsg; chatId: string }> {
   const books = await import("@/lib/business-books.server");
+  // Attachments: only the sender's own files. Reading them (a video watched
+  // in full, a PDF read) starts now, alongside everything else.
+  const attachments = (input.attachments ?? []).slice(0, MAX_ATTACHMENTS);
+  const files = await import("@/lib/cleo-attachments.server");
+  files.assertOwnAttachments(userId, attachments);
+  const reading = attachments.length ? files.readAttachments(attachments) : null;
   const { buildSummerContext, summerSystemPrompt } = await import("@/lib/summer-context");
   const { buildOpenSalesContext } = await import("@/lib/summer-app");
 
@@ -454,7 +461,7 @@ export async function answerSummer(
     input.chatId
       ? supabase
           .from("summer_messages")
-          .select("role, content")
+          .select("role, content, attachments")
           .eq("user_id", userId)
           .eq("chat_id", input.chatId)
           .order("created_at", { ascending: false })
@@ -505,7 +512,7 @@ export async function answerSummer(
     buildAppContext(app, links, { tz: BUSINESS_TZ, route: input.route ?? null }),
   ].join("\n");
 
-  const past = ((history.data ?? []) as Array<{ role: string; content: string }>).reverse();
+  const past = ((history.data ?? []) as Array<{ role: string; content: string; attachments?: CleoAttachment[] | null }>).reverse();
   const own = input.own ?? supabase;
   const { cleoReadTools } = await import("@/lib/cleo-tools.server");
   const { loadCaller, proposeAction } = await import("@/lib/cleo-actions.server");
@@ -563,9 +570,23 @@ export async function answerSummer(
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("AI is not configured (LOVABLE_API_KEY missing).");
   const gateway = createOpenAICompatible({ name: "google", baseURL: GATEWAY, headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" } });
+  // Earlier attachments come back as words (what was read from them); the
+  // photos from the latest one are re-sent so "what about the second photo?" works.
+  const lastWithFiles = [...past].reverse().find((m) => m.role === "user" && m.attachments?.length);
+  const pastImages = lastWithFiles && !attachments.length ? await files.recentImages(lastWithFiles.attachments) : [];
+  const read = reading ? await reading : null;
+  const ask = input.message.trim() || "Take a look at this.";
   const convo = [
-    ...past.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.content })),
-    { role: "user" as const, content: input.message },
+    ...past.map((m) => {
+      if (m.role === "assistant") return { role: "assistant" as const, content: m.content };
+      const text = [m.content, files.attachmentsInHistory(m.attachments)].filter(Boolean).join("\n");
+      return m === lastWithFiles && pastImages.length
+        ? { role: "user" as const, content: [{ type: "text" as const, text }, ...pastImages] }
+        : { role: "user" as const, content: text };
+    }),
+    read
+      ? { role: "user" as const, content: [{ type: "text" as const, text: `${ask}\n\n${read.notes}` }, ...read.images.slice(0, 24)] }
+      : { role: "user" as const, content: ask },
   ];
   const { looksLikeLeakedInstructions } = await import("@/lib/summer-voice-text");
   const usable = (t: string) => (looksLikeLeakedInstructions(t) ? "" : t.trim());
@@ -634,12 +655,12 @@ export async function answerSummer(
   // Saved only once there is an answer, so a failed call leaves no orphan
   // question (or empty chat). A new chat is named after its first question.
   const { chatFor, MESSAGE_COLS } = await import("@/lib/cleo-chats.server");
-  const chatId = await chatFor(supabase, userId, input.chatId, input.message);
+  const chatId = await chatFor(supabase, userId, input.chatId, input.message.trim() || (attachments[0] ? attachments[0].name : ""));
   const now = Date.now();
   const { data: saved, error } = await supabase
     .from("summer_messages")
     .insert([
-      { user_id: userId, chat_id: chatId, role: "user", content: input.message, created_at: new Date(now).toISOString() },
+      { user_id: userId, chat_id: chatId, role: "user", content: input.message, created_at: new Date(now).toISOString(), attachments: read?.saved.length ? read.saved : null },
       { user_id: userId, chat_id: chatId, role: "assistant", content: text, created_at: new Date(now + 1).toISOString(), choices: choices && !proposed.length ? choices : null },
     ])
     .select(MESSAGE_COLS);
@@ -650,7 +671,13 @@ export async function answerSummer(
     const { attachToMessage } = await import("@/lib/cleo-actions.server");
     await attachToMessage(userId, proposed, assistant.id);
   }
-  return { user: rows.find((r) => r.role === "user")!, assistant, chatId };
+  let user = rows.find((r) => r.role === "user")!;
+  if (read?.saved.length) {
+    // The files now belong to this message (they go when it goes).
+    await files.linkAttachments(userId, user.id, read.saved);
+    [user] = await files.withAttachmentUrls([user]);
+  }
+  return { user, assistant, chatId };
 }
 
 function firstName(full: string | null | undefined): string | null {
