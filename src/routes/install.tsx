@@ -102,7 +102,7 @@ function AlreadyInstalled() {
         You're using the installed app. Tap the icon on your home screen to open it next time.
       </p>
       <div className="mt-4">
-        <Link to="/m">
+        <Link to="/portal">
           <Button>Continue to your dashboard</Button>
         </Link>
       </div>

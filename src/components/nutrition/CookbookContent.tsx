@@ -61,7 +61,7 @@ export default function CookbookContent({ viewer }: { viewer: CookbookViewer }) 
     [q.data],
   );
 
-  const detailPath = viewer === "member" ? "/m/nutrition/$recipeId" : "/portal/recipes/$recipeId";
+  const detailPath = "/portal/recipes/$recipeId";
 
   const toggle = (v: string) =>
     setFilters((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));

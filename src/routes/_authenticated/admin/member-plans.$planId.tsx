@@ -168,7 +168,7 @@ function MemberPlanEditor() {
       description: "Member plan",
       steps: ["Validate content", "Save final content", "Publish to members", "Sync visibility/access", "Finalize"],
       successToast: "Plan published",
-      successAction: { label: "View published plan", onClick: () => navigate({ to: "/m/plans/$planId", params: { planId } }) },
+      successAction: { label: "View published plan", onClick: () => navigate({ to: "/portal/plans/$planId", params: { planId } }) },
     },
     async (job) => {
       job.completeStep(0); job.completeStep(1);

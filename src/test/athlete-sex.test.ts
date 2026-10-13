@@ -124,11 +124,9 @@ describe("one field, kept honest", () => {
   });
 
   it("asks once, only the athlete (never in coach view-as-client), and stops when answered", () => {
+    // clients and JF members (both in the portal); a coach viewing as them has a staff role
     expect(read("src/routes/_authenticated/portal/index.tsx")).toContain(
-      '<SexPromptCard enabled={role === "client"} />',
-    );
-    expect(read("src/routes/_authenticated/m/index.tsx")).toContain(
-      '<SexPromptCard enabled={role === "member"} />',
+      '<SexPromptCard enabled={role === "client" || role === "member"} />',
     );
     expect(read("src/components/athlete-sex.tsx")).toContain(
       'data.account === "none" || data.sex) return null;',

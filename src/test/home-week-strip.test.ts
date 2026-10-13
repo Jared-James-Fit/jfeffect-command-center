@@ -54,15 +54,10 @@ describe("every Home leads with its schedule", () => {
     const src = readFileSync("src/components/admin/finance/finance-home.tsx", "utf8");
     expect(at(src, "<MyCalendarCard")).toBeLessThan(at(src, "Today's money"));
   });
-  it("member Home: first card", () => {
-    const src = readFileSync("src/routes/_authenticated/m/index.tsx", "utf8");
-    expect(at(src, "<MemberWeekCard")).toBeLessThan(at(src, "<HomeBodyweightCard"));
-  });
-  it("every Home (client, coach, member) is the same day agenda, built from the shared pieces; weeks live in Workouts", () => {
+  it("every Home (client and member in the portal, coach) is the same day agenda, built from the shared pieces; weeks live in Workouts", () => {
     for (const f of [
       "src/components/home/upcoming-schedule-card.tsx",
       "src/components/admin-calendar/dashboard-schedule-card.tsx",
-      "src/components/member/member-week-card.tsx",
     ]) {
       const src = readFileSync(f, "utf8");
       expect(src).not.toContain("<WeekStrip");

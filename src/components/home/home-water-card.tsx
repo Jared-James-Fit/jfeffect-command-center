@@ -79,7 +79,7 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
     }
   }
 
-  const historyHref = surface === "portal" ? "/portal/progress" : "/m/progress";
+  const historyHref = "/portal/progress";
 
   return (
     <>

@@ -124,17 +124,7 @@ import { Route as AuthenticatedAdminVoiceRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminWarmupProtocolsRouteImport } from './routes/_authenticated/admin/warmup-protocols'
 import { Route as AuthenticatedCoachProgramsRouteImport } from './routes/_authenticated/coach/programs'
 import { Route as AuthenticatedMIndexRouteImport } from './routes/_authenticated/m/index'
-import { Route as AuthenticatedMAccountRouteImport } from './routes/_authenticated/m/account'
-import { Route as AuthenticatedMAnnouncementsRouteImport } from './routes/_authenticated/m/announcements'
-import { Route as AuthenticatedMBillingRouteImport } from './routes/_authenticated/m/billing'
-import { Route as AuthenticatedMMoreRouteImport } from './routes/_authenticated/m/more'
-import { Route as AuthenticatedMMyPlansRouteImport } from './routes/_authenticated/m/my-plans'
-import { Route as AuthenticatedMPlansRouteImport } from './routes/_authenticated/m/plans'
-import { Route as AuthenticatedMProgressRouteImport } from './routes/_authenticated/m/progress'
-import { Route as AuthenticatedMResourcesRouteImport } from './routes/_authenticated/m/resources'
-import { Route as AuthenticatedMSupportRouteImport } from './routes/_authenticated/m/support'
-import { Route as AuthenticatedMToolsRouteImport } from './routes/_authenticated/m/tools'
-import { Route as AuthenticatedMUpgradeRouteImport } from './routes/_authenticated/m/upgrade'
+import { Route as AuthenticatedMSplatRouteImport } from './routes/_authenticated/m/$'
 import { Route as AuthenticatedPortalIndexRouteImport } from './routes/_authenticated/portal/index'
 import { Route as AuthenticatedPortalAccountRouteImport } from './routes/_authenticated/portal/account'
 import { Route as AuthenticatedPortalAnnouncementsRouteImport } from './routes/_authenticated/portal/announcements'
@@ -221,14 +211,6 @@ import { Route as AuthenticatedAdminSalesMembershipRouteImport } from './routes/
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings_.chat'
 import { Route as AuthenticatedAdminSettingsNutritionAutomationRouteImport } from './routes/_authenticated/admin/settings_.nutrition-automation'
 import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings_.sms'
-import { Route as AuthenticatedMMyPlansEnrollmentIdRouteImport } from './routes/_authenticated/m/my-plans.$enrollmentId'
-import { Route as AuthenticatedMNutritionIndexRouteImport } from './routes/_authenticated/m/nutrition.index'
-import { Route as AuthenticatedMNutritionRecipeIdRouteImport } from './routes/_authenticated/m/nutrition.$recipeId'
-import { Route as AuthenticatedMNutritionTargetsManageRouteImport } from './routes/_authenticated/m/nutrition.targets-manage'
-import { Route as AuthenticatedMNutritionTargetsSetupRouteImport } from './routes/_authenticated/m/nutrition.targets-setup'
-import { Route as AuthenticatedMPlansPlanIdRouteImport } from './routes/_authenticated/m/plans.$planId'
-import { Route as AuthenticatedMResourcesSlugRouteImport } from './routes/_authenticated/m/resources.$slug'
-import { Route as AuthenticatedMWorkoutsIndexRouteImport } from './routes/_authenticated/m/workouts.index'
 import { Route as AuthenticatedPortalAgreementsNativePackageIdRouteImport } from './routes/_authenticated/portal/agreements-native.$packageId'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
@@ -280,7 +262,6 @@ import { Route as AuthenticatedAdminSettingsNotificationsCoachingApplicationsRou
 import { Route as AuthenticatedMFormsAssignmentIdCompleteRouteImport } from './routes/_authenticated/m/forms.$assignmentId.complete'
 import { Route as ApiPublicGoogleOauthCallbackRouteImport } from './routes/api/public/google/oauth/callback'
 import { Route as ApiPublicWearablesOuraCallbackRouteImport } from './routes/api/public/wearables/oura/callback'
-import { Route as AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport } from './routes/_authenticated/m/workouts.$enrollmentId.$week.$day'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -922,60 +903,9 @@ const AuthenticatedMIndexRoute = AuthenticatedMIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
-const AuthenticatedMAccountRoute = AuthenticatedMAccountRouteImport.update({
-  id: '/account',
-  path: '/account',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMAnnouncementsRoute =
-  AuthenticatedMAnnouncementsRouteImport.update({
-    id: '/announcements',
-    path: '/announcements',
-    getParentRoute: () => AuthenticatedMRouteRoute,
-  } as any)
-const AuthenticatedMBillingRoute = AuthenticatedMBillingRouteImport.update({
-  id: '/billing',
-  path: '/billing',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMMoreRoute = AuthenticatedMMoreRouteImport.update({
-  id: '/more',
-  path: '/more',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMMyPlansRoute = AuthenticatedMMyPlansRouteImport.update({
-  id: '/my-plans',
-  path: '/my-plans',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMPlansRoute = AuthenticatedMPlansRouteImport.update({
-  id: '/plans',
-  path: '/plans',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMProgressRoute = AuthenticatedMProgressRouteImport.update({
-  id: '/progress',
-  path: '/progress',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMResourcesRoute = AuthenticatedMResourcesRouteImport.update({
-  id: '/resources',
-  path: '/resources',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMSupportRoute = AuthenticatedMSupportRouteImport.update({
-  id: '/support',
-  path: '/support',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMToolsRoute = AuthenticatedMToolsRouteImport.update({
-  id: '/tools',
-  path: '/tools',
-  getParentRoute: () => AuthenticatedMRouteRoute,
-} as any)
-const AuthenticatedMUpgradeRoute = AuthenticatedMUpgradeRouteImport.update({
-  id: '/upgrade',
-  path: '/upgrade',
+const AuthenticatedMSplatRoute = AuthenticatedMSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => AuthenticatedMRouteRoute,
 } as any)
 const AuthenticatedPortalIndexRoute =
@@ -1490,54 +1420,6 @@ const AuthenticatedAdminSettingsSmsRoute =
     path: '/settings/sms',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
-const AuthenticatedMMyPlansEnrollmentIdRoute =
-  AuthenticatedMMyPlansEnrollmentIdRouteImport.update({
-    id: '/$enrollmentId',
-    path: '/$enrollmentId',
-    getParentRoute: () => AuthenticatedMMyPlansRoute,
-  } as any)
-const AuthenticatedMNutritionIndexRoute =
-  AuthenticatedMNutritionIndexRouteImport.update({
-    id: '/nutrition/',
-    path: '/nutrition/',
-    getParentRoute: () => AuthenticatedMRouteRoute,
-  } as any)
-const AuthenticatedMNutritionRecipeIdRoute =
-  AuthenticatedMNutritionRecipeIdRouteImport.update({
-    id: '/nutrition/$recipeId',
-    path: '/nutrition/$recipeId',
-    getParentRoute: () => AuthenticatedMRouteRoute,
-  } as any)
-const AuthenticatedMNutritionTargetsManageRoute =
-  AuthenticatedMNutritionTargetsManageRouteImport.update({
-    id: '/nutrition/targets-manage',
-    path: '/nutrition/targets-manage',
-    getParentRoute: () => AuthenticatedMRouteRoute,
-  } as any)
-const AuthenticatedMNutritionTargetsSetupRoute =
-  AuthenticatedMNutritionTargetsSetupRouteImport.update({
-    id: '/nutrition/targets-setup',
-    path: '/nutrition/targets-setup',
-    getParentRoute: () => AuthenticatedMRouteRoute,
-  } as any)
-const AuthenticatedMPlansPlanIdRoute =
-  AuthenticatedMPlansPlanIdRouteImport.update({
-    id: '/$planId',
-    path: '/$planId',
-    getParentRoute: () => AuthenticatedMPlansRoute,
-  } as any)
-const AuthenticatedMResourcesSlugRoute =
-  AuthenticatedMResourcesSlugRouteImport.update({
-    id: '/$slug',
-    path: '/$slug',
-    getParentRoute: () => AuthenticatedMResourcesRoute,
-  } as any)
-const AuthenticatedMWorkoutsIndexRoute =
-  AuthenticatedMWorkoutsIndexRouteImport.update({
-    id: '/workouts/',
-    path: '/workouts/',
-    getParentRoute: () => AuthenticatedMRouteRoute,
-  } as any)
 const AuthenticatedPortalAgreementsNativePackageIdRoute =
   AuthenticatedPortalAgreementsNativePackageIdRouteImport.update({
     id: '/agreements-native/$packageId',
@@ -1843,12 +1725,6 @@ const ApiPublicWearablesOuraCallbackRoute =
     path: '/api/public/wearables/oura/callback',
     getParentRoute: () => rootRouteImport,
   } as any)
-const AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute =
-  AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport.update({
-    id: '/workouts/$enrollmentId/$week/$day',
-    path: '/workouts/$enrollmentId/$week/$day',
-    getParentRoute: () => AuthenticatedMRouteRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -1963,17 +1839,7 @@ export interface FileRoutesByFullPath {
   '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
-  '/m/account': typeof AuthenticatedMAccountRoute
-  '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
-  '/m/billing': typeof AuthenticatedMBillingRoute
-  '/m/more': typeof AuthenticatedMMoreRoute
-  '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
-  '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
-  '/m/progress': typeof AuthenticatedMProgressRoute
-  '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
-  '/m/support': typeof AuthenticatedMSupportRoute
-  '/m/tools': typeof AuthenticatedMToolsRoute
-  '/m/upgrade': typeof AuthenticatedMUpgradeRoute
+  '/m/$': typeof AuthenticatedMSplatRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -2051,12 +1917,6 @@ export interface FileRoutesByFullPath {
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
-  '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
-  '/m/nutrition/$recipeId': typeof AuthenticatedMNutritionRecipeIdRoute
-  '/m/nutrition/targets-manage': typeof AuthenticatedMNutritionTargetsManageRoute
-  '/m/nutrition/targets-setup': typeof AuthenticatedMNutritionTargetsSetupRoute
-  '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
-  '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
@@ -2102,8 +1962,6 @@ export interface FileRoutesByFullPath {
   '/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
   '/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
-  '/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
-  '/m/workouts/': typeof AuthenticatedMWorkoutsIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/events/': typeof AuthenticatedPortalEventsIndexRoute
   '/portal/plans/': typeof AuthenticatedPortalPlansIndexRoute
@@ -2121,7 +1979,6 @@ export interface FileRoutesByFullPath {
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
-  '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -2232,17 +2089,7 @@ export interface FileRoutesByTo {
   '/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/coach/programs': typeof AuthenticatedCoachProgramsRoute
-  '/m/account': typeof AuthenticatedMAccountRoute
-  '/m/announcements': typeof AuthenticatedMAnnouncementsRoute
-  '/m/billing': typeof AuthenticatedMBillingRoute
-  '/m/more': typeof AuthenticatedMMoreRoute
-  '/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
-  '/m/plans': typeof AuthenticatedMPlansRouteWithChildren
-  '/m/progress': typeof AuthenticatedMProgressRoute
-  '/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
-  '/m/support': typeof AuthenticatedMSupportRoute
-  '/m/tools': typeof AuthenticatedMToolsRoute
-  '/m/upgrade': typeof AuthenticatedMUpgradeRoute
+  '/m/$': typeof AuthenticatedMSplatRoute
   '/portal/account': typeof AuthenticatedPortalAccountRoute
   '/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -2320,12 +2167,6 @@ export interface FileRoutesByTo {
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
-  '/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
-  '/m/nutrition/$recipeId': typeof AuthenticatedMNutritionRecipeIdRoute
-  '/m/nutrition/targets-manage': typeof AuthenticatedMNutritionTargetsManageRoute
-  '/m/nutrition/targets-setup': typeof AuthenticatedMNutritionTargetsSetupRoute
-  '/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
-  '/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
@@ -2371,8 +2212,6 @@ export interface FileRoutesByTo {
   '/admin/membership': typeof AuthenticatedAdminMembershipIndexRoute
   '/admin/products-history': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/admin/sales': typeof AuthenticatedAdminSalesIndexRoute
-  '/m/nutrition': typeof AuthenticatedMNutritionIndexRoute
-  '/m/workouts': typeof AuthenticatedMWorkoutsIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/events': typeof AuthenticatedPortalEventsIndexRoute
   '/portal/plans': typeof AuthenticatedPortalPlansIndexRoute
@@ -2390,7 +2229,6 @@ export interface FileRoutesByTo {
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
-  '/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -2507,17 +2345,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/voice': typeof AuthenticatedAdminVoiceRoute
   '/_authenticated/admin/warmup-protocols': typeof AuthenticatedAdminWarmupProtocolsRoute
   '/_authenticated/coach/programs': typeof AuthenticatedCoachProgramsRoute
-  '/_authenticated/m/account': typeof AuthenticatedMAccountRoute
-  '/_authenticated/m/announcements': typeof AuthenticatedMAnnouncementsRoute
-  '/_authenticated/m/billing': typeof AuthenticatedMBillingRoute
-  '/_authenticated/m/more': typeof AuthenticatedMMoreRoute
-  '/_authenticated/m/my-plans': typeof AuthenticatedMMyPlansRouteWithChildren
-  '/_authenticated/m/plans': typeof AuthenticatedMPlansRouteWithChildren
-  '/_authenticated/m/progress': typeof AuthenticatedMProgressRoute
-  '/_authenticated/m/resources': typeof AuthenticatedMResourcesRouteWithChildren
-  '/_authenticated/m/support': typeof AuthenticatedMSupportRoute
-  '/_authenticated/m/tools': typeof AuthenticatedMToolsRoute
-  '/_authenticated/m/upgrade': typeof AuthenticatedMUpgradeRoute
+  '/_authenticated/m/$': typeof AuthenticatedMSplatRoute
   '/_authenticated/portal/account': typeof AuthenticatedPortalAccountRoute
   '/_authenticated/portal/announcements': typeof AuthenticatedPortalAnnouncementsRoute
   '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
@@ -2595,12 +2423,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings_/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/_authenticated/admin/settings_/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/_authenticated/admin/settings_/sms': typeof AuthenticatedAdminSettingsSmsRoute
-  '/_authenticated/m/my-plans/$enrollmentId': typeof AuthenticatedMMyPlansEnrollmentIdRoute
-  '/_authenticated/m/nutrition/$recipeId': typeof AuthenticatedMNutritionRecipeIdRoute
-  '/_authenticated/m/nutrition/targets-manage': typeof AuthenticatedMNutritionTargetsManageRoute
-  '/_authenticated/m/nutrition/targets-setup': typeof AuthenticatedMNutritionTargetsSetupRoute
-  '/_authenticated/m/plans/$planId': typeof AuthenticatedMPlansPlanIdRoute
-  '/_authenticated/m/resources/$slug': typeof AuthenticatedMResourcesSlugRoute
   '/_authenticated/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
@@ -2646,8 +2468,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/membership/': typeof AuthenticatedAdminMembershipIndexRoute
   '/_authenticated/admin/products-history/': typeof AuthenticatedAdminProductsHistoryIndexRoute
   '/_authenticated/admin/sales/': typeof AuthenticatedAdminSalesIndexRoute
-  '/_authenticated/m/nutrition/': typeof AuthenticatedMNutritionIndexRoute
-  '/_authenticated/m/workouts/': typeof AuthenticatedMWorkoutsIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/_authenticated/portal/events/': typeof AuthenticatedPortalEventsIndexRoute
   '/_authenticated/portal/plans/': typeof AuthenticatedPortalPlansIndexRoute
@@ -2665,7 +2485,6 @@ export interface FileRoutesById {
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
-  '/_authenticated/m/workouts/$enrollmentId/$week/$day': typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -2782,17 +2601,7 @@ export interface FileRouteTypes {
     | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
-    | '/m/account'
-    | '/m/announcements'
-    | '/m/billing'
-    | '/m/more'
-    | '/m/my-plans'
-    | '/m/plans'
-    | '/m/progress'
-    | '/m/resources'
-    | '/m/support'
-    | '/m/tools'
-    | '/m/upgrade'
+    | '/m/$'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -2870,12 +2679,6 @@ export interface FileRouteTypes {
     | '/admin/settings/chat'
     | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
-    | '/m/my-plans/$enrollmentId'
-    | '/m/nutrition/$recipeId'
-    | '/m/nutrition/targets-manage'
-    | '/m/nutrition/targets-setup'
-    | '/m/plans/$planId'
-    | '/m/resources/$slug'
     | '/portal/agreements-native/$packageId'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
@@ -2921,8 +2724,6 @@ export interface FileRouteTypes {
     | '/admin/membership/'
     | '/admin/products-history/'
     | '/admin/sales/'
-    | '/m/nutrition/'
-    | '/m/workouts/'
     | '/portal/agreements/'
     | '/portal/events/'
     | '/portal/plans/'
@@ -2940,7 +2741,6 @@ export interface FileRouteTypes {
     | '/api/public/google/oauth/callback'
     | '/api/public/wearables/oura/callback'
     | '/admin/crm/contacts/'
-    | '/m/workouts/$enrollmentId/$week/$day'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -3051,17 +2851,7 @@ export interface FileRouteTypes {
     | '/admin/voice'
     | '/admin/warmup-protocols'
     | '/coach/programs'
-    | '/m/account'
-    | '/m/announcements'
-    | '/m/billing'
-    | '/m/more'
-    | '/m/my-plans'
-    | '/m/plans'
-    | '/m/progress'
-    | '/m/resources'
-    | '/m/support'
-    | '/m/tools'
-    | '/m/upgrade'
+    | '/m/$'
     | '/portal/account'
     | '/portal/announcements'
     | '/portal/appointments'
@@ -3139,12 +2929,6 @@ export interface FileRouteTypes {
     | '/admin/settings/chat'
     | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
-    | '/m/my-plans/$enrollmentId'
-    | '/m/nutrition/$recipeId'
-    | '/m/nutrition/targets-manage'
-    | '/m/nutrition/targets-setup'
-    | '/m/plans/$planId'
-    | '/m/resources/$slug'
     | '/portal/agreements-native/$packageId'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
@@ -3190,8 +2974,6 @@ export interface FileRouteTypes {
     | '/admin/membership'
     | '/admin/products-history'
     | '/admin/sales'
-    | '/m/nutrition'
-    | '/m/workouts'
     | '/portal/agreements'
     | '/portal/events'
     | '/portal/plans'
@@ -3209,7 +2991,6 @@ export interface FileRouteTypes {
     | '/api/public/google/oauth/callback'
     | '/api/public/wearables/oura/callback'
     | '/admin/crm/contacts'
-    | '/m/workouts/$enrollmentId/$week/$day'
   id:
     | '__root__'
     | '/'
@@ -3325,17 +3106,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/voice'
     | '/_authenticated/admin/warmup-protocols'
     | '/_authenticated/coach/programs'
-    | '/_authenticated/m/account'
-    | '/_authenticated/m/announcements'
-    | '/_authenticated/m/billing'
-    | '/_authenticated/m/more'
-    | '/_authenticated/m/my-plans'
-    | '/_authenticated/m/plans'
-    | '/_authenticated/m/progress'
-    | '/_authenticated/m/resources'
-    | '/_authenticated/m/support'
-    | '/_authenticated/m/tools'
-    | '/_authenticated/m/upgrade'
+    | '/_authenticated/m/$'
     | '/_authenticated/portal/account'
     | '/_authenticated/portal/announcements'
     | '/_authenticated/portal/appointments'
@@ -3413,12 +3184,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings_/chat'
     | '/_authenticated/admin/settings_/nutrition-automation'
     | '/_authenticated/admin/settings_/sms'
-    | '/_authenticated/m/my-plans/$enrollmentId'
-    | '/_authenticated/m/nutrition/$recipeId'
-    | '/_authenticated/m/nutrition/targets-manage'
-    | '/_authenticated/m/nutrition/targets-setup'
-    | '/_authenticated/m/plans/$planId'
-    | '/_authenticated/m/resources/$slug'
     | '/_authenticated/portal/agreements-native/$packageId'
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/events/$id'
@@ -3464,8 +3229,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/membership/'
     | '/_authenticated/admin/products-history/'
     | '/_authenticated/admin/sales/'
-    | '/_authenticated/m/nutrition/'
-    | '/_authenticated/m/workouts/'
     | '/_authenticated/portal/agreements/'
     | '/_authenticated/portal/events/'
     | '/_authenticated/portal/plans/'
@@ -3483,7 +3246,6 @@ export interface FileRouteTypes {
     | '/api/public/google/oauth/callback'
     | '/api/public/wearables/oura/callback'
     | '/_authenticated/admin/crm/contacts/'
-    | '/_authenticated/m/workouts/$enrollmentId/$week/$day'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -4361,81 +4123,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMIndexRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
-    '/_authenticated/m/account': {
-      id: '/_authenticated/m/account'
-      path: '/account'
-      fullPath: '/m/account'
-      preLoaderRoute: typeof AuthenticatedMAccountRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/announcements': {
-      id: '/_authenticated/m/announcements'
-      path: '/announcements'
-      fullPath: '/m/announcements'
-      preLoaderRoute: typeof AuthenticatedMAnnouncementsRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/billing': {
-      id: '/_authenticated/m/billing'
-      path: '/billing'
-      fullPath: '/m/billing'
-      preLoaderRoute: typeof AuthenticatedMBillingRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/more': {
-      id: '/_authenticated/m/more'
-      path: '/more'
-      fullPath: '/m/more'
-      preLoaderRoute: typeof AuthenticatedMMoreRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/my-plans': {
-      id: '/_authenticated/m/my-plans'
-      path: '/my-plans'
-      fullPath: '/m/my-plans'
-      preLoaderRoute: typeof AuthenticatedMMyPlansRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/plans': {
-      id: '/_authenticated/m/plans'
-      path: '/plans'
-      fullPath: '/m/plans'
-      preLoaderRoute: typeof AuthenticatedMPlansRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/progress': {
-      id: '/_authenticated/m/progress'
-      path: '/progress'
-      fullPath: '/m/progress'
-      preLoaderRoute: typeof AuthenticatedMProgressRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/resources': {
-      id: '/_authenticated/m/resources'
-      path: '/resources'
-      fullPath: '/m/resources'
-      preLoaderRoute: typeof AuthenticatedMResourcesRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/support': {
-      id: '/_authenticated/m/support'
-      path: '/support'
-      fullPath: '/m/support'
-      preLoaderRoute: typeof AuthenticatedMSupportRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/tools': {
-      id: '/_authenticated/m/tools'
-      path: '/tools'
-      fullPath: '/m/tools'
-      preLoaderRoute: typeof AuthenticatedMToolsRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/upgrade': {
-      id: '/_authenticated/m/upgrade'
-      path: '/upgrade'
-      fullPath: '/m/upgrade'
-      preLoaderRoute: typeof AuthenticatedMUpgradeRouteImport
+    '/_authenticated/m/$': {
+      id: '/_authenticated/m/$'
+      path: '/$'
+      fullPath: '/m/$'
+      preLoaderRoute: typeof AuthenticatedMSplatRouteImport
       parentRoute: typeof AuthenticatedMRouteRoute
     }
     '/_authenticated/portal/': {
@@ -5040,62 +4732,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSettingsSmsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
-    '/_authenticated/m/my-plans/$enrollmentId': {
-      id: '/_authenticated/m/my-plans/$enrollmentId'
-      path: '/$enrollmentId'
-      fullPath: '/m/my-plans/$enrollmentId'
-      preLoaderRoute: typeof AuthenticatedMMyPlansEnrollmentIdRouteImport
-      parentRoute: typeof AuthenticatedMMyPlansRoute
-    }
-    '/_authenticated/m/nutrition/': {
-      id: '/_authenticated/m/nutrition/'
-      path: '/nutrition'
-      fullPath: '/m/nutrition/'
-      preLoaderRoute: typeof AuthenticatedMNutritionIndexRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/nutrition/$recipeId': {
-      id: '/_authenticated/m/nutrition/$recipeId'
-      path: '/nutrition/$recipeId'
-      fullPath: '/m/nutrition/$recipeId'
-      preLoaderRoute: typeof AuthenticatedMNutritionRecipeIdRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/nutrition/targets-manage': {
-      id: '/_authenticated/m/nutrition/targets-manage'
-      path: '/nutrition/targets-manage'
-      fullPath: '/m/nutrition/targets-manage'
-      preLoaderRoute: typeof AuthenticatedMNutritionTargetsManageRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/nutrition/targets-setup': {
-      id: '/_authenticated/m/nutrition/targets-setup'
-      path: '/nutrition/targets-setup'
-      fullPath: '/m/nutrition/targets-setup'
-      preLoaderRoute: typeof AuthenticatedMNutritionTargetsSetupRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
-    '/_authenticated/m/plans/$planId': {
-      id: '/_authenticated/m/plans/$planId'
-      path: '/$planId'
-      fullPath: '/m/plans/$planId'
-      preLoaderRoute: typeof AuthenticatedMPlansPlanIdRouteImport
-      parentRoute: typeof AuthenticatedMPlansRoute
-    }
-    '/_authenticated/m/resources/$slug': {
-      id: '/_authenticated/m/resources/$slug'
-      path: '/$slug'
-      fullPath: '/m/resources/$slug'
-      preLoaderRoute: typeof AuthenticatedMResourcesSlugRouteImport
-      parentRoute: typeof AuthenticatedMResourcesRoute
-    }
-    '/_authenticated/m/workouts/': {
-      id: '/_authenticated/m/workouts/'
-      path: '/workouts'
-      fullPath: '/m/workouts/'
-      preLoaderRoute: typeof AuthenticatedMWorkoutsIndexRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
-    }
     '/_authenticated/portal/agreements-native/$packageId': {
       id: '/_authenticated/portal/agreements-native/$packageId'
       path: '/agreements-native/$packageId'
@@ -5452,13 +5088,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/public/wearables/oura/callback'
       preLoaderRoute: typeof ApiPublicWearablesOuraCallbackRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/m/workouts/$enrollmentId/$week/$day': {
-      id: '/_authenticated/m/workouts/$enrollmentId/$week/$day'
-      path: '/workouts/$enrollmentId/$week/$day'
-      fullPath: '/m/workouts/$enrollmentId/$week/$day'
-      preLoaderRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRouteImport
-      parentRoute: typeof AuthenticatedMRouteRoute
     }
   }
 }
@@ -5911,91 +5540,17 @@ const AuthenticatedCoachRouteRouteWithChildren =
     AuthenticatedCoachRouteRouteChildren,
   )
 
-interface AuthenticatedMMyPlansRouteChildren {
-  AuthenticatedMMyPlansEnrollmentIdRoute: typeof AuthenticatedMMyPlansEnrollmentIdRoute
-}
-
-const AuthenticatedMMyPlansRouteChildren: AuthenticatedMMyPlansRouteChildren = {
-  AuthenticatedMMyPlansEnrollmentIdRoute:
-    AuthenticatedMMyPlansEnrollmentIdRoute,
-}
-
-const AuthenticatedMMyPlansRouteWithChildren =
-  AuthenticatedMMyPlansRoute._addFileChildren(
-    AuthenticatedMMyPlansRouteChildren,
-  )
-
-interface AuthenticatedMPlansRouteChildren {
-  AuthenticatedMPlansPlanIdRoute: typeof AuthenticatedMPlansPlanIdRoute
-}
-
-const AuthenticatedMPlansRouteChildren: AuthenticatedMPlansRouteChildren = {
-  AuthenticatedMPlansPlanIdRoute: AuthenticatedMPlansPlanIdRoute,
-}
-
-const AuthenticatedMPlansRouteWithChildren =
-  AuthenticatedMPlansRoute._addFileChildren(AuthenticatedMPlansRouteChildren)
-
-interface AuthenticatedMResourcesRouteChildren {
-  AuthenticatedMResourcesSlugRoute: typeof AuthenticatedMResourcesSlugRoute
-}
-
-const AuthenticatedMResourcesRouteChildren: AuthenticatedMResourcesRouteChildren =
-  {
-    AuthenticatedMResourcesSlugRoute: AuthenticatedMResourcesSlugRoute,
-  }
-
-const AuthenticatedMResourcesRouteWithChildren =
-  AuthenticatedMResourcesRoute._addFileChildren(
-    AuthenticatedMResourcesRouteChildren,
-  )
-
 interface AuthenticatedMRouteRouteChildren {
-  AuthenticatedMAccountRoute: typeof AuthenticatedMAccountRoute
-  AuthenticatedMAnnouncementsRoute: typeof AuthenticatedMAnnouncementsRoute
-  AuthenticatedMBillingRoute: typeof AuthenticatedMBillingRoute
-  AuthenticatedMMoreRoute: typeof AuthenticatedMMoreRoute
-  AuthenticatedMMyPlansRoute: typeof AuthenticatedMMyPlansRouteWithChildren
-  AuthenticatedMPlansRoute: typeof AuthenticatedMPlansRouteWithChildren
-  AuthenticatedMProgressRoute: typeof AuthenticatedMProgressRoute
-  AuthenticatedMResourcesRoute: typeof AuthenticatedMResourcesRouteWithChildren
-  AuthenticatedMSupportRoute: typeof AuthenticatedMSupportRoute
-  AuthenticatedMToolsRoute: typeof AuthenticatedMToolsRoute
-  AuthenticatedMUpgradeRoute: typeof AuthenticatedMUpgradeRoute
+  AuthenticatedMSplatRoute: typeof AuthenticatedMSplatRoute
   AuthenticatedMIndexRoute: typeof AuthenticatedMIndexRoute
-  AuthenticatedMNutritionRecipeIdRoute: typeof AuthenticatedMNutritionRecipeIdRoute
-  AuthenticatedMNutritionTargetsManageRoute: typeof AuthenticatedMNutritionTargetsManageRoute
-  AuthenticatedMNutritionTargetsSetupRoute: typeof AuthenticatedMNutritionTargetsSetupRoute
-  AuthenticatedMNutritionIndexRoute: typeof AuthenticatedMNutritionIndexRoute
-  AuthenticatedMWorkoutsIndexRoute: typeof AuthenticatedMWorkoutsIndexRoute
   AuthenticatedMFormsAssignmentIdCompleteRoute: typeof AuthenticatedMFormsAssignmentIdCompleteRoute
-  AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute: typeof AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute
 }
 
 const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
-  AuthenticatedMAccountRoute: AuthenticatedMAccountRoute,
-  AuthenticatedMAnnouncementsRoute: AuthenticatedMAnnouncementsRoute,
-  AuthenticatedMBillingRoute: AuthenticatedMBillingRoute,
-  AuthenticatedMMoreRoute: AuthenticatedMMoreRoute,
-  AuthenticatedMMyPlansRoute: AuthenticatedMMyPlansRouteWithChildren,
-  AuthenticatedMPlansRoute: AuthenticatedMPlansRouteWithChildren,
-  AuthenticatedMProgressRoute: AuthenticatedMProgressRoute,
-  AuthenticatedMResourcesRoute: AuthenticatedMResourcesRouteWithChildren,
-  AuthenticatedMSupportRoute: AuthenticatedMSupportRoute,
-  AuthenticatedMToolsRoute: AuthenticatedMToolsRoute,
-  AuthenticatedMUpgradeRoute: AuthenticatedMUpgradeRoute,
+  AuthenticatedMSplatRoute: AuthenticatedMSplatRoute,
   AuthenticatedMIndexRoute: AuthenticatedMIndexRoute,
-  AuthenticatedMNutritionRecipeIdRoute: AuthenticatedMNutritionRecipeIdRoute,
-  AuthenticatedMNutritionTargetsManageRoute:
-    AuthenticatedMNutritionTargetsManageRoute,
-  AuthenticatedMNutritionTargetsSetupRoute:
-    AuthenticatedMNutritionTargetsSetupRoute,
-  AuthenticatedMNutritionIndexRoute: AuthenticatedMNutritionIndexRoute,
-  AuthenticatedMWorkoutsIndexRoute: AuthenticatedMWorkoutsIndexRoute,
   AuthenticatedMFormsAssignmentIdCompleteRoute:
     AuthenticatedMFormsAssignmentIdCompleteRoute,
-  AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute:
-    AuthenticatedMWorkoutsEnrollmentIdWeekDayRoute,
 }
 
 const AuthenticatedMRouteRouteWithChildren =

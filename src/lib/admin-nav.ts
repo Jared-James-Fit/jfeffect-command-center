@@ -221,22 +221,3 @@ export const selfServeBottomNav: NavItem[] = [
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/support", label: "Support", icon: HelpCircle },
 ];
-
-// App Member portal navigation (retired: /m redirects into the portal)
-export const memberNav: NavItem[] = [
-  { to: "/m", label: "Home", icon: LayoutDashboard },
-  { to: "/m/workouts", label: "Workouts", icon: Activity, keywords: ["plans","program","training","library"] },
-  { to: "/m/nutrition", label: "Nutrition", icon: ChefHat, keywords: ["recipes","targets","meal"] },
-  { to: "/m/support", label: "Support", icon: MessageCircle, keywords: ["help","messages","contact"] },
-  { to: "/m/more", label: "More", icon: UserCog, keywords: ["account","billing","profile","settings","manage","receipts","agreements","announcements","tools","progress","install"] },
-];
-
-// Mobile bottom-tab nav for the App Member portal: Home / Workouts /
-// Nutrition / Support. "More" (Account, Billing, Progress, Tools, etc.) opens
-// from the header (AppShell `moreInHeader`), the same as every other account.
-export const memberBottomNav: NavItem[] = [
-  { to: "/m", label: "Home", icon: LayoutDashboard },
-  { to: "/m/workouts", label: "Workouts", icon: Activity },
-  { to: "/m/nutrition", label: "Nutrition", icon: ChefHat },
-  { to: "/m/support", label: "Support", icon: MessageCircle },
-];
