@@ -20,6 +20,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { casualize } from "@/lib/coach-voice";
 import { voicePromptForClient } from "@/lib/coach-voice.functions";
+import { PROGRAM_CONTEXT_RULES, programContextText } from "@/lib/program-context";
 import { assertAdminView } from "@/lib/permissions.server";
 
 // ---------- Input validators -------------------------------------------------
@@ -565,13 +566,20 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
       : null;
 
     // Jared's voice for this client (Admin → My Voice) shapes client_response.
-    const voice = await voicePromptForClient(sb, row.client_id);
+    const { loadProgramContext } = await import("@/lib/program-context.server");
+    const [voice, program] = await Promise.all([
+      voicePromptForClient(sb, row.client_id),
+      // Where they are in their training program right now.
+      loadProgramContext(sb, row.client_id),
+    ]);
+    const programText = programContextText(program);
     const systemPrompt = [
       "You are an AI assistant helping a strength & conditioning coach review a client submission.",
       "Reply ONLY in the structured JSON schema requested. Never fabricate medical advice.",
       globalCfg?.brand_voice && `BRAND VOICE: ${globalCfg.brand_voice}`,
       globalCfg?.tone && `TONE: ${globalCfg.tone}`,
       `CLIENT_RESPONSE VOICE (applies to client_response only; the analysis fields stay plain and clear):\n${voice}`,
+      programText && PROGRAM_CONTEXT_RULES,
       globalCfg?.safety_rules && `SAFETY RULES: ${globalCfg.safety_rules}`,
       globalCfg?.escalation_rules && `ESCALATION: ${globalCfg.escalation_rules}`,
       formCfg?.instructions && `FORM-SPECIFIC INSTRUCTIONS: ${formCfg.instructions}`,
@@ -590,6 +598,7 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
     const userPrompt = [
       `Form: ${formTitle}`,
       safeClient ? `Client context: ${JSON.stringify(safeClient)}` : "",
+      programText ? `\nPROGRAM CONTEXT:\n${programText}` : "",
       "",
       "Submission:",
       detailText.slice(0, 8000),

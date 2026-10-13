@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { ensureNextOccurrence } from "@/lib/action-centre.functions";
 import { casualize } from "@/lib/coach-voice";
 import { voicePromptForClient } from "@/lib/coach-voice.functions";
+import { PROGRAM_CONTEXT_RULES, programContextText, publicProgramContext } from "@/lib/program-context";
 
 export type MessengerCheckinTaskType = "weekly_checkin";
 
@@ -627,6 +628,7 @@ async function generateAnalysis(
   answers: Record<string, unknown>,
   contextSnapshot: Record<string, unknown>,
   clientId?: string | null,
+  programText = "",
 ): Promise<MessengerCheckinAnalysis> {
   const fallback = fallbackAnalysis(taskType, answers as any);
   try {
@@ -654,11 +656,14 @@ async function generateAnalysis(
       "The suggested response acknowledges a real win, names the main focus, gives 1-3 concrete goals for the new week, and addresses any red flag or request for help.",
       globalCfg?.brand_voice ? `BRAND VOICE: ${globalCfg.brand_voice}` : "",
       globalCfg?.tone ? `TONE: ${globalCfg.tone}` : "",
+      programText ? PROGRAM_CONTEXT_RULES : "",
       voice,
       "Return ONLY JSON matching:",
       '{"summary":string,"wins":string[],"focus":string[],"goals":string[],"red_flags":string[],"coach_notes":string[],"suggested_response":string,"urgency":"low"|"normal"|"high"|"urgent"}',
     ].filter(Boolean).join("\n\n");
 
+    // The program goes in as readable lines, not inside the JSON dump.
+    const { program: _program, ...appContext } = contextSnapshot as Record<string, unknown>;
     const prompt = [
       `CHECK-IN TYPE: ${TASK_META[taskType].title}`,
       "",
@@ -666,8 +671,9 @@ async function generateAnalysis(
       answerText(taskType, answers),
       "",
       "APP CONTEXT (supporting context only):",
-      JSON.stringify(contextSnapshot),
+      JSON.stringify(appContext),
       "",
+      ...(programText ? ["PROGRAM CONTEXT:", programText, ""] : []),
       "Produce a coach-facing recap and suggested reply.",
     ].join("\n");
 
@@ -876,11 +882,17 @@ export const analyzeMessengerCheckin = createServerFn({ method: "POST" })
       dueLocalDate: occurrence?.due_local_date ?? null,
       clientTz: occurrence?.client_tz ?? null,
     });
-    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, contextSnapshot, row.client_id);
+    // Where they are in the program: the week this check-in covers (middle
+    // of its period) and the week coming up.
+    const { loadProgramContext } = await import("@/lib/program-context.server");
+    const periodStart = (contextSnapshot as any).checkin_period_start as string | undefined;
+    const program = await loadProgramContext(sb, row.client_id, periodStart ? isoDateAdd(periodStart, 3) : null);
+    const snapshot = { ...contextSnapshot, program: publicProgramContext(program) };
+    const analysis = await generateAnalysis(sb, taskType, row.answers ?? {}, snapshot, row.client_id, programContextText(program));
     await sb
       .from("messenger_checkins")
       .update({
-        context_snapshot: contextSnapshot,
+        context_snapshot: snapshot,
         ai_analysis: analysis,
         ai_status: "ready",
         ai_error: null,

@@ -60,7 +60,7 @@ export const DEFAULT_VOICE: VoiceProfile = {
     "Usually don't use their name. Never more than once.",
   ].join("\n"),
   everyday: [
-    "cooked", "cooking", "killing it", "crushing it", "looking yoked", "massive", "honestly", "ngl", "fr", "imo",
+    "cooked", "cooking", "killing it", "crushing it", "looking yoked", "massive", "honestly", "ngl", "imo",
     "crazy", "trash", "trashhh", "dump", "dumping", "winner", "winning", "geeking", "geeking out", "goes hard",
     "floored", "no way", "bless", "bless up", "omg", "perff",
     "thats wild", "this is wild", "thats crazy", "v proud",
@@ -77,10 +77,11 @@ export const DEFAULT_VOICE: VoiceProfile = {
     "navigating", "it's clear that", "solid win", "momentum", "journey", "dial in", "a strong start", "keep it up",
     "significantly", "metabolic flexibility", "ensure", "crucial", "optimal", "prioritize",
     "Great work this week, [name].",
+    "fr",
   ],
   examples: [
     "really good week overall! training felt strong food was on point cardio got done and bodyweight held steady while everything tightened up. thats exactly what we want to see\n\nstress is a bit higher but you're still getting everything done & not letting it touch training which is a big win\n\nthis week lets keep doing what's working and lock in all 4 sessions",
-    "sheeeesh a 10lb bench PR?? you're cooking fr 🔥🔥🔥\n\nbar speed on the top set looked massive too so theres more in the tank. biggest thing to clean up is sleep, 6hrs isnt gonna cut it if we want to keep this going\n\nthis week lets hit all 4 sessions and get 7+ hrs every night",
+    "sheeeesh a 10lb bench PR?? you're cooking 🔥🔥🔥\n\nbar speed on the top set looked massive too so theres more in the tank. biggest thing to clean up is sleep, 6hrs isnt gonna cut it if we want to keep this going\n\nthis week lets hit all 4 sessions and get 7+ hrs every night",
     "squats looked perff, depth is there and bar path is way more consistent\n\nfor bench pause the FIRST rep of every set like comp, long pause til its dead still. rest of the reps can be touch n go\n\ntop sets should feel like an RPE 8. if bar speed dies before that we pull the weight back a bit",
     "glad youre feeling well enough to get back at it! being sick while traveling is rough so a 4/5 on nutrition is honestly a win\n\nenergy & sleep took a hit so this week lets just get the 3 sessions in. keep it around RPE 7 and leave a couple reps in the tank til the congestion clears, no grinding reps\n\nget sleep back on track first and the strength comes right back",
   ],

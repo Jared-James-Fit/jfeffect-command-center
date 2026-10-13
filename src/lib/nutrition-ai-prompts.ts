@@ -40,6 +40,7 @@ CALCULATIONS
 - performance = at or slightly above expenditure, carbs around training
 - reverse diet = start at current intake, add 50–100 kcal per week
 - if a COACH-SELECTED PHASE is given, it overrides the client's goal
+- if a TRAINING PROGRAM is given, use it to judge training demand: higher volume or intensity blocks and weeks get more carbs on training days, a deload never lowers protein, and within 2 weeks of a meet keep foods familiar with no new big deficit unless the coach-selected phase says so. it never overrides the goal or the coach-selected phase
 
 - protein = 0.8–1g per lb bodyweight
 - fats = 20–30% of calories
@@ -167,11 +168,14 @@ export function targetsUserPrompt(
   client: string | ClientBasics,
   qas: QA[],
   phase?: string | null,
+  /** programContextText() for the client, when they have a program. */
+  program?: string | null,
 ): string {
   return [
     `CLIENT DATA`,
     ...clientBasicsLines(client, qas),
     phase ? `COACH-SELECTED PHASE: ${phase}` : "",
+    program ? `TRAINING PROGRAM\n${program}` : "",
     "",
     formatAnswers(qas),
   ]
