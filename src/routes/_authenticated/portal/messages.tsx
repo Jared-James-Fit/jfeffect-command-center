@@ -114,6 +114,8 @@ function ClientMessages() {
 
   const pinned: PinnedChat = {
     id: "coach",
+    searchText: `${coachName} coach ${coachLast?.body ?? ""}`,
+    unread: coachUnread,
     renderRow: ({ selected, onClick }) => (
       <button
         type="button"

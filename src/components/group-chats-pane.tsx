@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X, Pencil } from "lucide-react";
+import { ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X, Pencil, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   listMyGroups, listAllGroupsForAdmin, listMyGroupMemberships,
@@ -39,7 +39,12 @@ export type PinnedChat = {
   renderRow: (p: { selected: boolean; onClick: () => void }) => ReactNode;
   /** onBack is null when there's no list to go back to (only this chat). */
   renderThread: (p: { onBack: (() => void) | null }) => ReactNode;
+  /** What search matches against (name + latest message). */
+  searchText?: string;
+  unread?: boolean;
 };
+
+type ChatFilter = "all" | "unread" | "groups" | "people";
 
 export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?: PinnedChat }) {
   const { user, role } = useAuth();
@@ -224,6 +229,39 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
     return rows.sort((a, b) => b.at.localeCompare(a.at));
   }, [visibleGroups, directChats, crewChats]);
 
+  // Search + filter, the same way for every messenger list.
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<ChatFilter>("all");
+  const q = query.trim().toLowerCase();
+  const matches = (text: string) => !q || text.toLowerCase().includes(q);
+  const shownRows = useMemo(() => listRows.filter((row) => {
+    if (row.group) {
+      if (filter === "people") return false;
+      if (filter === "unread" && !row.group.unread) return false;
+      return matches(`${row.group.group.name} ${row.group.last?.body ?? ""}`);
+    }
+    if (row.crew) {
+      if (filter === "people") return false;
+      if (filter === "unread" && !isCrewUnread(row.crew, me)) return false;
+      return matches(`${row.crew.name} ${row.crew.last?.body ?? ""}`);
+    }
+    if (row.direct) {
+      if (filter === "groups") return false;
+      if (filter === "unread" && !isUnread(row.direct, me)) return false;
+      return matches(`${row.direct.other?.name ?? ""} ${row.direct.last?.body ?? ""}`);
+    }
+    return false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [listRows, filter, q, me]);
+  const showPinned = !!pinned
+    && filter !== "groups"
+    && (filter !== "unread" || !!pinned.unread)
+    && matches(pinned.searchText ?? "");
+  const filtering = !!q || filter !== "all";
+  const filterChips: Array<[ChatFilter, string]> = asAdmin
+    ? [["all", "All"], ["unread", "Unread"]]
+    : [["all", "All"], ["unread", "Unread"], ["groups", "Groups"], ["people", "People"]];
+
   const selected = groupRows.find((g) => g.id === selectedId);
   const pinnedSelected = !!pinned && selectedId === pinned.id;
   const anySelected = !!(selected || selectedDirect || selectedCrew || pinnedSelected);
@@ -309,6 +347,42 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
             </div>
           )}
         </header>
+        <div className="space-y-2 border-b border-border px-3 py-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={asAdmin ? "Search groups" : "Search chats and people"}
+              aria-label="Search chats"
+              className="h-9 w-full rounded-full border border-border bg-secondary/40 pl-9 pr-9 text-[15px] outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:bg-background [&::-webkit-search-cancel-button]:hidden"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery("")} aria-label="Clear search"
+                className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full bg-muted-foreground/30 text-background">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto" role="tablist" aria-label="Filter chats">
+            {filterChips.map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={filter === key}
+                onClick={() => setFilter(key)}
+                className={cn(
+                  "h-7 shrink-0 rounded-full border px-3 text-xs font-semibold transition",
+                  filter === key ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:bg-secondary",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         {selectMode && isAdmin && (
           <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-3 py-1.5">
             <span className="text-xs font-semibold">
@@ -337,19 +411,19 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
           </div>
         )}
         <div className="flex-1 overflow-y-auto">
-          {requestCount > 0 && !selectMode && (
+          {requestCount > 0 && !selectMode && !filtering && (
             <RequestsEntry
               count={requestCount}
               fresh={requests.some((t) => isUnread(t, me)) || crewInvites.some((t) => isCrewUnread(t, me))}
               onClick={() => setShowRequests(true)}
             />
           )}
-          {pinned && !selectMode && pinned.renderRow({ selected: pinnedSelected, onClick: () => setSelectedId(pinned.id) })}
-          {listRows.length === 0 ? (
+          {showPinned && pinned && !selectMode && pinned.renderRow({ selected: pinnedSelected, onClick: () => setSelectedId(pinned.id) })}
+          {shownRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">
-              {asAdmin ? "No groups yet. Create one to get started." : pinned ? "Group chats and chats with other members show up here too." : "No chats yet. Start a group, or tap the send icon on someone's post to message them."}
+              {filtering ? (showPinned ? "" : "No chats match.") : asAdmin ? "No groups yet. Create one to get started." : pinned ? "Group chats and chats with other members show up here too." : "No chats yet. Start a group, or tap the send icon on someone's post to message them."}
             </div>
-          ) : listRows.map((row) => row.crew ? (
+          ) : shownRows.map((row) => row.crew ? (
             <CrewRow
               key={row.crew.group_id}
               thread={row.crew}
