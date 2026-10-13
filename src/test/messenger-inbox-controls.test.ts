@@ -154,3 +154,15 @@ describe("the list", () => {
     expect(rules).toContain("`chat_thread_prefs` (own rows only)");
   });
 });
+
+describe("live in chat means in the conversation", () => {
+  it("only tracks presence while the chat is open and the app is on screen", () => {
+    const hook = read("src/hooks/use-chat-presence.tsx");
+    expect(hook).toContain("const here = inConversation && visible;");
+    expect(hook).toContain("if (hereRef.current) void channel.track(");
+    expect(hook).toContain("else void ch.untrack();");
+    expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain('useChatPresence(selectedId, "admin", tab !== "groups" && !!selected)');
+    expect(read("src/routes/_authenticated/portal/messages.tsx")).toContain('"client", coachChatOpen)');
+    expect(read("src/components/group-chats-pane.tsx")).toContain("onPinnedOpenChange?.(pinnedOpen);");
+  });
+});

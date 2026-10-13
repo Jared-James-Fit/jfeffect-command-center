@@ -57,7 +57,9 @@ function ClientMessages() {
 
   // Viewing as the client must not show them as online in the coach's inbox.
   const viewingAsClient = useViewingAsClient();
-  const { peerLive: coachLive } = useChatPresence(viewingAsClient ? null : client?.id ?? null, "client");
+  // The coach sees me "live" only while I have our chat open (not the list).
+  const [coachChatOpen, setCoachChatOpen] = useState(false);
+  const { peerLive: coachLive } = useChatPresence(viewingAsClient ? null : client?.id ?? null, "client", coachChatOpen);
 
   const { data: coach } = useQuery({
     queryKey: ["my-assigned-coach", client?.assigned_coach_id],
@@ -137,6 +139,7 @@ function ClientMessages() {
     searchText: `${coachName} coach ${coachLast?.body ?? ""}`,
     unread: coachUnread,
     markUnread: markCoachUnread,
+    onOpenChange: setCoachChatOpen,
     markRead: async () => {
       if (!client?.id) return;
       await markRead(client.id, "client");

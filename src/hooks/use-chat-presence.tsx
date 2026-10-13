@@ -1,17 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import type { SenderRole } from "@/lib/messages";
 
 /** Realtime presence for a single 1:1 conversation.
- *  Each side joins `chat-presence:{clientId}` and tracks itself by role.
- *  Returns `peerLive` = true while the opposite role is in the chat. */
+ *  Each side joins `chat-presence:{clientId}` to see the other, but only
+ *  counts as there itself (tracks) while `inConversation` is true and the app
+ *  is on screen: the chat is actually open, not the list, another tab, or the
+ *  app in the background. Returns `peerLive` = true while the opposite role
+ *  is in the chat. */
 export function useChatPresence(
   clientId: string | null | undefined,
   myRole: SenderRole,
+  inConversation = true,
 ) {
   const { user } = useAuth();
   const [peerLive, setPeerLive] = useState(false);
+  const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState === "visible");
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const subscribedRef = useRef(false);
+  const here = inConversation && visible;
+  const hereRef = useRef(here);
+  hereRef.current = here;
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVis = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", onVis);
+    window.addEventListener("pageshow", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", onVis);
+      window.removeEventListener("pageshow", onVis);
+    };
+  }, []);
 
   useEffect(() => {
     if (!clientId || !user) {
@@ -25,6 +48,8 @@ export function useChatPresence(
         presence: { key: `${myRole}:${user.id}` },
       },
     });
+    channelRef.current = channel;
+    subscribedRef.current = false;
 
     const recompute = () => {
       const state = channel.presenceState() as Record<string, Array<{ role?: string }>>;
@@ -43,16 +68,28 @@ export function useChatPresence(
       .on("presence", { event: "leave" }, recompute)
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          void channel.track({ role: myRole, user_id: user.id, at: Date.now() });
+          subscribedRef.current = true;
+          if (hereRef.current) void channel.track({ role: myRole, user_id: user.id, at: Date.now() });
         }
       });
 
     return () => {
       try { void channel.untrack(); } catch {}
       supabase.removeChannel(channel);
+      channelRef.current = null;
+      subscribedRef.current = false;
       setPeerLive(false);
     };
   }, [clientId, myRole, user?.id]);
+
+  // Opening / leaving the conversation (or the app going to the background)
+  // starts / stops counting as there, without dropping the channel.
+  useEffect(() => {
+    const ch = channelRef.current;
+    if (!ch || !subscribedRef.current || !user) return;
+    if (here) void ch.track({ role: myRole, user_id: user.id, at: Date.now() });
+    else void ch.untrack();
+  }, [here, myRole, user?.id]);
 
   return { peerLive };
 }
