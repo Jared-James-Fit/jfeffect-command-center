@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { releaseCanvas } from "@/lib/canvas-memory";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -273,8 +274,12 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
     const d = dataFor(t);
     if (!d) return null;
     const c = document.createElement("canvas");
-    await drawWorkoutShareCard(c, d);
-    return canvasToBlob(c, exportType(t), 0.92);
+    try {
+      await drawWorkoutShareCard(c, d);
+      return await canvasToBlob(c, exportType(t), 0.92);
+    } finally {
+      releaseCanvas(c);
+    }
   };
 
   const shareOut = async () => {

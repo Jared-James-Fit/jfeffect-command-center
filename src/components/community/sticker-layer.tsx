@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { releaseCanvas } from "@/lib/canvas-memory";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
 import { Check, TextAlignCenter, TextAlignEnd, TextAlignStart, Trash2 } from "lucide-react";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
@@ -98,6 +99,7 @@ function finish(c: HTMLCanvasElement): Bitmap {
   const ctx = p.getContext("2d")!;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(c, m, m);
+  releaseCanvas(c);
   return { canvas: p, url: p.toDataURL("image/png"), bw: p.width, bh: p.height, px: PX };
 }
 
@@ -478,7 +480,12 @@ export function bakeStickers(src: CanvasImageSource & { width?: number; height?:
     ctx.drawImage(it.canvas, -w / 2, -h / 2, w, h);
     ctx.restore();
   }
-  return new Promise((resolve) => c.toBlob((b) => resolve(b), "image/jpeg", 0.9));
+  return new Promise((resolve) =>
+    c.toBlob((b) => {
+      releaseCanvas(c);
+      resolve(b);
+    }, "image/jpeg", 0.9),
+  );
 }
 
 /**

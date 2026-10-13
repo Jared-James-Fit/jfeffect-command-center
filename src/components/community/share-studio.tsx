@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { Camera, Check, ChevronLeft, Download, EyeOff, Images, Lock, RefreshCcw, Send, Smile, Timer, Type, User, Users, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, Download, EyeOff, Images, Lock, PenLine, RefreshCcw, Send, Smile, Timer, Type, User, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,8 @@ import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach, type Post
 import { SlideTray, useSlideTray } from "@/components/community/slide-tray";
 import { MAX_SLIDES, type PostSlide } from "@/lib/community";
 import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
+import { context2d, releaseCanvas } from "@/lib/canvas-memory";
+import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-draft";
 
 export type CameraMode = { key: string; label: string };
 
@@ -90,6 +92,7 @@ export function ShareStudio({
   accept = "image/*",
   onVideo,
   post,
+  onWrite,
 }: {
   open: boolean;
   onClose: () => void;
@@ -104,6 +107,8 @@ export function ShareStudio({
   /** A video picked from the library (cards can't be painted on video). */
   onVideo?: (file: File) => void;
   post: StudioPost | null;
+  /** A words-first post instead (shown where "No photo" is, when there's no card). */
+  onWrite?: () => void;
 }) {
   // No iOS focus-zoom anywhere in the studio: it left the editor zoomed and off-centre.
   useNoAutoZoom(open);
@@ -142,7 +147,7 @@ export function ShareStudio({
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const cardRef = useRef(card);
   cardRef.current = card;
-  const tray = useSlideTray({ open, initial: post?.extras, resetKey: post?.key ?? "", coverCount: 1 });
+  const tray = useSlideTray({ open, initial: post?.extras, resetKey: post?.key ?? "", coverCount: card || shot ? 1 : 0 });
   const att = usePostAttach({ initial: post?.attach, key: post?.key ?? "", open });
   useEffect(() => {
     if (!open) att.discard();
@@ -178,6 +183,74 @@ export function ShareStudio({
     setPosted(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, post?.key]);
+
+  /* ---- the draft: never lose the post ------------------------------- */
+  // Kept on the phone while it's being made (photo, caption, audience, look).
+  // Opening the same post again (after a failed post, a crash, a reload, or
+  // iOS dropping the app while the camera was open) picks it up again.
+  const draftOff = useRef(false);
+  const restoredFor = useRef<string | null>(null);
+  const photoBlob = useRef<{ shot: Shot; blob: Promise<Blob | null> } | null>(null);
+  // nothing is saved over the draft until it's been read back
+  const restoring = useRef(false);
+  useEffect(() => {
+    if (!open || !post || restoredFor.current === post.key) return;
+    restoredFor.current = post.key;
+    draftOff.current = false;
+    const key = post.key;
+    restoring.current = true;
+    void loadDraft(key).then((d) => {
+      restoring.current = false;
+      if (!d || restoredFor.current !== key || postingRef.current) return;
+      if (d.caption) setCaption(d.caption);
+      if (d.visibility === "community" || d.visibility === "coach" || d.visibility === "private") setVisibility(d.visibility);
+      if (d.look && cardRef.current?.looks.includes(d.look as ShareTemplate)) cardRef.current.onLook(d.look as ShareTemplate);
+      const startOver = () => {
+        void clearDraft(key);
+        retake();
+        setCaption(post.caption ?? "");
+      };
+      if (!d.photo) {
+        if (d.caption) toast.message("Your caption is back", { action: { label: "Clear", onClick: () => setCaption(post.caption ?? "") } });
+        return;
+      }
+      const url = URL.createObjectURL(d.photo);
+      const img = new Image();
+      img.onload = () => {
+        freeze({ src: img, file: new File([d.photo!], "jf-photo.jpg", { type: d.photo!.type || "image/jpeg" }), live: d.live, at: new Date(d.at) });
+        toast.message("Picked up where you left off", { action: { label: "Start over", onClick: startOver } });
+      };
+      img.onerror = () => URL.revokeObjectURL(url);
+      img.src = url;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, post?.key]);
+  useEffect(() => {
+    if (!open) restoredFor.current = null;
+  }, [open]);
+  // Save as it changes (a beat after the last change). The photo is encoded once per shot.
+  useEffect(() => {
+    if (!open || !post || posted || busy || draftOff.current || restoring.current) return;
+    const key = post.key;
+    const t = setTimeout(async () => {
+      let photo: Blob | null = null;
+      if (shot) {
+        if (photoBlob.current?.shot !== shot) {
+          photoBlob.current = {
+            shot,
+            blob: shot.file ? Promise.resolve(shot.file) : shot.src instanceof HTMLCanvasElement ? canvasToBlob(shot.src, "image/jpeg", 0.9) : Promise.resolve(null),
+          };
+        }
+        photo = await photoBlob.current.blob;
+      }
+      if (draftOff.current) return;
+      const d = { key, caption, visibility, look: card?.look ?? null, photo, live: !!shot?.live, at: (shot?.at ?? new Date()).getTime() };
+      if (draftWorthKeeping(d)) void saveDraft(d);
+      else void clearDraft(key);
+    }, 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, post?.key, shot, caption, visibility, card?.look, posted, busy]);
 
   useEffect(() => {
     void Promise.all([ensureDisplayFont(), cardLogo()]).then(([, l]) => setLogo(l));
@@ -288,6 +361,7 @@ export function ShareStudio({
     return () => {
       alive = false;
       cancelAnimationFrame(raf);
+      releaseCanvas(mirror);
     };
   }, [shooting, cardEl, showCard, logo, status, video, facing]);
 
@@ -316,8 +390,21 @@ export function ShareStudio({
   }, [lookFlash]);
 
   /* ---- shoot -------------------------------------------------------- */
+  // a camera frame is a full-size canvas: hand its memory back the moment it's replaced or done with
+  const dropShot = (s: Shot | null) => {
+    if (s?.src instanceof HTMLCanvasElement) releaseCanvas(s.src);
+    if (s?.src instanceof HTMLImageElement && s.src.src.startsWith("blob:")) URL.revokeObjectURL(s.src.src);
+  };
+  const shotRef = useRef<Shot | null>(null);
+  shotRef.current = shot;
+  useEffect(() => {
+    if (open) return;
+    dropShot(shotRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const freeze = (s: Shot) => {
     stop();
+    if (shotRef.current && shotRef.current !== s) dropShot(shotRef.current);
     setShot(s);
     setItems([]);
     setPhase("edit");
@@ -327,7 +414,11 @@ export function ShareStudio({
     const c = document.createElement("canvas");
     c.width = video.videoWidth;
     c.height = video.videoHeight;
-    const ctx = c.getContext("2d")!;
+    const ctx = c.getContext("2d");
+    if (!ctx) {
+      releaseCanvas(c);
+      return void toast.error("Your phone ran out of memory for photos. Close a few apps and try again.");
+    }
     // The selfie preview is mirrored; keep it the way it looked.
     if (facing === "user") {
       ctx.translate(c.width, 0);
@@ -338,7 +429,10 @@ export function ShareStudio({
     setTimeout(() => setFlash(false), 140);
     if (adding) {
       // another slide: straight into the strip, back to the post
-      void canvasToBlob(c, "image/jpeg", 0.92).then((b) => b && tray.add([new File([b], `jf-live-${Date.now()}.jpg`, { type: "image/jpeg" })]));
+      void canvasToBlob(c, "image/jpeg", 0.92).then((b) => {
+        releaseCanvas(c);
+        if (b) void tray.add([new File([b], `jf-live-${Date.now()}.jpg`, { type: "image/jpeg" })]);
+      });
       backToPost();
       return;
     }
@@ -377,6 +471,12 @@ export function ShareStudio({
     const isVideo = (x: File) => x.type.startsWith("video/");
     const heroAt = files.findIndex((x) => !isVideo(x));
     if (heroAt === -1) {
+      // a plain post (no card): the clips are the post
+      if (!card) {
+        skipPhoto();
+        void tray.add(files);
+        return;
+      }
       if (!onVideo) return void toast.error("Pick a photo for this one");
       // one video: the video editor, as before. Several: the card leads, the clips follow.
       if (files.length === 1) {
@@ -403,11 +503,13 @@ export function ShareStudio({
   };
   const skipPhoto = () => {
     stop();
+    dropShot(shotRef.current);
     setShot(null);
     setItems([]);
     setPhase("edit");
   };
   const retake = () => {
+    dropShot(shotRef.current);
     setShot(null);
     setItems([]);
     setPosted(false);
@@ -447,9 +549,13 @@ export function ShareStudio({
   const cardBlob = async (): Promise<Blob | null> => {
     if (!card) return null;
     const c = document.createElement("canvas");
-    paintShareCard(c, { ...card.data, lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);
-    drawStickers(c.getContext("2d")!, items, CARD_W, CARD_H);
-    return canvasToBlob(c, "image/jpeg", 0.92);
+    try {
+      paintShareCard(c, { ...card.data, lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);
+      drawStickers(context2d(c), items, CARD_W, CARD_H);
+      return await canvasToBlob(c, "image/jpeg", 0.92);
+    } finally {
+      releaseCanvas(c);
+    }
   };
 
   // What gets posted is what you see: the look you're on, as a 4:5 feed card
@@ -457,39 +563,49 @@ export function ShareStudio({
   // photo itself; so does Hide weights, so a card never shows your numbers.
   // With no photo, a carousel opens on the card itself (what you see as slide 1).
   const postPhoto = async (carousel: boolean): Promise<File | null> => {
-    if (!card) return null;
+    if (!card) return finalPhoto();
     const bare = card.look === "plain" || (post?.showHideLoads && hideLoads);
     if (!shot && (!carousel || bare)) return null;
     if (shot && bare) return finalPhoto();
     const FEED_H = 1350;
     const c = document.createElement("canvas");
-    paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);
-    if (shot) drawStickers(c.getContext("2d")!, remapStickers(items, shot.src, { w: CARD_W, h: CARD_H }, { w: CARD_W, h: FEED_H }), CARD_W, FEED_H);
-    const b = await canvasToBlob(c, "image/jpeg", 0.92);
+    let b: Blob | null;
+    try {
+      paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);
+      if (shot) drawStickers(context2d(c), remapStickers(items, shot.src, { w: CARD_W, h: CARD_H }, { w: CARD_W, h: FEED_H }), CARD_W, FEED_H);
+      b = await canvasToBlob(c, "image/jpeg", 0.92);
+    } finally {
+      releaseCanvas(c);
+    }
     return b ? new File([b], `jf-${card.look}.jpg`, { type: "image/jpeg" }) : finalPhoto();
   };
 
   // Slide 1 in the strip: the card as it is now, small.
   useEffect(() => {
     if (phase !== "edit") return;
-    const t = setTimeout(() => setCoverThumb(captionThumb(cardEl) ?? null), 120);
+    const t = setTimeout(() => setCoverThumb(captionThumb(cardEl ?? (shot?.src as HTMLCanvasElement | undefined)) ?? null), 120);
     return () => clearTimeout(t);
   }, [phase, cardEl, card?.look, shot]);
 
   // The caption screen's preview: the card as it is now, stickers and all, small.
   const openCaption = () => {
-    setThumb(captionThumb(cardEl, (ctx, w, h) => drawStickers(ctx, items, w, h)));
+    setThumb(captionThumb(cardEl ?? (shot?.src as HTMLCanvasElement | undefined), (ctx, w, h) => drawStickers(ctx, items, w, h)));
     setCaptioning(true);
   };
 
+  // something to post: the card, or (a plain post) a photo or a slide
+  const hasContent = !!card || !!shot || tray.items.length > 0;
   const doPost = async () => {
-    if (!post || busy || posted || !card) return;
+    if (!post || busy || posted || !hasContent) return;
     setBusy("post");
     try {
       // the extras have been uploading all along; this only waits for any still going
       const extras = await tray.ready();
-      await post.onPost({ photo: await postPhoto(extras.length > 0), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card.look, extras, attach: att.save });
+      await post.onPost({ photo: await postPhoto(extras.length > 0), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card?.look ?? "plain", extras, attach: att.save });
       tray.commit();
+      // posted: the draft is done with (a lock in's key can change while it posts, so not by key)
+      void clearDraft();
+      draftOff.current = true;
       setPosted(true);
       setTimeout(onClose, 900);
     } catch (e: any) {
@@ -501,12 +617,12 @@ export function ShareStudio({
   // Save the card to the phone. On phones that's the system sheet (its "Save
   // Image" puts it in Photos); elsewhere it downloads.
   const doSave = async () => {
-    if (busy || !card) return;
+    if (busy || (!card && !shot)) return;
     setBusy("save");
     try {
-      const blob = await cardBlob();
+      const blob = card ? await cardBlob() : await finalPhoto();
       if (!blob) throw new Error("Couldn't build the card");
-      const outcome = await shareCardImage(blob, { filename: `jf-effect-${card.look}.jpg`, title: "JF Effect" });
+      const outcome = await shareCardImage(blob, { filename: `jf-effect-${card?.look ?? "photo"}.jpg`, title: "JF Effect" });
       if (outcome === "downloaded") toast.success("Saved to your phone");
       else if (outcome === "failed") toast.error("Couldn't save on this device");
     } catch (e: any) {
@@ -516,6 +632,11 @@ export function ShareStudio({
     }
   };
 
+  // The frozen photo shown bare (no card on it): encoded once, not on every keystroke of the caption.
+  const shotUrl = useMemo(() => {
+    if (phase !== "edit" || showCard || !shot) return null;
+    return shot.src instanceof HTMLImageElement ? shot.src.src : (shot.src as HTMLCanvasElement).toDataURL("image/jpeg", 0.8);
+  }, [phase, showCard, shot]);
   const aud = AUDIENCE.find((a) => a.key === visibility) ?? AUDIENCE[0];
   const AudIcon = aud.icon;
   const stickerContext = useMemo(
@@ -552,7 +673,9 @@ export function ShareStudio({
                 className={cn("absolute inset-0 h-full w-full object-cover", status === "live" && !showCard ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
               />
             )}
-            {phase === "edit" && !showCard && shot && <img src={shot.src instanceof HTMLImageElement ? shot.src.src : (shot.src as HTMLCanvasElement).toDataURL("image/jpeg", 0.8)} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+            {phase === "edit" && !showCard && shotUrl && <img src={shotUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+            {/* a plain post of clips: the first one, up front */}
+            {phase === "edit" && !card && !shot && tray.items[0]?.preview && <img src={tray.items[0].preview} alt="" className="absolute inset-0 h-full w-full object-cover" />}
             {showCard && <canvas ref={setCardEl} className="pointer-events-none absolute inset-0 h-full w-full" aria-label={card ? `${TEMPLATE_LABEL[card.look]} look` : undefined} />}
 
             {phase === "shoot" && status === "fallback" && (
@@ -610,23 +733,32 @@ export function ShareStudio({
                       {timer ? `${timer}s` : null}
                     </button>
                   )}
-                  {canShoot && !adding && (
+                  {canShoot && !adding && (card ? (
                     <button type="button" onClick={skipPhoto} className="ml-auto h-10 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
                       No photo
                     </button>
-                  )}
+                  ) : onWrite ? (
+                    <button type="button" onClick={onWrite} className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
+                      <PenLine className="h-4 w-4" /> Write
+                    </button>
+                  ) : null)}
                 </>
               ) : (
                 <>
                   <button type="button" onClick={retake} className={pill} aria-label={shot ? "Retake" : "Back to the camera"}>
                     <ChevronLeft className="h-6 w-6" />
                   </button>
-                  <button type="button" onClick={() => setRequest({ kind: "text", n: Date.now() })} className={cn(pill, "ml-auto")} aria-label="Add text">
-                    <Type className="h-5 w-5" />
-                  </button>
-                  <button type="button" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} className={pill} aria-label="Add a sticker">
-                    <Smile className="h-5 w-5" />
-                  </button>
+                  {/* text and stickers go on a card or a photo (never on a clip) */}
+                  {(card || shot) && (
+                    <>
+                      <button type="button" onClick={() => setRequest({ kind: "text", n: Date.now() })} className={cn(pill, "ml-auto")} aria-label="Add text">
+                        <Type className="h-5 w-5" />
+                      </button>
+                      <button type="button" onClick={() => setRequest({ kind: "stickers", n: Date.now() })} className={pill} aria-label="Add a sticker">
+                        <Smile className="h-5 w-5" />
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -681,6 +813,7 @@ export function ShareStudio({
             <div className="space-y-2">
               <SlideTray
                 tray={tray}
+                hasCover={!!card || !!shot}
                 cover={coverThumb}
                 onCamera={() => {
                   setAdding(true);
@@ -699,7 +832,7 @@ export function ShareStudio({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={!!busy || !card}
+                  disabled={!!busy || (!card && !shot)}
                   onClick={() => void doSave()}
                   className="grid h-14 w-12 shrink-0 place-items-center rounded-2xl bg-white/10 active:scale-[0.97] disabled:opacity-60"
                   aria-label="Save image"
@@ -734,7 +867,7 @@ export function ShareStudio({
                 )}
                 <button
                   type="button"
-                  disabled={!!busy || posted || !post || !card || att.recorder.recording}
+                  disabled={!!busy || posted || !post || !hasContent || att.recorder.recording}
                   onClick={() => void doPost()}
                   className={cn(
                     // the app's own primary button: JF red, solid

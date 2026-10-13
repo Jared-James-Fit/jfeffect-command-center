@@ -48,6 +48,9 @@ export async function compressImage(
     const blob: Blob | null = await new Promise((resolve) =>
       canvas.toBlob((b) => resolve(b), mimeType, quality)
     );
+    // iPhone Safari caps total canvas memory: give it back now, not at the next GC
+    canvas.width = 0;
+    canvas.height = 0;
     if (!blob || blob.size >= file.size) return file;
 
     const name = (file as File).name?.replace(/\.[^.]+$/, "") ?? "image";

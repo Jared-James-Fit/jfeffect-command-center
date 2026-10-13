@@ -1,9 +1,10 @@
 import { NewAchievementReveal } from "@/components/portal/new-achievement-reveal";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download } from "lucide-react";
+import { StudioShell } from "@/components/community/studio-chunks";
 import type { WorkoutSummary } from "@/lib/workout-summary";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
@@ -74,6 +75,12 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const [sharing, setSharing] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareMounted, setShareMounted] = useState(false);
+  // fetched while this build is still the live one (a session can outlast a publish), so Share opens
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => void WorkoutShareStudio.preload(), 800);
+    return () => window.clearTimeout(t);
+  }, [open]);
   // A caption started in the recap's footer, carried into the studio.
   const [draftCaption, setDraftCaption] = useState("");
   const shareCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -421,7 +428,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
       </DialogContent>
     </Dialog>
     {completionId && shareMounted && (
-      <Suspense fallback={null}>
+      <StudioShell onClose={() => setShareOpen(false)}>
         <WorkoutShareStudio
           open={shareOpen}
           onClose={() => setShareOpen(false)}
@@ -431,7 +438,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           unit={displayUnit}
           draftCaption={draftCaption}
         />
-      </Suspense>
+      </StudioShell>
     )}
     </>
   );

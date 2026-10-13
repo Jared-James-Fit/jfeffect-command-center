@@ -37,6 +37,6 @@ describe("a page that keeps failing heals itself once", () => {
   });
 
   it("every device starts from a fresh saved cache after this publish", () => {
-    expect(read("src/lib/query-persister.ts")).toContain('export const QUERY_PERSIST_BUSTER = "v7";');
+    expect(read("src/lib/query-persister.ts")).toContain('export const QUERY_PERSIST_BUSTER = "v9";');
   });
 });

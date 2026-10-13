@@ -829,6 +829,58 @@ export async function shareToCommunity(
   return postId;
 }
 
+/**
+ * A member's own post (not a workout): a photo and/or slides, words, who
+ * sees it. Upload the photo, save, then the GIF / voice memo. A photo the
+ * database turned down is removed again (not on a network failure: the save
+ * may have landed). Earns no League points (those follow shared workouts).
+ */
+export async function createCommunityPost(
+  qc: ReturnType<typeof useQueryClient>,
+  i: { userId: string; caption: string; visibility: CommunityVisibility; photo: File | null; extras?: PostSlide[]; attach?: (postId: string) => Promise<void> },
+): Promise<string> {
+  const media: PostSlide[] = [];
+  let up: Awaited<ReturnType<typeof uploadPicked>> | null = null;
+  if (i.photo) {
+    const res = await pickMedia(i.photo);
+    if (!res.ok) throw new Error(res.reason);
+    try {
+      up = await uploadPicked(res.media, i.userId);
+    } finally {
+      releasePicked(res.media);
+    }
+    media.push({ path: up.media_path, thumb: up.media_thumb_path, type: up.media_type, width: up.media_width, height: up.media_height });
+  }
+  media.push(...(i.extras ?? []));
+  const { data, error } = await db.rpc("community_create_post", { _caption: i.caption, _media: media, _visibility: i.visibility });
+  if (error) {
+    if (up && error.code) await removeCommunityFiles([up.media_path, up.media_thumb_path]);
+    throw error;
+  }
+  const postId = (data as { id: string }).id;
+  try {
+    await i.attach?.(postId);
+  } catch (e) {
+    invalidateCommunity(qc);
+    throw new Error((e as any)?.message ? `Posted, but the GIF or voice memo didn't attach: ${(e as any).message}` : "Posted, but the GIF or voice memo didn't attach. Edit the post to add it.");
+  }
+  invalidateCommunity(qc);
+  return postId;
+}
+
+/** A member's words-first post (from Write), with any photos it carries. */
+export function useCreateCommunityPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { caption: string; media?: PostSlide[]; visibility?: CommunityVisibility }) => {
+      const { data, error } = await db.rpc("community_create_post", { _caption: a.caption, _media: a.media ?? [], _visibility: a.visibility ?? "community" });
+      if (error) throw error;
+      return (data as { id: string }).id;
+    },
+    onSuccess: () => invalidateCommunity(qc),
+  });
+}
+
 /** What a Community post earns right now (today banked? weekly cap?). */
 export function usePostPointsStatus(enabled = true) {
   return useQuery({

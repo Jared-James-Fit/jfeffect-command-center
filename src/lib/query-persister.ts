@@ -12,7 +12,8 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // v7 evicts every saved copy after a phone's admin app kept failing on a
 // snapshot from an older build (a fresh browser loaded the same pages fine).
 // v8 evicts saved copies holding expired signed photo links (the "?" boxes).
-export const QUERY_PERSIST_BUSTER = "v8";
+// v9 evicts saved Maps that came back as `{}` (the Hall of Strength's "T?.get is not a function").
+export const QUERY_PERSIST_BUSTER = "v9";
 export const QUERY_PERSIST_KEY = "jfeffect-rq-cache";
 export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
@@ -79,9 +80,24 @@ export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
 // before the refetch lands. Any query holding one is kept in memory only.
 const SIGNED_URL_MARK = "/storage/v1/object/sign/";
 
-/** What goes to disk: an allowed key, and no signed link anywhere in its data. */
+/**
+ * JSON.stringify turns a Map or Set into `{}`, so a restored copy would come
+ * back as a plain object and `.get` / `.has` would throw on the next render
+ * (the League tab's Hall of Strength crashed exactly like that: "T?.get is not
+ * a function"). Any query holding one stays in memory only. Shallow enough to
+ * be cheap: the shapes that matter put the Map at the top or one level down.
+ */
+export function holdsMapOrSet(v: unknown, depth = 0): boolean {
+  if (v instanceof Map || v instanceof Set) return true;
+  if (depth >= 3 || v === null || typeof v !== "object") return false;
+  const vals = Array.isArray(v) ? v.slice(0, 50) : Object.values(v as Record<string, unknown>).slice(0, 50);
+  return vals.some((x) => holdsMapOrSet(x, depth + 1));
+}
+
+/** What goes to disk: an allowed key, nothing JSON can't round-trip, and no signed link anywhere in its data. */
 export function shouldPersistQuery(q: { queryKey: readonly unknown[]; state: { status: string; data: unknown } }): boolean {
   if (q.state.status !== "success" || !shouldPersistQueryKey(q.queryKey)) return false;
+  if (holdsMapOrSet(q.state.data)) return false;
   try {
     return !JSON.stringify(q.state.data ?? null).includes(SIGNED_URL_MARK);
   } catch {

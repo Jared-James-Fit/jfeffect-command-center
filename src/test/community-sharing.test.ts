@@ -463,7 +463,8 @@ describe("lock in (I showed up)", () => {
   it("opens the in-app camera and keeps the logger light", () => {
     expect(bar).toContain("else setCapturing(true);");
     expect(bar).toContain('lazyWithRetry(() => import("@/components/community/lock-in-editor")');
-    expect(bar).toContain('lazyWithRetry(() => import("@/components/community/share-studio")');
+    // the studio comes from the shared loader: fetched early, fails full screen, crashes contained
+    expect(bar).toContain('import { ShareStudio, StudioShell, usePreloadStudio } from "@/components/community/studio-chunks";');
     expect(bar).not.toContain("workout-share-card");
   });
   it("draws a LOCKED IN card and carries the time onto the finished photo card", () => {
@@ -906,7 +907,8 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
     const studio = read("src/components/community/share-studio.tsx");
     expect(picker).toContain("<ShareStudio");
     expect(bar).toContain("<ShareStudio");
-    expect(picker).toContain('const activeMode: Mode = today ? mode ?? "lockin" : "workout";');
+    // opens on a session to start, else a workout from the last day, else a plain post
+    expect(picker).toContain('const fallbackMode: Mode = today ? "lockin" : freshWorkout ? "workout" : "post";');
     // the shutter freezes the frame in place: same dialog, no second screen
     expect(studio).toContain('freeze({ src: c, file: null, live: true, at: new Date() });');
     expect(studio).toContain('setPhase("edit");');
@@ -931,7 +933,7 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
     const studio = read("src/components/community/share-studio.tsx");
     expect(layer).toContain("const k = Math.min(1, 2048 / Math.max(nw, nh));");
     expect(layer).toContain("const s = Math.max(REF / W, CARD_H / H);");
-    expect(studio).toContain("drawStickers(c.getContext(\"2d\")!, items, CARD_W, CARD_H);");
+    expect(studio).toContain("drawStickers(context2d(c), items, CARD_W, CARD_H);");
     expect(studio).toContain("const b = await bakeStickers(shot.src, items);");
     // nothing added → the original photo, untouched
     expect(studio).toContain("if (shot.file) return shot.file;");
@@ -977,7 +979,7 @@ describe("share camera: options right away, no list in the way", () => {
     expect(picker).toContain("const changeTarget = () => setRawOpen(true);");
   });
   it("the viewfinder is the real card, live; swipe changes the look, before and after the shot", () => {
-    expect(picker).toContain("card={cameraCard}");
+    expect(picker).toContain('card={activeMode === "post" ? null : cameraCard}');
     expect(read("src/components/community/lock-in.tsx")).toContain("lockInCameraCard({ workoutTitle: cardTitle, athleteName, plan: plan ?? [] })");
     expect(cam).toContain("paintShareCard(cardEl, { ...c.data, lockedIn, template: c.look, media }, logo, LIVE_SCALE);");
     expect(cam).toContain("if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) changeLook(dx < 0 ? 1 : -1);");
@@ -1291,7 +1293,7 @@ describe("captions: Instagram-length, written on their own screen", () => {
     expect(read("src/components/community/post-detail.tsx")).toContain('<p className="whitespace-pre-line');
   });
   it("the preview on the caption screen includes the stickers and text", () => {
-    expect(read("src/components/community/share-studio.tsx")).toContain("captionThumb(cardEl, (ctx, w, h) => drawStickers(ctx, items, w, h))");
+    expect(read("src/components/community/share-studio.tsx")).toContain("captionThumb(cardEl ?? (shot?.src as HTMLCanvasElement | undefined), (ctx, w, h) => drawStickers(ctx, items, w, h))");
   });
   it("long captions fold to three lines in the feed with 'more'", () => {
     expect(read("src/components/community/feed-caption.tsx")).toContain('!open && "line-clamp-3"');

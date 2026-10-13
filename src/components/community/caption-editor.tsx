@@ -3,12 +3,13 @@ import { Check, PenLine } from "lucide-react";
 import { CAPTION_MAX } from "@/lib/community";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { MentionSuggestBar } from "@/components/community/mentions";
+import { releaseCanvas } from "@/lib/canvas-memory";
 
 /** A small picture of the post for the caption screen (null if it can't be drawn). */
 export function captionThumb(src: HTMLCanvasElement | null | undefined, extra?: (ctx: CanvasRenderingContext2D, w: number, h: number) => void): string | null {
   if (!src?.width || !src.height) return null;
+  const c = document.createElement("canvas");
   try {
-    const c = document.createElement("canvas");
     c.width = 189;
     c.height = Math.round((189 * src.height) / src.width);
     const ctx = c.getContext("2d")!;
@@ -17,6 +18,8 @@ export function captionThumb(src: HTMLCanvasElement | null | undefined, extra?: 
     return c.toDataURL("image/jpeg", 0.85);
   } catch {
     return null;
+  } finally {
+    releaseCanvas(c);
   }
 }
 
