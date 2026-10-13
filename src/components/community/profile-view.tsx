@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, Camera, Lock, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { UserAvatar } from "@/components/user-avatar";
+import { AvatarCropper } from "@/components/avatar-cropper";
 import { CoachBadge } from "@/components/community/post-card";
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
 import { BIO_MAX, trainingSinceLabel, type CommunityPost } from "@/lib/community";
@@ -32,6 +33,9 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
   const saveBio = useSetBio(userId);
   const setAvatar = useSetCommunityAvatar(userId);
   const photoRef = useRef<HTMLInputElement | null>(null);
+  // A picked photo goes through "Move and scale" before it's saved.
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  useEffect(() => () => { if (cropSrc) URL.revokeObjectURL(cropSrc); }, [cropSrc]);
 
   if (isLoading || !profile) {
     return (
@@ -91,7 +95,21 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = "";
-                if (f) setAvatar.mutate(f, { onSuccess: () => toast.success("Photo updated"), onError: (err: any) => toast.error(err?.message ?? "Couldn't upload that photo") });
+                if (!f) return;
+                if (f.type && !f.type.startsWith("image/")) return void toast.error("Pick a photo");
+                setCropSrc(URL.createObjectURL(f));
+              }}
+            />
+          )}
+          {profile.is_me && (
+            <AvatarCropper
+              src={cropSrc}
+              open={!!cropSrc}
+              onCancel={() => setCropSrc(null)}
+              onDone={(blob) => {
+                setCropSrc(null);
+                const file = new File([blob], "community-photo.jpg", { type: "image/jpeg" });
+                setAvatar.mutate(file, { onSuccess: () => toast.success("Photo updated"), onError: (err: any) => toast.error(err?.message ?? "Couldn't upload that photo") });
               }}
             />
           )}

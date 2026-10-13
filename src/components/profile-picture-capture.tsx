@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, RefreshCw, Upload, X, AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
+import { Camera, Crop as CropIcon, RefreshCw, Upload, X, AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { compressImage } from "@/lib/image-compress";
 import { withRetry, isTransientError } from "@/lib/retry";
 import { Progress } from "@/components/ui/progress";
+import { AvatarCropper } from "@/components/avatar-cropper";
 
 interface Props {
   userId: string;
@@ -40,7 +41,12 @@ export function ProfilePictureCapture({
   const streamRef = useRef<MediaStream | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [opening, setOpening] = useState(false);
+  /** The full photo just taken or picked (kept so "Adjust" can re-crop it). */
+  const [raw, setRaw] = useState<string | null>(null);
+  const [cropping, setCropping] = useState(false);
+  /** The cropped square that gets saved. */
   const [preview, setPreview] = useState<string | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -112,44 +118,72 @@ export function ProfilePictureCapture({
     setStreaming(false);
   };
 
+  // Object URLs we made: released when replaced or on unmount.
+  const urls = useRef<string[]>([]);
+  const track = (u: string) => {
+    urls.current.push(u);
+    return u;
+  };
+  useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), []);
+
+  /** A new photo: straight into "Move and scale". */
+  const startCrop = (src: string) => {
+    setRaw(src);
+    setPreview(null);
+    setPreviewBlob(null);
+    setCropping(true);
+  };
+
   const capture = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const size = Math.min(video.videoWidth, video.videoHeight);
-    canvas.width = size;
-    canvas.height = size;
+    // The whole frame (the crop step frames the face), mirrored so the saved
+    // photo matches the live selfie preview exactly.
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Mirror the canvas so the saved photo matches the live (selfie) preview
-    // exactly — what they see is what gets submitted.
     ctx.save();
-    ctx.translate(size, 0);
+    ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(video, (video.videoWidth - size) / 2, (video.videoHeight - size) / 2, size, size, 0, 0, size, size);
+    ctx.drawImage(video, 0, 0);
     ctx.restore();
-    setPreview(canvas.toDataURL("image/jpeg", 0.9));
+    startCrop(canvas.toDataURL("image/jpeg", 0.92));
     stopCamera();
   };
 
-  const retake = () => { setPreview(null); startCamera(); };
+  const retake = () => { setPreview(null); setPreviewBlob(null); setRaw(null); startCamera(); };
 
   const onFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPreview(reader.result as string);
-    reader.readAsDataURL(file);
     e.target.value = "";
+    if (!file) return;
+    if (file.type && !file.type.startsWith("image/")) {
+      toast.error("Pick a photo");
+      return;
+    }
+    startCrop(track(URL.createObjectURL(file)));
+  };
+
+  const onCropped = (blob: Blob) => {
+    setPreviewBlob(blob);
+    setPreview(track(URL.createObjectURL(blob)));
+    setCropping(false);
+  };
+
+  const onCropCancel = () => {
+    setCropping(false);
+    // cancelled before ever cropping: drop the photo (Retake / pick again)
+    if (!previewBlob) setRaw(null);
   };
 
   const upload = async () => {
-    if (!preview) return;
+    if (!previewBlob) return;
     setBusy(true);
     setProgress(5);
     try {
-      const raw = await (await fetch(preview)).blob();
-      const compressed = await compressImage(raw, { maxDimension: 1200, quality: 0.85 });
+      const compressed = await compressImage(previewBlob, { maxDimension: 1200, quality: 0.85 });
       const path = `${userId}/avatar-${Date.now()}.jpg`;
       setProgress(35);
       await withRetry(
@@ -170,6 +204,8 @@ export function ProfilePictureCapture({
       onMeta?.({ source: source ?? (isClient ? "camera" : "upload"), takenAt: new Date().toISOString() });
       toast.success("Profile picture updated");
       setPreview(null);
+      setPreviewBlob(null);
+      setRaw(null);
     } catch (e: any) {
       toast.error(e?.message ?? "Upload failed");
     } finally {
@@ -241,8 +277,8 @@ export function ProfilePictureCapture({
 
       {/* Captured photo preview */}
       {preview && (
-        <div className="mx-auto w-full max-w-sm overflow-hidden rounded-xl border-2 border-border bg-black">
-          <img loading="lazy" src={preview} alt="Captured" className="aspect-square w-full object-cover" />
+        <div className="mx-auto w-full max-w-[260px]">
+          <img src={preview} alt="Your new profile picture" className="aspect-square w-full rounded-full border-2 border-border object-cover shadow-sm" />
         </div>
       )}
 
@@ -310,10 +346,16 @@ export function ProfilePictureCapture({
             {busy && progress > 0 && (
               <Progress value={progress} className="h-1.5" />
             )}
-            <Button type="button" variant="outline" onClick={retake}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Retake
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" onClick={() => setCropping(true)} disabled={busy || !raw}>
+                <CropIcon className="mr-2 h-4 w-4" />
+                Adjust
+              </Button>
+              <Button type="button" variant="outline" onClick={retake} disabled={busy}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retake
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -331,6 +373,7 @@ export function ProfilePictureCapture({
       )}
 
       <canvas ref={canvasRef} className="hidden" />
+      <AvatarCropper src={raw} open={cropping} onCancel={onCropCancel} onDone={onCropped} />
     </div>
   );
 }
