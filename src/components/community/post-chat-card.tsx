@@ -13,13 +13,15 @@ export type PostCardAttachment = {
   thumb_path?: string | null;
   /** Sent from the post's "Message" button. */
   reply?: boolean;
+  /** Sent from the story viewer (a message or a quick emoji). */
+  story?: boolean;
 };
 
 /**
  * A community post inside a chat: its photo (when it has one), what it is,
  * and a tap that opens it. Replies read like Instagram's: "Replied to your
- * post" for the person who posted it, "You replied to Amanda's post" for the
- * one who sent it.
+ * post" (or story) for the person who posted it, "You replied to Amanda's
+ * story" for the one who sent it.
  */
 export function CommunityPostChatCard({ att, mine, staff }: { att: PostCardAttachment; mine: boolean; staff: boolean }) {
   const path = att.thumb_path ?? null;
@@ -31,8 +33,9 @@ export function CommunityPostChatCard({ att, mine, staff }: { att: PostCardAttac
   });
   if (!att.post_id) return null;
   const birthday = /birthday/i.test(att.title ?? "");
+  const what = att.story ? "story" : "post";
   const label = att.reply
-    ? mine ? `You replied to ${att.name ? `${att.name}'s` : "their"} post` : "Replied to your post"
+    ? mine ? `You replied to ${att.name ? `${att.name}'s` : "their"} ${what}` : `Replied to your ${what}`
     : null;
   return (
     <div className={cn("flex max-w-full flex-col gap-1", mine ? "items-end" : "items-start")}>
