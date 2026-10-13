@@ -66,10 +66,13 @@ describe("Rankings", () => {
     expect(card).toContain("{monthName(monthStart)} League");
     expect(card).toContain("{monthClockLabel(finalWeek)}");
   });
-  it("Monthly: the whole Top 10 on the page (and you, if you're below it), Show all for the rest; every row opens that athlete", () => {
+  it("Monthly: only the Top 10 (and you, if you're below it), never the whole roster; no record pills by names; every row opens that athlete", () => {
     expect(card).toContain("const SHOWN = 10;");
     expect(card).toContain("[...shown, ...(meBelow ? [meBelow] : [])]");
-    expect(card).toContain("Show all ${ranked.length}");
+    expect(card).not.toContain("Show all");
+    expect(card).not.toContain("RecordBadges");
+    // last month's final standings: the same Top 10
+    expect(card).toContain("{listed.map((r) => (");
     expect(card).toContain("onOpen={() => openAthlete(r.client_id)}");
     expect(card).toContain('hideCloseButton={sheet?.kind === "athlete"}');
     expect(card).not.toContain("View Rankings");

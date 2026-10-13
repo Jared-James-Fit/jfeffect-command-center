@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type AchievementMetrics } from "@/lib/athlete-achievements";
 import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
 import { LEAGUE_RULES, LEAGUE_RECORDS_NOTE, formatLeaguePoints } from "@/lib/league-points";
-import { RecordBadges } from "@/components/portal/record-badges";
 import { formatWeightLifted } from "@/lib/weight-lifted";
 import { useWeightUnit } from "@/lib/use-weight-unit";
 import { isFinalWeek, leagueToday } from "@/lib/league-boost";
@@ -40,7 +39,7 @@ function useXpEvents(clientId: string) {
   });
 }
 
-/** The board shows the Top 10 (and you, if you're below it); "Show all" opens the rest in place. */
+/** The scoreboard shows the Top 10 (and you, if you're below it), this month and last. */
 const SHOWN = 10;
 const MEDALS = ["🥇", "🥈", "🥉"];
 
@@ -61,12 +60,12 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
   const { data: rows = [], isPending } = usePerformanceLeague("current");
   // The sheet holds only an athlete's details or last month's final standings.
   const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string; fromPrevious?: boolean } | { kind: "previous" }>(null);
-  const [showAll, setShowAll] = useState(false);
 
   const me = rows.find((r) => r.client_id === clientId) ?? rows.find((r) => r.is_me) ?? null;
   const ranked = rankedRows(rows);
-  const shown = showAll ? ranked : ranked.filter((r) => Number(r.rank) <= SHOWN);
-  const meBelow = !showAll && me?.qualified && me.rank != null && me.rank > SHOWN ? me : null;
+  // The scoreboard is the Top 10 (and you, if you're below it): never the whole roster.
+  const shown = ranked.filter((r) => Number(r.rank) <= SHOWN);
+  const meBelow = me?.qualified && me.rank != null && me.rank > SHOWN ? me : null;
   const finalWeek = me?.is_final_week ?? isFinalWeek();
   const monthStart = rows[0]?.month_start ?? `${leagueToday().slice(0, 7)}-01`;
   const prevName = monthName(previousLeagueMonth());
@@ -116,15 +115,6 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
                     </li>
                   ))}
                 </ol>
-              )}
-              {ranked.length > SHOWN && (
-                <button
-                  type="button"
-                  onClick={() => setShowAll((v) => !v)}
-                  className="mx-3 mt-2 flex min-h-10 w-[calc(100%-1.5rem)] items-center justify-center rounded-xl text-[13px] font-bold text-primary active:bg-muted"
-                >
-                  {showAll ? "Show top 10" : `Show all ${ranked.length}`}
-                </button>
               )}
             </>
           )}
@@ -242,7 +232,6 @@ function BoardRow({ row: r, finalWeek, onOpen }: { row: Row; finalWeek: boolean;
           <span className={cn("truncate text-[13px] font-semibold", r.is_me && "text-primary")}>{r.is_me ? "You" : r.display_name}</span>
           {r.is_coach && <CoachTag />}
         </span>
-        <RecordBadges row={r} size="xs" best className="mt-0.5" />
         {finalWeek && <RowBoost row={r} />}
       </span>
       <span className="shrink-0 text-[13px] font-black tabular-nums">{formatLeaguePoints(r.total_points)}</span>
@@ -426,6 +415,10 @@ function FinalStandings({ onOpenAthlete }: { onOpenAthlete: (id: string) => void
   const top = Math.max(0, ...ranked.map((r) => r.total_points));
   const me = data.find((r) => r.is_me);
   const name = monthName(previousLeagueMonth());
+  const listed = [
+    ...ranked.filter((r) => Number(r.rank) <= SHOWN),
+    ...(me?.qualified && me.rank != null && me.rank > SHOWN ? [me] : []),
+  ];
   return (
     <div className="space-y-4">
       <SheetHeader className="text-left">
@@ -444,7 +437,7 @@ function FinalStandings({ onOpenAthlete }: { onOpenAthlete: (id: string) => void
           )}
           <PointsLegend rows={ranked} />
           <ol className="divide-y overflow-hidden rounded-xl border">
-            {ranked.map((r) => (
+            {listed.map((r) => (
               <li key={r.client_id}>
                 <button type="button" onClick={() => onOpenAthlete(r.client_id)} className={cn("flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm active:bg-muted", r.is_me && "bg-primary/5")}>
                   <span className="w-7 shrink-0 text-center font-black text-muted-foreground">{MEDALS[Number(r.rank) - 1] ?? `#${r.rank}`}</span>
