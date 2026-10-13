@@ -40,7 +40,8 @@ export function isSubscriptionActive(status: string | null | undefined): boolean
  * row the first time they open Nutrition (their meal logs hang off it); that
  * row isn't a membership, they're a client (listed under Clients). Matched by
  * login, or by email for a row not linked to one yet. Admins' test accounts
- * always stay (the page decides where they show).
+ * always stay (the page decides where they show). Pass coaching-tier clients
+ * only: every JF member also has a (self_serve) client row.
  */
 export function withoutCoachingClients<
   M extends { user_id: string | null; email: string | null; is_admin_sandbox?: boolean | null },

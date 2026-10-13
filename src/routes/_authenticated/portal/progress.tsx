@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
+import { useEntitlement } from "@/lib/service-tier";
 import { PageHeader } from "@/components/app-shell";
 import { ProgressSection, type ProgressInitialAction } from "@/components/progress/progress-section";
 
@@ -24,6 +25,8 @@ function PortalProgress() {
   const userId = usePortalUserId();
   const { action } = Route.useSearch();
   const quickAdd = !!action && QUICK_ADD.includes(action);
+  // asking a coach to review progress is the coaching service
+  const canRequestReview = useEntitlement("check_ins");
 
   const { data: client, isLoading } = useQuery({
     queryKey: ["my-client-progress-ctx", userId],
@@ -49,7 +52,7 @@ function PortalProgress() {
         assignedCoachId: (client as any)?.assigned_coach_id ?? null,
         viewerRole: "owner" as const,
         preferredWeightUnit: ((client as any)?.preferred_weight_unit as any) ?? "lb",
-        canRequestReview: true,
+        canRequestReview,
       }
     : null;
 

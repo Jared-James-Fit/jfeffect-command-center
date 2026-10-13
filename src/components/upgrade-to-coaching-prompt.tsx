@@ -5,7 +5,7 @@ import { Sparkles, MessageCircle } from "lucide-react";
 
 export function UpgradeToCoachingPrompt({
   feature = "This feature",
-  upgradeTo = "/m/upgrade",
+  upgradeTo = "/portal/upgrade",
   supportTo = "/m/account",
 }: {
   feature?: string;

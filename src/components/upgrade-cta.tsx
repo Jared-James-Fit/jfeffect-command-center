@@ -28,7 +28,7 @@ export function UpgradeCTA({
           <span className="text-muted-foreground hidden sm:inline">— {subtitle}</span>
         </div>
         {/* Upgrade button is web-only; on native, direct users to jfeffect.com */}
-        {!native && <Link to="/m/upgrade"><Button size="sm">Upgrade</Button></Link>}
+        {!native && <Link to="/portal/upgrade"><Button size="sm">Upgrade</Button></Link>}
         {native && <span className="text-xs text-muted-foreground">Available at jfeffect.com</span>}
       </div>
     );
@@ -46,7 +46,7 @@ export function UpgradeCTA({
             </ul>
           )}
           {!native && (
-            <Link to="/m/upgrade" className="mt-4 inline-block">
+            <Link to="/portal/upgrade" className="mt-4 inline-block">
               <Button>See plans & upgrade</Button>
             </Link>
           )}

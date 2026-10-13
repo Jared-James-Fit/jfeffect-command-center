@@ -43,7 +43,7 @@ import { assertAdminView } from "@/lib/permissions.server";
 
 export type AgreementStateResponse = {
   applicable: boolean;
-  reason: "ok" | "no_client" | "staff" | "inactive" | "unavailable";
+  reason: "ok" | "no_client" | "staff" | "inactive" | "unavailable" | "self_serve";
   clientId: string | null;
   firstName: string | null;
   state: AgreementState | null;
@@ -203,11 +203,13 @@ export const getMyAgreementState = createServerFn({ method: "GET" })
       const { data: client, error } = await supabase
         .from("clients")
         .select(
-          "id, first_name, preferred_name, full_name, archived, status, portal_access_disabled, agreement_signed, agreement_version, agreement_signed_date",
+          "id, first_name, preferred_name, full_name, archived, status, portal_access_disabled, agreement_signed, agreement_version, agreement_signed_date, service_tier",
         )
         .eq("id", clientId)
         .maybeSingle();
       if (error || !client) return { ...base, applicable: false, reason: "no_client" };
+      // the coaching agreement is for coaching: a JF member never signs it
+      if ((client as any).service_tier === "self_serve") return { ...base, clientId, applicable: false, reason: "self_serve" };
 
       if (!isActiveClient(client)) {
         return { ...base, clientId, applicable: false, reason: "inactive" };
@@ -667,6 +669,8 @@ async function loadRoster(supabase: any, clientIds?: string[]) {
       )
       .not("user_id", "is", null)
       .eq("archived", false)
+      // JF members don't sign the coaching agreement
+      .eq("service_tier", "coaching")
       .order("id");
     if (clientIds) q = q.in("id", clientIds);
     return q.range(from, to);

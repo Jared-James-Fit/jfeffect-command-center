@@ -192,7 +192,37 @@ export const clientBottomNav: NavItem[] = [
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
 ];
 
-// App Member portal navigation
+// JF Membership (self-serve) in the portal: the same app as coaching clients,
+// minus the coach (Messages, Check-Ins, Agreements, Goals & Setup, Purchases),
+// plus what a member manages themselves: plans, support, their membership.
+export const selfServeNav: NavItem[] = [
+  { to: "/portal", label: "Home", icon: LayoutDashboard },
+  { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  { to: "/portal/plans", label: "Plan Library", icon: BookOpen, keywords: ["plans","programs","library","start","training"] },
+  { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","compare"] },
+  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
+  { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","community","members","posts"] },
+  { to: "/portal/support", label: "Support", icon: HelpCircle, keywords: ["help","support","question","bug","contact"] },
+  { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
+  { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
+  { to: "/portal/resources", label: "Resources", icon: FolderOpen },
+  { to: "/portal/tools", label: "Tools", icon: Wrench, keywords: ["calculator","1rm","macro","plate","water","sleep"] },
+  { to: "/portal/calendar", label: "Schedule", icon: Calendar, keywords: ["schedule","calendar","workouts","events"] },
+  { to: "/portal/membership", label: "Membership", icon: CreditCard, keywords: ["billing","subscription","payment","cancel","hold","plan","upgrade"] },
+  { to: "/portal/account", label: "Account Settings", icon: Settings },
+];
+
+// Members' bottom tabs: Crew stays the raised centre; Support takes Messages' place.
+export const selfServeBottomNav: NavItem[] = [
+  { to: "/portal", label: "Home", icon: LayoutDashboard },
+  { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  { to: "/portal/community", label: "Crew", icon: UsersRound, featured: true,
+    shortcut: { to: "/portal/community", hash: "rankings", label: "Rankings", icon: Trophy } },
+  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
+  { to: "/portal/support", label: "Support", icon: HelpCircle },
+];
+
+// App Member portal navigation (retired: /m redirects into the portal)
 export const memberNav: NavItem[] = [
   { to: "/m", label: "Home", icon: LayoutDashboard },
   { to: "/m/workouts", label: "Workouts", icon: Activity, keywords: ["plans","program","training","library"] },

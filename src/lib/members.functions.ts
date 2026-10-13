@@ -69,7 +69,9 @@ export const listMembers = createServerFn({ method: "GET" })
     if (data.status) q = q.eq("status", data.status);
     const [{ data: rows, error }, { data: clientRows, error: clientErr }] = await Promise.all([
       q,
-      supabaseAdmin.from("clients").select("user_id, email"),
+      // only coaching clients come out: a JF member's own client row (service tier
+      // self_serve) is the same person as the membership, listed here
+      supabaseAdmin.from("clients").select("user_id, email").eq("service_tier", "coaching"),
     ]);
     if (error) throw new Error(error.message);
     if (clientErr) throw new Error(clientErr.message);
@@ -414,4 +416,56 @@ export const redeemSetupToken = createServerFn({ method: "POST" })
       .eq("id", member.id);
 
     return { ok: true, email: member.email };
+  });
+/* ---------- membership → coaching (one athlete record) ---------- */
+
+/** A member's client row and tier, plus the coaches an admin can hand them to. */
+export const getMemberCoachingState = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: { memberId: string }) => z.object({ memberId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdminView(context as any);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: member } = await supabaseAdmin.from("app_members").select("id, user_id").eq("id", data.memberId).maybeSingle();
+    const { data: client } = member?.user_id
+      ? await supabaseAdmin.from("clients").select("id, service_tier, status, assigned_coach_id").eq("user_id", member.user_id).maybeSingle()
+      : { data: null };
+    const { data: coaches } = await supabaseAdmin.from("coaches").select("id, full_name, first_name, last_name").eq("archived", false).order("full_name");
+    return {
+      clientId: (client as any)?.id ?? null,
+      tier: ((client as any)?.service_tier ?? null) as "coaching" | "self_serve" | null,
+      assignedCoachId: (client as any)?.assigned_coach_id ?? null,
+      coaches: ((coaches ?? []) as any[]).map((c) => ({ id: c.id as string, name: (c.full_name || [c.first_name, c.last_name].filter(Boolean).join(" ") || "Coach") as string })),
+    };
+  });
+
+/**
+ * Upgrade a JF member to coaching: same client row (so every workout, PR and
+ * photo they logged comes with them), tier flipped to coaching, a coach
+ * assigned, and they start as a New Client (coaching onboarding forms, the
+ * agreement and check-ins switch on). Billing for coaching is set up
+ * separately, as for any client: this never touches Stripe.
+ */
+export const moveMemberToCoaching = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ memberId: z.string().uuid(), coachId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: member } = await supabaseAdmin.from("app_members").select("id, user_id, account_type").eq("id", data.memberId).maybeSingle();
+    if (!member?.user_id) throw new Error("This member hasn't signed in yet, so there's no account to move.");
+    let { data: client } = await supabaseAdmin.from("clients").select("id, service_tier").eq("user_id", member.user_id).maybeSingle();
+    if (!client) {
+      await (supabaseAdmin as any).rpc("ensure_member_client", { _member_id: member.id });
+      ({ data: client } = await supabaseAdmin.from("clients").select("id, service_tier").eq("user_id", member.user_id).maybeSingle());
+    }
+    if (!client) throw new Error("Couldn't find this member's account.");
+    const { data: coach } = await supabaseAdmin.from("coaches").select("id").eq("id", data.coachId).eq("archived", false).maybeSingle();
+    if (!coach) throw new Error("Pick an active coach.");
+    const { error } = await supabaseAdmin
+      .from("clients")
+      .update({ service_tier: "coaching", status: "New Client", assigned_coach_id: data.coachId } as any)
+      .eq("id", (client as any).id);
+    if (error) throw new Error(error.message);
+    return { clientId: (client as any).id as string };
   });

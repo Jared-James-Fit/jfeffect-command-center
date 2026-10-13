@@ -24,7 +24,7 @@ const MembershipOnboardingEmail = (p: MembershipOnboardingProps) => {
   const firstName = p.first_name?.trim() || 'there'
   const productName = p.product_name || 'JF Membership'
   const setupOrLogin = p.setup_link || p.app_login_link || 'https://jfeffect.com/auth'
-  const billingLink = p.billing_link || 'https://jfeffect.com/m/billing'
+  const billingLink = p.billing_link || 'https://jfeffect.com/portal/membership'
   const price = p.monthly_price_display || '$29 USD/month plus applicable tax'
   const trialEnd = p.trial_end_display
   const firstBilling = p.first_billing_display
@@ -92,7 +92,7 @@ export const template = {
     first_name: 'Jane',
     product_name: 'JF Membership',
     setup_link: 'https://jfeffect.com/member-setup?token=preview',
-    billing_link: 'https://jfeffect.com/m/billing',
+    billing_link: 'https://jfeffect.com/portal/membership',
     monthly_price_display: '$29 USD/month plus applicable tax',
     trial_end_display: 'June 18, 2026',
     first_billing_display: 'June 18, 2026',

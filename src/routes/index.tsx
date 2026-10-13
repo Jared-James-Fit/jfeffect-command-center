@@ -85,7 +85,7 @@ function IndexRedirect() {
           const isAdmin  = saved === "/admin" || saved.startsWith("/admin/");
 
           const roleMatch =
-            (isPortal && (role === "client" || role === "admin" || role === "coach")) ||
+            (isPortal && (role === "client" || role === "member" || role === "admin" || role === "coach")) ||
             (isMember && (role === "member"  || role === "admin" || role === "coach")) ||
             (isAdmin  && (role === "admin"   || role === "coach"));
 
@@ -99,7 +99,7 @@ function IndexRedirect() {
 
       const dest =
         role === "client" ? "/portal"
-        : role === "member" ? "/m"
+        : role === "member" ? "/portal"
         // The finance login starts at its desk, Taxes & Books (/finance redirects there).
         : viewOnly ? "/finance"
         : "/admin";

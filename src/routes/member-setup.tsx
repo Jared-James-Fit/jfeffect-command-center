@@ -46,7 +46,7 @@ function MemberSetupPage() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       toast.success("Welcome!");
-      navigate({ to: "/m", replace: true });
+      navigate({ to: "/portal", replace: true });
     } catch (e: any) {
       toast.error(e?.message ?? "Setup failed");
     } finally {

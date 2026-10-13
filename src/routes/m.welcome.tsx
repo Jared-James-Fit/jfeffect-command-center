@@ -89,7 +89,7 @@ function Welcome() {
           if (signedIn) {
             // Auto-redirect — REPLACE so Back doesn't return to /m/welcome.
             setTimeout(() => {
-              if (!cancelled) navigate({ to: "/m", replace: true });
+              if (!cancelled) navigate({ to: "/portal", replace: true });
             }, 600);
             // Fallback: if for any reason the redirect didn't take, surface
             // the "Continue to Membership" CTA prominently after 4s.
@@ -155,7 +155,7 @@ function Welcome() {
               )}
               <div className="flex flex-wrap gap-2 pt-2">
                 {state.signedIn ? (
-                  <Button onClick={() => navigate({ to: "/m", replace: true })}>
+                  <Button onClick={() => navigate({ to: "/portal", replace: true })}>
                     Continue to Membership
                   </Button>
                 ) : (

@@ -19,7 +19,7 @@ export function SubscriptionRestrictedBanner({
   const s = subscriptionStatus || status || null;
   if (!s) return null;
   const location = useLocation();
-  const onBilling = location.pathname.startsWith("/m/billing");
+  const onBilling = location.pathname.startsWith("/portal/membership") || location.pathname.startsWith("/m/billing");
   const reason =
     s === "Past Due" ? "Your subscription payment is past due."
     : s === "Payment Failed" ? "Your last payment didn't go through."
@@ -56,7 +56,7 @@ export function SubscriptionRestrictedBanner({
           Manage billing
         </Button>
       ) : (
-        <Link to={"/m/billing" as any}>
+        <Link to={"/portal/membership" as any}>
           <Button size="sm" variant="outline" className="border-amber-500/50">Manage billing</Button>
         </Link>
       )}

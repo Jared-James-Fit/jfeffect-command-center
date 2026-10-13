@@ -29,6 +29,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberAccessSummary } from "@/components/admin/member-access-summary";
+import { MoveToCoachingCard } from "@/components/admin/move-to-coaching-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
@@ -344,6 +345,7 @@ export function MemberProfileWorkspace({
             />
           )}
           <MemberAccessSummary member={member} access={access} />
+          {member.account_type === "jf_member" && <MoveToCoachingCard memberId={memberId} />}
 
           <Card className="space-y-3 p-5">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Contact</div>

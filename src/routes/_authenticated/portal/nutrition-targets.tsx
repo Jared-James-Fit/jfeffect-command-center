@@ -8,6 +8,8 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { useServiceTier } from "@/lib/service-tier";
+import { MemberNutritionPage } from "@/components/nutrition/member-nutrition-page";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -41,8 +43,15 @@ import { RecentAdherenceWidget } from "@/components/nutrition/RecentAdherenceWid
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 
 export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")({
-  component: PortalNutrition,
+  component: PortalNutritionByTier,
 });
+
+/** Members set their own targets; coaching clients see their coach's. */
+function PortalNutritionByTier() {
+  const { tier, loading } = useServiceTier();
+  if (loading) return null;
+  return tier === "self_serve" ? <MemberNutritionPage /> : <PortalNutrition />;
+}
 
 function PortalNutrition() {
   const portalUserId = usePortalUserId();

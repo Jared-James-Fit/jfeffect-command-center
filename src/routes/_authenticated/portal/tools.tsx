@@ -1,0 +1,52 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { memberListResources } from "@/lib/member-resources.functions";
+import { PageHeader } from "@/components/app-shell";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Wrench, Lock } from "lucide-react";
+import { OneRepMaxCalculator } from "@/components/tools/OneRepMaxCalculator";
+import { MacroCalculator } from "@/components/tools/MacroCalculator";
+import { PlateCalculator } from "@/components/tools/PlateCalculator";
+import { WaterCalculator } from "@/components/tools/WaterCalculator";
+import { SleepCalculator } from "@/components/tools/SleepCalculator";
+
+export const Route = createFileRoute("/_authenticated/portal/tools")({ component: ToolsPage });
+
+function ToolsPage() {
+  const fetchFn = useServerFn(memberListResources);
+  const { data } = useQuery({ queryKey: ["m-tools"], queryFn: () => fetchFn({ data: { kind: "tool" } }) });
+  const items: any[] = data?.items ?? [];
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Tools" subtitle="Calculators and trackers." />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <OneRepMaxCalculator />
+        <MacroCalculator />
+        <PlateCalculator />
+        <WaterCalculator />
+        <SleepCalculator />
+      </div>
+      {items.length > 0 && (
+        <div className="space-y-3">
+          <div className="text-sm font-semibold text-muted-foreground">More tools</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((r) => (
+            <Link key={r.id} to="/portal/resources/$slug" params={{ slug: r.slug }}>
+              <Card className="h-full p-5 transition hover:bg-muted/40">
+                <div className="flex items-start justify-between gap-3">
+                  <Wrench className="h-5 w-5 text-primary" />
+                  {r.locked && <Badge variant="outline"><Lock className="mr-1 h-3 w-3" />Locked</Badge>}
+                </div>
+                <div className="mt-3 font-semibold">{r.title}</div>
+                {r.description && <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{r.description}</div>}
+              </Card>
+            </Link>
+          ))}
+        </div>
+        </div>
+      )}
+    </div>
+  );
+}

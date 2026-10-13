@@ -147,13 +147,16 @@ import { Route as AuthenticatedPortalExercisesRouteImport } from './routes/_auth
 import { Route as AuthenticatedPortalGoalsSetupRouteImport } from './routes/_authenticated/portal/goals-setup'
 import { Route as AuthenticatedPortalLiftVideosRouteImport } from './routes/_authenticated/portal/lift-videos'
 import { Route as AuthenticatedPortalMediaRouteImport } from './routes/_authenticated/portal/media'
+import { Route as AuthenticatedPortalMembershipRouteImport } from './routes/_authenticated/portal/membership'
 import { Route as AuthenticatedPortalMessagesRouteImport } from './routes/_authenticated/portal/messages'
 import { Route as AuthenticatedPortalNutritionTargetsRouteImport } from './routes/_authenticated/portal/nutrition-targets'
 import { Route as AuthenticatedPortalProgressRouteImport } from './routes/_authenticated/portal/progress'
 import { Route as AuthenticatedPortalProgressMetricsRouteImport } from './routes/_authenticated/portal/progress-metrics'
 import { Route as AuthenticatedPortalPurchasesRouteImport } from './routes/_authenticated/portal/purchases'
-import { Route as AuthenticatedPortalResourcesRouteImport } from './routes/_authenticated/portal/resources'
 import { Route as AuthenticatedPortalScheduleRouteImport } from './routes/_authenticated/portal/schedule'
+import { Route as AuthenticatedPortalSupportRouteImport } from './routes/_authenticated/portal/support'
+import { Route as AuthenticatedPortalToolsRouteImport } from './routes/_authenticated/portal/tools'
+import { Route as AuthenticatedPortalUpgradeRouteImport } from './routes/_authenticated/portal/upgrade'
 import { Route as ApiPublicBulkExerciseImportRouteImport } from './routes/api/public/bulk-exercise-import'
 import { Route as ApiPublicCalendarFeedRouteImport } from './routes/api/public/calendar-feed'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
@@ -234,6 +237,8 @@ import { Route as AuthenticatedPortalEventsIdRouteImport } from './routes/_authe
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalRecipesIndexRouteImport } from './routes/_authenticated/portal/recipes.index'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
+import { Route as AuthenticatedPortalResourcesIndexRouteImport } from './routes/_authenticated/portal/resources.index'
+import { Route as AuthenticatedPortalResourcesSlugRouteImport } from './routes/_authenticated/portal/resources.$slug'
 import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_authenticated/portal/workouts.index'
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalWorkoutsAnalyticsRouteImport } from './routes/_authenticated/portal/workouts.analytics'
@@ -1043,6 +1048,12 @@ const AuthenticatedPortalMediaRoute =
     path: '/media',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalMembershipRoute =
+  AuthenticatedPortalMembershipRouteImport.update({
+    id: '/membership',
+    path: '/membership',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalMessagesRoute =
   AuthenticatedPortalMessagesRouteImport.update({
     id: '/messages',
@@ -1073,16 +1084,28 @@ const AuthenticatedPortalPurchasesRoute =
     path: '/purchases',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
-const AuthenticatedPortalResourcesRoute =
-  AuthenticatedPortalResourcesRouteImport.update({
-    id: '/resources',
-    path: '/resources',
-    getParentRoute: () => AuthenticatedPortalRouteRoute,
-  } as any)
 const AuthenticatedPortalScheduleRoute =
   AuthenticatedPortalScheduleRouteImport.update({
     id: '/schedule',
     path: '/schedule',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalSupportRoute =
+  AuthenticatedPortalSupportRouteImport.update({
+    id: '/support',
+    path: '/support',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalToolsRoute =
+  AuthenticatedPortalToolsRouteImport.update({
+    id: '/tools',
+    path: '/tools',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalUpgradeRoute =
+  AuthenticatedPortalUpgradeRouteImport.update({
+    id: '/upgrade',
+    path: '/upgrade',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const ApiPublicBulkExerciseImportRoute =
@@ -1561,6 +1584,18 @@ const AuthenticatedPortalRecipesRecipeIdRoute =
     path: '/recipes/$recipeId',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalResourcesIndexRoute =
+  AuthenticatedPortalResourcesIndexRouteImport.update({
+    id: '/resources/',
+    path: '/resources/',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalResourcesSlugRoute =
+  AuthenticatedPortalResourcesSlugRouteImport.update({
+    id: '/resources/$slug',
+    path: '/resources/$slug',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalWorkoutsIndexRoute =
   AuthenticatedPortalWorkoutsIndexRouteImport.update({
     id: '/workouts/',
@@ -1936,13 +1971,16 @@ export interface FileRoutesByFullPath {
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/portal/media': typeof AuthenticatedPortalMediaRoute
+  '/portal/membership': typeof AuthenticatedPortalMembershipRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
-  '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/portal/schedule': typeof AuthenticatedPortalScheduleRoute
+  '/portal/support': typeof AuthenticatedPortalSupportRoute
+  '/portal/tools': typeof AuthenticatedPortalToolsRoute
+  '/portal/upgrade': typeof AuthenticatedPortalUpgradeRoute
   '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
@@ -2010,6 +2048,7 @@ export interface FileRoutesByFullPath {
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
+  '/portal/resources/$slug': typeof AuthenticatedPortalResourcesSlugRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
@@ -2053,6 +2092,7 @@ export interface FileRoutesByFullPath {
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/events/': typeof AuthenticatedPortalEventsIndexRoute
   '/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
+  '/portal/resources/': typeof AuthenticatedPortalResourcesIndexRoute
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
@@ -2198,13 +2238,16 @@ export interface FileRoutesByTo {
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
   '/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/portal/media': typeof AuthenticatedPortalMediaRoute
+  '/portal/membership': typeof AuthenticatedPortalMembershipRoute
   '/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
-  '/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/portal/schedule': typeof AuthenticatedPortalScheduleRoute
+  '/portal/support': typeof AuthenticatedPortalSupportRoute
+  '/portal/tools': typeof AuthenticatedPortalToolsRoute
+  '/portal/upgrade': typeof AuthenticatedPortalUpgradeRoute
   '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
@@ -2272,6 +2315,7 @@ export interface FileRoutesByTo {
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
+  '/portal/resources/$slug': typeof AuthenticatedPortalResourcesSlugRoute
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
@@ -2315,6 +2359,7 @@ export interface FileRoutesByTo {
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/events': typeof AuthenticatedPortalEventsIndexRoute
   '/portal/recipes': typeof AuthenticatedPortalRecipesIndexRoute
+  '/portal/resources': typeof AuthenticatedPortalResourcesIndexRoute
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
@@ -2466,13 +2511,16 @@ export interface FileRoutesById {
   '/_authenticated/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
   '/_authenticated/portal/lift-videos': typeof AuthenticatedPortalLiftVideosRoute
   '/_authenticated/portal/media': typeof AuthenticatedPortalMediaRoute
+  '/_authenticated/portal/membership': typeof AuthenticatedPortalMembershipRoute
   '/_authenticated/portal/messages': typeof AuthenticatedPortalMessagesRoute
   '/_authenticated/portal/nutrition-targets': typeof AuthenticatedPortalNutritionTargetsRoute
   '/_authenticated/portal/progress': typeof AuthenticatedPortalProgressRoute
   '/_authenticated/portal/progress-metrics': typeof AuthenticatedPortalProgressMetricsRoute
   '/_authenticated/portal/purchases': typeof AuthenticatedPortalPurchasesRouteWithChildren
-  '/_authenticated/portal/resources': typeof AuthenticatedPortalResourcesRoute
   '/_authenticated/portal/schedule': typeof AuthenticatedPortalScheduleRoute
+  '/_authenticated/portal/support': typeof AuthenticatedPortalSupportRoute
+  '/_authenticated/portal/tools': typeof AuthenticatedPortalToolsRoute
+  '/_authenticated/portal/upgrade': typeof AuthenticatedPortalUpgradeRoute
   '/api/public/bulk-exercise-import': typeof ApiPublicBulkExerciseImportRoute
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
@@ -2540,6 +2588,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
+  '/_authenticated/portal/resources/$slug': typeof AuthenticatedPortalResourcesSlugRoute
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/_authenticated/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/_authenticated/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
@@ -2583,6 +2632,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/_authenticated/portal/events/': typeof AuthenticatedPortalEventsIndexRoute
   '/_authenticated/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
+  '/_authenticated/portal/resources/': typeof AuthenticatedPortalResourcesIndexRoute
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
@@ -2734,13 +2784,16 @@ export interface FileRouteTypes {
     | '/portal/goals-setup'
     | '/portal/lift-videos'
     | '/portal/media'
+    | '/portal/membership'
     | '/portal/messages'
     | '/portal/nutrition-targets'
     | '/portal/progress'
     | '/portal/progress-metrics'
     | '/portal/purchases'
-    | '/portal/resources'
     | '/portal/schedule'
+    | '/portal/support'
+    | '/portal/tools'
+    | '/portal/upgrade'
     | '/api/public/bulk-exercise-import'
     | '/api/public/calendar-feed'
     | '/api/public/signnow-webhook'
@@ -2808,6 +2861,7 @@ export interface FileRouteTypes {
     | '/portal/events/$id'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
+    | '/portal/resources/$slug'
     | '/portal/workouts/$dayId'
     | '/portal/workouts/analytics'
     | '/portal/workouts/prs'
@@ -2851,6 +2905,7 @@ export interface FileRouteTypes {
     | '/portal/agreements/'
     | '/portal/events/'
     | '/portal/recipes/'
+    | '/portal/resources/'
     | '/portal/workouts/'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
@@ -2996,13 +3051,16 @@ export interface FileRouteTypes {
     | '/portal/goals-setup'
     | '/portal/lift-videos'
     | '/portal/media'
+    | '/portal/membership'
     | '/portal/messages'
     | '/portal/nutrition-targets'
     | '/portal/progress'
     | '/portal/progress-metrics'
     | '/portal/purchases'
-    | '/portal/resources'
     | '/portal/schedule'
+    | '/portal/support'
+    | '/portal/tools'
+    | '/portal/upgrade'
     | '/api/public/bulk-exercise-import'
     | '/api/public/calendar-feed'
     | '/api/public/signnow-webhook'
@@ -3070,6 +3128,7 @@ export interface FileRouteTypes {
     | '/portal/events/$id'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
+    | '/portal/resources/$slug'
     | '/portal/workouts/$dayId'
     | '/portal/workouts/analytics'
     | '/portal/workouts/prs'
@@ -3113,6 +3172,7 @@ export interface FileRouteTypes {
     | '/portal/agreements'
     | '/portal/events'
     | '/portal/recipes'
+    | '/portal/resources'
     | '/portal/workouts'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
@@ -3263,13 +3323,16 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/goals-setup'
     | '/_authenticated/portal/lift-videos'
     | '/_authenticated/portal/media'
+    | '/_authenticated/portal/membership'
     | '/_authenticated/portal/messages'
     | '/_authenticated/portal/nutrition-targets'
     | '/_authenticated/portal/progress'
     | '/_authenticated/portal/progress-metrics'
     | '/_authenticated/portal/purchases'
-    | '/_authenticated/portal/resources'
     | '/_authenticated/portal/schedule'
+    | '/_authenticated/portal/support'
+    | '/_authenticated/portal/tools'
+    | '/_authenticated/portal/upgrade'
     | '/api/public/bulk-exercise-import'
     | '/api/public/calendar-feed'
     | '/api/public/signnow-webhook'
@@ -3337,6 +3400,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/events/$id'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
+    | '/_authenticated/portal/resources/$slug'
     | '/_authenticated/portal/workouts/$dayId'
     | '/_authenticated/portal/workouts/analytics'
     | '/_authenticated/portal/workouts/prs'
@@ -3380,6 +3444,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/agreements/'
     | '/_authenticated/portal/events/'
     | '/_authenticated/portal/recipes/'
+    | '/_authenticated/portal/resources/'
     | '/_authenticated/portal/workouts/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
@@ -4431,6 +4496,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalMediaRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/membership': {
+      id: '/_authenticated/portal/membership'
+      path: '/membership'
+      fullPath: '/portal/membership'
+      preLoaderRoute: typeof AuthenticatedPortalMembershipRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/messages': {
       id: '/_authenticated/portal/messages'
       path: '/messages'
@@ -4466,18 +4538,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalPurchasesRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
-    '/_authenticated/portal/resources': {
-      id: '/_authenticated/portal/resources'
-      path: '/resources'
-      fullPath: '/portal/resources'
-      preLoaderRoute: typeof AuthenticatedPortalResourcesRouteImport
-      parentRoute: typeof AuthenticatedPortalRouteRoute
-    }
     '/_authenticated/portal/schedule': {
       id: '/_authenticated/portal/schedule'
       path: '/schedule'
       fullPath: '/portal/schedule'
       preLoaderRoute: typeof AuthenticatedPortalScheduleRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/support': {
+      id: '/_authenticated/portal/support'
+      path: '/support'
+      fullPath: '/portal/support'
+      preLoaderRoute: typeof AuthenticatedPortalSupportRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/tools': {
+      id: '/_authenticated/portal/tools'
+      path: '/tools'
+      fullPath: '/portal/tools'
+      preLoaderRoute: typeof AuthenticatedPortalToolsRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/upgrade': {
+      id: '/_authenticated/portal/upgrade'
+      path: '/upgrade'
+      fullPath: '/portal/upgrade'
+      preLoaderRoute: typeof AuthenticatedPortalUpgradeRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/api/public/bulk-exercise-import': {
@@ -5038,6 +5124,20 @@ declare module '@tanstack/react-router' {
       path: '/recipes/$recipeId'
       fullPath: '/portal/recipes/$recipeId'
       preLoaderRoute: typeof AuthenticatedPortalRecipesRecipeIdRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/resources/': {
+      id: '/_authenticated/portal/resources/'
+      path: '/resources'
+      fullPath: '/portal/resources/'
+      preLoaderRoute: typeof AuthenticatedPortalResourcesIndexRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/resources/$slug': {
+      id: '/_authenticated/portal/resources/$slug'
+      path: '/resources/$slug'
+      fullPath: '/portal/resources/$slug'
+      preLoaderRoute: typeof AuthenticatedPortalResourcesSlugRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/workouts/': {
@@ -5902,23 +6002,28 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalGoalsSetupRoute: typeof AuthenticatedPortalGoalsSetupRoute
   AuthenticatedPortalLiftVideosRoute: typeof AuthenticatedPortalLiftVideosRoute
   AuthenticatedPortalMediaRoute: typeof AuthenticatedPortalMediaRoute
+  AuthenticatedPortalMembershipRoute: typeof AuthenticatedPortalMembershipRoute
   AuthenticatedPortalMessagesRoute: typeof AuthenticatedPortalMessagesRoute
   AuthenticatedPortalNutritionTargetsRoute: typeof AuthenticatedPortalNutritionTargetsRoute
   AuthenticatedPortalProgressRoute: typeof AuthenticatedPortalProgressRoute
   AuthenticatedPortalProgressMetricsRoute: typeof AuthenticatedPortalProgressMetricsRoute
   AuthenticatedPortalPurchasesRoute: typeof AuthenticatedPortalPurchasesRouteWithChildren
-  AuthenticatedPortalResourcesRoute: typeof AuthenticatedPortalResourcesRoute
   AuthenticatedPortalScheduleRoute: typeof AuthenticatedPortalScheduleRoute
+  AuthenticatedPortalSupportRoute: typeof AuthenticatedPortalSupportRoute
+  AuthenticatedPortalToolsRoute: typeof AuthenticatedPortalToolsRoute
+  AuthenticatedPortalUpgradeRoute: typeof AuthenticatedPortalUpgradeRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
   AuthenticatedPortalAgreementsNativePackageIdRoute: typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   AuthenticatedPortalEventsIdRoute: typeof AuthenticatedPortalEventsIdRoute
   AuthenticatedPortalRecipesRecipeIdRoute: typeof AuthenticatedPortalRecipesRecipeIdRoute
+  AuthenticatedPortalResourcesSlugRoute: typeof AuthenticatedPortalResourcesSlugRoute
   AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
   AuthenticatedPortalWorkoutsAnalyticsRoute: typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   AuthenticatedPortalWorkoutsPrsRoute: typeof AuthenticatedPortalWorkoutsPrsRoute
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
   AuthenticatedPortalEventsIndexRoute: typeof AuthenticatedPortalEventsIndexRoute
   AuthenticatedPortalRecipesIndexRoute: typeof AuthenticatedPortalRecipesIndexRoute
+  AuthenticatedPortalResourcesIndexRoute: typeof AuthenticatedPortalResourcesIndexRoute
   AuthenticatedPortalWorkoutsIndexRoute: typeof AuthenticatedPortalWorkoutsIndexRoute
 }
 
@@ -5937,6 +6042,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalGoalsSetupRoute: AuthenticatedPortalGoalsSetupRoute,
     AuthenticatedPortalLiftVideosRoute: AuthenticatedPortalLiftVideosRoute,
     AuthenticatedPortalMediaRoute: AuthenticatedPortalMediaRoute,
+    AuthenticatedPortalMembershipRoute: AuthenticatedPortalMembershipRoute,
     AuthenticatedPortalMessagesRoute: AuthenticatedPortalMessagesRoute,
     AuthenticatedPortalNutritionTargetsRoute:
       AuthenticatedPortalNutritionTargetsRoute,
@@ -5945,14 +6051,18 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalProgressMetricsRoute,
     AuthenticatedPortalPurchasesRoute:
       AuthenticatedPortalPurchasesRouteWithChildren,
-    AuthenticatedPortalResourcesRoute: AuthenticatedPortalResourcesRoute,
     AuthenticatedPortalScheduleRoute: AuthenticatedPortalScheduleRoute,
+    AuthenticatedPortalSupportRoute: AuthenticatedPortalSupportRoute,
+    AuthenticatedPortalToolsRoute: AuthenticatedPortalToolsRoute,
+    AuthenticatedPortalUpgradeRoute: AuthenticatedPortalUpgradeRoute,
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
     AuthenticatedPortalAgreementsNativePackageIdRoute:
       AuthenticatedPortalAgreementsNativePackageIdRoute,
     AuthenticatedPortalEventsIdRoute: AuthenticatedPortalEventsIdRoute,
     AuthenticatedPortalRecipesRecipeIdRoute:
       AuthenticatedPortalRecipesRecipeIdRoute,
+    AuthenticatedPortalResourcesSlugRoute:
+      AuthenticatedPortalResourcesSlugRoute,
     AuthenticatedPortalWorkoutsDayIdRoute:
       AuthenticatedPortalWorkoutsDayIdRoute,
     AuthenticatedPortalWorkoutsAnalyticsRoute:
@@ -5962,6 +6072,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalAgreementsIndexRoute,
     AuthenticatedPortalEventsIndexRoute: AuthenticatedPortalEventsIndexRoute,
     AuthenticatedPortalRecipesIndexRoute: AuthenticatedPortalRecipesIndexRoute,
+    AuthenticatedPortalResourcesIndexRoute:
+      AuthenticatedPortalResourcesIndexRoute,
     AuthenticatedPortalWorkoutsIndexRoute:
       AuthenticatedPortalWorkoutsIndexRoute,
   }

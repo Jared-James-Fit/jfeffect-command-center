@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
 
-const ALLOW = ["/m/billing", "/m/account", "/m/welcome", "/m/support"];
+const ALLOW = ["/portal/membership", "/portal/account", "/portal/support", "/portal/upgrade", "/m/billing", "/m/account", "/m/welcome", "/m/support"];
 
 export function MemberSetupGate() {
   const fetchStatus = useServerFn(getMySetupStatus);

@@ -42,6 +42,7 @@ import { CalendarSyncCard } from "@/components/schedule/calendar-sync-card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { GoalsSetupFlow } from "@/components/client-goals/GoalsSetupFlow";
 import { Target } from "lucide-react";
+import { useServiceTier } from "@/lib/service-tier";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
 
@@ -57,6 +58,20 @@ function PortalHome() {
   const portalUserId = usePortalUserId();
   const offlineNoCache = useIsOfflineWithoutCache();
   const qc = useQueryClient();
+  // A JF member (self-serve): same Home, without the coach's pieces.
+  const { isSelfServe, loading: tierLoading } = useServiceTier();
+  const coaching = !isSelfServe && !tierLoading;
+
+  // Back from a coaching upgrade checkout.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("upgrade") !== "success") return;
+    toast.success("You're in! Your coach will reach out shortly.");
+    sp.delete("upgrade");
+    const qs = sp.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+  }, []);
 
   // Dev-only first-load timing.
   useEffect(() => { logPerf("dashboard mounted"); }, []);
@@ -114,7 +129,8 @@ function PortalHome() {
   useEffect(() => { if (client) logPerf("card:client loaded"); }, [client]);
 
   useEffect(() => {
-    if (!client?.id) return;
+    // check-ins are the coach's: never seeded for a member
+    if (!client?.id || !coaching) return;
     // Seed the recurring task first, then turn any due Weekly Check-In /
     // Nutrition Review into a Messenger reminder. No Home-page form card.
     void bootstrapOcc({ data: { clientId: client.id } })
@@ -126,7 +142,7 @@ function PortalHome() {
         }
       })
       .catch(() => {});
-  }, [client?.id, bootstrapOcc, ensureMessengerCheckins, qc]);
+  }, [client?.id, coaching, bootstrapOcc, ensureMessengerCheckins, qc]);
 
 
   const { data: goalsSetup } = useQuery({
@@ -148,9 +164,9 @@ function PortalHome() {
   // Prompt incomplete clients once per app load. Closing only dismisses this
   // session; it never marks Goals & Setup complete, so it returns next load/login.
   useEffect(() => {
-    if (!client?.id || goalsSetup === undefined || goalsSetupPromptDismissed) return;
+    if (!client?.id || !coaching || goalsSetup === undefined || goalsSetupPromptDismissed) return;
     if (!isGoalsSetupComplete(goalsSetup ?? null)) setGoalsSetupPromptOpen(true);
-  }, [client?.id, goalsSetup, goalsSetupPromptDismissed]);
+  }, [client?.id, coaching, goalsSetup, goalsSetupPromptDismissed]);
 
   // Coach response surfaces — power "Today / This Week" cards so clients see
   // when their coach has replied to anything (messages, lift reviews, check-ins).
@@ -244,8 +260,8 @@ function PortalHome() {
   return (
     <>
       {/* Background gates / popups — keep wired exactly as before. */}
-      {client?.id && <ClientActionRequestModal clientId={client.id} />}
-      {client?.id && (
+      {client?.id && coaching && <ClientActionRequestModal clientId={client.id} />}
+      {client?.id && coaching && (
         <Dialog
           open={goalsSetupPromptOpen && !isGoalsSetupComplete(goalsSetup ?? null)}
           onOpenChange={(open) => {
@@ -295,10 +311,12 @@ function PortalHome() {
           {clientSettled && !client ? <NoProfileCard /> : null}
 
           {/* Needs-you items: each hides itself once it's done. */}
-          <SectionErrorBoundary label="Coaching agreement">
-            <AgreementDashboardCard />
-          </SectionErrorBoundary>
-          {client?.id && portalUserId && (
+          {coaching && (
+            <SectionErrorBoundary label="Coaching agreement">
+              <AgreementDashboardCard />
+            </SectionErrorBoundary>
+          )}
+          {client?.id && portalUserId && coaching && (
             <SectionErrorBoundary label="Setup checklist">
               <SetupChecklistBanner clientId={client.id} userId={portalUserId ?? ""} />
             </SectionErrorBoundary>
@@ -310,7 +328,7 @@ function PortalHome() {
           )}
 
           {/* PT package (only with an active one) and events (only when there's one coming) */}
-          {client?.id && (
+          {client?.id && coaching && (
             <SectionErrorBoundary label="Sessions">
               <SessionsCard clientId={client.id} nextAppointmentAt={nextAppointment?.starts_at ?? null} />
             </SectionErrorBoundary>
