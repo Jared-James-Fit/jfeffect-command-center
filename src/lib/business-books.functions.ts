@@ -448,7 +448,7 @@ export const summerSpeech = createServerFn({ method: "POST" })
         rate: z.number().min(0.5).max(1.5).optional(),
         prev: z.string().max(1500).optional(),
         next: z.string().max(1500).optional(),
-        voice: z.enum(["neutral", "soft", "deep", "bright"]).optional(),
+        voice: z.string().max(20).optional(),
       })
       .parse(d),
   )

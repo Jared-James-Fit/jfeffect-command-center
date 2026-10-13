@@ -232,15 +232,79 @@ export async function transcribeAudio(b64: string, mime: string, names: string[]
 // voice when none answers.
 
 export const SUMMER_VOICE_STYLE =
-  "Voice: calm, clear and smooth, a mid-range pitch that sounds neither male nor female, with a neutral North American accent, like a polished voice assistant. Delivery: even and relaxed, conversational pace, never rushed. Sentences flow into each other with short, natural pauses. No dramatic pitch swings, no sing-song, no breathiness, no vocal fry, no upspeak. Read numbers, weights and dollar amounts clearly and naturally.";
+  "Voice: a smooth, warm, natural female voice with a neutral North American accent, like a polished voice assistant. Delivery: calm, even and relaxed, conversational pace, never rushed. Sentences flow into each other with short, natural pauses. No dramatic pitch swings, no sing-song, no breathiness, no vocal fry, no upspeak. Read numbers, weights and dollar amounts clearly and naturally.";
 
-/** Per voice: the provider voices (best first) and a line on top of the style. */
+/**
+ * Per voice: the provider voices (best first) and a line on top of the style.
+ * Gemini's are Google's named voices (Despina is literally "smooth");
+ * OpenAI's are the fallback. All female.
+ */
 const VOICE_PRESETS: Record<CleoVoice, { openai: string[]; gemini: string; style: string }> = {
-  neutral: { openai: ["alloy", "marin"], gemini: "Zephyr", style: "" },
-  soft: { openai: ["marin", "nova"], gemini: "Despina", style: " Tone: soft, gentle and warm." },
-  deep: { openai: ["cedar", "onyx"], gemini: "Algieba", style: " Tone: lower and calm, unhurried." },
-  bright: { openai: ["coral", "shimmer"], gemini: "Laomedeia", style: " Tone: clear and upbeat, a light smile in the voice." },
+  smooth: { openai: ["marin", "nova"], gemini: "Despina", style: "" },
+  warm: { openai: ["coral", "marin"], gemini: "Sulafat", style: " Tone: warm and friendly, a little richer." },
+  soft: { openai: ["sage", "marin"], gemini: "Achernar", style: " Tone: soft and gentle, quietly confident." },
+  bright: { openai: ["shimmer", "coral"], gemini: "Aoede", style: " Tone: light and upbeat, a smile in the voice." },
 };
+
+/**
+ * Google's speech models for those voices, best first. The gateway passes a
+ * Gemini request straight through (Google's own shape, not OpenAI's), and the
+ * audio comes back as raw 24kHz PCM, which is wrapped as a WAV here.
+ */
+const GEMINI_TTS_MODELS = ["google/gemini-2.5-flash-tts", "google/gemini-3.1-flash-tts-preview"];
+let geminiTtsModel: string | null = null;
+
+/** How she should sound, said the way Gemini's voices take direction (it isn't read out). */
+function geminiDirection(req: SpeechRequest): string {
+  const rate = req.rate ?? 1;
+  const pace = rate <= 0.95 ? "a little slower than usual, unhurried" : rate >= 1.05 ? "a little brisker than usual, still clear" : "a relaxed, natural conversational pace";
+  return `Say this in a calm, smooth, warm and natural voice, at ${pace}:`;
+}
+
+/** Raw 16-bit mono PCM (base64) → a WAV file (base64). */
+export function pcmToWav(pcmB64: string, sampleRate = 24000): string {
+  const pcm = Uint8Array.from(atob(pcmB64), (ch) => ch.charCodeAt(0));
+  const out = new Uint8Array(44 + pcm.length);
+  const v = new DataView(out.buffer);
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + pcm.length, true); w(8, "WAVE"); w(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, "data"); v.setUint32(40, pcm.length, true);
+  out.set(pcm, 44);
+  let bin = "";
+  for (let i = 0; i < out.length; i += 0x8000) bin += String.fromCharCode(...out.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+async function geminiSpeech(key: string, model: string, req: SpeechRequest): Promise<{ audio: string; mime: string } | { error: string; status?: number }> {
+  const res = await fetch(`${GATEWAY}/audio/speech`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+    body: JSON.stringify({
+      model,
+      contents: [{ role: "user", parts: [{ text: `${geminiDirection(req)}\n${req.text}` }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: preset(req).gemini } } },
+      },
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const type = res.headers.get("content-type") ?? "";
+  if (res.ok && type.startsWith("audio")) {
+    return { audio: await toBase64(await res.arrayBuffer()), mime: type.split(";")[0] || "audio/wav" };
+  }
+  if (!res.ok) return { error: (await res.text().catch(() => "")).slice(0, 160) || `HTTP ${res.status}`, status: res.status };
+  const json: any = await res.json().catch(() => null);
+  const part = (json?.candidates?.[0]?.content?.parts ?? []).find((p: any) => p?.inlineData?.data || p?.inline_data?.data);
+  const inline = part?.inlineData ?? part?.inline_data;
+  if (!inline?.data) return { error: "no audio in response", status: res.status };
+  const mime = String(inline.mimeType ?? inline.mime_type ?? "");
+  if (/^audio\/(mpeg|mp3|wav|ogg)/.test(mime)) return { audio: inline.data, mime: mime.split(";")[0] };
+  const rate = Number(/rate=(\d+)/.exec(mime)?.[1] ?? 24000);
+  return { audio: pcmToWav(inline.data, rate), mime: "audio/wav" };
+}
 
 function preset(req: SpeechRequest) {
   return VOICE_PRESETS[isCleoVoice(req.voice) ? req.voice : DEFAULT_CLEO_VOICE];
@@ -256,7 +320,7 @@ const ELEVENLABS_DEFAULT_MODEL = "eleven_multilingual_v2";
  * text around this piece when a reply is spoken in parts, so the voice keeps
  * one intonation across the seam (ElevenLabs uses them; the others ignore them).
  */
-export type SpeechRequest = { text: string; rate?: number; prev?: string; next?: string; voice?: CleoVoice };
+export type SpeechRequest = { text: string; rate?: number; prev?: string; next?: string; voice?: string };
 
 type SpeechOk = { ok: true; audio: string; mime: string; provider: string };
 type SpeechFail = { ok: false; reason: string };
@@ -344,29 +408,28 @@ function providers(): Provider[] {
   }
   const lovable = process.env.LOVABLE_API_KEY;
   if (lovable) {
+    // Google's voices first (the most natural), OpenAI's right behind.
+    list.push({
+      name: "lovable:google/gemini-tts",
+      run: async (req) => {
+        const models = geminiTtsModel ? [geminiTtsModel, ...GEMINI_TTS_MODELS.filter((m) => m !== geminiTtsModel)] : GEMINI_TTS_MODELS;
+        let last: { error: string; status?: number } = { error: "no voice" };
+        for (const model of models) {
+          const r = await geminiSpeech(lovable, model, req);
+          if ("audio" in r) {
+            geminiTtsModel = model;
+            return r;
+          }
+          last = r;
+          // Only a refused model is worth trying the next one; auth, quota and outages aren't.
+          if (r.status !== 400 && r.status !== 404) break;
+        }
+        return last;
+      },
+    });
     list.push({
       name: "lovable:openai/gpt-4o-mini-tts",
       run: (req) => speechEndpoint(`${GATEWAY}/audio/speech`, { "Lovable-API-Key": lovable }, "openai/gpt-4o-mini-tts", req),
-    });
-    list.push({
-      name: "lovable:google/gemini-2.5-flash-tts",
-      run: async (req) => {
-        const res = await fetch(`${GATEWAY}/chat/completions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Lovable-API-Key": lovable },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash-tts",
-            modalities: ["audio"],
-            audio: { voice: preset(req).gemini, format: "wav" },
-            messages: [{ role: "user", content: `${styleFor(req)}\n\nSay exactly this:\n${req.text}` }],
-          }),
-        });
-        if (!res.ok) return { error: (await res.text().catch(() => "")).slice(0, 160) || `HTTP ${res.status}`, status: res.status };
-        const json: any = await res.json().catch(() => null);
-        const data = json?.choices?.[0]?.message?.audio?.data;
-        if (typeof data !== "string" || !data) return { error: "no audio in response", status: res.status };
-        return { audio: data, mime: "audio/wav" };
-      },
     });
   }
   const openai = process.env.OPENAI_API_KEY;
@@ -410,6 +473,25 @@ export async function synthesizeSpeech(req: SpeechRequest): Promise<SpeechOk | S
   }
   noVoiceUntil = Date.now() + 10 * 60_000;
   return { ok: false, reason: "no voice provider available" };
+}
+
+/** For the health check: each Google speech model on its own, with how long it took. */
+export async function probeGeminiVoices(sample = "Hi, it's Cleo. You've got two check-ins waiting, and Marc hit a new squat PR.") {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) return [];
+  return Promise.all(
+    [...GEMINI_TTS_MODELS, "google/gemini-2.5-pro-tts"].map(async (model) => {
+      const started = Date.now();
+      try {
+        const r = await geminiSpeech(key, model, { text: sample, voice: "smooth" });
+        return "audio" in r
+          ? { model, ok: true, ms: Date.now() - started, bytes: Math.round((r.audio.length * 3) / 4), mime: r.mime }
+          : { model, ok: false, ms: Date.now() - started, status: r.status, detail: r.error };
+      } catch (e: any) {
+        return { model, ok: false, ms: Date.now() - started, detail: String(e?.message ?? e).slice(0, 160) };
+      }
+    }),
+  );
 }
 
 /** For the health check: try every provider and report what each said. */
