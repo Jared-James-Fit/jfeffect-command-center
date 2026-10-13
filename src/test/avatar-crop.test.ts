@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { MAX_ZOOM, clampCrop, coverScale, cropRect, zoomAt } from "@/lib/avatar-crop";
+import { MAX_ZOOM, clampCrop, coverScale, cropRect, pinchCrop, zoomAt } from "@/lib/avatar-crop";
 
 const read = (p: string) => readFileSync(p, "utf8");
 const portrait = { w: 3000, h: 4000 }; // an iPhone photo
@@ -38,6 +38,30 @@ describe("profile photo crop (Instagram-style move and scale)", () => {
     expect(photoPoint(after).y).toBeCloseTo(photoPoint(before).y);
   });
 
+  it("a pinch keeps the photo under the fingers and follows them", () => {
+    const start = { zoom: 1.5, x: 10, y: -20 };
+    const startMid = { x: 40, y: 30 };
+    const photoPoint = (c: typeof start, at: { x: number; y: number }) => ({ x: (at.x - c.x) / c.zoom, y: (at.y - c.y) / c.zoom });
+    // spread the fingers to 2× without moving them
+    const zoomed = pinchCrop(start, startMid, startMid, 2, portrait, frame);
+    expect(zoomed.zoom).toBeCloseTo(3);
+    expect(photoPoint(zoomed, startMid).x).toBeCloseTo(photoPoint(start, startMid).x);
+    expect(photoPoint(zoomed, startMid).y).toBeCloseTo(photoPoint(start, startMid).y);
+    // move both fingers 15px right: the photo moves with them
+    const moved = pinchCrop(start, startMid, { x: startMid.x + 15, y: startMid.y }, 2, portrait, frame);
+    expect(moved.x - zoomed.x).toBeCloseTo(15);
+    // the same finger positions always give the same crop (measured from the start, no drift)
+    expect(pinchCrop(start, startMid, startMid, 2, portrait, frame)).toEqual(zoomed);
+  });
+
+  it("a pinch at the edge is clamped once, not before following the fingers", () => {
+    // pinched out past zoom 1 while dragging off the edge: still covers the frame, never jumps past it
+    const c = pinchCrop({ zoom: 1.2, x: 0, y: 0 }, { x: 0, y: 0 }, { x: 900, y: -900 }, 0.5, portrait, frame);
+    expect(c).toEqual(clampCrop(c, portrait, frame));
+    expect(c.zoom).toBe(1);
+    expect(pinchCrop({ zoom: 2, x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, NaN, portrait, frame).zoom).toBe(2);
+  });
+
   it("zoom 2× at the centre crops the middle half of the short side", () => {
     expect(cropRect({ zoom: 2, x: 0, y: 0 }, portrait, frame)).toEqual({ sx: 750, sy: 1250, size: 1500 });
   });
@@ -61,5 +85,16 @@ describe("profile photo crop (Instagram-style move and scale)", () => {
     expect(ui).toContain('type="range"');
     expect(ui).toContain("rounded-full ring-1 ring-white/70");
     expect(ui).toContain("Move and scale");
+  });
+
+  it("moves smoothly: one transform write per frame from the live crop, iOS page zoom blocked", () => {
+    const ui = read("src/components/avatar-cropper.tsx");
+    expect(ui).toContain("requestAnimationFrame(");
+    expect(ui).toContain("imgRef.current.style.transform = cropTransform(c)");
+    expect(ui).toContain("crop: cropRef.current };");
+    expect(ui).toContain("transform: cropTransform(cropRef.current),");
+    expect(ui).toContain('"gesturestart", "gesturechange", "gestureend"');
+    expect(ui).toContain("pinchCrop(p.crop, p.mid, mid,");
+    expect(ui).not.toContain("setCrop((c) =>");
   });
 });
