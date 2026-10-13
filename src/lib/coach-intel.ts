@@ -89,7 +89,8 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
   const windowStart = new Date(now); windowStart.setDate(now.getDate() - 14);
   const recentCutoff = new Date(now); recentCutoff.setDate(now.getDate() - 30);
 
-  let q = sb.from("clients").select("id, full_name, profile_picture_url, assigned_coach_id, archived").eq("archived", false);
+  // coaching clients only: JF members have no coach watching their training
+  let q = sb.from("clients").select("id, full_name, profile_picture_url, assigned_coach_id, archived").eq("archived", false).eq("service_tier", "coaching");
   if (opts?.coachId) q = q.eq("assigned_coach_id", opts.coachId);
   const { data: clients = [] } = await q;
   const clientIds = (clients as any[]).map((c) => c.id);

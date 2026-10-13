@@ -4316,6 +4316,7 @@ export type Database = {
           schedule_updated_at: string | null
           sessions_purchased: number
           sessions_used: number
+          service_tier: string
           sex: string | null
           sex_updated_at: string | null
           sms_opt_out: boolean
@@ -4505,6 +4506,7 @@ export type Database = {
           schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
+          service_tier?: string
           sex?: string | null
           sex_updated_at?: string | null
           sms_opt_out?: boolean
@@ -4694,6 +4696,7 @@ export type Database = {
           schedule_updated_at?: string | null
           sessions_purchased?: number
           sessions_used?: number
+          service_tier?: string
           sex?: string | null
           sex_updated_at?: string | null
           sms_opt_out?: boolean

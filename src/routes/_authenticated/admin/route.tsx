@@ -25,7 +25,7 @@ function AdminLayout() {
     if (loading || !role) return;
     if (role === "admin" || role === "coach") return;
     if (role === "member") {
-      navigate({ to: "/m", replace: true });
+      navigate({ to: "/portal", replace: true });
       return;
     }
     // Any other role (client / unknown / the retired media_manager) → portal

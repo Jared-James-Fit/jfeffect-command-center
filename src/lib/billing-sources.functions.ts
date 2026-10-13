@@ -62,6 +62,8 @@ export const listClientsWithBillingFn = createServerFn({ method: "POST" })
       .select(
         "id, full_name, email, billing_source, billing_source_locked, billing_source_set_at, stripe_customer_id, status, created_at",
       )
+      // JF members bill through their membership (Admin → Membership)
+      .eq("service_tier", "coaching")
       .order("created_at", { ascending: false })
       .limit(500);
 

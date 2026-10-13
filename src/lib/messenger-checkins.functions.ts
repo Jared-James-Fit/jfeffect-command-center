@@ -255,6 +255,9 @@ export const ensureDueMessengerCheckins = createServerFn({ method: "POST" })
       clientId = client?.id;
     }
     if (!clientId) return { ok: false as const, created: 0 };
+    // check-ins come from a coach: none for a JF member
+    const { data: tierRow } = await context.supabase.from("clients").select("service_tier").eq("id", clientId).maybeSingle();
+    if ((tierRow as any)?.service_tier === "self_serve") return { ok: false as const, created: 0 };
 
     const actor = await resolveClientAccess(context.supabase, context.userId, clientId);
     if (actor !== "client" && actor !== "admin" && actor !== "coach") {

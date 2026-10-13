@@ -1,69 +1,23 @@
-import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useAuth } from "@/lib/auth";
-import { AppShell } from "@/components/app-shell";
-import { memberNav, memberBottomNav } from "@/lib/admin-nav";
-import { PovQuickToggle, getPovFlag } from "@/components/pov-quick-toggle";
-import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
-import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
-import { useMemberAccess } from "@/lib/member-access";
-import { MemberSetupGate } from "@/components/member/member-setup-gate";
-import { ClientBirthdayCard } from "@/components/client-birthday-card";
 import { FullPageLoader } from "@/components/full-page-loader";
+import { memberPathToPortal } from "@/lib/member-redirect";
 
+/**
+ * JF Membership moved into the portal (one app, the service tier decides the
+ * coach's screens). Every /m link (old emails, Stripe returns, bookmarks)
+ * lands on the same screen there, query string kept. Only the Fillout
+ * completion landing still renders here.
+ */
 function MemberLayout() {
-  const { role, loading } = useAuth();
+  const { pathname, searchStr } = useLocation();
   const navigate = useNavigate();
-  const pov = getPovFlag();
-  const { status, subscriptionStatus, subscriptionActive, hasAccess, loading: accessLoading, accountType, member } = useMemberAccess();
-  const location = useLocation();
-  const allowList = ["/m/billing", "/m/welcome", "/m/account", "/m/more"];
-  const isAllowed = allowList.some((p) => location.pathname.startsWith(p));
-
+  const target = memberPathToPortal(pathname);
   useEffect(() => {
-    if (loading) return;
-    if (role === "client") navigate({ to: "/portal", replace: true });
-    // Admins are allowed into /m only while POV mode is active; otherwise send back to /admin.
-    else if ((role === "admin" || role === "coach") && !pov.active) {
-      navigate({ to: "/admin", replace: true });
-    }
-  }, [role, loading, navigate, pov.active]);
-
-  // Hard gate: JF members without active access get sent to billing for paid routes.
-  // hasAccess now uses the canonical helper (respects manual override, grace, expiry).
-  useEffect(() => {
-    if (loading || accessLoading) return;
-    if (accountType === "jf_member" && !hasAccess("app_membership") && !isAllowed) {
-      navigate({ to: "/m/billing", replace: true });
-    }
-  }, [loading, accessLoading, accountType, hasAccess, isAllowed, navigate]);
-
-  if (loading || !role) {
-    return <FullPageLoader />;
-  }
-  const showToggle = role === "admin" || role === "coach";
-
-  // Show the restricted banner only when canonical access is denied AND the
-  // subscription status indicates a problem (not just a loading state).
-  const showBanner = accountType === "jf_member"
-    && !hasAccess("app_membership")
-    && (subscriptionStatus && !["Trialing", "Active"].includes(subscriptionStatus));
-
-  return (
-    <AppShell items={memberNav} bottomItems={memberBottomNav} title="Member" moreInHeader>
-      {showToggle && <PovQuickToggle variant="banner" />}
-      {showBanner && (
-        <div className="px-4 pt-4 md:px-6 md:pt-6">
-          <SubscriptionRestrictedBanner status={status} subscriptionStatus={subscriptionStatus} />
-        </div>
-      )}
-      <Outlet />
-      <BroadcastPopupGate />
-      <MemberSetupGate />
-      {/* Birthday card mounts LAST so it stacks above other member gates. */}
-      <ClientBirthdayCard />
-    </AppShell>
-  );
+    if (target) navigate({ href: `${target}${searchStr ?? ""}`, replace: true });
+  }, [target, searchStr, navigate]);
+  if (target) return <FullPageLoader />;
+  return <Outlet />;
 }
 
 export const Route = createFileRoute("/_authenticated/m")({ component: MemberLayout });

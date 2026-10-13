@@ -113,7 +113,9 @@ describe("client tab bar: Crew in the centre", () => {
   });
 
   it("no community for this account: no centre button", () => {
-    expect(portal).toContain('community?.enabled === false ? clientBottomNav.filter((i) => i.to !== "/portal/community") : clientBottomNav');
+    // (members get their own bar, same rule)
+    expect(portal).toContain("const base = isSelfServe ? selfServeBottomNav : clientBottomNav;");
+    expect(portal).toContain('community?.enabled === false ? base.filter((i) => i.to !== "/portal/community") : base');
   });
 
   it("tapping it while you're there goes back to the top of the feed, fresh", () => {

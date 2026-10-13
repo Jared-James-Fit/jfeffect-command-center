@@ -18,10 +18,10 @@ describe("one staff app, laid out like the client app", () => {
     expect(badges).toContain('map["/admin/community"] = { count: community.unseen };');
   });
 
-  it("More opens from a big header button for staff, clients and members", () => {
+  it("More opens from a big header button for staff, clients and members (members use the portal)", () => {
     expect(read("src/routes/_authenticated/admin/route.tsx")).toContain("title={title} moreInHeader>");
-    expect(read("src/routes/_authenticated/m/route.tsx")).toContain('title="Member" moreInHeader>');
     expect(read("src/routes/_authenticated/portal/route.tsx")).toContain('title="JF Effect" moreInHeader simpleHeader>');
+    expect(read("src/routes/_authenticated/portal/route.tsx")).toContain("items={isSelfServe ? selfServeNav : clientNav}");
     expect(read("src/components/app-shell.tsx")).toContain('className="h-10 w-10 shrink-0 rounded-xl px-0">');
   });
 

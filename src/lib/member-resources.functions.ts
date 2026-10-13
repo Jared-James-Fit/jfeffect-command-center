@@ -119,6 +119,14 @@ export const adminGetUploadUrl = createServerFn({ method: "POST" })
 
 /* ---------- member: list & view ---------- */
 
+/** A coaching client (active, not archived): every resource is theirs, no membership keys needed. */
+async function isCoachingClient(supabase: any, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("clients").select("id").eq("user_id", userId).eq("service_tier", "coaching").eq("archived", false)
+    .not("status", "in", "(Archived,Deactivated)").maybeSingle();
+  return !!data;
+}
+
 export const memberListResources = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: { kind?: "resource"|"tool" } | undefined) => i ?? {})
@@ -137,8 +145,9 @@ export const memberListResources = createServerFn({ method: "GET" })
     if (data.kind) q = q.eq("kind", data.kind);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
+    const coaching = await isCoachingClient(supabase, userId);
     return {
-      items: (rows ?? []).map((r: any) => ({ ...r, locked: !accessKeys.includes(r.required_access_level) })),
+      items: (rows ?? []).map((r: any) => ({ ...r, locked: !coaching && !accessKeys.includes(r.required_access_level) })),
       accessKeys,
     };
   });
@@ -153,8 +162,8 @@ export const memberGetResource = createServerFn({ method: "GET" })
       .from("member_resources").select("*").eq("slug", data.slug).eq("status", "Published").maybeSingle();
     if (!row) throw new Error("Not found");
     const { data: member } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
-    let hasAccess = false;
-    if (member?.id) {
+    let hasAccess = await isCoachingClient(supabase, userId);
+    if (!hasAccess && member?.id) {
       const { data: acc } = await supabase
         .from("member_access").select("id").eq("member_id", member.id).eq("active", true).eq("access_level_key", row.required_access_level).maybeSingle();
       hasAccess = !!acc;

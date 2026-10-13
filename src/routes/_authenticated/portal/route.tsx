@@ -1,7 +1,11 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
-import { clientNav, clientBottomNav } from "@/lib/admin-nav";
+import { clientNav, clientBottomNav, selfServeNav, selfServeBottomNav } from "@/lib/admin-nav";
+import { isCoachingOnlyPath, isLapsedMemberPath, useServiceTier } from "@/lib/service-tier";
+import { useMemberAccess } from "@/lib/member-access";
+import { MemberSetupGate } from "@/components/member/member-setup-gate";
+import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
 import { ClientPovBanner, PovFrame } from "@/components/client-pov-banner";
 import { useActivityHeartbeat } from "@/hooks/use-activity-heartbeat";
 import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
@@ -18,17 +22,20 @@ import { useCommunityActivity } from "@/lib/community.queries";
 function PortalLayout() {
   useActivityHeartbeat();
   const { isImpersonating } = useClientImpersonation();
+  // Coaching client or JF member: one portal, the coach's screens only for coaching.
+  const { isSelfServe } = useServiceTier();
   // No community for this account (not an active client): no centre button.
   const { data: community } = useCommunityActivity(true);
-  const bottomNav = useMemo(
-    () => (community?.enabled === false ? clientBottomNav.filter((i) => i.to !== "/portal/community") : clientBottomNav),
-    [community?.enabled],
-  );
+  const bottomNav = useMemo(() => {
+    const base = isSelfServe ? selfServeBottomNav : clientBottomNav;
+    return community?.enabled === false ? base.filter((i) => i.to !== "/portal/community") : base;
+  }, [community?.enabled, isSelfServe]);
   return (
     <>
       <PovFrame />
       <ClientPovBanner />
-      <AppShell items={clientNav} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader>
+      <AppShell items={isSelfServe ? selfServeNav : clientNav} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader>
+        {isSelfServe && <MemberGates />}
         {/* Onboarding requirements (profile photo, basic info, training schedule,
             Goals & Setup) are surfaced as a non-blocking checklist on the Home
             page — they must never lock the portal. See
@@ -53,6 +60,33 @@ function PortalLayout() {
             gates (setup prompts, event/form popups). */}
         <ClientBirthdayCard />
       </AppShell>
+    </>
+  );
+}
+
+/**
+ * A JF member in the portal: the coach's screens send them home; a lapsed
+ * membership opens Membership (billing, account, support stay reachable),
+ * with the status banner; first-time setup as before.
+ */
+function MemberGates() {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { isImpersonating } = useClientImpersonation();
+  const { loading, hasAccess, accountType, status, subscriptionStatus } = useMemberAccess();
+  const lapsed = !loading && accountType === "jf_member" && !hasAccess("app_membership");
+  useEffect(() => {
+    if (isCoachingOnlyPath(pathname)) navigate({ to: "/portal", replace: true });
+    else if (lapsed && !isImpersonating && !isLapsedMemberPath(pathname)) navigate({ to: "/portal/membership" as any, replace: true });
+  }, [pathname, lapsed, isImpersonating, navigate]);
+  return (
+    <>
+      {lapsed && (
+        <div className="px-4 pt-4 md:px-6 md:pt-6">
+          <SubscriptionRestrictedBanner status={status} subscriptionStatus={subscriptionStatus} />
+        </div>
+      )}
+      {!isImpersonating && <MemberSetupGate />}
     </>
   );
 }

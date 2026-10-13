@@ -405,6 +405,9 @@ export const bootstrapClientOccurrences = createServerFn({ method: "POST" })
       clientId = (c as any)?.id;
     }
     if (!clientId) return { ok: false, reason: "no_client" as const };
+    // the coach's recurring tasks (check-ins, reviews): never for a JF member
+    const { data: tierRow } = await context.supabase.from("clients").select("service_tier").eq("id", clientId).maybeSingle();
+    if ((tierRow as any)?.service_tier === "self_serve") return { ok: false, reason: "self_serve" as const };
 
     const { data: defs } = await context.supabase
       .from("coach_task_definitions").select("task_type, enabled").eq("enabled", true);

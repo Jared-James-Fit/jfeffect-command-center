@@ -125,7 +125,7 @@ export async function sendMembershipOnboardingEmail(
       ? `${origin}/member-setup?token=${member.setup_token}`
       : null
     const loginLink = `${origin}/auth`
-    const billingLink = `${origin}/m/billing`
+    const billingLink = `${origin}/portal/membership`
     const trialEndDisplay = formatInTz(member.trial_end_at, tz)
     // First billing is when the trial ends (or current_period_end if no trial)
     const firstBillingDisplay = trialEndDisplay

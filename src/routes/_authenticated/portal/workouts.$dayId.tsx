@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServiceTier } from "@/lib/service-tier";
 import { useMemo, useEffect } from "react";
 import { Link, useRouter, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
@@ -157,6 +158,7 @@ function RouteComponent() {
       (await supabase.from("pl_days").select("scheduled_date").eq("id", dayId).maybeSingle()).data,
   });
 
+  const { isSelfServe } = useServiceTier();
   const adapter = useMemo(() => {
     if (!clientId || !clientUserId) return undefined;
     return createClientAdapter({
@@ -220,7 +222,8 @@ function RouteComponent() {
       navigation={{
         backTo: "/portal/workouts",
         listPath: "/portal/workouts",
-        messagesPath: "/portal/messages",
+        // a JF member has no coach thread: questions go to Support
+        messagesPath: isSelfServe ? "/portal/support" : "/portal/messages",
       }}
     >
       {/* wait for the day's date, or cardio loads once for today and again for the real date */}
