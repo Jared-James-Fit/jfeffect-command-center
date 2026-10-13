@@ -70,7 +70,13 @@ export const Route = createFileRoute("/api/public/hooks/summer-voice-check")({
             cleoRun = { model, ok: false, error: String(e?.message ?? e).slice(0, 300) };
           }
         }
-        return Response.json({ ok: attempts.some((a) => a.ok), attempts, gatewayModels, chatModels, cleoRun });
+        // Which attachment formats each model takes (images, PDFs, video).
+        let attachments: unknown = null;
+        if (key && new URL(request.url).searchParams.get("attachments") === "1") {
+          const { probeAttachmentFormats } = await import("@/lib/cleo-attachment-probe.server");
+          attachments = await probeAttachmentFormats(key);
+        }
+        return Response.json({ ok: attempts.some((a) => a.ok), attempts, gatewayModels, chatModels, cleoRun, attachments });
       },
     },
   },
