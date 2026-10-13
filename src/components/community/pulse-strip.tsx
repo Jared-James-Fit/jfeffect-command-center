@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Activity, ChevronRight } from "lucide-react";
+import { Activity, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
@@ -53,27 +53,59 @@ export function ActivitySection({ posts, unit, viewerIsStaff, onOpen, weekComple
         ))}
       </ul>
 
-      <Sheet open={all} onOpenChange={setAll}>
-        <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-2xl px-0 pb-safe-bottom pt-5">
-          <SheetHeader className="px-5 text-left">
-            <SheetTitle>Activity</SheetTitle>
-            <SheetDescription>Finished sessions and PRs from the crew, newest first.</SheetDescription>
-          </SheetHeader>
-          <ul className="mt-3 divide-y divide-border/60 border-y border-border/60">
-            {posts.map((p) => (
-              <PulseRow key={p.id} post={p} unit={unit} viewerIsStaff={viewerIsStaff} onOpen={open} />
-            ))}
-          </ul>
-          {hasMore && (
-            <div className="px-5 pt-3">
-              <Button type="button" variant="outline" className="h-11 w-full rounded-xl" disabled={loadingMore} onClick={onLoadMore}>
-                {loadingMore ? "Loading…" : "Show older"}
-              </Button>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      <ActivityHistorySheet
+        open={all}
+        onOpenChange={setAll}
+        posts={posts}
+        unit={unit}
+        viewerIsStaff={viewerIsStaff}
+        onOpen={open}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadMore={onLoadMore}
+      />
     </section>
+  );
+}
+
+/** Every finished session and PR from the crew, newest first (Stories' "All activity" and the Activity card). */
+export function ActivityHistorySheet({ open, onOpenChange, posts, unit, viewerIsStaff, onOpen, hasMore, loadingMore, onLoadMore }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  posts: CommunityPost[];
+  unit: "kg" | "lb";
+  viewerIsStaff: boolean;
+  onOpen: (p: CommunityPost) => void;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" hideCloseButton className="max-h-[88dvh] gap-0 overflow-y-auto overscroll-contain rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[520px]">
+        <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 px-5 pb-3 pt-4 text-left">
+          <div className="min-w-0">
+            <SheetTitle className="text-[16px] font-black">Activity</SheetTitle>
+            <SheetDescription className="text-[12px]">Finished sessions and PRs from the crew, newest first.</SheetDescription>
+          </div>
+          <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
+            <X className="h-4 w-4" />
+          </SheetClose>
+        </SheetHeader>
+        <ul className="divide-y divide-border/60 border-y border-border/60">
+          {posts.map((p) => (
+            <PulseRow key={p.id} post={p} unit={unit} viewerIsStaff={viewerIsStaff} onOpen={onOpen} />
+          ))}
+        </ul>
+        {hasMore && (
+          <div className="px-5 pt-3">
+            <Button type="button" variant="outline" className="h-11 w-full rounded-xl" disabled={loadingMore} onClick={onLoadMore}>
+              {loadingMore ? "Loading…" : "Show older"}
+            </Button>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 

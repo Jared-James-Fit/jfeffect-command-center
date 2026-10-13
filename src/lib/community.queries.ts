@@ -810,12 +810,13 @@ export async function shareToCommunity(
     }
   }
   const postId = await saveCommunityPost({ completionId: i.completionId, caption: i.caption, visibility: i.visibility, media, hideLoads: i.hideLoads, extras: i.extras, lockIn: i.lockIn });
+  // The post is up from here: a GIF / voice memo that doesn't go must not undo it
+  // (the screen keeps its photos and closes as posted, with a heads-up).
+  let attachError: PostedButAttachFailed | null = null;
   try {
     await i.attach?.(postId);
   } catch (e) {
-    // the post is up; only the GIF / voice memo didn't go
-    invalidateCommunity(qc);
-    throw new Error((e as any)?.message ? `Posted, but the GIF or voice memo didn't attach: ${(e as any).message}` : "Posted, but the GIF or voice memo didn't attach. Edit the post to add it.");
+    attachError = new PostedButAttachFailed((e as any)?.message);
   }
   // tidy up whatever the post no longer points at
   const old = i.existing;
@@ -826,6 +827,7 @@ export async function shareToCommunity(
     if (gone.length) await removeCommunityFiles(gone);
   }
   invalidateCommunity(qc);
+  if (attachError) throw attachError;
   return postId;
 }
 
@@ -861,8 +863,9 @@ export async function createCommunityPost(
   try {
     await i.attach?.(postId);
   } catch (e) {
+    // the post is up: the screen keeps its photos and closes as posted
     invalidateCommunity(qc);
-    throw new Error((e as any)?.message ? `Posted, but the GIF or voice memo didn't attach: ${(e as any).message}` : "Posted, but the GIF or voice memo didn't attach. Edit the post to add it.");
+    throw new PostedButAttachFailed((e as any)?.message);
   }
   invalidateCommunity(qc);
   return postId;
@@ -879,6 +882,14 @@ export function useCreateCommunityPost() {
     },
     onSuccess: () => invalidateCommunity(qc),
   });
+}
+
+/** Saved, but the GIF / voice memo didn't attach: the post is up, so the screen treats it as posted. */
+export class PostedButAttachFailed extends Error {
+  readonly posted = true;
+  constructor(reason?: string) {
+    super(reason ? `Posted, but the GIF or voice memo didn't attach: ${reason}` : "Posted, but the GIF or voice memo didn't attach. Edit the post to add it.");
+  }
 }
 
 /** What a Community post earns right now (today banked? weekly cap?). */
@@ -905,6 +916,9 @@ export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["community-profile"] });
   qc.invalidateQueries({ queryKey: ["community-members"] });
   qc.invalidateQueries({ queryKey: ["community-crew-goal"] });
+  // a saved / edited post shows in Stories, its own page and the archive straight away
+  qc.invalidateQueries({ queryKey: ["community-post"] });
+  qc.invalidateQueries({ queryKey: ["community-archived"] });
 }
 
 /* ---- post detail / profile ------------------------------------------ */

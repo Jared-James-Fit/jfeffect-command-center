@@ -34,6 +34,8 @@ describe("the crew list is about training, not posting", () => {
   it("never says 'No posts yet'; a quiet member gets their bio or when they started", () => {
     expect(list).not.toContain("No posts yet");
     expect(list).toContain('trainingSinceLabel(m.training_since) || "In the JF crew"');
-    expect(list).toContain("{days.length > 0 && <WeekDots days={days} today={today} />}");
+    expect(list).toContain("<WeekDots days={days} today={today} />");
+    // Follow sits beside the row, never inside its button
+    expect(list).toMatch(/<\/button>\s*<FollowButton userId=\{m\.author\.user_id\}/);
   });
 });

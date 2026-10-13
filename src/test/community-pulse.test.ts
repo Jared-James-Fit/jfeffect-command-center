@@ -66,7 +66,9 @@ describe("Activity: one section at the top of the feed", () => {
   it("the feed puts Activity first, then the posts people made, newest first", () => {
     const screen = readFileSync("src/components/community/community-screen.tsx", "utf8");
     expect(screen).toContain("const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);");
-    expect(screen.indexOf("<ActivitySection")).toBeLessThan(screen.indexOf("{ownPosts.map((p, i) => ("));
+    expect(screen.indexOf("<ActivitySection")).toBeLessThan(screen.indexOf("{feedPosts.map((p, i) => ("));
+    // Following narrows the posts to people you follow (Activity is the whole crew, so it steps aside)
+    expect(screen).toContain("{activity.length > 0 && !following && (");
   });
 });
 describe("Home shows a couple of Pulses at most", () => {

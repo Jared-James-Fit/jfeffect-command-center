@@ -8,10 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { UserAvatar } from "@/components/user-avatar";
+import { FollowButton, FollowsYouTag, MyFollowing } from "@/components/community/follow-button";
 import { AvatarCropper } from "@/components/avatar-cropper";
 import { CoachBadge } from "@/components/community/post-card";
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
-import { BIO_MAX, trainingSinceLabel, type CommunityPost } from "@/lib/community";
+import { BIO_MAX, trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { useCommunityFeed, useCommunityProfile, useMyArchived, useMyCommunitySettings, usePostMediaUrls, useSetAutoShare, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
 
 /**
@@ -19,7 +20,7 @@ import { useCommunityFeed, useCommunityProfile, useMyArchived, useMyCommunitySet
  * the workouts they chose to share. Deliberately no follower counts or
  * reaction totals.
  */
-export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit: "kg" | "lb"; onOpenPost: (post: CommunityPost) => void }) {
+export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId: string; unit: "kg" | "lb"; onOpenPost: (post: CommunityPost) => void; onOpenPerson?: (a: CommunityAuthor) => void }) {
   const { data: profile, isLoading } = useCommunityProfile(userId);
   const feed = useCommunityFeed(userId);
   const shown = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
@@ -121,6 +122,17 @@ export function ProfileView({ userId, unit, onOpenPost }: { userId: string; unit
           </div>
           {profile.author.is_coach && <div className="mt-1 text-[12px] font-bold text-foreground/80">{profile.author.title || "Coach · JF Effect"}</div>}
           <div className="mt-1 text-[12px] font-semibold text-muted-foreground">{meta}</div>
+          {/* Follow: private, no counts on anyone else's profile */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            {profile.is_me ? (
+              onOpenPerson && <MyFollowing onOpen={onOpenPerson} />
+            ) : (
+              <>
+                <FollowButton userId={profile.author.user_id} name={profile.author.name} />
+                <FollowsYouTag userId={profile.author.user_id} />
+              </>
+            )}
+          </div>
         </div>
       </div>
 

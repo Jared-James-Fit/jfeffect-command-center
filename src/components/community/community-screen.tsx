@@ -10,6 +10,7 @@ import { PostCard } from "@/components/community/post-card";
 import { doubleTapTipKeys } from "@/components/community/reaction-button";
 import { CommentsSheet } from "@/components/community/comments-sheet";
 import { OPEN_POST_EVENT } from "@/components/community/shared-comment";
+import { OPEN_PERSON_EVENT } from "@/lib/community-notifications";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
@@ -20,6 +21,8 @@ import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { activityNeedsMore, isPulsePost, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { ActivitySection } from "@/components/community/pulse-strip";
+import { SuggestedAthletes } from "@/components/community/suggested-athletes";
+import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification-bell";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
@@ -101,6 +104,15 @@ export function CommunityScreen({
   // Automatic Activity sits in one section at the top; the posts people made follow, newest first
   const activity = useMemo(() => posts.filter((p) => isPulsePost(p)), [posts]);
   const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);
+  // All (the whole crew, like a Strava club) or Following (just the people you follow, and you).
+  const { data: follows } = useFollowState(!hideTabs);
+  const followingIds = useMemo(() => new Set(follows?.following ?? []), [follows]);
+  const [only, setOnly] = useState<"all" | "following">("all");
+  const following = only === "following" && followingIds.size > 0;
+  const feedPosts = useMemo(
+    () => (following ? ownPosts.filter((p) => p.is_mine || followingIds.has(p.author.user_id) || p.collaborators?.some((c) => followingIds.has(c.user_id))) : ownPosts),
+    [following, ownPosts, followingIds],
+  );
   // "Double-tap to like": a few seconds on the first post (a workout before a
   // note), once a visit, until the first double-tap, and only for the first
   // few visits either way. Remembered on the account, not the device.
@@ -239,6 +251,19 @@ export function CommunityScreen({
     return () => window.removeEventListener(OPEN_POST_EVENT, open);
   }, []);
 
+  // A follow notice opens the follower's profile.
+  useEffect(() => {
+    const open = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (typeof id !== "string" || !id) return;
+      setDetailId(null);
+      setScope((sc) => ({ kind: "author", author: { user_id: id, name: "", avatar_url: null, is_coach: false }, from: sc.kind === "author" || sc.kind === "you" ? sc.from : sc.kind }));
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener(OPEN_PERSON_EVENT, open);
+    return () => window.removeEventListener(OPEN_PERSON_EVENT, open);
+  }, []);
+
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
@@ -341,9 +366,9 @@ export function CommunityScreen({
       ) : scope.kind === "members" ? (
         <CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "members" })} />
       ) : scope.kind === "you" && user?.id ? (
-        <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} />
+        <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : scope.kind === "author" ? (
-        <ProfileView userId={scope.author.user_id} unit={unit} onOpenPost={openPost} />
+        <ProfileView userId={scope.author.user_id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : feed.isLoading ? (
         <div className="space-y-3">
           {[0, 1].map((i) => (
@@ -375,7 +400,26 @@ export function CommunityScreen({
             onOpenPost={(id) => setDetailId(id)}
             lead={canShare ? <ShareWorkoutButton unit={unit} label="Post" variant="bubble" previewOnly={previewOnly} /> : null}
           />
-          {activity.length > 0 && (
+          {!hideTabs && followingIds.size > 0 && (
+            <div className="flex gap-1.5" role="tablist" aria-label="Show posts from">
+              {([["all", "All"], ["following", "Following"]] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  aria-selected={only === k}
+                  onClick={() => {
+                    setOnly(k);
+                    window.scrollTo({ top: 0 });
+                  }}
+                  className={cn("h-8 rounded-full px-3.5 text-[13px] font-bold transition-colors", only === k ? "bg-foreground text-background" : "bg-muted text-muted-foreground active:bg-muted/70")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {activity.length > 0 && !following && (
             <FeedItem index={0}>
               <ActivitySection
                 posts={activity}
@@ -389,9 +433,12 @@ export function CommunityScreen({
               />
             </FeedItem>
           )}
-          {ownPosts.map((p, i) => (
+          {following && feedPosts.length === 0 && (
+            <EmptyNote title="Nothing new from people you follow" body="Their posts land here. The whole crew is under All." action={<Button type="button" variant="outline" className="w-full" onClick={() => setOnly("all")}>Show all posts</Button>} />
+          )}
+          {feedPosts.map((p, i) => (
             <Fragment key={p.id}>
-            <FeedItem index={i + (activity.length > 0 ? 1 : 0)} data-post-id={p.id} className={cn("scroll-mt-20 rounded-3xl transition-shadow duration-700", flash === p.id && "ring-2 ring-primary")}>
+            <FeedItem index={i + (activity.length > 0 && !following ? 1 : 0)} data-post-id={p.id} className={cn("scroll-mt-20 transition-shadow duration-700 sm:rounded-3xl", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
               post={p}
               thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
@@ -407,7 +454,9 @@ export function CommunityScreen({
             />
             </FeedItem>
             {/* now and then, until their first post: an invite to lock in or share (after the second post) */}
-            {canShare && i === Math.min(1, ownPosts.length - 1) && <ShareNudge surface="feed" unit={unit} />}
+            {canShare && !following && i === Math.min(1, feedPosts.length - 1) && <ShareNudge surface="feed" unit={unit} />}
+            {/* people to follow, after the third post, until you follow a handful */}
+            {!hideTabs && !following && i === Math.min(2, feedPosts.length - 1) && <SuggestedAthletes onOpen={openAuthor} />}
             </Fragment>
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />

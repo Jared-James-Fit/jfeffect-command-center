@@ -132,13 +132,15 @@ export function LockInBar({
               const c = lockInCameraCard({ workoutTitle: cardTitle, athleteName, plan: plan ?? [] });
               return { data: c.data, looks: c.looks, look: c.looks.includes(look) ? look : "lockin", onLook: (t) => setLook(t as LockTemplate) };
             })()}
-            post={{
+            // not until we know whether there's already a lock-in post (posting blind would overwrite it)
+            post={completionId && existing === undefined ? null : {
               key: `lock:${completionId ?? ""}:${existing?.id ?? ""}`,
               label: existing ? "Update" : "Post",
               caption: existing?.caption,
               visibility: existing?.visibility,
               extras: existing?.extra_media ?? null,
               attach: existing,
+              hasCover: !!existing?.media_path,
               onPost: async (a) => {
                 if (!user?.id) throw new Error("Sign in again to post");
                 // Always through the start path: the row can exist without being started.

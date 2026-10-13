@@ -82,7 +82,10 @@ export function ShareWorkoutButton({
   usePreloadStudio(!previewOnly);
   const [startedId, setStartedId] = useState<string | null>(null);
   const lockCompletionId = today ? startedId ?? today.completionId : null;
-  const { data: lockExisting } = useMyPostForCompletion(lockCompletionId, capturing && !!lockCompletionId, "lockin");
+  const lockExistingQ = useMyPostForCompletion(lockCompletionId, capturing && !!lockCompletionId, "lockin");
+  const lockExisting = lockExistingQ.data;
+  // a session not started yet has no post to wait for
+  const lockKnown = !lockCompletionId || lockExisting !== undefined;
   const { data: plan } = useDayPlan(capturing ? today?.dayId ?? null : null);
   const startSrv = useServerFn(startWorkoutFn);
 
@@ -120,7 +123,7 @@ export function ShareWorkoutButton({
     return id;
   };
 
-  const lockPost: StudioPost | null = today
+  const lockPost: StudioPost | null = today && lockKnown
     ? {
         key: `lock:${lockCompletionId ?? today.dayId}:${lockExisting?.id ?? ""}`,
         label: lockExisting ? "Update" : "Post",
@@ -128,6 +131,7 @@ export function ShareWorkoutButton({
         visibility: lockExisting?.visibility,
         extras: lockExisting?.extra_media ?? null,
         attach: lockExisting,
+        hasCover: !!lockExisting?.media_path,
         onPost: async (a) => {
           if (!user?.id) throw new Error("Sign in again to post");
           const id = await ensureStarted();
@@ -292,7 +296,8 @@ export function ShareWorkoutButton({
             modes={modes}
             mode={activeMode}
             onMode={(k) => setMode(k as Mode)}
-            canShoot={activeMode === "post" ? true : activeMode === "lockin" ? !!today : !!target && workout.ready}
+            // shoot straight away: the card's numbers land on the photo when they arrive
+            canShoot={activeMode === "post" ? true : activeMode === "lockin" ? !!today : !!target}
             card={activeMode === "post" ? null : cameraCard}
             post={activeMode === "post" ? plainPost : activeMode === "lockin" ? lockPost : workout.post}
             chip={

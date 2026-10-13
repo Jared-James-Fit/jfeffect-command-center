@@ -1548,7 +1548,7 @@ export type StoryGroup<T> = { author: CommunityAuthor; items: T[]; unseen: boole
  * story-worthy posts, one bubble each, their moments oldest first (they play
  * in order). People with something unseen first, then the most recent.
  */
-export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author">>(posts: T[], now = Date.now()): StoryGroup<T>[] {
+export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author">>(posts: T[], now = Date.now(), followed?: ReadonlySet<string>): StoryGroup<T>[] {
   const by = new Map<string, StoryGroup<T>>();
   for (const p of posts) {
     const t = new Date(p.created_at).getTime();
@@ -1561,5 +1561,7 @@ export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | 
   }
   const groups = [...by.values()];
   for (const g of groups) g.items.sort((a, b) => a.created_at.localeCompare(b.created_at));
-  return groups.sort((a, b) => Number(b.unseen) - Number(a.unseen) || b.latest - a.latest);
+  // new first; among those, people you follow; then the most recent
+  const f = (g: StoryGroup<T>) => Number(!!followed?.has(g.author.user_id));
+  return groups.sort((a, b) => Number(b.unseen) - Number(a.unseen) || f(b) - f(a) || b.latest - a.latest);
 }

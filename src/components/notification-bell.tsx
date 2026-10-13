@@ -33,7 +33,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listUpcomingForBell, listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { communityNoticeText, fetchCommunityNotices, openCommunityPost } from "@/lib/community-notifications";
+import { communityNoticeText, fetchCommunityNotices, openCommunityPerson, openCommunityPost } from "@/lib/community-notifications";
 import { initialNotificationView, notificationListScrollClass } from "@/lib/notifications-page-layout";
 import { listenChannel } from "@/lib/realtime-channel";
 
@@ -65,6 +65,8 @@ export type BellItem = {
   meetLink?: string | null;
   /** community: the post it's about. */
   postId?: string;
+  /** community follow: the follower, whose profile it opens. */
+  personId?: string;
   name: string;
   title: string;
   body: string;
@@ -529,7 +531,8 @@ export function useNotificationFeed() {
         const t = communityNoticeText(n);
         raw.push({
           id: makeId("community", n.anchor),
-          kind: "community", sourceId: n.anchor, clientId: "", postId: n.post_id,
+          kind: "community", sourceId: n.anchor, clientId: "",
+          ...(n.kind === "follow" ? { personId: n.anchor } : { postId: n.post_id ?? undefined }),
           name: n.actors?.[0]?.name ?? "Crew",
           title: t.title, body: t.body, created_at: n.at,
         });
@@ -666,7 +669,7 @@ function destinationFor(it: BellItem, role: string | null) {
       : { to: "/portal" } as const;
     case "appointment": return { to: isAdmin ? "/admin/calendar" : "/portal/calendar" } as const;
     case "group_message": return { to: isAdmin ? "/admin/messages" : "/portal/messages" } as const;
-    case "community": return { to: isAdmin ? "/admin/community" : "/portal/community", hash: `post=${it.postId ?? ""}` } as const;
+    case "community": return { to: isAdmin ? "/admin/community" : "/portal/community", hash: it.personId ? `person=${it.personId}` : `post=${it.postId ?? ""}` } as const;
     default: return isAdmin
       ? { to: "/admin/messages", search: { client: it.clientId } }
       : { to: "/portal/messages" } as const;
@@ -1053,6 +1056,7 @@ export function NotificationPanel({
       try { navigate(dest as any); } catch { /* ignore */ }
       // already on the community screen: the hash alone won't reopen a post
       if (it.kind === "community" && it.postId) window.setTimeout(() => openCommunityPost(it.postId!), 0);
+      if (it.kind === "community" && it.personId) window.setTimeout(() => openCommunityPerson(it.personId!), 0);
       onNavigate?.();
     },
     [markReadMut, navigate, onNavigate, role, impersonation],

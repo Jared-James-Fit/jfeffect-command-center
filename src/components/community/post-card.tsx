@@ -381,7 +381,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   };
 
   return (
-    <article ref={articleRef} className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-sm">
+    // Instagram-style on a phone: edge to edge, no card frame, a hairline between
+    // posts. A wider screen keeps the soft card (the feed column is centred there).
+    <article ref={articleRef} data-feed-post className="-mx-3 overflow-hidden border-b border-border/60 bg-background pb-2 sm:mx-0 sm:rounded-3xl sm:border sm:border-border/70 sm:bg-card sm:pb-0 sm:shadow-sm">
       <header className="flex items-center justify-between gap-2 px-3.5 py-3">
         <AuthorLine author={post.author} sub={sub} onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined} collaborators={post.collaborators} onOpenPerson={onOpenAuthor} />
         <div className="flex shrink-0 items-center gap-1">

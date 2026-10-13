@@ -69,7 +69,7 @@ export async function uploadLiftFileToStorage(
   const DIRECT_UPLOAD_MAX_BYTES =
     bucket === "message-attachments" ? 40 * 1024 * 1024 : 6 * 1024 * 1024;
   if (args.file.size <= DIRECT_UPLOAD_MAX_BYTES && typeof XMLHttpRequest !== "undefined") {
-    await uploadDirectWithProgress({
+    await uploadDirectWithRetry({
       bucket,
       path,
       file: args.file,
@@ -129,7 +129,7 @@ function encodeStoragePath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
 }
 
-async function uploadDirectWithProgress(args: {
+type DirectUploadArgs = {
   bucket: string;
   path: string;
   file: File;
@@ -139,7 +139,37 @@ async function uploadDirectWithProgress(args: {
   supabaseUrl: string;
   onProgress?: (pct: number) => void;
   signal?: AbortSignal;
-}): Promise<void> {
+};
+
+/** Waits before the 2nd and 3rd try of a direct upload. */
+export const DIRECT_UPLOAD_RETRY_MS = [1000, 3000];
+/** No bytes moving for this long while sending: the connection is gone, try again. */
+const DIRECT_UPLOAD_STALL_MS = 30_000;
+
+/** A dropped connection, a stall or a server hiccup: worth another go. */
+class RetryableUploadError extends Error {
+  retryable = true;
+}
+
+/**
+ * Phones drop connections mid-upload (a lift's wifi, walking out of the gym):
+ * a network error, a stalled send or a 5xx / 408 / 429 gets two more tries
+ * before the post fails. Same path every try, so a 409 means an earlier try
+ * landed after all (treated as done). Cancelling never retries.
+ */
+async function uploadDirectWithRetry(args: DirectUploadArgs): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await uploadDirectWithProgress(args);
+    } catch (e) {
+      if (!(e instanceof RetryableUploadError) || attempt >= DIRECT_UPLOAD_RETRY_MS.length || args.signal?.aborted) throw e;
+      await new Promise((r) => setTimeout(r, DIRECT_UPLOAD_RETRY_MS[attempt]));
+      if (args.signal?.aborted) throw new Error("Upload cancelled.");
+    }
+  }
+}
+
+async function uploadDirectWithProgress(args: DirectUploadArgs): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const url =
@@ -155,27 +185,48 @@ async function uploadDirectWithProgress(args: {
     // can be cached for good.
     xhr.setRequestHeader("cache-control", `max-age=${CACHE_SECONDS}`);
 
+    // Stall watch while the body is going up (not while the server answers).
+    let lastMove = Date.now();
+    let stalled = false;
+    const watch = setInterval(() => {
+      if (Date.now() - lastMove < DIRECT_UPLOAD_STALL_MS) return;
+      stalled = true;
+      clearInterval(watch);
+      xhr.abort();
+    }, 5000);
+    const done = () => clearInterval(watch);
+    xhr.upload.onload = done;
     xhr.upload.onprogress = (e) => {
+      lastMove = Date.now();
       if (!args.onProgress) return;
       const total = e.lengthComputable ? e.total : args.file.size;
       if (!total) return;
       const pct = Math.max(1, Math.min(99, Math.round((e.loaded / total) * 100)));
       args.onProgress(pct);
     };
-    xhr.onerror = () => reject(new Error("Network error during upload."));
-    xhr.onabort = () => reject(new Error("Upload cancelled."));
+    xhr.onerror = () => {
+      done();
+      reject(new RetryableUploadError("Network error during upload."));
+    };
+    xhr.onabort = () => {
+      done();
+      reject(stalled ? new RetryableUploadError("The upload stalled.") : new Error("Upload cancelled."));
+    };
     xhr.onload = () => {
+      done();
       if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 409) {
         resolve();
       } else {
-        reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText || xhr.statusText}`));
+        const msg = `Upload failed (${xhr.status}): ${xhr.responseText || xhr.statusText}`;
+        reject(xhr.status >= 500 || xhr.status === 408 || xhr.status === 429 ? new RetryableUploadError(msg) : new Error(msg));
       }
     };
 
     if (args.signal) {
       const onAbort = () => xhr.abort();
       if (args.signal.aborted) {
-        xhr.abort();
+        done();
+        reject(new Error("Upload cancelled."));
         return;
       }
       args.signal.addEventListener("abort", onAbort, { once: true });

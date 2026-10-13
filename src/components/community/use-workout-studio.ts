@@ -32,7 +32,8 @@ export function useWorkoutStudio(target: StudioWorkout | null, unit: "kg" | "lb"
   const [look, setLook] = useState<ShareTemplate | null>(null);
   const id = target?.completion_id ?? "";
   const { data: stats } = useCompletionPreview(id, enabled && !!target);
-  const { data: existing } = useMyPostForCompletion(target?.completion_id, enabled && !!target);
+  const existingQ = useMyPostForCompletion(target?.completion_id, enabled && !!target);
+  const existing = existingQ.data;
 
   const built = useMemo(() => {
     if (!stats || !target) return null;
@@ -51,7 +52,10 @@ export function useWorkoutStudio(target: StudioWorkout | null, unit: "kg" | "lb"
   const current = built ? (look && built.looks.includes(look) ? look : built.looks[0]) : null;
   const card: CameraCard | null = built && current ? { data: built.data, looks: built.looks, look: current, onLook: setLook } : null;
 
-  const post: StudioPost | null = target
+  // Not until we know whether it's already posted (posting blind would
+  // overwrite that post's caption and drop its other photos), and not before
+  // its card is ready (a quick shot would otherwise go up without the numbers).
+  const post: StudioPost | null = target && existing !== undefined && built
     ? {
         key: `workout:${target.completion_id}:${existing?.id ?? ""}`,
         label: existing ? "Update" : "Post",
@@ -62,6 +66,7 @@ export function useWorkoutStudio(target: StudioWorkout | null, unit: "kg" | "lb"
         showHideLoads: true,
         extras: existing?.extra_media ?? null,
         attach: existing,
+        hasCover: !!existing?.media_path,
         onPost: async (a) => {
           if (!user?.id) throw new Error("Sign in again to post");
           await shareToCommunity(qc, { userId: user.id, completionId: target.completion_id, caption: a.caption, visibility: a.visibility, hideLoads: a.hideLoads, photo: a.photo, existing, extras: a.extras, attach: a.attach });
