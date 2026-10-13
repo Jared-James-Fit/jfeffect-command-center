@@ -29,7 +29,7 @@ const FRAME_MS = 5000;
  * automatic-sharing switch on your profile and who-sees-it on every post
  * apply exactly as in the feed.
  */
-export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, lead, addYours }: {
+export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, lead, addYours, after }: {
   posts: CommunityPost[];
   unit: "kg" | "lb";
   viewerIsStaff: boolean;
@@ -39,6 +39,8 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
   lead?: React.ReactNode;
   /** The end card's "add yours" (when they have nothing in the stories themselves). */
   addYours?: React.ReactNode;
+  /** Right after your own bubble: the week's Activity (keeps the row up on a quiet day). */
+  after?: React.ReactNode;
 }) {
   const [seenNow, setSeenNow] = useState<Set<string>>(() => new Set());
   const { data: follows } = useFollowState();
@@ -50,7 +52,7 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
   const [open, setOpen] = useState<number | null>(null);
   // the order is fixed while watching (rings change as you go)
   const frozen = useRef<StoryGroup<CommunityPost>[]>([]);
-  if (!groups.length) return null;
+  if (!groups.length && !after) return null;
   const watch = (i: number) => {
     frozen.current = groups;
     setOpen(i);
@@ -59,6 +61,7 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
     <>
       <div className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-4 sm:px-4" data-story-rail data-no-swipe-back aria-label="Crew stories">
         {lead}
+        {after}
         {groups.map((g, i) => (
           <button key={g.author.user_id} type="button" onClick={() => watch(i)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`${g.author.name}'s story${g.unseen ? ", new" : ""}`} data-story-unseen={g.unseen ? "" : undefined}>
             <span className={cn("grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", g.unseen ? "bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)]" : "bg-border")}>
