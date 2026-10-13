@@ -6,7 +6,8 @@ import { isCrewUnread, useCrewThreads } from "@/lib/crew-chats";
 import { useCommunityActivity } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
 import { useAdminNavBadgeCounts, adminBadgeMap } from "@/hooks/use-admin-nav-badges";
-import { messagesBadgeCount, unreadGroupCount } from "@/lib/nav-badge-counts";
+import { messagesBadgeCount, unreadGroupIds, waitingChatCount } from "@/lib/nav-badge-counts";
+import { useChatPrefs } from "@/lib/chat-prefs";
 import { listenChannel } from "@/lib/realtime-channel";
 
 export type NavBadge = { count?: number; dot?: boolean };
@@ -138,6 +139,8 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   // 1:1 chats and message requests from other members: a dot, like lift feedback.
   const { data: directs } = useDirectThreads(enabled);
   const { data: crews } = useCrewThreads(enabled);
+  // Muted chats don't count; chats marked unread do.
+  const { prefs: chatPrefs } = useChatPrefs(enabled);
   // New community posts since you last opened it (cleared server-side when you do).
   // Staff see the same count on their League button; a view-only login can't
   // clear it, so it gets none.
@@ -180,9 +183,9 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   const messagesCount = messagesBadgeCount({
     coachMessages: unread,
     liftFeedback: liftWithFeedback.size,
-    directThreads: (directs ?? []).filter((t) => isUnread(t, user?.id)).length,
-    crewThreads: (crews ?? []).filter((t) => isCrewUnread(t, user?.id)).length,
-    groupThreads: user ? unreadGroupCount(data.groupMemberships ?? [], data.groupMsgs ?? [], user.id) : 0,
+    directThreads: waitingChatCount((directs ?? []).map((t) => ({ key: t.group_id, unread: isUnread(t, user?.id), at: t.last_at })), chatPrefs),
+    crewThreads: waitingChatCount((crews ?? []).map((t) => ({ key: t.group_id, unread: isCrewUnread(t, user?.id), at: t.last_at })), chatPrefs),
+    groupThreads: user ? coachGroupsWaiting(data.groupMemberships ?? [], data.groupMsgs ?? [], user.id, chatPrefs) : 0,
   });
   if (messagesCount > 0) result["/portal/messages"] = { count: messagesCount };
 
@@ -218,4 +221,19 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   if (ciDot) result["/portal/check-in"] = { dot: true };
 
   return result;
+}
+
+function coachGroupsWaiting(
+  memberships: { group_id: string; last_read_at: string | null }[],
+  msgs: { group_id: string; sender_id: string | null; created_at: string }[],
+  me: string,
+  prefs: Parameters<typeof waitingChatCount>[1],
+) {
+  const unread = unreadGroupIds(memberships, msgs, me);
+  const lastAt = new Map<string, string>();
+  for (const m of msgs) {
+    const cur = lastAt.get(m.group_id);
+    if (!cur || m.created_at > cur) lastAt.set(m.group_id, m.created_at);
+  }
+  return waitingChatCount(memberships.map((m) => ({ key: m.group_id, unread: unread.has(m.group_id), at: lastAt.get(m.group_id) ?? null })), prefs);
 }

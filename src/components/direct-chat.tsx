@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, MoreHorizontal, ShieldOff, Flag, Inbox } from "lucide-react";
+import { Bell, BellOff, ChevronLeft, MoreHorizontal, ShieldOff, Flag, Inbox, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -20,23 +20,28 @@ import { fmtTime } from "@/components/chat-shared";
 import { isUnread, previewLine, useRespondToChat, type DirectThread, type RequestAction } from "@/lib/direct-chats";
 import { CrewRow } from "@/components/crew-chat";
 import type { CrewThread } from "@/lib/crew-chats";
+import { isMuted, useChatPrefs, useSetChatPrefs } from "@/lib/chat-prefs";
 
 /** A request holds this many messages until it's answered (chat_request_cap()). */
 export const REQUEST_CAP = 3;
 
 /**
  * One member-to-member chat. Three states:
- *   - a request to me: read it all, then Accept / Delete (and Block / Report).
- *     Previewing never shows as "Seen" or "active now".
+ *   - a request to me: read it all, then Accept / Delete / Block (or Report),
+ *     or just leave it in Requests. Previewing never shows as "Seen" or
+ *     "active now", and Delete / Block are never told to them.
  *   - my request: a few lines of text until they answer. It looks the same
  *     whether they haven't opened it or quietly deleted it.
- *   - a chat: like any other, with Block / Report in the menu.
+ *   - a chat: like any other, with Hide Alerts / Block / Report in the menu.
  */
 export function DirectChatView({ thread, onBack }: { thread: DirectThread; onBack: () => void }) {
   const { user } = useAuth();
   const respond = useRespondToChat();
   const [confirm, setConfirm] = useState<RequestAction | null>(null);
   const name = thread.other.name;
+  const { prefs } = useChatPrefs();
+  const setPrefs = useSetChatPrefs();
+  const muted = isMuted(prefs, thread.group_id);
 
   // Same cache as the thread itself: how many lines my request has used.
   const { data: messages = [] } = useQuery({
@@ -62,7 +67,7 @@ export function DirectChatView({ thread, onBack }: { thread: DirectThread; onBac
   };
 
   const footer = thread.incoming ? (
-    <RequestBar name={name} busy={respond.isPending} onAction={(a) => (a === "accept" ? act("accept") : setConfirm(a))} />
+    <RequestBar name={name} busy={respond.isPending} onLater={onBack} onAction={(a) => (a === "accept" ? act("accept") : setConfirm(a))} />
   ) : left === 0 ? (
     <div className="border-t border-border bg-secondary/30 px-4 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] text-center text-[13px] text-muted-foreground">
       You can send more once {name} replies.
@@ -89,7 +94,21 @@ export function DirectChatView({ thread, onBack }: { thread: DirectThread; onBac
                 <MoreHorizontal className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-48">
+              {active && (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => setPrefs.mutate([{ key: thread.group_id, patch: { muted: !muted } }], {
+                      onSuccess: () => toast.success(muted ? "Alerts are back on" : `No alerts from ${name}`),
+                      onError: (e: any) => toast.error(e?.message ?? "That didn't save."),
+                    })}
+                  >
+                    {muted ? <Bell className="mr-2 h-4 w-4" /> : <BellOff className="mr-2 h-4 w-4" />}
+                    {muted ? "Show Alerts" : "Hide Alerts"}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               <DropdownMenuItem onClick={() => setConfirm("block")}>
                 <ShieldOff className="mr-2 h-4 w-4" /> Block
               </DropdownMenuItem>
@@ -130,10 +149,10 @@ export function DirectChatView({ thread, onBack }: { thread: DirectThread; onBac
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm === "decline"
-                ? `It disappears from your requests. ${name} won't be told.`
+                ? `It disappears from your requests. ${name} won't be told, and it still looks unanswered to them.`
                 : confirm === "block"
-                  ? `${name} won't be able to message you, and won't be told you blocked them.`
-                  : `Your coach gets a copy of this chat so they can step in, and ${name} won't be able to message you. ${name} won't be told.`}
+                  ? `${name} won't be able to message you or add you to group chats, and won't be told you blocked them. You can unblock them any time from Messages › Edit › Blocked.`
+                  : `Your coach gets a copy of this chat so they can step in, and ${name} is blocked. ${name} won't be told.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -151,15 +170,25 @@ export function DirectChatView({ thread, onBack }: { thread: DirectThread; onBac
   );
 }
 
-/** In place of the composer on a request to me. */
-function RequestBar({ name, busy, onAction }: { name: string; busy: boolean; onAction: (a: RequestAction) => void }) {
+/**
+ * In place of the composer on a request to me, Instagram style. Nothing here
+ * is ever shown to them: not opening it, not reading it, not deleting or
+ * blocking it. Leaving it is fine too.
+ */
+function RequestBar({ name, busy, onAction, onLater }: { name: string; busy: boolean; onAction: (a: RequestAction) => void; onLater: () => void }) {
   return (
     <div className="space-y-2.5 border-t border-border bg-card px-4 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
       <div className="text-center">
         <div className="text-[14px] font-bold">{name} wants to message you</div>
-        <div className="text-[12px] text-muted-foreground">They won't know you've seen this unless you accept.</div>
+        <p className="mx-auto mt-0.5 max-w-xs text-[12px] text-muted-foreground">
+          <EyeOff className="mr-1 inline h-3.5 w-3.5 -translate-y-px" aria-hidden />
+          They won't know you've seen this unless you accept. Delete and Block are never shown to them.
+        </p>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
+        <Button type="button" variant="secondary" className="h-11 rounded-xl font-bold text-destructive" disabled={busy} onClick={() => onAction("block")}>
+          Block
+        </Button>
         <Button type="button" variant="secondary" className="h-11 rounded-xl font-bold" disabled={busy} onClick={() => onAction("decline")}>
           Delete
         </Button>
@@ -168,7 +197,7 @@ function RequestBar({ name, busy, onAction }: { name: string; busy: boolean; onA
         </Button>
       </div>
       <div className="flex items-center justify-center gap-5 text-[12px] font-semibold text-muted-foreground">
-        <button type="button" className="py-1 hover:text-foreground" disabled={busy} onClick={() => onAction("block")}>Block</button>
+        <button type="button" className="py-1 hover:text-foreground" disabled={busy} onClick={onLater}>Leave it for now</button>
         <button type="button" className="py-1 hover:text-destructive" disabled={busy} onClick={() => onAction("report")}>Report</button>
       </div>
     </div>
@@ -176,8 +205,19 @@ function RequestBar({ name, busy, onAction }: { name: string; busy: boolean; onA
 }
 
 /** A direct chat in the Chats list. */
-export function DirectRow({ thread, me, selected, onClick }: { thread: DirectThread; me: string | null | undefined; selected: boolean; onClick: () => void }) {
-  const unread = isUnread(thread, me);
+export function DirectRow({ thread, me, selected, onClick, unread: markedUnread, muted, leading }: {
+  thread: DirectThread;
+  me: string | null | undefined;
+  selected: boolean;
+  onClick: () => void;
+  /** Overrides the computed state (Mark as Unread). */
+  unread?: boolean;
+  /** Hide Alerts is on. */
+  muted?: boolean;
+  /** Shown before the avatar (a checkbox while selecting). */
+  leading?: ReactNode;
+}) {
+  const unread = markedUnread ?? isUnread(thread, me);
   return (
     <button
       type="button"
@@ -187,11 +227,15 @@ export function DirectRow({ thread, me, selected, onClick }: { thread: DirectThr
         selected && "bg-secondary/60",
       )}
     >
+      {leading}
       <UserAvatar src={thread.other.avatar_url} name={thread.other.name} size={36} expandable={false} />
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="flex items-center justify-between gap-2">
           <span className={cn("truncate text-sm", unread ? "font-bold" : "font-semibold")}>{thread.other.name}</span>
-          {thread.last && <span className="shrink-0 text-[10px] text-muted-foreground">{fmtTime(thread.last.created_at)}</span>}
+          <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+            {muted && <BellOff className="h-3 w-3" aria-label="Alerts hidden" />}
+            {thread.last && fmtTime(thread.last.created_at)}
+          </span>
         </div>
         <div className="mt-0.5 flex items-center gap-1.5">
           <span className={cn("flex-1 truncate text-xs", unread ? "text-foreground" : "text-muted-foreground")}>
@@ -243,9 +287,10 @@ export function RequestsList({
         </Button>
         <div className="text-sm font-bold tracking-tight">Requests</div>
       </header>
-      <p className="border-b border-border/60 px-4 py-2.5 text-[12px] text-muted-foreground">
-        Messages from people you haven't chatted with, and group chats you're invited to. Open one to read it. Nobody knows you've seen it unless you accept or join.
-      </p>
+      <div className="space-y-1 border-b border-border/60 bg-secondary/30 px-4 py-3 text-[12px] text-muted-foreground">
+        <p className="flex items-center gap-1.5 font-semibold text-foreground"><EyeOff className="h-3.5 w-3.5" /> They can't tell you've opened these</p>
+        <p>Messages from people you haven't chatted with, and group chats you're invited to. Read them, then accept, delete, block, or just leave them here as long as you like. Nobody is told what you do.</p>
+      </div>
       <div className="flex-1 overflow-y-auto">
         {threads.length + crews.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted-foreground">No requests.</div>

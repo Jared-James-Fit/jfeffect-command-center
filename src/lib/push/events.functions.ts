@@ -101,11 +101,15 @@ export const notifyNewGroupMessage = createServerFn({ method: "POST" })
     if (!msg || msg.deleted_at) return { skipped: "no_msg_or_deleted" };
     if (msg.sender_id !== userId) return { skipped: "not_sender" };
 
-    const [{ data: group }, { data: members }] = await Promise.all([
+    const [{ data: group }, { data: allMembers }, { data: mutedRows }] = await Promise.all([
       (supabaseAdmin.from("chat_groups") as any).select("id, name, kind, direct_status, requested_by").eq("id", msg.group_id).maybeSingle(),
       (supabaseAdmin.from("chat_group_members") as any).select("user_id, status").eq("group_id", msg.group_id),
+      // Hide Alerts (chat_thread_prefs.muted): still delivered, never pushed.
+      (supabaseAdmin as any).from("chat_thread_prefs").select("user_id").eq("thread_key", msg.group_id).eq("muted", true),
     ]);
-    if (!members || members.length === 0) return { skipped: "no_members" };
+    const muted = new Set(((mutedRows ?? []) as any[]).map((r) => r.user_id));
+    const members = ((allMembers ?? []) as any[]).filter((m) => !muted.has(m.user_id));
+    if (members.length === 0) return { skipped: "no_members" };
     if ((group as any)?.kind === "direct") {
       return notifyDirect(supabaseAdmin, sendWebPushToUser, msg as any, group as any, members as any[], userId);
     }

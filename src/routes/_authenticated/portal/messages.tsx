@@ -2,13 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { listenChannel } from "@/lib/realtime-channel";
 import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
 import { MessageThread } from "@/components/message-thread";
 import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
 import { GroupChatsPane, type PinnedChat } from "@/components/group-chats-pane";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -23,13 +23,15 @@ import {
 import { Phone, MessageSquare, AlertTriangle, Mail, ChevronLeft } from "lucide-react";
 import { formatDistanceToNowStrict, isToday, format } from "date-fns";
 import { UserAvatar } from "@/components/user-avatar";
-import { markUnread } from "@/lib/messages";
+import { markRead, markUnread } from "@/lib/messages";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/portal/messages")({
   component: ClientMessages,
 });
+
+type CoachLast = { body: string | null; sender_role: string; created_at: string; read_by_client_at: string | null; attachments: any[] | null };
 
 function ClientMessages() {
   const portalUserId = usePortalUserId();
@@ -70,28 +72,31 @@ function ClientMessages() {
     },
   });
 
-  // Coach row preview: latest message + whether it's unread for me.
+  // Coach row preview: latest message + whether it's unread for me (the
+  // coach's latest, so "Mark as Unread" shows even after my own reply).
   const { data: coachLast } = useQuery({
     queryKey: ["coach-chat-last", client?.id],
     enabled: !!client?.id,
     refetchInterval: 30_000,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("messages")
+      const base = () => (supabase.from("messages") as any)
         .select("body, sender_role, created_at, read_by_client_at, attachments")
         .eq("client_id", client!.id)
         .eq("is_internal_note", false)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data as { body: string | null; sender_role: string; created_at: string; read_by_client_at: string | null; attachments: any[] | null } | null;
+        .limit(1);
+      const [{ data: last }, { data: fromCoach }] = await Promise.all([
+        base().maybeSingle(),
+        base().neq("sender_role", "client").maybeSingle(),
+      ]);
+      if (!last) return null;
+      return { ...(last as CoachLast), coachUnread: !!fromCoach && !(fromCoach as CoachLast).read_by_client_at };
     },
   });
   useEffect(() => {
     if (!client?.id) return;
-    const ch = supabase
-      .channel(`coach-chat-row-${client.id}`)
+    const ch = listenChannel(`coach-chat-row-${client.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `client_id=eq.${client.id}` }, () => {
         qc.invalidateQueries({ queryKey: ["coach-chat-last", client.id] });
       })
@@ -104,7 +109,7 @@ function ClientMessages() {
   const callEnabled = !!client?.coach_call_access_enabled && !!coachTel;
   const smsEnabled = !!client?.coach_sms_access_enabled && !!coachTel;
 
-  const coachUnread = !!coachLast && coachLast.sender_role !== "client" && !coachLast.read_by_client_at;
+  const coachUnread = !!coachLast?.coachUnread;
   const coachPreview = coachLast
     ? `${coachLast.sender_role === "client" ? "You: " : ""}${coachLast.body?.trim() || (coachLast.attachments?.length ? "Attachment" : "")}`
     : "Message your coach";
@@ -112,45 +117,40 @@ function ClientMessages() {
     ? isToday(new Date(coachLast.created_at)) ? format(new Date(coachLast.created_at), "h:mm a") : formatDistanceToNowStrict(new Date(coachLast.created_at), { addSuffix: false })
     : "";
 
+  const markCoachUnread = async () => {
+    if (!client?.id) return;
+    await markUnread(client.id, "client");
+    qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
+    qc.invalidateQueries({ queryKey: ["coach-chat-last", client.id] });
+    toast.success("Marked as unread");
+  };
+
+  // Always first in the list, iMessage style: it can be marked unread, never
+  // unpinned, muted or deleted.
   const pinned: PinnedChat = {
     id: "coach",
+    name: coachName,
+    avatarUrl: coach?.profile_picture_url ?? null,
+    live: coachLive,
+    preview: coachPreview,
+    when: coachWhen,
     searchText: `${coachName} coach ${coachLast?.body ?? ""}`,
     unread: coachUnread,
-    renderRow: ({ selected, onClick }) => (
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
-          "flex w-full items-center gap-3 border-b border-border/60 px-3 py-3 text-left transition hover:bg-secondary/40",
-          selected && "bg-secondary/60",
-        )}
-      >
-        <span className="relative shrink-0">
-          <UserAvatar src={coach?.profile_picture_url ?? null} name={coachName} size={44} ring expandable={false} />
-          {coachLive && <span className="absolute bottom-0 right-0"><LiveDot /></span>}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center justify-between gap-2">
-            <span className={cn("truncate text-[15px]", coachUnread ? "font-bold" : "font-semibold")}>{coachName}</span>
-            <span className={cn("shrink-0 text-[11px]", coachUnread ? "font-semibold text-primary" : "text-muted-foreground")}>{coachWhen}</span>
-          </span>
-          <span className="mt-0.5 flex items-center gap-2">
-            <span className={cn("flex-1 truncate text-[13px]", coachUnread ? "text-foreground" : "text-muted-foreground")}>{coachPreview}</span>
-            {coachUnread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />}
-          </span>
-        </span>
-      </button>
-    ),
+    markUnread: markCoachUnread,
+    markRead: async () => {
+      if (!client?.id) return;
+      await markRead(client.id, "client");
+      qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
+      qc.invalidateQueries({ queryKey: ["coach-chat-last", client.id] });
+    },
     renderThread: ({ onBack }) => (
       <>
       <header
         className="flex items-center gap-2.5 border-b border-border bg-card/80 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6"
       >
-        {onBack && (
-          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 md:hidden" onClick={onBack} aria-label="All chats">
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-        )}
+        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 md:hidden" onClick={onBack} aria-label="All chats">
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
         <span className="relative shrink-0">
           <UserAvatar
             src={coach?.profile_picture_url ?? null}
@@ -204,11 +204,7 @@ function ClientMessages() {
             size="icon"
             className="h-9 w-9 shrink-0"
             title="Mark conversation as unread"
-            onClick={async () => {
-              await markUnread(client.id, "client");
-              qc.invalidateQueries({ queryKey: ["client-nav-badges"] });
-              toast.success("Marked as unread");
-            }}
+            onClick={markCoachUnread}
           >
             <Mail className="h-4 w-4" />
           </Button>
@@ -246,8 +242,9 @@ function ClientMessages() {
           "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
-      {/* One inbox, like iMessage: the coach chat pinned on top, then groups
-          and 1:1 chats by most recent. Only chat? It opens straight into it. */}
+      {/* One inbox, like iMessage: the coach chat pinned first, then your own
+          pins, then groups and 1:1 chats by most recent. Only chat? It opens
+          straight into it, and back still shows the list (compose, New group). */}
       <div className="min-h-0 flex-1">
         <GroupChatErrorBoundary>
           <GroupChatsPane asAdmin={false} pinned={pinned} />
