@@ -63,7 +63,14 @@ describe("holiday posts", () => {
     for (const h of holidays) expect(existsSync(`public${h.image}`), h.image).toBe(true);
   });
 
-  it("sounds like the coach: thanks, then one thing to do today, none of the banned words", () => {
+  it("short, in the coach's texting voice, and the whole caption shows in the feed", () => {
+    const short = read("supabase/migrations/20261117090000_community_holiday_posts_short.sql");
+    const bodies = [...short.matchAll(/^  \('([a-z_]+)',\n'((?:[^']|'')*)'\)/gm)].map((m) => ({
+      key: m[1],
+      body: m[2].replace(/''/g, "'"),
+    }));
+    expect(bodies.map((b) => b.key).sort()).toEqual(holidays.map((h) => h.key).sort());
+    expect(short).toContain("CHECK (char_length(body) <= 160)");
     const banned = [
       "navigating",
       "it's clear that",
@@ -77,13 +84,22 @@ describe("holiday posts", () => {
       "crucial",
       "optimal",
       "prioritize",
+      "real talk",
+      "one thing for today",
       "—",
       ";",
     ];
-    for (const h of holidays) {
-      expect(h.body, h.key).toContain("one thing for today:");
-      expect(h.body.length, h.key).toBeLessThanOrEqual(1200);
-      for (const w of banned) expect(h.body.toLowerCase(), `${h.key}: ${w}`).not.toContain(w);
+    for (const b of bodies) {
+      expect(b.body.length, b.key).toBeLessThanOrEqual(160);
+      // a happy-holiday + thanks line, then the one thing to do today
+      expect(b.body.split("\n\n").length, b.key).toBe(2);
+      // mostly lowercase, like a text (capitals only to stress a word)
+      expect(b.body.replace(/ONE/g, ""), b.key).toBe(b.body.replace(/ONE/g, "").toLowerCase());
+      for (const w of banned) expect(b.body.toLowerCase(), `${b.key}: ${w}`).not.toContain(w);
     }
+    // never cut off with "more" in the feed
+    expect(read("src/components/community/post-card.tsx")).toContain(
+      'clamp && post.series !== "holiday" && "line-clamp-[8]"',
+    );
   });
 });
