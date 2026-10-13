@@ -108,12 +108,12 @@ describe("holiday posts", () => {
       for (const w of banned)
         expect(` ${b.body.toLowerCase()} `, `${b.key}: ${w}`).not.toContain(w);
     }
-    // regular post font, and never cut off with "more" in the feed
+    // regular post font, and short enough to show whole in the feed (NoteCaption)
     const card = read("src/components/community/post-card.tsx");
-    expect(card).toContain('cn("whitespace-pre-line text-[15px] leading-[1.45]", clamp');
+    expect(card).toContain("<NoteCaption text={post.caption}");
     expect(card).not.toContain("text-[17px] font-semibold");
-    expect(read("src/components/community/post-card.tsx")).toContain(
-      'clamp && post.series !== "holiday" && "line-clamp-[8]"',
+    expect(read("src/components/community/note-caption.tsx")).toContain(
+      '"whitespace-pre-line text-[15px] leading-[1.45]"',
     );
   });
 });

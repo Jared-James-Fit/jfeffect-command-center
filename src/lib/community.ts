@@ -286,6 +286,21 @@ export function splitMentions(text: string, mentions: CommunityMention[] | null 
 }
 
 /**
+ * Where a long caption can be cut in the feed without stopping mid-thought:
+ * the end of a line or paragraph, a sentence (. ! ? …) or an emoji, when
+ * more words follow. Ascending character offsets; the full length is never
+ * one (that's "show everything").
+ */
+export function captionBreaks(text: string): number[] {
+  const out = new Set<number>();
+  for (const m of text.matchAll(/[.!?…]+(?=\s)|\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*(?=\s)|(?=\n)/gu)) {
+    const end = (m.index ?? 0) + m[0].length;
+    if (end > 0 && text.slice(end).trim()) out.add(end);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+/**
  * The "@…" being typed right before the caret, if any (a name can have one
  * space: "@Alyssa Am"). null when the caret isn't in a mention.
  */
