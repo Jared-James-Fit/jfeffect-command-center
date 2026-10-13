@@ -234,6 +234,8 @@ import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes
 import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
 import { Route as AuthenticatedPortalEventsIndexRouteImport } from './routes/_authenticated/portal/events.index'
 import { Route as AuthenticatedPortalEventsIdRouteImport } from './routes/_authenticated/portal/events.$id'
+import { Route as AuthenticatedPortalPlansIndexRouteImport } from './routes/_authenticated/portal/plans.index'
+import { Route as AuthenticatedPortalPlansPlanIdRouteImport } from './routes/_authenticated/portal/plans.$planId'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalRecipesIndexRouteImport } from './routes/_authenticated/portal/recipes.index'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
@@ -1566,6 +1568,18 @@ const AuthenticatedPortalEventsIdRoute =
     path: '/events/$id',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalPlansIndexRoute =
+  AuthenticatedPortalPlansIndexRouteImport.update({
+    id: '/plans/',
+    path: '/plans/',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalPlansPlanIdRoute =
+  AuthenticatedPortalPlansPlanIdRouteImport.update({
+    id: '/plans/$planId',
+    path: '/plans/$planId',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalPurchasesIdRoute =
   AuthenticatedPortalPurchasesIdRouteImport.update({
     id: '/$id',
@@ -2046,6 +2060,7 @@ export interface FileRoutesByFullPath {
   '/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
+  '/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/resources/$slug': typeof AuthenticatedPortalResourcesSlugRoute
@@ -2091,6 +2106,7 @@ export interface FileRoutesByFullPath {
   '/m/workouts/': typeof AuthenticatedMWorkoutsIndexRoute
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/events/': typeof AuthenticatedPortalEventsIndexRoute
+  '/portal/plans/': typeof AuthenticatedPortalPlansIndexRoute
   '/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/resources/': typeof AuthenticatedPortalResourcesIndexRoute
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2313,6 +2329,7 @@ export interface FileRoutesByTo {
   '/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
+  '/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/resources/$slug': typeof AuthenticatedPortalResourcesSlugRoute
@@ -2358,6 +2375,7 @@ export interface FileRoutesByTo {
   '/m/workouts': typeof AuthenticatedMWorkoutsIndexRoute
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/events': typeof AuthenticatedPortalEventsIndexRoute
+  '/portal/plans': typeof AuthenticatedPortalPlansIndexRoute
   '/portal/recipes': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/resources': typeof AuthenticatedPortalResourcesIndexRoute
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2586,6 +2604,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
+  '/_authenticated/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/resources/$slug': typeof AuthenticatedPortalResourcesSlugRoute
@@ -2631,6 +2650,7 @@ export interface FileRoutesById {
   '/_authenticated/m/workouts/': typeof AuthenticatedMWorkoutsIndexRoute
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/_authenticated/portal/events/': typeof AuthenticatedPortalEventsIndexRoute
+  '/_authenticated/portal/plans/': typeof AuthenticatedPortalPlansIndexRoute
   '/_authenticated/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/_authenticated/portal/resources/': typeof AuthenticatedPortalResourcesIndexRoute
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2859,6 +2879,7 @@ export interface FileRouteTypes {
     | '/portal/agreements-native/$packageId'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
+    | '/portal/plans/$planId'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/resources/$slug'
@@ -2904,6 +2925,7 @@ export interface FileRouteTypes {
     | '/m/workouts/'
     | '/portal/agreements/'
     | '/portal/events/'
+    | '/portal/plans/'
     | '/portal/recipes/'
     | '/portal/resources/'
     | '/portal/workouts/'
@@ -3126,6 +3148,7 @@ export interface FileRouteTypes {
     | '/portal/agreements-native/$packageId'
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
+    | '/portal/plans/$planId'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/resources/$slug'
@@ -3171,6 +3194,7 @@ export interface FileRouteTypes {
     | '/m/workouts'
     | '/portal/agreements'
     | '/portal/events'
+    | '/portal/plans'
     | '/portal/recipes'
     | '/portal/resources'
     | '/portal/workouts'
@@ -3398,6 +3422,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/agreements-native/$packageId'
     | '/_authenticated/portal/check-ins/$formId'
     | '/_authenticated/portal/events/$id'
+    | '/_authenticated/portal/plans/$planId'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/resources/$slug'
@@ -3443,6 +3468,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/workouts/'
     | '/_authenticated/portal/agreements/'
     | '/_authenticated/portal/events/'
+    | '/_authenticated/portal/plans/'
     | '/_authenticated/portal/recipes/'
     | '/_authenticated/portal/resources/'
     | '/_authenticated/portal/workouts/'
@@ -5105,6 +5131,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalEventsIdRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/plans/': {
+      id: '/_authenticated/portal/plans/'
+      path: '/plans'
+      fullPath: '/portal/plans/'
+      preLoaderRoute: typeof AuthenticatedPortalPlansIndexRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/plans/$planId': {
+      id: '/_authenticated/portal/plans/$planId'
+      path: '/plans/$planId'
+      fullPath: '/portal/plans/$planId'
+      preLoaderRoute: typeof AuthenticatedPortalPlansPlanIdRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/purchases/$id': {
       id: '/_authenticated/portal/purchases/$id'
       path: '/$id'
@@ -6015,6 +6055,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
   AuthenticatedPortalAgreementsNativePackageIdRoute: typeof AuthenticatedPortalAgreementsNativePackageIdRoute
   AuthenticatedPortalEventsIdRoute: typeof AuthenticatedPortalEventsIdRoute
+  AuthenticatedPortalPlansPlanIdRoute: typeof AuthenticatedPortalPlansPlanIdRoute
   AuthenticatedPortalRecipesRecipeIdRoute: typeof AuthenticatedPortalRecipesRecipeIdRoute
   AuthenticatedPortalResourcesSlugRoute: typeof AuthenticatedPortalResourcesSlugRoute
   AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -6022,6 +6063,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalWorkoutsPrsRoute: typeof AuthenticatedPortalWorkoutsPrsRoute
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
   AuthenticatedPortalEventsIndexRoute: typeof AuthenticatedPortalEventsIndexRoute
+  AuthenticatedPortalPlansIndexRoute: typeof AuthenticatedPortalPlansIndexRoute
   AuthenticatedPortalRecipesIndexRoute: typeof AuthenticatedPortalRecipesIndexRoute
   AuthenticatedPortalResourcesIndexRoute: typeof AuthenticatedPortalResourcesIndexRoute
   AuthenticatedPortalWorkoutsIndexRoute: typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -6059,6 +6101,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalAgreementsNativePackageIdRoute:
       AuthenticatedPortalAgreementsNativePackageIdRoute,
     AuthenticatedPortalEventsIdRoute: AuthenticatedPortalEventsIdRoute,
+    AuthenticatedPortalPlansPlanIdRoute: AuthenticatedPortalPlansPlanIdRoute,
     AuthenticatedPortalRecipesRecipeIdRoute:
       AuthenticatedPortalRecipesRecipeIdRoute,
     AuthenticatedPortalResourcesSlugRoute:
@@ -6071,6 +6114,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalAgreementsIndexRoute:
       AuthenticatedPortalAgreementsIndexRoute,
     AuthenticatedPortalEventsIndexRoute: AuthenticatedPortalEventsIndexRoute,
+    AuthenticatedPortalPlansIndexRoute: AuthenticatedPortalPlansIndexRoute,
     AuthenticatedPortalRecipesIndexRoute: AuthenticatedPortalRecipesIndexRoute,
     AuthenticatedPortalResourcesIndexRoute:
       AuthenticatedPortalResourcesIndexRoute,

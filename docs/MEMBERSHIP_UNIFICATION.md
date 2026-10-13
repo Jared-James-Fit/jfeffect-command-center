@@ -109,9 +109,17 @@ until there are members; ship 1–2 first.
    a `clients` row for every member (no coach assigned); everyone lands in
    `/portal`; one `useEntitlement(key)` gates coach-service screens; a tier
    filter on the admin client list so members don't flood coaching views.
-2. **One program system.** A "membership library" flag on templates; "Start
-   plan" runs the existing assign function (copies into `pl_blocks`). Link
-   the 40 plans' exercises to the library. No enrollments to migrate.
+2. **One program system — shipped.** "Start plan" (`/portal/plans`,
+   `startLibraryPlan`) runs the coach's assign engine
+   (`pl_assign_template_to_client`, which now also lets
+   `member_can_start_plan` through: the member's own self-serve row, live
+   access, a live published plan). The copy lands in `pl_blocks` the member
+   owns (`created_by`), on the days they pick; starting another plan archives
+   the one they started (history kept). The 40 plans' templates are linked
+   to the library (6,596 → 48 unlinked rows; Glute Ham Raise, Lying Leg Curl
+   and T-Bar Row have no honest match). `member_plans` stays the listing; its
+   payload is only the preview. Members with no plan see "Pick your plan" on
+   Home and Workouts.
 3. **Retire `/m` duplicates.** Member tables are empty, so: read-only, then
    drop once Phase 2 is verified.
 4. **One builder.** One library, one assign path, publish-to-membership as a
