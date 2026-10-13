@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Loader2, ZoomIn, ZoomOut } from "lucide-react";
-import { MAX_ZOOM, clampCrop, cropRect, zoomAt, type Crop, type Size } from "@/lib/avatar-crop";
+import { MAX_ZOOM, clampCrop, cropRect, pinchCrop, zoomAt, type Crop, type Size } from "@/lib/avatar-crop";
 import { cn } from "@/lib/utils";
 
 const START: Crop = { zoom: 1, x: 0, y: 0 };
+
+/** The photo's transform: on the GPU (translate3d), so moving it never re-lays out the page. */
+function cropTransform(c: Crop): string {
+  return `translate3d(${c.x}px, ${c.y}px, 0) scale(${c.zoom})`;
+}
 
 /** Draw the framed square of the photo to a JPEG (never larger than the photo has pixels for). */
 export async function exportAvatarCrop(img: HTMLImageElement, crop: Crop, frame: number, out = 1080): Promise<Blob> {
@@ -28,6 +33,11 @@ export async function exportAvatarCrop(img: HTMLImageElement, crop: Crop, frame:
  * square with a circle showing exactly what people will see. Pinch or use
  * the slider to zoom (wheel / trackpad on a computer), drag to place it.
  * It can't be dragged off the edge, so a crop never has empty corners.
+ *
+ * Smoothness: gestures write the photo's transform straight to the element
+ * once per frame (no React render per finger move), every gesture reads the
+ * live crop from a ref (a pinch never starts from a frame-old position and
+ * snaps back), and iOS's own page-zoom gesture is blocked inside the frame.
  */
 export function AvatarCropper({
   src,
@@ -49,13 +59,32 @@ export function AvatarCropper({
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [failed, setFailed] = useState(false);
+  // `crop` (state) only drives the slider; the live value is cropRef
   const [crop, setCrop] = useState<Crop>(START);
+  const cropRef = useRef<Crop>(START);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const raf = useRef<number | null>(null);
   const [frame, setFrame] = useState(0);
   const [moving, setMoving] = useState(false);
   const [busy, setBusy] = useState(false);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const pinch = useRef<{ dist: number; zoom: number; mid: { x: number; y: number }; crop: Crop } | null>(null);
+  const pinch = useRef<{ dist: number; mid: { x: number; y: number }; crop: Crop } | null>(null);
+
+  /** Move the photo now (next frame); the slider catches up in the same frame. */
+  const apply = useCallback((next: Crop) => {
+    cropRef.current = next;
+    if (raf.current != null) return;
+    raf.current = requestAnimationFrame(() => {
+      raf.current = null;
+      const c = cropRef.current;
+      if (imgRef.current) imgRef.current.style.transform = cropTransform(c);
+      setCrop(c);
+    });
+  }, []);
+  useEffect(() => () => {
+    if (raf.current != null) cancelAnimationFrame(raf.current);
+  }, []);
 
   // load the photo (a new one starts centred, just covering the frame)
   useEffect(() => {
@@ -63,7 +92,10 @@ export function AvatarCropper({
     let cancelled = false;
     setImg(null);
     setFailed(false);
+    cropRef.current = START;
     setCrop(START);
+    pointers.current.clear();
+    pinch.current = null;
     const el = new Image();
     el.decoding = "async";
     el.onload = () => !cancelled && setImg(el);
@@ -91,7 +123,7 @@ export function AvatarCropper({
 
   const size: Size | null = img ? { w: img.naturalWidth, h: img.naturalHeight } : null;
   useEffect(() => {
-    if (size && frame) setCrop((c) => clampCrop(c, size, frame));
+    if (size && frame) apply(clampCrop(cropRef.current, size, frame));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frame, img]);
 
@@ -108,7 +140,7 @@ export function AvatarCropper({
     setMoving(true);
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
-      pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: crop.zoom, mid: local((a.x + b.x) / 2, (a.y + b.y) / 2), crop };
+      pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mid: local((a.x + b.x) / 2, (a.y + b.y) / 2), crop: cropRef.current };
     }
   };
 
@@ -121,40 +153,52 @@ export function AvatarCropper({
       const [a, b] = [...pointers.current.values()];
       const p = pinch.current;
       const mid = local((a.x + b.x) / 2, (a.y + b.y) / 2);
-      const zoomed = zoomAt(p.crop, p.zoom * (Math.hypot(a.x - b.x, a.y - b.y) / p.dist), p.mid, size, frame);
-      setCrop(clampCrop({ ...zoomed, x: zoomed.x + mid.x - p.mid.x, y: zoomed.y + mid.y - p.mid.y }, size, frame));
+      apply(pinchCrop(p.crop, p.mid, mid, Math.hypot(a.x - b.x, a.y - b.y) / p.dist, size, frame));
       return;
     }
-    setCrop((c) => clampCrop({ ...c, x: c.x + (e.clientX - prev.x), y: c.y + (e.clientY - prev.y) }, size, frame));
+    const c = cropRef.current;
+    apply(clampCrop({ ...c, x: c.x + (e.clientX - prev.x), y: c.y + (e.clientY - prev.y) }, size, frame));
   };
 
   const onPointerEnd = (e: ReactPointerEvent<HTMLDivElement>) => {
-    pointers.current.delete(e.pointerId);
-    if (pointers.current.size < 2) pinch.current = null;
+    if (!pointers.current.delete(e.pointerId)) return;
+    if (pointers.current.size === 2) {
+      // a third finger lifted: carry on pinching with the two that are left
+      const [a, b] = [...pointers.current.values()];
+      pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mid: local((a.x + b.x) / 2, (a.y + b.y) / 2), crop: cropRef.current };
+    } else if (pointers.current.size < 2) pinch.current = null;
     if (pointers.current.size === 0) setMoving(false);
   };
 
-  // wheel / trackpad pinch on a computer (non-passive, so the page doesn't zoom)
+  // wheel / trackpad pinch on a computer (non-passive, so the page doesn't
+  // zoom), and iOS's own pinch gesture events, which would zoom the page
+  // underneath and fight the crop
   useEffect(() => {
     const node = frameRef.current;
     if (!node || !size || !frame) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const at = local(e.clientX, e.clientY);
-      setCrop((c) => zoomAt(c, c.zoom * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002)), at, size, frame));
+      const c = cropRef.current;
+      apply(zoomAt(c, c.zoom * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002)), at, size, frame));
     };
+    const stopGesture = (e: Event) => e.preventDefault();
     node.addEventListener("wheel", onWheel, { passive: false });
-    return () => node.removeEventListener("wheel", onWheel);
+    for (const t of ["gesturestart", "gesturechange", "gestureend"]) node.addEventListener(t, stopGesture, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", onWheel);
+      for (const t of ["gesturestart", "gesturechange", "gestureend"]) node.removeEventListener(t, stopGesture);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [img, frame]);
 
-  const setZoom = (z: number) => size && frame && setCrop((c) => zoomAt(c, z, { x: 0, y: 0 }, size, frame));
+  const setZoom = (z: number) => size && frame && apply(zoomAt(cropRef.current, z, { x: 0, y: 0 }, size, frame));
 
   const done = async () => {
     if (!img || !frame || busy) return;
     setBusy(true);
     try {
-      await onDone(await exportAvatarCrop(img, crop, frame, outputSize));
+      await onDone(await exportAvatarCrop(img, cropRef.current, frame, outputSize));
     } finally {
       setBusy(false);
     }
@@ -197,11 +241,17 @@ export function AvatarCropper({
               onPointerMove={onPointerMove}
               onPointerUp={onPointerEnd}
               onPointerCancel={onPointerEnd}
-              onDoubleClick={(e) => size && frame && setCrop((c) => zoomAt(c, c.zoom > 1.5 ? 1 : 2.5, local(e.clientX, e.clientY), size, frame))}
+              onLostPointerCapture={onPointerEnd}
+              onDoubleClick={(e) => {
+                if (!size || !frame) return;
+                const c = cropRef.current;
+                apply(zoomAt(c, c.zoom > 1.5 ? 1 : 2.5, local(e.clientX, e.clientY), size, frame));
+              }}
               aria-label="Drag to move, pinch to zoom"
             >
               {img && base ? (
                 <img
+                  ref={imgRef}
                   src={img.src}
                   alt=""
                   draggable={false}
@@ -211,7 +261,8 @@ export function AvatarCropper({
                     height: base.h,
                     left: frame / 2 - base.w / 2,
                     top: frame / 2 - base.h / 2,
-                    transform: `translate(${crop.x}px, ${crop.y}px) scale(${crop.zoom})`,
+                    // the live value, so a render never puts back an older position
+                    transform: cropTransform(cropRef.current),
                   }}
                 />
               ) : (
@@ -235,7 +286,7 @@ export function AvatarCropper({
             </div>
 
             <div className="mt-6 flex w-full max-w-[440px] items-center gap-3 px-1">
-              <button type="button" aria-label="Zoom out" onClick={() => setZoom(crop.zoom / 1.25)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white/80 active:bg-white/10">
+              <button type="button" aria-label="Zoom out" onClick={() => setZoom(cropRef.current.zoom / 1.25)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white/80 active:bg-white/10">
                 <ZoomOut className="h-5 w-5" />
               </button>
               <input
@@ -249,7 +300,7 @@ export function AvatarCropper({
                 className="h-2 flex-1 cursor-pointer accent-white"
                 disabled={!img}
               />
-              <button type="button" aria-label="Zoom in" onClick={() => setZoom(crop.zoom * 1.25)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white/80 active:bg-white/10">
+              <button type="button" aria-label="Zoom in" onClick={() => setZoom(cropRef.current.zoom * 1.25)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white/80 active:bg-white/10">
                 <ZoomIn className="h-5 w-5" />
               </button>
             </div>

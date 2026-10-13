@@ -52,3 +52,29 @@ export function cropRect(c: Crop, img: Size, frame: number): { sx: number; sy: n
     size: Math.min(size, img.w, img.h),
   };
 }
+
+/**
+ * A pinch, always measured from where it started: zoom by `ratio` around the
+ * fingers' starting midpoint, follow the midpoint as it moves, and keep the
+ * frame covered — clamped once at the end, so hitting an edge never jitters.
+ */
+export function pinchCrop(
+  start: Crop,
+  startMid: { x: number; y: number },
+  mid: { x: number; y: number },
+  ratio: number,
+  img: Size,
+  frame: number,
+): Crop {
+  const zoom = clampZoom(start.zoom * (Number.isFinite(ratio) && ratio > 0 ? ratio : 1));
+  const k = zoom / start.zoom;
+  return clampCrop(
+    {
+      zoom,
+      x: startMid.x - (startMid.x - start.x) * k + (mid.x - startMid.x),
+      y: startMid.y - (startMid.y - start.y) * k + (mid.y - startMid.y),
+    },
+    img,
+    frame,
+  );
+}
