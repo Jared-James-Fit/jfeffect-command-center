@@ -168,19 +168,53 @@ describe("Cleo's models", () => {
 });
 
 describe("Cleo's voices", () => {
-  it("maps picker values to server voices, defaulting to Neutral", async () => {
+  it("maps picker values to server voices, defaulting to Smooth (old saved picks too)", async () => {
     const { serverVoiceOf, serverVoiceValue } = await import("@/lib/cleo-voices");
-    expect(serverVoiceOf("summer")).toBe("neutral");
-    expect(serverVoiceOf("summer:deep")).toBe("deep");
-    expect(serverVoiceOf("summer:nope")).toBe("neutral");
+    expect(serverVoiceOf("summer")).toBe("smooth");
+    expect(serverVoiceOf("summer:warm")).toBe("warm");
+    expect(serverVoiceOf("summer:deep")).toBe("smooth");
+    expect(serverVoiceOf("summer:neutral")).toBe("smooth");
     expect(serverVoiceOf("com.apple.voice.Samantha")).toBeNull();
-    expect(serverVoiceValue("neutral")).toBe("summer");
+    expect(serverVoiceValue("smooth")).toBe("summer");
     expect(serverVoiceValue("soft")).toBe("summer:soft");
   });
 
-  it("asks for a voice that sounds neither male nor female", async () => {
+  it("asks for a smooth, natural female voice", async () => {
     const { SUMMER_VOICE_STYLE } = await import("@/lib/summer.server");
-    expect(SUMMER_VOICE_STYLE).toMatch(/neither male nor female/);
-    expect(SUMMER_VOICE_STYLE).not.toMatch(/woman/);
+    expect(SUMMER_VOICE_STYLE).toMatch(/smooth, warm, natural female voice/);
+  });
+
+  it("wraps Google's raw 24kHz audio as a playable WAV", async () => {
+    const { pcmToWav } = await import("@/lib/summer.server");
+    const pcm = btoa(String.fromCharCode(...new Uint8Array(480)));
+    const wav = Uint8Array.from(atob(pcmToWav(pcm, 24000)), (c) => c.charCodeAt(0));
+    expect(wav.length).toBe(44 + 480);
+    expect(String.fromCharCode(...wav.subarray(0, 4))).toBe("RIFF");
+    expect(String.fromCharCode(...wav.subarray(8, 12))).toBe("WAVE");
+    const v = new DataView(wav.buffer);
+    expect(v.getUint32(24, true)).toBe(24000);
+    expect(v.getUint16(34, true)).toBe(16);
+    expect(v.getUint32(40, true)).toBe(480);
+  });
+
+  it("tries Google's voices first, then OpenAI's", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/lib/summer.server.ts", "utf8");
+    expect(src.indexOf('name: "lovable:google/gemini-tts"')).toBeLessThan(src.indexOf('name: "lovable:openai/gpt-4o-mini-tts"'));
+    expect(src).toContain('smooth: { openai: ["marin", "nova"], gemini: "Despina"');
+  });
+});
+
+describe("Cleo's thinking music", () => {
+  it("is a soft music-box melody over a pad, through I-vi-IV-V in D, fading in after a pause", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/lib/app-sounds.ts", "utf8");
+    expect(src).toContain("export function thinkingMusic(");
+    expect(src).toMatch(/D:\s+D5 F#5 A5 D6/);
+    expect(src).toMatch(/Bm: B4 D5 F#5 B5/);
+    expect(src).toContain("master.gain.linearRampToValueAtTime(1, t0 + 0.7)");
+    // Still follows the sounds toggle and stays quiet for quick answers.
+    expect(src).toMatch(/startThinkingSound\(\): \(\) => void \{\n  if \(typeof window === "undefined" \|\| !appSoundsEnabled\(\)\) return/);
+    expect(src).toMatch(/\}, 350\);/);
   });
 });

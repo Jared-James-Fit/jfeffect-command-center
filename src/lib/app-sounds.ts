@@ -141,60 +141,160 @@ export function playAppSound(name: AppSound, opts: { force?: boolean } = {}) {
 }
 
 /**
- * Cleo's "working on it" sound: one warm, low hum (a soft open fifth, D4
- * and A4, slightly detuned and filtered) that slowly swells and settles
- * like a breath. No separate notes, nothing bright, very quiet. Starts
+ * Cleo's "working on it" music: a soft music-box melody over a warm pad, in
+ * D major, moving slowly through I–vi–IV–V (D, Bm, G, A). The melody walks
+ * gently through each chord's notes with rests, a quiet echo gives it room,
+ * and everything bright is filtered so phone speakers stay pleasant. Starts
  * after a short pause (quick answers stay silent), fades in and out, and
  * follows the sounds toggle and the silent switch. Returns stop().
  */
+const STEP = 0.42; // seconds per melody step (a calm eighth note)
+const STEPS_PER_CHORD = 8;
+const THINKING_CHORDS: Array<{ pad: [number, number]; tones: number[] }> = [
+  { pad: [146.83, 220.0], tones: [587.33, 739.99, 880.0, 1174.66] }, // D:  D5 F#5 A5 D6
+  { pad: [123.47, 185.0], tones: [493.88, 587.33, 739.99, 987.77] }, // Bm: B4 D5 F#5 B5
+  { pad: [98.0, 146.83], tones: [493.88, 587.33, 783.99, 987.77] }, // G:  B4 D5 G5 B5
+  { pad: [110.0, 164.81], tones: [554.37, 659.25, 880.0, 1108.73] }, // A:  C#5 E5 A5 C#6
+];
+
+/** Small seeded random, so a phrase never repeats exactly but stays calm. */
+function seeded(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** One music-box note: a sine with a soft octave and a faint shimmer, quick attack, long gentle decay. */
+function bell(c: BaseAudioContext, out: AudioNode, t: number, freq: number, vel: number) {
+  for (const [mult, level, decay] of [[1, 1, 1.9], [2, 0.16, 1.1], [4.07, 0.035, 0.45]] as const) {
+    const o = c.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq * mult, t);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vel * level, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + decay + 0.05);
+  }
+}
+
+/** A chord's soft bed: root and fifth an octave down, breathing in and out. */
+function pad(c: BaseAudioContext, out: AudioNode, t: number, dur: number, freqs: [number, number]) {
+  for (const [i, f] of freqs.entries()) {
+    const o = c.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(f, t);
+    o.detune.setValueAtTime(i ? 3 : -3, t);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(i ? 0.6 : 1, t + 1.1);
+    g.gain.setValueAtTime(i ? 0.6 : 1, t + dur - 0.2);
+    g.gain.linearRampToValueAtTime(0, t + dur + 1.3);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + dur + 1.4);
+  }
+}
+
+/**
+ * The music's signal chain and a scheduler: schedule(until) adds every step
+ * up to `until` (seconds, context time). Shared by the live sound and tests
+ * (OfflineAudioContext).
+ */
+export function thinkingMusic(c: BaseAudioContext, dest: AudioNode, t0: number, seed = Date.now()) {
+  const rand = seeded(seed);
+  const bus = c.createGain();
+  bus.gain.value = 1;
+  // Phone speakers make highs harsh: round everything off.
+  const tone = c.createBiquadFilter();
+  tone.type = "lowpass";
+  tone.frequency.value = 3200;
+  tone.Q.value = 0.4;
+  bus.connect(tone).connect(dest);
+  // A quiet echo for space.
+  const delay = c.createDelay(2);
+  delay.delayTime.value = STEP * 1.5;
+  const feedback = c.createGain();
+  feedback.gain.value = 0.28;
+  const wet = c.createGain();
+  wet.gain.value = 0.32;
+  const wetTone = c.createBiquadFilter();
+  wetTone.type = "lowpass";
+  wetTone.frequency.value = 1800;
+  const melody = c.createGain();
+  melody.gain.value = 0.065;
+  melody.connect(bus);
+  melody.connect(delay);
+  delay.connect(wetTone).connect(wet).connect(bus);
+  wetTone.connect(feedback).connect(delay);
+  const bed = c.createGain();
+  bed.gain.value = 0.011;
+  const bedTone = c.createBiquadFilter();
+  bedTone.type = "lowpass";
+  bedTone.frequency.value = 650;
+  bed.connect(bedTone).connect(bus);
+
+  let step = 0;
+  let idx = 1;
+  let last = -1;
+  let repeats = 0;
+  const schedule = (until: number) => {
+    while (t0 + step * STEP < until) {
+      const t = t0 + step * STEP;
+      const inChord = step % STEPS_PER_CHORD;
+      const chord = THINKING_CHORDS[Math.floor(step / STEPS_PER_CHORD) % THINKING_CHORDS.length];
+      if (inChord === 0) pad(c, bed, t, STEP * STEPS_PER_CHORD, chord.pad);
+      // Downbeats always sound; the last step of a chord breathes; the rest sometimes rest.
+      const play = inChord === 0 || (inChord !== STEPS_PER_CHORD - 1 && rand() < 0.62);
+      if (play) {
+        // Walk gently through the chord's notes (a step or two, never a big leap).
+        idx = Math.max(0, Math.min(chord.tones.length - 1, idx + (rand() < 0.5 ? -1 : 1) * (rand() < 0.75 ? 1 : 2)));
+        if (inChord === 0) idx = rand() < 0.5 ? 0 : 1;
+        if (idx === last && ++repeats > 1) idx = idx > 0 ? idx - 1 : idx + 1;
+        if (idx !== last) repeats = 0;
+        last = idx;
+        bell(c, melody, t, chord.tones[idx], inChord === 0 ? 1 : 0.62 + rand() * 0.3);
+      }
+      step++;
+    }
+  };
+  return { output: bus, schedule };
+}
+
 export function startThinkingSound(): () => void {
   if (typeof window === "undefined" || !appSoundsEnabled()) return () => {};
   const c = getCtx();
   if (!c) return () => {};
   if (c.state !== "running") void c.resume().catch(() => {});
   let master: GainNode | null = null;
-  const nodes: AudioScheduledSourceNode[] = [];
+  let timer: number | undefined;
   const begin = window.setTimeout(() => {
     if (c.state !== "running" || document.visibilityState === "hidden") return;
     try {
-      const t = c.currentTime;
+      const t0 = c.currentTime + 0.05;
       master = c.createGain();
-      master.gain.setValueAtTime(0, t);
-      master.gain.linearRampToValueAtTime(1, t + 0.8);
-      // Round off anything bright: phone speakers make highs harsh.
-      const lp = c.createBiquadFilter();
-      lp.type = "lowpass";
-      lp.frequency.value = 900;
-      lp.Q.value = 0.3;
-      // The swell: volume drifts gently between soft and softer.
-      const swell = c.createGain();
-      swell.gain.value = 0.022;
-      const lfo = c.createOscillator();
-      lfo.frequency.value = 0.35;
-      const depth = c.createGain();
-      depth.gain.value = 0.01;
-      lfo.connect(depth).connect(swell.gain);
-      swell.connect(lp).connect(master).connect(c.destination);
-      for (const [f, detune, level] of [[293.66, -4, 1], [293.66, 5, 0.7], [440, 0, 0.45]] as const) {
-        const o = c.createOscillator();
-        o.type = "sine";
-        o.frequency.value = f;
-        o.detune.value = detune;
-        const g = c.createGain();
-        g.gain.value = level;
-        o.connect(g).connect(swell);
-        o.start(t);
-        nodes.push(o);
-      }
-      lfo.start(t);
-      nodes.push(lfo);
+      master.gain.setValueAtTime(0, t0);
+      master.gain.linearRampToValueAtTime(1, t0 + 0.7);
+      master.connect(c.destination);
+      const music = thinkingMusic(c, master, t0);
+      // Look ahead half a second, topped up every 150 ms.
+      music.schedule(c.currentTime + 0.5);
+      timer = window.setInterval(() => music.schedule(c.currentTime + 0.5), 150);
     } catch { /* never let a sound break the UI */ }
-  }, 450);
+  }, 350);
   let stopped = false;
   return () => {
     if (stopped) return;
     stopped = true;
     window.clearTimeout(begin);
+    window.clearInterval(timer);
     const m = master;
     master = null;
     if (!m) return;
@@ -202,9 +302,9 @@ export function startThinkingSound(): () => void {
       const t = c.currentTime;
       m.gain.cancelScheduledValues(t);
       m.gain.setValueAtTime(m.gain.value, t);
-      m.gain.linearRampToValueAtTime(0, t + 0.35);
-      for (const n of nodes) n.stop(t + 0.4);
-      window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, 600);
+      m.gain.linearRampToValueAtTime(0, t + 0.5);
+      // Notes already scheduled ring out under the fade, then everything is let go.
+      window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, 700);
     } catch { /* gone */ }
   };
 }

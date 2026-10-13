@@ -76,36 +76,11 @@ export const Route = createFileRoute("/api/public/hooks/summer-voice-check")({
           const { probeAttachmentFormats } = await import("@/lib/cleo-attachment-probe.server");
           attachments = await probeAttachmentFormats(key);
         }
-        // Gemini voices through the speech endpoint (the chat endpoint refuses TTS models).
+        // Google's voices, each model on its own (Cleo's voice tries them first).
         let speech: unknown = null;
         if (key && new URL(request.url).searchParams.get("speech") === "1") {
-          const sample = "Hi, it's Cleo. You've got two check-ins waiting, and Marc hit a new squat PR.";
-          const tries: Array<{ model: string; voice: string; format: string }> = [
-            { model: "google/gemini-3.1-flash-tts-preview", voice: "Despina", format: "mp3" },
-            { model: "google/gemini-2.5-flash-tts", voice: "Despina", format: "mp3" },
-            { model: "google/gemini-2.5-pro-tts", voice: "Despina", format: "mp3" },
-            { model: "google/gemini-2.5-flash-tts", voice: "Despina", format: "wav" },
-            { model: "openai/gpt-4o-mini-tts", voice: "marin", format: "mp3" },
-          ];
-          speech = await Promise.all(
-            tries.map(async (t) => {
-              const started = Date.now();
-              try {
-                const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/speech", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
-                  body: JSON.stringify({ model: t.model, voice: t.voice, input: sample, response_format: t.format }),
-                  signal: AbortSignal.timeout(45_000),
-                });
-                const type = res.headers.get("content-type") ?? "";
-                const bytes = type.startsWith("audio") ? (await res.arrayBuffer()).byteLength : 0;
-                const detail = bytes ? "" : (await res.text().catch(() => "")).slice(0, 240);
-                return { ...t, status: res.status, type, bytes, ms: Date.now() - started, detail };
-              } catch (e: any) {
-                return { ...t, status: 0, type: "", bytes: 0, ms: Date.now() - started, detail: String(e?.message ?? e).slice(0, 200) };
-              }
-            }),
-          );
+          const { probeGeminiVoices } = await import("@/lib/summer.server");
+          speech = await probeGeminiVoices();
         }
         return Response.json({ ok: attempts.some((a) => a.ok), attempts, gatewayModels, chatModels, cleoRun, attachments, speech });
       },
