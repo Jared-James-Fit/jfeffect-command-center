@@ -251,6 +251,28 @@ export async function updateRow(rowId: string, patch: Record<string, any>) {
   if (error) throw error;
 }
 
+export type HistoryKind = "row" | "day" | "week" | "block";
+
+/**
+ * Which of these program parts hold logged training (a logged set or a
+ * finished workout). Those are never deleted: the database refuses, so
+ * editors keep them instead of failing. Empty when the check can't run (the
+ * database guard still protects the history).
+ */
+export async function loggedIds(kind: HistoryKind, ids: (string | null | undefined)[]): Promise<Set<string>> {
+  const list = Array.from(new Set(ids.filter((id): id is string => !!id)));
+  if (!list.length) return new Set();
+  const { data, error } = await sb.rpc("pl_logged_ids", { _kind: kind, _ids: list });
+  if (error) return new Set();
+  return new Set(((data ?? []) as any[]).map((r) => (typeof r === "string" ? r : r?.pl_logged_ids ?? r?.id)).filter(Boolean));
+}
+
+/** True when a delete was refused because it would have wiped logged training. */
+export function isHistoryLocked(e: unknown): boolean {
+  const err = e as { hint?: string; message?: string } | null;
+  return err?.hint === "pl_history_locked" || /history is never deleted|can't be deleted\. Archive it/i.test(err?.message ?? "");
+}
+
 export async function deleteRow(rowId: string) {
   const { error } = await sb.from("pl_exercise_rows").delete().eq("id", rowId);
   if (error) throw error;
@@ -278,10 +300,24 @@ export async function deletePrep(prepId: string) {
   if (error) throw error;
 }
 
-export async function deleteBlock(blockId: string) {
+/**
+ * Remove a program. One with logged workouts is archived instead: it leaves
+ * the client's active programs and its history stays (deleting it would wipe
+ * every set logged in it).
+ */
+export async function deleteBlock(blockId: string): Promise<"deleted" | "archived"> {
+  if ((await loggedIds("block", [blockId])).has(blockId)) {
+    await archiveBlock(blockId);
+    return "archived";
+  }
   // pl_weeks/pl_days/pl_exercise_rows cascade via FK; if not, this still removes the block row.
   const { error } = await sb.from("pl_blocks").delete().eq("id", blockId);
-  if (error) throw error;
+  if (error) {
+    if (!isHistoryLocked(error)) throw error;
+    await archiveBlock(blockId);
+    return "archived";
+  }
+  return "deleted";
 }
 
 export async function deleteDay(dayId: string) {
@@ -514,12 +550,16 @@ export function buildCopiedExerciseRowPayload(r: Record<string, any>, dayId: str
   };
 }
 
-/** Copy week structure (days + rows) into another week. Never touches client logs. */
+/** Copy week structure (days + rows) into another week. Never touches client logs: trained target days stay. */
 export async function copyWeek(srcWeekId: string, targetWeekId: string, opts: CopyWeekOptions) {
   if (srcWeekId === targetWeekId) throw new Error("Source and target weeks must differ");
-  // Wipe existing days in target (cascades to rows + completions)
-  const { data: targetDays } = await sb.from("pl_days").select("id").eq("week_id", targetWeekId);
+  // Replace the target's days, except ones already trained: those stay as they
+  // were logged (their slot isn't overwritten either).
+  const { data: targetDays } = await sb.from("pl_days").select("id, day_index").eq("week_id", targetWeekId);
+  const logged = await loggedIds("day", ((targetDays ?? []) as any[]).map((d) => d.id));
+  const keptSlots = new Set(((targetDays ?? []) as any[]).filter((d) => logged.has(d.id)).map((d) => d.day_index));
   for (const d of (targetDays ?? []) as any[]) {
+    if (logged.has(d.id)) continue;
     await sb.from("pl_days").delete().eq("id", d.id);
   }
   // Optionally copy week notes
@@ -529,6 +569,7 @@ export async function copyWeek(srcWeekId: string, targetWeekId: string, opts: Co
   }
   const { data: srcDays } = await sb.from("pl_days").select("*").eq("week_id", srcWeekId).order("day_index");
   for (const d of (srcDays ?? []) as any[]) {
+    if (keptSlots.has(d.day_index)) continue;
     const { data: newDay } = await sb
       .from("pl_days")
       .insert({
@@ -676,6 +717,8 @@ async function copyDayContent(srcDayId: string, targetWeekId: string, dayIndex: 
   // Skip if the target day is flagged custom — preserve manual edits by default.
   const { data: existing } = await sb.from("pl_days").select("id, is_custom").eq("week_id", targetWeekId).eq("day_index", dayIndex).maybeSingle();
   if (existing?.is_custom) return;
+  // Already trained: it stays as it was logged.
+  if (existing && (await loggedIds("day", [existing.id])).has(existing.id)) return;
   // Delete existing day at this slot (cascades to rows).
   if (existing) await sb.from("pl_days").delete().eq("id", existing.id);
   const { data: newDay } = await sb
@@ -700,14 +743,16 @@ async function copyDayContent(srcDayId: string, targetWeekId: string, dayIndex: 
   }
 }
 
-/** Delete every row in every day of every week with week_index > fromIndex in a block. Custom days are preserved. */
+/** Delete every row in every day of every week with week_index > fromIndex in a block. Custom and trained days are preserved. */
 export async function clearFutureWeeks(blockId: string, fromIndex: number) {
   const { data: weeks } = await sb.from("pl_weeks").select("id").eq("block_id", blockId).gt("week_index", fromIndex);
   let cleared = 0;
   for (const w of (weeks ?? []) as any[]) {
     const { data: days } = await sb.from("pl_days").select("id, is_custom").eq("week_id", w.id);
+    // trained days keep their exercises (and the sets logged on them)
+    const logged = await loggedIds("day", ((days ?? []) as any[]).map((d) => d.id));
     for (const d of (days ?? []) as any[]) {
-      if (d.is_custom) continue;
+      if (d.is_custom || logged.has(d.id)) continue;
       await sb.from("pl_exercise_rows").delete().eq("day_id", d.id);
       cleared++;
     }

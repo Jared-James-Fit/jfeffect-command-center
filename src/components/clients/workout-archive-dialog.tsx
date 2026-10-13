@@ -47,8 +47,9 @@ export function WorkoutArchiveDialog({
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteBlock(id),
-    onSuccess: () => {
-      toast.success("Program deleted");
+    onSuccess: (outcome) => {
+      if (outcome === "archived") toast("Kept in the archive", { description: "This program has logged workouts, so its history stays." });
+      else toast.success("Program deleted");
       queryClient.invalidateQueries({ queryKey: ["archived-blocks", clientId] });
       setPendingDelete(null);
     },

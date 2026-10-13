@@ -326,7 +326,8 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
       return rows.map((r: any, ei: number) => ({
         id: `ex:${ei}`,
         exerciseId: r.exercise_id ?? null,
-        exerciseName: r.exercise ?? r.name ?? `Exercise ${ei + 1}`,
+        // The builder publishes reps_text / load_lb / exercise_name_override; older payloads used reps / load / exercise.
+        exerciseName: r.exercise ?? r.exercise_name_override ?? r.exercise_name ?? r.name ?? `Exercise ${ei + 1}`,
         videoUrl: r.video_url ?? null,
         vimeoEmbedUrl: r.vimeo_embed_url ?? null,
         thumbnailUrl: r.thumbnail_url ?? null,
@@ -336,14 +337,14 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         commonMistakes: r.common_mistakes ?? null,
         sortOrder: Number.isFinite(Number(r.sort_order)) ? Number(r.sort_order) : ei,
         targetSets: Number.isFinite(Number(r.sets)) ? Number(r.sets) : null,
-        targetReps: r.reps != null ? String(r.reps) : null,
+        targetReps: r.reps != null ? String(r.reps) : r.reps_text != null && String(r.reps_text).trim() !== "" ? String(r.reps_text) : null,
         targetEffort:
           r.rpe != null && String(r.rpe).trim() !== ""
             ? `RPE ${r.rpe}`
             : r.rir != null && String(r.rir).trim() !== ""
               ? `RIR ${r.rir}`
               : null,
-        targetLoadText: r.load != null ? String(r.load) : null,
+        targetLoadText: r.load != null ? String(r.load) : r.load_text ? String(r.load_text) : r.load_lb != null ? `${r.load_lb} lb` : r.load_kg != null ? `${r.load_kg} kg` : null,
         restSeconds: Number.isFinite(Number(r.rest_seconds)) ? Number(r.rest_seconds) : null,
         notes: r.notes ?? null,
         warmupProtocolId: r.warmup_protocol_id ?? null,
@@ -898,7 +899,7 @@ export function createMemberAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         const merged = {
           ...r,
           exercise_id: overrideId,
-          exercise: ex?.name ?? r.exercise ?? r.name,
+          exercise: ex?.name ?? r.exercise ?? r.exercise_name_override ?? r.name,
           name: ex?.name ?? r.name ?? r.exercise,
           video_url: ex?.video_url ?? null,
           vimeo_embed_url: ex?.vimeo_embed_url ?? null,
@@ -1076,21 +1077,24 @@ export function memberRowToPlRow(args: {
   dayId: string;
 }): PlRowRaw {
   const { row: r, exerciseIndex: ei, dayId } = args;
-  const rawLoad = r.load;
+  // builder payloads carry load_lb / load_kg; older ones a bare load
+  const builderKg = r.load == null && r.load_lb == null && r.load_kg != null;
+  const rawLoad = r.load ?? (builderKg ? r.load_kg : r.load_lb);
   const loadNum =
     rawLoad != null && rawLoad !== "" && Number.isFinite(Number(rawLoad))
       ? Number(rawLoad)
       : null;
   const unit: "kg" | "lb" =
-    r.default_load_unit === "kg" ? "kg" : "lb";
+    r.default_load_unit === "kg" || builderKg ? "kg" : "lb";
+  const name = r.exercise ?? r.exercise_name_override ?? r.exercise_name ?? r.name ?? null;
   return {
     id: `ex:${ei}`,
     day_id: dayId,
     sort_order: Number.isFinite(Number(r.sort_order)) ? Number(r.sort_order) : ei,
     exercise_id: r.exercise_id ?? null,
-    exercise_name_override: r.exercise_id ? null : (r.exercise ?? r.name ?? null),
+    exercise_name_override: r.exercise_id ? null : name,
     sets: Number.isFinite(Number(r.sets)) ? Number(r.sets) : 1,
-    reps_text: r.reps != null ? String(r.reps) : null,
+    reps_text: r.reps != null ? String(r.reps) : r.reps_text != null && String(r.reps_text).trim() !== "" ? String(r.reps_text) : null,
     rest_seconds: Number.isFinite(Number(r.rest_seconds)) ? Number(r.rest_seconds) : null,
     rest_seconds_override: null,
     notes: r.notes ?? null,
@@ -1104,7 +1108,7 @@ export function memberRowToPlRow(args: {
     warmup_protocol_id: r.warmup_protocol_id ?? null,
     exercises: {
       id: r.exercise_id ?? null,
-      name: r.exercise ?? r.name ?? `Exercise ${ei + 1}`,
+      name: name ?? `Exercise ${ei + 1}`,
       video_url: r.video_url ?? null,
       vimeo_embed_url: r.vimeo_embed_url ?? null,
       thumbnail_url: r.thumbnail_url ?? null,

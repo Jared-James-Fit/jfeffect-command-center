@@ -110,7 +110,7 @@ export const getRecentlyExpiredMembers = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows } = await supabaseAdmin
       .from("app_members")
-      .select("id, full_name, email, avatar_url, subscription_status, status, manual_access_override, manual_access_disabled, access_end_date, in_grace, cancelled_at, current_period_end, trial_end_at")
+      .select("id, full_name, email, avatar_url, subscription_status, status, manual_access_override, manual_access_disabled, access_end_date, in_grace, cancelled_at, cancel_at, current_period_end, trial_end_at")
       .eq("account_type", "jf_member");
     const list = rows ?? [];
     const now = Date.now();

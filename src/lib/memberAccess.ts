@@ -13,9 +13,16 @@ export type MemberAccessInput = {
   status?: string | null;
   access_end_date?: string | Date | null;
   in_grace?: boolean | null;
+  /** When a cancelled subscription's paid period ends (cancel_at, else current_period_end). */
+  cancel_at?: string | Date | null;
+  current_period_end?: string | Date | null;
 };
 
-const ACTIVE_SUB_STATUSES = new Set(["active", "trialing", "admin_granted"]);
+// Billing writes these as "Active", "Trialing", "Complimentary" (any case).
+const ACTIVE_SUB_STATUSES = new Set(["active", "trialing", "admin_granted", "complimentary"]);
+// Cancelled, but the month is paid for: access until the period ends.
+// ("Hold Plan" and "Paused" stay locked on purpose: data kept, features off.)
+const CANCELS_AT_PERIOD_END = "active (cancels at period end)";
 const INACTIVE_STATUSES = new Set(["expired", "cancelled", "canceled"]);
 
 function toMs(v: string | Date | null | undefined): number | null {
@@ -51,8 +58,14 @@ export function isMemberAccessActive(
   if (INACTIVE_STATUSES.has(status)) return false;
 
   // 6. Active subscription status → allowed (if not past access_end_date).
-  const sub = (member.subscription_status ?? "").toLowerCase();
+  const sub = (member.subscription_status ?? "").trim().toLowerCase();
   if (ACTIVE_SUB_STATUSES.has(sub)) return true;
+
+  // 7. Cancelled at period end → allowed until the paid period is over.
+  if (sub === CANCELS_AT_PERIOD_END) {
+    const until = toMs(member.cancel_at ?? null) ?? toMs(member.current_period_end ?? null);
+    return until === null || until > now;
+  }
 
   return false;
 }
