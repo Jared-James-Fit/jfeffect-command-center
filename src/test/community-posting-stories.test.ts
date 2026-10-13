@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { crewStories, namesLine, storyEnd, storyWorthy, STORY_WINDOW_MS } from "@/lib/community";
+import { ACTIVITY_STORY_MAX, activityStory, activityStoryGroup, crewStories, namesLine, storyEnd, storyWorthy, STORY_WINDOW_MS } from "@/lib/community";
 import { holdsMapOrSet, shouldPersistQuery } from "@/lib/query-persister";
 import { draftWorthKeeping } from "@/lib/post-draft";
 
@@ -101,6 +101,54 @@ describe("Crew Stories", () => {
     expect(screen).toContain('variant="bubble"');
     expect(read("src/components/community/crew-stories.tsx")).toContain("markPostViewed(post.id)");
     expect(read("supabase/migrations/20261101110000_community_post_seen.sql")).toContain("'seen', EXISTS");
+  });
+
+  describe("Activity, played like a story", () => {
+    const pr = { prs: [{ exercise_name: "Squat", reps: 3, load_kg: 140, scope: "atpr" }], pr_count: 1 };
+    it("the crew's sessions from the last day, oldest first, never your own; at most 30", () => {
+      const feed = [pulse("a", "vicky", 2, {}), pulse("b", "marc", 5, pr), pulse("old", "nicole", 30, {}), { ...pulse("mine", "jared", 1, {}), is_mine: true }, post("note", "fionna", 1)];
+      expect(activityStory(feed, now).map((p) => p.id)).toEqual(["b", "a"]);
+      const busy = Array.from({ length: 40 }, (_, i) => pulse(`s${i}`, `p${i}`, i * 0.5, {}));
+      const s = activityStory(busy, now);
+      expect(s).toHaveLength(ACTIVITY_STORY_MAX);
+      // the newest 30, still oldest first
+      expect(s[s.length - 1].id).toBe("s0");
+    });
+    it("a quiet day plays the week's wins; nothing at all, nothing to play", () => {
+      const feed = [pulse("routine", "vicky", 30, {}), pulse("pr", "marc", 50, pr), pulse("lastweek", "nicole", 24 * 9, pr)];
+      expect(activityStory(feed, now).map((p) => p.id)).toEqual(["pr"]);
+      expect(activityStoryGroup([pulse("routine", "vicky", 30, {})], new Set(), now)).toBeNull();
+    });
+    it("its ring is lit while there's one you haven't watched; the end card names the people in it", () => {
+      const feed = [pulse("a", "vicky", 2, {}), pulse("b", "marc", 5, pr, true)];
+      const g = activityStoryGroup(feed, new Set(), now)!;
+      expect(g.activity).toBe(true);
+      expect(g.unseen).toBe(true);
+      expect(activityStoryGroup(feed, new Set(["a"]), now)!.unseen).toBe(false);
+      const end = storyEnd([g], feed, new Set(["a", "b"]), now);
+      expect(end.people.map((a) => a.user_id)).toEqual(["marc", "vicky"]);
+      expect(end.moments).toBe(2);
+    });
+    it("each moment names its athlete; All activity opens the week as a list", () => {
+      const viewer = read("src/components/community/crew-stories.tsx");
+      expect(viewer).toContain("const who = group.activity ? post.author : group.author;");
+      expect(viewer).toContain("data-story-activity-all");
+    });
+  });
+
+  describe("swipe down to close, as on Instagram", () => {
+    const viewer = read("src/components/community/crew-stories.tsx");
+    it("the story follows the finger down (smaller, the feed showing through), pausing while held", () => {
+      expect(viewer).toContain("transform: `translate3d(0, ${drag.y}px, 0) scale(${1 - pull * 0.14})`,");
+      expect(viewer).toContain("overlayStyle={drag ? { opacity: 1 - pull,");
+      expect(read("src/components/ui/dialog.tsx")).toContain("<DialogOverlay style={overlayStyle} />");
+    });
+    it("let go far enough or flick and it slides away; otherwise it springs back", () => {
+      expect(viewer).toContain("if (dy > 110 || (velocity.current > 0.45 && dy > 30)) close();");
+      expect(viewer).toContain("else springBack();");
+      // ✕, Esc and the end card leave the same way
+      expect(viewer).toContain("<Dialog open onOpenChange={(o) => !o && close()}>");
+    });
   });
 
   describe("replying to a story", () => {

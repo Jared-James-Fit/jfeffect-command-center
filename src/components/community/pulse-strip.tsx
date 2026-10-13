@@ -14,17 +14,65 @@ import { ReactorsSheet } from "@/components/community/reactors-sheet";
 /**
  * Feed → Activity: the crew's finished sessions (posted by themselves), as
  * ONE bubble in the story row, right after "Post", so they take no room from
- * the feed (the stories already spotlight the last day's wins). Its tag is
- * the week's PRs; its ring lights up while there's a win from the last day.
- * Tap it: the week in numbers, then its Wins (PRs, milestones, streaks; never
- * a wall of routine sessions) or All, by day.
+ * the feed. Its tag is the week's PRs; its ring is lit while there's a
+ * session you haven't watched. Tap it and it plays like a story (the crew's
+ * last day, see activityStory and the StoryRail); "All activity" in it (or the
+ * bubble on a week with nothing to play) opens ActivitySheet: the week in
+ * numbers, then its Wins (PRs, milestones, streaks; never a wall of routine
+ * sessions) or All, by day.
  *
  * Celebrating is the app's own like: tap the heart (hold for 👍 ‼️ 🔥 😂),
  * same as any post, so it's one gesture everywhere. On your own rows you see
  * who celebrated (faces + count; tap for everyone). The face opens the
  * athlete, the row opens the workout.
  */
-export function ActivityBubble({ posts, unit, viewerIsStaff, onOpen, onOpenAuthor, weekComplete = true, hasMore, loadingMore, onLoadMore }: {
+export function ActivityBubble({ posts, weekComplete = true, unseen, onClick }: {
+  posts: CommunityPost[];
+  weekComplete?: boolean;
+  /** Something in the Activity story they haven't watched: the ring is lit, like a story's. */
+  unseen: boolean;
+  onClick: () => void;
+}) {
+  const week = activityWeekSummary(posts);
+  // the bubble's tag: this week's PRs (the headline), else its sessions
+  const tag = week.prs > 0 ? `${week.prs}${weekComplete ? "" : "+"} PR${week.prs === 1 && weekComplete ? "" : "s"}` : week.sessions > 0 ? `${week.sessions}${weekComplete ? "" : "+"}` : null;
+  const plus = weekComplete ? "" : "+";
+  return (
+    <button
+      type="button"
+      data-activity
+      onClick={onClick}
+      className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95"
+      aria-label={`Crew activity this week: ${week.sessions}${plus} sessions, ${week.prs}${plus} PRs${unseen ? ", new" : ""}`}
+    >
+      <span data-fresh={unseen ? "" : undefined} className={cn("relative grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", unseen ? "bg-[conic-gradient(from_200deg,#f59e0b,#ef3340,#f59e0b)]" : "bg-border")}>
+        <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
+          <ActivityGlyph />
+        </span>
+        {tag && (
+          <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-background bg-primary px-1.5 text-[9px] font-black leading-[14px] text-primary-foreground tabular-nums">
+            {tag}
+          </span>
+        )}
+      </span>
+      <span className={cn("w-full truncate text-center text-[11px]", unseen ? "font-bold" : "font-medium text-muted-foreground")}>Activity</span>
+    </button>
+  );
+}
+
+/** Activity's face (the bubble, and the story's header). */
+export function ActivityGlyph({ className }: { className?: string }) {
+  return (
+    <span className={cn("grid h-full w-full place-items-center rounded-full bg-gradient-to-br from-amber-400/25 via-primary/15 to-transparent", className)}>
+      <Activity className="h-6 w-6 text-primary" strokeWidth={2.5} aria-hidden />
+    </span>
+  );
+}
+
+/** The whole week's activity as a list: what "All activity" opens. */
+export function ActivitySheet({ open: isOpen, onOpenChange, posts, unit, viewerIsStaff, onOpen, onOpenAuthor, weekComplete = true, hasMore, loadingMore, onLoadMore }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
   posts: CommunityPost[];
   /** Everything from the last 7 days is loaded (otherwise the count reads "N+"). */
   weekComplete?: boolean;
@@ -37,17 +85,14 @@ export function ActivityBubble({ posts, unit, viewerIsStaff, onOpen, onOpenAutho
   loadingMore: boolean;
   onLoadMore: () => void;
 }) {
-  const [all, setAll] = useState(false);
+  const all = isOpen;
+  const setAll = onOpenChange;
   const [listFor, setListFor] = useState<string | null>(null);
   const wins = useMemo(() => posts.filter((p) => !!p.stats && isRealWin(pickWorkoutWin(p.stats, "kg").kind)), [posts]);
   const [view, setView] = useState<"wins" | "all">("wins");
   // a week with no wins yet opens on everything
   const shownView = wins.length ? view : "all";
   const week = activityWeekSummary(posts);
-  // lit like an unseen story only while there's a win from the last day; grey like a seen one otherwise
-  const fresh = wins.some((p) => Date.now() - new Date(p.created_at).getTime() < 86_400_000);
-  // the bubble's tag: this week's PRs (the headline), else its sessions
-  const tag = week.prs > 0 ? `${week.prs}${weekComplete ? "" : "+"} PR${week.prs === 1 && weekComplete ? "" : "s"}` : week.sessions > 0 ? `${week.sessions}${weekComplete ? "" : "+"}` : null;
   const { people } = activityFaces(posts);
   const plus = weekComplete ? "" : "+";
   const open = (p: CommunityPost) => {
@@ -69,28 +114,6 @@ export function ActivityBubble({ posts, unit, viewerIsStaff, onOpen, onOpenAutho
   }
   return (
     <>
-      <button
-        type="button"
-        data-activity
-        onClick={() => setAll(true)}
-        className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95"
-        aria-label={`Crew activity this week: ${week.sessions}${plus} sessions, ${week.prs}${plus} PRs`}
-      >
-        <span data-fresh={fresh ? "" : undefined} className={cn("relative grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", fresh ? "bg-[conic-gradient(from_200deg,#f59e0b,#ef3340,#f59e0b)]" : "bg-border")}>
-          <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
-            <span className="grid h-full w-full place-items-center rounded-full bg-gradient-to-br from-amber-400/25 via-primary/15 to-transparent">
-              <Activity className="h-6 w-6 text-primary" strokeWidth={2.5} aria-hidden />
-            </span>
-          </span>
-          {tag && (
-            <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-background bg-primary px-1.5 text-[9px] font-black leading-[14px] text-primary-foreground tabular-nums">
-              {tag}
-            </span>
-          )}
-        </span>
-        <span className="w-full truncate text-center text-[11px] font-bold">Activity</span>
-      </button>
-
       <Sheet open={all} onOpenChange={setAll}>
         <SheetContent side="bottom" hideCloseButton className="max-h-[88dvh] gap-0 overflow-y-auto overscroll-contain rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[520px]">
           {/* our own close: the sheet's floating Back pill sat on top of the title */}

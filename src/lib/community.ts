@@ -1579,7 +1579,43 @@ export function storyWorthy(p: Pick<CommunityPost, "auto" | "stats" | "visibilit
   return isRealWin(pickWorkoutWin(p.stats!, "kg").kind);
 }
 
-export type StoryGroup<T> = { author: CommunityAuthor; items: T[]; unseen: boolean; latest: number };
+export type StoryGroup<T> = {
+  author: CommunityAuthor;
+  items: T[];
+  unseen: boolean;
+  latest: number;
+  /** The Activity bubble played as a story: many people's sessions (each frame shows its athlete). */
+  activity?: boolean;
+};
+
+/** The Activity story's bubble stands in for an author. */
+export const ACTIVITY_STORY_AUTHOR: CommunityAuthor = { user_id: "activity", name: "Activity", avatar_url: null, is_coach: false };
+export const ACTIVITY_STORY_MAX = 30;
+
+/**
+ * Activity, played like a story: everyone else's finished sessions from the
+ * last day, oldest first (the newest 30 when it's busy); on a day with none,
+ * the week's wins. Never your own.
+ */
+export function activityStory<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "is_mine" | "seen">>(posts: T[], now = Date.now()): T[] {
+  const theirs = posts.filter((p) => !p.is_mine && isPulsePost(p));
+  const age = (p: T) => now - new Date(p.created_at).getTime();
+  let items = theirs.filter((p) => age(p) <= STORY_WINDOW_MS);
+  if (!items.length) items = theirs.filter((p) => age(p) <= 7 * 86_400_000 && isRealWin(pickWorkoutWin(p.stats!, "kg").kind));
+  return [...items].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, ACTIVITY_STORY_MAX).reverse();
+}
+
+export function activityStoryGroup<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "is_mine" | "seen">>(posts: T[], seenNow: ReadonlySet<string>, now = Date.now()): StoryGroup<T> | null {
+  const items = activityStory(posts, now);
+  if (!items.length) return null;
+  return {
+    author: ACTIVITY_STORY_AUTHOR,
+    items,
+    unseen: items.some((p) => !p.seen && !seenNow.has(p.id)),
+    latest: new Date(items[items.length - 1].created_at).getTime(),
+    activity: true,
+  };
+}
 
 /**
  * The story rail from the feed already loaded: everyone else's last day of
@@ -1639,12 +1675,18 @@ export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "au
   const people: CommunityAuthor[] = [];
   const seenOrder: T[] = [];
   const stillNew: number[] = [];
+  const named = new Set<string>();
   groups.forEach((g, i) => {
-    const w = g.items.filter((p) => watched.has(p.id));
+    const w = g.items.filter((p) => watched.has(p.id) && !seenOrder.some((q) => q.id === p.id));
     if (w.length) {
-      people.push(g.author);
+      // whose moments they were (Activity's are many people's)
+      for (const p of w) {
+        if (named.has(p.author.user_id)) continue;
+        named.add(p.author.user_id);
+        people.push(p.author);
+      }
       seenOrder.push(...w);
-    } else if (g.unseen) stillNew.push(i);
+    } else if (g.unseen && !g.items.some((p) => watched.has(p.id))) stillNew.push(i);
   });
   const isWin = (p: T) => isPulsePost(p) && isRealWin(pickWorkoutWin(p.stats!, "kg").kind);
   const celebrate = seenOrder

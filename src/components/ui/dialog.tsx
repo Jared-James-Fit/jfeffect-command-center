@@ -33,14 +33,16 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
   /** Consumers with a dedicated header can suppress the default floating Back control. */
   showBackButton?: boolean;
+  /** e.g. fading the dim behind it while it's dragged away (Crew Stories). */
+  overlayStyle?: React.CSSProperties;
 };
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, showBackButton = true, onOpenAutoFocus, ...props }, ref) => (
+>(({ className, children, showBackButton = true, onOpenAutoFocus, overlayStyle, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay style={overlayStyle} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(

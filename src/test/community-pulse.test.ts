@@ -76,19 +76,22 @@ describe("Activity: one section at the top of the feed", () => {
   it("Activity is a bubble right after Post in the story row (no card above the feed); the feed is the posts people made", () => {
     const screen = readFileSync("src/components/community/community-screen.tsx", "utf8");
     expect(screen).toContain("const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);");
-    expect(screen).toContain("after={activity.length > 0 && !following ? (");
-    expect(screen.indexOf("<ActivityBubble")).toBeGreaterThan(screen.indexOf("<StoryRail"));
-    expect(screen.indexOf("<ActivityBubble")).toBeLessThan(screen.indexOf("{feedPosts.map((p, i) => ("));
+    expect(screen).toContain("activity={activity.length > 0 && !following ? { posts: activity, weekComplete: activityWeekComplete, onList: () => setActivityList(true) } : null}");
+    expect(screen.indexOf("<ActivitySheet")).toBeGreaterThan(screen.indexOf("<StoryRail"));
+    expect(screen.indexOf("<ActivitySheet")).toBeLessThan(screen.indexOf("{feedPosts.map((p, i) => ("));
     expect(screen).not.toContain("ActivitySection");
     const rail = readFileSync("src/components/community/crew-stories.tsx", "utf8");
-    expect(rail).toContain("{lead}\n        {after}");
+    expect(rail).toContain("{lead}\n        {activity && (");
     // a quiet day (no stories) still shows Post + Activity
-    expect(rail).toContain("if (!groups.length && !after) return null;");
+    expect(rail).toContain("if (!groups.length && !activity) return null;");
+    // it plays like a story; with nothing to play it opens the list
+    expect(rail).toContain("onClick={() => (actGroup ? watch(-1) : activity.onList())}");
     const bubble = readFileSync("src/components/community/pulse-strip.tsx", "utf8");
-    // Wins first; a week with no wins opens on All; the ring is lit only while there's a win from the last day
+    // the list: Wins first; a week with no wins opens on All
     expect(bubble).toContain('const shownView = wins.length ? view : "all";');
     expect(bubble).toContain('for (const p of shownView === "wins" ? wins : posts) {');
-    expect(bubble).toContain("const fresh = wins.some((p) => Date.now() - new Date(p.created_at).getTime() < 86_400_000);");
+    // the ring is lit like a story's: while there's a session you haven't watched
+    expect(bubble).toContain('data-fresh={unseen ? "" : undefined}');
   });
 });
 describe("Home shows a couple of Pulses at most", () => {
