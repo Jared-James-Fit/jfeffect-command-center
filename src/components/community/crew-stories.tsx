@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, crewStories, isPulsePost, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, activityStoryGroup, crewStories, isPulsePost, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { markPostViewed } from "@/components/community/post-views";
@@ -13,6 +13,7 @@ import { useFollowState } from "@/lib/community-social";
 import { useAuth } from "@/lib/auth";
 import { useDirectThreads, useMessageAuthor } from "@/lib/direct-chats";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
+import { ActivityBubble, ActivityGlyph } from "@/components/community/pulse-strip";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
@@ -32,7 +33,7 @@ const FRAME_MS = 5000;
  * automatic-sharing switch on your profile and who-sees-it on every post
  * apply exactly as in the feed.
  */
-export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, lead, addYours, after }: {
+export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, lead, addYours, activity }: {
   posts: CommunityPost[];
   unit: "kg" | "lb";
   viewerIsStaff: boolean;
@@ -42,8 +43,12 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
   lead?: React.ReactNode;
   /** The end card's "add yours" (when they have nothing in the stories themselves). */
   addYours?: React.ReactNode;
-  /** Right after your own bubble: the week's Activity (keeps the row up on a quiet day). */
-  after?: React.ReactNode;
+  /**
+   * Right after your own bubble: the crew's Activity, which plays like a story
+   * (keeps the row up on a quiet day). `posts` are the week's sessions (its
+   * tag); `onList` opens the whole week as a list.
+   */
+  activity?: { posts: CommunityPost[]; weekComplete: boolean; onList: () => void } | null;
 }) {
   const [seenNow, setSeenNow] = useState<Set<string>>(() => new Set());
   const { data: follows } = useFollowState();
@@ -52,19 +57,30 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
     // what's been watched since the feed loaded counts too
     return g.map((x) => ({ ...x, unseen: x.items.some((p) => !p.seen && !seenNow.has(p.id)) }));
   }, [posts, seenNow, follows]);
+  // Activity, played like a story: first in the row (after Post), then the people
+  const actGroup = useMemo(() => (activity ? activityStoryGroup(posts, seenNow) : null), [activity, posts, seenNow]);
   const [open, setOpen] = useState<number | null>(null);
   // the order is fixed while watching (rings change as you go)
   const frozen = useRef<StoryGroup<CommunityPost>[]>([]);
-  if (!groups.length && !after) return null;
+  if (!groups.length && !activity) return null;
+  /** i = a person's bubble; -1 = Activity. */
   const watch = (i: number) => {
-    frozen.current = groups;
-    setOpen(i);
+    frozen.current = actGroup ? [actGroup, ...groups] : groups;
+    setOpen(i + (actGroup ? 1 : 0));
   };
   return (
     <>
       <div className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-4 sm:px-4" data-story-rail data-no-swipe-back aria-label="Crew stories">
         {lead}
-        {after}
+        {activity && (
+          <ActivityBubble
+            posts={activity.posts}
+            weekComplete={activity.weekComplete}
+            unseen={!!actGroup?.unseen}
+            // nothing from the last day or the week's wins to play: straight to the list
+            onClick={() => (actGroup ? watch(-1) : activity.onList())}
+          />
+        )}
         {groups.map((g, i) => (
           <button key={g.author.user_id} type="button" onClick={() => watch(i)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`${g.author.name}'s story${g.unseen ? ", new" : ""}`} data-story-unseen={g.unseen ? "" : undefined}>
             <span className={cn("grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", g.unseen ? "bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)]" : "bg-border")}>
@@ -95,6 +111,14 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
             else onOpenPost(id);
           }}
           addYours={addYours}
+          onActivityList={
+            activity
+              ? () => {
+                  setOpen(null);
+                  activity.onList();
+                }
+              : undefined
+          }
         />
       )}
     </>
@@ -112,6 +136,7 @@ function StoryViewer({
   onOpenPost,
   onJumpTo,
   addYours,
+  onActivityList,
 }: {
   groups: StoryGroup<CommunityPost>[];
   posts: CommunityPost[];
@@ -123,6 +148,8 @@ function StoryViewer({
   onOpenPost: (id: string) => void;
   onJumpTo: (id: string) => void;
   addYours?: React.ReactNode;
+  /** In the Activity story: the whole week as a list. */
+  onActivityList?: () => void;
 }) {
   const { isImpersonating } = useClientImpersonation();
   const firstUnseen = (g: StoryGroup<CommunityPost>) => Math.max(0, g.items.findIndex((p) => !p.seen));
@@ -140,15 +167,33 @@ function StoryViewer({
   const [end, setEnd] = useState<StoryEnd<CommunityPost> | null>(null);
   // writing a reply (or picking a quick reaction): the story waits
   const [composing, setComposing] = useState(false);
+  // Swipe down to close, as on Instagram: the story follows the finger (shrinking, the feed showing
+  // through behind it); let go far enough down, or flick, and it slides away, else it springs back.
+  const [drag, setDrag] = useState<{ y: number; settle: boolean } | null>(null);
+  const dragging = useRef(false);
+  const closing = useRef(false);
+  const lastMove = useRef<{ y: number; t: number } | null>(null);
+  const velocity = useRef(0);
+  const close = () => {
+    if (closing.current) return;
+    closing.current = true;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return onClose();
+    setDrag({ y: window.innerHeight, settle: true });
+    window.setTimeout(onClose, 210);
+  };
 
   const next = () => {
-    if (!group) return onClose();
+    if (!group) return close();
     if (ii < group.items.length - 1) return setIi(ii + 1);
-    // on to the next person not watched yet this time, else the end card
-    const j = groups.findIndex((g, k) => k > gi && !g.items.some((p) => watched.current.has(p.id)));
+    // on to the next person with something not watched this time (a PR already seen in
+    // Activity doesn't skip their photo), from where that starts; else the end card
+    const fresh = (p: CommunityPost) => !watched.current.has(p.id);
+    const j = groups.findIndex((g, k) => k > gi && g.items.some(fresh));
     if (j >= 0) {
+      const items = groups[j].items;
+      const at = items.findIndex((p) => fresh(p) && !p.seen);
       setGi(j);
-      setIi(firstUnseen(groups[j]));
+      setIi(at >= 0 ? at : Math.max(0, items.findIndex(fresh)));
     } else {
       setPaused(false);
       setEnd(storyEnd(groups, posts, watched.current));
@@ -206,17 +251,49 @@ function StoryViewer({
       return;
     }
     press.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    lastMove.current = { y: e.clientY, t: performance.now() };
+    velocity.current = 0;
     holdTimer.current = window.setTimeout(() => setPaused(true), 220);
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const p = press.current;
+    if (!p || closing.current) return;
+    const dy = e.clientY - p.y;
+    if (!dragging.current) {
+      // a downward drag (not a tap, not sideways) picks the story up
+      if (dy < 12 || dy < Math.abs(e.clientX - p.x) * 1.2) return;
+      dragging.current = true;
+      window.clearTimeout(holdTimer.current);
+      setPaused(true);
+    }
+    const now = performance.now();
+    const last = lastMove.current;
+    if (last && now > last.t) velocity.current = 0.7 * ((e.clientY - last.y) / (now - last.t)) + 0.3 * velocity.current;
+    lastMove.current = { y: e.clientY, t: now };
+    setDrag({ y: Math.max(0, dy), settle: false });
+  };
+  const springBack = () => {
+    setDrag({ y: 0, settle: true });
+    window.setTimeout(() => setDrag((d) => (d && d.y === 0 ? null : d)), 230);
+    setPaused(false);
   };
   const onUp = (e: React.PointerEvent) => {
     window.clearTimeout(holdTimer.current);
     const p = press.current;
     press.current = null;
+    if (dragging.current) {
+      dragging.current = false;
+      const dy = p ? e.clientY - p.y : 0;
+      // far enough, or a quick flick down
+      if (dy > 110 || (velocity.current > 0.45 && dy > 30)) close();
+      else springBack();
+      return;
+    }
     const wasHold = paused;
     setPaused(false);
     if (!p) return;
     const dy = e.clientY - p.y;
-    if (dy > 80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return onClose();
+    if (dy > 80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return close();
     // swipe up: the post itself (the workout, comments)
     if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return onOpenPost(post.id);
     if (wasHold || Date.now() - p.t > 220) return;
@@ -224,10 +301,24 @@ function StoryViewer({
     else next();
   };
 
+  // while it's dragged: down with the finger, a little smaller and rounder, the dim behind fading
+  const pull = drag ? Math.min(1, drag.y / (window.innerHeight * 0.5)) : 0;
+  const ease = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+  const lifted: React.CSSProperties | undefined = drag
+    ? {
+        transform: `translate3d(0, ${drag.y}px, 0) scale(${1 - pull * 0.14})`,
+        borderRadius: Math.round(8 + pull * 24),
+        transformOrigin: "50% 30%",
+        transition: drag.settle ? `transform 210ms ${ease}, border-radius 210ms ${ease}` : "none",
+      }
+    : undefined;
+  const who = group.activity ? post.author : group.author;
+
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o) => !o && close()}>
       <DialogContent
-        className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,900px)] sm:max-w-[460px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
+        className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 text-white shadow-none dark:bg-transparent sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,900px)] sm:max-w-[460px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
+        overlayStyle={drag ? { opacity: 1 - pull, transition: drag.settle ? `opacity 210ms ${ease}` : "none" } : undefined}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => {
           // Esc while replying puts the keyboard away, it doesn't close the stories
@@ -237,13 +328,14 @@ function StoryViewer({
           }
         }}
       >
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black will-change-transform sm:rounded-[28px]" style={lifted} data-story-card>
         {end ? (
           <StoryEndCard
             end={end}
             groups={groups}
             posts={posts}
             viewerIsStaff={viewerIsStaff}
-            onClose={onClose}
+            onClose={close}
             onWatch={watchFrom}
             onOpenPost={onOpenPost}
             onJumpTo={onJumpTo}
@@ -251,16 +343,20 @@ function StoryViewer({
           />
         ) : (
         <>
-        <DialogTitle className="sr-only">{group.author.name}'s story</DialogTitle>
+        <DialogTitle className="sr-only">{group.activity ? "Crew activity" : `${group.author.name}'s story`}</DialogTitle>
         <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe up for the post, swipe down to close. Reply or send a quick reaction at the bottom.</DialogDescription>
         <div
           className="relative flex min-h-0 flex-1 select-none flex-col touch-none"
           onPointerDown={onDown}
           onPointerUp={onUp}
+          onPointerMove={onMove}
           onPointerCancel={() => {
             window.clearTimeout(holdTimer.current);
             press.current = null;
-            setPaused(false);
+            if (dragging.current) {
+              dragging.current = false;
+              springBack();
+            } else setPaused(false);
           }}
           data-story-viewer
         >
@@ -276,10 +372,21 @@ function StoryViewer({
               ))}
             </div>
             <div className="mt-2.5 flex items-center gap-2">
-              <UserAvatar src={group.author.avatar_url} name={group.author.name} size={32} expandable={false} />
-              <span className="min-w-0 truncate text-[14px] font-bold">{group.author.name.split(" ")[0]}</span>
-              <span className="shrink-0 text-[12px] text-white/70">{postTimeLabel(post.created_at)}</span>
-              <button type="button" onClick={onClose} className="ml-auto grid h-10 w-10 place-items-center rounded-full active:bg-white/10" aria-label="Close">
+              {/* Activity: each moment is someone's session, so it names them */}
+              <UserAvatar src={who.avatar_url} name={who.name} size={32} expandable={false} />
+              <span className="min-w-0">
+                <span className="flex items-baseline gap-2">
+                  <span className="truncate text-[14px] font-bold">{who.name.split(" ")[0]}</span>
+                  <span className="shrink-0 text-[12px] text-white/70">{postTimeLabel(post.created_at)}</span>
+                </span>
+                {group.activity && <span className="block text-[11px] font-semibold leading-tight text-white/65">Crew activity</span>}
+              </span>
+              {group.activity && onActivityList && (
+                <button type="button" onClick={onActivityList} className="ml-auto h-8 shrink-0 rounded-full bg-white/15 px-3 text-[12px] font-bold backdrop-blur-sm active:scale-95" data-story-activity-all>
+                  All activity
+                </button>
+              )}
+              <button type="button" onClick={close} className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-white/10", !(group.activity && onActivityList) && "ml-auto")} aria-label="Close">
                 <X className="h-6 w-6" />
               </button>
             </div>
@@ -289,6 +396,7 @@ function StoryViewer({
         </div>
         </>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -647,10 +755,10 @@ function StoryEndCard({
               {end.stillNew.map((j) => {
                 const g = groups[j];
                 return (
-                  <button key={g.author.user_id} type="button" onClick={() => onWatch(j)} className="flex w-[62px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`Watch ${g.author.name}'s story`}>
+                  <button key={g.author.user_id} type="button" onClick={() => onWatch(j)} className="flex w-[62px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={g.activity ? "Watch the crew's activity" : `Watch ${g.author.name}'s story`}>
                     <span className="grid h-[60px] w-[60px] place-items-center rounded-full bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)] p-[2.5px]">
                       <span className="grid h-full w-full place-items-center rounded-full bg-zinc-950 p-[2px]">
-                        <UserAvatar src={g.author.avatar_url} name={g.author.name} size={50} expandable={false} />
+                        {g.activity ? <ActivityGlyph /> : <UserAvatar src={g.author.avatar_url} name={g.author.name} size={50} expandable={false} />}
                       </span>
                     </span>
                     <span className="w-full truncate text-center text-[11px] font-bold">{g.author.name.split(" ")[0]}</span>

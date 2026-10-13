@@ -20,7 +20,7 @@ import { CrewList } from "@/components/community/crew-list";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { activityNeedsMore, isPulsePost, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
-import { ActivityBubble } from "@/components/community/pulse-strip";
+import { ActivitySheet } from "@/components/community/pulse-strip";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
@@ -103,6 +103,8 @@ export function CommunityScreen({
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
   // Automatic Activity is one bubble in the story row; the posts people made are the feed, newest first
   const activity = useMemo(() => posts.filter((p) => isPulsePost(p)), [posts]);
+  // the whole week's Activity as a list ("All activity" in its story)
+  const [activityList, setActivityList] = useState(false);
   const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);
   // All (the whole crew, like a Strava club) or Following (just the people you follow, and you).
   const { data: follows } = useFollowState(!hideTabs);
@@ -402,19 +404,20 @@ export function CommunityScreen({
             lead={canShare ? <ShareWorkoutButton unit={unit} label="Post" variant="bubble" previewOnly={previewOnly} /> : null}
             addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} /> : null}
             // Following narrows things to people you follow; Activity is the whole crew, so it steps aside
-            after={activity.length > 0 && !following ? (
-              <ActivityBubble
-                posts={activity}
-                onOpenAuthor={openAuthor}
-                unit={unit}
-                viewerIsStaff={viewerIsStaff}
-                onOpen={openPost}
-                weekComplete={activityWeekComplete}
-                hasMore={!!hasNextPage}
-                loadingMore={isFetchingNextPage}
-                onLoadMore={() => void fetchNextPage()}
-              />
-            ) : null}
+            activity={activity.length > 0 && !following ? { posts: activity, weekComplete: activityWeekComplete, onList: () => setActivityList(true) } : null}
+          />
+          <ActivitySheet
+            open={activityList}
+            onOpenChange={setActivityList}
+            posts={activity}
+            onOpenAuthor={openAuthor}
+            unit={unit}
+            viewerIsStaff={viewerIsStaff}
+            onOpen={openPost}
+            weekComplete={activityWeekComplete}
+            hasMore={!!hasNextPage}
+            loadingMore={isFetchingNextPage}
+            onLoadMore={() => void fetchNextPage()}
           />
           {!hideTabs && followingIds.size > 0 && (
             <div className="flex gap-1.5" role="tablist" aria-label="Show posts from">
