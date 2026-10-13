@@ -1,9 +1,9 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { DashboardSplash } from "@/components/dashboard-splash";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { getLastRoute } from "@/lib/route-persistence";
+import { cachedLaunchHome, forgetSavedLastRoutes } from "@/lib/launch-home";
 import { getViewMode } from "@/lib/view-mode";
 import { supabase } from "@/integrations/supabase/client";
 import { hasPersistedAuthSession } from "@/lib/session-hint";
@@ -11,8 +11,8 @@ import { hasPersistedAuthSession } from "@/lib/session-hint";
 export const Route = createFileRoute("/")({
   // First-time / signed-out visitors: skip "splash -> hydrate -> wait for auth ->
   // redirect" and go straight to sign-in. Runs in the browser only (the server
-  // can't see localStorage); anyone with a saved session keeps the full flow
-  // below, including last-route restore and dual-account handling.
+  // can't see localStorage); anyone with a saved session keeps the flow below,
+  // which always opens their Home.
   beforeLoad: () => {
     if (typeof window !== "undefined" && !hasPersistedAuthSession()) {
       throw redirect({ to: "/auth", replace: true });
@@ -29,10 +29,27 @@ export const Route = createFileRoute("/")({
   component: IndexRedirect,
 });
 
+/**
+ * App launch ("/", the installed app's start page): always the person's Home,
+ * never the last screen they were on. When this device already knows the
+ * account's role it goes there at once, so Home loads while sign-in finishes
+ * (the signed-in area still checks the session and sends a stale one to
+ * /auth); otherwise it waits for auth below.
+ */
 function IndexRedirect() {
   const { user, role, viewOnly, loading } = useAuth();
   const navigate = useNavigate();
   const { isImpersonating } = useClientImpersonation();
+  const launched = useRef(false);
+
+  useEffect(() => {
+    forgetSavedLastRoutes();
+    const home = cachedLaunchHome();
+    if (!home || launched.current) return;
+    launched.current = true;
+    navigate({ to: home, replace: true });
+  }, [navigate]);
+
   // Give the impersonation provider one tick to hydrate from sessionStorage
   // before we redirect — otherwise admins in active Client POV get bounced
   // to /admin on every cold launch / SW navigate-fallback that lands them
@@ -44,7 +61,8 @@ function IndexRedirect() {
   }, []);
 
   useEffect(() => {
-    if (loading || !hydrated) return;
+    if (loading || !hydrated || launched.current) return;
+    launched.current = true;
     if (user && role) {
       // Respect active Client POV: admins/coaches impersonating a client
       // must land in /portal, not their own admin dashboard.
@@ -64,7 +82,7 @@ function IndexRedirect() {
         if (savedView === "client") {
           void supabase.from("clients").select("id").eq("user_id", user.id).maybeSingle().then(({ data }) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if (data?.id) navigate({ to: "/portal/workouts" as any, replace: true });
+            if (data?.id) navigate({ to: "/portal" as any, replace: true });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             else navigate({ to: "/admin" as any, replace: true });
           });
@@ -72,31 +90,7 @@ function IndexRedirect() {
         }
       }
 
-      // Attempt to restore the user's last meaningful route (set by
-      // RouteTracker on every navigation). Validate against the current role
-      // so a user can never be sent into an area they're not permitted to
-      // access, and so that switching accounts always lands at the correct
-      // dashboard.
-      if (user.id) {
-        const saved = getLastRoute(user.id);
-        if (saved) {
-          const isPortal = saved.startsWith("/portal");
-          const isMember = saved === "/m" || saved.startsWith("/m/");
-          const isAdmin  = saved === "/admin" || saved.startsWith("/admin/");
-
-          const roleMatch =
-            (isPortal && (role === "client" || role === "member" || role === "admin" || role === "coach")) ||
-            (isMember && (role === "member"  || role === "admin" || role === "coach")) ||
-            (isAdmin  && (role === "admin"   || role === "coach"));
-
-          if (roleMatch) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            navigate({ to: saved as any, replace: true });
-            return;
-          }
-        }
-      }
-
+      // Home for their role (never the last screen: a launch always starts fresh).
       const dest =
         role === "client" ? "/portal"
         : role === "member" ? "/portal"

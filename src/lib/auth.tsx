@@ -5,7 +5,6 @@ import { useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { markClientSignedIn } from "@/lib/activity";
 import { logPerf } from "@/lib/perf-timing";
-import { clearLastRoute } from "@/lib/route-persistence";
 import { setAdminView } from "@/lib/admin-view";
 import { stopTeamPreview, useTeamPreview, type TeamPreview } from "@/lib/team-preview";
 
@@ -33,6 +32,21 @@ function readCachedRole(uid: string): AppRole | null {
 function writeCachedRole(uid: string, role: AppRole): void {
   if (typeof window === "undefined") return;
   try { localStorage.setItem(ROLE_CACHE_PREFIX + uid, JSON.stringify({ role, ts: Date.now() })); } catch { /* storage full */ }
+}
+
+/**
+ * The signed-in person this device remembers, and their cached role (no
+ * network): lets a cold launch open their Home before auth finishes.
+ */
+export function cachedSessionRole(): { uid: string; role: AppRole } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const sessionKey = Object.keys(localStorage).find((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
+    const raw = sessionKey ? localStorage.getItem(sessionKey) : null;
+    const uid = raw ? JSON.parse(raw)?.user?.id : null;
+    const role = uid ? readCachedRole(uid) : null;
+    return uid && role ? { uid, role } : null;
+  } catch { return null; }
 }
 
 function clearCachedRole(uid: string): void {
@@ -503,9 +517,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       explicitSignOutRef.current = false;
     }
 
-    // Remove the persisted last-route so the next user on this device
-    // never lands in a previous user's workout or profile.
-    if (uid) clearLastRoute(uid);
     // Clear app-shell caches and offline drafts so the next signed-in user
     // never sees the previous user's cached data.
     try {

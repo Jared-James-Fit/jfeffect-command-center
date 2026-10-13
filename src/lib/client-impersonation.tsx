@@ -28,6 +28,11 @@ function readStoredClient(): ImpersonatedClient | null {
   }
 }
 
+/** A "View as client" session is saved on this device (sync, for app launch). */
+export function hasStoredClientPov(): boolean {
+  return readStoredClient() !== null;
+}
+
 function readStoredReturnTo(): string | null {
   if (typeof window === "undefined") return null;
   try {
