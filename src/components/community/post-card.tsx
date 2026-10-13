@@ -224,13 +224,12 @@ export { WIN_STYLE };
 /**
  * Pulse: a finished workout, posted by itself. It leads with the session's
  * one real win (pickWorkoutWin: a PR, a milestone, the top set), tinted to
- * match, and the crew can give props in one tap.
+ * match. Celebrating it is the heart under it (or a double-tap), like any post.
  */
-export function PulseHero({ post, stats, unit, onReact }: { post: CommunityPost; stats: WorkoutShareStats; unit: "kg" | "lb"; onReact?: (p: CommunityPost, next: ReactionKey | null) => void }) {
+export function PulseHero({ stats, unit }: { post?: CommunityPost; stats: WorkoutShareStats; unit: "kg" | "lb" }) {
   const win = pickWorkoutWin(stats, unit);
   const style = WIN_STYLE[win.kind];
   const nums = [formatWorkoutDuration(stats.duration_min), stats.working_sets > 0 && win.kind !== "done" ? `${stats.working_sets} sets` : null, win.kind !== "pr" && stats.pr_count > 0 ? `${stats.pr_count} PR${stats.pr_count === 1 ? "" : "s"}` : null].filter(Boolean);
-  const canProps = !!onReact && !post.is_mine;
   return (
     <div data-pulse={win.kind} className={cn("mx-3.5 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b0e] p-4 text-white", style.tint)}>
       <div className="flex min-w-0 items-center gap-2">
@@ -244,23 +243,7 @@ export function PulseHero({ post, stats, unit, onReact }: { post: CommunityPost;
       {win.detail && (
         <div className={cn("font-display mt-0.5 text-[24px] uppercase leading-none", win.kind === "pr" ? "bg-[linear-gradient(90deg,#fde68a,#f59e0b)] bg-clip-text text-transparent" : "text-white/85")}>{win.detail}</div>
       )}
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-[11px] font-semibold text-white/55">{nums.join(" · ")}</span>
-        {canProps && (
-          <button
-            type="button"
-            data-props
-            onClick={(e) => {
-              e.stopPropagation();
-              onReact?.(post, post.my_reaction ? null : "fire");
-            }}
-            aria-pressed={!!post.my_reaction}
-            className={cn("h-8 shrink-0 rounded-full px-3 text-[12px] font-black transition active:scale-95", post.my_reaction ? "bg-orange-500/20 text-orange-300" : "bg-white text-black")}
-          >
-            {post.my_reaction ? `${reactionEmoji(post.my_reaction) ?? "🔥"} Sent` : "🔥 Props"}
-          </button>
-        )}
-      </div>
+      {nums.length > 0 && <div className="mt-3 min-w-0 truncate text-[11px] font-semibold text-white/55">{nums.join(" · ")}</div>}
     </div>
   );
 }
@@ -401,7 +384,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         ) : post.media_type ? (
           <PostMedia post={post} thumbUrl={thumbUrl} />
         ) : s && post.auto ? (
-          <PulseHero post={post} stats={s} unit={unit} onReact={onReact} />
+          <PulseHero post={post} stats={s} unit={unit} />
         ) : s ? (
           <WorkoutHero stats={s} unit={unit} />
         ) : post.locked_in_at ? (
@@ -571,7 +554,6 @@ export function ReactionBar({
   // People are reacting to this one: a moment after it's on screen, its
   // reactions float up out of the heart and who reacted pops (never over the post).
   const pop = useEngagementPop<HTMLDivElement>(post);
-  const celebrate = !post.is_mine && !post.my_reaction && !post.auto && (post.stats?.pr_count ?? 0) > 0;
   const { on, done } = pop;
   useEffect(() => {
     if (!on) return;
@@ -602,19 +584,6 @@ export function ReactionBar({
           <span className="truncate text-[12px] text-muted-foreground">
             <span className="font-bold text-foreground">{who}</span>
           </span>
-        </button>
-      )}
-      {/* someone else's PR, not celebrated yet: one tap (Pulse cards carry their own Props) */}
-      {celebrate && (
-        <button
-          type="button"
-          data-celebrate
-          onClick={() => onReact(post, "fire")}
-          aria-label="Celebrate their PR"
-          // beside who reacted, just the trophy (room for the names)
-          className={cn("ml-1 h-8 shrink-0 rounded-full bg-amber-500/15 text-[12px] font-black text-amber-700 active:scale-95 dark:text-amber-300", who ? "w-8" : "px-3")}
-        >
-          {who ? "🏆" : "🏆 Celebrate"}
         </button>
       )}
       {onOpenComments && (

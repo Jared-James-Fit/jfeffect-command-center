@@ -35,15 +35,18 @@ describe("Pulse: a finished workout posts itself, with its real win", () => {
     expect(sql).toContain("and not cp.auto_shared");
     expect(sql).toContain("RAISE WARNING 'community_pulse_on_completion: %', sqlerrm;");
   });
-  it("the crew can give props in one tap (not on your own)", () => {
+  it("the crew celebrates it with the heart under it, like any post (not your own)", () => {
     const card = read("src/components/community/post-card.tsx");
-    expect(card).toContain("const canProps = !!onReact && !post.is_mine;");
-    expect(card).toContain('onReact?.(post, post.my_reaction ? null : "fire");');
-    expect(card).toContain("<PulseHero post={post} stats={s} unit={unit} onReact={onReact} />");
+    expect(card).toContain("<PulseHero post={post} stats={s} unit={unit} />");
+    expect(card).not.toContain("const canProps");
+    const strip = read("src/components/community/pulse-strip.tsx");
+    // yours: who celebrated it; theirs: the heart
+    expect(strip).toContain("{post.is_mine ? (");
+    expect(strip).toContain('title="Celebrated by"');
   });
 });
 
-import { ACTIVITY_PREVIEW_ROWS, HOME_CREW_PULSES, activityNeedsMore, activityWeekSummary, homeCrewPosts, isPulsePost } from "@/lib/community";
+import { ACTIVITY_PREVIEW_ROWS, HOME_CREW_PULSES, activityDay, activityNeedsMore, activityPreview, activityWeekSummary, homeCrewPosts, isPulsePost } from "@/lib/community";
 describe("Activity: one section at the top of the feed", () => {
   const now = Date.UTC(2026, 9, 10, 21);
   const at = (h: number) => new Date(now - h * 3600e3).toISOString();
@@ -53,8 +56,15 @@ describe("Activity: one section at the top of the feed", () => {
     expect(isPulsePost(pulse("p", 1))).toBe(true);
     expect(isPulsePost(own("claimed", 1))).toBe(false);
   });
-  it("shows the 2 newest, with the week's sessions and PRs", () => {
-    expect(ACTIVITY_PREVIEW_ROWS).toBe(2);
+  it("leads with the week's real wins, with the week's sessions and PRs", () => {
+    expect(ACTIVITY_PREVIEW_ROWS).toBe(3);
+    const win = (id: string, h: number, o: object) => ({ id, created_at: new Date(now - h * 3600e3).toISOString(), auto: true, stats: { prs: [], pr_count: 0, month_sessions: 2, week_sessions: 1, top_lift: { exercise_name: "Squat", reps: 5, load_kg: 100 }, working_sets: 10, duration_min: 40, ...o } });
+    const posts = [win("routine1", 1, {}), win("pr", 2, { prs: [{ exercise_name: "Squat", reps: 3, load_kg: 140, scope: "atpr" }], pr_count: 1 }), win("routine2", 3, {}), win("streak", 5, { week_sessions: 4 }), win("tenth", 30, { month_sessions: 10 }), win("oldpr", 24 * 9, { prs: [{ exercise_name: "Bench", reps: 1, load_kg: 100, scope: "atpr" }], pr_count: 1 })];
+    expect(activityPreview(posts, 3, now).rows.map((p) => p.id)).toEqual(["pr", "streak", "tenth"]);
+    // a quiet week with no wins still shows the latest sessions
+    expect(activityPreview([win("a", 1, {}), win("b", 2, {})], 3, now).rows.map((p) => p.id)).toEqual(["a", "b"]);
+    expect(activityDay(new Date(now - 3600e3).toISOString(), new Date(now))).toBe("Today");
+    expect(activityDay(new Date(now - 26 * 3600e3).toISOString(), new Date(now))).toBe("Yesterday");
     expect(activityWeekSummary([pulse("a", 1, 2), pulse("b", 30), pulse("old", 24 * 8, 5)], now)).toEqual({ sessions: 2, prs: 2 });
   });
   it("reads on until the last 7 days are loaded (bounded), so the section is complete", () => {
