@@ -13,6 +13,7 @@ import { OPEN_POST_EVENT } from "@/components/community/shared-comment";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
+import { StoryRail } from "@/components/community/crew-stories";
 import { ShareNudge } from "@/components/community/share-nudge";
 import { CrewList } from "@/components/community/crew-list";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
@@ -330,7 +331,7 @@ export function CommunityScreen({
           </button>
           {bell && <NotificationBell />}
           {/* small phones: just the "+", so Feed · Rankings keep their room */}
-          {canShare && <ShareWorkoutButton unit={unit} label="Share" previewOnly={previewOnly} className="max-[389px]:w-9 max-[389px]:px-0" labelClassName="max-[389px]:sr-only" />}
+          {canShare && <ShareWorkoutButton unit={unit} label="Post" previewOnly={previewOnly} className="max-[389px]:w-9 max-[389px]:px-0" labelClassName="max-[389px]:sr-only" />}
         </div>
         </div>
       )}
@@ -366,6 +367,14 @@ export function CommunityScreen({
         />
       ) : (
         <>
+          {/* the crew's last day, story-style; your own post bubble first */}
+          <StoryRail
+            posts={posts}
+            unit={unit}
+            viewerIsStaff={viewerIsStaff}
+            onOpenPost={(id) => setDetailId(id)}
+            lead={canShare ? <ShareWorkoutButton unit={unit} label="Post" variant="bubble" previewOnly={previewOnly} /> : null}
+          />
           {activity.length > 0 && (
             <FeedItem index={0}>
               <ActivitySection

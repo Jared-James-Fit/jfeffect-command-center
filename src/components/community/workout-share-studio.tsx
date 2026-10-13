@@ -1,11 +1,10 @@
-import { Suspense, useMemo, useState } from "react";
-import { lazyWithRetry } from "@/lib/lazy-chunk";
+import { useMemo, useState } from "react";
 import { sessionDisplayTitle } from "@/lib/community";
 import { ShareStudio } from "@/components/community/share-studio";
 import { CameraChip } from "@/components/community/camera-overlays";
 import { useWorkoutStudio, type StudioWorkout } from "@/components/community/use-workout-studio";
 
-const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
+import { ShareComposer, StudioShell } from "@/components/community/studio-chunks";
 
 /**
  * The studio for one workout you just finished (the recap's Share): camera
@@ -46,7 +45,12 @@ export function WorkoutShareStudio({
         chip={<CameraChip icon="🔥" title={sessionDisplayTitle(target.title)} sub={w.ready ? "Swipe for more looks" : "Getting your numbers…"} />}
       />
       {video && (
-        <Suspense fallback={null}>
+        <StudioShell
+          onClose={() => {
+            setVideo(null);
+            onClose();
+          }}
+        >
           <ShareComposer
             open={!!video}
             onOpenChange={(o) => {
@@ -61,7 +65,7 @@ export function WorkoutShareStudio({
             unit={unit}
             initialFile={video}
           />
-        </Suspense>
+        </StudioShell>
       )}
     </>
   );

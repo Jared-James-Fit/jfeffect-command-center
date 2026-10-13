@@ -148,6 +148,8 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
           scene={sceneKey ? { key: sceneKey, onRemove: () => removeScene.mutateAsync(post.id) } : undefined}
           // a GIF / voice memo is the author's own (staff can fix the words of anyone's note)
           attach={mine ? { initial: attachOfPost(post), key: post.id } : undefined}
+          // a member's photo post can lose its words; a coach's text post can't
+          wordsOptional={!post.author.is_coach}
           onSave={async (body, _poll, media) => {
             await updateNote.mutateAsync({ postId: post.id, body });
             if (media) await setMedia.mutateAsync({ postId: post.id, media });

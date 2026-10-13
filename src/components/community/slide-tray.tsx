@@ -230,14 +230,18 @@ export type SlideTrayState = ReturnType<typeof useSlideTray>;
  * The strip under the photo: slide 1 (what's on screen), the rest, and
  * "+ Camera" / "+ Library" to add more (up to 10).
  */
-export function SlideTray({ tray, cover, onCamera, onLibrary }: { tray: SlideTrayState; cover: string | null; onCamera: () => void; onLibrary: () => void }) {
+export function SlideTray({ tray, cover, onCamera, onLibrary, hasCover = true }: { tray: SlideTrayState; cover: string | null; onCamera: () => void; onLibrary: () => void; hasCover?: boolean }) {
   const urls = useSlideThumbUrls(tray.items.filter((it) => it.existing && it.slide).map((it) => it.slide!));
+  // a plain post of clips has no card or photo up front: its slides start at 1
+  const first = hasCover ? 2 : 1;
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-no-swipe-back>
-      <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-white/10 ring-2 ring-white" aria-label="Slide 1, on screen">
-        {cover && <img src={cover} alt="" className="h-full w-full object-cover" />}
-        <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-black">1</span>
-      </div>
+      {hasCover && (
+        <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-white/10 ring-2 ring-white" aria-label="Slide 1, on screen">
+          {cover && <img src={cover} alt="" className="h-full w-full object-cover" />}
+          <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-black">1</span>
+        </div>
+      )}
       {tray.items.map((it, i) => {
         const src = it.preview ?? (it.slide ? urls[slideThumbPath(it.slide) ?? ""] ?? null : null);
         const busy = it.status === "preparing" || it.status === "uploading";
@@ -247,11 +251,11 @@ export function SlideTray({ tray, cover, onCamera, onLibrary }: { tray: SlideTra
               type="button"
               onClick={() => it.status === "error" && tray.retry(it.id)}
               className="relative block h-full w-full overflow-hidden rounded-lg bg-white/10"
-              aria-label={it.status === "error" ? "Didn't upload. Tap to try again" : `Slide ${i + 2}`}
+              aria-label={it.status === "error" ? "Didn't upload. Tap to try again" : `Slide ${i + first}`}
             >
               {src && <img src={src} alt="" className="h-full w-full object-cover" />}
               {it.kind === "video" && <Play className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 fill-white text-white drop-shadow" />}
-              <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-black">{i + 2}</span>
+              <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-black">{i + first}</span>
               {busy && (
                 <span className="absolute inset-x-1 bottom-1 h-1 overflow-hidden rounded-full bg-black/50">
                   <span className="block h-full rounded-full bg-white transition-[width]" style={{ width: `${Math.max(8, it.progress)}%` }} />
@@ -263,7 +267,7 @@ export function SlideTray({ tray, cover, onCamera, onLibrary }: { tray: SlideTra
                 </span>
               )}
             </button>
-            <button type="button" onClick={() => tray.remove(it.id)} className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-white text-black shadow" aria-label={`Remove slide ${i + 2}`}>
+            <button type="button" onClick={() => tray.remove(it.id)} className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-white text-black shadow" aria-label={`Remove slide ${i + first}`}>
               <X className="h-3 w-3" strokeWidth={3} />
             </button>
           </div>

@@ -182,6 +182,7 @@ export async function prepareCommunityAvatar(file: File): Promise<Blob> {
     c.height = out;
     c.getContext("2d")!.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, out, out);
     const blob = await canvasToJpeg(c, 0.86);
+    c.width = c.height = 0;
     if (!blob) throw new Error("Couldn't prepare that photo");
     return blob;
   } finally {

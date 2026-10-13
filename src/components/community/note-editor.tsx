@@ -32,6 +32,8 @@ export function NoteEditor({
   media,
   scene,
   attach,
+  saveLabel = "Save",
+  wordsOptional = false,
 }: {
   open: boolean;
   title: string;
@@ -48,6 +50,10 @@ export function NoteEditor({
   scene?: { key: SpiritSceneKey; onRemove: () => Promise<void> };
   /** Offer a GIF and a voice memo: what's on it now and a key for this post. */
   attach?: { initial: PostAttachInitial | null; key: string };
+  /** The button's word ("Post" for a new one). */
+  saveLabel?: string;
+  /** A post with photos can go without words (members' posts). */
+  wordsOptional?: boolean;
 }) {
   const [body, setBody] = useState(initial);
   const draft = useMediaDraft({ open: open && !!media, initial: media?.initial, key: media?.key ?? "none" });
@@ -164,7 +170,7 @@ export function NoteEditor({
             <Button type="button" variant="ghost" disabled={saving} onClick={close}>Cancel</Button>
             <Button
               type="button"
-              disabled={saving || !trimmed || !pollReady || draft.tray.uploading > 0 || att.recorder.recording}
+              disabled={saving || (!trimmed && !(wordsOptional && !poll && draft.tray.items.length > 0)) || !pollReady || draft.tray.uploading > 0 || att.recorder.recording}
               onClick={() => {
                 const options = pollCheck?.ok ? pollCheck.options : undefined;
                 // photos only go when they changed (left out, the post keeps what it has)
@@ -184,7 +190,7 @@ export function NoteEditor({
                 );
               }}
             >
-              {saving ? "Saving…" : draft.tray.uploading > 0 ? "Uploading…" : poll ? "Post poll" : "Save"}
+              {saving ? "Saving…" : draft.tray.uploading > 0 ? "Uploading…" : poll ? "Post poll" : saveLabel}
             </Button>
           </div>
         </div>

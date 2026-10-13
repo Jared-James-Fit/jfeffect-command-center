@@ -203,6 +203,8 @@ export type CommunityPost = {
   auto?: boolean;
   /** Your own posts only: how many have seen it, and the three latest (named) faces. */
   views?: { count: number; faces: CommunityAuthor[] } | null;
+  /** You've seen it (on any device): what rings people in the story rail. */
+  seen?: boolean;
 };
 
 /** A comment line under a post in the feed (Instagram style). */
@@ -1503,4 +1505,46 @@ export function pickWorkoutWin(s: Pick<WorkoutShareStats, "prs" | "pr_count" | "
   if (s.top_lift) return { kind: "top", label: "Top set", headline: s.top_lift.exercise_name, detail: formatTopSet(s.top_lift, unit) };
   // the line under it carries the time
   return { kind: "done", label: "Session done", headline: `${s.working_sets} working ${s.working_sets === 1 ? "set" : "sets"}`, detail: null };
+}
+
+
+/* ---- Crew Stories ---------------------------------------------------- */
+
+/** How long a moment stays in the story rail. */
+export const STORY_WINDOW_MS = 24 * 3_600_000;
+
+/**
+ * Worth a story: anything a person posted themselves, and the automatic
+ * workout posts only when the session had a real moment in it (a PR, a
+ * monthly milestone, a 3rd+ session of the week). A routine "session done"
+ * or plain top set never takes over the rail.
+ */
+export function storyWorthy(p: Pick<CommunityPost, "auto" | "stats" | "visibility">): boolean {
+  if (p.visibility !== "community") return false;
+  if (!isPulsePost(p)) return true;
+  const kind = pickWorkoutWin(p.stats!, "kg").kind;
+  return kind === "pr" || kind === "month" || kind === "week";
+}
+
+export type StoryGroup<T> = { author: CommunityAuthor; items: T[]; unseen: boolean; latest: number };
+
+/**
+ * The story rail from the feed already loaded: everyone else's last day of
+ * story-worthy posts, one bubble each, their moments oldest first (they play
+ * in order). People with something unseen first, then the most recent.
+ */
+export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author">>(posts: T[], now = Date.now()): StoryGroup<T>[] {
+  const by = new Map<string, StoryGroup<T>>();
+  for (const p of posts) {
+    const t = new Date(p.created_at).getTime();
+    if (p.is_mine || now - t > STORY_WINDOW_MS || !storyWorthy(p)) continue;
+    const g = by.get(p.author.user_id) ?? { author: p.author, items: [], unseen: false, latest: 0 };
+    g.items.push(p);
+    g.unseen ||= !p.seen;
+    g.latest = Math.max(g.latest, t);
+    by.set(p.author.user_id, g);
+  }
+  const groups = [...by.values()];
+  for (const g of groups) g.items.sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return groups.sort((a, b) => Number(b.unseen) - Number(a.unseen) || b.latest - a.latest);
 }

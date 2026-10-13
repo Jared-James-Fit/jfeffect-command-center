@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, ChevronRight, Plus, X } from "lucide-react";
@@ -6,10 +6,9 @@ import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
-import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { cn } from "@/lib/utils";
 import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, lockInCameraCard, sessionDisplayTitle, sessionWhen } from "@/lib/community";
-import { shareToCommunity, useDayPlan, useMyPostForCompletion, usePublicSessionTitle, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
+import { createCommunityPost, shareToCommunity, useCreateCommunityPost, useDayPlan, useMyPostForCompletion, usePublicSessionTitle, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
 import type { ShareTemplate } from "@/lib/workout-share-card";
 import type { CameraCard, StudioPost } from "@/components/community/share-studio";
 import { startWorkout as startWorkoutFn } from "@/lib/workout-completion.functions";
@@ -17,28 +16,34 @@ import { audienceDoneLabel } from "@/components/community/audience-picker";
 import { CameraChip } from "@/components/community/camera-overlays";
 import { postedToast, useWorkoutStudio } from "@/components/community/use-workout-studio";
 
-const ShareComposer = lazyWithRetry(() => import("@/components/community/share-composer").then((m) => ({ default: m.ShareComposer })));
-const ShareStudio = lazyWithRetry(() => import("@/components/community/share-studio").then((m) => ({ default: m.ShareStudio })));
+import { NoteEditor, ShareComposer, ShareStudio, StudioShell, preloadStudio, usePreloadStudio } from "@/components/community/studio-chunks";
 
-type Mode = "lockin" | "workout";
+type Mode = "post" | "lockin" | "workout";
+/** A plain post (any photo or video, no workout on it): one per person at a time while it's being made. */
+const plainKey = (userId: string | undefined) => `post:new:${userId ?? ""}`;
 type LockLook = Extract<ShareTemplate, "lockin" | "lockclock" | "lockplan">;
 
 /** The app's own red for the one action we want people to take. */
 export const SHARE_GRADIENT = "bg-primary";
 
 /**
- * "+ Share" — the whole thing on one screen (ShareStudio). Opens straight to
- * the camera, the viewfinder already showing the card. Two modes: LOCK IN
- * (today's session: Locked in / Clock / Today's plan; posting starts the
- * session) and WORKOUT (a finished session: Photo, vs last time, Receipt,
- * Streak, Stats, Volume). The workout is picked for you (today's, else the
- * latest) in the chip above the shutter; tap it to change. Snap, the frame
- * freezes in place, add text or stickers, Post or Story. Done.
+ * "+ Post" — the whole thing on one screen (ShareStudio), Instagram-style:
+ * one tap and the camera is up. Three modes along the bottom:
+ *   POST     any photo, carousel or clip, words optional; or Write for a
+ *            words-first post. Nothing to do with a workout (no points).
+ *   LOCK IN  today's session (Locked in / Clock / Today's plan); posting
+ *            starts the session.
+ *   WORKOUT  a finished session with its card (Photo, vs last time, Receipt,
+ *            Streak, Stats, Volume); the chip above the shutter picks which.
+ * It opens on whatever fits right now: Lock in when there's a session to
+ * start, Workout when one finished in the last day, else Post. Snap, the
+ * frame freezes in place, add text or stickers, a caption, Post. Every post
+ * is kept as a draft on the phone until it's up.
  */
 export function ShareWorkoutButton({
   unit,
   className,
-  label = "Share a workout",
+  label = "Post",
   variant = "pill",
   previewOnly = false,
   labelClassName,
@@ -68,7 +73,13 @@ export function ShareWorkoutButton({
   const { data: today } = useTodaySession(!previewOnly);
   // null = not picked yet: Lock in leads when there's a session to train today.
   const [mode, setMode] = useState<Mode | null>(null);
-  const activeMode: Mode = today ? mode ?? "lockin" : "workout";
+  // what it opens on: a session to start, else a workout from the last day, else a plain post
+  const freshWorkout = !!target && Date.now() - new Date(target.completed_at).getTime() < 86_400_000;
+  const fallbackMode: Mode = today ? "lockin" : freshWorkout ? "workout" : "post";
+  const activeMode: Mode = mode === "lockin" && !today ? fallbackMode : mode === "workout" && !target && !isLoading ? fallbackMode : mode ?? fallbackMode;
+  const [writing, setWriting] = useState(false);
+  const createPost = useCreateCommunityPost();
+  usePreloadStudio(!previewOnly);
   const [startedId, setStartedId] = useState<string | null>(null);
   const lockCompletionId = today ? startedId ?? today.completionId : null;
   const { data: lockExisting } = useMyPostForCompletion(lockCompletionId, capturing && !!lockCompletionId, "lockin");
@@ -87,6 +98,7 @@ export function ShareWorkoutButton({
 
   const begin = () => {
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
+    preloadStudio();
     setMode(null);
     setChosen(null);
     workout.resetLook();
@@ -127,6 +139,23 @@ export function ShareWorkoutButton({
       }
     : null;
   const changeTarget = () => setRawOpen(true);
+
+  // POST: any photo or clip, no workout card on it
+  const plainPost: StudioPost = {
+    key: plainKey(user?.id),
+    label: "Post",
+    onPost: async (a) => {
+      if (!user?.id) throw new Error("Sign in again to post");
+      await createCommunityPost(qc, { userId: user.id, caption: a.caption, visibility: a.visibility, photo: a.photo, extras: a.extras, attach: a.attach });
+      const t = postedToast(a.visibility, false, false);
+      toast.success(t.title, { description: t.description });
+    },
+  };
+  const modes = [
+    { key: "post", label: "Post" },
+    ...(today ? [{ key: "lockin", label: "Lock in" }] : []),
+    ...(target || isLoading ? [{ key: "workout", label: "Workout" }] : []),
+  ];
 
   return (
     <>
@@ -232,7 +261,7 @@ export function ShareWorkoutButton({
       </Sheet>
 
       {videoFor && (
-        <Suspense fallback={null}>
+        <StudioShell onClose={() => setVideoFor(null)}>
           <ShareComposer
             open={!!videoFor}
             onOpenChange={(o) => !o && setVideoFor(null)}
@@ -242,15 +271,16 @@ export function ShareWorkoutButton({
             unit={unit}
             initialFile={videoFor.file}
           />
-        </Suspense>
+        </StudioShell>
       )}
 
       {capturing && (
-        <Suspense fallback={null}>
+        <StudioShell onClose={() => setCapturing(false)}>
           <ShareStudio
             open={capturing}
             onClose={() => setCapturing(false)}
             accept={activeMode === "lockin" ? "image/*" : "image/*,video/*"}
+            onWrite={activeMode === "post" ? () => setWriting(true) : undefined}
             onVideo={
               activeMode === "workout" && target
                 ? (file) => {
@@ -259,14 +289,16 @@ export function ShareWorkoutButton({
                   }
                 : undefined
             }
-            modes={today ? [{ key: "lockin", label: "Lock in" }, { key: "workout", label: "Workout" }] : undefined}
+            modes={modes}
             mode={activeMode}
             onMode={(k) => setMode(k as Mode)}
-            canShoot={activeMode === "lockin" ? !!today : !!target && workout.ready}
-            card={cameraCard}
-            post={activeMode === "lockin" ? lockPost : workout.post}
+            canShoot={activeMode === "post" ? true : activeMode === "lockin" ? !!today : !!target && workout.ready}
+            card={activeMode === "post" ? null : cameraCard}
+            post={activeMode === "post" ? plainPost : activeMode === "lockin" ? lockPost : workout.post}
             chip={
-              activeMode === "lockin" && today ? (
+              activeMode === "post" ? (
+                <CameraChip icon="📸" title="Post to the crew" sub="A photo, a few, or a clip" tone="muted" />
+              ) : activeMode === "lockin" && today ? (
                 <CameraChip icon="🔒" title={sessionDisplayTitle(today.title)} sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Posting it starts your session"} />
               ) : target ? (
                 <CameraChip
@@ -278,11 +310,34 @@ export function ShareWorkoutButton({
               ) : isLoading ? (
                 <CameraChip icon="⏳" title="Finding your workout…" tone="muted" />
               ) : (
-                <CameraChip icon="🏁" title="Finish a workout to share it" sub="Or lock in before your next one" tone="muted" />
+                <CameraChip icon="🏁" title="Finish a workout to share it" sub="Or post a photo instead" tone="muted" />
               )
             }
           />
-        </Suspense>
+        </StudioShell>
+      )}
+
+      {/* POST → Write: a words-first post (photos optional) */}
+      {writing && (
+        <StudioShell onClose={() => setWriting(false)}>
+          <NoteEditor
+            open={writing}
+            title="New post"
+            saveLabel="Post"
+            wordsOptional
+            initial=""
+            saving={createPost.isPending}
+            media={{ initial: null, key: "member-write", hint: "Add photos or a clip" }}
+            onClose={() => setWriting(false)}
+            onSave={async (body, _poll, media) => {
+              const id = await createPost.mutateAsync({ caption: body, media });
+              toast.success("You're in the feed 🔥");
+              setWriting(false);
+              setCapturing(false);
+              return id;
+            }}
+          />
+        </StudioShell>
       )}
     </>
   );

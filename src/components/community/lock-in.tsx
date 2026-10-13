@@ -11,7 +11,7 @@ import { CameraChip } from "@/components/community/camera-overlays";
 import type { LockTemplate } from "@/components/community/lock-in-editor";
 
 const LockInEditor = lazyWithRetry(() => import("@/components/community/lock-in-editor").then((m) => ({ default: m.LockInEditor })));
-const ShareStudio = lazyWithRetry(() => import("@/components/community/share-studio").then((m) => ({ default: m.ShareStudio })));
+import { ShareStudio, StudioShell, usePreloadStudio } from "@/components/community/studio-chunks";
 
 export type LockInPick = { file: File; live: boolean; n: number };
 
@@ -54,6 +54,7 @@ export function LockInBar({
   const { data: existing } = useMyPostForCompletion(completionId, !!completionId, "lockin");
   const [open, setOpen] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  usePreloadStudio();
   const [look, setLook] = useState<LockTemplate>("lockin");
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -122,7 +123,7 @@ export function LockInBar({
       )}
 
       {capturing && (
-        <Suspense fallback={null}>
+        <StudioShell onClose={() => setCapturing(false)}>
           <ShareStudio
             open={capturing}
             onClose={() => setCapturing(false)}
@@ -158,7 +159,7 @@ export function LockInBar({
               },
             }}
           />
-        </Suspense>
+        </StudioShell>
       )}
     </>
   );
