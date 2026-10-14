@@ -45,7 +45,9 @@ describe("RPE chart", () => {
   });
 
   it("ignores warm-ups and down-weights unlogged effort", () => {
-    expect(setE1rm({ load: 100, reps: 5, rpe: 3.5 })).toBeNull(); // below RPE 4 = warm-up
+    // A light rating is real work (an RPE 3–5 wave), just trusted less.
+    expect(setE1rm({ load: 100, reps: 5, rpe: 3.5 })).not.toBeNull();
+    expect(setE1rm({ load: 100, reps: 5, rpe: 3.5 })!.trust).toBeLessThan(setE1rm({ load: 100, reps: 5, rpe: 8 })!.trust);
     expect(setE1rm({ load: 100, reps: 5, rpe: 5 })!.trust).toBeLessThan(setE1rm({ load: 100, reps: 5, rpe: 8 })!.trust);
     expect(setE1rm({ load: 100, reps: 5, rpe: null })!.trust).toBeLessThan(setE1rm({ load: 100, reps: 5, rpe: 8 })!.trust);
   });
@@ -290,11 +292,12 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
   });
 });
 
-describe("light prescriptions (RPE 4-5) are planned at their real effort", () => {
-  it("planningTarget keeps RPE 4-5 instead of bumping it to 6", () => {
-    expect(MIN_RPE).toBe(4);
+describe("light prescriptions (RPE 3-5) are planned at their real effort", () => {
+  it("planningTarget keeps RPE 3-5 instead of bumping it up", () => {
+    expect(MIN_RPE).toBe(3);
     expect(planningTarget({ repTarget: { exact: 5 }, rpeTarget: { min: 4, max: 5 }, rirTarget: {} })).toEqual({ reps: 5, rpe: 4.5 });
-    expect(planningTarget({ repTarget: { exact: 1 }, rpeTarget: { exact: 3 }, rirTarget: {} })).toEqual({ reps: 1, rpe: 4 });
+    expect(planningTarget({ repTarget: { exact: 7 }, rpeTarget: { exact: 3 }, rirTarget: {} })).toEqual({ reps: 7, rpe: 3 });
+    expect(planningTarget({ repTarget: { exact: 1 }, rpeTarget: { exact: 2 }, rirTarget: {} })).toEqual({ reps: 1, rpe: 3 });
   });
   it("a light target suggests less than the same reps at RPE 6", () => {
     const m = buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW });
@@ -383,8 +386,11 @@ describe("live across cards: today's top set moves the lift's other cards", () =
     expect(strong).toBeCloseTo(1.05, 6);
   });
 
-  it("ignores easy-rated sets and needs history", () => {
-    expect(todayVsUsual({ history: twoWeeks, sets: [{ load: 200, reps: 5, rpe: 5 }], unit: "kg", now: NOW })).toBeNull();
+  it("counts light sets too (monotonic: rated easier reads as a better day) and needs history", () => {
+    const at = (rpe: number) => todayVsUsual({ history: twoWeeks, sets: [{ load: 140, reps: 5, rpe }], unit: "kg", now: NOW })!;
+    expect(at(5)).not.toBeNull();
+    expect(at(5)).toBeGreaterThan(at(6));
+    expect(at(6)).toBeGreaterThan(at(8));
     expect(todayVsUsual({ history: [], sets: [{ load: 140, reps: 5, rpe: 8 }], unit: "kg", now: NOW })).toBeNull();
   });
 
@@ -478,5 +484,44 @@ describe("high-rep accessories (10–20, 20+ reps)", () => {
   it("past the chart there's no plan (30 reps @ RPE 7), so no empty promise", () => {
     expect(planningTarget({ repTarget: { exact: 30 }, rpeTarget: { exact: 7 }, rirTarget: {} })).toBeNull();
     expect(setE1rm({ load: 50, reps: 31, rpe: 10 })).toBeNull();
+  });
+});
+
+describe("effort is monotonic: the same set rated easier never lowers the suggestion", () => {
+  // 3-0-0 Tempo to Knee Sumo Deadlift, 3 × 7 @ RPE 5 — an RPE wave (3 → 4 → 5).
+  // Oct 2026: 3 × 235 × 7 rated 4 said "next time 240"; rated 3 it said 235.
+  const lb = (session: string, d: number, load: number, rpe: number) =>
+    log(session, d, load / 2.2046226218, 7, rpe, { enteredValue: load, enteredUnit: "lb", normalizedLb: load });
+  const history = [lb("w1", 13, 315, 3), lb("w1", 13, 315, 3), lb("w2", 6, 225, 4), lb("w2", 6, 225, 4), lb("w2", 6, 225, 4)];
+  const next = (rpe: number) =>
+    suggestSetLoad(buildLoadModel({ history, today: [1, 2, 3].map(() => ({ load: 235, reps: 7, rpe })), unit: "lb", now: NOW }), { reps: 7, rpe: 5 })!.target;
+
+  it("235 × 7 rated 6 → 5 → 4 → 3 → 2 only ever goes up", () => {
+    const seq = [6, 5, 4, 3, 2].map(next);
+    expect(seq).toEqual([...seq].sort((a, b) => a - b));
+    expect(next(5)).toBe(235); // right on plan: same weight
+    expect(next(4)).toBeGreaterThan(235); // easier than planned: up
+    expect(next(6)).toBeLessThan(235); // harder than planned: down
+  });
+
+  it("a set rated within a point of the target counts both ways (a heavy day pulls it down)", () => {
+    const heavyDay = buildLoadModel({ history: twoWeeks, today: [{ load: 110, reps: 5, rpe: 8 }], unit: "kg", now: NOW });
+    const cold = buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW });
+    expect(estimateFor(heavyDay, 5, 9)!.load).toBeLessThan(estimateFor(cold, 5, 9)!.load);
+  });
+
+  it("a clearly easy set is a floor: it can lift the number, never drag it down", () => {
+    const cold = estimateFor(buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW }), 5, 8)!.load;
+    const opener = estimateFor(buildLoadModel({ history: twoWeeks, today: [{ load: 100, reps: 5, rpe: 5 }], unit: "kg", now: NOW }), 5, 8)!.load;
+    const strong = estimateFor(buildLoadModel({ history: twoWeeks, today: [{ load: 150, reps: 5, rpe: 5 }], unit: "kg", now: NOW }), 5, 8)!.load;
+    expect(opener).toBeCloseTo(cold, 6);
+    expect(strong).toBeGreaterThan(cold);
+  });
+
+  it("an easy rating can claim at most 2 RPE of credit", () => {
+    const at = (rpe: number) => estimateFor(buildLoadModel({ history: [], today: [{ load: 100, reps: 5, rpe }], unit: "kg", now: NOW }), 5, 8)!.load;
+    expect(at(5)).toBeCloseTo(at(6), 6);
+    expect(at(3)).toBeCloseTo(at(6), 6);
+    expect(at(6.5)).toBeLessThan(at(6));
   });
 });

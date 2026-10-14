@@ -201,6 +201,30 @@ export function LoadSuggestionsNudge({ onDismiss }: { onDismiss: () => void }) {
 }
 
 /**
+ * One line on why next time's number is what it is: the change from today's
+ * weight and how the sets felt against the plan ("+5 lb · felt easier than
+ * planned (RPE 4 vs 5)"), so a re-rated set visibly moves it the honest way.
+ */
+export function nextTimeWhy(
+  next: LoadSuggestion,
+  today: { load: number; rpe: number | null },
+  plan: { reps: number; rpe: number } | null,
+): string {
+  const step = next.unit === "kg" ? 1 : 2.5;
+  const diff = next.target - today.load;
+  const change = Math.abs(diff) < step / 2
+    ? "Same weight"
+    : `${diff > 0 ? "+" : "−"}${fmtNum(Math.round(Math.abs(diff) * 2) / 2)} ${next.unit}`;
+  if (today.rpe == null || !plan) return change;
+  const felt = Math.round(today.rpe * 2) / 2;
+  const gap = plan.rpe - today.rpe;
+  const feel = Math.abs(gap) < 0.5
+    ? `right on RPE ${fmtNum(plan.rpe)}`
+    : `felt ${Math.abs(gap) < 1 ? "a bit " : ""}${gap > 0 ? "easier" : "harder"} than planned (RPE ${fmtNum(felt)} vs ${fmtNum(plan.rpe)})`;
+  return `${change} · ${feel}`;
+}
+
+/**
  * Every set on the card is logged: no stale "next set" range. Says it's done,
  * how today ran vs the athlete's usual (when that can be read), and what to
  * start with next time from today's sets — never a blank card while Suggest
@@ -210,12 +234,16 @@ export function LoadSuggestionsDone({
   own,
   next = null,
   plan = null,
+  today = null,
 }: {
   own: number | null;
   /** Today's sets → the load for the plan next session. */
   next?: LoadSuggestion | null;
   plan?: { reps: number; rpe: number } | null;
+  /** Today's last working weight (display unit) and average RPE, for the "why". */
+  today?: { load: number; rpe: number | null } | null;
 }) {
+  const why = next && today ? nextTimeWhy(next, today, plan) : null;
   const pct = own != null && Number.isFinite(own) ? Math.round((own - 1) * 100) : null;
   const read = pct == null ? null : Math.abs(own! - 1) < 0.015 ? "right on your usual" : `${Math.abs(pct)}% ${pct > 0 ? "above" : "below"} your usual`;
   return (
@@ -230,6 +258,7 @@ export function LoadSuggestionsDone({
             {plan && <> for {plan.reps} @ RPE {fmtNum(plan.rpe)}</>}
           </span>
         )}
+        {why && <span className="block" data-testid="load-next-why">{why}</span>}
       </span>
     </div>
   );

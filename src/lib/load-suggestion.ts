@@ -47,8 +47,14 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      ±8%, and it replaces the predicted readiness from the last review (real
 //      sets beat a forecast). A lift with no history of its own starts from
 //      today's earlier sets of the same exercise instead.
+//  10. EFFORT IS MONOTONIC: the same weight × reps rated easier never lowers a
+//      suggestion and rated harder never raises it. Every rated set counts;
+//      a set claims at most MAX_EASIER_CREDIT RPE "easier than the target",
+//      and today's sets are weighed by order and reps, never by their rating.
 // Backtested on ~2,800 real sets (scratch script, not shipped): median error
-// 8% cold, 4.4% once today's first set is in.
+// 8% cold, 4.4% once today's first set is in. Monotonic effort (Oct 2026, 7,000
+// real sets): "rated easier → lower" 621 → 0 of 4,200 next-set cases; next-set
+// median error 1.56% → 1.47%, within ±5% 68.4% → 69.6%; cold unchanged.
 // Pure: no I/O, fully unit tested.
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -78,12 +84,35 @@ export const EARLY_SPREAD = 0.08;
 const DAY_MS = 86_400_000;
 
 /**
- * Lowest RPE used as evidence and as a target. Light prescriptions (RPE 4–5:
- * primers, technique work, pivot weeks) are planned at their real effort
- * instead of being bumped to RPE 6. Backtest on real logs: light-target error
- * 10.9% → 8.5% cold and 13.7% → 9.8% once a set is in; normal targets unchanged.
+ * Lowest RPE a target is planned at and a set is read at (a set rated 1–2 reads
+ * as 3). Light prescriptions — RPE 3–5 primers, tempo/technique waves, pivot
+ * weeks — are planned at their real effort.
  */
-export const MIN_RPE = 4;
+export const MIN_RPE = 3;
+
+/**
+ * Effort is monotonic: the same weight × reps rated EASIER never lowers a
+ * suggestion, rated harder never raises it. Easier-than-target sets used to
+ * fall off cliffs instead (below RPE 4 "a warm-up", below 6 "too light for a
+ * heavy target", 9+ reps below 7 "untrusted") and the card fell back to older
+ * history — on real logs, rating the day's sets one RPE easier LOWERED the next
+ * suggestion 15% of the time (3-0-0 tempo sumo 3×7 @ 5, Oct 2026: 235 @ 4 →
+ * next time 240, the same 235 rated 3 → 235).
+ *
+ * Every rated working set now counts, but a set can claim at most this many
+ * RPE "easier than the target": RIR far from failure is a loose guess and a
+ * light set is often an opener, so an easier rating keeps nudging the number
+ * up without flinging it.
+ */
+export const MAX_EASIER_CREDIT = 2;
+/**
+ * A set rated more than this below the target is "clearly easier" and reads as
+ * a lower bound (see estimateFor). Within it a rating is close enough to the
+ * plan to count both ways — 65 × 5 @ 8 against a target of 9 says today is
+ * heavy. Backtest: 1.5 keeps the easy-set-before-heavier-target error at 5.1%
+ * (was 8.2%) with no bias (median 0%).
+ */
+export const EASIER_BAND = 1.5;
 
 /**
  * Bodyweight: strength scales with bodyweight^~0.67 (allometric scaling), so a
@@ -178,11 +207,11 @@ export interface SetSample {
 /** RPE-adjusted e1RM for one set and how much to trust it (0..1). */
 export function setE1rm(s: SetSample): { e1rm: number; trust: number } | null {
   if (!(s.load > 0) || !(s.reps >= 1) || s.reps > MAX_SET_REPS) return null;
-  // Below RPE 4 is warm-up territory. RPE 4–6 counts, but its RIR guess is
-  // weak, so it's trusted less (see below) and its own reps/RPE neighbours
-  // dominate through the kernel.
-  if (s.rpe != null && s.rpe < MIN_RPE) return null;
-  const rpe = s.rpe ?? 8.5; // unlogged working sets: assume a typical hard set
+  // Light ratings count (a planned RPE 3–5 set is real work), read at no
+  // easier than MIN_RPE; their RIR guess is weak, so they're trusted less
+  // (below) and their own reps/RPE neighbours dominate through the kernel.
+  // Unlogged working sets: assume a typical hard set.
+  const rpe = s.rpe == null ? 8.5 : Math.max(MIN_RPE, s.rpe);
   const pct = percentOf1RM(s.reps, 10 - rpe);
   if (!pct) return null;
   let trust = s.rpe != null ? 1 : 0.5;
@@ -320,7 +349,7 @@ export function buildLoadModel(input: {
     const s = bySession.get(log.sessionKey) ?? { at, sets: [], rated: false };
     s.at = Math.max(s.at, at);
     if (rpe != null) s.rated = true;
-    s.sets.push({ e1rm: est.e1rm * bw, load: load * bw, reps, rpe: rpe ?? 8.5, trust: est.trust });
+    s.sets.push({ e1rm: est.e1rm * bw, load: load * bw, reps, rpe: rpe == null ? 8.5 : Math.max(MIN_RPE, rpe), trust: est.trust });
     bySession.set(log.sessionKey, s);
   }
   const sessions = Array.from(bySession.values()).sort((a, b) => b.at - a.at).slice(0, MAX_SESSIONS);
@@ -362,9 +391,11 @@ export function buildLoadModel(input: {
   const carried = input.today.length === 0 && !historyReady && (input.carryToday?.length ?? 0) > 0;
   const today: ModelSample[] = [];
   (carried ? input.carryToday! : input.today).forEach((s, i) => {
+    // Every rated set calibrates (trust only weighs it — a cut-off here made an
+    // easier rating drop the set and fall back to older history).
     const est = setE1rm(s);
-    if (est && s.rpe != null && est.trust >= 0.7) {
-      today.push({ e1rm: est.e1rm, load: s.load, reps: s.reps, rpe: s.rpe, trust: est.trust, weight: i + 1 });
+    if (est && s.rpe != null) {
+      today.push({ e1rm: est.e1rm, load: s.load, reps: s.reps, rpe: Math.max(MIN_RPE, s.rpe), trust: est.trust, weight: i + 1 });
     }
   });
 
@@ -434,20 +465,37 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
   if (model.status !== "ready") return null;
   const targetPct = percentOf1RM(reps, 10 - rpe);
   if (!targetPct) return null;
-  const est = (samples: ModelSample[], alpha: number) => {
+  // A set rated more than MAX_EASIER_CREDIT below the target is read at
+  // exactly that far below (see MAX_EASIER_CREDIT).
+  const easiest = rpe - MAX_EASIER_CREDIT;
+  const samplePct = (s: ModelSample) =>
+    (s.rpe < easiest ? percentOf1RM(s.reps, 10 - easiest) : null) ?? s.load / s.e1rm;
+  // Today's sets are weighed by order and rep match only — never by how they
+  // were rated — so re-rating them can only move the number the honest way.
+  const est = (samples: ModelSample[], alpha: number, byEffort = true) => {
     const w = samples.map((s) => ({
-      v: s.load * Math.pow(targetPct / (s.load / s.e1rm), alpha),
-      w: s.weight * s.trust * kernel(s, reps, rpe),
+      v: s.load * Math.pow(targetPct / samplePct(s), alpha),
+      w: byEffort ? s.weight * s.trust * kernel(s, reps, rpe) : s.weight * Math.exp(-Math.abs(s.reps - reps) / REP_KERNEL),
     }));
     const mean = weightedMean(w);
     if (mean == null) return null;
     const variance = weightedMean(w.map((x) => ({ v: (x.v / mean - 1) ** 2, w: x.w }))) ?? 0;
     return { load: mean, spread: Math.sqrt(variance) };
   };
-  // A light set (below RPE 6) says little about heavy capacity — athletes rate
-  // easy sets loosely — so it only calibrates light targets, never heavier ones.
-  const todayUsable = rpe >= 6 ? model.today.filter((s) => s.rpe >= 6) : model.today;
-  const t = todayUsable.length ? est(todayUsable, TODAY_ALPHA) : null;
+  // Today's sets at (or harder than) the target are point evidence. Sets rated
+  // EASIER are a lower bound — "I had at least this much in me" (and light sets
+  // are rated loosely, often an opener logged on the working row): they can
+  // lift the number when they imply more, never drag it down. Either way an
+  // easier rating can only move it up.
+  const point = model.today.filter((s) => s.rpe >= rpe - EASIER_BAND);
+  const easier = model.today.filter((s) => s.rpe < rpe - EASIER_BAND);
+  const t = point.length ? est(point, TODAY_ALPHA, false) : null;
+  // Each easier set is its own lower bound, so the floor is the highest one
+  // (averaging them let one easy set dilute another).
+  const floor = easier.reduce<{ load: number; spread: number } | null>((best, s) => {
+    const e = est([s], TODAY_ALPHA, false);
+    return e && (!best || e.load > best.load) ? e : best;
+  }, null);
   const h = model.history.length ? est(model.history, HISTORY_ALPHA) : null;
   // Final warm-up: only before any working set is logged today (model.warmup is
   // null otherwise). It nudges a history estimate, or — with no history — gives
@@ -482,13 +530,15 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
   }
   // Spread floors are calibrated on real logs so the range is honest (most
   // sets land inside it) rather than falsely precise.
-  if (t && h) return { load: 0.75 * t.load + 0.25 * h.load, spread: clamp(h.spread / 2, TODAY_SPREAD, 0.05) };
-  if (t) return { load: t.load, spread: TODAY_SPREAD };
-  if (h) {
+  let out: { load: number; spread: number } | null = null;
+  if (t && h) out = { load: 0.75 * t.load + 0.25 * h.load, spread: clamp(h.spread / 2, TODAY_SPREAD, 0.05) };
+  else if (t) out = { load: t.load, spread: TODAY_SPREAD };
+  else if (h) {
     const spread = clamp(h.spread / 2, HISTORY_SPREAD, 0.07);
-    return { load: h.load, spread: model.early ? Math.max(EARLY_SPREAD, spread) : spread };
+    out = { load: h.load, spread: model.early ? Math.max(EARLY_SPREAD, spread) : spread };
   }
-  return null;
+  if (floor && (!out || floor.load > out.load)) out = { load: floor.load, spread: TODAY_SPREAD };
+  return out;
 }
 
 export interface LoadSuggestion {
@@ -594,8 +644,8 @@ export const DAY_FACTOR_TRUST_FAMILY = 0.5;
 /**
  * How today's logged sets of a lift compare with what its recent sessions
  * predicted for the same reps @ RPE: 1.03 = moving 3% better than usual.
- * Only sets with an RPE of 6+ count (easier ratings are too loose), and the
- * first sets weigh most (later sets carry fatigue). Null without enough
+ * Every rated set counts (light ones capped by MAX_EASIER_CREDIT inside
+ * estimateFor), and the first sets weigh most (later sets carry fatigue). Null without enough
  * history or a usable set.
  */
 export function todayVsUsual(input: {
@@ -611,8 +661,10 @@ export function todayVsUsual(input: {
   let weight = 0;
   let i = 0;
   for (const s of input.sets) {
-    if (s.rpe == null || s.rpe < 6 || s.rpe > 10 || !(s.load > 0) || !(s.reps >= 1) || s.reps > 12) continue;
-    const est = estimateFor(model, Math.round(s.reps), s.rpe);
+    // Light sets count too (an RPE 4 tempo wave is real work); a cut-off at 6
+    // made re-rating 6 → 5.5 drop the read and other cards jump back.
+    if (s.rpe == null || s.rpe > 10 || !(s.load > 0) || !(s.reps >= 1) || s.reps > 12) continue;
+    const est = estimateFor(model, Math.round(s.reps), Math.max(MIN_RPE, s.rpe));
     if (!est || !(est.load > 0)) continue;
     const w = 1 / (1 + i++);
     sum += (s.load / est.load) * w;

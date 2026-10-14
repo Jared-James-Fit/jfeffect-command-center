@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
-const { LoadSuggestionsChip, LoadSuggestionsNudge, LoadSuggestionsDone } = await import("@/components/workout-day/load-suggestion-card");
+const { LoadSuggestionsChip, LoadSuggestionsNudge, LoadSuggestionsDone, nextTimeWhy } = await import("@/components/workout-day/load-suggestion-card");
 const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
 
 describe("suggestions: a switch on every exercise card, one state for the workout, off by default", () => {
@@ -35,7 +35,19 @@ describe("suggestions: a switch on every exercise card, one state for the workou
     }));
     expect(next).toMatch(/Next time: .*50(<!-- -->)? (<!-- -->)?lb/);
     expect(next).toMatch(/15(<!-- -->)? @ RPE (<!-- -->)?9.5/);
-    expect(wdv).toContain("<LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} />");
+    expect(wdv).toContain("<LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />");
+  });
+
+  it("says why next time's number moved: the change and how the sets felt vs the plan", () => {
+    const plan = { reps: 7, rpe: 5 };
+    const next = (target: number) => ({ low: target, high: target, target, unit: "lb" as const });
+    expect(nextTimeWhy(next(240), { load: 235, rpe: 4 }, plan)).toBe("+5 lb · felt easier than planned (RPE 4 vs 5)");
+    expect(nextTimeWhy(next(235), { load: 235, rpe: 5 }, plan)).toBe("Same weight · right on RPE 5");
+    expect(nextTimeWhy(next(230), { load: 235, rpe: 6 }, plan)).toBe("−5 lb · felt harder than planned (RPE 6 vs 5)");
+    expect(nextTimeWhy(next(235), { load: 235, rpe: 4.33 }, plan)).toBe("Same weight · felt a bit easier than planned (RPE 4.5 vs 5)");
+    expect(nextTimeWhy(next(240), { load: 235, rpe: null }, plan)).toBe("+5 lb");
+    const html = renderToStaticMarkup(createElement(LoadSuggestionsDone, { own: null, next: next(240), plan, today: { load: 235, rpe: 4 } }));
+    expect(html).toContain('data-testid="load-next-why"');
   });
 
   it("is a per-device UI preference with a safe fallback", async () => {

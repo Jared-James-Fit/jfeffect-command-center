@@ -3655,6 +3655,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     },
     [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg],
   );
+  // For the finished card's "why": the last working weight and how the sets felt.
+  const todayRead = useMemo(() => {
+    const done = existingResults
+      .filter((r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external")
+      .sort((a: any, b: any) => a.set_index - b.set_index);
+    const last = done[done.length - 1];
+    const load = last ? Number(displayLoadInUnit(last, activeUnit)) : NaN;
+    if (!(load > 0)) return null;
+    const rated = done.map((r: any) => parseRpe(r.actual_rpe_num ?? r.actual_rpe)).filter((x: number | null): x is number => x != null);
+    return { load, rpe: rated.length ? rated.reduce((a: number, b: number) => a + b, 0) / rated.length : null };
+  }, [existingResults, activeUnit]);
   const openSetCount = Array.from({ length: setCount }, (_, i) => i + 1)
     .filter((i) => !existingResults.find((x: any) => x.set_index === i && x.completed_at)).length;
   // Put one weight into every open set as a draft (never a confirmed set);
@@ -4113,7 +4124,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           then the same lift's other cards — see dayRead). */}
       {showSuggestionCard && loadModel && loadPlan && (
         openSetCount === 0 && workedToday
-          ? <LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} />
+          ? <LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />
           : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} />
       )}
       {row.manual_override && (row.load_kg || row.load_lb) && (
