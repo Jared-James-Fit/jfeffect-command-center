@@ -131,7 +131,7 @@ describe("client tab bar: Crew in the centre", () => {
 describe("Home's Crew feed", () => {
   it("newest first (yours too), then a card that opens the feed", () => {
     expect(entry).toContain("const { shown, more } = useMemo(() => homeCrewDeck(");
-    // automatic Activity stays in the feed; Home's shelf is posts people made
+    // a session that posted itself is in the athlete's story; Home's shelf is posts people made
     expect(entry).not.toContain("HomePulseCard");
     expect(entry).toContain("<SeeMoreCard posts=");
   });
@@ -189,7 +189,7 @@ describe("the recap's one-tap post", () => {
   });
 });
 
-describe("the recap's composer, with the automatic Activity post", () => {
+describe("the recap's composer, with the automatic story post", () => {
   const footer = read("src/components/community/recap-post.tsx");
   const summary = read("src/components/workout-submission-summary.tsx");
   it("shows what the crew will see first: the same headline win as the post, from the same stats", () => {
@@ -201,7 +201,7 @@ describe("the recap's composer, with the automatic Activity post", () => {
   });
   it("the automatic post isn't 'shared': Share to Crew upgrades that same post, Hide it takes it out of Crew", () => {
     expect(footer).toContain("const unshared = !justPosted && (!existing || auto || hidden);");
-    expect(footer).toContain("Posted to Crew Activity automatically");
+    expect(footer).toContain("On your story for 24 hours");
     expect(footer).toContain('saveCommunityPost({ completionId, caption: "", visibility: "private", media: { action: "keep" } })');
     // the hide is only a choice they make: never on its own
     expect(footer).toContain("onClick={() => void hide()}");

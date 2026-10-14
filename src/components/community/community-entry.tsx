@@ -74,7 +74,7 @@ export function CommunityHomeStrip() {
   // a card opens its post in full (likes, comments); the last card opens the feed
   const openPost = (postId: string) => navigate({ to: "/portal/community", hash: `post=${postId}` });
 
-  // the newest posts people made themselves (automatic Activity stays in the feed, not on Home)
+  // the newest posts people made themselves (a session that posted itself is in that athlete's story)
   // every page read so far: a busy training day can fill the first page with Pulses, so
   // Home reads on (a few pages, two weeks at most) until it has 3 posts people made
   const loaded = useMemo(() => feed.data?.pages.flatMap((pg) => pg.posts) ?? [], [feed.data]);

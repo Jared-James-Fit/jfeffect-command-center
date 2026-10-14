@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ENGAGED_AT, HOME_CREW_POSTS, SHARE_NUDGE_EVERY_DAYS, engagementLine, homeCrewPosts, isEngaged, shareNudgeKey } from "@/lib/community";
+import { ENGAGED_AT, HOME_DECK_POSTS, SHARE_NUDGE_EVERY_DAYS, engagementLine, homeCrewDeck, isEngaged, shareNudgeKey } from "@/lib/community";
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const entry = read("src/components/community/community-entry.tsx");
@@ -17,17 +17,17 @@ const post = (id: string, h: number) => ({ id, created_at: at(h) });
 
 describe("Home's Crew feed: newest first, a few, then the feed", () => {
   it("newest first, yours included (it used to put Dwayne's 15h post ahead of your 4h one)", () => {
-    const { shown } = homeCrewPosts([post("dwayne", 15), post("mine", 4), post("vicky", 30)], NOW);
+    const { shown } = homeCrewDeck([post("dwayne", 15), post("mine", 4), post("vicky", 30)], NOW);
     expect(shown.map((p) => p.id)).toEqual(["mine", "dwayne", "vicky"]);
   });
-  it(`shows ${HOME_CREW_POSTS}, and counts the rest for the card that opens the feed`, () => {
+  it(`shows ${HOME_DECK_POSTS}, and counts the rest for the card that opens the feed`, () => {
     const posts = Array.from({ length: 8 }, (_, i) => post(`p${i}`, i + 1));
-    const { shown, more } = homeCrewPosts(posts, NOW);
-    expect(shown).toHaveLength(5);
-    expect(more).toBe(3);
+    const { shown, more } = homeCrewDeck(posts, NOW);
+    expect(shown).toHaveLength(HOME_DECK_POSTS);
+    expect(more).toBe(8 - HOME_DECK_POSTS);
   });
   it("only the last two weeks, so it never looks stale", () => {
-    const { shown, more } = homeCrewPosts([post("new", 2), post("old", 15 * 24)], NOW);
+    const { shown, more } = homeCrewDeck([post("new", 2), post("old", 15 * 24)], NOW);
     expect(shown.map((p) => p.id)).toEqual(["new"]);
     expect(more).toBe(0);
   });

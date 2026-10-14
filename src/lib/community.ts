@@ -1374,48 +1374,22 @@ export function crewGoalStatus(g: CrewGoal, opts: { now?: Date; me?: string | nu
   return { pct, left, hit, line: `${left} to go · ${days === 1 ? "last day" : `${days} days left`}` };
 }
 
-/** How many posts Home's Crew feed shows before the card that opens the feed. */
-export const HOME_CREW_POSTS = 5;
-
 /**
- * Home's Crew feed: the newest posts first (only the last two weeks, so it
- * never looks stale), at most `max`. `more` is how many recent ones the feed
- * has beyond these, for the card at the end.
- */
-export function homeCrewPosts<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean }>(posts: T[], now = Date.now(), max = HOME_CREW_POSTS): { shown: T[]; more: number } {
-  const since = now - 14 * 86_400_000;
-  const recent = posts
-    .filter((p) => new Date(p.created_at).getTime() > since)
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || (a.id < b.id ? 1 : -1));
-  // a busy training day mustn't push everyone's own posts off Home: a couple of Pulses at most
-  let pulses = 0;
-  const kept = recent.filter((p) => !p.auto || ++pulses <= HOME_CREW_PULSES);
-  return { shown: kept.slice(0, max), more: Math.max(0, recent.length - Math.min(max, kept.length)) };
-}
-
-/**
- * Home's Crew feed deck: one Crew Pulse card up front with the crew's newest
- * finished sessions (Pulses, newest first, `HOME_PULSE_ROWS` of them, from the
- * last two weeks), then the newest posts people made themselves. Pulses only
- * ever sit in that card, never among the posts. `today` is how many sessions
- * the crew finished since midnight; `more` is how many recent posts people
- * made beyond the ones shown.
+ * Home's Crew feed deck: the newest posts people made themselves (the last
+ * two weeks), at most `max`. Pulses (a finished session posting itself)
+ * never sit among them: they're in the athlete's story. `more` is how many
+ * recent posts people made beyond the ones shown.
  */
 export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; stats?: { pr_count?: number } | null }>(
   posts: T[],
   now = Date.now(),
   max = HOME_DECK_POSTS,
-): { pulses: T[]; today: number; shown: T[]; more: number } {
+): { shown: T[]; more: number } {
   const t = (p: T) => new Date(p.created_at).getTime();
   const since = now - 14 * 86_400_000;
-  const recent = [...posts].filter((p) => t(p) > since).sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
-  const allPulses = recent.filter((p) => isPulsePost(p));
-  const midnight = new Date(now);
-  midnight.setHours(0, 0, 0, 0);
-  const today = allPulses.filter((p) => t(p) >= midnight.getTime()).length;
-  const own = recent.filter((p) => !isPulsePost(p));
+  const own = [...posts].filter((p) => t(p) > since && !isPulsePost(p)).sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
   const shown = own.slice(0, max);
-  return { pulses: allPulses.slice(0, HOME_PULSE_ROWS), today, shown, more: own.length - shown.length };
+  return { shown, more: own.length - shown.length };
 }
 
 /** Feed pages Home reads at most while looking for posts people made (the first page is often all Pulses). */
@@ -1439,85 +1413,21 @@ export function homeDeckNeedsMore<T extends Pick<CommunityPost, "id" | "created_
   return !posts.length || oldest > now - 14 * 86_400_000;
 }
 
-/** Sessions the Crew Pulse card on Home lists. */
-export const HOME_PULSE_ROWS = 3;
-
 /** Regular posts Home's Crew feed swipes through after the Crew Pulse. */
 export const HOME_DECK_POSTS = 3;
 
-/** Pulses (automatic workout posts) Home's Crew feed shows at most. */
-export const HOME_CREW_PULSES = 2;
-
-/** A Pulse: posted by itself when a session finished, nobody's words or photo on it. */
+/**
+ * A Pulse: posted by itself when a session finished, nobody's words or photo
+ * on it. It lives in the athlete's story (24h) and on their profile, never in
+ * the feed; a caption or photo makes it their own post (in the feed).
+ */
 export function isPulsePost(p: { auto?: boolean; stats?: unknown }): boolean {
   return !!p.auto && !!p.stats;
 }
 
-/** Activity rows the top of the feed shows before "View all". */
-export const ACTIVITY_PREVIEW_ROWS = 3;
-
 /** A moment worth celebrating, not a routine session: a PR, a monthly milestone, a 3rd+ session of the week. */
 export function isRealWin(kind: WorkoutWin["kind"]): boolean {
   return kind === "pr" || kind === "month" || kind === "week";
-}
-
-/**
- * The Activity rows on the feed: the week's real wins first (newest first),
- * so a routine "session done" never pushes a PR out of sight; when there are
- * none yet, the latest sessions so the section isn't empty. The rest (and
- * every routine session) is a tap away in See all.
- */
-export function activityPreview<T extends { created_at: string; stats?: unknown; auto?: boolean }>(posts: T[], max = ACTIVITY_PREVIEW_ROWS, now = Date.now()): { rows: T[]; hidden: number } {
-  const week = posts.filter((p) => now - new Date(p.created_at).getTime() < 7 * 86_400_000);
-  const wins = week.filter((p) => p.stats && isRealWin(pickWorkoutWin(p.stats as WorkoutShareStats, "kg").kind));
-  const rows = (wins.length ? wins : week.length ? week : posts).slice(0, max);
-  return { rows, hidden: Math.max(0, week.length - rows.length) };
-}
-
-/** Who trained this week (newest first, one face each), for the Activity header. */
-export function activityFaces<T extends { created_at: string; author: CommunityAuthor }>(posts: T[], max = 4, now = Date.now()): { faces: CommunityAuthor[]; people: number } {
-  const seen = new Map<string, CommunityAuthor>();
-  for (const p of posts) {
-    if (now - new Date(p.created_at).getTime() >= 7 * 86_400_000) continue;
-    if (!seen.has(p.author.user_id)) seen.set(p.author.user_id, p.author);
-  }
-  return { faces: [...seen.values()].slice(0, max), people: seen.size };
-}
-
-/** "Today", "Yesterday", "Monday", then "Oct 3": the day headers in See all. */
-export function activityDay(iso: string, now = new Date()): string {
-  const d = new Date(iso);
-  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const days = Math.round((start(now) - start(d)) / 86_400_000);
-  if (days <= 0) return "Today";
-  if (days === 1) return "Yesterday";
-  if (days < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-/**
- * Whether the feed should read another page for the Activity section: the first
- * page is only a handful of posts, so it reads on (at most HOME_DECK_PAGES
- * pages) until it holds the last 7 days, or the feed ends.
- */
-export function activityNeedsMore(posts: { created_at: string }[], hasMore: boolean, pages: number, now = Date.now()): boolean {
-  if (!hasMore || pages >= HOME_DECK_PAGES) return false;
-  if (!posts.length) return true;
-  const oldest = Math.min(...posts.map((p) => new Date(p.created_at).getTime()));
-  return oldest > now - 7 * 86_400_000;
-}
-
-/** The Activity header's line: sessions finished and PRs in the last 7 days. */
-export function activityWeekSummary(posts: { created_at: string; stats?: { pr_count?: number } | null | unknown }[], now = Date.now()): { sessions: number; prs: number } {
-  const since = now - 7 * 86_400_000;
-  let sessions = 0;
-  let prs = 0;
-  for (const p of posts) {
-    if (new Date(p.created_at).getTime() < since) continue;
-    sessions += 1;
-    prs += Number((p.stats as { pr_count?: number } | null)?.pr_count ?? 0);
-  }
-  return { sessions, prs };
 }
 
 /**
@@ -1610,92 +1520,73 @@ export function storyWorthy(p: Pick<CommunityPost, "visibility">): boolean {
   return p.visibility === "community";
 }
 
-/** Activity's opening card: the crew's week in numbers. */
-export type ActivityCover = { prs: number; sessions: number; athletes: number; faces: CommunityAuthor[] };
-
 export type StoryGroup<T> = {
   author: CommunityAuthor;
   items: T[];
   unseen: boolean;
   latest: number;
-  /** The Activity bubble played as a story: many people's sessions (each frame shows its athlete). */
-  activity?: boolean;
-  /** Plays first, before the moments (Activity's week in numbers). */
-  cover?: ActivityCover;
+  /** PRs in these moments: the bubble wears a small "PR" tag (the win, where it happened). */
+  prs: number;
   /** Your own story (you see who saw it; nothing to reply to). */
   mine?: boolean;
 };
 
-/** The Activity story's bubble stands in for an author. */
-export const ACTIVITY_STORY_AUTHOR: CommunityAuthor = { user_id: "activity", name: "Activity", avatar_url: null, is_coach: false };
-export const ACTIVITY_STORY_MAX = 20;
-
-/**
- * Activity, played like a story, is the week you might have missed: the
- * crew's wins (PRs, milestones, streaks) from earlier in the week, the ones
- * that have already left people's stories (the last day is in those, so it
- * never plays the same thing twice). Oldest first, the newest 20. Never yours.
- */
-export function activityStory<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "is_mine" | "seen">>(posts: T[], now = Date.now()): T[] {
-  const age = (p: T) => now - new Date(p.created_at).getTime();
-  const items = posts.filter(
-    (p) => !p.is_mine && isPulsePost(p) && age(p) > STORY_WINDOW_MS && age(p) <= 7 * 86_400_000 && isRealWin(pickWorkoutWin(p.stats!, "kg").kind),
-  );
-  return [...items].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, ACTIVITY_STORY_MAX).reverse();
-}
-
-/** Activity as a story: its week-in-numbers card, then the week's earlier wins. Null on a week with no sessions. */
-export function activityStoryGroup<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "is_mine" | "seen" | "author">>(
-  posts: T[],
-  seenNow: ReadonlySet<string>,
-  now = Date.now(),
-): StoryGroup<T> | null {
-  // the same numbers as the bubble's tag and the list: every finished session this week
-  const sessions = posts.filter((p) => isPulsePost(p));
-  const week = activityWeekSummary(sessions, now);
-  if (week.sessions === 0) return null;
-  const { faces, people } = activityFaces(sessions, 6, now);
-  const items = activityStory(posts, now);
-  return {
-    author: ACTIVITY_STORY_AUTHOR,
-    items,
-    unseen: items.some((p) => !p.seen && !seenNow.has(p.id)),
-    latest: items.length ? new Date(items[items.length - 1].created_at).getTime() : now,
-    activity: true,
-    cover: { prs: week.prs, sessions: week.sessions, athletes: people, faces },
-  };
+/** PRs set in a set of moments (a workout post carries its session's count). */
+export function storyPrs(items: { stats?: unknown }[]): number {
+  let n = 0;
+  for (const p of items) n += Math.max(0, Number((p.stats as { pr_count?: number } | null | undefined)?.pr_count ?? 0));
+  return n;
 }
 
 /** Your own last day of stories (you see them first, with who saw each). */
-export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "visibility" | "is_mine" | "seen" | "author">>(posts: T[], now = Date.now()): StoryGroup<T> | null {
+export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "visibility" | "is_mine" | "seen" | "author" | "stats">>(posts: T[], now = Date.now()): StoryGroup<T> | null {
   const items = posts
     .filter((p) => p.is_mine && storyWorthy(p) && now - new Date(p.created_at).getTime() <= STORY_WINDOW_MS)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
   if (!items.length) return null;
-  return { author: items[0].author, items, unseen: false, latest: new Date(items[items.length - 1].created_at).getTime(), mine: true };
+  return { author: items[0].author, items, unseen: false, latest: new Date(items[items.length - 1].created_at).getTime(), prs: storyPrs(items), mine: true };
 }
 
 /**
  * The story rail from the feed already loaded: everyone else's last day of
  * story-worthy posts, one bubble each, their moments oldest first (they play
- * in order). People with something unseen first, then the most recent.
+ * in order). People with something unseen first; then people you follow;
+ * then a PR; then the most recent.
  */
 export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author">>(posts: T[], now = Date.now(), followed?: ReadonlySet<string>): StoryGroup<T>[] {
   const by = new Map<string, StoryGroup<T>>();
   for (const p of posts) {
     const t = new Date(p.created_at).getTime();
     if (p.is_mine || now - t > STORY_WINDOW_MS || !storyWorthy(p)) continue;
-    const g = by.get(p.author.user_id) ?? { author: p.author, items: [], unseen: false, latest: 0 };
+    const g = by.get(p.author.user_id) ?? { author: p.author, items: [], unseen: false, latest: 0, prs: 0 };
     g.items.push(p);
     g.unseen ||= !p.seen;
     g.latest = Math.max(g.latest, t);
     by.set(p.author.user_id, g);
   }
   const groups = [...by.values()];
-  for (const g of groups) g.items.sort((a, b) => a.created_at.localeCompare(b.created_at));
-  // new first; among those, people you follow; then the most recent
+  for (const g of groups) {
+    g.items.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    g.prs = storyPrs(g.items);
+  }
+  // new first; among those, people you follow, then a PR; then the most recent
   const f = (g: StoryGroup<T>) => Number(!!followed?.has(g.author.user_id));
-  return groups.sort((a, b) => Number(b.unseen) - Number(a.unseen) || f(b) - f(a) || b.latest - a.latest);
+  return groups.sort((a, b) => Number(b.unseen) - Number(a.unseen) || f(b) - f(a) || Number(b.prs > 0) - Number(a.prs > 0) || b.latest - a.latest);
+}
+
+/** Feed pages the Crew reads at most to fill the story rail. */
+export const STORY_READ_PAGES = 5;
+
+/**
+ * Whether the Crew should read another feed page for the story rail: the
+ * first page is only a handful of posts, so on a busy day it reads on (a few
+ * pages at most) until it holds the whole last day, or the feed ends.
+ */
+export function storiesNeedMore(posts: { created_at: string }[], hasMore: boolean, pages: number, now = Date.now()): boolean {
+  if (!hasMore || pages >= STORY_READ_PAGES) return false;
+  if (!posts.length) return true;
+  const oldest = Math.min(...posts.map((p) => new Date(p.created_at).getTime()));
+  return oldest > now - STORY_WINDOW_MS;
 }
 
 /** What the end of the stories offers (only what's there; every part can be empty). */
@@ -1738,7 +1629,7 @@ export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "au
     if (g.mine) return;
     const w = g.items.filter((p) => !p.is_mine && watched.has(p.id) && !seenOrder.some((q) => q.id === p.id));
     if (w.length) {
-      // whose moments they were (Activity's are many people's)
+      // whose moments they were
       for (const p of w) {
         if (named.has(p.author.user_id)) continue;
         named.add(p.author.user_id);

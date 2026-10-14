@@ -27,14 +27,15 @@ import {
  * coach's note from the review never goes in it) and the camera (the full
  * studio: photo, looks, who sees it), then Share to Crew with what it earns.
  *
- * Finishing already posts the session to Crew Activity by itself (Pulse, when
- * automatic sharing is on), so that post isn't "shared" yet: Share to Crew
- * turns that same post into theirs in the feed (community_save_post upserts
- * the session's one post, so it's never a duplicate), and "Hide it" takes
- * this one out of Crew (only them). The review is saved before this shows,
- * so a failed share never touches it. A lock-in is its own post, so this
- * always posts the finish separately. Once it's shared, it says where it is
- * (with Undo right there) and Done takes over.
+ * Finishing already posts the session to their story by itself (a Pulse,
+ * when automatic sharing is on: 24 hours, never the feed), so that post isn't
+ * "shared" yet: Share to Crew turns that same post into theirs in the feed
+ * (community_save_post upserts the session's one post, so it's never a
+ * duplicate), and "Hide it" takes this one out of Crew (only them). The
+ * review is saved before this shows, so a failed share never touches it. A
+ * lock-in is its own post, so this always posts the finish separately. Once
+ * it's shared, it says where it is (with Undo right there when this made the
+ * post) and Done takes over.
  */
 export function RecapPostFooter({
   completionId,
@@ -65,7 +66,10 @@ export function RecapPostFooter({
   // The post made from this footer (it can be undone here). Set the moment the
   // share lands, so it reads as shared before the refetch catches up.
   const [justPosted, setJustPosted] = useState<string | null>(null);
-  // Not shared yet: nothing posted, the automatic Activity post, or one just hidden here.
+  // Undo deletes the post, so it's offered only for one this made (never their
+  // session's story post that sharing upgraded, which would go with it).
+  const [undoable, setUndoable] = useState(false);
+  // Not shared yet: nothing posted, the automatic story post, or one just hidden here.
   const unshared = !justPosted && (!existing || auto || hidden);
   const { data: points } = usePostPointsStatus(canPost && unshared);
   const hint = postPointsHint(points, "community", false, { completedAt: completedAt ? new Date(completedAt).toISOString() : null });
@@ -83,7 +87,9 @@ export function RecapPostFooter({
     busy.current = true;
     setPosting(true);
     try {
+      const made = !existing;
       const id = await saveCommunityPost({ completionId, caption: caption.trim(), visibility: "community", media: { action: "keep" } });
+      setUndoable(made);
       setJustPosted(id);
       setHiddenHere(false);
       invalidateCommunity(qc);
@@ -96,7 +102,7 @@ export function RecapPostFooter({
       setPosting(false);
     }
   };
-  // Take the automatic Activity post out of Crew: only they can see it (their profile).
+  // Take the automatic story post out of Crew: only they can see it (their profile).
   const hide = async () => {
     if (busy.current) return;
     busy.current = true;
@@ -136,7 +142,7 @@ export function RecapPostFooter({
       <div className="w-full">
         <div className="mb-2 flex items-center justify-center gap-1.5 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">
           <Check className="h-3.5 w-3.5" strokeWidth={3} /> {where}
-          {justPosted === postId && (
+          {justPosted === postId && undoable && (
             <button type="button" onClick={() => undo(postId)} disabled={del.isPending} className="ml-1 rounded-full px-1.5 py-0.5 font-bold text-muted-foreground underline underline-offset-2 active:opacity-60">
               Undo
             </button>
@@ -195,10 +201,10 @@ export function RecapPostFooter({
           {earn > 0 && <span className="text-[10px] font-bold opacity-90">+{earn} league points</span>}
         </Button>
       </div>
-      {/* where it is now, honestly: finishing already put it in Crew Activity */}
+      {/* where it is now, honestly: finishing already put it in their story */}
       {auto && !hidden && (
         <p className="mt-2 text-center text-[11px] text-muted-foreground" data-recap-status="auto">
-          Posted to Crew Activity automatically ·{" "}
+          On your story for 24 hours ·{" "}
           <button type="button" onClick={() => void hide()} disabled={hiding} className="font-semibold underline underline-offset-2 active:opacity-60">
             {hiding ? "Hiding…" : "Hide it"}
           </button>
