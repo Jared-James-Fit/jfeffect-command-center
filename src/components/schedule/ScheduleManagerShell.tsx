@@ -51,7 +51,6 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
     return <div className="flex items-center gap-2 text-sm text-muted-foreground p-8"><Loader2 className="h-4 w-4 animate-spin" /> Loading schedule…</div>;
   }
   const { client, blocks, weeks, days, completions, scheduledInstances } = data as any;
-  const locked = !!client?.schedule_locked && mode === "client";
 
   const handleMove = (
     target: { dayId: string; instanceId: string | null },
@@ -105,11 +104,6 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
 
   return (
     <div className="space-y-6">
-      {locked && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          Your coach has locked schedule editing on your account. Reach out via messages to make changes.
-        </div>
-      )}
 
       <Card>
         <CardContent className="p-3 sm:p-4">
@@ -140,7 +134,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
               </div>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => { setBulkAnchor(days[0]?.id ?? null); setBulkOpen(true); }} disabled={locked || days.length === 0}>
+              <Button size="sm" variant="outline" onClick={() => { setBulkAnchor(days[0]?.id ?? null); setBulkOpen(true); }} disabled={days.length === 0}>
                 <ListChecks className="h-4 w-4 mr-1" /> Bulk move
               </Button>
               <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)}>
@@ -156,7 +150,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
               blocks={blocks}
               completions={completions}
               scheduledInstances={scheduledInstances ?? []}
-              canEdit={!locked}
+              canEdit
               onMoveDay={handleMove}
               onSelectDay={handleSelectDay}
               onReorder={handleReorder}
@@ -168,7 +162,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
               blocks={blocks}
               completions={completions}
               scheduledInstances={scheduledInstances ?? []}
-              canEdit={!locked}
+              canEdit
               onSelectDay={handleSelectDay}
             />
           )}
@@ -194,7 +188,7 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
               </SelectContent>
             </Select>
           </div>
-          {weeklyWeekId && !locked && (
+          {weeklyWeekId && (
             <WeeklyScheduleEditor days={days} weeks={weeks} weekId={weeklyWeekId} scheduledInstances={scheduledInstances ?? []} />
           )}
         </CardContent>
@@ -204,7 +198,6 @@ export function ScheduleManagerShell({ clientId, mode }: ScheduleManagerShellPro
         <CoachOverridePanel
           clientId={clientId}
           clientName={client?.full_name ?? "Client"}
-          scheduleLocked={!!client?.schedule_locked}
           days={days}
           completions={completions}
         />

@@ -31,7 +31,7 @@ export interface ScheduleManagerListProps {
   blocks: any[];
   completions: any[];
   scheduledInstances: any[];
-  /** False when the client's schedule is locked (client mode). */
+  /** Whether rows can be moved (always true now: clients move their own workouts anytime). */
   canEdit: boolean;
   /** Opens the existing MoveWorkoutSheet for the row's day/instance. */
   onSelectDay: (target: { dayId: string; instanceId: string | null }) => void;
