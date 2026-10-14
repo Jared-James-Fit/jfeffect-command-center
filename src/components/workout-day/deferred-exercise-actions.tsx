@@ -62,6 +62,25 @@ function LoadingAction({ children }: { children: string }) {
   );
 }
 
+/**
+ * The History sheet opened from somewhere else (tapping the "Last time" chip):
+ * loads the sheet code only once it's asked for.
+ */
+export function DeferredExerciseHistorySheet(props: {
+  clientId: string;
+  exerciseId: string | null | undefined;
+  exerciseName: string;
+  displayUnit?: "kg" | "lb";
+  currentDayIndex?: number | null;
+  onClose: () => void;
+}) {
+  return (
+    <Suspense fallback={null}>
+      <LazyExerciseHistorySheet {...props} />
+    </Suspense>
+  );
+}
+
 export function DeferredExerciseHistoryButton({
   clientId,
   exerciseId,

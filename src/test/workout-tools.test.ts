@@ -92,14 +92,13 @@ describe("Workout Tools: one sheet for the whole workout, plain labels", () => {
     expect(html).toContain("lb→kg");
     expect(html).not.toContain("<input");
   });
-  it("the card's calculator button opens Tools on the Calculator, in the card's unit", () => {
+  it("the card's calculator lives in its ⋯ menu (Tools on the Calculator, in the card's unit)", () => {
     const row = renderToStaticMarkup(createElement(ExerciseActionRow, {
-      name: "Squat", howTo: null, hasNote: false, onOpenNote() {}, moreMenu: null, rest: null, onCalculator() {},
+      name: "Squat", howTo: null, hasNote: false, onOpenNote() {}, moreMenu: null, rest: null,
     }));
-    expect(row).toContain('aria-label="Calculator"');
-    expect(row).toContain('aria-haspopup="dialog"');
+    expect(row).not.toContain('aria-label="Calculator"');
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-    expect(wdv).toContain('onCalculator={toolsActions ? () => toolsActions.open({ tool: "calc", unit: activeUnit }) : null}');
+    expect(wdv).toContain('onSelect={() => toolsActions.open({ tool: "calc", unit: activeUnit })}');
   });
   it("one Tools button at the top of the workout, next to Warm-Up", () => {
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
