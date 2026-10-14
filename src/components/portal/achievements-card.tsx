@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { playAppSound } from "@/lib/app-sounds";
 import {
   RARITY_STYLE, RARITY_ORDER, featured, progressFor, isLegacyBadge, markAchievementsSeen, useUnseenAchievements,
   type AchievementMetrics, type CatalogBadge, type PublicBadge, type Rarity,
@@ -262,7 +263,6 @@ export function AchievementCelebrations({ clientId, catalog }: { clientId: strin
   const [index, setIndex] = useState(0);
   const [ready, setReady] = useState(false);
   const acked = useRef(new Set<string>());
-  const audio = useRef<AudioContext | null>(null);
 
   // Snapshot the queue once per batch so refetches can't reshuffle it mid-reveal.
   useEffect(() => {
@@ -291,17 +291,10 @@ export function AchievementCelebrations({ clientId, catalog }: { clientId: strin
       .catch(() => { /* retried next launch; local set prevents replay this session */ })
       .finally(() => qc.invalidateQueries({ queryKey: ["athlete-achievements-unseen", clientId] }));
   };
-  const ping = () => {
-    try {
-      const C = window.AudioContext || (window as any).webkitAudioContext; if (!C) return;
-      const ctx = audio.current ?? new C(); audio.current = ctx;
-      [523.25, 659.25, 783.99].forEach((f, i) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = f; g.gain.setValueAtTime(.0001, ctx.currentTime + i * .07); g.gain.exponentialRampToValueAtTime(.06, ctx.currentTime + i * .07 + .015); g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + i * .07 + .16); o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + i * .07); o.stop(ctx.currentTime + i * .07 + .18); });
-    } catch {}
-  };
   const finish = () => { setQueue([]); setIndex(0); setReady(false); };
   const next = () => {
     const b = queue[index]; if (!b) return;
-    ack([b.badge_key]); ping();
+    ack([b.badge_key]);
     if (index < queue.length - 1) setIndex((i) => i + 1); else finish();
   };
   // Dismissing never acknowledges a milestone, and hides the reveal for the
@@ -310,6 +303,18 @@ export function AchievementCelebrations({ clientId, catalog }: { clientId: strin
   const close = () => { dismissedThisLaunch.add(clientId); finish(); };
 
   const b = ready ? queue[index] : null;
+  // Each milestone lands with a sound as it appears: a bell chime, or the full
+  // sting for a legendary one (app-sounds: toggle, silent switch, music-safe).
+  const shownKey = b ? `${b.badge_key}:${b.rarity}` : null;
+  useEffect(() => {
+    if (!shownKey) return;
+    if (shownKey.endsWith(":legendary")) {
+      let stop = () => {};
+      void import("@/lib/achievement-music").then(({ playSting }) => { stop = playSting("legendary"); });
+      return () => stop();
+    }
+    playAppSound("milestone");
+  }, [shownKey]);
   if (!b) return null;
   const r = RARITY_STYLE[b.rarity];
   const prestige = b.rarity === "legendary";

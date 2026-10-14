@@ -21,6 +21,7 @@ import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
 import { RecapPostFooter } from "@/components/community/recap-post";
 import { usePublicSessionTitle } from "@/lib/community.queries";
+import { SoundToggleButton } from "@/components/sound-toggle";
 
 // The share studio (camera, cards, upload) is only fetched the first time
 // someone taps Share workout, so the recap itself stays light.
@@ -93,16 +94,34 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     }
     setRevealStage(0);
     setDisplayScore(0);
-    const intro = window.setTimeout(() => {
-      setRevealStage(1);
-      void import("@/lib/app-sounds").then(({ playAppSound }) => playAppSound(soundRef.current));
-    }, 450);
+    const intro = window.setTimeout(() => setRevealStage(1), 450);
     const details = window.setTimeout(() => setRevealStage(2), 1450);
     return () => {
       window.clearTimeout(intro);
       window.clearTimeout(details);
+      // The sting stops the moment the recap closes.
+      stingPlayedRef.current = false;
+      stopStingRef.current();
+      stopStingRef.current = () => {};
     };
   }, [open]);
+
+  // The sting lands with the reveal, once the records are in (they're worked
+  // out on the server and can trail the reveal): a PR day gets the full
+  // build-and-drop, never the short one by mistake. Waits at most 2 s.
+  useEffect(() => {
+    if (!open || revealStage < 1 || stingPlayedRef.current) return;
+    const fire = () => {
+      if (stingPlayedRef.current) return;
+      stingPlayedRef.current = true;
+      void import("@/lib/achievement-music").then(({ playSting }) => {
+        if (stingPlayedRef.current) stopStingRef.current = playSting(stingRef.current);
+      });
+    };
+    if (!usesRecords || records !== null) { fire(); return; }
+    const wait = window.setTimeout(fire, 2000);
+    return () => window.clearTimeout(wait);
+  }, [open, revealStage, usesRecords, records]);
 
   useEffect(() => {
     if (!open || revealStage < 1) return;
@@ -119,8 +138,11 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [open, revealStage, summary.score]);
-  const soundRef = useRef<"celebrate" | "success">("success");
-  soundRef.current = prList.length > 0 || recordCount > 0 ? "celebrate" : "success";
+  // New records get the full build-and-drop; a finished workout the short one.
+  const stingRef = useRef<"pr" | "workout">("workout");
+  stingRef.current = prList.length > 0 || recordCount > 0 ? "pr" : "workout";
+  const stopStingRef = useRef<() => void>(() => {});
+  const stingPlayedRef = useRef(false);
   const hasAchievement = prList.length > 0 || recordCount > 0 || summary.score >= 90 || summary.completionPct === 100;
   const headline =
     recordHeadline ? recordHeadline
@@ -243,6 +265,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           >
             <X className="h-4 w-4" />
           </Button>
+          <SoundToggleButton className="absolute left-3 top-3 z-10" onMute={() => stopStingRef.current()} />
 
           <div className={`mx-auto flex w-full max-w-[calc(100%-4.5rem)] flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
             <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${prList.length > 0 || recordCount > 0 ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`}>

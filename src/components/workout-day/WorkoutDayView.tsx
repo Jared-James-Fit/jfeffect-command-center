@@ -47,7 +47,7 @@ import {
 } from "@/lib/workout-completion.functions";
 import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
-import { playUiSound } from "@/lib/ui-sounds";
+import { playAppSound } from "@/lib/app-sounds";
 import { haptic } from "@/platform/haptics";
 import {
   selectExerciseNoteHistory,
@@ -1001,6 +1001,18 @@ function WorkoutDay({
 
   // Bodyweight (smoothed) — strength scales with it, so past sets are adjusted
   // for any change since they were lifted. See load-suggestion.ts.
+  // The finish sting's code (a few KB, no audio files) is fetched quietly once
+  // the workout has settled, so the recap plays it instantly even when the gym
+  // has no signal by the end of the session.
+  useEffect(() => {
+    if (!secondaryHydrationReady) return;
+    const idle = (fn: () => void) => ((window as any).requestIdleCallback ? (window as any).requestIdleCallback(fn, { timeout: 3000 }) : window.setTimeout(fn, 0));
+    const t = window.setTimeout(() => {
+      void import("@/lib/achievement-music").then((m) => idle(() => m.warmUpStings())).catch(() => {});
+    }, 4000);
+    return () => window.clearTimeout(t);
+  }, [secondaryHydrationReady]);
+
   const { data: bodyweightSeries = [] } = useQuery<BodyweightKgPoint[]>({
     queryKey: ["load-bodyweight", historyOwnerId],
     enabled: secondaryHydrationReady && adapter?.kind !== "member" && !!historyOwnerId,
@@ -3733,6 +3745,19 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     },
     [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg],
   );
+  // Logging sound: one soft "tock" each time this card gains a completed set —
+  // however it was completed (typed, tapped, filled down, timed) — and a
+  // brighter cue when it was the last one. Not on load, not for a coach view.
+  const completedSetCount = existingResults.filter((x: any) => x.completed_at && Number(x.set_index) <= setCount).length;
+  const soundedCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (readonly || !resultsReady) return;
+    const before = soundedCountRef.current;
+    soundedCountRef.current = completedSetCount;
+    if (before == null || completedSetCount <= before) return;
+    playAppSound(completedSetCount >= setCount ? "exercise" : "set");
+  }, [completedSetCount, resultsReady, readonly, setCount]);
+
   // For the finished card's "why": the last working weight and how the sets felt.
   const todayRead = useMemo(() => {
     const done = existingResults
@@ -5907,7 +5932,7 @@ function SetRow({
       : `${rowId}:${setIndex}:${existing.completed_at}:${prBadge!.reps}:${prBadge!.amount}`;
     if (prSoundedRef.current === key) return;
     prSoundedRef.current = key;
-    playUiSound("pr", 0.055);
+    playAppSound("pr");
     haptic("success");
   }, [prBadge, recordForBadge, loadRecordForBadge, hasRecords, existing?.completed_at, rowId, setIndex]);
 
@@ -5978,7 +6003,8 @@ function SetRow({
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
-      if (completeNow) { playUiSound("success"); haptic("light"); }
+      // The card plays the set's sound (it hears every way a set completes).
+      if (completeNow) haptic("light");
       toast.success(
         opts.finishedEarly && prescribedSec
           ? `Saved ${formatDuration(completedSeconds)} of ${formatDuration(prescribedSec)}`

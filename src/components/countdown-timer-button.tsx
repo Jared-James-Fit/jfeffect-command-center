@@ -1,3 +1,4 @@
+import { playAppSound } from "@/lib/app-sounds";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw, Timer, Check } from "lucide-react";
@@ -49,21 +50,7 @@ export function CountdownTimerButton({ seconds, onComplete, compact, className, 
         setRunning(false);
         setDone(true);
         endsAtRef.current = null;
-        // Soft beep (best-effort, no asset required).
-        try {
-          const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-          if (AC) {
-            const ctx = new AC();
-            const o = ctx.createOscillator();
-            const g = ctx.createGain();
-            o.frequency.value = 880;
-            o.connect(g); g.connect(ctx.destination);
-            g.gain.setValueAtTime(0.001, ctx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
-            g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
-            o.start(); o.stop(ctx.currentTime + 0.65);
-          }
-        } catch { /* no-op */ }
+        playAppSound("timer");
         if (navigator?.vibrate) { try { navigator.vibrate([100, 60, 100]); } catch { /* no-op */ } }
         onComplete?.();
       }
