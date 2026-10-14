@@ -55,12 +55,8 @@ async function resolveActorAccess(
       .maybeSingle();
     if (coach?.user_id && coach.user_id === userId) return { role: "coach", client };
   }
-  if (client.user_id === userId) {
-    if (client.schedule_locked) {
-      throw new Error("Schedule editing is locked for this account.");
-    }
-    return { role: "client", client };
-  }
+  // the client themselves can always move their own workouts (no account or coach lock)
+  if (client.user_id === userId) return { role: "client", client };
   throw new Error("You don't have permission to change this schedule.");
 }
 
@@ -170,11 +166,6 @@ export const applyBulkScheduleChange = createServerFn({ method: "POST" })
     }
     const clientId = clientIds[0];
     const { role } = await resolveActorAccess({ supabase, userId }, clientId);
-
-    if (role !== "coach" && role !== "admin") {
-      const locked = dayRows.find((d: any) => d.schedule_locked);
-      if (locked) throw new Error("One of these workouts is date-locked by your coach.");
-    }
 
     // Slice 2d: reject the entire batch if any day is instance-backed.
     // Bulk moves write pl_days.scheduled_date; when an instance exists the
@@ -289,35 +280,13 @@ export const coachOverrideCompletedMove = createServerFn({ method: "POST" })
   });
 
 // ───────────────────────────────────────────────────────────────────────────
-// setScheduleLock — coach/admin toggles a client's schedule lock.
-// ───────────────────────────────────────────────────────────────────────────
-
-export const setScheduleLock = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
-    z.object({ clientId: z.string().uuid(), locked: z.boolean() }).parse(i),
-  )
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { role } = await resolveActorAccess(
-      { supabase, userId }, data.clientId,
-    );
-    if (role !== "coach" && role !== "admin") {
-      throw new Error("Only a coach or admin can change the schedule lock.");
-    }
-    const { error } = await supabase
-      .from("clients").update({ schedule_locked: data.locked }).eq("id", data.clientId);
-    if (error) throw new Error(error.message);
-    return { ok: true as const, locked: data.locked };
-  });
-
-// ───────────────────────────────────────────────────────────────────────────
 // rescheduleFromCommittedDays — realign future auto-scheduled workouts onto
 // the client's currently committed training days. Canonical instance dates
 // win over legacy pl_days dates. Always preserves:
 //   • workouts already in the past
 //   • workouts that have a completion row (started, in-progress, or completed)
-// Coach-locked dates remain protected from client overrides. Manual future
+// Hand-placed dates (a coach's plan, a manual move) stay put unless the person
+// asks to move them too (includePinned), client or coach alike. Manual future
 // placements may be explicitly realigned when includePinned=true.
 // Preserved workouts consume their ordinal committed-day slot so completed
 // history never shifts the remaining workout order within a week.

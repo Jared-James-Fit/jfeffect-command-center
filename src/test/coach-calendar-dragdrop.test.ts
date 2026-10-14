@@ -26,7 +26,9 @@ describe("coach calendar drag/drop boundary", () => {
 
   it("allows the existing client self calendar and a specific coach client calendar to drag", () => {
     expect(workoutsExperience).toContain('mode === "self" || mode === "coach"');
-    expect(scheduleShell).toContain("canEdit={!locked}");
+    // clients can always move their own workouts: no lock gates the calendar
+    expect(scheduleShell).toMatch(/\n\s+canEdit\n/);
+    expect(scheduleShell).not.toContain("canEdit={!locked}");
   });
 
   it("keeps completed workouts non-draggable and prevents a drag from opening the move sheet", () => {

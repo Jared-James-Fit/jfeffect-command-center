@@ -25,8 +25,9 @@ describe("committed training schedule canonical sync", () => {
     expect(planner).toContain("if (ordinalTarget) consumed.add(ordinalTarget)");
   });
 
-  it("keeps coach-locked workouts protected from client schedule changes", () => {
-    expect(planner).toContain('role === "coach" || role === "admin" || !isCoachLocked');
+  it("a client can move coach-placed workouts too; only automatic re-plans keep hand-placed dates", () => {
+    expect(planner).toContain("const canOverridePinned = includePinned;");
+    expect(planner).not.toContain("isCoachLocked");
   });
 
   it("saving committed days is one server call that realigns future workouts", () => {

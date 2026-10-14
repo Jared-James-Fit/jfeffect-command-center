@@ -83,13 +83,18 @@ describe("planCommittedRealign", () => {
     ]);
   });
 
-  it("protects coach-locked workouts from clients but not from coaches", () => {
-    const days = [day("d1", "w1", 1, "2026-10-09", { schedule_locked: true })];
+  it("a coach-placed workout moves when the client asks (it's their schedule); an automatic re-plan keeps it", () => {
+    const days = [day("d1", "w1", 1, "2026-10-09", { schedule_locked: true, schedule_source: "manual" })];
+    // the client changes their training days and moves them all
     const asClient = planCommittedRealign({ ...base, days, weeks: [week(1)], committed: ["Tuesday"] });
-    expect(asClient.moves).toEqual([]);
-    expect(asClient.pendingPinned).toBe(1);
+    expect(asClient.moves.map((m) => m.next)).toEqual(["2026-10-06"]);
+    expect(asClient.pendingPinned).toBe(0);
     const asCoach = planCommittedRealign({ ...base, days, weeks: [week(1)], committed: ["Tuesday"], role: "coach" });
     expect(asCoach.moves.map((m) => m.next)).toEqual(["2026-10-06"]);
+    // automatic (a new program, Cleo): hand-placed dates stay put
+    const auto = planCommittedRealign({ ...base, days, weeks: [week(1)], committed: ["Tuesday"], includePinned: false });
+    expect(auto.moves).toEqual([]);
+    expect(auto.pendingPinned).toBe(1);
   });
 
   it("only moves manual placements when includePinned is set", () => {

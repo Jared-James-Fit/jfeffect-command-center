@@ -10,8 +10,10 @@ import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
 //   • workouts in the past, or with a started/in-progress/completed record,
 //     are never moved and still consume their ordinal committed-day slot
 //   • canonical placement is the scheduled-workout instance, then pl_days
-//   • coach-locked / manually pinned days only move when includePinned and
-//     the actor may override the lock
+//   • hand-placed days (a coach's planned date, or a manual move) only move
+//     when includePinned: an automatic realign leaves them be, but when the
+//     person asks to move them too (client or coach alike) they move. A
+//     client can always move their own workouts; there's no coach lock.
 //   • idempotent: re-running with the same committed days produces no moves
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -112,7 +114,7 @@ export function planCommittedRealign(input: {
   role: RealignRole;
   includePinned: boolean;
 }): RealignPlan {
-  const { committed, todayISO, role, includePinned, touchedDayIds } = input;
+  const { committed, todayISO, includePinned, touchedDayIds } = input;
   const moves: RealignMove[] = [];
   let pendingPinned = 0;
   let unplaced = 0;
@@ -176,11 +178,9 @@ export function planCommittedRealign(input: {
         const inst = instanceByDayId.get(d.id);
         const effectiveDate = inst?.scheduled_date ?? d.scheduled_date ?? null;
         const effectiveSource = inst?.schedule_source ?? d.schedule_source ?? null;
-        const isCoachLocked = !!d.schedule_locked;
-        const isManual = effectiveSource === "manual";
-        const isPinned = isCoachLocked || isManual;
-        const canOverridePinned =
-          includePinned && (role === "coach" || role === "admin" || !isCoachLocked);
+        // placed by hand (schedule_locked / a manual source): kept unless asked to move them too
+        const isPinned = !!d.schedule_locked || effectiveSource === "manual";
+        const canOverridePinned = includePinned;
         const isTouched = touchedDayIds.has(d.id);
         const isPast = !!effectiveDate && effectiveDate < todayISO;
         const ordinalTarget = committedDates[dayPos] ?? null;

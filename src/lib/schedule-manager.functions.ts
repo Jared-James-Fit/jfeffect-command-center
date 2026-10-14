@@ -48,13 +48,9 @@ async function resolveActorAccess(
     }
   }
 
-  // The client themselves.
+  // The client themselves: they can always move their own (not yet done)
+  // workouts. There's no lock on that, from the account or from a coach.
   if (client.user_id && client.user_id === userId) {
-    if (client.schedule_locked) {
-      throw new Error(
-        "Schedule editing is locked for this account. Reach out to your coach to make changes.",
-      );
-    }
     return { role: "client", client };
   }
 
@@ -107,14 +103,8 @@ export const moveWorkout = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { day, week, block } = await loadDayContext(supabase, data.dayId);
-    const { role } = await resolveActorAccess(
-      { supabase, userId },
-      block.client_id,
-    );
-
-    if (day.schedule_locked && role !== "admin" && role !== "coach") {
-      throw new Error("This workout's date is locked by your coach.");
-    }
+    // who's asking: admin, their coach, or the client (anyone else is refused)
+    const { role } = await resolveActorAccess({ supabase, userId }, block.client_id);
 
     // Slice 2d: this legacy path may only mutate pl_days.scheduled_date
     // for genuinely legacy program days that have NO pl_scheduled_workouts
@@ -212,17 +202,7 @@ export const swapWorkouts = createServerFn({ method: "POST" })
     if (a.block.client_id !== b.block.client_id) {
       throw new Error("These workouts belong to different clients.");
     }
-    const { role } = await resolveActorAccess(
-      { supabase, userId },
-      a.block.client_id,
-    );
-    if (
-      (a.day.schedule_locked || b.day.schedule_locked) &&
-      role !== "admin" &&
-      role !== "coach"
-    ) {
-      throw new Error("One of these workouts is date-locked by your coach.");
-    }
+    const { role } = await resolveActorAccess({ supabase, userId }, a.block.client_id);
 
     // Slice 2d: reject if EITHER day is instance-backed. Swapping via
     // pl_days.scheduled_date would desync from the canonical instance list.
