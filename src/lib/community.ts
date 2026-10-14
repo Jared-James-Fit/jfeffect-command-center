@@ -1211,6 +1211,39 @@ export function lockInCameraCard(i: { workoutTitle: string; athleteName: string 
 }
 
 /**
+ * Meal on the camera: a food photo with a look people share (Meal prep, On
+ * plan, Fuel, High day, Cheat meal). Numbers-free on purpose: nothing private
+ * (targets, bodyweight) ever lands on a card. Fuel says pre / post-workout
+ * when we know which. A plain post: never League points.
+ */
+export function mealCameraCard(i: { athleteName: string | null; fuel?: "pre" | "post" | null; now?: Date }): { data: CameraCardBase; looks: ShareTemplate[] } {
+  const now = i.now ?? new Date();
+  return {
+    data: {
+      format: "story",
+      athleteName: first(i.athleteName),
+      workoutTitle: "",
+      dateLabel: now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
+      lift: null,
+      stats: [],
+      isPr: false,
+      exercises: [],
+      volume: null,
+      sessionLine: i.fuel === "post" ? "Post-workout" : i.fuel === "pre" ? "Pre-workout" : null,
+      lockedIn: null,
+    },
+    looks: ["mealprep", "onplan", "fuel", "highday", "cheat", "plain"],
+  };
+}
+
+/** Fuel's label: post-workout within 3 hours of finishing one, pre-workout with one still to do today. */
+export function mealFuelMoment(i: { lastFinishedAt?: string | null; sessionToday: boolean; now?: number }): "pre" | "post" | null {
+  const now = i.now ?? Date.now();
+  if (i.lastFinishedAt && now - new Date(i.lastFinishedAt).getTime() < 3 * 3_600_000) return "post";
+  return i.sessionToday ? "pre" : null;
+}
+
+/**
  * The session Lock in should attach to: one started in the last 12 hours
  * (really in progress), else the unfinished one scheduled for today. Never an
  * old session someone started weeks ago and didn't finish.

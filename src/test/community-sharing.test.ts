@@ -924,7 +924,8 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
   it("the camera falls back to the phone's own camera and picker", () => {
     const cam = read("src/components/community/share-studio.tsx");
     expect(cam).toContain("navigator.mediaDevices?.getUserMedia");
-    expect(cam).toContain('.catch(() => !cancelled && setStatus("fallback"))');
+    // it falls back, and keeps why (switched off for the app, or something else)
+    expect(cam).toContain('setCamWhy(name === "NotAllowedError" || name === "SecurityError" ? "denied" : "other");\n        setStatus("fallback");');
     expect(cam).toContain('capture="environment"');
     expect(cam).toContain("if (video) video.srcObject = null;");
   });

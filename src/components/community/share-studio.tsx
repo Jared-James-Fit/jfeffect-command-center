@@ -13,6 +13,7 @@ import { MAX_SLIDES, type PostSlide } from "@/lib/community";
 import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 import { context2d, releaseCanvas } from "@/lib/canvas-memory";
 import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-draft";
+import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTestFlight } from "@/platform";
 
 export type CameraMode = { key: string; label: string };
 
@@ -91,6 +92,7 @@ export function ShareStudio({
   chip,
   card,
   canShoot = true,
+  allowNoPhoto = true,
   accept = "image/*",
   onVideo,
   post,
@@ -105,6 +107,8 @@ export function ShareStudio({
   card: CameraCard | null;
   /** False while there's nothing to share yet (the chip says why). */
   canShoot?: boolean;
+  /** "No photo" (post the card on the brand glow); off where the photo is the point (a meal). */
+  allowNoPhoto?: boolean;
   accept?: string;
   /** A video picked from the library (cards can't be painted on video). */
   onVideo?: (file: File) => void;
@@ -122,6 +126,12 @@ export function ShareStudio({
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [status, setStatus] = useState<"starting" | "live" | "fallback">("starting");
+  // Why the live camera isn't on: switched off for the app ("denied"), or something else.
+  const [camWhy, setCamWhy] = useState<"denied" | "other" | null>(null);
+  // An iPhone app from before the camera worked in it: it has to be updated first.
+  const [oldApp, setOldApp] = useState(false);
+  const statusRef = useRef(status);
+  statusRef.current = status;
   const [flash, setFlash] = useState(false);
   const [timer, setTimer] = useState<0 | 3 | 10>(0);
   const [count, setCount] = useState<number | null>(null);
@@ -289,7 +299,13 @@ export function ShareStudio({
   const [camTry, setCamTry] = useState(0);
   const restarts = useRef(0);
   useEffect(() => {
-    if (open) restarts.current = 0;
+    if (!open) return;
+    restarts.current = 0;
+    let gone = false;
+    void iosAppTooOldForCamera().then((old) => !gone && setOldApp(old));
+    return () => {
+      gone = true;
+    };
   }, [open]);
   const restartCamera = () => {
     if (restarts.current >= 3) return setStatus("fallback");
@@ -322,9 +338,17 @@ export function ShareStudio({
         } catch {
           /* muted + inline: only fails if it was closed */
         }
-        if (!cancelled) setStatus("live");
+        if (!cancelled) {
+          setCamWhy(null);
+          setStatus("live");
+        }
       })
-      .catch(() => !cancelled && setStatus("fallback"))
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        const name = (e as { name?: string } | null)?.name;
+        setCamWhy(name === "NotAllowedError" || name === "SecurityError" ? "denied" : "other");
+        setStatus("fallback");
+      })
       .finally(() => clearTimeout(slow));
     return () => {
       cancelled = true;
@@ -337,7 +361,13 @@ export function ShareStudio({
   useEffect(() => {
     if (!shooting) return;
     const wake = () => {
-      if (document.visibilityState !== "visible" || !streamRef.current) return;
+      if (document.visibilityState !== "visible") return;
+      // back from Settings (camera just switched on) or any other app: try the live camera again
+      if (statusRef.current === "fallback") {
+        restarts.current = 0;
+        return restartCamera();
+      }
+      if (!streamRef.current) return;
       const track = streamRef.current.getVideoTracks()[0];
       if (!track || track.readyState === "ended") restartCamera();
       else if (video?.paused) void video.play().catch(() => undefined);
@@ -485,7 +515,8 @@ export function ShareStudio({
     if (!canShoot) return;
     // the camera's still coming up: a tap here must not throw you into the phone's camera
     if (status === "starting") return;
-    if (status !== "live") return capRef.current?.click();
+    // no live camera: the phone's own (never on an iPhone app too old for it: that would close the app)
+    if (status !== "live") return oldApp ? libRef.current?.click() : capRef.current?.click();
     if (count != null) return cancelCount();
     if (!timer) return capture();
     let n = timer;
@@ -729,12 +760,51 @@ export function ShareStudio({
             {showCard && <canvas ref={setCardEl} className="pointer-events-none absolute inset-0 h-full w-full" aria-label={card ? `${TEMPLATE_LABEL[card.look]} look` : undefined} />}
 
             {phase === "shoot" && status === "fallback" && (
-              <div className={cn("absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center", showCard && "bg-black/55 backdrop-blur-[2px]")}>
-                <button type="button" disabled={!canShoot} onClick={() => capRef.current?.click()} className="grid h-24 w-24 place-items-center rounded-full bg-white text-black shadow-xl active:scale-95 disabled:opacity-40" aria-label="Open the camera">
-                  <Camera className="h-10 w-10" />
-                </button>
-                <div className="text-[15px] font-black">Take a photo</div>
-                <p className="max-w-[260px] text-[12px] text-white/70">The live camera isn't on, so this opens your phone's camera. To shoot right in the app, turn on Camera for JF Effect in your phone's Settings (Settings › JF Effect › Camera).</p>
+              <div className={cn("absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center", showCard && "bg-black/55 backdrop-blur-[2px]")} data-camera-fallback={oldApp ? "old-app" : camWhy ?? "other"}>
+                {oldApp ? (
+                  // the phone's camera would close this version of the app: update first, or pick a photo
+                  <>
+                    <div className="grid h-20 w-20 place-items-center rounded-full bg-white/10">
+                      <Camera className="h-9 w-9" />
+                    </div>
+                    <div className="text-[17px] font-black">Update JF Effect to use the camera</div>
+                    <p className="max-w-[270px] text-[13px] text-white/75">This version of the app can't open the camera. Get the latest one in TestFlight and it opens right here.</p>
+                    <button type="button" onClick={openTestFlight} className="h-11 rounded-full bg-white px-6 text-[15px] font-black text-black active:scale-95">
+                      Update in TestFlight
+                    </button>
+                    <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className="text-[14px] font-bold text-white/80 underline-offset-4 active:underline disabled:opacity-40">
+                      Choose a photo instead
+                    </button>
+                  </>
+                ) : camWhy === "denied" && isNative() ? (
+                  // switched off for the app: one tap to its Settings page (Android: back here, it retries by itself)
+                  <>
+                    <div className="grid h-20 w-20 place-items-center rounded-full bg-white/10">
+                      <Camera className="h-9 w-9" />
+                    </div>
+                    <div className="text-[17px] font-black">Camera is off for JF Effect</div>
+                    <p className="max-w-[270px] text-[13px] text-white/75">
+                      {/* iOS restarts an app when its camera permission changes, so it's "open it again", not "come back" */}
+                      {getPlatform() === "ios" ? "Turn on Camera, then open Post again. From then on it opens right here." : "Allow the camera for JF Effect in your phone's settings and come back. It opens right here."}
+                    </p>
+                    {getPlatform() === "ios" && (
+                      <button type="button" onClick={openAppSettings} className="h-11 rounded-full bg-white px-6 text-[15px] font-black text-black active:scale-95" data-camera-settings>
+                        Turn on camera
+                      </button>
+                    )}
+                    <button type="button" disabled={!canShoot} onClick={() => capRef.current?.click()} className="text-[14px] font-bold text-white/80 underline-offset-4 active:underline disabled:opacity-40">
+                      Use the phone's camera instead
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" disabled={!canShoot} onClick={() => capRef.current?.click()} className="grid h-24 w-24 place-items-center rounded-full bg-white text-black shadow-xl active:scale-95 disabled:opacity-40" aria-label="Open the camera">
+                      <Camera className="h-10 w-10" />
+                    </button>
+                    <div className="text-[15px] font-black">Take a photo</div>
+                    <p className="max-w-[260px] text-[12px] text-white/70">The live camera didn't start here, so this opens your phone's camera.</p>
+                  </>
+                )}
               </div>
             )}
 
@@ -783,7 +853,7 @@ export function ShareStudio({
                       {timer ? `${timer}s` : null}
                     </button>
                   )}
-                  {canShoot && !adding && (card ? (
+                  {canShoot && !adding && (card && allowNoPhoto ? (
                     <button type="button" onClick={skipPhoto} className="ml-auto h-10 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
                       No photo
                     </button>
@@ -851,7 +921,8 @@ export function ShareStudio({
                         cancelCount();
                         onMode?.(m.key);
                       }}
-                      className={cn("h-9 rounded-full px-5 text-[13px] font-black uppercase tracking-[0.12em] transition-colors", mode === m.key ? "bg-white text-black" : "text-white/60")}
+                      // four fit a phone when they're a little tighter
+                      className={cn("h-9 rounded-full text-[13px] font-black uppercase transition-colors", modes.length > 3 ? "px-3.5 tracking-[0.08em]" : "px-5 tracking-[0.12em]", mode === m.key ? "bg-white text-black" : "text-white/60")}
                     >
                       {m.label}
                     </button>
