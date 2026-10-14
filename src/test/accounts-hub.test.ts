@@ -158,7 +158,11 @@ describe("Clients page: every account in one place", () => {
   });
 
   it("a view-only login (or a preview) gets no client view, which the server would refuse", () => {
-    expect(read("src/components/clients/client-row.tsx")).toContain('const canPov = (role === "admin" || role === "coach") && !viewOnly;');
+    // Client rows, the mobile card and the session sheet all enter client view through one hook.
+    expect(read("src/components/clients/use-enter-client-pov.ts")).toContain('const canPov = (role === "admin" || role === "coach") && !viewOnly;');
+    for (const f of ["src/components/clients/client-row.tsx", "src/components/clients-mobile-card.tsx", "src/components/schedule/session-actions-sheet.tsx"]) {
+      expect(read(f)).toContain("useEnterClientPov()");
+    }
     expect(read("src/components/client-pov-quick-picker.tsx")).toContain('const canPov = (role === "admin" || role === "coach") && !viewOnly;');
   });
 

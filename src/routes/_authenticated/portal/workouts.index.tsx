@@ -17,11 +17,15 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/")({
     const post = hash.match(/post=([0-9a-f-]{36})/i)?.[1];
     throw redirect({ to: "/portal/community", hash: post ? `post=${post}` : undefined, replace: true });
   },
+  // ?open=<yyyy-mm-dd>: open that day's workout (a coach jumping in from a session).
+  validateSearch: (s: Record<string, unknown>): { open?: string } =>
+    typeof s.open === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.open) ? { open: s.open } : {},
   component: WorkoutsPage,
 });
 
 function WorkoutsPage() {
   const portalUserId = usePortalUserId();
+  const { open } = Route.useSearch();
   // Resolve the client row first (fast single-row lookup) and render the
   // workouts shell as soon as it's known. The heavier workout-schedule
   // queries fire in parallel from <WorkoutsExperience />, so the page no
@@ -63,7 +67,7 @@ function WorkoutsPage() {
 
   return (
     <>
-      <WorkoutsExperience clientId={client.id} mode="self" />
+      <WorkoutsExperience clientId={client.id} mode="self" openDate={open ?? null} />
       <div className="px-4 pb-24 md:px-6">
         <WorkoutArchiveSection clientId={client.id} mode="client" />
       </div>
