@@ -1,15 +1,14 @@
 import type { ReactNode } from "react";
-import { Calculator, MoreHorizontal, StickyNote } from "lucide-react";
+import { MoreHorizontal, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 /**
- * The How To · Note · More · Calculator · Rest row on every workout exercise
- * card.
+ * The How To · Note · More · Rest row on every workout exercise card.
  *
  * Round 40px targets, so the row fits one line at any phone width. Rarer
- * actions (undo / redo / reset, swap, cues, help, reorder) live in More; the
- * calculator opens Workout Tools on the Calculator in this card's unit. It is a size container: labels
+ * actions (undo / redo / reset, swap, cues, calculator, help, reorder) live in
+ * More; the calculator is also one tap from Tools at the top of the workout. It is a size container: labels
  * drop before anything wraps.
  */
 export function ExerciseActionRow({
@@ -19,17 +18,14 @@ export function ExerciseActionRow({
   onOpenNote,
   moreMenu,
   rest,
-  onCalculator = null,
 }: {
   name: string;
   howTo: ReactNode | null;
   hasNote: boolean;
   onOpenNote: () => void;
-  /** DropdownMenuContent for "More" (undo / redo / reset, swap, cues, help, reorder). */
+  /** DropdownMenuContent for "More" (undo / redo / reset, swap, cues, calculator, help, reorder). */
   moreMenu: ReactNode;
   rest: ReactNode | null;
-  /** Opens Workout Tools → Calculator. */
-  onCalculator?: (() => void) | null;
 }) {
   const round =
     "relative h-10 w-10 shrink-0 rounded-full border border-border bg-card p-0 text-muted-foreground @max-[20rem]:h-9 @max-[20rem]:w-9 [&_svg]:size-[18px]";
@@ -58,20 +54,6 @@ export function ExerciseActionRow({
           </DropdownMenuTrigger>
           {moreMenu}
         </DropdownMenu>
-        {onCalculator && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            data-testid="calc-chip"
-            className={round}
-            onClick={onCalculator}
-            aria-haspopup="dialog"
-            aria-label="Calculator"
-          >
-            <Calculator className="h-4 w-4" />
-          </Button>
-        )}
         {rest && <div className="ml-auto flex min-w-0 shrink-0 justify-end">{rest}</div>}
       </div>
     </div>

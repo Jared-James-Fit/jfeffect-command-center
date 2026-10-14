@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight, Calculator } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -71,6 +71,8 @@ import { WorkoutSyncBanner } from "@/components/workout-sync-banner";
 import { writePlanCache, cachedInitialData, cachedUpdatedAt } from "@/lib/workout-plan-cache";
 import { WarmupRows, bestE1rm, useWarmupSets } from "@/components/workout-day/final-warmup-input";
 import { planRestore, setPayload, snapshotOf, type CardSet, type CardSnapshot } from "@/lib/card-history";
+import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
+import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
 import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
 import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge } from "@/components/workout-day/load-suggestion-card";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
@@ -90,6 +92,7 @@ import {
   DeferredExerciseHistoryButton,
   DeferredExerciseHowToButton,
   DeferredQuickSwapSheet,
+  DeferredExerciseHistorySheet,
 } from "@/components/workout-day/deferred-exercise-actions";
 import { WorkoutToolsProvider, WorkoutToolsButton, useWorkoutToolsActions } from "@/components/workout-tools/workout-tools";
 import { WorkoutAddExercise } from "@/components/workout-day/workout-add-exercise";
@@ -1009,6 +1012,57 @@ function WorkoutDay({
     () => smoothedBodyweightKgAt(bodyweightSeries, Date.now()),
     [bodyweightSeries],
   );
+
+  // "Last week this slot was …": the same day of last week in this block, so a
+  // card whose exercise changed (swapped either week, or reprogrammed) can show
+  // what was done there. See previous-week-slot.ts. Coaching programs only.
+  const weekId = (day as any)?.week_id ?? null;
+  const dayIndexForSlots = (day as any)?.day_index ?? null;
+  const { data: lastWeekDay = null } = useQuery({
+    queryKey: ["last-week-slots", dayId, weekId, dayIndexForSlots, historyOwnerId],
+    enabled: secondaryHydrationReady && adapter?.kind !== "member" && !!historyOwnerId && !!weekId && dayIndexForSlots != null,
+    staleTime: 10 * 60_000,
+    retry: 1,
+    queryFn: async () => {
+      const { data: week } = await sb.from("pl_weeks").select("block_id, week_index").eq("id", weekId).maybeSingle();
+      if (!week || week.week_index == null || week.week_index < 1) return null;
+      const { data: prevWeek } = await sb.from("pl_weeks").select("id")
+        .eq("block_id", week.block_id).eq("week_index", week.week_index - 1).limit(1).maybeSingle();
+      if (!prevWeek) return null;
+      const { data: prevDay } = await sb.from("pl_days").select("id")
+        .eq("week_id", prevWeek.id).eq("day_index", dayIndexForSlots).limit(1).maybeSingle();
+      if (!prevDay) return null;
+      const { data: prevRows } = await sb.from("pl_exercise_rows")
+        .select("id, exercise_id, exercise_name_override, sort_order, purpose_label, exercises(name, muscle_group, category, movement_family)")
+        .eq("day_id", prevDay.id);
+      const ids = ((prevRows ?? []) as any[]).map((r) => r.id);
+      if (!ids.length) return null;
+      const { data: sets } = await sb.from("pl_row_results")
+        .select("id, row_id, set_index, entered_value, entered_unit, actual_load, actual_load_unit, normalized_kg, normalized_lb, actual_load_kg, actual_load_lb, actual_reps, actual_rpe, actual_rpe_num, load_type, is_bodyweight, completed_at")
+        .in("row_id", ids).eq("client_id", historyOwnerId).not("completed_at", "is", null);
+      return { rows: (prevRows ?? []) as any[], sets: (sets ?? []) as any[] };
+    },
+  });
+  const lastWeekSwapByRow = useMemo(() => {
+    const out = new Map<string, LastWeekSwap>();
+    if (!lastWeekDay) return out;
+    const toSlot = (r: any): SlotRow => ({
+      id: r.id,
+      exerciseId: r.exercise_id ?? r.exercises?.id ?? null,
+      name: r.exercises?.name ?? r.exercise_name_override ?? "",
+      sortOrder: r.sort_order ?? null,
+      purposeLabel: r.purpose_label ?? null,
+      muscleGroup: r.exercises?.muscle_group ?? null,
+      category: r.exercises?.category ?? null,
+      family: r.exercises?.movement_family ?? null,
+    });
+    const matched = matchPreviousWeekSlots((rows as any[]).map(toSlot), lastWeekDay.rows.map(toSlot));
+    for (const [rowId, slot] of matched) {
+      const sets = lastWeekDay.sets.filter((x: any) => x.row_id === slot.id);
+      if (sets.length && slot.name) out.set(rowId, { name: slot.name, sets });
+    }
+    return out;
+  }, [lastWeekDay, rows]);
 
   // Per-row history for RPE-based load suggestions — same batch, same matching
   // rules as Last Time, current session excluded.
@@ -2426,6 +2480,7 @@ function WorkoutDay({
                       clientId={client?.id}
                       previousLift={previousLiftByRow.get(r.id) ?? null}
                       warmedUp={warmedUpRowIds.has(r.id)}
+                      lastWeekSwap={lastWeekSwapByRow.get(r.id) ?? null}
                       dayRead={dayReadByRow.get(r.id) ?? null}
                       suggestNudge={suggestNudgeRowId === r.id ? hideSuggestNudge : null}
                       onSuggestEligible={reportSuggestEligible}
@@ -2740,6 +2795,7 @@ function WorkoutDay({
                     clientId={client?.id}
                     previousLift={previousLiftByRow.get(r.id) ?? null}
                       warmedUp={warmedUpRowIds.has(r.id)}
+                      lastWeekSwap={lastWeekSwapByRow.get(r.id) ?? null}
                       dayRead={dayReadByRow.get(r.id) ?? null}
                       suggestNudge={suggestNudgeRowId === r.id ? hideSuggestNudge : null}
                       onSuggestEligible={reportSuggestEligible}
@@ -3147,8 +3203,16 @@ function DayCoachNotes({ day }: { day: { notes?: string | null; notes_client_vis
  * but explicit ("Last time" label + date) so the client can't mistake it
  * for today's target.
  */
-function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift | null; displayUnit: "kg" | "lb"; className?: string }) {
-  if (!data) return null;
+function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = null }: {
+  data: PreviousLift | null;
+  displayUnit: "kg" | "lb";
+  className?: string;
+  /** Tapping it opens this exercise's History (it is the History button). */
+  onOpen?: () => void;
+  /** Shown instead when there is no last time to show. */
+  fallback?: ReactNode;
+}) {
+  if (!data) return <>{fallback}</>;
   // A 0-load logged set is a bodyweight set — surface it as "BW × reps".
   // Assisted sets keep their load type so "50 lb" can never be mistaken for
   // weight the athlete actually lifted.
@@ -3160,26 +3224,40 @@ function PreviousLiftChip({ data, displayUnit, className }: { data: PreviousLift
         ? (rawLoad ? `${rawLoad} assistance` : "")
         : (rawLoad ?? (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : ""));
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
-  if (!loadStr && !repsStr) return null;
+  if (!loadStr && !repsStr) return <>{fallback}</>;
   let when = "";
   if (data.occurredAt) {
     const d = new Date(data.occurredAt);
     const days = Math.round((Date.now() - d.getTime()) / 86400000);
-    when = days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days}d ago` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    // "7d", not "7d ago": the chip shares its row with the Suggest switch.
+    when = days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days}d` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
-  return (
-    <div
-      className={cn("inline-flex max-w-full items-center gap-1 rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-900 dark:text-sky-100", className)}
-      title="Your top set the last time you trained this exercise"
-    >
-      <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">Last time</span>
+  const body = (
+    <>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-sky-700/80 dark:text-sky-300/80">Last time</span>
       <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}</span>
       {when && <span className="text-[10px] text-sky-700/70 dark:text-sky-300/70">· {when}</span>}
-    </div>
+    </>
+  );
+  const chip = "inline-flex max-w-full items-center gap-[3px] rounded-md border border-sky-500/30 bg-sky-500/10 px-1.5 py-1 text-[11px] font-medium text-sky-900 dark:text-sky-100";
+  if (!onOpen) {
+    return <div className={cn(chip, className)} title="Your top set the last time you trained this exercise">{body}</div>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      data-testid="last-time-history"
+      aria-label={`Last time: ${loadStr}${repsStr}${when ? `, ${when}` : ""}. Open history`}
+      className={cn(chip, "h-7 transition hover:bg-sky-500/15 active:scale-[0.97]", className)}
+    >
+      {body}
+      <ChevronRight className="-mr-0.5 h-3.5 w-3.5 shrink-0 text-sky-700/70 dark:text-sky-300/70" aria-hidden="true" />
+    </button>
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3824,6 +3902,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   };
   const [swapOpen, setSwapOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Timer results follow the same controlled downward cascade as weight:
   // blank / auto-derived sets below adopt the value, manual ones are protected.
@@ -4073,6 +4152,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         <Badge variant="outline" className={cn("h-5 px-1.5 text-[11px] font-bold uppercase tracking-wider", purposeLabelBadgeClass(purposeLabel))}>
           {purposeLabel || category}
         </Badge>
+        {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
         {hasNote && (
           <span title="You saved a note for this exercise" className="inline-flex h-4 items-center gap-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
             <StickyNote className="h-2.5 w-2.5" /> Note
@@ -4096,27 +4176,39 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         })}
         {row.tempo && <span className="ml-2 text-sm font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
-      {/* Reference row: Last Time and History stay directly connected — History
-          simply expands on the previous-performance information. */}
+      {/* Reference row: "Last time" IS the History button (tap it for the
+          full history), so the row holds it and the Suggest switch on one line.
+          With no last time to show, a plain History chip stands in. */}
       {(exerciseId || name) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
           <PreviousLiftChip
             data={previousLift}
             displayUnit={activeUnit}
             className="mt-0"
+            onOpen={clientId ? () => setHistoryOpen(true) : undefined}
+            fallback={clientId ? (
+              <DeferredExerciseHistoryButton
+                clientId={clientId}
+                exerciseId={exerciseId}
+                exerciseName={name}
+                displayUnit={activeUnit}
+                currentDayIndex={dayIndex}
+                className="w-auto h-7 rounded-full px-2.5 text-xs"
+              />
+            ) : null}
           />
-          {clientId && (
-            <DeferredExerciseHistoryButton
-              clientId={clientId}
-              exerciseId={exerciseId}
-              exerciseName={name}
-              displayUnit={activeUnit}
-              currentDayIndex={dayIndex}
-              className="w-auto h-7 rounded-full px-2.5 text-xs"
-            />
-          )}
           {canSuggest && !readonly && <LoadSuggestionsChip highlight={!!suggestNudge} />}
         </div>
+      )}
+      {historyOpen && clientId && (
+        <DeferredExerciseHistorySheet
+          clientId={clientId}
+          exerciseId={exerciseId}
+          exerciseName={name}
+          displayUnit={activeUnit}
+          currentDayIndex={dayIndex}
+          onClose={() => setHistoryOpen(false)}
+        />
       )}
       {canSuggest && !readonly && suggestNudge && !showSuggestionCard && <LoadSuggestionsNudge onDismiss={suggestNudge} />}
       {/* Off by default; the Suggest chip on any card turns it on for every
@@ -4215,6 +4307,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 {cuesOpen ? "Hide cues" : "Show cues"}
               </DropdownMenuItem>
             )}
+            {toolsActions && (
+              <DropdownMenuItem onSelect={() => toolsActions.open({ tool: "calc", unit: activeUnit })} className="rounded-lg" data-testid="card-calculator">
+                <Calculator className="mr-2 h-4 w-4" /> Calculator
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => setHelpOpen(true)} className="rounded-lg">
               <HelpCircle className="mr-2 h-4 w-4" /> Training help
             </DropdownMenuItem>
@@ -4262,7 +4359,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             onStart={() => beginWorkoutSession(dayId)}
           />
         ) : null}
-        onCalculator={toolsActions ? () => toolsActions.open({ tool: "calc", unit: activeUnit }) : null}
       />
       <DeferredQuickSwapSheet
         open={swapOpen}

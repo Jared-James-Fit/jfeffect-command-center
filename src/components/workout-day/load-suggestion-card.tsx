@@ -162,7 +162,7 @@ export function LoadSuggestionsChip({ highlight = false, className }: { highligh
       onClick={() => setShow(!show)}
       data-testid="load-suggestions-chip"
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold transition active:scale-[0.97]",
+        "inline-flex h-7 items-center gap-1 rounded-full border px-2 text-xs font-semibold transition active:scale-[0.97]",
         show ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-background text-foreground",
         highlight && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
         className,
