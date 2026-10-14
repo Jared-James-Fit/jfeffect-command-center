@@ -33,4 +33,14 @@ describe("the phone apps ask for the camera instead of crashing", () => {
     expect(s.text).toContain("android.permission.RECORD_AUDIO");
     expect(s.text).toContain('android:required="false"');
   });
+
+  it("iOS: each build stamps its number on the web view, so the app can say when it's too old", () => {
+    const wf = read(".github/workflows/ios-build.yml");
+    const s = step(wf, "Stamp the build number on the web view");
+    expect(s.at).toBeGreaterThan(wf.indexOf("- name: Setup iOS platform"));
+    expect(s.at).toBeLessThan(wf.indexOf("- name: Build and Archive iOS app"));
+    expect(s.text).not.toMatch(/\n\s+if:/);
+    expect(s.text).toContain('cfg["appendUserAgent"] = f"JFEffectApp/{os.environ[\'BUILD_NUMBER\']}"');
+    expect(read("src/platform/index.ts")).toContain("/JFEffectApp\\/(\\d+)/");
+  });
 });

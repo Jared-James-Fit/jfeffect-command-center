@@ -190,6 +190,20 @@ jobs:
           print("✅ Purpose strings set: " + ", ".join(strings))
           PYEOF
 
+      # The web app can tell which iPhone build it's running in (e.g. to say
+      # "update the app" when a build is too old for the camera): Capacitor
+      # appends this to the web view's user agent. The App plugin isn't linked.
+      - name: Stamp the build number on the web view
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+          path = "ios/App/App/capacitor.config.json"
+          cfg = json.load(open(path))
+          cfg["appendUserAgent"] = f"JFEffectApp/{os.environ['BUILD_NUMBER']}"
+          json.dump(cfg, open(path, "w"), indent=2)
+          print("✅ User agent stamp:", cfg["appendUserAgent"])
+          PYEOF
+
       - name: Install Pillow for icon generation
         run: python3 -m pip install --break-system-packages Pillow
 
