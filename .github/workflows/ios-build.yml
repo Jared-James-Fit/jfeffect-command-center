@@ -419,6 +419,20 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="JF Effect App Store Distribution" \
             "OTHER_CODE_SIGN_FLAGS=--keychain $KEYCHAIN_PATH"
 
+      # Proof, in every build's log, that the app going to TestFlight really
+      # carries the camera / microphone / photo permission text (without it iOS
+      # hides the camera from the web view and closes the app on "Take a photo").
+      - name: Check the built app carries the permission text
+        run: |
+          APP=$(find "$RUNNER_TEMP/JFEffect.xcarchive/Products/Applications" -maxdepth 1 -name "*.app" | head -1)
+          if [ -z "$APP" ]; then echo "::error::No .app in the archive"; exit 1; fi
+          echo "App: $APP (build $(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"))"
+          for k in NSCameraUsageDescription NSMicrophoneUsageDescription NSPhotoLibraryUsageDescription NSPhotoLibraryAddUsageDescription; do
+            v=$(/usr/libexec/PlistBuddy -c "Print :$k" "$APP/Info.plist" 2>/dev/null) || { echo "::error::$k is missing from the built app"; exit 1; }
+            echo "✅ $k: $v"
+          done
+          grep -o '"appendUserAgent": *"[^"]*"' "$APP/capacitor.config.json" || echo "::warning::No build number stamp in capacitor.config.json"
+
       - name: Export and Upload to TestFlight
         run: |
           cat > /tmp/ExportOptions.plist << 'PLIST'

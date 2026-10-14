@@ -65,7 +65,12 @@ export async function nativeAppBuild(): Promise<number | null> {
 export async function iosAppTooOldForCamera(): Promise<boolean> {
   if (getPlatform() !== "ios") return false;
   const build = await nativeAppBuild();
-  return build != null && build < IOS_CAMERA_MIN_BUILD;
+  if (build != null) return build < IOS_CAMERA_MIN_BUILD;
+  // Builds before the user-agent stamp can't say their number. An iPhone app
+  // whose web view has no camera at all is one without the camera permission
+  // text (iOS hides the camera then): a build from before 1842, where the
+  // phone's own camera would close the app too.
+  return typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia !== "function";
 }
 
 /** iOS: JF Effect's own page in Settings (where Camera is switched on). */

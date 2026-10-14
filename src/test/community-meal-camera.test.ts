@@ -11,7 +11,9 @@ describe("the camera opens in the iPhone app (or says exactly why not)", () => {
   it("knows an app build from before the camera worked in it (#565 added the permission text from build 1842)", () => {
     expect(platform).toContain("export const IOS_CAMERA_MIN_BUILD = 1842;");
     expect(platform).toContain("const info = await (window as any).Capacitor?.Plugins?.App?.getInfo?.();");
-    expect(platform).toContain("return build != null && build < IOS_CAMERA_MIN_BUILD;");
+    expect(platform).toContain("if (build != null) return build < IOS_CAMERA_MIN_BUILD;");
+    // a build too old to say its number: no camera in its web view means no camera permission text
+    expect(platform).toContain('return typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia !== "function";');
   });
   it("an old build is sent to TestFlight and never into the phone's camera (that closes it)", () => {
     expect(studio).toContain("Update JF Effect to use the camera");

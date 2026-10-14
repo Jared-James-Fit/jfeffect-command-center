@@ -43,4 +43,13 @@ describe("the phone apps ask for the camera instead of crashing", () => {
     expect(s.text).toContain('cfg["appendUserAgent"] = f"JFEffectApp/{os.environ[\'BUILD_NUMBER\']}"');
     expect(read("src/platform/index.ts")).toContain("/JFEffectApp\\/(\\d+)/");
   });
+
+  it("iOS: every build checks the finished app for the permission text before it goes to TestFlight", () => {
+    const wf = read(".github/workflows/ios-build.yml");
+    const s = step(wf, "Check the built app carries the permission text");
+    expect(s.at).toBeGreaterThan(wf.indexOf("- name: Build and Archive iOS app"));
+    expect(s.at).toBeLessThan(wf.indexOf("- name: Export and Upload to TestFlight"));
+    expect(s.text).not.toMatch(/\n\s+if:/);
+    expect(s.text).toContain("for k in NSCameraUsageDescription NSMicrophoneUsageDescription NSPhotoLibraryUsageDescription NSPhotoLibraryAddUsageDescription; do");
+  });
 });
