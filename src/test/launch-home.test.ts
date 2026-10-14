@@ -10,9 +10,6 @@ vi.mock("@/lib/auth", () => ({ cachedSessionRole: () => state.session }));
 vi.mock("@/lib/client-impersonation", () => ({ hasStoredClientPov: () => state.pov }));
 vi.mock("@/lib/view-mode", () => ({ getViewMode: () => state.viewMode }));
 
-import { cachedLaunchHome, cachedLaunchTarget } from "@/lib/launch-home";
-import { clearLastRoute, lastRouteFor, saveLastRoute } from "@/lib/route-persistence";
-
 const read = (p: string) => readFileSync(p, "utf8");
 
 // the browser's storage, in memory (these tests run in Node)
@@ -25,71 +22,92 @@ vi.stubGlobal("localStorage", {
   key: (i: number) => [...store.keys()][i] ?? null,
   get length() { return store.size; },
 });
+vi.stubGlobal("window", globalThis);
 
-describe("opening the app comes back where you left off", () => {
+import { cachedLaunchTarget, crewHome, launchTarget } from "@/lib/launch-home";
+import { clearLastRoute, resumableWorkoutRoute, saveLastRoute } from "@/lib/route-persistence";
+import { RESUME_WORKOUT_WITHIN_MS } from "@/lib/workout-resume";
+
+/** A workout being logged, as the Workout Session clock stores it. */
+const logging = (dayId: string, lastSeenAt = Date.now()) => {
+  store.set("workout-active-day", dayId);
+  store.set(`wsession:${dayId}`, JSON.stringify({ startedAt: lastSeenAt - 600_000, pausedMs: 0, pausedAt: null, lastSeenAt, stoppedAt: null }));
+};
+
+describe("a fresh launch opens Crew; mid-workout it goes back to the workout", () => {
   beforeEach(() => {
     state.session = null;
     state.pov = false;
     state.viewMode = null;
-    localStorage.clear();
+    store.clear();
   });
 
-  it("reopens the last screen (Crew, a workout, a client), else the role's Home", () => {
+  it("opens Crew for everyone with one; the finance login keeps its desk", () => {
+    expect(crewHome("client")).toBe("/portal/community");
+    expect(crewHome("member")).toBe("/portal/community");
+    expect(crewHome("admin", "client")).toBe("/portal/community"); // staff + client account, client view
+    expect(crewHome("admin")).toBe("/admin/community");
+    expect(crewHome("coach")).toBe("/admin/community");
+    expect(crewHome("finance")).toBe("/finance");
+    // whatever screen they were on (Home, a client, Nutrition), a fresh launch is Crew
+    saveLastRoute("u1", "/portal/nutrition-targets");
+    expect(launchTarget("u1", "client")).toBe("/portal/community");
+  });
+
+  it("closed (or iOS closed it in the background) mid-workout: back to that workout, with its instance", () => {
+    saveLastRoute("u1", "/portal/workouts/day-1", "?instance=sw-9");
+    logging("day-1");
+    expect(launchTarget("u1", "client")).toBe("/portal/workouts/day-1?instance=sw-9");
+    expect(launchTarget("u1", "admin", "client")).toBe("/portal/workouts/day-1?instance=sw-9");
+  });
+
+  it("only an unfinished workout from the last 2 hours, and only the one they were on", () => {
+    saveLastRoute("u1", "/portal/workouts/day-1");
+    logging("day-1", Date.now() - RESUME_WORKOUT_WITHIN_MS - 60_000);
+    expect(resumableWorkoutRoute("u1")).toBeNull(); // too long ago: Crew
+    logging("day-2");
+    expect(resumableWorkoutRoute("u1")).toBeNull(); // a different workout is running
+    store.delete("workout-active-day"); // finished (the clock clears it)
+    expect(launchTarget("u1", "client")).toBe("/portal/community");
+    saveLastRoute("u1", "/portal/workouts/analytics");
+    logging("analytics");
+    expect(resumableWorkoutRoute("u1")).toBeNull(); // the analytics page isn't a workout
+    saveLastRoute("u2", "/portal/workouts/day-3");
+    logging("day-3");
+    clearLastRoute("u2"); // signed out
+    expect(resumableWorkoutRoute("u2")).toBeNull();
+    expect(launchTarget("u2", "finance")).toBe("/finance");
+  });
+
+  it("the fast launch goes straight there when this device knows the role, else waits for the full check", () => {
     state.session = { uid: "u1", role: "client" };
-    expect(cachedLaunchTarget()).toBe("/portal"); // nothing saved yet
-    saveLastRoute("u1", "/portal/community");
     expect(cachedLaunchTarget()).toBe("/portal/community");
-    saveLastRoute("u1", "/portal/workouts/abc");
-    expect(cachedLaunchTarget()).toBe("/portal/workouts/abc");
+    saveLastRoute("u1", "/portal/workouts/day-1");
+    logging("day-1");
+    expect(cachedLaunchTarget()).toBe("/portal/workouts/day-1");
+    state.session = { uid: "u2", role: "coach" };
+    expect(cachedLaunchTarget()).toBe("/admin/community");
+    state.session = { uid: "u3", role: "media_manager" };
+    expect(cachedLaunchTarget()).toBeNull();
     state.session = { uid: "u2", role: "admin" };
-    saveLastRoute("u2", "/admin/clients/42");
-    expect(cachedLaunchTarget()).toBe("/admin/clients/42");
-  });
-
-  it("only reopens what the role may open; sign-in pages and old entries never", () => {
-    saveLastRoute("u1", "/admin/clients/42");
-    expect(lastRouteFor("u1", "client")).toBeNull(); // a client never lands in staff pages
-    expect(lastRouteFor("u1", "coach")).toBe("/admin/clients/42");
-    saveLastRoute("u1", "/portal/community");
-    expect(lastRouteFor("u1", "admin", "client")).toBe("/portal/community"); // dual account, client view
-    saveLastRoute("u1", "/admin");
-    expect(lastRouteFor("u1", "admin", "client")).toBeNull(); // client view never reopens staff pages
-    saveLastRoute("u3", "/auth");
-    expect(lastRouteFor("u3", "client")).toBeNull();
-    localStorage.setItem("jf:last-route:u4", JSON.stringify({ pathname: "/portal/community", savedAt: Date.now() - 8 * 86_400_000 }));
-    expect(lastRouteFor("u4", "client")).toBeNull(); // older than 7 days
-    saveLastRoute("u5", "/portal/community");
-    clearLastRoute("u5"); // sign-out
-    expect(lastRouteFor("u5", "client")).toBeNull();
-  });
-
-  it("the fast launch still goes straight there when this device knows the role", () => {
-    for (const [role, home] of [
-      ["client", "/portal"],
-      ["member", "/portal"],
-      ["admin", "/admin"],
-      ["coach", "/admin"],
-      ["finance", "/finance"],
-    ] as const) {
-      state.session = { uid: "u1", role };
-      expect(cachedLaunchHome()).toBe(home);
-    }
-    expect((state.session = null, cachedLaunchTarget())).toBeNull(); // nothing cached
-    state.session = { uid: "u1", role: "admin" };
     state.pov = true;
-    expect(cachedLaunchTarget()).toBeNull(); // "View as client": the full check decides
+    expect(cachedLaunchTarget()).toBeNull(); // "View as client"
     state.pov = false;
     state.viewMode = "client";
-    expect(cachedLaunchTarget()).toBeNull(); // dual account chose a view: the full check decides
+    expect(cachedLaunchTarget()).toBeNull(); // dual account chose a view
+    state.session = null;
+    expect(cachedLaunchTarget()).toBeNull();
   });
 
-  it("is wired in: every screen is saved, the launch and the dual-account client view reopen it, nothing sends a reopen to Home", () => {
-    expect(read("src/routes/__root.tsx")).toContain("saveLastRoute(user.id, location.pathname);");
+  it("is wired in, and nothing sends an app coming back from another app anywhere", () => {
+    expect(read("src/routes/__root.tsx")).toContain('saveLastRoute(user.id, location.pathname, location.searchStr ?? "");');
     const index = read("src/routes/index.tsx");
     expect(index).toContain("const target = cachedLaunchTarget();");
-    expect(index).toContain('lastRouteFor(user.id, role, "client") ?? "/portal"');
-    expect(index).toContain("const saved = lastRouteFor(user.id, role);");
+    expect(index).toContain('navigate({ href: launchTarget(user.id, role, "client"), replace: true });');
+    expect(index).toContain('navigate({ href: viewOnly ? "/finance" : launchTarget(user.id, role), replace: true });');
+    expect(read("src/routes/app.tsx")).toContain("const target = cachedLaunchTarget();");
     expect(read("src/lib/auth.tsx")).toContain("if (uid) clearLastRoute(uid);");
+    expect(read("src/components/workout-day/WorkoutTimer.tsx")).toContain("const ACTIVE_DAY_KEY = ACTIVE_WORKOUT_DAY_KEY;");
     expect(existsSync("src/lib/app-reopen.ts")).toBe(false);
     expect(read("src/routes/_authenticated/route.tsx")).not.toContain("reopenTarget");
     expect(read("public/manifest.json")).toContain('"start_url": "/"');

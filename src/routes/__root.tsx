@@ -340,7 +340,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 /**
  * Keeps the light/dark theme in step with the current page, and remembers the
- * signed-in person's screen so opening the app again comes back to it
+ * signed-in person's screen so a launch mid-workout goes back to that workout
  * (route-persistence.ts). Renders nothing.
  */
 function RouteTracker() {
@@ -349,8 +349,8 @@ function RouteTracker() {
   useThemeSync(location.pathname);
   useEffect(() => {
     if (loading || !user?.id) return;
-    saveLastRoute(user.id, location.pathname);
-  }, [user?.id, loading, location.pathname]);
+    saveLastRoute(user.id, location.pathname, location.searchStr ?? "");
+  }, [user?.id, loading, location.pathname, location.searchStr]);
   return null;
 }
 

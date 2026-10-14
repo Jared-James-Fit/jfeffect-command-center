@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Clock, Pause, Play, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ACTIVE_WORKOUT_DAY_KEY, WORKOUT_SESSION_PREFIX } from "@/lib/workout-resume";
 
 /**
  * Workout Session timer.
@@ -24,9 +25,9 @@ import { cn } from "@/lib/utils";
  * untouched mechanism (RestTimerButton / DurationTimerInCard).
  */
 
-const SESSION_PREFIX = "wsession:";
+const SESSION_PREFIX = WORKOUT_SESSION_PREFIX;
 const RUNTIME_KEY = "workout-runtime-id";
-const ACTIVE_DAY_KEY = "workout-active-day";
+const ACTIVE_DAY_KEY = ACTIVE_WORKOUT_DAY_KEY;
 /** Sessions running longer than this are treated as abandoned, not real. */
 export const MAX_SESSION_MS = 6 * 60 * 60 * 1000;
 
