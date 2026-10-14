@@ -72,7 +72,7 @@ export default defineConfig({
           // Pull in our Web Push handlers (push, notificationclick,
           // pushsubscriptionchange) inside the same SW Workbox generates.
           // This keeps us at ONE service worker for offline + push.
-          importScripts: ["/push-sw.js?v=20260928-home-hotfix-1"],
+          importScripts: ["/push-sw.js?v=20261014-open-link"],
           navigateFallbackDenylist: [
             /^\/~oauth/,         // Supabase OAuth callback — must hit network
             /^\/api\//,

@@ -76,7 +76,10 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
+  const raw = (event.notification.data && event.notification.data.url) || '/';
+  // Marked so a reopened app opens this page instead of going to Home.
+  let url = raw;
+  try { const u = new URL(raw, self.location.origin); u.searchParams.set('jf_open', '1'); url = u.pathname + u.search + u.hash; } catch {}
   event.waitUntil((async () => {
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     // Focus an existing tab if we already have one

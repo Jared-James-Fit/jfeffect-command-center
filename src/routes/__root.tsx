@@ -10,6 +10,7 @@ import {
 } from "@/lib/query-persister";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth";
+import { noteAppPage, trackAppState } from "@/lib/app-reopen";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
 import { ProgressDrawer } from "@/components/progress-drawer";
 import { GlobalHighlight } from "@/components/global-highlight";
@@ -338,12 +339,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 /**
- * Keeps the light/dark theme in step with the current page. Renders nothing.
- * (The app no longer remembers the last screen: a launch always opens Home.)
+ * Keeps the light/dark theme in step with the current page, and notes the
+ * app's state for reopen detection. Renders nothing.
  */
 function RouteTracker() {
   const location = useLocation();
   useThemeSync(location.pathname);
+  // Notes whether the app went to the background or reloaded, so a reopen
+  // can be told apart and land on Home (src/lib/app-reopen.ts).
+  useEffect(() => trackAppState(), []);
+  useEffect(() => noteAppPage(location.pathname), [location.pathname]);
   return null;
 }
 
