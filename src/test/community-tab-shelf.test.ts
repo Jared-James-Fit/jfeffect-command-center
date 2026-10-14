@@ -174,7 +174,7 @@ describe("the recap's one-tap post", () => {
     expect(footer).toContain("<CaptionRow value={caption} onOpen={() => setWriting(true)} />");
     expect(footer).toContain("<CaptionSheet open={writing}");
     // opening the camera instead keeps what they wrote
-    expect(footer).toContain("onClick={() => onStudio(caption)}");
+    expect(footer).toContain("onPhoto={() => onStudio(caption)}");
     expect(read("src/components/community/use-workout-studio.ts")).toContain("caption: existing ? existing.caption : draftCaption,");
   });
   it("says what it earns only when it really earns (DB rule: recent workout, 1 a day, 2 a week)", () => {
@@ -183,9 +183,38 @@ describe("the recap's one-tap post", () => {
   });
   it("an earlier finish post: says where it is, Done takes over; a lock-in never counts as one", () => {
     expect(footer).toContain('"It\'s in the crew\'s feed"');
-    expect(footer).toContain('existing.visibility === "coach"');
+    expect(footer).toContain('existing?.visibility === "coach"');
     expect(footer).not.toContain("locked_in_at");
     expect(footer).toContain('useMyPostForCompletion(completionId, true, "lockin")');
+  });
+});
+
+describe("the recap's composer, with the automatic story post", () => {
+  const footer = read("src/components/community/recap-post.tsx");
+  const summary = read("src/components/workout-submission-summary.tsx");
+  it("shows what the crew will see first: the same headline win as the post, from the same stats", () => {
+    expect(footer).toContain("useCompletionPreview(completionId)");
+    expect(footer).toContain("pickWorkoutWin(stats, unit)");
+    // weights hidden on their posts stay hidden on the preview
+    expect(footer).toContain("const detail = win?.detail && !hideLoads ? win.detail : null;");
+    expect(summary).toContain("unit={displayUnit}");
+  });
+  it("the automatic post isn't 'shared': Share to Crew upgrades that same post, Hide it takes it out of Crew", () => {
+    expect(footer).toContain("const unshared = !justPosted && (!existing || auto || hidden);");
+    expect(footer).toContain("On your story for 24 hours");
+    expect(footer).toContain('saveCommunityPost({ completionId, caption: "", visibility: "private", media: { action: "keep" } })');
+    // the hide is only a choice they make: never on its own
+    expect(footer).toContain("onClick={() => void hide()}");
+    expect(footer).not.toMatch(/useEffect\([^)]*hide\(\)/);
+  });
+  it("one save at a time, and a failed share keeps the caption to try again", () => {
+    expect(footer).toContain("if (busy.current) return;");
+    const fail = footer.slice(footer.indexOf("} catch (e: any) {"), footer.indexOf("} finally {"));
+    expect(fail).not.toContain("setCaption");
+  });
+  it("tells them the review stays with the coach", () => {
+    expect(footer).toContain("Your review and coach note stay private.");
+    expect(footer).not.toMatch(/feedback|pain|session_rpe|pl_workout_feedback/);
   });
 });
 

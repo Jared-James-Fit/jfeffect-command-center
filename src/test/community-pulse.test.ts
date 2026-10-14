@@ -157,23 +157,19 @@ describe("Home reads on until it has 3 posts people made", () => {
   });
 });
 
-describe("after a workout: one tap to share it, with the PR up front", () => {
+describe("after a workout: the session's story post, one tap from the feed", () => {
   const footer = read("src/components/community/recap-post.tsx");
-  it("a session that posted itself says it's on your story, and the same caption + one tap posts it to the feed (the same post)", () => {
-    expect(footer).toContain("const pulse = !!existing?.auto_shared;");
-    expect(footer).toContain("if (existing && !pulse) {");
+  it("says where it actually is (their story, not a crew Activity), and sharing upgrades that same post", () => {
     expect(footer).toContain("On your story for 24 hours");
-    expect(footer).not.toContain("Posted automatically as Activity");
-    // the share earns its points again once it's theirs
-    expect(footer).toContain("usePostPointsStatus(canPost && (!existing || pulse))");
-    // Undo would delete their session's story post, so it's only for a post this made
-    expect(footer).toContain("if (!pulse) setJustPosted(id);");
+    expect(footer).not.toMatch(/Crew Activity|as Activity/);
+    expect(footer).toContain("const unshared = !justPosted && (!existing || auto || hidden);");
   });
-  it("the post button celebrates a PR when they set one", () => {
-    expect(footer).toContain('const label = records > 0 ? (records === 1 ? "Share your PR" : "Share your PRs") : pulse ? "Post to feed" : "Post to crew";');
-    expect(read("src/components/workout-submission-summary.tsx")).toContain("records={recordCount}");
+  it("Undo is only for a post the footer made (it would delete the session's story post too)", () => {
+    expect(footer).toContain("const made = !existing;");
+    expect(footer).toContain("{justPosted === postId && undoable && (");
   });
-  it("never blocks finishing: Done is always there, and nothing posts unless they tap", () => {
+  it("the PR leads what they'd share (the same headline win as the post), and Done always skips it", () => {
+    expect(footer).toContain("pickWorkoutWin(stats, unit)");
     expect(footer).toContain('<Button type="button" variant="outline" className="h-12 rounded-xl text-sm font-bold" onClick={onDone}>');
   });
 });
