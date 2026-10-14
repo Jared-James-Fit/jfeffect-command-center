@@ -89,16 +89,22 @@ import type { ProgramRoadmap } from "@/lib/training-roadmap";
 
 type Mode = "self" | "coach";
 
+/** ?open=<date> values already acted on in this page load (see WorkoutsExperience). */
+const handledOpenDates = new Set<string>();
+
 export function WorkoutsExperience({
   clientId,
   mode = "self",
   clientName,
+  openDate,
 }: {
   clientId: string;
   mode?: Mode;
   clientName?: string | null;
+  /** yyyy-mm-dd: open that day's workout (or show that day when it isn't exactly one). */
+  openDate?: string | null;
 }) {
-  const { data: client } = useQuery({
+  const { data: client, isFetched: clientFetched } = useQuery({
     queryKey: ["workouts-experience-client", clientId],
     queryFn: async () =>
       (await supabase.from("clients").select("*").eq("id", clientId).maybeSingle()).data,
@@ -212,6 +218,27 @@ export function WorkoutsExperience({
     : null;
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const navigate = useNavigate();
+
+  // Arriving with ?open=<date> (a coach tapping "Open … workout" on a session):
+  // once the dates are resolved, show that day and, when it holds exactly one
+  // workout, open it the way its card's main button would. Once per page load,
+  // so Back from the workout lands on that day instead of reopening it.
+  useEffect(() => {
+    if (!openDate || !/^\d{4}-\d{2}-\d{2}$/.test(openDate) || isLoading || !clientFetched) return;
+    if (handledOpenDates.has(openDate)) return;
+    handledOpenDates.add(openDate);
+    const [y, m, d] = openDate.split("-").map(Number);
+    setSelectedDate(new Date(y, m - 1, d));
+    const onDay = (byDate.get(openDate) ?? []).filter((it) => !isAtHomeBackupSessionBlock(it.block));
+    if (onDay.length !== 1) return;
+    const item = onDay[0];
+    const cta = primaryCtaFor(item, getWorkoutStatus(item).status);
+    navigate({
+      to: "/portal/workouts/$dayId",
+      params: { dayId: item.day.id },
+      search: { ...(cta.search as any), ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any,
+    });
+  }, [openDate, isLoading, clientFetched, byDate, navigate]);
 
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);

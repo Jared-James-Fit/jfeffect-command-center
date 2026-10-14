@@ -1,10 +1,6 @@
 import { ClientNameLink } from "@/components/clients/client-name-link";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { toast } from "sonner";
-import { useAuth } from "@/lib/auth";
-import { useClientImpersonation } from "@/lib/client-impersonation";
-import { supabase } from "@/integrations/supabase/client";
+import { Link } from "@tanstack/react-router";
+import { useEnterClientPov } from "@/components/clients/use-enter-client-pov";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,40 +46,10 @@ export function ClientMobileCard(props: ClientCardProps) {
     hasActiveProduct, setupNeeded,
     onAssign, onSell, onSendSetup, onSendReset, onToggleArchive, onDelete,
   } = props;
-  const { role } = useAuth();
-  const navigate = useNavigate();
-  const impersonation = useClientImpersonation();
-  const canPov = role === "admin" || role === "coach";
-  const [povBusy, setPovBusy] = useState(false);
-
-  const enterPov = async () => {
-    if (povBusy) return;
-    setPovBusy(true);
-    try {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("user_id, full_name")
-        .eq("id", c.id)
-        .single();
-      if (error) throw error;
-      const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/admin/clients";
-      impersonation.start(
-        { id: c.id, user_id: data?.user_id ?? null, full_name: data?.full_name ?? c.full_name },
-        returnTo,
-      );
-      if (!data?.user_id) {
-        toast.message("Entering POV preview — client account isn't set up yet, so personal data will be empty.");
-      }
-      if (typeof window !== "undefined") {
-        window.location.href = "/portal";
-      } else {
-        navigate({ to: "/portal" });
-      }
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not enter POV");
-      setPovBusy(false);
-    }
-  };
+  const pov = useEnterClientPov();
+  const povBusy = pov.busy;
+  const canPov = pov.canPov;
+  const enterPov = () => pov.enter(c.id, { fallbackName: c.full_name });
 
   const paymentLabel = c.payment_status ?? "—";
   const paymentTone =

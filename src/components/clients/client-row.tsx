@@ -22,10 +22,8 @@ import { format, parseISO, differenceInDays } from "date-fns";
 import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
-import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
-import { useClientImpersonation } from "@/lib/client-impersonation";
-import { supabase } from "@/integrations/supabase/client";
+import { useEnterClientPov } from "@/components/clients/use-enter-client-pov";
 import { toast } from "sonner";
 import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 
@@ -149,47 +147,12 @@ export function ClientRow({ r, onArchive, calSync }: { r: DirectoryRow; onArchiv
   const missedShownAsBadge = badges.some((b) => b.id === "missed");
   const prog = blockProgress(r.block_start, r.block_end);
   const range = fmtRange(r.block_start, r.block_end);
-  const { role, viewOnly } = useAuth();
+  const { role } = useAuth();
   const isAdmin = role === "admin";
-  const navigate = useNavigate();
-  const impersonation = useClientImpersonation();
-  // A view-only login (or a team preview) can't open client view: the server refuses it.
-  const canPov = (role === "admin" || role === "coach") && !viewOnly;
-  const [povBusy, setPovBusy] = useState(false);
-
-  const enterPov = async () => {
-    if (povBusy) return;
-    setPovBusy(true);
-    try {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("user_id, full_name")
-        .eq("id", r.id)
-        .single();
-      if (error) throw error;
-      const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/admin/clients";
-      impersonation.start(
-        { id: r.id, user_id: data?.user_id ?? null, full_name: data?.full_name ?? r.full_name },
-        returnTo,
-      );
-      if (!data?.user_id) {
-        toast.message("Entering POV preview — client account isn't set up yet, so personal data will be empty.");
-      }
-      // Use window.location.href instead of navigate() to force a full page reload.
-      // This ensures the sessionStorage/localStorage POV state is read on mount
-      // and the React context is fully initialized before the portal renders.
-      // Using navigate() causes a race condition where the portal renders before
-      // the impersonation context state update propagates.
-      if (typeof window !== "undefined") {
-        window.location.href = "/portal";
-      } else {
-        navigate({ to: "/portal" });
-      }
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not enter POV");
-      setPovBusy(false);
-    }
-  };
+  const pov = useEnterClientPov();
+  const povBusy = pov.busy;
+  const canPov = pov.canPov;
+  const enterPov = () => pov.enter(r.id, { fallbackName: r.full_name });
 
   return (
     <TooltipProvider delayDuration={300}>

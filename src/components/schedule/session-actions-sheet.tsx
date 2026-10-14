@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Ban, CalendarClock, CheckCircle2, CircleOff, Clock, MapPin, MessageSquare, Pencil, ChevronLeft, Loader2,
+  Ban, CalendarClock, CheckCircle2, CircleOff, Clock, Dumbbell, MapPin, MessageSquare, Pencil, ChevronLeft, Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -23,6 +23,7 @@ import { kickScheduleSync, textClientSessionChange } from "@/lib/schedule.functi
 import { isLastMinute } from "@/lib/pt-session-reminders";
 import { addMinutesHM, fmtWallClock, minutesBetweenHM, wallTimeToUtc, DEFAULT_TZ } from "@/lib/schedule-time";
 import { ConflictNotice, useConflictCheck } from "@/components/schedule/use-conflict-check";
+import { useEnterClientPov } from "@/components/clients/use-enter-client-pov";
 import { cn } from "@/lib/utils";
 
 export type ActionSession = {
@@ -148,6 +149,7 @@ export function SessionActionsSheet({
   });
   const blocked = conflictCheck.conflicts.length > 0 && !override;
 
+  const pov = useEnterClientPov();
   const name = clientName || client?.full_name || "Client";
   const first = client?.first_name || name.split(" ")[0];
   const title = session?.title || session?.session_type || "session";
@@ -345,6 +347,17 @@ export function SessionActionsSheet({
 
             {mode === "menu" && (
               <div className="space-y-2">
+                {/* Mid-session: straight into the client's workout for that day, as they see it. */}
+                {pov.canPov && (
+                  <Button
+                    className="h-12 w-full bg-gradient-primary font-bold"
+                    disabled={pov.busy}
+                    onClick={() => pov.enter(session.client_id, { to: `/portal/workouts?open=${session.session_date}`, fallbackName: name })}
+                  >
+                    {pov.busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Dumbbell className="mr-2 h-4 w-4" />}
+                    Open {first}'s workout
+                  </Button>
+                )}
                 {isScheduled ? (
                   <>
                     <div className="grid grid-cols-2 gap-2">
