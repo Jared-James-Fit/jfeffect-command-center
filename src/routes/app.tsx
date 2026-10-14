@@ -29,13 +29,12 @@ function AppEntry() {
   const native = isNative();
 
   useEffect(() => {
-    // Signed in: the same place as any app open (the last screen, else Home;
-    // "/" sorts out View as client and dual accounts). This used to send
-    // clients to the membership welcome page.
+    // Signed in: the same place as any app launch (Crew, or the workout
+    // they were in the middle of; "/" sorts out View as client and dual
+    // accounts). This used to send clients to the membership welcome page.
     const target = cachedLaunchTarget();
     if (target) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({ to: target as any, replace: true });
+      navigate({ href: target, replace: true });
       return;
     }
     let cancelled = false;

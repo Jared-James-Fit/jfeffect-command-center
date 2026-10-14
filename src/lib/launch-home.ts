@@ -1,48 +1,49 @@
 import { cachedSessionRole } from "@/lib/auth";
 import { hasStoredClientPov } from "@/lib/client-impersonation";
 import { getViewMode } from "@/lib/view-mode";
-import { lastRouteFor } from "@/lib/route-persistence";
+import { resumableWorkoutRoute } from "@/lib/route-persistence";
 
 /**
- * Opening the app (a cold launch always starts at "/") goes back to the screen
- * the person was last on (saved per account, up to 7 days, see
- * route-persistence.ts); with nothing saved, their Home: the portal for
- * clients and members, the admin dashboard for staff, Taxes & Books for the
- * finance login.
+ * Where a fresh launch of the app lands (a cold launch always starts at "/").
+ *
+ * - Crew: clients and members (and a staff + client account in its client
+ *   view) on the portal's Crew page, coaches and admins on the staff Crew
+ *   page; the finance login keeps its desk, Taxes & Books.
+ * - Except mid-workout: an unfinished workout that was on screen in the last
+ *   2 hours reopens instead (iOS can close the app in the background while
+ *   you're in Spotify; coming back must land on your sets).
+ *
+ * Switching apps and coming back isn't a launch: nothing reloads or
+ * redirects, so you're exactly where you were.
  */
 
-/**
- * The Home this device can pick with no network, from the role it cached at
- * the last sign-in. Null when the launch needs the full auth check: no cached
- * role, a "View as client" session, or a staff + client account that chose a
- * view.
- */
-export function cachedLaunchHome(): "/portal" | "/admin" | "/finance" | null {
-  const cached = cachedSessionRole();
-  if (!cached) return null;
-  if (hasStoredClientPov() || getViewMode(cached.uid)) return null;
-  switch (cached.role) {
-    case "client":
-    case "member":
-      return "/portal";
-    case "admin":
-    case "coach":
-      return "/admin";
-    case "finance":
-      return "/finance";
-    default:
-      return null;
-  }
+export type LaunchRole = string | null | undefined;
+
+/** The Crew page for this role (or its desk / dashboard when it has no Crew). */
+export function crewHome(role: LaunchRole, view: "client" | "staff" | null = null): string {
+  if (view === "client" || role === "client" || role === "member") return "/portal/community";
+  if (role === "admin" || role === "coach") return "/admin/community";
+  if (role === "finance") return "/finance";
+  return "/admin";
+}
+
+/** Fresh launch: back to an unfinished workout, else Crew. */
+export function launchTarget(uid: string, role: LaunchRole, view: "client" | "staff" | null = null): string {
+  const portal = view === "client" || role === "client" || role === "member" || role === "admin" || role === "coach";
+  const workout = portal ? resumableWorkoutRoute(uid) : null;
+  return workout ?? crewHome(role, view);
 }
 
 /**
- * Where a launch can go with no network: the last screen this account was on
- * (when its cached role may open it), else its Home. Null when the launch
- * needs the full auth check (see cachedLaunchHome).
+ * The same, with no network, from the role this device cached at the last
+ * sign-in. Null when the launch needs the full auth check: no cached role, a
+ * role with no Crew or desk of its own, a "View as client" session, or a
+ * staff + client account that chose a view.
  */
 export function cachedLaunchTarget(): string | null {
-  const home = cachedLaunchHome();
   const cached = cachedSessionRole();
-  if (!home || !cached) return null;
-  return lastRouteFor(cached.uid, cached.role) ?? home;
+  if (!cached) return null;
+  if (hasStoredClientPov() || getViewMode(cached.uid)) return null;
+  if (!["client", "member", "admin", "coach", "finance"].includes(cached.role)) return null;
+  return launchTarget(cached.uid, cached.role);
 }
