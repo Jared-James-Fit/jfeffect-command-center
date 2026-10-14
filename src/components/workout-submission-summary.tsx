@@ -410,6 +410,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             <RecapPostFooter
               completionId={completionId}
               completedAt={workoutDate ?? null}
+              records={recordCount}
               onDone={() => { onOpenChange(false); onClose?.(); }}
               onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}
             />

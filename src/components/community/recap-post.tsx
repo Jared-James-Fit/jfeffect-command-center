@@ -19,21 +19,29 @@ import {
 /**
  * The recap's footer for a finished client workout. It's the moment they're
  * proudest, so posting is one tap: "Post to crew" puts the workout card in
- * the feed and says what it earns; the caption sits right above it (optional,
- * and it rides into the studio if they open the camera instead). Undo sits
- * right in the footer (a toast's button is under the recap). The camera opens
- * the full studio (photo, looks, caption, who sees it). A lock-in is its own
- * post, so this always posts the finish separately. Once there's a finish
- * post, it says where it is and Done takes over.
+ * the feed and says what it earns (it says "Share your PR" when they set
+ * one); the caption sits right above it (optional, and it rides into the
+ * studio if they open the camera instead). Undo sits right in the footer (a
+ * toast's button is under the recap). The camera opens the full studio
+ * (photo, looks, caption, who sees it). A lock-in is its own post, so this
+ * always posts the finish separately.
+ *
+ * With automatic sharing on, the session already posted itself to their
+ * story: it says so, and the same caption + one tap posts it to the feed as
+ * their own (the same post, so nothing doubles up). Done leaves it as is.
+ * Once it's their own post, it says where it is and Done takes over.
  */
 export function RecapPostFooter({
   completionId,
   completedAt,
+  records = 0,
   onDone,
   onStudio,
 }: {
   completionId: string;
   completedAt?: string | Date | null;
+  /** PRs / records set this session: the post button celebrates them. */
+  records?: number;
   onDone: () => void;
   /** Opens the studio, carrying the caption written here so far. */
   onStudio: (caption: string) => void;
@@ -44,7 +52,9 @@ export function RecapPostFooter({
   // Their lock-in for this session (a separate post): it carries the numbers until the finish is posted.
   const { data: lockIn } = useMyPostForCompletion(completionId, true, "lockin");
   const canPost = activity?.enabled !== false;
-  const { data: points } = usePostPointsStatus(canPost && !existing);
+  // posted by itself to their story (automatic sharing): still theirs to post to the feed
+  const pulse = !!existing?.auto_shared;
+  const { data: points } = usePostPointsStatus(canPost && (!existing || pulse));
   const hint = postPointsHint(points, "community", false, { completedAt: completedAt ? new Date(completedAt).toISOString() : null });
   const earn = hint?.tone === "earn" && points ? points.points : 0;
   const del = useDeletePost();
@@ -58,7 +68,8 @@ export function RecapPostFooter({
     setPosting(true);
     try {
       const id = await saveCommunityPost({ completionId, caption: caption.trim(), visibility: "community", media: { action: "keep" } });
-      setJustPosted(id);
+      // Undo deletes the post, so only for one this made (not their session's story post)
+      if (!pulse) setJustPosted(id);
       invalidateCommunity(qc);
       toast.success(`You're in the feed 🔥${earn ? ` +${earn} league points` : ""}`);
     } catch (e: any) {
@@ -79,7 +90,7 @@ export function RecapPostFooter({
       },
     );
 
-  if (existing) {
+  if (existing && !pulse) {
     const where =
       existing.visibility === "community"
         ? "It's in the crew's feed"
@@ -96,8 +107,6 @@ export function RecapPostFooter({
             </button>
           )}
         </div>
-        {/* Pulse posted it by itself: a photo or caption makes it theirs (and earns the share) */}
-        {existing.auto_shared && <p className="-mt-1 mb-2 text-center text-[11px] text-muted-foreground">Posted automatically as Activity. Add a photo or caption to make it yours.</p>}
         <div className="grid w-full grid-cols-[1fr_1.35fr] gap-2">
           <Button type="button" variant="outline" className="h-12 rounded-xl text-sm font-bold" onClick={() => onStudio("")}>
             <Camera className="mr-1.5 h-4 w-4" />
@@ -126,9 +135,18 @@ export function RecapPostFooter({
     );
   }
 
+  const label = records > 0 ? (records === 1 ? "Share your PR" : "Share your PRs") : pulse ? "Post to feed" : "Post to crew";
   return (
     <div className="w-full">
-    {lockIn && (
+    {pulse ? (
+      // it's in their story already; the feed is one tap (with words or a photo if they like)
+      <div className="mb-2 text-center" data-recap-story>
+        <div className="flex items-center justify-center gap-1.5 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">
+          <Check className="h-3.5 w-3.5" strokeWidth={3} /> On your story for 24 hours
+        </div>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">Post it to the feed too, with a caption or photo if you like.</p>
+      </div>
+    ) : lockIn && (
       <div className="mb-2 text-center text-[12px] font-semibold text-muted-foreground">🔒 Your lock-in stays up. This posts your finish on its own.</div>
     )}
     <CaptionRow value={caption} onOpen={() => setWriting(true)} />
@@ -147,7 +165,7 @@ export function RecapPostFooter({
         onClick={() => void post()}
       >
         <span className="inline-flex items-center gap-1 text-sm font-black">
-          <Flame className="h-4 w-4" /> {posting ? "Posting…" : "Post to crew"}
+          <Flame className="h-4 w-4" /> {posting ? "Posting…" : label}
         </span>
         {earn > 0 && <span className="text-[10px] font-bold opacity-90">+{earn} league points</span>}
       </Button>

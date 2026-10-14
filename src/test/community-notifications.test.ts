@@ -74,7 +74,6 @@ describe("crew activity notifications", () => {
     const card = read("src/components/community/post-card.tsx");
     expect(card).not.toContain("data-celebrate");
     expect(card).not.toContain("🔥 Props");
-    expect(read("src/components/community/pulse-strip.tsx")).toContain('<ReactionButton post={post} onReact={give} size="sm" align="right" />');
     expect(read("src/components/community/crew-stories.tsx")).toContain('react.mutate(mine ? null : "heart"');
   });
   it("the bell and the push say what was celebrated (worked out once per post)", () => {

@@ -131,7 +131,7 @@ describe("client tab bar: Crew in the centre", () => {
 describe("Home's Crew feed", () => {
   it("newest first (yours too), then a card that opens the feed", () => {
     expect(entry).toContain("const { shown, more } = useMemo(() => homeCrewDeck(");
-    // automatic Activity stays in the feed; Home's shelf is posts people made
+    // a session that posted itself is in the athlete's story; Home's shelf is posts people made
     expect(entry).not.toContain("HomePulseCard");
     expect(entry).toContain("<SeeMoreCard posts=");
   });

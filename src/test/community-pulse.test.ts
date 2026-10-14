@@ -29,83 +29,70 @@ describe("Pulse: a finished workout posts itself, with its real win", () => {
     expect(sql).toContain("AND coalesce(cl.portal_access_disabled, false) = false;");
     expect(sql).toContain("IF NEW.completed_at < now() - interval '2 days' THEN RETURN NULL; END IF;");
     expect(sql).toContain("coalesce(v_hide, false)");
-    expect(read("src/components/community/profile-view.tsx")).toContain("Post my finished workouts to the crew automatically");
+    expect(read("src/components/community/profile-view.tsx")).toContain("Post my finished workouts to my story automatically (24 hours)");
   });
   it("no share points for a post nobody shared; never blocks finishing a workout", () => {
     expect(sql).toContain("and not cp.auto_shared");
     expect(sql).toContain("RAISE WARNING 'community_pulse_on_completion: %', sqlerrm;");
   });
-  it("the crew celebrates it with the heart under it, like any post (not your own)", () => {
+  it("the crew celebrates it with the heart, in the story and on the post, like any post (not your own)", () => {
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain("<PulseHero post={post} stats={s} unit={unit} />");
     expect(card).not.toContain("const canProps");
-    const strip = read("src/components/community/pulse-strip.tsx");
-    // yours: who celebrated it; theirs: the heart
-    expect(strip).toContain("{post.is_mine ? (");
-    expect(strip).toContain('title="Celebrated by"');
+    const stories = read("src/components/community/crew-stories.tsx");
+    expect(stories).toContain('aria-label={mine ? "Take it back" : isPulsePost(post) ? "Celebrate" : "Like"}');
   });
 });
 
-import { ACTIVITY_PREVIEW_ROWS, HOME_CREW_PULSES, activityDay, activityNeedsMore, activityPreview, activityWeekSummary, homeCrewPosts, isPulsePost } from "@/lib/community";
-describe("Activity: one section at the top of the feed", () => {
+import { STORY_READ_PAGES, crewStories, isPulsePost, myStory, storiesNeedMore, storyPrs } from "@/lib/community";
+import { existsSync } from "node:fs";
+describe("No Activity bubble: a finished session is the athlete's own story", () => {
   const now = Date.UTC(2026, 9, 10, 21);
   const at = (h: number) => new Date(now - h * 3600e3).toISOString();
   const pulse = (id: string, h: number, prs = 0) => ({ id, created_at: at(h), auto: true, stats: { pr_count: prs } });
   const own = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: {} });
-  it("only automatic posts are Activity; one someone made their own (caption / photo) is a regular post", () => {
+  it("only automatic posts are Pulses; one someone made their own (caption / photo) is a regular post", () => {
     expect(isPulsePost(pulse("p", 1))).toBe(true);
     expect(isPulsePost(own("claimed", 1))).toBe(false);
   });
-  it("leads with the week's real wins, with the week's sessions and PRs", () => {
-    expect(ACTIVITY_PREVIEW_ROWS).toBe(3);
-    const win = (id: string, h: number, o: object) => ({ id, created_at: new Date(now - h * 3600e3).toISOString(), auto: true, stats: { prs: [], pr_count: 0, month_sessions: 2, week_sessions: 1, top_lift: { exercise_name: "Squat", reps: 5, load_kg: 100 }, working_sets: 10, duration_min: 40, ...o } });
-    const posts = [win("routine1", 1, {}), win("pr", 2, { prs: [{ exercise_name: "Squat", reps: 3, load_kg: 140, scope: "atpr" }], pr_count: 1 }), win("routine2", 3, {}), win("streak", 5, { week_sessions: 4 }), win("tenth", 30, { month_sessions: 10 }), win("oldpr", 24 * 9, { prs: [{ exercise_name: "Bench", reps: 1, load_kg: 100, scope: "atpr" }], pr_count: 1 })];
-    expect(activityPreview(posts, 3, now).rows.map((p) => p.id)).toEqual(["pr", "streak", "tenth"]);
-    // a quiet week with no wins still shows the latest sessions
-    expect(activityPreview([win("a", 1, {}), win("b", 2, {})], 3, now).rows.map((p) => p.id)).toEqual(["a", "b"]);
-    expect(activityDay(new Date(now - 3600e3).toISOString(), new Date(now))).toBe("Today");
-    expect(activityDay(new Date(now - 26 * 3600e3).toISOString(), new Date(now))).toBe("Yesterday");
-    expect(activityWeekSummary([pulse("a", 1, 2), pulse("b", 30), pulse("old", 24 * 8, 5)], now)).toEqual({ sessions: 2, prs: 2 });
-  });
-  it("reads on until the last 7 days are loaded (bounded), so the section is complete", () => {
-    expect(activityNeedsMore([own("a", 1)], true, 1, now)).toBe(true);
-    expect(activityNeedsMore([own("a", 1), own("b", 24 * 8)], true, 1, now)).toBe(false);
-    expect(activityNeedsMore([own("a", 1)], false, 1, now)).toBe(false);
-    expect(activityNeedsMore([own("a", 1)], true, 5, now)).toBe(false);
-  });
-  it("Activity is a bubble right after Post in the story row (no card above the feed); the feed is the posts people made", () => {
-    const screen = readFileSync("src/components/community/community-screen.tsx", "utf8");
+  it("the Activity bubble, its story, its week cover and its list are gone; the feed is the posts people made", () => {
+    expect(existsSync("src/components/community/pulse-strip.tsx")).toBe(false);
+    const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain("const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);");
-    expect(screen).toContain("activity={activity.length > 0 && !following ? { posts: activity, weekComplete: activityWeekComplete, onList: () => setActivityList(true) } : null}");
-    expect(screen.indexOf("<ActivitySheet")).toBeGreaterThan(screen.indexOf("<StoryRail"));
-    expect(screen.indexOf("<ActivitySheet")).toBeLessThan(screen.indexOf("{feedPosts.map((p, i) => ("));
-    expect(screen).not.toContain("ActivitySection");
-    const rail = readFileSync("src/components/community/crew-stories.tsx", "utf8");
-    // Post, then your story (when you have one), then Activity, then the people
+    expect(screen).not.toMatch(/ActivitySheet|activityNeedsMore|activity=\{/);
+    const rail = read("src/components/community/crew-stories.tsx");
+    expect(rail).not.toMatch(/ActivityBubble|ActivityGlyph|ActivityCoverFrame|activityStoryGroup|onActivityList|group\.activity|data-story-activity-all/);
+    // Post, then your story, then the people; a quiet day has no row
     expect(rail.indexOf("{lead}")).toBeLessThan(rail.indexOf("{mine && ("));
-    expect(rail.indexOf("{mine && (")).toBeLessThan(rail.indexOf("{activity && ("));
-    expect(rail.indexOf("{activity && (")).toBeLessThan(rail.indexOf("{groups.map((g, i) => ("));
-    // a quiet day (no stories) still shows Post + Activity
-    expect(rail).toContain("if (!groups.length && !activity && !mine) return null;");
-    // it plays like a story; with nothing to play it opens the list
-    expect(rail).toContain("onClick={() => (actGroup ? watch(-1) : activity.onList())}");
-    const bubble = readFileSync("src/components/community/pulse-strip.tsx", "utf8");
-    // the list: Wins first; a week with no wins opens on All
-    expect(bubble).toContain('const shownView = wins.length ? view : "all";');
-    expect(bubble).toContain('for (const p of shownView === "wins" ? wins : posts) {');
-    // the ring is lit like a story's: while there's a session you haven't watched
-    expect(bubble).toContain('data-fresh={unseen ? "" : undefined}');
+    expect(rail.indexOf("{mine && (")).toBeLessThan(rail.indexOf("{groups.map((g, i) => ("));
+    expect(rail).toContain("if (!groups.length && !mine) return null;");
+    const lib = read("src/lib/community.ts");
+    expect(lib).not.toMatch(/activityStory|ACTIVITY_STORY|activityWeekSummary|activityPreview|activityFaces|activityDay|ActivityCover/);
   });
-});
-describe("Home shows a couple of Pulses at most", () => {
-  const at = (h: number) => new Date(Date.UTC(2026, 9, 10, h)).toISOString();
-  const pulse = (id: string, h: number) => ({ id, created_at: at(h), auto: true, stats: {} });
-  const own = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: {} });
-  it("Home shows a couple of Pulses at most", () => {
-    const now = Date.UTC(2026, 9, 10, 21);
-    const { shown } = homeCrewPosts([pulse("p1", 20), pulse("p2", 19), pulse("p3", 18), own("a", 17), own("b", 16)], now);
-    expect(shown.filter((p) => p.auto).length).toBe(HOME_CREW_PULSES);
-    expect(shown.map((p) => p.id)).toEqual(["p1", "p2", "a", "b"]);
+  it("reads on only until the story rail holds the last day (not a whole week), a few pages at most", () => {
+    expect(storiesNeedMore([own("a", 1)], true, 1, now)).toBe(true);
+    expect(storiesNeedMore([own("a", 1), own("b", 25)], true, 1, now)).toBe(false);
+    expect(storiesNeedMore([own("a", 1)], false, 1, now)).toBe(false);
+    expect(storiesNeedMore([own("a", 1)], true, STORY_READ_PAGES, now)).toBe(false);
+    expect(read("src/components/community/community-screen.tsx")).toContain("storiesNeedMore(posts, !!hasNextPage, feed.data?.pages.length ?? 0)");
+  });
+  it("a PR rides on the athlete's own bubble (a small tag), and a PR story comes before a routine one", () => {
+    const author = (id: string) => ({ user_id: id, name: id, avatar_url: null, is_coach: false });
+    const story = (id: string, who: string, h: number, prs = 0, extra: object = {}) => ({ id, created_at: at(h), auto: true, stats: { pr_count: prs }, visibility: "community" as const, is_mine: false, seen: false, author: author(who), ...extra }) as any;
+    expect(storyPrs([story("a", "x", 1, 2), story("b", "x", 2, 1), { stats: null }])).toBe(3);
+    const groups = crewStories([story("r", "routine", 1), story("p", "lifter", 3, 1)], now);
+    expect(groups.map((g) => [g.author.user_id, g.prs])).toEqual([["lifter", 1], ["routine", 0]]);
+    const mine = myStory([story("m", "me", 2, 2, { is_mine: true })], now)!;
+    expect(mine.prs).toBe(2);
+    const rail = read("src/components/community/crew-stories.tsx");
+    expect(rail).toContain("<PrTag prs={g.prs} />");
+    expect(rail).toContain("<PrTag prs={mine.prs} />");
+    expect(rail).toContain('return n > 1 ? `${n} PRs` : "PR";');
+  });
+  it("the Crew's \"N new\" badge counts posts people made, not sessions that posted themselves", () => {
+    const badge = read("supabase/migrations/20261127090000_crew_badge_counts_people_posts.sql");
+    expect(badge).toContain("AND NOT coalesce(p.auto_shared, false)");
+    expect(badge).toContain("anchor not found exactly once");
   });
 });
 
@@ -115,18 +102,15 @@ describe("Home's Crew feed deck", () => {
   const at = (h: number) => new Date(now - h * 3600e3).toISOString();
   const pulse = (id: string, h: number, prs = 0) => ({ id, created_at: at(h), auto: true, stats: { pr_count: prs } });
   const post = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: null });
-  it("the Crew Pulse card lists the 3 newest sessions; Pulses never sit among the posts", () => {
-    const d = homeCrewDeck([pulse("p1", 1), pulse("p2", 3, 2), post("a", 2), post("b", 5), pulse("p3", 30), pulse("p4", 72, 5), pulse("ancient", 24 * 20)], now);
-    expect(d.pulses.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+  it("Pulses never sit among the posts (they're in the athlete's story); only the last two weeks", () => {
+    const d = homeCrewDeck([pulse("p1", 1), pulse("p2", 3, 2), post("a", 2), post("b", 5), pulse("p3", 30), post("ancient", 24 * 20)], now);
     expect(d.shown.map((p) => p.id)).toEqual(["a", "b"]);
     expect(d.more).toBe(0);
-  });
-  it("no recent Pulse: just the posts", () => {
-    expect(homeCrewDeck([post("a", 2), pulse("old", 24 * 20)], now).pulses).toEqual([]);
+    expect(Object.keys(d).sort()).toEqual(["more", "shown"]);
   });
 });
 
-describe("Home deck: Pulse, three posts, then the rest", () => {
+describe("Home deck: three posts, then the rest", () => {
   const now = Date.UTC(2026, 9, 10, 21);
   const at = (h: number) => new Date(now - h * 3600e3).toISOString();
   const post = (id: string, h: number) => ({ id, created_at: at(h), auto: false, stats: null });
@@ -138,7 +122,7 @@ describe("Home deck: Pulse, three posts, then the rest", () => {
     const entry = readFileSync(new URL("../components/community/community-entry.tsx", import.meta.url), "utf8");
     expect(entry).toContain("<SeeMoreCard posts=");
     expect(entry).not.toContain("{more > 0 && <SeeMoreCard");
-    // a day of only Pulses: they stay in the Pulse card, and More doesn't count them
+    // a day of only Pulses: they're in stories, and More doesn't count them
     const pulse = (id: string, h: number) => ({ id, created_at: at(h), auto: true, stats: { pr_count: 0 } });
     const quiet = homeCrewDeck([pulse("x", 1), pulse("y", 2), pulse("z", 3), pulse("w", 4)], now);
     expect(quiet.shown).toEqual([]);
@@ -160,7 +144,6 @@ describe("Home reads on until it has 3 posts people made", () => {
     expect(homeDeckNeedsMore(more, true, 2, now)).toBe(false);
     const d = homeCrewDeck(more, now);
     expect(d.shown.map((p) => p.id)).toEqual(["note", "photo-workout", "w2"]);
-    expect(d.pulses.map((p) => p.id)).toEqual(["a", "b", "c"]);
   });
   it("stops at the end of the feed, after a few pages, or past two weeks", () => {
     expect(homeDeckNeedsMore([pulse("a", 1)], false, 1, now)).toBe(false);
@@ -171,5 +154,26 @@ describe("Home reads on until it has 3 posts people made", () => {
     const entry = readFileSync(new URL("../components/community/community-entry.tsx", import.meta.url), "utf8");
     expect(entry).toContain("feed.data?.pages.flatMap((pg) => pg.posts)");
     expect(entry).toContain("void feed.fetchNextPage()");
+  });
+});
+
+describe("after a workout: one tap to share it, with the PR up front", () => {
+  const footer = read("src/components/community/recap-post.tsx");
+  it("a session that posted itself says it's on your story, and the same caption + one tap posts it to the feed (the same post)", () => {
+    expect(footer).toContain("const pulse = !!existing?.auto_shared;");
+    expect(footer).toContain("if (existing && !pulse) {");
+    expect(footer).toContain("On your story for 24 hours");
+    expect(footer).not.toContain("Posted automatically as Activity");
+    // the share earns its points again once it's theirs
+    expect(footer).toContain("usePostPointsStatus(canPost && (!existing || pulse))");
+    // Undo would delete their session's story post, so it's only for a post this made
+    expect(footer).toContain("if (!pulse) setJustPosted(id);");
+  });
+  it("the post button celebrates a PR when they set one", () => {
+    expect(footer).toContain('const label = records > 0 ? (records === 1 ? "Share your PR" : "Share your PRs") : pulse ? "Post to feed" : "Post to crew";');
+    expect(read("src/components/workout-submission-summary.tsx")).toContain("records={recordCount}");
+  });
+  it("never blocks finishing: Done is always there, and nothing posts unless they tap", () => {
+    expect(footer).toContain('<Button type="button" variant="outline" className="h-12 rounded-xl text-sm font-bold" onClick={onDone}>');
   });
 });
