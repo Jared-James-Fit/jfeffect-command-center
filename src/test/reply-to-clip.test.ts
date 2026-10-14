@@ -156,4 +156,18 @@ describe("reply to one clip of several", () => {
     // A long-press that never produced a click can't swallow the next tap on a video.
     expect(thread).toContain("if (!fromPortal(e)) suppressClickRef.current = false;");
   });
+
+  it("holding a clip offers exactly that clip first: no picker, one tap to reply", () => {
+    expect(thread).toContain('data-testid="reply-held-clip"');
+    expect(thread).toContain("Reply to {nounOf(media[held].att)} {held + 1}");
+    // the strip to pick a clip only shows when the hold wasn't on a clip
+    expect(thread).toContain("{clipPick && held < 0 && (");
+    expect(thread).not.toContain("Reply to this {nounOf(media[held].att)}");
+  });
+
+  it("the composer is focused inside the tap, so iOS raises the keyboard", () => {
+    expect(thread).toContain('import { flushSync } from "react-dom";');
+    expect(thread).toContain("box?.focus({ preventScroll: true });");
+    expect(thread).not.toContain("window.setTimeout(() => composerRef.current?.focus(), 120);");
+  });
 });

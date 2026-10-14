@@ -1,3 +1,4 @@
+import { flushSync } from "react-dom";
 import React, { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SessionRequestCard } from "@/components/schedule/session-request-card";
 import { getMicStream } from "@/lib/audio-session";
@@ -1434,11 +1435,21 @@ export function MessageThread({
 
   const startReply = (message: Message, att: number | null = null) => {
     if (message.deleted_at || message.is_internal_note || message.id.startsWith("optimistic-")) return;
-    setReply({ to: message, att });
-    setSheetForId(null);
-    setActionsForId(null);
-    // Wait for the mobile action sheet to release focus before opening the keyboard.
-    window.setTimeout(() => composerRef.current?.focus(), 120);
+    // Close the hold sheet synchronously so its focus trap is gone, then focus
+    // the composer inside this same tap: iOS only raises the keyboard for a
+    // focus() that happens during the user's gesture (a timer doesn't count).
+    flushSync(() => {
+      setReply({ to: message, att });
+      setSheetForId(null);
+      setSheetClip(null);
+      setActionsForId(null);
+    });
+    const box = composerRef.current;
+    box?.focus({ preventScroll: true });
+    // Fallback (desktop menus that hand focus back as they close).
+    window.setTimeout(() => {
+      if (composerRef.current && document.activeElement !== composerRef.current) composerRef.current.focus({ preventScroll: true });
+    }, 160);
   };
 
   const jumpToReplySource = (messageId?: string | null, att?: number | null) => {
@@ -2909,7 +2920,19 @@ export function MessageThread({
                     })}
                   </div>
                 )}
-                {clipPick && (
+                {held >= 0 && (
+                  // Held one clip: replying to exactly that one is the first thing on offer.
+                  <Button
+                    type="button"
+                    data-testid="reply-held-clip"
+                    className="mt-3 h-12 w-full justify-start rounded-xl text-base font-semibold"
+                    onClick={() => startReply(m, media[held].index)}
+                  >
+                    <Reply className="mr-3 h-5 w-5" /> Reply to {nounOf(media[held].att)} {held + 1}
+                    <span className="ml-auto text-sm font-normal opacity-80">of {media.length}</span>
+                  </Button>
+                )}
+                {clipPick && held < 0 && (
                   <div className="mt-3">
                     <div className="mb-1.5 px-1 text-xs font-semibold text-muted-foreground">
                       Reply to one {pickNoun}
@@ -2949,17 +2972,6 @@ export function MessageThread({
                   </div>
                 )}
                 <div className="mt-3 grid gap-1">
-                  {held >= 0 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-12 justify-start text-base"
-                      onClick={() => startReply(m, media[held].index)}
-                    >
-                      <Reply className="mr-3 h-5 w-5" /> Reply to this {nounOf(media[held].att)}
-                      <span className="ml-auto text-sm text-muted-foreground">{held + 1} of {media.length}</span>
-                    </Button>
-                  )}
                   {canReply && (
                     <Button
                       type="button"
