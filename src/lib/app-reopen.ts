@@ -12,6 +12,14 @@
  *  - "open": on screen.
  * A notification tap (marked with ?jf_open) or a link to a different page
  * than the one it was on always opens that page.
+ *
+ * The iPhone app needs two more signals: its web view may never say "hidden",
+ * and when iOS reclaims it in the background Capacitor brings it back with
+ * webView.reload() on the page it was on (the web app is restarted at "/"
+ * instead). So the native app's own pause / resume events also mark it, and
+ * while on screen the app beats every 30s: a page that died without unloading
+ * itself, with its last beat over 90s old, was frozen or killed in the
+ * background → a reopen. (A crash mid-use has a fresh beat: it keeps its page.)
  */
 
 const STATE_KEY = "jf:app-state";
@@ -23,6 +31,8 @@ export type AppState = { path: string; state: "open" | "away" | "leaving"; at: n
 export type AppBoot = {
   /** where this page load started */
   path: string;
+  /** when */
+  at: number;
   /** what the app was doing just before it */
   previous: AppState | null;
   /** opened by a notification tap */
@@ -50,7 +60,7 @@ const boot: AppBoot | null = typeof window === "undefined"
   ? null
   : (() => {
       const url = new URL(window.location.href);
-      return { path: url.pathname, previous: readState(), link: url.searchParams.has(OPEN_LINK_PARAM) };
+      return { path: url.pathname, at: Date.now(), previous: readState(), link: url.searchParams.has(OPEN_LINK_PARAM) };
     })();
 
 export function appBoot(): AppBoot | null {
@@ -80,11 +90,53 @@ export function trackAppState(): () => void {
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("pagehide", onPageHide);
   window.addEventListener("pageshow", onPageShow);
+  // Alive and on screen (timers stop while the app is in the background).
+  let paused = false;
+  const beat = window.setInterval(() => {
+    if (!unloading && !paused && document.visibilityState !== "hidden") writeState("open", path());
+  }, HEARTBEAT_MS);
+  // The iPhone / Android app's own background and foreground events.
+  const nativeListeners: Array<{ remove: () => unknown }> = [];
+  let stopped = false;
+  if (isNativeApp()) {
+    void import("@capacitor/app")
+      .then(async ({ App }) => {
+        const keep = (h: { remove: () => unknown }) => {
+          if (stopped) void h.remove();
+          else nativeListeners.push(h);
+        };
+        keep(await App.addListener("pause", () => {
+          paused = true;
+          if (!unloading) writeState("away", path());
+        }));
+        keep(await App.addListener("resume", () => {
+          paused = false;
+          if (!unloading) writeState("open", path());
+        }));
+      })
+      .catch(() => { /* plugin not in this build */ });
+  }
   return () => {
+    stopped = true;
     document.removeEventListener("visibilitychange", onVisibility);
     window.removeEventListener("pagehide", onPageHide);
     window.removeEventListener("pageshow", onPageShow);
+    window.clearInterval(beat);
+    for (const h of nativeListeners) void h.remove();
   };
+}
+
+const HEARTBEAT_MS = 30_000;
+/** No beat for this long before a page load that didn't unload itself: it was asleep or killed in the background. */
+export const STALE_OPEN_MS = 90_000;
+
+function isNativeApp(): boolean {
+  try {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return !!cap?.isNativePlatform?.();
+  } catch {
+    return false;
+  }
 }
 
 /** The page in view changed (in-app navigation). */
@@ -99,8 +151,7 @@ export function isInstalledApp(): boolean {
   try {
     if (window.matchMedia?.("(display-mode: standalone)").matches) return true;
     if ((window.navigator as unknown as { standalone?: boolean }).standalone === true) return true;
-    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
-    return !!cap?.isNativePlatform?.();
+    return isNativeApp();
   } catch {
     return false;
   }
@@ -127,7 +178,11 @@ export function reopenTarget(input: {
   if (path !== (b.path.replace(/\/+$/, "") || "/")) return null; // already moved on (e.g. signed in first)
   if (!APP_PREFIXES.some((p) => under(path, p)) || HOME_PATHS.has(path)) return null;
   const prev = b.previous;
-  if (!prev || prev.state !== "away") return null; // a reload or hand-off, not a reopen
+  if (!prev) return null;
+  // "leaving" = it unloaded itself (reload, hand-off): keep the page. "away" =
+  // it went to the background. "open" with an old beat = it died asleep.
+  const reopened = prev.state === "away" || (prev.state === "open" && b.at - prev.at > STALE_OPEN_MS);
+  if (!reopened) return null;
   if ((prev.path.replace(/\/+$/, "") || "/") !== path) return null; // a link to another page
   return home ?? "/";
 }

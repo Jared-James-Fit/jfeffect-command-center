@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Smartphone, LogIn, Download, Loader2 } from "lucide-react";
 import { isStandalone, isNative } from "@/platform";
+import { cachedLaunchHome } from "@/lib/launch-home";
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -28,30 +29,20 @@ function AppEntry() {
   const native = isNative();
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function route() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (!session?.user) {
-        setState("guest");
-        return;
-      }
-      // Resolve role → destination.
-      const { data: roleRows } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", session.user.id);
-      if (cancelled) return;
-      const roles = (roleRows ?? []).map((r: any) => r.role as string);
-      const dest =
-        roles.includes("admin") ? "/admin"
-        : roles.includes("coach") ? "/coach"
-        : "/m/welcome";
-      navigate({ to: dest, replace: true });
+    // Signed in: the same Home as any app open (clients and members the
+    // portal, staff the dashboard; "/" sorts out View as client and dual
+    // accounts). This used to send clients to the membership welcome page.
+    const home = cachedLaunchHome();
+    if (home) {
+      navigate({ to: home, replace: true });
+      return;
     }
-
-    void route();
+    let cancelled = false;
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      if (session?.user) navigate({ to: "/", replace: true });
+      else setState("guest");
+    });
     return () => { cancelled = true; };
   }, [navigate]);
 

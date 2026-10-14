@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { reopenTarget, type AppBoot } from "@/lib/app-reopen";
+import { STALE_OPEN_MS, reopenTarget, type AppBoot } from "@/lib/app-reopen";
 
 const read = (p: string) => readFileSync(p, "utf8");
-const boot = (path: string, prev: AppBoot["previous"], link = false): AppBoot => ({ path, previous: prev, link });
-const away = (path: string) => ({ path, state: "away" as const, at: 0 });
+const NOW = 10_000_000;
+const boot = (path: string, prev: AppBoot["previous"], link = false): AppBoot => ({ path, at: NOW, previous: prev, link });
+const away = (path: string) => ({ path, state: "away" as const, at: NOW - 5_000 });
 const go = (b: AppBoot, extra: Partial<Parameters<typeof reopenTarget>[0]> = {}) =>
   reopenTarget({ installed: true, boot: b, currentPath: b.path, home: "/portal", ...extra });
 
@@ -17,9 +18,15 @@ describe("a reopened app lands on Home, even when the phone hands back the last 
   });
 
   it("keeps the page for a reload or a hand-off while the app was in use", () => {
-    expect(go(boot("/portal/workouts/abc", { path: "/portal/workouts/abc", state: "leaving", at: 0 }))).toBeNull();
-    expect(go(boot("/portal/workouts/abc", { path: "/portal/workouts/abc", state: "open", at: 0 }))).toBeNull();
+    expect(go(boot("/portal/workouts/abc", { path: "/portal/workouts/abc", state: "leaving", at: NOW - 3_600_000 }))).toBeNull();
+    // died mid-use (a crash): its last beat is fresh
+    expect(go(boot("/portal/workouts/abc", { path: "/portal/workouts/abc", state: "open", at: NOW - 20_000 }))).toBeNull();
     expect(go(boot("/portal/workouts/abc", null))).toBeNull();
+  });
+
+  it("the iPhone app: iOS reclaimed it asleep and Capacitor reloaded the last page (no 'hidden' ever fired)", () => {
+    expect(go(boot("/portal/workouts/abc", { path: "/portal/workouts/abc", state: "open", at: NOW - STALE_OPEN_MS - 1 }))).toBe("/portal");
+    expect(go(boot("/portal/workouts/abc", { path: "/portal/workouts/abc", state: "open", at: NOW - STALE_OPEN_MS + 1_000 }))).toBeNull();
   });
 
   it("honors a notification tap or a link to another page", () => {
@@ -48,5 +55,16 @@ describe("a reopened app lands on Home, even when the phone hands back the last 
     const mod = read("src/lib/app-reopen.ts");
     expect(mod).toContain("if (e.persisted) return;");
     expect(mod).toContain("if (unloading) return;");
+    // native pause / resume, and the on-screen heartbeat (silent while paused)
+    expect(mod).toContain('keep(await App.addListener("pause", () => {');
+    expect(mod).toContain("if (!unloading && !paused && document.visibilityState !== \"hidden\") writeState(\"open\", path());");
+  });
+
+  it("the app entry page (/app) sends a signed-in person to the same Home, not the membership welcome", () => {
+    const app = read("src/routes/app.tsx");
+    expect(app).toContain("const home = cachedLaunchHome();");
+    expect(app).toContain('if (session?.user) navigate({ to: "/", replace: true });');
+    expect(app).not.toContain('"/m/welcome"');
+    expect(app).not.toContain('"/coach"');
   });
 });
