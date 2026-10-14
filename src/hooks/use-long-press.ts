@@ -1,4 +1,5 @@
 import { useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
+import { guardNativeHold } from "@/lib/hold-guard";
 
 /**
  * Hold a chat (or right-click it) to open its menu, like iMessage.
@@ -34,6 +35,7 @@ export function useLongPress(onLongPress: () => void, ms = 450) {
       fired.current = false;
       if (e.pointerType === "mouse" && e.button !== 0) return;
       clear();
+      if (e.pointerType !== "mouse") guardNativeHold();
       start.current = { x: e.clientX, y: e.clientY };
       timer.current = setTimeout(fire, ms);
     },

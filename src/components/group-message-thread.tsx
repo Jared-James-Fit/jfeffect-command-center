@@ -1,3 +1,4 @@
+import { guardNativeHold } from "@/lib/hold-guard";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -701,6 +702,7 @@ export function GroupMessageThread({
                   onPointerDown={(e) => {
                     if (isEditing || (isDeleted && !isAdmin)) return;
                     if ((e.target as HTMLElement).closest("a,button,textarea,input,audio,video")) return;
+                    if (e.pointerType !== "mouse") guardNativeHold();
                     startLongPress(m.id, e.clientX, e.clientY);
                   }}
                   onPointerMove={onPointerMoveDuringHold}

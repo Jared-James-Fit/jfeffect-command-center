@@ -1069,3 +1069,12 @@ html[data-page-fab] .summer-fab { bottom: calc(var(--mobile-bar-top) + 78px); }
   .jf-live-wave, .jf-live-core, .jf-live-ring, .jf-live-halo, .jf-live-pill { animation: none; }
   .jf-live-wave { opacity: 0; }
 }
+
+/* While a finger is holding a message or chat (hold-guard.ts): iOS's own
+   long-press must not select the page or open a callout under our menu. */
+html[data-holding],
+html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
