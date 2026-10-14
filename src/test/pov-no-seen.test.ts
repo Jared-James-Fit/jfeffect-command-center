@@ -122,7 +122,7 @@ describe("POV leaves no 'seen' marks", () => {
     expect(thread).toContain("|| povClient) return;");
     expect(thread).toContain("if (povClient) return;");
     const portal = readFileSync("src/routes/_authenticated/portal/messages.tsx", "utf8");
-    expect(portal).toContain('useChatPresence(viewingAsClient ? null : client?.id ?? null, "client")');
+    expect(portal).toContain('useChatPresence(viewingAsClient ? null : client?.id ?? null, "client", coachChatOpen)');
     const group = readFileSync("src/components/group-message-thread.tsx", "utf8");
     expect(group).toContain("useGroupPresence(viewingAsClient || hidePresence ? null : groupId");
   });

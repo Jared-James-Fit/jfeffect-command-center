@@ -1,4 +1,6 @@
 import { guardNativeHold } from "@/lib/hold-guard";
+import { flushSync } from "react-dom";
+import { MessageEditRow, type MessageEditRowHandle } from "@/components/message-edit-row";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +9,6 @@ import { adminDeleteMessages } from "@/lib/messages";
 import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -118,6 +119,8 @@ export function GroupMessageThread({
   // Editing / actions
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const editRowRef = useRef<MessageEditRowHandle | null>(null);
   const [actionsForId, setActionsForId] = useState<string | null>(null);
   const [sheetForId, setSheetForId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -383,6 +386,34 @@ export function GroupMessageThread({
 
   /* ---------------- Long-press + swipe + selection ---------------- */
 
+  // Edit in place, iMessage style (same editor as the coach chat). Closing the
+  // sheet synchronously first lets the editor take focus inside this tap.
+  const startEdit = (message: GroupMessage) => {
+    flushSync(() => {
+      setSheetForId(null);
+      setActionsForId(null);
+      setEditingId(message.id);
+      setEditingBody(message.body ?? "");
+    });
+    editRowRef.current?.focus();
+  };
+  const cancelEdit = () => { setEditingId(null); setEditSaving(false); };
+  const saveEdit = async (message: GroupMessage) => {
+    const next = editingBody.trim();
+    if (!next || next === (message.body ?? "").trim()) { cancelEdit(); return; }
+    setEditSaving(true);
+    try {
+      await editGroupMessage(message.id, next);
+      qc.setQueriesData<GroupMessage[]>({ queryKey: ["group-messages", groupId] }, (prev) =>
+        Array.isArray(prev) ? prev.map((x) => (x.id === message.id ? { ...x, body: next, edited_at: new Date().toISOString() } : x)) : prev);
+      cancelEdit();
+      qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
+    } catch (err: any) {
+      setEditSaving(false);
+      toast.error(err?.message ?? "Couldn't save the edit");
+    }
+  };
+
   const startLongPress = (id: string, x: number, y: number) => {
     if (longPressRef.current?.t) clearTimeout(longPressRef.current.t);
     const t = setTimeout(() => {
@@ -590,6 +621,8 @@ export function GroupMessageThread({
       <div
         ref={scrollerRef}
         className="flex-1 min-h-0 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch] px-3 py-4 sm:px-6"
+        data-editing-thread={editingId ? "" : undefined}
+        onClick={() => { if (editingId && !editSaving) cancelEdit(); }}
         onTouchStart={onSwipeTouchStart}
         onTouchMove={onSwipeTouchMove}
         onTouchEnd={onSwipeTouchEnd}
@@ -683,9 +716,22 @@ export function GroupMessageThread({
                   </div>
                 )}
 
+                {isEditing && (
+                  <MessageEditRow
+                    ref={editRowRef}
+                    value={editingBody}
+                    original={m.body ?? ""}
+                    onChange={setEditingBody}
+                    onCancel={cancelEdit}
+                    onSave={() => void saveEdit(m)}
+                    saving={editSaving}
+                    label={(m.attachments?.length ?? 0) > 0 ? "Caption" : undefined}
+                  />
+                )}
                 <div
                   className={cn(
                     "group relative select-none touch-manipulation",
+                    isEditing && "hidden",
                     "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm transition-shadow",
                     mine
                       ? "bg-primary text-primary-foreground rounded-br-md"
@@ -763,57 +809,6 @@ export function GroupMessageThread({
                     <div className="flex items-center gap-1.5 whitespace-pre-wrap break-words">
                       <Trash2 className="h-3 w-3 opacity-70" />
                       <span>This message was deleted</span>
-                    </div>
-                  ) : isEditing ? (
-                    <div className="space-y-1.5">
-                      <Textarea
-                        value={editingBody}
-                        onChange={(e) => setEditingBody(e.target.value)}
-                        rows={2}
-                        className={cn(
-                          "min-h-[60px] resize-none rounded-md border-0 bg-background/20 px-2 py-1 text-sm",
-                          mine ? "text-primary-foreground placeholder:text-primary-foreground/60" : "text-foreground",
-                        )}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            void (async () => {
-                              const next = editingBody.trim();
-                              if (!next || next === m.body) { setEditingId(null); return; }
-                              try {
-                                await editGroupMessage(m.id, next);
-                                setEditingId(null);
-                                qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
-                              } catch (err: any) {
-                                toast.error(err?.message ?? "Failed to edit");
-                              }
-                            })();
-                          }
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                        autoFocus
-                      />
-                      <div className="flex items-center justify-end gap-1">
-                        <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-[11px]"
-                          onClick={() => setEditingId(null)}>
-                          Cancel
-                        </Button>
-                        <Button type="button" size="sm" className="h-7 px-2 text-[11px]"
-                          onClick={async () => {
-                            const next = editingBody.trim();
-                            if (!next || next === m.body) { setEditingId(null); return; }
-                            try {
-                              await editGroupMessage(m.id, next);
-                              setEditingId(null);
-                              qc.invalidateQueries({ queryKey: ["group-messages", groupId] });
-                            } catch (err: any) {
-                              toast.error(err?.message ?? "Failed to edit");
-                            }
-                          }}
-                        >
-                          <Check className="mr-1 h-3 w-3" /> Save
-                        </Button>
-                      </div>
                     </div>
                   ) : (
                     m.body && renderBodyWithMeet(m.body, mine)
@@ -911,7 +906,7 @@ export function GroupMessageThread({
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => { setEditingId(m.id); setEditingBody(m.body); setActionsForId(null); }}
+                                onClick={() => startEdit(m)}
                               >
                                 <Pencil className="mr-2 h-4 w-4" /> Edit
                               </DropdownMenuItem>
@@ -960,7 +955,10 @@ export function GroupMessageThread({
       {/* Composer */}
       {!canPost && footer ? footer : canPost ? (
         <div
-          className="space-y-2 border-t border-border bg-background/95 px-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:pt-3 pb-[max(env(safe-area-inset-bottom),0.5rem)]"
+          className={cn(
+            "space-y-2 border-t border-border bg-background/95 px-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:pt-3 pb-[max(env(safe-area-inset-bottom),0.5rem)] transition-opacity duration-200",
+            editingId && "pointer-events-none opacity-30",
+          )}
         >
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-1.5 px-1">
@@ -1273,7 +1271,7 @@ export function GroupMessageThread({
                   {canEdit && (
                     <Button
                       type="button" variant="ghost" className="h-12 justify-start text-base"
-                      onClick={() => { setEditingId(m.id); setEditingBody(m.body); setSheetForId(null); }}
+                      onClick={() => startEdit(m)}
                     >
                       <Pencil className="mr-3 h-5 w-5" /> Edit
                     </Button>

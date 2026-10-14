@@ -1,5 +1,6 @@
 import { flushSync } from "react-dom";
 import { guardNativeHold } from "@/lib/hold-guard";
+import { MessageEditRow, type MessageEditRowHandle } from "@/components/message-edit-row";
 import React, { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SessionRequestCard } from "@/components/schedule/session-request-card";
 import { getMicStream } from "@/lib/audio-session";
@@ -21,7 +22,6 @@ import type { SharedAttachment } from "@/components/chat-shared";
 import { transcribeVoiceMessage } from "@/lib/voice-transcribe.functions";
 import { Button } from "@/components/ui/button";
 import { ChatImageAttachment } from "@/components/chat-media-attachment";
-import { Textarea } from "@/components/ui/textarea";
 import { AutoGrowTextarea, focusComposerAtEnd } from "@/components/ui/auto-grow-textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -825,6 +825,8 @@ export function MessageThread({
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const editRowRef = useRef<MessageEditRowHandle | null>(null);
   const [actionsForId, setActionsForId] = useState<string | null>(null);
   // Mobile/tablet long-press action sheet + iMessage-style selection mode.
   const [sheetForId, setSheetForId] = useState<string | null>(null);
@@ -1453,6 +1455,37 @@ export function MessageThread({
     }, 160);
   };
 
+  // Edit in place, iMessage style. Closing the hold sheet synchronously first
+  // lets the editor take focus inside this tap, so iOS raises the keyboard.
+  const startEdit = (message: Message) => {
+    flushSync(() => {
+      setSheetForId(null);
+      setSheetClip(null);
+      setActionsForId(null);
+      setReply(null);
+      setEditingId(message.id);
+      setEditingBody(message.body ?? "");
+    });
+    editRowRef.current?.focus();
+  };
+  const cancelEdit = () => { setEditingId(null); setEditSaving(false); };
+  const saveEdit = async (message: Message) => {
+    const next = editingBody.trim();
+    if (!next || next === (message.body ?? "").trim()) { cancelEdit(); return; }
+    setEditSaving(true);
+    try {
+      await editMessage(message.id, next);
+      // Show it straight away; the refetch confirms.
+      qc.setQueriesData<Message[]>({ queryKey: ["messages", clientId, role] }, (prev) =>
+        Array.isArray(prev) ? prev.map((x) => (x.id === message.id ? { ...x, body: next, edited_at: new Date().toISOString() } : x)) : prev);
+      cancelEdit();
+      qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
+    } catch (err: any) {
+      setEditSaving(false);
+      toast.error(err?.message ?? "Couldn't save the edit");
+    }
+  };
+
   const jumpToReplySource = (messageId?: string | null, att?: number | null) => {
     if (!messageId) return;
     // A reply about one clip lands on (and highlights) that clip.
@@ -1838,6 +1871,8 @@ export function MessageThread({
           "flex-1 min-h-0 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch]",
           fullBleed ? "px-3 py-4 sm:px-6" : "p-3 sm:p-4",
         )}
+        data-editing-thread={editingId ? "" : undefined}
+        onClick={() => { if (editingId && !editSaving) cancelEdit(); }}
         onScroll={onThreadScroll}
         onTouchStart={onSwipeTouchStart}
         onTouchMove={onSwipeTouchMove}
@@ -1975,9 +2010,47 @@ export function MessageThread({
                   className="mb-1"
                 />
               )}
+              {isEditing && (
+                <MessageEditRow
+                  ref={editRowRef}
+                  value={editingBody}
+                  original={m.body ?? ""}
+                  onChange={setEditingBody}
+                  onCancel={cancelEdit}
+                  onSave={() => void saveEdit(m)}
+                  saving={editSaving}
+                  label={mediaAttachments(m).length > 0 ? "Caption" : undefined}
+                  media={(() => {
+                    const thumbs = mediaAttachments(m).slice(0, 4);
+                    if (!thumbs.length) return undefined;
+                    return (
+                      <span className="flex -space-x-2">
+                        {thumbs.map(({ att, index }) => {
+                          const media = {
+                            type: att.type as "image" | "video",
+                            path: att.storage_path || undefined,
+                            url: att.storage_path ? undefined : att.url,
+                            posterPath: att.type === "video" ? att.thumbnail_storage_path || undefined : undefined,
+                          };
+                          return (
+                            <ReplyThumb
+                              key={index}
+                              media={media}
+                              signedUrl={media.path ? signedUrlMap[media.path] : undefined}
+                              posterUrl={media.posterPath ? signedUrlMap[media.posterPath] : undefined}
+                              className="h-9 w-9 rounded-lg ring-2 ring-card"
+                            />
+                          );
+                        })}
+                      </span>
+                    );
+                  })()}
+                />
+              )}
               <div
                 className={cn(
                   "group relative select-none touch-manipulation",
+                  isEditing && "hidden",
                   "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm transition-shadow",
                   m.is_internal_note
                     ? "border border-warning/40 bg-warning/10"
@@ -2118,57 +2191,6 @@ export function MessageThread({
                         Remove
                       </button>
                     )}
-                  </div>
-                ) : isEditing ? (
-                  <div className="space-y-1.5">
-                    <Textarea
-                      value={editingBody}
-                      onChange={(e) => setEditingBody(e.target.value)}
-                      rows={2}
-                      className={cn(
-                        "min-h-[60px] resize-none rounded-md border-0 bg-background/20 px-2 py-1 text-sm",
-                        mine ? "text-primary-foreground placeholder:text-primary-foreground/60" : "text-foreground",
-                      )}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          void (async () => {
-                            const next = editingBody.trim();
-                            if (!next || next === m.body) { setEditingId(null); return; }
-                            try {
-                              await editMessage(m.id, next);
-                              setEditingId(null);
-                              qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
-                            } catch (err: any) {
-                              toast.error(err?.message ?? "Failed to edit");
-                            }
-                          })();
-                        }
-                        if (e.key === "Escape") setEditingId(null);
-                      }}
-                      autoFocus
-                    />
-                    <div className="flex items-center justify-end gap-1">
-                      <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-[11px]"
-                        onClick={() => setEditingId(null)}>
-                        Cancel
-                      </Button>
-                      <Button type="button" size="sm" className="h-7 px-2 text-[11px]"
-                        onClick={async () => {
-                          const next = editingBody.trim();
-                          if (!next || next === m.body) { setEditingId(null); return; }
-                          try {
-                            await editMessage(m.id, next);
-                            setEditingId(null);
-                            qc.invalidateQueries({ queryKey: ["messages", clientId, role] });
-                          } catch (err: any) {
-                            toast.error(err?.message ?? "Failed to edit");
-                          }
-                        }}
-                      >
-                        <Check className="mr-1 h-3 w-3" /> Save
-                      </Button>
-                    </div>
                   </div>
                 ) : (
                   // A session request's card says it all; its text is for inbox previews.
@@ -2348,7 +2370,7 @@ export function MessageThread({
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem
-                          onClick={() => { setEditingId(m.id); setEditingBody(m.body); setActionsForId(null); }}
+                          onClick={() => startEdit(m)}
                         >
                           <Pencil className="mr-2 h-4 w-4" /> Edit
                         </DropdownMenuItem>
@@ -2461,7 +2483,9 @@ export function MessageThread({
 
       <div
         className={cn(
-          "space-y-2 border-t border-border",
+          "space-y-2 border-t border-border transition-opacity duration-200",
+          // Editing a message: the composer steps back like the rest of the chat.
+          editingId && "pointer-events-none opacity-30",
           fullBleed
             ? "shrink-0 bg-background/95 px-3 pt-2 pb-[var(--composer-bottom-pad)] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6 sm:pt-3"
             : "bg-card p-2 sm:p-3",
@@ -2987,9 +3011,7 @@ export function MessageThread({
                   {canEdit && (
                     <Button
                       type="button" variant="ghost" className="h-12 justify-start text-base"
-                      onClick={() => {
-                        setEditingId(m.id); setEditingBody(m.body); setSheetForId(null);
-                      }}
+                      onClick={() => startEdit(m)}
                     >
                       <Pencil className="mr-3 h-5 w-5" /> Edit
                     </Button>
