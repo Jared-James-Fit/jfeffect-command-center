@@ -14,6 +14,11 @@
  *   lockin   – "LOCKED IN": the gym photo (or the brand glow) with the
  *              time and the session, posted when someone shows up, before
  *              any numbers exist. Not in the finished-workout carousel.
+ *   meal looks (Meal on the camera: a food photo, numbers-free on purpose,
+ *              so nothing private like targets lands on a public card):
+ *              mealprep "MEAL PREP" · onplan a Nutrition Facts label
+ *              ("Discipline 100% · Excuses 0g") · fuel pre / post-workout ·
+ *              highday a gold "HIGH DAY" sticker · cheat a red "CHEAT MEAL" one.
  *
  * Hierarchy (on purpose): photo / performance → accomplishment → brand. The
  * brand is a small footer mark, never a banner.
@@ -29,7 +34,11 @@ import { ellipsize, fitFont as fitSystemFont, font, loadImage, roundRect } from 
 import type { CardStat, ShareCardExtras } from "@/lib/community";
 
 export type ShareFormat = "feed" | "story";
-export type ShareTemplate = "pr" | "photo" | "stats" | "sticker" | "volume" | "receipt" | "streak" | "progress" | "lockin" | "lockclock" | "lockplan" | "plain";
+export type ShareTemplate =
+  | "pr" | "photo" | "stats" | "sticker" | "volume" | "receipt" | "streak" | "progress"
+  | "lockin" | "lockclock" | "lockplan"
+  | "mealprep" | "onplan" | "fuel" | "highday" | "cheat"
+  | "plain";
 
 export const SHARE_SIZES: Record<ShareFormat, { w: number; h: number; safeTop: number; safeBottom: number }> = {
   feed: { w: 1080, h: 1350, safeTop: 80, safeBottom: 80 },
@@ -48,6 +57,11 @@ export const TEMPLATE_LABEL: Record<ShareTemplate, string> = {
   lockin: "Locked in",
   lockclock: "Clock",
   lockplan: "Today's plan",
+  mealprep: "Meal prep",
+  onplan: "On plan",
+  fuel: "Fuel",
+  highday: "High day",
+  cheat: "Cheat meal",
   plain: "No filter",
 };
 
@@ -339,6 +353,11 @@ export function paintShareCard(canvas: HTMLCanvasElement, d: ShareCardData, logo
   else if (d.template === "receipt") drawReceipt(ctx, d, logo, L);
   else if (d.template === "streak") drawStreak(ctx, d, logo, L);
   else if (d.template === "progress") drawProgress(ctx, d, logo, L);
+  else if (d.template === "mealprep") drawMealPrep(ctx, d, logo, L);
+  else if (d.template === "onplan") drawOnPlan(ctx, d, logo, L);
+  else if (d.template === "fuel") drawFuel(ctx, d, logo, L);
+  else if (d.template === "highday") drawMealSticker(ctx, d, logo, L, "high");
+  else if (d.template === "cheat") drawMealSticker(ctx, d, logo, L, "cheat");
   else if (d.template === "plain") drawPlain(ctx, d, L);
   else drawVolume(ctx, d, logo, L);
 }
@@ -594,6 +613,212 @@ function drawLockClock(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null
     setSpacing(ctx, 6);
     ctx.fillStyle = MUTED;
     ctx.fillText(d.athleteName.toUpperCase(), PAD, y);
+    setSpacing(ctx, 0);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  MEAL  (the food is the photo: light on top, the words low)          */
+/* ------------------------------------------------------------------ */
+
+/** Food reads best bright: just a soft shade where the brand row sits. */
+function topShade(ctx: Ctx, L: Layout) {
+  const tg = ctx.createLinearGradient(0, 0, 0, L.top + 160);
+  tg.addColorStop(0, "rgba(8,8,11,0.5)");
+  tg.addColorStop(1, "rgba(8,8,11,0)");
+  ctx.fillStyle = tg;
+  ctx.fillRect(0, 0, L.W, L.top + 160);
+}
+
+/** MEAL PREP: the containers lined up, the stamp under them. */
+function drawMealPrep(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
+  const { W, PAD, innerW } = L;
+  photoWithScrim(ctx, d, L, 0.5, 0.9);
+  brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
+  let y = L.bottom - 10;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = font(800, 40);
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.fillText("Prepped. Locked in.", PAD, y);
+  y -= 40 + 64;
+  ctx.fillStyle = INK;
+  const size = fitDisplay(ctx, "MEAL PREP", innerW, L.story ? 250 : 210, 120);
+  ctx.fillText("MEAL PREP", PAD - 4, y);
+  ctx.fillStyle = RED;
+  ctx.fillRect(PAD, y + 18, Math.min(innerW, size * 1.15), 10);
+  y -= size * 0.92 + 34;
+  if (d.athleteName) {
+    ctx.font = font(800, 28);
+    setSpacing(ctx, 6);
+    ctx.fillStyle = MUTED;
+    ctx.fillText(d.athleteName.toUpperCase(), PAD, y);
+    setSpacing(ctx, 0);
+  }
+}
+
+/** ON PLAN: the food under a Nutrition Facts label for the discipline. */
+function drawOnPlan(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
+  const { W, H, PAD } = L;
+  if (d.media) drawCover(ctx, d.media, W, H);
+  else darkGlow(ctx, W, H, "red");
+  topShade(ctx, L);
+  brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
+
+  const rows: [string, string][] = [
+    ["Discipline", "100%"],
+    ["Excuses", "0g"],
+    ["Skipped meals", "0"],
+    ["Consistency", "100%"],
+  ];
+  const w = L.story ? 620 : 560;
+  const pad = 30;
+  const rowH = 66;
+  const h = pad + 74 + 16 + 44 + 22 + 40 + rows.length * rowH + 16 + 50 + pad - 14;
+  const x = PAD;
+  const top = L.bottom - h + 30;
+  const ink = "#0b0b0f";
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.38)";
+  ctx.shadowBlur = 44;
+  ctx.shadowOffsetY = 14;
+  ctx.fillStyle = "#fffdf8";
+  roundRect(ctx, x, top, w, h, 18);
+  ctx.fill();
+  ctx.restore();
+
+  const left = x + pad;
+  const right = x + w - pad;
+  const inner = w - pad * 2;
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = ink;
+  let y = top + pad + 60;
+  // title, as big as it fits
+  let size = 70;
+  ctx.font = font(900, size);
+  while (size > 40 && ctx.measureText("Locked In Facts").width > inner) {
+    size -= 2;
+    ctx.font = font(900, size);
+  }
+  ctx.textAlign = "left";
+  ctx.fillText("Locked In Facts", left, y);
+  y += 16;
+  ctx.fillRect(left, y, inner, 2);
+  y += 40;
+  ctx.font = font(600, 28);
+  ctx.fillText("Serving size", left, y);
+  ctx.font = font(800, 28);
+  ctx.textAlign = "right";
+  ctx.fillText("1 plan", right, y);
+  y += 18;
+  ctx.fillRect(left, y, inner, 16);
+  y += 16 + 34;
+  ctx.textAlign = "left";
+  ctx.font = font(800, 22);
+  ctx.fillText("Amount per day", left, y);
+  y += 12;
+  for (const [label, value] of rows) {
+    ctx.fillRect(left, y, inner, 2);
+    y += rowH - 18;
+    ctx.font = font(900, 34);
+    ctx.textAlign = "left";
+    ctx.fillText(label, left, y);
+    ctx.textAlign = "right";
+    ctx.fillText(value, right, y);
+    y += 18;
+  }
+  ctx.fillRect(left, y, inner, 8);
+  y += 8 + 38;
+  ctx.font = font(800, 20);
+  setSpacing(ctx, 3);
+  ctx.fillStyle = "rgba(11,11,15,0.6)";
+  ctx.textAlign = "left";
+  ctx.fillText((d.athleteName ? `${d.athleteName} · JF EFFECT` : "JF EFFECT").toUpperCase(), left, y);
+  setSpacing(ctx, 0);
+}
+
+/** FUEL: pre or post-workout, said when we know which. */
+function drawFuel(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
+  const { W, PAD, innerW } = L;
+  photoWithScrim(ctx, d, L, 0.5, 0.9);
+  brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
+  let y = L.bottom - 10;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  if (d.athleteName) {
+    ctx.font = font(800, 28);
+    setSpacing(ctx, 6);
+    ctx.fillStyle = MUTED;
+    ctx.fillText(d.athleteName.toUpperCase(), PAD, y);
+    setSpacing(ctx, 0);
+    y -= 28 + 56;
+  }
+  ctx.fillStyle = INK;
+  const size = fitDisplay(ctx, "FUEL", innerW, L.story ? 300 : 250, 140);
+  ctx.fillText("FUEL", PAD - 4, y);
+  ctx.fillStyle = gold(ctx, PAD, size * 1.4);
+  ctx.fillRect(PAD, y + 18, Math.min(innerW, ctx.measureText("FUEL").width), 10);
+  y -= size * 0.92 + 34;
+  if (d.sessionLine) pill(ctx, d.sessionLine.toUpperCase(), PAD, y - 54, gold(ctx, PAD, 360), "#1a0f00");
+}
+
+/** HIGH DAY / CHEAT MEAL: a tilted sticker slapped on the food, and a little tag under it. */
+function drawMealSticker(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout, kind: "high" | "cheat") {
+  const { W, PAD } = L;
+  photoWithScrim(ctx, d, L, 0.55, 0.7);
+  if (!d.media) darkGlow(ctx, W, L.H, kind === "high" ? "gold" : "red");
+  topShade(ctx, L);
+  brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
+
+  const text = kind === "high" ? "HIGH DAY" : "CHEAT MEAL";
+  const tag = kind === "high" ? "Planned. Not a cheat." : "Back on it tomorrow.";
+  const cx = W / 2;
+  const cy = L.bottom - (L.story ? 330 : 270);
+  // the slab
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate((-6 * Math.PI) / 180);
+  const size = fitDisplay(ctx, text, W - PAD * 2 - 120, L.story ? 200 : 170, 100);
+  const tw = ctx.measureText(text).width;
+  const sw = tw + 110;
+  const sh = size * 0.9 + 70;
+  ctx.shadowColor = "rgba(0,0,0,0.4)";
+  ctx.shadowBlur = 40;
+  ctx.shadowOffsetY = 14;
+  ctx.fillStyle = kind === "high" ? gold(ctx, -sw / 2, sw) : RED;
+  roundRect(ctx, -sw / 2, -sh / 2, sw, sh, 34);
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.fillStyle = kind === "high" ? "#1a0f00" : INK;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(text, 0, size * 0.36);
+  ctx.restore();
+  // the tag, tilted the other way
+  ctx.save();
+  ctx.translate(cx + 90, cy + sh / 2 + 70);
+  ctx.rotate((4 * Math.PI) / 180);
+  ctx.font = font(900, 32);
+  const gw = ctx.measureText(tag).width + 60;
+  ctx.shadowColor = "rgba(0,0,0,0.3)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
+  ctx.fillStyle = "#ffffff";
+  roundRect(ctx, -gw / 2, -36, gw, 72, 36);
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.fillStyle = "#0b0b0f";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(tag, 0, 2);
+  ctx.restore();
+  if (d.athleteName) {
+    ctx.font = font(800, 28);
+    setSpacing(ctx, 6);
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(d.athleteName.toUpperCase(), PAD, L.bottom - 10);
     setSpacing(ctx, 0);
   }
 }

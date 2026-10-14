@@ -7,7 +7,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, lockInCameraCard, sessionDisplayTitle, sessionWhen } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, lockInCameraCard, mealCameraCard, mealFuelMoment, sessionDisplayTitle, sessionWhen } from "@/lib/community";
 import { createCommunityPost, shareToCommunity, useCreateCommunityPost, useDayPlan, useMyPostForCompletion, usePublicSessionTitle, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
 import type { ShareTemplate } from "@/lib/workout-share-card";
 import type { CameraCard, StudioPost } from "@/components/community/share-studio";
@@ -18,9 +18,12 @@ import { postedToast, useWorkoutStudio } from "@/components/community/use-workou
 
 import { NoteEditor, ShareComposer, ShareStudio, StudioShell, preloadStudio, usePreloadStudio } from "@/components/community/studio-chunks";
 
-type Mode = "post" | "lockin" | "workout";
+type Mode = "post" | "meal" | "lockin" | "workout";
 /** A plain post (any photo or video, no workout on it): one per person at a time while it's being made. */
 const plainKey = (userId: string | undefined) => `post:new:${userId ?? ""}`;
+/** A meal photo: its own draft, so a half-made workout post isn't touched. */
+const mealKey = (userId: string | undefined) => `meal:new:${userId ?? ""}`;
+type MealLook = Extract<ShareTemplate, "mealprep" | "onplan" | "fuel" | "highday" | "cheat" | "plain">;
 type LockLook = Extract<ShareTemplate, "lockin" | "lockclock" | "lockplan">;
 
 /** The app's own red for the one action we want people to take. */
@@ -31,6 +34,8 @@ export const SHARE_GRADIENT = "bg-primary";
  * one tap and the camera is up. Three modes along the bottom:
  *   POST     any photo, carousel or clip, words optional; or Write for a
  *            words-first post. Nothing to do with a workout (no points).
+ *   MEAL     a food photo with a look: Meal prep, On plan, Fuel, High day,
+ *            Cheat meal (swipe), or none. A plain post too (no points).
  *   LOCK IN  today's session (Locked in / Clock / Today's plan); posting
  *            starts the session.
  *   WORKOUT  a finished session with its card (Photo, vs last time, Receipt,
@@ -91,13 +96,18 @@ export function ShareWorkoutButton({
 
   // The look they're on (swipe to change).
   const [lockLook, setLockLook] = useState<LockLook>("lockin");
+  const [mealLook, setMealLook] = useState<MealLook>("mealprep");
+  const fuel = mealFuelMoment({ lastFinishedAt: target?.completed_at ?? null, sessionToday: !!today });
+  const mealCard = useMemo(() => mealCameraCard({ athleteName: today?.athleteName ?? target?.athlete_name ?? null, fuel }), [today?.athleteName, target?.athlete_name, fuel]);
   const workout = useWorkoutStudio(target, unit, capturing);
   const { data: publicTitle } = usePublicSessionTitle({ dayId: today?.dayId }, !!today);
   const lockCard = useMemo(() => (today ? lockInCameraCard({ workoutTitle: publicTitle ?? "Workout", athleteName: today.athleteName, plan: plan ?? [] }) : null), [today, plan, publicTitle]);
   const cameraCard: CameraCard | null =
-    activeMode === "lockin" && lockCard
-      ? { data: lockCard.data, looks: lockCard.looks, look: lockCard.looks.includes(lockLook) ? lockLook : "lockin", onLook: (t) => setLockLook(t as LockLook) }
-      : workout.card;
+    activeMode === "meal"
+      ? { data: mealCard.data, looks: mealCard.looks, look: mealLook, onLook: (t) => setMealLook(t as MealLook) }
+      : activeMode === "lockin" && lockCard
+        ? { data: lockCard.data, looks: lockCard.looks, look: lockCard.looks.includes(lockLook) ? lockLook : "lockin", onLook: (t) => setLockLook(t as LockLook) }
+        : workout.card;
 
   const begin = () => {
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
@@ -155,8 +165,20 @@ export function ShareWorkoutButton({
       toast.success(t.title, { description: t.description });
     },
   };
+  // MEAL: a food photo with a look on it (the photo already carries the look)
+  const mealPost: StudioPost = {
+    key: mealKey(user?.id),
+    label: "Post",
+    onPost: async (a) => {
+      if (!user?.id) throw new Error("Sign in again to post");
+      await createCommunityPost(qc, { userId: user.id, caption: a.caption, visibility: a.visibility, photo: a.photo, extras: a.extras, attach: a.attach });
+      const t = postedToast(a.visibility, false, false);
+      toast.success(t.title, { description: t.description });
+    },
+  };
   const modes = [
     { key: "post", label: "Post" },
+    { key: "meal", label: "Meal" },
     ...(today ? [{ key: "lockin", label: "Lock in" }] : []),
     ...(target || isLoading ? [{ key: "workout", label: "Workout" }] : []),
   ];
@@ -283,7 +305,7 @@ export function ShareWorkoutButton({
           <ShareStudio
             open={capturing}
             onClose={() => setCapturing(false)}
-            accept={activeMode === "lockin" ? "image/*" : "image/*,video/*"}
+            accept={activeMode === "lockin" || activeMode === "meal" ? "image/*" : "image/*,video/*"}
             onWrite={activeMode === "post" ? () => setWriting(true) : undefined}
             onVideo={
               activeMode === "workout" && target
@@ -297,12 +319,15 @@ export function ShareWorkoutButton({
             mode={activeMode}
             onMode={(k) => setMode(k as Mode)}
             // shoot straight away: the card's numbers land on the photo when they arrive
-            canShoot={activeMode === "post" ? true : activeMode === "lockin" ? !!today : !!target}
+            canShoot={activeMode === "post" || activeMode === "meal" ? true : activeMode === "lockin" ? !!today : !!target}
+            allowNoPhoto={activeMode !== "meal"}
             card={activeMode === "post" ? null : cameraCard}
-            post={activeMode === "post" ? plainPost : activeMode === "lockin" ? lockPost : workout.post}
+            post={activeMode === "post" ? plainPost : activeMode === "meal" ? mealPost : activeMode === "lockin" ? lockPost : workout.post}
             chip={
               activeMode === "post" ? (
                 <CameraChip icon="📸" title="Post to the crew" sub="A photo, a few, or a clip" tone="muted" />
+              ) : activeMode === "meal" ? (
+                <CameraChip icon="🍽️" title="Show what you're eating" sub="Swipe: meal prep, high day, cheat meal…" tone="muted" />
               ) : activeMode === "lockin" && today ? (
                 <CameraChip icon="🔒" title={sessionDisplayTitle(today.title)} sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Posting it starts your session"} />
               ) : target ? (
