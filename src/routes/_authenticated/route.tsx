@@ -1,8 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { appBoot, isInstalledApp, reopenTarget } from "@/lib/app-reopen";
-import { cachedLaunchHome } from "@/lib/launch-home";
 import { DashboardSplash } from "@/components/dashboard-splash";
 import { NavigationProgress } from "@/components/navigation-progress";
 import { ClientProfileOverlayMount } from "@/components/clients/profile/client-profile-overlay";
@@ -17,10 +15,6 @@ import { CoachingAgreementProvider } from "@/components/coaching-agreement/agree
 // a transient network blip. A genuinely signed-out session still returns
 // null from getSession (no throw) and redirects as before.
 let warmUser: User | null = null;
-// The first signed-in page of this page load: a reopened app goes to Home
-// from here (before the old page renders) even when the phone handed back the
-// page it was last on instead of the start page. See src/lib/app-reopen.ts.
-let reopenChecked = false;
 
 function hasPersistedAuthSession(): boolean {
   if (typeof window === "undefined") return false;
@@ -136,16 +130,6 @@ export const Route = createFileRoute("/_authenticated")({
       });
     }
     warmUser = session.user;
-    if (!reopenChecked) {
-      reopenChecked = true;
-      const home = reopenTarget({
-        installed: isInstalledApp(),
-        boot: appBoot(),
-        currentPath: location.pathname,
-        home: cachedLaunchHome(),
-      });
-      if (home) throw redirect({ to: home, replace: true });
-    }
     return { user: session.user };
   },
   pendingComponent: () => <DashboardSplash />,

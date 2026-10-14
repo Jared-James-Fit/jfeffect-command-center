@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { DashboardSplash } from "@/components/dashboard-splash";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { cachedLaunchHome, forgetSavedLastRoutes } from "@/lib/launch-home";
+import { cachedLaunchTarget } from "@/lib/launch-home";
+import { lastRouteFor } from "@/lib/route-persistence";
 import { getViewMode } from "@/lib/view-mode";
 import { supabase } from "@/integrations/supabase/client";
 import { hasPersistedAuthSession } from "@/lib/session-hint";
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/")({
   // First-time / signed-out visitors: skip "splash -> hydrate -> wait for auth ->
   // redirect" and go straight to sign-in. Runs in the browser only (the server
   // can't see localStorage); anyone with a saved session keeps the flow below,
-  // which always opens their Home.
+  // which reopens where they left off.
   beforeLoad: () => {
     if (typeof window !== "undefined" && !hasPersistedAuthSession()) {
       throw redirect({ to: "/auth", replace: true });
@@ -30,11 +31,11 @@ export const Route = createFileRoute("/")({
 });
 
 /**
- * App launch ("/", the installed app's start page): always the person's Home,
- * never the last screen they were on. When this device already knows the
- * account's role it goes there at once, so Home loads while sign-in finishes
- * (the signed-in area still checks the session and sends a stale one to
- * /auth); otherwise it waits for auth below.
+ * App launch ("/", the installed app's start page): back to the screen the
+ * person was last on (Crew, a workout, a client…), else their Home. When this
+ * device already knows the account's role it goes there at once, so the page
+ * loads while sign-in finishes (the signed-in area still checks the session
+ * and sends a stale one to /auth); otherwise it waits for auth below.
  */
 function IndexRedirect() {
   const { user, role, viewOnly, loading } = useAuth();
@@ -43,11 +44,11 @@ function IndexRedirect() {
   const launched = useRef(false);
 
   useEffect(() => {
-    forgetSavedLastRoutes();
-    const home = cachedLaunchHome();
-    if (!home || launched.current) return;
+    const target = cachedLaunchTarget();
+    if (!target || launched.current) return;
     launched.current = true;
-    navigate({ to: home, replace: true });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    navigate({ to: target as any, replace: true });
   }, [navigate]);
 
   // Give the impersonation provider one tick to hydrate from sessionStorage
@@ -81,8 +82,9 @@ function IndexRedirect() {
         // on another account on this device.
         if (savedView === "client") {
           void supabase.from("clients").select("id").eq("user_id", user.id).maybeSingle().then(({ data }) => {
+            // their last portal screen (e.g. Crew), else portal Home
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if (data?.id) navigate({ to: "/portal" as any, replace: true });
+            if (data?.id) navigate({ to: (lastRouteFor(user.id, role, "client") ?? "/portal") as any, replace: true });
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             else navigate({ to: "/admin" as any, replace: true });
           });
@@ -90,7 +92,15 @@ function IndexRedirect() {
         }
       }
 
-      // Home for their role (never the last screen: a launch always starts fresh).
+      // Back where they left off, when their role may open it.
+      const saved = lastRouteFor(user.id, role);
+      if (saved) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        navigate({ to: saved as any, replace: true });
+        return;
+      }
+
+      // Nothing saved: Home for their role.
       const dest =
         role === "client" ? "/portal"
         : role === "member" ? "/portal"
