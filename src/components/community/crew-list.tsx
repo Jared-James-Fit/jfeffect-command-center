@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { LiveAvatar, LivePill } from "@/components/live-indicator";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge } from "@/components/community/post-card";
@@ -102,14 +103,15 @@ function CrewRow({ m, today, onOpen }: { m: CommunityMember; today: number; onOp
   return (
     <div data-crew-row className="flex w-full items-center gap-2 pr-3">
     <button type="button" onClick={() => onOpen(m.author)} className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3.5 text-left active:bg-muted">
-      <span className={cn("shrink-0 rounded-full", m.live && "ring-2 ring-red-500 ring-offset-2 ring-offset-card")}>
+      {/* training now: the red ring turning around them (the Live pill sits by the name) */}
+      <LiveAvatar live={m.live} size={44} tone="red" tag={false}>
         <UserAvatar src={m.author.avatar_url} name={m.author.name} size={44} expandable={false} />
-      </span>
+      </LiveAvatar>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[15px] font-bold">{m.author.name}</span>
           {m.author.is_coach && <CoachBadge />}
-          {m.live && <span className="rounded-[5px] bg-red-500 px-1 text-[9px] font-black uppercase leading-[14px] text-white">Live</span>}
+          {m.live && <LivePill />}
           {/* the week, beside the name, so the line under it gets the full width */}
           {days.length > 0 && <span className="ml-auto shrink-0 pl-1 max-[359px]:hidden"><WeekDots days={days} today={today} /></span>}
         </span>

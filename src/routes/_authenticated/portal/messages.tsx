@@ -6,7 +6,8 @@ import { listenChannel } from "@/lib/realtime-channel";
 import { usePortalUserId, useViewingAsClient } from "@/lib/client-impersonation";
 import { Card } from "@/components/ui/card";
 import { MessageThread } from "@/components/message-thread";
-import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
+import { useChatPresence } from "@/hooks/use-chat-presence";
+import { LiveAvatar, LiveMark } from "@/components/live-indicator";
 import { GroupChatsPane, type PinnedChat } from "@/components/group-chats-pane";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { Button } from "@/components/ui/button";
@@ -154,7 +155,7 @@ function ClientMessages() {
         <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 md:hidden" onClick={onBack} aria-label="All chats">
           <ChevronLeft className="h-5 w-5" />
         </Button>
-        <span className="relative shrink-0">
+        <LiveAvatar live={coachLive} size={40} tag={false}>
           <UserAvatar
             src={coach?.profile_picture_url ?? null}
             name={coachName}
@@ -162,15 +163,12 @@ function ClientMessages() {
             ring
             expandable={false}
           />
-          {coachLive && (
-            <span className="absolute bottom-0 right-0"><LiveDot /></span>
-          )}
-        </span>
+        </LiveAvatar>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-black tracking-tight">{coachName}</div>
           <div className="truncate text-[11px] text-muted-foreground">
             {coachLive ? (
-              <span className="font-semibold text-emerald-600">● Live in chat</span>
+              <LiveMark className="font-semibold" size={6}>Live in chat</LiveMark>
             ) : (
               "Direct line · usually replies within a day"
             )}

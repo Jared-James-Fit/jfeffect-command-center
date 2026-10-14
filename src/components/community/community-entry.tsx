@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LivePill } from "@/components/live-indicator";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowRight, ChevronRight, Flame, Heart, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -163,7 +164,7 @@ function CrewCard({ post, unit, thumb: signed, fresh, onOpen }: { post: Communit
         <span className={cn("min-w-0 truncate text-[12px] font-bold", photo && "drop-shadow")}>{name}</span>
         <span className={cn("shrink-0 text-[11px]", post.kind === "note" && !photo ? "text-muted-foreground" : "text-white/75")}>{postTimeLabel(post.created_at)}</span>
         {live ? (
-          <span className="shrink-0 rounded-[5px] bg-red-500 px-1 text-[9px] font-black uppercase leading-[14px] tracking-wide">Live</span>
+          <LivePill className="shrink-0" />
         ) : fresh ? (
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff5a4e]" aria-hidden />
         ) : null}

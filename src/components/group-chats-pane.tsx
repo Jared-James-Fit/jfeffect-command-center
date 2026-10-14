@@ -32,7 +32,7 @@ import { CreateGroupDialog } from "@/components/create-group-dialog";
 import { ManageGroupDialog } from "@/components/manage-group-dialog";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { useGroupPresence } from "@/hooks/use-group-presence";
-import { LiveDot } from "@/hooks/use-chat-presence";
+import { LiveAvatar, LiveMark } from "@/components/live-indicator";
 import { directThreadsKey, isUnread, previewLine, useDirectThreads, type DirectThread } from "@/lib/direct-chats";
 import { DirectChatView, DirectRow, RequestsEntry, RequestsList } from "@/components/direct-chat";
 import { crewPreview, crewThreadsKey, isCrewUnread, useCrewThreads, type CrewThread } from "@/lib/crew-chats";
@@ -590,10 +590,9 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
         pinnedSelected && "bg-secondary/60",
       )}
     >
-      <span className="relative shrink-0">
+      <LiveAvatar live={pinned.live} size={44}>
         <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={44} ring expandable={false} />
-        {pinned.live && <span className="absolute bottom-0 right-0"><LiveDot /></span>}
-      </span>
+      </LiveAvatar>
       <span className="min-w-0 flex-1">
         <span className="flex items-center justify-between gap-2">
           <span className={cn("truncate text-[15px]", pinned.unread ? "font-bold" : "font-semibold")}>{pinned.name}</span>
@@ -859,12 +858,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
                 </div>
                 <div className="truncate text-[11px] text-muted-foreground">
                   {liveCount > 0 ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <LiveDot />
-                      <span className="font-semibold text-emerald-600">
-                        {liveCount} active now
-                      </span>
-                    </span>
+                    <LiveMark className="font-semibold">{liveCount} active now</LiveMark>
                   ) : (
                     selected.description || (selected.permission_mode === "read_only" ? "View/react only" : selected.permission_mode === "admins_only" ? "Coach posts only" : "Everyone can post")
                   )}

@@ -25,7 +25,8 @@ import { toast } from "sonner";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useChatPresence, LiveDot } from "@/hooks/use-chat-presence";
+import { useChatPresence } from "@/hooks/use-chat-presence";
+import { LiveAvatar, LiveDot } from "@/components/live-indicator";
 import { GroupChatsPane } from "@/components/group-chats-pane";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { MassMessageDialog } from "@/components/mass-message-dialog";
@@ -927,13 +928,16 @@ export function MessagesInbox({
                 title="Open client profile"
                 className="relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <UserAvatar
-                  src={selected.profile_picture_url}
-                  name={selected.full_name}
-                  size={40}
-                  ring
-                />
-                {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
+                {/* in the chat right now: the turning ring; recently active: the dot */}
+                <LiveAvatar live={selectedClientLive} size={40} tag={false}>
+                  <UserAvatar
+                    src={selected.profile_picture_url}
+                    name={selected.full_name}
+                    size={40}
+                    ring
+                  />
+                </LiveAvatar>
+                {!selectedClientLive && isClientActive((selected as any).last_active_at) && (
                   <span className="absolute bottom-0 right-0"><LiveDot /></span>
                 )}
               </ClientNameLink>

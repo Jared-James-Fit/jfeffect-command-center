@@ -57,7 +57,9 @@ describe("Rankings", () => {
   });
   it("one Live mark in the Rankings header (not on each board); scoring rules folded under the board", () => {
     expect(hub).toContain("one Live mark for the page");
-    expect(hub.match(/animate-ping/g)?.length).toBe(1);
+    // the app's shared live indicator, once
+    expect(hub.match(/<LiveMark /g)?.length).toBe(1);
+    expect(card).not.toContain("<LiveMark");
     expect(card).not.toContain("animate-ping");
     expect(card).toContain("How points work");
     expect(card.match(/How to earn points/g)).toBeNull();
