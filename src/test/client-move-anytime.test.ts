@@ -21,6 +21,11 @@ describe("clients can move their own workouts any time", () => {
     expect(read("src/components/schedule/CoachOverridePanel.tsx")).not.toMatch(/Lock client schedule editing|setScheduleLock|<Switch/);
     expect(read("src/components/schedule/ScheduleManagerShell.tsx")).not.toContain("Your coach has locked schedule editing");
   });
+  it("changing training days moves hand-placed workouts too, and never says 'locked'", () => {
+    expect(bulk).toMatch(/clientId: data\.clientId, userId, role, includePinned: true,/);
+    const card = read("src/components/training-schedule-card.tsx");
+    expect(card).not.toMatch(/locked kept|locked workout|coach-locked/);
+  });
   it("what stays fixed is what's done: completed workouts", () => {
     expect(read("src/lib/workout-move.ts")).toContain("if (isCompletedItem(item)) return false;");
   });

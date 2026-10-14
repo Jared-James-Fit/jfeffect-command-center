@@ -84,8 +84,8 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
 
     // One server call saves the days AND re-dates every future, unstarted
     // workout (all blocks, including upcoming Draft blocks) onto them. Started,
-    // completed and past workouts are always preserved; coach-locked workouts
-    // stay protected for clients.
+    // completed and past workouts are always preserved; workouts placed by hand
+    // move too, since the person asked for new days.
     let res: any;
     try {
       res = await saveSchedule({
@@ -121,14 +121,11 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     }
 
     const movedCount: number = res?.applied ?? 0;
-    const pinned: number = res?.pendingPinned ?? 0;
     const unplaced: number = res?.unplaced ?? 0;
     toast.success(
       movedCount > 0
-        ? `Schedule saved · ${movedCount} upcoming workout${movedCount === 1 ? "" : "s"} moved to your new days${pinned > 0 ? ` · ${pinned} locked kept` : ""}`
-        : pinned > 0
-          ? `Schedule saved · ${pinned} locked workout${pinned === 1 ? "" : "s"} kept`
-          : "Schedule saved",
+        ? `Schedule saved · ${movedCount} upcoming workout${movedCount === 1 ? "" : "s"} moved to your new days`
+        : "Schedule saved",
     );
     if (unplaced > 0) {
       toast.warning(
