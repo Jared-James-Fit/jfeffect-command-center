@@ -1,4 +1,5 @@
 import { flushSync } from "react-dom";
+import { guardNativeHold } from "@/lib/hold-guard";
 import React, { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SessionRequestCard } from "@/components/schedule/session-request-card";
 import { getMicStream } from "@/lib/audio-session";
@@ -2007,6 +2008,7 @@ export function MessageThread({
                   if (target.closest("textarea,input,select,audio,video[controls],[data-clip-reply]")) return;
                   // Several photos/videos: the actions are about the one that was held.
                   const tile = target.closest<HTMLElement>("[data-media-index]");
+                  if (e.pointerType !== "mouse") guardNativeHold();
                   startLongPress(
                     m.id, e.clientX, e.clientY,
                     tile ? Number(tile.dataset.mediaIndex) : null,
