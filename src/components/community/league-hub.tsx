@@ -1,4 +1,5 @@
 import { useRef, useState, type TouchEvent } from "react";
+import { LiveMark } from "@/components/live-indicator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -100,13 +101,7 @@ export function RankingsHub() {
         ))}
       </div>
         {/* both boards update as people train: one Live mark for the page */}
-        <span className="inline-flex shrink-0 items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          Live
-        </span>
+        <LiveMark className="shrink-0 px-1 text-[11px] uppercase tracking-wide" />
       </div>
       <div
         ref={boardRef}

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SwipeableRow, type SwipeAction } from "@/components/ui/swipeable-row";
 import { UserAvatar } from "@/components/user-avatar";
-import { LiveDot } from "@/hooks/use-chat-presence";
+import { LiveAvatar } from "@/components/live-indicator";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useCommunityMembers } from "@/lib/community.queries";
 import type { CommunityAuthor } from "@/lib/community";
@@ -197,9 +197,10 @@ export function PinTile({
       )}
     >
       <span className="relative">
-        {avatar}
-        {unread && <span className="absolute -left-2.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-primary" aria-hidden />}
-        {live && <span className="absolute bottom-0.5 right-0.5"><LiveDot /></span>}
+        {/* one signal at a time: live is the turning ring and LIVE tag (an unread
+            chat still shows in the bold name); otherwise the unread dot */}
+        <LiveAvatar live={live} size={60}>{avatar}</LiveAvatar>
+        {unread && !live && <span className="absolute -left-2.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-primary" aria-hidden />}
         {muted && (
           <span className="absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full bg-card text-muted-foreground ring-1 ring-border">
             <BellOff className="h-3 w-3" />

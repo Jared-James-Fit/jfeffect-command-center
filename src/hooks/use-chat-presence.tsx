@@ -94,17 +94,5 @@ export function useChatPresence(
   return { peerLive };
 }
 
-/** Pulsing green dot — call out an active/live peer. */
-export function LiveDot({ className = "" }: { className?: string }) {
-  return (
-    <span
-      aria-label="Live"
-      className={
-        "relative inline-flex h-2 w-2 shrink-0 " + className
-      }
-    >
-      <span className="absolute inset-0 rounded-full bg-emerald-500 opacity-60 animate-ping" />
-      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-background" />
-    </span>
-  );
-}
+/** The app's live dot (breathing, with waves): see live-indicator.tsx. */
+export { LiveDot } from "@/components/live-indicator";

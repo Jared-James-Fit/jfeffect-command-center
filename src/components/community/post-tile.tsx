@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LiveDot } from "@/components/live-indicator";
 import { Layers, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { featuredLift, formatTopSet, isTrainingNow, workoutHeadline, workoutSubtitle, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
@@ -89,7 +90,7 @@ function WorkoutTile({ stats, unit, pad, bottom, large }: { stats: WorkoutShareS
 function LockInTile({ post, pad, bottom, large }: { post: CommunityPost } & Box) {
   return (
     <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.55),rgba(127,29,29,0.16)_45%,#0a0a0d_75%)] text-white", pad, bottom)}>
-      {isTrainingNow(post) ? <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /> : <span />}
+      {isTrainingNow(post) ? <LiveDot size={8} tone="red" ring={false} /> : <span />}
       <div>
         <div className={cn("font-display uppercase leading-none", large ? "text-[32px]" : "text-[17px]")}>Locked in</div>
         <div className={cn("mt-0.5 line-clamp-2 font-bold text-white/70", large ? "text-[12px]" : "text-[10px]")}>{post.session_title}</div>

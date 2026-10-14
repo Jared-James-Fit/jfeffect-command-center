@@ -51,7 +51,9 @@ describe("Home League previews", () => {
     expect(src).toContain("<SwipeCards");
     expect(src).toContain("remember={false}");
     expect(src.indexOf('{ key: "league", label: "League", node: league }')).toBeLessThan(src.indexOf('{ key: "strength", label: "Hall of Strength", node: strength }'));
-    expect(src.match(/animate-ping/g)?.length).toBe(1);
+    // one Live mark (the app's shared live indicator)
+    expect(src.match(/<LiveIndicator /g)?.length).toBe(1);
+    expect(src).not.toContain("animate-ping");
     expect(src).toContain('hash="rankings">');
     expect(src).toContain('hash="rankings=strength">');
     // the same label component as Home → Progress

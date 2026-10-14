@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { LiveMark as LiveIndicator } from "@/components/live-indicator";
 import type { ReactNode } from "react";
 import { ChevronRight, Dumbbell, Flame, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -73,13 +74,7 @@ function BoardCard({ icon, title, hash, children }: { icon: ReactNode; title: Re
 
 function LiveMark() {
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wide text-emerald-600 dark:text-emerald-400">
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-      </span>
-      Live
-    </span>
+    <LiveIndicator className="gap-1 text-[10px] tracking-wide" size={6} />
   );
 }
 

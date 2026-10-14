@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LiveDot } from "@/components/live-indicator";
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { Ban, Check, ExternalLink, History, Landmark, Loader2, RefreshCw } from "lucide-react";
@@ -60,10 +61,7 @@ function CoachingLine({ status }: { status: CoachingStatus }) {
     <div className={cn("mt-3 flex items-center gap-2.5 rounded-xl border px-3 py-2",
       current ? "border-emerald-500/40 bg-emerald-500/10" : "border-dashed border-muted-foreground/40 bg-muted/40")}>
       {current ? (
-        <span className="relative flex h-2.5 w-2.5 shrink-0">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-        </span>
+        <LiveDot size={10} ring={false} />
       ) : (
         <History className="h-4 w-4 shrink-0 text-muted-foreground" />
       )}
