@@ -9,8 +9,8 @@ import {
   shouldPersistQuery,
 } from "@/lib/query-persister";
 import { Toaster } from "sonner";
-import { AuthProvider } from "@/lib/auth";
-import { noteAppPage, trackAppState } from "@/lib/app-reopen";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { saveLastRoute } from "@/lib/route-persistence";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
 import { ProgressDrawer } from "@/components/progress-drawer";
 import { GlobalHighlight } from "@/components/global-highlight";
@@ -339,16 +339,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 /**
- * Keeps the light/dark theme in step with the current page, and notes the
- * app's state for reopen detection. Renders nothing.
+ * Keeps the light/dark theme in step with the current page, and remembers the
+ * signed-in person's screen so opening the app again comes back to it
+ * (route-persistence.ts). Renders nothing.
  */
 function RouteTracker() {
+  const { user, loading } = useAuth();
   const location = useLocation();
   useThemeSync(location.pathname);
-  // Notes whether the app went to the background or reloaded, so a reopen
-  // can be told apart and land on Home (src/lib/app-reopen.ts).
-  useEffect(() => trackAppState(), []);
-  useEffect(() => noteAppPage(location.pathname), [location.pathname]);
+  useEffect(() => {
+    if (loading || !user?.id) return;
+    saveLastRoute(user.id, location.pathname);
+  }, [user?.id, loading, location.pathname]);
   return null;
 }
 

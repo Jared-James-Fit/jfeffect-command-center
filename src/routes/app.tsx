@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Smartphone, LogIn, Download, Loader2 } from "lucide-react";
 import { isStandalone, isNative } from "@/platform";
-import { cachedLaunchHome } from "@/lib/launch-home";
+import { cachedLaunchTarget } from "@/lib/launch-home";
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -29,12 +29,13 @@ function AppEntry() {
   const native = isNative();
 
   useEffect(() => {
-    // Signed in: the same Home as any app open (clients and members the
-    // portal, staff the dashboard; "/" sorts out View as client and dual
-    // accounts). This used to send clients to the membership welcome page.
-    const home = cachedLaunchHome();
-    if (home) {
-      navigate({ to: home, replace: true });
+    // Signed in: the same place as any app open (the last screen, else Home;
+    // "/" sorts out View as client and dual accounts). This used to send
+    // clients to the membership welcome page.
+    const target = cachedLaunchTarget();
+    if (target) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      navigate({ to: target as any, replace: true });
       return;
     }
     let cancelled = false;

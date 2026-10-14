@@ -5,6 +5,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { markClientSignedIn } from "@/lib/activity";
 import { logPerf } from "@/lib/perf-timing";
+import { clearLastRoute } from "@/lib/route-persistence";
 import { setAdminView } from "@/lib/admin-view";
 import { stopTeamPreview, useTeamPreview, type TeamPreview } from "@/lib/team-preview";
 
@@ -514,6 +515,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       clearResolvedAuth();
       if (uid) clearCachedRole(uid); // clear role cache on explicit sign-out
+      // and the saved last screen, so the next person here never lands in it
+      if (uid) clearLastRoute(uid);
       explicitSignOutRef.current = false;
     }
 

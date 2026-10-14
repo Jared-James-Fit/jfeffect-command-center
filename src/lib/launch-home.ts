@@ -1,11 +1,14 @@
 import { cachedSessionRole } from "@/lib/auth";
 import { hasStoredClientPov } from "@/lib/client-impersonation";
 import { getViewMode } from "@/lib/view-mode";
+import { lastRouteFor } from "@/lib/route-persistence";
 
 /**
- * Opening the app (a cold launch always starts at "/") lands on the person's
- * Home: the portal for clients and members, the admin dashboard for staff,
- * Taxes & Books for the finance login. Never the last screen they were on.
+ * Opening the app (a cold launch always starts at "/") goes back to the screen
+ * the person was last on (saved per account, up to 7 days, see
+ * route-persistence.ts); with nothing saved, their Home: the portal for
+ * clients and members, the admin dashboard for staff, Taxes & Books for the
+ * finance login.
  */
 
 /**
@@ -32,12 +35,14 @@ export function cachedLaunchHome(): "/portal" | "/admin" | "/finance" | null {
   }
 }
 
-/** Saved "last screen" entries from before launches always opened Home. */
-export function forgetSavedLastRoutes(): void {
-  if (typeof window === "undefined") return;
-  try {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith("jf:last-route:")) localStorage.removeItem(key);
-    }
-  } catch { /* storage unavailable */ }
+/**
+ * Where a launch can go with no network: the last screen this account was on
+ * (when its cached role may open it), else its Home. Null when the launch
+ * needs the full auth check (see cachedLaunchHome).
+ */
+export function cachedLaunchTarget(): string | null {
+  const home = cachedLaunchHome();
+  const cached = cachedSessionRole();
+  if (!home || !cached) return null;
+  return lastRouteFor(cached.uid, cached.role) ?? home;
 }
