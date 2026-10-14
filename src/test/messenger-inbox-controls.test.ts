@@ -166,3 +166,11 @@ describe("live in chat means in the conversation", () => {
     expect(read("src/components/group-chats-pane.tsx")).toContain("onPinnedOpenChange?.(pinnedOpen);");
   });
 });
+
+describe("live in chat works for every client with app access", () => {
+  it("doesn't require status 'Active' (most clients are 'New Client')", () => {
+    const fix = read("supabase/migrations/20261122090000_chat_presence_new_clients.sql");
+    expect(fix).toContain("AND coalesce(c.status, '') NOT IN ('Archived', 'Deactivated')");
+    expect(fix).not.toContain("AND status = 'Active'");
+  });
+});
