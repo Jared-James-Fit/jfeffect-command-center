@@ -52,10 +52,13 @@ export async function nativeAppBuild(): Promise<number | null> {
   try {
     const info = await (window as any).Capacitor?.Plugins?.App?.getInfo?.();
     const n = Number(info?.build);
-    return Number.isFinite(n) && n > 0 ? n : null;
+    if (Number.isFinite(n) && n > 0) return n;
   } catch {
-    return null;
+    /* the App plugin isn't linked in every build */
   }
+  // The iOS build stamps its number on the web view's user agent ("JFEffectApp/1850").
+  const m = /JFEffectApp\/(\d+)/.exec(typeof navigator !== "undefined" ? navigator.userAgent : "");
+  return m ? Number(m[1]) : null;
 }
 
 /** This iPhone app is a build from before the camera worked in it (it needs updating). */

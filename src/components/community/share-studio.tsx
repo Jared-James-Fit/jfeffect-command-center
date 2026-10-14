@@ -14,6 +14,7 @@ import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerIt
 import { context2d, releaseCanvas } from "@/lib/canvas-memory";
 import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-draft";
 import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTestFlight } from "@/platform";
+import { reportCameraTrouble } from "@/lib/camera-report";
 
 export type CameraMode = { key: string; label: string };
 
@@ -312,44 +313,94 @@ export function ShareStudio({
     restarts.current += 1;
     setCamTry((n) => n + 1);
   };
+  // Why the live camera didn't start, reported once per open (phone app only).
+  const reported = useRef(false);
+  useEffect(() => {
+    if (open) reported.current = false;
+  }, [open]);
+  const report = (reason: string, extra?: Record<string, unknown>) => {
+    if (reported.current) return;
+    reported.current = true;
+    void reportCameraTrouble(reason, { facing, ...extra });
+  };
   useEffect(() => {
     if (!shooting || !video) return;
     let cancelled = false;
     if (!navigator.mediaDevices?.getUserMedia) {
+      report("no camera API in this web view");
       setStatus("fallback");
       return;
     }
     setStatus("starting");
+    let step = "asking";
     // still nothing after a while (a stuck camera): the phone's own camera instead; a late start still goes live
-    const slow = setTimeout(() => !cancelled && setStatus((st) => (st === "starting" ? "fallback" : st)), 8000);
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false })
-      .then(async (stream) => {
+    const slow = setTimeout(() => {
+      if (cancelled || statusRef.current !== "starting") return;
+      report(`timed out (${step})`);
+      setStatus("fallback");
+    }, 8000);
+    // The full-quality ask first; a camera that can't do it gets simpler ones
+    // (a refusal is final: asking again only repeats it).
+    const asks: MediaStreamConstraints[] = [
+      { video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false },
+      { video: { facingMode: facing }, audio: false },
+      { video: true, audio: false },
+    ];
+    const openCamera = async (): Promise<MediaStream> => {
+      let last: unknown = null;
+      for (const ask of asks) {
+        try {
+          return await navigator.mediaDevices.getUserMedia(ask);
+        } catch (e) {
+          last = e;
+          const name = (e as { name?: string } | null)?.name;
+          if (name === "NotAllowedError" || name === "SecurityError") break;
+        }
+      }
+      throw last;
+    };
+    openCamera()
+      .then((stream) => {
         if (cancelled) return stream.getTracks().forEach((t) => t.stop());
         stop();
+        step = "showing";
         streamRef.current = stream;
+        // iOS plays a camera inline only when the element is muted + playsinline as attributes
+        video.muted = true;
+        video.setAttribute("muted", "");
+        video.setAttribute("playsinline", "");
+        video.setAttribute("webkit-playsinline", "");
         video.srcObject = stream;
         // ended by the system (not by us: stop() doesn't fire this): start again once we're back on screen
         stream.getVideoTracks()[0]?.addEventListener("ended", () => {
           if (!cancelled && streamRef.current === stream && document.visibilityState === "visible") restartCamera();
         });
-        try {
-          await video.play();
-        } catch {
-          /* muted + inline: only fails if it was closed */
-        }
-        if (!cancelled) {
+        // Live as soon as frames arrive; never wait on play() itself, which can
+        // stay pending in an app's web view even while the picture is showing.
+        const live = () => {
+          if (cancelled || streamRef.current !== stream) return;
+          clearTimeout(slow);
           setCamWhy(null);
           setStatus("live");
+        };
+        if (video.readyState >= 2) live();
+        else {
+          video.addEventListener("loadeddata", live, { once: true });
+          video.addEventListener("playing", live, { once: true });
         }
+        void video.play().then(live, () => {
+          /* muted + inline: only fails if it was closed */
+        });
       })
       .catch((e: unknown) => {
+        clearTimeout(slow);
         if (cancelled) return;
-        const name = (e as { name?: string } | null)?.name;
+        const err = e as { name?: string; message?: string } | null;
+        const name = err?.name;
         setCamWhy(name === "NotAllowedError" || name === "SecurityError" ? "denied" : "other");
         setStatus("fallback");
-      })
-      .finally(() => clearTimeout(slow));
+        if (name !== "NotAllowedError") report(`${name ?? "error"}: ${err?.message ?? String(e)}`);
+      });
     return () => {
       cancelled = true;
       clearTimeout(slow);
