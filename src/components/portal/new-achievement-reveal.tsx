@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { BadgeIcon } from "@/components/portal/achievements-card";
 import { RARITY_STYLE, markAchievementsSeen, type Rarity } from "@/lib/athlete-achievements";
 import { cn } from "@/lib/utils";
+import { playAppSound } from "@/lib/app-sounds";
 
 type Row = { badge_key: string; client_id: string; athlete_badge_catalog: { name: string; icon_key: string; rarity: Rarity; description: string } | null };
 
@@ -31,6 +32,8 @@ export function NewAchievementReveal({ open }: { open: boolean }) {
   const shownKey = rows.map((r) => r.badge_key).join(",");
   useEffect(() => {
     if (!rows.length) return;
+    // A bell chime as the milestones appear (after the recap's sting has landed).
+    playAppSound("milestone");
     markAchievementsSeen(rows[0].client_id, rows.map((r) => r.badge_key))
       .then(() => qc.invalidateQueries({ queryKey: ["athlete-achievements-unseen"] }))
       .catch(() => {});

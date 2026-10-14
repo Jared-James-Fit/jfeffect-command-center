@@ -1,3 +1,4 @@
+import { playAppSound } from "@/lib/app-sounds";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -37,20 +38,9 @@ function fmtClock(totalMs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** The shared "time's up" chime: follows the sounds setting and mixes with music. */
 function beep() {
-  try {
-    const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.frequency.value = 880;
-    o.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.7);
-    o.start(); o.stop(ctx.currentTime + 0.75);
-  } catch { /* no-op */ }
+  playAppSound("timer");
 }
 function vibrate(pattern: number | number[]) {
   if (typeof navigator !== "undefined" && navigator.vibrate) {

@@ -13,12 +13,22 @@
 
 import { installMediaPlaybackSession, setBaseAudioSessionType } from "@/lib/audio-session";
 
-export type AppSound = "message" | "sent" | "notify" | "success" | "celebrate" | "reply";
+export type AppSound =
+  | "message" | "sent" | "notify" | "success" | "celebrate" | "reply"
+  // Workout logging — short and soft, so a session full of them never nags.
+  | "tick" | "set" | "exercise" | "pr" | "timer" | "milestone" | "error";
+
+/**
+ * Sounds that matter more win over a cue that just played (a set's "tock"
+ * must not swallow the PR sparkle that lands 200 ms later).
+ */
+const PRIORITY: Partial<Record<AppSound, number>> = { pr: 2, celebrate: 2, milestone: 2, exercise: 1, timer: 1 };
+/** Same-sound spacing: fast cues may repeat sooner than the 2.5 s default. */
+const MIN_GAP: Partial<Record<AppSound, number>> = { tick: 90, set: 450, exercise: 900, error: 900 };
 
 const KEY = "jf-app-sounds";
 const listeners = new Set<(on: boolean) => void>();
 let ctx: AudioContext | null = null;
-let lastAny = 0;
 const lastBy: Partial<Record<AppSound, number>> = {};
 const openThreads = new Set<string>();
 
@@ -83,7 +93,7 @@ if (typeof window !== "undefined") {
   installMediaPlaybackSession();
 }
 
-function tone(c: AudioContext, out: AudioNode, t: number, freq: number, dur: number, vel: number, type: OscillatorType = "sine", to?: number) {
+function tone(c: BaseAudioContext, out: AudioNode, t: number, freq: number, dur: number, vel: number, type: OscillatorType = "sine", to?: number) {
   const o = c.createOscillator();
   o.type = type;
   o.frequency.setValueAtTime(freq, t);
@@ -97,7 +107,25 @@ function tone(c: AudioContext, out: AudioNode, t: number, freq: number, dur: num
   o.stop(t + dur + 0.05);
 }
 
-const PATTERNS: Record<AppSound, (c: AudioContext, out: AudioNode, t: number) => void> = {
+/** A short filtered noise burst (the "click" of a plate or a wood block). */
+function click(c: BaseAudioContext, out: AudioNode, t: number, freq: number, dur: number, vel: number) {
+  const len = Math.max(1, Math.floor(c.sampleRate * dur));
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const f = c.createBiquadFilter();
+  f.type = "bandpass";
+  f.frequency.value = freq;
+  f.Q.value = 1.4;
+  const g = c.createGain();
+  g.gain.value = vel;
+  src.connect(f).connect(g).connect(out);
+  src.start(t);
+}
+
+const PATTERNS: Record<AppSound, (c: BaseAudioContext, out: AudioNode, t: number) => void> = {
   // Soft two-note "blip" — new message.
   message: (c, o, t) => { tone(c, o, t, 880, 0.18, 0.16); tone(c, o, t + 0.09, 1320, 0.26, 0.12); },
   // Quick upward tick — your message sent.
@@ -113,17 +141,60 @@ const PATTERNS: Record<AppSound, (c: AudioContext, out: AudioNode, t: number) =>
     [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(c, o, t + i * 0.07, f, i === 3 ? 0.7 : 0.25, 0.12, "triangle"));
     for (let i = 0; i < 5; i++) tone(c, o, t + 0.3 + i * 0.045, 2093 * Math.pow(2, (i * 3) / 12), 0.25, 0.035);
   },
+  // Barely-there tick — a checkbox or toggle.
+  tick: (c, o, t) => { tone(c, o, t, 1400, 0.035, 0.035, "sine", 1100); },
+  // A set logged: a soft, woody "tock" — felt more than heard.
+  set: (c, o, t) => { tone(c, o, t, 330, 0.09, 0.09, "triangle", 220); click(c, o, t, 2400, 0.018, 0.05); },
+  // An exercise's last set: the tock plus a warm rising pair.
+  exercise: (c, o, t) => {
+    tone(c, o, t, 330, 0.09, 0.08, "triangle", 220);
+    tone(c, o, t + 0.07, 587.33, 0.28, 0.07);
+    tone(c, o, t + 0.15, 880, 0.4, 0.06);
+  },
+  // A PR on a set: quick bright sparkle, short enough to sit on top of their music.
+  pr: (c, o, t) => {
+    [783.99, 1046.5, 1318.51].forEach((f, i) => tone(c, o, t + i * 0.06, f, i === 2 ? 0.55 : 0.2, 0.09, "triangle"));
+    for (let i = 0; i < 4; i++) tone(c, o, t + 0.2 + i * 0.04, 2637 * Math.pow(2, (i * 4) / 12), 0.2, 0.025);
+  },
+  // Rest is over: two gentle chimes (iPhone web can't vibrate, so this is the cue).
+  timer: (c, o, t) => { tone(c, o, t, 987.77, 0.35, 0.1); tone(c, o, t + 0.2, 1318.51, 0.5, 0.1); },
+  // Milestone unlocked: a bell arpeggio over a soft chord.
+  milestone: (c, o, t) => {
+    [261.63, 329.63, 392].forEach((f) => tone(c, o, t, f, 1.1, 0.025));
+    [1046.5, 1318.51, 1567.98, 2093].forEach((f, i) => tone(c, o, t + i * 0.09, f, 0.6, 0.06));
+  },
+  // Something failed: low, short, not alarming.
+  error: (c, o, t) => { tone(c, o, t, 300, 0.12, 0.08, "triangle", 240); tone(c, o, t + 0.12, 220, 0.16, 0.07, "triangle"); },
 };
+
+/** Schedule one sound on any context (offline rendering for checks and previews). */
+export function scheduleAppSound(c: BaseAudioContext, out: AudioNode, t: number, name: AppSound) {
+  PATTERNS[name](c, out, t);
+}
+
+export type SoundGate = { lastAny: number; lastAnyPriority: number; lastBy: Partial<Record<AppSound, number>> };
+/**
+ * Spacing so sounds never pile up: any two at least 0.6 s apart unless the
+ * later one matters more (a PR right after its set's tock still plays), and
+ * the same sound again only after its own gap. Updates `gate` when it admits.
+ */
+export function admitSound(name: AppSound, now: number, gate: SoundGate): boolean {
+  const priority = PRIORITY[name] ?? 0;
+  const crowded = now - gate.lastAny < 600 && priority <= gate.lastAnyPriority;
+  if (crowded || now - (gate.lastBy[name] ?? -Infinity) < (MIN_GAP[name] ?? 2500)) return false;
+  gate.lastAny = now;
+  gate.lastAnyPriority = priority;
+  gate.lastBy[name] = now;
+  return true;
+}
+const gate: SoundGate = { lastAny: 0, lastAnyPriority: 0, lastBy };
 
 export function playAppSound(name: AppSound, opts: { force?: boolean } = {}) {
   if (typeof window === "undefined") return;
   if (!opts.force) {
     if (!appSoundsEnabled()) return;
     if (document.visibilityState === "hidden") return;
-    const now = Date.now();
-    if (now - lastAny < 600 || now - (lastBy[name] ?? 0) < 2500) return;
-    lastAny = now;
-    lastBy[name] = now;
+    if (!admitSound(name, Date.now(), gate)) return;
   }
   const c = getCtx();
   if (!c) return;
@@ -138,6 +209,51 @@ export function playAppSound(name: AppSound, opts: { force?: boolean } = {}) {
     out.connect(c.destination);
     PATTERNS[name](c, out, c.currentTime + 0.01);
   } catch { /* never let a sound break the UI */ }
+}
+
+/**
+ * Play a longer synthesized piece (the achievement stings, achievement-music.ts)
+ * through the same context, toggle and audio session as every other sound.
+ * `build` schedules its notes from `t` and returns their length in seconds.
+ * Returns stop(): a quick fade, used when the screen closes or sound is muted.
+ */
+export function playSynth(build: (c: AudioContext, out: AudioNode, t: number) => number): () => void {
+  if (typeof window === "undefined" || !appSoundsEnabled() || document.visibilityState === "hidden") return () => {};
+  const c = getCtx();
+  if (!c) return () => {};
+  if (c.state !== "running") {
+    void c.resume().catch(() => {});
+    return () => {};
+  }
+  let master: GainNode | null = null;
+  try {
+    const t = c.currentTime + 0.02;
+    master = c.createGain();
+    master.gain.value = 1;
+    // A gentle limiter so stacked hits never clip on a phone speaker.
+    const limiter = c.createDynamicsCompressor();
+    limiter.threshold.value = -14;
+    limiter.knee.value = 8;
+    limiter.ratio.value = 6;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.15;
+    master.connect(limiter).connect(c.destination);
+    const length = build(c, master, t);
+    const m = master;
+    window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, (length + 1.5) * 1000);
+  } catch { /* never let a sound break the UI */ }
+  return () => {
+    const m = master;
+    master = null;
+    if (!m) return;
+    try {
+      const now = c.currentTime;
+      m.gain.cancelScheduledValues(now);
+      m.gain.setValueAtTime(m.gain.value, now);
+      m.gain.linearRampToValueAtTime(0, now + 0.25);
+      window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, 400);
+    } catch { /* gone */ }
+  };
 }
 
 /**

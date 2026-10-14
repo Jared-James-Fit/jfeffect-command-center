@@ -23,7 +23,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { Calculator, ChevronDown, ChevronLeft, ChevronRight, Gauge, Hash, Minus, Pause, Play, Plus, RotateCcw, Timer as TimerIcon, Watch, Wrench } from "lucide-react";
+import { Calculator, ChevronDown, ChevronLeft, ChevronRight, Gauge, Hash, Minus, Pause, Play, Plus, RotateCcw, Timer as TimerIcon, Volume2, VolumeX, Watch, Wrench } from "lucide-react";
 import {
   type StopwatchState,
   type TimerState,
@@ -44,6 +44,8 @@ import {
   addTimerSeconds,
 } from "@/lib/workout-tools/timing";
 import { CALC_START, calcReducer } from "@/lib/calculator";
+import { playAppSound } from "@/lib/app-sounds";
+import { useAppSoundsOn } from "@/components/sound-toggle";
 import type { WarmupUnit } from "@/lib/final-warmup";
 import { CalculatorTool, E1rmTool, type E1rmPick } from "@/components/workout-tools/lifting-math";
 
@@ -216,6 +218,7 @@ export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string;
     if (timerIsDone && !doneFiredRef.current) {
       doneFiredRef.current = true;
       safeVibrate([30, 80, 30]);
+      playAppSound("timer");
     }
     if (!timerIsDone) doneFiredRef.current = false;
   }, [timerIsDone]);
@@ -420,7 +423,32 @@ export function ToolsPicker({ state, go }: { state: ToolsState; go: (v: View) =>
       <p className="text-[11px] leading-snug text-muted-foreground">
         Rest timers are separate: they start from each exercise&apos;s rest button.
       </p>
+      <SoundsRow />
     </div>
+  );
+}
+
+/** The app's one sounds setting, where an athlete mid-workout will look for it. */
+function SoundsRow() {
+  const [on, setOn] = useAppSoundsOn();
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      data-testid="tools-sounds"
+      onClick={() => setOn(!on)}
+      className="flex w-full items-center gap-3 rounded-xl border border-border px-3 py-2 text-left transition hover:bg-accent"
+    >
+      {on ? <Volume2 className="h-4 w-4 shrink-0 text-primary" /> : <VolumeX className="h-4 w-4 shrink-0 text-muted-foreground" />}
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold">Workout sounds</span>
+        <span className="block text-xs text-muted-foreground">Set logged, PRs, rest over, the finish. Mixes with your music.</span>
+      </span>
+      <span aria-hidden className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", on ? "bg-primary" : "bg-muted-foreground/35")}>
+        <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-background shadow-sm transition-all", on ? "left-[18px]" : "left-0.5")} />
+      </span>
+    </button>
   );
 }
 
