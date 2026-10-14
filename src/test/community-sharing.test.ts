@@ -233,7 +233,7 @@ describe("sharing stays optional", () => {
     // posting only ever happens from the button, and the footer can take it back
     expect(footer).toContain("onClick={() => void post()}");
     expect(footer).not.toMatch(/useEffect\([^)]*post\(\)/);
-    expect(footer).toContain("{justPosted === existing.id && (");
+    expect(footer).toContain("{justPosted === postId && (");
     // one per footer state, plus the caption sheet's
     expect(footer.match(/>\s*Done\s*</g)?.length).toBe(4);
   });
