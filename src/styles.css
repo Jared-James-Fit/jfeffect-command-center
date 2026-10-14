@@ -1078,3 +1078,13 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
   user-select: none !important;
   -webkit-touch-callout: none !important;
 }
+
+/* Editing a sent message (MessageEditRow): everything but the message being
+   edited steps back, iMessage style; tapping it cancels (the thread listens). */
+[data-editing-thread] > * {
+  transition: opacity 200ms ease;
+}
+[data-editing-thread] > *:not(:has([data-edit-row])) {
+  opacity: 0.25;
+  pointer-events: none;
+}
