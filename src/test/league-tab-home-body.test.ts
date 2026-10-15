@@ -20,14 +20,14 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
     expect(menu?.label).toBe("Crew");
     expect(menu?.keywords).toEqual(expect.arrayContaining(["league", "leaderboard", "rankings", "community", "feed", "crew", "members"]));
   });
-  it("Feed · Rankings; Activity is the heart beside them, Members opens from Activity, and your profile is its first row", () => {
-    expect(screen).toContain('(["feed", "rankings"] as const)');
+  it("Feed · Rankings · You; Activity is the heart beside them, Members opens from Activity, and your profile is its first row", () => {
+    expect(screen).toContain('(previewOnly ? ["feed", "rankings"] : ["feed", "rankings", "you"])');
     expect(screen).toContain("<RankingsHub />");
     expect(screen).toContain('aria-label={activityNew ? "Activity, new" : "Activity"}');
     expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "activity" };');
     expect(read("src/components/community/crew-activity.tsx")).toContain('aria-label="Find people"');
     expect(crew).toContain("data-crew-me");
-    expect(screen).toContain('onOpenMe={() => setScope({ kind: "you", from: "members" })}');
+    expect(screen).toContain('onOpenMe={() => setScope({ kind: "you" })}');
   });
   it("opens on the Feed; ranking links land on Rankings (Monthly or Strength)", () => {
     expect(screen).toContain('if (rankingsFromHash()) return { kind: "rankings" };');
@@ -41,11 +41,11 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
     expect(screen).toContain('if (markedRef.current || !feed.isSuccess || scope.kind !== "feed") return;');
   });
   it("a profile's back button returns to the tab you came from", () => {
-    expect(screen).toContain("{TAB_LABEL[tab]}");
-    expect(screen).toContain("const tab: Tab = scope.kind === \"author\" || scope.kind === \"you\" ? scope.from : scope.kind;");
+    expect(screen).toContain('{TAB_LABEL[youAsPage ? "feed" : tab]}');
+    expect(screen).toContain("const tab: Tab = scope.kind === \"author\" ? scope.from : scope.kind;");
   });
-  it("small phones get a round + for Share so the tabs keep their room", () => {
-    expect(screen).toContain('labelClassName="max-[389px]:sr-only"');
+  it("phones get a round + for Share so Feed · Rankings · You keep their room", () => {
+    expect(screen).toContain('labelClassName="max-[419px]:sr-only"');
     expect(read("src/components/community/share-workout-picker.tsx")).toContain("aria-label={labelClassName ? label : undefined}");
   });
 });
