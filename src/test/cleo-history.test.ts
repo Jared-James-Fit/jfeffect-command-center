@@ -206,15 +206,36 @@ describe("Cleo's voices", () => {
 });
 
 describe("Cleo's thinking music", () => {
-  it("is a soft music-box melody over a pad, through I-vi-IV-V in D, fading in after a pause", async () => {
+  it("is subtle lo-fi chill: soft seventh chords with a few rounded notes, fading in after a pause", async () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync("src/lib/app-sounds.ts", "utf8");
     expect(src).toContain("export function thinkingMusic(");
-    expect(src).toMatch(/D:\s+D5 F#5 A5 D6/);
-    expect(src).toMatch(/Bm: B4 D5 F#5 B5/);
-    expect(src).toContain("master.gain.linearRampToValueAtTime(1, t0 + 0.7)");
+    expect(src).toMatch(/Dmaj7: A3 D4 F#4 A4 \| D5 F#5 A5 C#6/);
+    expect(src).toMatch(/Gmaj7: G3 B3 D4 F#4/);
+    // Sparse, unhurried notes with a soft attack (no plinky music box).
+    expect(src).toContain("const STEP = 0.6;");
+    expect(src).toContain("rand() < 0.3");
+    expect(src).toContain("g.gain.linearRampToValueAtTime(vel * level, t + 0.06)");
+    expect(src).toContain("master.gain.linearRampToValueAtTime(1, t0 + 1.2)");
     // Still follows the sounds toggle and stays quiet for quick answers.
     expect(src).toMatch(/startThinkingSound\(\): \(\) => void \{\n  if \(typeof window === "undefined" \|\| !appSoundsEnabled\(\)\) return/);
     expect(src).toMatch(/\}, 350\);/);
+  });
+
+  it("never puts two notes a semitone apart (inside a chord, or where one chord fades into the next)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/lib/app-sounds.ts", "utf8");
+    const pads = [...src.matchAll(/\{ pad: \[([\d., ]+)\], tones: \[([\d., ]+)\] \}/g)].map((m) => ({
+      pad: m[1].split(",").map(Number),
+      tones: m[2].split(",").map(Number),
+    }));
+    expect(pads).toHaveLength(4);
+    const semis = (a: number, b: number) => Math.abs(Math.round(12 * Math.log2(a / b)));
+    const clash = (notes: number[]) => notes.some((a, i) => notes.some((b, j) => i < j && semis(a, b) % 12 === 1 && semis(a, b) < 12));
+    pads.forEach((p, i) => {
+      expect(clash(p.pad)).toBe(false);
+      expect(clash([...p.pad, ...p.tones])).toBe(false);
+      expect(clash([...p.pad, ...pads[(i + 1) % pads.length].pad])).toBe(false);
+    });
   });
 });

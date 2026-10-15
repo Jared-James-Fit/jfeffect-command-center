@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { adminDeleteMessages } from "@/lib/messages";
 import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { UserAvatar } from "@/components/user-avatar";
+import { LiveAvatar } from "@/components/live-indicator";
 import { Button } from "@/components/ui/button";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { Badge } from "@/components/ui/badge";
@@ -704,18 +705,15 @@ export function GroupMessageThread({
 
                 {!mine && (
                   <div className="relative shrink-0 mb-1">
-                    <UserAvatar
-                      src={otherAvatar}
-                      name={otherName}
-                      size={28}
-                      tone="neutral"
-                    />
-                    {isLive && (
-                      <span
-                        aria-label="Active now"
-                        className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background"
+                    {/* here now: the app's one live look, the turning ring */}
+                    <LiveAvatar live={isLive} size={28} tag={false}>
+                      <UserAvatar
+                        src={otherAvatar}
+                        name={otherName}
+                        size={28}
+                        tone="neutral"
                       />
-                    )}
+                    </LiveAvatar>
                   </div>
                 )}
 

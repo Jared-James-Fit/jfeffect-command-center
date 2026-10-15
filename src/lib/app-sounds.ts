@@ -257,23 +257,28 @@ export function playSynth(build: (c: AudioContext, out: AudioNode, t: number) =>
 }
 
 /**
- * Cleo's "working on it" music: a soft music-box melody over a warm pad, in
- * D major, moving slowly through I–vi–IV–V (D, Bm, G, A). The melody walks
- * gently through each chord's notes with rests, a quiet echo gives it room,
- * and everything bright is filtered so phone speakers stay pleasant. Starts
- * after a short pause (quick answers stay silent), fades in and out, and
- * follows the sounds toggle and the silent switch. Returns stop().
+ * Cleo's "working on it" music: subtle lo-fi chill. Warm, soft major-seventh
+ * chords (Dmaj7, Bm7, Gmaj7, Asus) that breathe in and out, with a few
+ * rounded notes floating on top and a little space around them. No sharp
+ * attacks, nothing bright, quiet enough to sit under a conversation: the
+ * kind of thing that makes waiting feel nice. Starts after a short pause
+ * (quick answers stay silent), fades in and out, and follows the sounds
+ * toggle and the silent switch. Returns stop().
  */
-const STEP = 0.42; // seconds per melody step (a calm eighth note)
-const STEPS_PER_CHORD = 8;
-const THINKING_CHORDS: Array<{ pad: [number, number]; tones: number[] }> = [
-  { pad: [146.83, 220.0], tones: [587.33, 739.99, 880.0, 1174.66] }, // D:  D5 F#5 A5 D6
-  { pad: [123.47, 185.0], tones: [493.88, 587.33, 739.99, 987.77] }, // Bm: B4 D5 F#5 B5
-  { pad: [98.0, 146.83], tones: [493.88, 587.33, 783.99, 987.77] }, // G:  B4 D5 G5 B5
-  { pad: [110.0, 164.81], tones: [554.37, 659.25, 880.0, 1108.73] }, // A:  C#5 E5 A5 C#6
+const STEP = 0.6; // seconds per beat (a slow, easy pulse)
+const STEPS_PER_CHORD = 8; // 4.8s a chord
+// Open voicings in the middle (about 200-440Hz) so a phone speaker still
+// carries them. No two notes a semitone apart anywhere: not inside a chord,
+// not against the melody, not where one chord fades into the next (that
+// beats and buzzes). The sevenths live in the melody, where they shimmer.
+const THINKING_CHORDS: Array<{ pad: number[]; tones: number[] }> = [
+  { pad: [220.0, 293.66, 369.99, 440.0], tones: [587.33, 739.99, 880.0, 1108.73] }, // Dmaj7: A3 D4 F#4 A4 | D5 F#5 A5 C#6
+  { pad: [246.94, 293.66, 369.99, 440.0], tones: [493.88, 587.33, 739.99, 880.0] }, // Bm7: B3 D4 F#4 A4 | B4 D5 F#5 A5
+  { pad: [196.0, 246.94, 293.66, 369.99], tones: [493.88, 587.33, 739.99, 987.77] }, // Gmaj7: G3 B3 D4 F#4 | B4 D5 F#5 B5
+  { pad: [220.0, 293.66, 329.63, 440.0], tones: [440.0, 587.33, 659.25, 880.0] }, // Asus: A3 D4 E4 A4 | A4 D5 E5 A5
 ];
 
-/** Small seeded random, so a phrase never repeats exactly but stays calm. */
+/** Small seeded random, so the music never repeats exactly but stays calm. */
 function seeded(seed: number) {
   let a = seed >>> 0;
   return () => {
@@ -285,42 +290,42 @@ function seeded(seed: number) {
   };
 }
 
-/** One music-box note: a sine with a soft octave and a faint shimmer, quick attack, long gentle decay. */
-function bell(c: BaseAudioContext, out: AudioNode, t: number, freq: number, vel: number) {
-  for (const [mult, level, decay] of [[1, 1, 1.9], [2, 0.16, 1.1], [4.07, 0.035, 0.45]] as const) {
+/** One soft, rounded note (like a felt piano): a gentle swell in, a long fade out. */
+function softNote(c: BaseAudioContext, out: AudioNode, t: number, freq: number, vel: number) {
+  for (const [mult, level] of [[1, 1], [2, 0.08]] as const) {
     const o = c.createOscillator();
     o.type = "sine";
     o.frequency.setValueAtTime(freq * mult, t);
     const g = c.createGain();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(vel * level, t + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    g.gain.linearRampToValueAtTime(vel * level, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
     o.connect(g).connect(out);
     o.start(t);
-    o.stop(t + decay + 0.05);
+    o.stop(t + 2.7);
   }
 }
 
-/** A chord's soft bed: root and fifth an octave down, breathing in and out. */
-function pad(c: BaseAudioContext, out: AudioNode, t: number, dur: number, freqs: [number, number]) {
-  for (const [i, f] of freqs.entries()) {
+/** A chord's warm bed: each note one steady sine, swelling in and fading out (chords overlap). */
+function pad(c: BaseAudioContext, out: AudioNode, t: number, dur: number, freqs: number[]) {
+  freqs.forEach((f, i) => {
     const o = c.createOscillator();
     o.type = "sine";
     o.frequency.setValueAtTime(f, t);
-    o.detune.setValueAtTime(i ? 3 : -3, t);
     const g = c.createGain();
+    const level = i === 0 ? 1 : 0.8; // the lowest note a touch stronger
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(i ? 0.6 : 1, t + 1.1);
-    g.gain.setValueAtTime(i ? 0.6 : 1, t + dur - 0.2);
-    g.gain.linearRampToValueAtTime(0, t + dur + 1.3);
+    g.gain.linearRampToValueAtTime(level, t + 1.6);
+    g.gain.setValueAtTime(level, t + dur - 0.4);
+    g.gain.linearRampToValueAtTime(0, t + dur + 1.8);
     o.connect(g).connect(out);
     o.start(t);
-    o.stop(t + dur + 1.4);
-  }
+    o.stop(t + dur + 1.9);
+  });
 }
 
 /**
- * The music's signal chain and a scheduler: schedule(until) adds every step
+ * The music's signal chain and a scheduler: schedule(until) adds every beat
  * up to `until` (seconds, context time). Shared by the live sound and tests
  * (OfflineAudioContext).
  */
@@ -328,55 +333,49 @@ export function thinkingMusic(c: BaseAudioContext, dest: AudioNode, t0: number, 
   const rand = seeded(seed);
   const bus = c.createGain();
   bus.gain.value = 1;
-  // Phone speakers make highs harsh: round everything off.
+  // Round everything off: soft, warm, never bright on a phone speaker.
   const tone = c.createBiquadFilter();
   tone.type = "lowpass";
-  tone.frequency.value = 3200;
-  tone.Q.value = 0.4;
+  tone.frequency.value = 2200;
+  tone.Q.value = 0.3;
   bus.connect(tone).connect(dest);
-  // A quiet echo for space.
+  // A little space: a soft, low echo.
   const delay = c.createDelay(2);
-  delay.delayTime.value = STEP * 1.5;
+  delay.delayTime.value = STEP * 0.75;
   const feedback = c.createGain();
-  feedback.gain.value = 0.28;
-  const wet = c.createGain();
-  wet.gain.value = 0.32;
+  feedback.gain.value = 0.22;
   const wetTone = c.createBiquadFilter();
   wetTone.type = "lowpass";
-  wetTone.frequency.value = 1800;
+  wetTone.frequency.value = 1200;
+  const wet = c.createGain();
+  wet.gain.value = 0.25;
   const melody = c.createGain();
-  melody.gain.value = 0.065;
+  melody.gain.value = 0.034;
   melody.connect(bus);
   melody.connect(delay);
   delay.connect(wetTone).connect(wet).connect(bus);
   wetTone.connect(feedback).connect(delay);
   const bed = c.createGain();
-  bed.gain.value = 0.011;
+  bed.gain.value = 0.0085;
   const bedTone = c.createBiquadFilter();
   bedTone.type = "lowpass";
-  bedTone.frequency.value = 650;
+  bedTone.frequency.value = 900;
   bed.connect(bedTone).connect(bus);
 
   let step = 0;
   let idx = 1;
-  let last = -1;
-  let repeats = 0;
   const schedule = (until: number) => {
     while (t0 + step * STEP < until) {
       const t = t0 + step * STEP;
       const inChord = step % STEPS_PER_CHORD;
       const chord = THINKING_CHORDS[Math.floor(step / STEPS_PER_CHORD) % THINKING_CHORDS.length];
       if (inChord === 0) pad(c, bed, t, STEP * STEPS_PER_CHORD, chord.pad);
-      // Downbeats always sound; the last step of a chord breathes; the rest sometimes rest.
-      const play = inChord === 0 || (inChord !== STEPS_PER_CHORD - 1 && rand() < 0.62);
+      // A few notes a chord, mostly off the downbeat, so it floats rather than ticks.
+      const play = inChord !== 0 && inChord !== STEPS_PER_CHORD - 1 && rand() < 0.3;
       if (play) {
-        // Walk gently through the chord's notes (a step or two, never a big leap).
-        idx = Math.max(0, Math.min(chord.tones.length - 1, idx + (rand() < 0.5 ? -1 : 1) * (rand() < 0.75 ? 1 : 2)));
-        if (inChord === 0) idx = rand() < 0.5 ? 0 : 1;
-        if (idx === last && ++repeats > 1) idx = idx > 0 ? idx - 1 : idx + 1;
-        if (idx !== last) repeats = 0;
-        last = idx;
-        bell(c, melody, t, chord.tones[idx], inChord === 0 ? 1 : 0.62 + rand() * 0.3);
+        idx = Math.max(0, Math.min(chord.tones.length - 1, idx + (rand() < 0.5 ? -1 : 1)));
+        // A tiny human lag so it never sounds mechanical.
+        softNote(c, melody, t + rand() * 0.06, chord.tones[idx], 0.7 + rand() * 0.3);
       }
       step++;
     }
@@ -397,7 +396,7 @@ export function startThinkingSound(): () => void {
       const t0 = c.currentTime + 0.05;
       master = c.createGain();
       master.gain.setValueAtTime(0, t0);
-      master.gain.linearRampToValueAtTime(1, t0 + 0.7);
+      master.gain.linearRampToValueAtTime(1, t0 + 1.2);
       master.connect(c.destination);
       const music = thinkingMusic(c, master, t0);
       // Look ahead half a second, topped up every 150 ms.
@@ -418,9 +417,9 @@ export function startThinkingSound(): () => void {
       const t = c.currentTime;
       m.gain.cancelScheduledValues(t);
       m.gain.setValueAtTime(m.gain.value, t);
-      m.gain.linearRampToValueAtTime(0, t + 0.5);
+      m.gain.linearRampToValueAtTime(0, t + 0.6);
       // Notes already scheduled ring out under the fade, then everything is let go.
-      window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, 700);
+      window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, 800);
     } catch { /* gone */ }
   };
 }

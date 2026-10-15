@@ -27,7 +27,7 @@ import { SendSmsDialog } from "@/components/send-sms-dialog";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useChatPresence } from "@/hooks/use-chat-presence";
-import { LiveAvatar, LiveDot } from "@/components/live-indicator";
+import { LiveAvatar, LiveMark } from "@/components/live-indicator";
 import { GroupChatsPane } from "@/components/group-chats-pane";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { MassMessageDialog } from "@/components/mass-message-dialog";
@@ -806,17 +806,18 @@ export function MessagesInbox({
                 selectedId === client.id && "bg-secondary/60",
               )}
             >
-              <span className="relative shrink-0">
+              {/* the same live look as the client's inbox: the turning ring and LIVE tag */}
+              <LiveAvatar
+                live={isClientActive((client as any).last_active_at) || (client.id === selectedId && selectedClientLive)}
+                size={44}
+              >
                 <UserAvatar
                   src={client.profile_picture_url}
                   name={client.full_name}
                   size={44}
                   ring
                 />
-                {isClientActive((client as any).last_active_at) && (
-                  <span className="absolute bottom-0 right-0"><LiveDot /></span>
-                )}
-              </span>
+              </LiveAvatar>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", unread > 0 ? "font-bold" : "font-semibold")}>
@@ -931,8 +932,8 @@ export function MessagesInbox({
                 title="Open client profile"
                 className="relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {/* in the chat right now: the turning ring; recently active: the dot */}
-                <LiveAvatar live={selectedClientLive} size={40} tag={false}>
+                {/* live: the turning ring, as everywhere (the line under the name says where) */}
+                <LiveAvatar live={selectedClientLive || isClientActive((selected as any).last_active_at)} size={40} tag={false}>
                   <UserAvatar
                     src={selected.profile_picture_url}
                     name={selected.full_name}
@@ -940,17 +941,14 @@ export function MessagesInbox({
                     ring
                   />
                 </LiveAvatar>
-                {!selectedClientLive && isClientActive((selected as any).last_active_at) && (
-                  <span className="absolute bottom-0 right-0"><LiveDot /></span>
-                )}
               </ClientNameLink>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 truncate text-sm font-bold">
                   <span className="truncate">{selected.full_name}</span>
                   {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
-                      <LiveDot /> {selectedClientLive ? "Live in chat" : "Active"}
-                    </span>
+                    <LiveMark className="shrink-0 text-[11px] font-semibold" size={6}>
+                      {selectedClientLive ? "Live in chat" : "Active now"}
+                    </LiveMark>
                   )}
                 </div>
                 <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] text-muted-foreground">

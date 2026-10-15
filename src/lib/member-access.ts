@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useAuth } from "@/lib/auth";
 import { getCurrentMember } from "@/lib/members.functions";
 import { isSubscriptionActive, type AccountType } from "@/lib/membership";
 import { isMemberAccessActive } from "@/lib/memberAccess";
@@ -17,8 +18,11 @@ export type MemberAccessSummary = {
 
 export function useMemberAccess(): MemberAccessSummary {
   const fn = useServerFn(getCurrentMember);
+  // Per person: saved on the device, so another account here never opens on this one's access.
+  const uid = useAuth().user?.id ?? null;
   const { data, isLoading } = useQuery({
-    queryKey: ["current-member-access"],
+    queryKey: ["current-member-access", uid],
+    enabled: !!uid,
     queryFn: () => fn(),
     staleTime: 60_000,
   });
@@ -41,7 +45,7 @@ export function useMemberAccess(): MemberAccessSummary {
   const subscriptionActive = isSubscriptionActive(member?.status);
 
   return {
-    loading: isLoading,
+    loading: !uid || isLoading,
     member,
     accountType: (member?.account_type ?? null) as AccountType | null,
     status: member?.status ?? null,
