@@ -46,7 +46,8 @@ describe("photos on every post, same rules as sharing a workout", () => {
     expect(sql).toContain("use_count = use_count + 1, media = '[]'::jsonb WHERE id = v_item.id;");
     // lessons (the library days now): a photo put on a planned lesson goes out with it
     expect(read("supabase/migrations/20261129110000_community_lessons.sql")).toContain("IF jsonb_array_length(v_media) > 0 THEN PERFORM public.community_apply_media(v_id, v_media); END IF;");
-    expect(read("src/components/community/coach-lessons.tsx")).toContain("Photos go on top of this lesson. The diagram stays under the words.");
+    // the lesson's words-and-photo editor (shared by its sheet and the story preview)
+    expect(read("src/components/community/lesson-story-player.tsx")).toContain("Photos go on top of this lesson. The diagram stays under the words.");
   });
 
   it("coaches can preview draft photos before they're a post, through the function the storage rule already asks (the rule itself is unchanged)", () => {

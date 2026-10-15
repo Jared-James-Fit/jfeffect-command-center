@@ -2,7 +2,7 @@ import { useState } from "react";
 import { BookOpen, ChevronDown, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CommunityPost } from "@/lib/community";
-import { extraLesson, hookLine, lessonKicker, safeRefUrl, type LessonExtra } from "@/lib/lessons";
+import { extraLesson, hookLine, lessonKicker, safeRefUrl, stickerUpTop, type LessonExtra } from "@/lib/lessons";
 import { LessonVisualArt, visualLabel, visualNote } from "@/components/community/lesson-visuals";
 
 /**
@@ -89,14 +89,16 @@ export function LessonStoryFrame({ post }: { post: CommunityPost }) {
   const lesson = extraLesson(post);
   if (!lesson) return null;
   const hook = hookLine(post.caption);
-  // with a sticker under it, the lesson sits up top; the hook only fits without a diagram
+  // with a sticker under it, the lesson sits up top; moved up top, the lesson
+  // goes under it (above the reply bar). The hook only fits without a diagram.
   const sticker = !!post.sticker;
+  const below = sticker && stickerUpTop(post.sticker?.y);
   const showHook = !!hook && !(sticker && lesson.visual);
   return (
     <div
       className={cn(
         "flex flex-1 flex-col bg-zinc-950 bg-[radial-gradient(120%_70%_at_100%_0%,rgba(239,51,64,0.38),transparent_60%)] px-6",
-        sticker ? "justify-start pt-24" : "justify-center pb-28 pt-24",
+        below ? "justify-end pb-40" : sticker ? "justify-start pt-24" : "justify-center pb-28 pt-24",
       )}
       data-story-frame="lesson"
     >
