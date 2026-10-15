@@ -1,6 +1,7 @@
 import { guardNativeHold } from "@/lib/hold-guard";
 import { flushSync } from "react-dom";
 import { MessageEditRow, type MessageEditRowHandle } from "@/components/message-edit-row";
+import { CommunityPostChatCard, PostReplyText, postReplyCard } from "@/components/community/post-chat-card";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -636,6 +637,8 @@ export function GroupMessageThread({
           const mine = m.sender_id === user?.id;
           const isDeleted = !!m.deleted_at;
           const isEditing = editingId === m.id;
+          // A reply to a story/post: its cover leads and the words sit under it (Instagram style).
+          const replyCard = !m.deleted_at ? postReplyCard(m.attachments) : null;
           const isSelected = selectedIds.has(m.id);
           const canModify = mine && !isDeleted;
           const mem = m.sender_id ? memberById.get(m.sender_id) : undefined;
@@ -732,10 +735,12 @@ export function GroupMessageThread({
                   className={cn(
                     "group relative select-none touch-manipulation",
                     isEditing && "hidden",
-                    "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm transition-shadow",
-                    mine
-                      ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-secondary text-foreground rounded-bl-md",
+                    "max-w-[80%] rounded-2xl text-sm transition-shadow",
+                    replyCard
+                      ? "text-foreground"
+                      : mine
+                      ? "bg-primary text-primary-foreground rounded-br-md px-3 py-2 shadow-sm"
+                      : "bg-secondary text-foreground rounded-bl-md px-3 py-2 shadow-sm",
                     isDeleted && "italic opacity-70",
                     selectionMode && isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
                   )}
@@ -810,21 +815,26 @@ export function GroupMessageThread({
                       <Trash2 className="h-3 w-3 opacity-70" />
                       <span>This message was deleted</span>
                     </div>
+                  ) : replyCard ? (
+                    <>
+                      <CommunityPostChatCard att={replyCard} mine={mine} staff={authRole === "admin" || authRole === "coach"} />
+                      {m.body?.trim() && <PostReplyText body={m.body} mine={mine}>{renderBodyWithMeet(m.body, mine)}</PostReplyText>}
+                    </>
                   ) : (
                     m.body && renderBodyWithMeet(m.body, mine)
                   )}
 
-                  {!isDeleted && !isEditing && m.attachments?.length > 0 && (
+                  {!isDeleted && !isEditing && m.attachments?.some((a) => a !== replyCard) && (
                     <div className="mt-2 space-y-2">
                       {m.attachments.map((a, i) => (
-                        <AttachmentView key={i} att={a as SharedAttachment} mine={mine} messageId={m.id} />
+                        a === replyCard ? null : <AttachmentView key={i} att={a as SharedAttachment} mine={mine} messageId={m.id} />
                       ))}
                     </div>
                   )}
 
                   <div className={cn(
                     "mt-1 flex items-center gap-2 text-[10px]",
-                    mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                    replyCard ? cn("px-1 text-muted-foreground", mine && "justify-end") : mine ? "text-primary-foreground/70" : "text-muted-foreground",
                   )}>
                     <span>{fmtTime(m.created_at)}</span>
                     {m.edited_at && !isDeleted && <span>· edited</span>}
