@@ -10,7 +10,9 @@ const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url),
 describe("the service worker never holds a page load or reloads the app", () => {
   it("never answers a page load: every page comes from the site", () => {
     const config = read("vite.config.ts");
-    expect(config).not.toMatch(/^\s*navigateFallback\s*:/m);
+    // null, not left out: the plugin's default is "index.html", which isn't precached (Workbox threw on every start)
+    expect(config).toMatch(/^\s*navigateFallback: null,$/m);
+    expect(config).not.toMatch(/navigateFallback: ["']/);
     expect(config).not.toContain("navigateFallbackDenylist");
     // HTML, JS and CSS stay out of the worker's caches
     expect(config).toContain("handler: \"StaleWhileRevalidate\"");
