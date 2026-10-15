@@ -15,6 +15,7 @@ import { context2d, releaseCanvas } from "@/lib/canvas-memory";
 import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-draft";
 import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTestFlight } from "@/platform";
 import { reportCameraTrouble } from "@/lib/camera-report";
+import { LookCarousel } from "@/components/community/look-carousel";
 
 export type CameraMode = { key: string; label: string };
 
@@ -269,17 +270,41 @@ export function ShareStudio({
     void Promise.all([ensureDisplayFont(), cardLogo()]).then(([, l]) => setLogo(l));
   }, []);
 
-  // The card: as big as fits, exactly 9:16, so what you see is what you share.
+  // The card: exactly 9:16, so what you see is what you share. Shooting, it's
+  // edge to edge like Instagram's camera (the shutter and looks sit over its
+  // foot, the bar under it); a screen too short for that (a laptop) fits it.
   useEffect(() => {
     if (!area || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(([e]) => setAreaSize({ w: e.contentRect.width, h: e.contentRect.height }));
     ro.observe(area);
     return () => ro.disconnect();
   }, [area]);
+  // the whole screen and the bar under the camera: full screen when the camera fits above the bar
+  // (every recent phone); a shorter one (an SE, a laptop) keeps the camera above the controls
+  const [screenEl, setScreenEl] = useState<HTMLDivElement | null>(null);
+  const [screenSize, setScreenSize] = useState({ w: 0, h: 0, top: 0 });
+  const [barEl, setBarEl] = useState<HTMLDivElement | null>(null);
+  const [barH, setBarH] = useState(0);
+  useEffect(() => {
+    if (!screenEl || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => {
+      const top = area ? parseFloat(getComputedStyle(area).paddingTop) || 0 : 0;
+      setScreenSize({ w: e.contentRect.width, h: e.contentRect.height, top });
+    });
+    ro.observe(screenEl);
+    return () => ro.disconnect();
+  }, [screenEl, area]);
+  useEffect(() => {
+    if (!barEl || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setBarH(e.borderBoxSize?.[0]?.blockSize ?? e.contentRect.height));
+    ro.observe(barEl);
+    return () => ro.disconnect();
+  }, [barEl]);
+  const fullScreen = phase === "shoot" && screenSize.w > 0 && barH > 0 && screenSize.h - screenSize.top - (screenSize.w * CARD_H) / CARD_W >= barH - 2;
   const box = useMemo(() => {
-    const w = Math.min(areaSize.w, (areaSize.h * CARD_W) / CARD_H);
+    const w = fullScreen ? areaSize.w : Math.min(areaSize.w, (areaSize.h * CARD_W) / CARD_H);
     return { w: Math.floor(w), h: Math.floor((w * CARD_H) / CARD_W) };
-  }, [areaSize]);
+  }, [areaSize, fullScreen]);
 
   /* ---- camera ------------------------------------------------------- */
   const cancelCount = () => {
@@ -500,7 +525,8 @@ export function ShareStudio({
     const i = Math.max(0, card.looks.indexOf(card.look));
     const next = card.looks[(i + dir + card.looks.length) % card.looks.length];
     card.onLook(next);
-    setLookFlash(TEMPLATE_LABEL[next]);
+    // shooting, the looks' row shows it; editing, a quick name on the card
+    if (phase === "edit") setLookFlash(TEMPLATE_LABEL[next]);
   };
   useEffect(() => {
     if (!lookFlash) return;
@@ -780,6 +806,7 @@ export function ShareStudio({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
+        ref={setScreenEl}
         className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-black p-0 text-white dark:bg-black sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,920px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
@@ -788,9 +815,15 @@ export function ShareStudio({
         <input ref={libRef} type="file" accept={accept} multiple hidden onChange={(e) => fromInput(e, false)} />
         <input ref={capRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => fromInput(e, true)} />
 
-        <div ref={setArea} className="flex min-h-0 flex-1 items-center justify-center px-2" style={{ paddingTop: "max(env(safe-area-inset-top), 0.5rem)" }}>
+        <div
+          ref={setArea}
+          className={cn("flex min-h-0 flex-1 justify-center", fullScreen ? "items-start" : "items-center px-2")}
+          style={{ paddingTop: "max(env(safe-area-inset-top), 0.5rem)" }}
+          data-camera-full={fullScreen ? "" : undefined}
+        >
           <div
-            className="relative touch-pan-y select-none overflow-hidden rounded-[22px] bg-zinc-900"
+            // the shot settles into the editor (opening and retaking snap straight to full screen)
+            className={cn("relative shrink-0 touch-pan-y select-none overflow-hidden rounded-[22px] bg-zinc-900", phase === "edit" && "transition-[width,height] duration-300 ease-out")}
             style={{ width: box.w, height: box.h }}
             onPointerDown={onDown}
             onPointerUp={onUp}
@@ -872,7 +905,7 @@ export function ShareStudio({
                 <span key={lookFlash} className="font-display animate-in fade-in zoom-in-95 rounded-2xl bg-black/35 px-5 py-2 text-[34px] uppercase leading-none backdrop-blur-sm">{lookFlash}</span>
               </div>
             )}
-            {card && card.looks.length > 1 && (
+            {phase === "edit" && card && card.looks.length > 1 && (
               <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1.5" aria-hidden>
                 {card.looks.map((t) => (
                   <span key={t} className={cn("h-1.5 rounded-full transition-all", t === card.look ? "w-5 bg-white" : "w-1.5 bg-white/45")} />
@@ -936,50 +969,54 @@ export function ShareStudio({
           </div>
         </div>
 
-        {/* Bottom: shoot controls, or caption + post */}
-        <div className="shrink-0 px-4 pt-2.5" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
+        {/* Bottom: shoot controls over the camera's foot (Instagram's), or caption + post */}
+        <div
+          className={phase !== "shoot" ? "shrink-0 px-4 pt-2.5" : fullScreen ? "pointer-events-none absolute inset-x-0 bottom-0 z-10" : "shrink-0 pt-2"}
+          style={phase === "shoot" ? undefined : { paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
+          data-camera-controls={phase === "shoot" ? (fullScreen ? "over" : "under") : undefined}
+        >
           {adding ? (
             <div className="mb-2.5 flex justify-center">
-              <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/10 px-3.5 text-[12px] font-bold">
+              <span className="pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-full bg-black/45 px-3.5 text-[12px] font-bold backdrop-blur">
                 Adding slide {tray.total + 1} of up to {MAX_SLIDES}
               </span>
             </div>
           ) : (
-            chip && <div className="mb-2.5 flex justify-center">{chip}</div>
+            chip && (
+              <div className="pointer-events-none mb-2 flex justify-center px-4">
+                {/* over the camera it needs a backing to read on any picture */}
+                <div className={cn("pointer-events-auto max-w-full rounded-full", phase === "shoot" && fullScreen && "bg-black/45 backdrop-blur-md")}>{chip}</div>
+              </div>
+            )
           )}
           {phase === "shoot" ? (
             <>
-              <div className="flex items-center justify-between px-2">
-                <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className="grid h-12 w-12 place-items-center rounded-xl border-2 border-white/80 bg-white/10 active:scale-95 disabled:opacity-30" aria-label="Choose from your library">
-                  <Images className="h-6 w-6" />
+              <div className="pointer-events-auto">
+                <LookCarousel
+                  looks={card?.looks ?? null}
+                  look={card?.look ?? null}
+                  onLook={(t) => card?.onLook(t)}
+                  onShoot={shoot}
+                  disabled={!canShoot}
+                  counting={count != null}
+                  showName={fullScreen}
+                />
+              </div>
+              {/* under the camera: library, what you're sharing, flip */}
+              <div ref={setBarEl} className="pointer-events-auto mt-2 flex items-center gap-2 bg-black px-4 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.6rem)" }} data-camera-bar>
+                <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 border-white/85 bg-white/10 active:scale-95 disabled:opacity-30" aria-label="Choose from your library">
+                  <Images className="h-5 w-5" />
                 </button>
-                <button type="button" disabled={!canShoot} onClick={shoot} className="grid h-[76px] w-[76px] place-items-center rounded-full border-[5px] border-white active:scale-95 disabled:opacity-30" aria-label={count != null ? "Cancel timer" : "Take photo"}>
-                  <span className={cn("block rounded-full transition-all", count != null ? "h-7 w-7 rounded-md bg-red-500" : "h-[60px] w-[60px] bg-white")} />
-                </button>
-                <button type="button" disabled={status !== "live"} onClick={flip} className="grid h-12 w-12 place-items-center rounded-full bg-white/10 active:scale-95 disabled:opacity-30" aria-label="Flip camera">
-                  <RefreshCcw className="h-6 w-6" />
+                <div className="flex min-w-0 flex-1 justify-center">
+                  {modes && modes.length > 1 && !adding && <ModeTabs modes={modes} mode={mode} onMode={(k) => {
+                    cancelCount();
+                    onMode?.(k);
+                  }} />}
+                </div>
+                <button type="button" disabled={status !== "live"} onClick={flip} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/12 active:scale-95 disabled:opacity-30" aria-label="Flip camera">
+                  <RefreshCcw className="h-5 w-5" />
                 </button>
               </div>
-              {modes && modes.length > 1 && !adding && (
-                <div className="mx-auto mt-3 flex w-max gap-1 rounded-full bg-white/10 p-1" role="tablist" aria-label="What you're sharing">
-                  {modes.map((m) => (
-                    <button
-                      key={m.key}
-                      type="button"
-                      role="tab"
-                      aria-selected={mode === m.key}
-                      onClick={() => {
-                        cancelCount();
-                        onMode?.(m.key);
-                      }}
-                      // four fit a phone when they're a little tighter
-                      className={cn("h-9 rounded-full text-[13px] font-black uppercase transition-colors", modes.length > 3 ? "px-3.5 tracking-[0.08em]" : "px-5 tracking-[0.12em]", mode === m.key ? "bg-white text-black" : "text-white/60")}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              )}
             </>
           ) : (
             <div className="space-y-2">
@@ -1068,5 +1105,43 @@ export function ShareStudio({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * What you're sharing, under the camera like Instagram's POST / STORY / REEL:
+ * a row of words that slides so the one you're on sits in the middle.
+ */
+function ModeTabs({ modes, mode, onMode }: { modes: CameraMode[]; mode?: string; onMode: (key: string) => void }) {
+  const row = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = row.current;
+    const on = el?.querySelector<HTMLElement>("[aria-selected=true]");
+    if (!el || !on) return;
+    el.scrollTo({ left: on.offsetLeft + on.offsetWidth / 2 - el.clientWidth / 2, behavior: "smooth" });
+  }, [mode]);
+  return (
+    <div
+      ref={row}
+      className="flex min-w-0 overflow-x-auto [mask-image:linear-gradient(90deg,transparent,#000_14%,#000_86%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="tablist"
+      aria-label="What you're sharing"
+    >
+      {/* room either side, so the first and last can sit in the middle too */}
+      <span className="w-1/2 shrink-0" aria-hidden />
+      {modes.map((m) => (
+        <button
+          key={m.key}
+          type="button"
+          role="tab"
+          aria-selected={mode === m.key}
+          onClick={() => onMode(m.key)}
+          className={cn("h-10 shrink-0 px-2.5 text-[13px] font-black uppercase tracking-[0.08em] transition-colors", mode === m.key ? "text-white" : "text-white/50")}
+        >
+          {m.label}
+        </button>
+      ))}
+      <span className="w-1/2 shrink-0" aria-hidden />
+    </div>
   );
 }

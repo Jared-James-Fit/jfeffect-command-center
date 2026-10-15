@@ -19,6 +19,11 @@ export type CommunityNotice = {
   post_kind: "workout" | "lockin" | "post";
   /** What the post was about ("Belt Squat PR", "10th session this month"), when it was a real moment. */
   win?: string | null;
+  /** The post's photo (a storage path the app signs), for the thumbnail beside the line. */
+  post_thumb?: string | null;
+  post_media?: string | null;
+  /** A words-only post: its first few words, for the thumbnail. */
+  post_text?: string | null;
 };
 
 /** Open a post from anywhere: the community screen, when it's up, listens for this. */

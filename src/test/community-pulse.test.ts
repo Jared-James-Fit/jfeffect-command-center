@@ -62,10 +62,9 @@ describe("No Activity bubble: a finished session is the athlete's own story", ()
     expect(screen).not.toMatch(/ActivitySheet|activityNeedsMore|activity=\{/);
     const rail = read("src/components/community/crew-stories.tsx");
     expect(rail).not.toMatch(/ActivityBubble|ActivityGlyph|ActivityCoverFrame|activityStoryGroup|onActivityList|group\.activity|data-story-activity-all/);
-    // Post, then your story, then the people; a quiet day has no row
-    expect(rail.indexOf("{lead}")).toBeLessThan(rail.indexOf("{mine && ("));
-    expect(rail.indexOf("{mine && (")).toBeLessThan(rail.indexOf("{groups.map((g, i) => ("));
-    expect(rail).toContain("if (!groups.length && !mine) return null;");
+    // your story (with its +) first, then the people; a quiet day with nothing to add has no row
+    expect(rail.indexOf("{addStory ? (")).toBeLessThan(rail.indexOf("{groups.map((g, i) => ("));
+    expect(rail).toContain("if (!groups.length && !mine && !addStory) return null;");
     const lib = read("src/lib/community.ts");
     expect(lib).not.toMatch(/activityStory|ACTIVITY_STORY|activityWeekSummary|activityPreview|activityFaces|activityDay|ActivityCover/);
   });

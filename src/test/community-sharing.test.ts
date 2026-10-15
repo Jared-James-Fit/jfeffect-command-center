@@ -984,8 +984,9 @@ describe("share camera: options right away, no list in the way", () => {
     expect(read("src/components/community/lock-in.tsx")).toContain("lockInCameraCard({ workoutTitle: cardTitle, athleteName, plan: plan ?? [] })");
     expect(cam).toContain("paintShareCard(cardEl, { ...c.data, lockedIn, template: c.look, media }, logo, LIVE_SCALE);");
     expect(cam).toContain("if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) changeLook(dx < 0 ? 1 : -1);");
-    // the card is exactly 9:16 on screen, so what you see is what you share
-    expect(cam).toContain("const w = Math.min(areaSize.w, (areaSize.h * CARD_W) / CARD_H);");
+    // the card is exactly 9:16 on screen, so what you see is what you share: edge to edge when shooting (when it fits above the bar)
+    expect(cam).toContain("const w = fullScreen ? areaSize.w : Math.min(areaSize.w, (areaSize.h * CARD_W) / CARD_H);");
+    expect(cam).toContain("screenSize.h - screenSize.top - (screenSize.w * CARD_H) / CARD_W >= barH - 2");
   });
   it("self-timer, double-tap flip, and the camera light goes off", () => {
     expect(cam).toContain("setTimer((t) => (t === 0 ? 3 : t === 3 ? 10 : 0))");

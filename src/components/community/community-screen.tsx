@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Dumbbell, Users } from "lucide-react";
+import { ArrowLeft, Dumbbell, Heart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +17,8 @@ import { ShareWorkoutButton } from "@/components/community/share-workout-picker"
 import { StoryRail } from "@/components/community/crew-stories";
 import { ShareNudge } from "@/components/community/share-nudge";
 import { CrewList } from "@/components/community/crew-list";
+import { CrewActivity } from "@/components/community/crew-activity";
+import { useCrewActivity } from "@/lib/crew-activity.queries";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { isPulsePost, storiesNeedMore, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
@@ -28,11 +30,17 @@ import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
 import { CaughtUp, FeedItem, NewPostsPill, PostSkeleton, useNewPosts } from "@/components/community/feed-motion";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
-/** Feed and Rankings are the two tabs; Members (the directory) opens from the icon beside them. */
-type Tab = "feed" | "rankings" | "members";
+/**
+ * Feed and Rankings are the two tabs. Activity (the heart: likes, comments,
+ * follows) opens from beside them, and Members (the directory) from Activity's
+ * search, Instagram's way.
+ */
+type Tab = "feed" | "rankings" | "members" | "activity";
 /** A tab, or a profile opened from one (yours, or someone else's). */
 type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab } | { kind: "you"; from: Tab };
-const TAB_LABEL: Record<Tab, string> = { feed: "Feed", rankings: "Rankings", members: "Members" };
+const TAB_LABEL: Record<Tab, string> = { feed: "Feed", rankings: "Rankings", members: "Members", activity: "Activity" };
+/** Pages opened from another one, and where their back arrow goes. */
+const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "activity" };
 
 /** `#post=<id>` opens a post straight away (used by the Home strip and pushes). */
 function postFromHash(): string | null {
@@ -84,7 +92,7 @@ export function CommunityScreen({
   const viewerIsStaff = role === "admin" || role === "coach";
   const [scope, setScope] = useState<Scope>(() => {
     const person = personFromHash();
-    if (person) return { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "members" };
+    if (person) return { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "feed" };
     // the coach's own Community page is just the feed
     if (hideTabs) return { kind: "feed" };
     // Home's ranking tiles (and old #league links) land on Rankings; everything else on the Feed
@@ -93,6 +101,9 @@ export function CommunityScreen({
   });
   const tab: Tab = scope.kind === "author" || scope.kind === "you" ? scope.from : scope.kind;
   const inProfile = scope.kind === "author" || scope.kind === "you";
+  // the heart's dot: something new in Activity (never the coach's own while viewing as a client)
+  const { data: activityItems } = useCrewActivity(!hideTabs && !previewOnly);
+  const activityNew = (activityItems ?? []).some((i) => i.unread);
   const [commentsFor, setCommentsFor] = useState<CommunityPost | null>(null);
   const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
   const [jumpTo, setJumpTo] = useState<string | null>(() => atFromHash());
@@ -191,7 +202,8 @@ export function CommunityScreen({
     if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });
     else if (!routeHash) setScope((sc) => (sc.kind === "rankings" ? { kind: "feed" } : sc));
   }, [routeHash, hideTabs]);
-  const canSwipeBack = inProfile || !!backTo;
+  const parent = PARENT[scope.kind as Tab];
+  const canSwipeBack = inProfile || !!parent || !!backTo;
   const leaveAuthor = () => {
     if (scope.kind !== "author" && scope.kind !== "you") return;
     setScope({ kind: scope.from });
@@ -199,6 +211,7 @@ export function CommunityScreen({
   };
   const swipeBack = () => {
     if (inProfile) return leaveAuthor();
+    if (parent) return setScope({ kind: parent });
     if (!backTo) return;
     if (router.history.canGoBack()) router.history.back();
     else void navigate({ to: backTo });
@@ -310,7 +323,11 @@ export function CommunityScreen({
         >
           <ArrowLeft className="mr-1.5 h-4 w-4" /> {TAB_LABEL[tab]}
         </Button>
-      ) : hideTabs ? null : (
+      ) : hideTabs || scope.kind === "activity" ? null : parent ? (
+        <Button type="button" variant="ghost" className="-ml-2 h-10 rounded-full px-3" onClick={() => setScope({ kind: parent })}>
+          <ArrowLeft className="mr-1.5 h-4 w-4" /> {TAB_LABEL[parent]}
+        </Button>
+      ) : (
         <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
         {backTo && (
@@ -338,19 +355,22 @@ export function CommunityScreen({
         </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
-          {/* the member directory: a secondary entry, beside the bell */}
-          <button
-            type="button"
-            aria-label="Members"
-            aria-pressed={scope.kind === "members"}
-            onClick={() => {
-              setScope({ kind: "members" });
-              window.scrollTo({ top: 0 });
-            }}
-            className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors active:bg-muted", scope.kind === "members" ? "bg-muted text-foreground" : "text-muted-foreground")}
-          >
-            <Users className="h-[18px] w-[18px]" />
-          </button>
+          {/* Activity: who liked, commented, followed (Instagram's heart), a dot when there's something new */}
+          {!previewOnly && (
+            <button
+              type="button"
+              aria-label={activityNew ? "Activity, new" : "Activity"}
+              onClick={() => {
+                setScope({ kind: "activity" });
+                window.scrollTo({ top: 0 });
+              }}
+              className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground transition-colors active:bg-muted"
+              data-activity-open
+            >
+              <Heart className="h-[21px] w-[21px]" strokeWidth={2.1} />
+              {activityNew && <span className="absolute right-[5px] top-[5px] h-2 w-2 rounded-full bg-primary ring-2 ring-background" data-activity-dot />}
+            </button>
+          )}
           {bell && <NotificationBell />}
           {/* small phones: just the "+", so Feed · Rankings keep their room */}
           {canShare && <ShareWorkoutButton unit={unit} label="Post" previewOnly={previewOnly} className="max-[389px]:w-9 max-[389px]:px-0" labelClassName="max-[389px]:sr-only" />}
@@ -360,6 +380,16 @@ export function CommunityScreen({
 
       {scope.kind === "rankings" ? (
         <RankingsHub />
+      ) : scope.kind === "activity" ? (
+        <CrewActivity
+          onBack={() => setScope({ kind: "feed" })}
+          onOpenPost={(id) => setDetailId(id)}
+          onOpenPerson={openAuthor}
+          onFindPeople={() => {
+            setScope({ kind: "members" });
+            window.scrollTo({ top: 0 });
+          }}
+        />
       ) : scope.kind === "members" ? (
         <CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "members" })} />
       ) : scope.kind === "you" && user?.id ? (
@@ -396,7 +426,7 @@ export function CommunityScreen({
             viewerIsStaff={viewerIsStaff}
             onOpenPost={(id) => setDetailId(id)}
             onJumpTo={setJumpTo}
-            lead={canShare ? <ShareWorkoutButton unit={unit} label="Post" variant="bubble" previewOnly={previewOnly} /> : null}
+            addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} /> : undefined}
             addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} /> : null}
           />
           {!hideTabs && followingIds.size > 0 && (
