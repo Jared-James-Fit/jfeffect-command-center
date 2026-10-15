@@ -435,10 +435,13 @@ export async function markRead(clientId: string, role: SenderRole) {
   // Stamp messages from the opposite side
   const col = role === "admin" ? "read_by_admin_at" : "read_by_client_at";
   const oppRole = role === "admin" ? "client" : "admin";
-  await db.from("messages").update({ [col]: now })
+  const { error: stampError } = await db.from("messages").update({ [col]: now })
     .eq("client_id", clientId)
     .eq("sender_role", oppRole)
     .is(col, null);
+  // Never silent again: a failing stamp left the read receipt and the inbox
+  // dot stuck for weeks while the tab badge cleared (Oct 2026).
+  if (stampError) console.warn("[messages] read stamp failed", stampError);
   // Best-effort: dismiss OS-level notifications + PWA app badge for this thread
   // so the reminder disappears the moment the conversation is opened.
   try { await dismissMessageBadges(clientId); } catch {}
