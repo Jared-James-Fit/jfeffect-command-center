@@ -96,8 +96,10 @@ export function FollowsYouTag({ userId, className }: { userId: string; className
 }
 
 /** "N followers · N following" on a profile; opens the lists when you're allowed to see them. */
-export function FollowCounts({ userId, isMe, canSee, followers, following, onOpen }: {
+export function FollowCounts({ userId, name, isMe, canSee, followers, following, onOpen }: {
   userId: string;
+  /** Their name, for the lists' title. */
+  name?: string;
   isMe: boolean;
   canSee: boolean;
   followers: number;
@@ -123,7 +125,7 @@ export function FollowCounts({ userId, isMe, canSee, followers, following, onOpe
         {stat(followers, "follower", "followers", "followers")}
         {stat(following, "following", "following", "following")}
       </div>
-      <FollowListSheet userId={userId} isMe={isMe} kind={open} onKind={setOpen} onOpen={onOpen} />
+      <FollowListSheet userId={userId} name={name} isMe={isMe} counts={{ followers, following }} kind={open} onKind={setOpen} onOpen={onOpen} />
     </>
   );
 }
@@ -144,23 +146,29 @@ function SheetTop({ title, sub }: { title: string; sub?: string }) {
 
 const SHEET = "max-h-[80dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[520px]";
 
-function PersonRow({ a, onOpen, children }: { a: CommunityAuthor; onOpen?: () => void; children?: React.ReactNode }) {
+function PersonRow({ a, onOpen, followsYou = true, children }: { a: CommunityAuthor; onOpen?: () => void; followsYou?: boolean; children?: React.ReactNode }) {
   return (
     <li className="flex items-center gap-3 px-5 py-2.5">
       <button type="button" onClick={onOpen} disabled={!onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-70 disabled:active:opacity-100">
         <UserAvatar src={a.avatar_url} name={a.name} size={40} expandable={false} />
         <span className="min-w-0 truncate text-[14px] font-bold">{a.name}</span>
-        <FollowsYouTag userId={a.user_id} />
+        {followsYou && <FollowsYouTag userId={a.user_id} />}
       </button>
       {children}
     </li>
   );
 }
 
-/** Followers / Following, Instagram-style. On your own, Remove a follower or unfollow in place. */
-function FollowListSheet({ userId, isMe, kind, onKind, onOpen }: {
+/**
+ * Followers / Following, Instagram-style: their name on top, the counts on the
+ * tabs. On your own, Remove a follower (asks first; they aren't told) or
+ * unfollow in place.
+ */
+function FollowListSheet({ userId, name, isMe, counts, kind, onKind, onOpen }: {
   userId: string;
+  name?: string;
   isMe: boolean;
+  counts: { followers: number; following: number };
   kind: FollowListKind | null;
   onKind: (k: FollowListKind | null) => void;
   onOpen?: (a: CommunityAuthor) => void;
@@ -168,15 +176,17 @@ function FollowListSheet({ userId, isMe, kind, onKind, onOpen }: {
   const { data: people = [], isLoading } = useFollowList(userId, kind ?? "followers", !!kind);
   const remove = useRemoveFollower();
   const myId = useMyCommunityId();
+  const [removing, setRemoving] = useState<CommunityAuthor | null>(null);
+  const tab = (k: FollowListKind) => (k === "followers" ? `${counts.followers} ${counts.followers === 1 ? "follower" : "followers"}` : `${counts.following} following`);
   return (
     <Sheet open={!!kind} onOpenChange={(o) => !o && onKind(null)}>
       <SheetContent side="bottom" hideCloseButton className={SHEET}>
-        <SheetTop title={kind === "following" ? "Following" : "Followers"} />
+        <SheetTop title={name || (kind === "following" ? "Following" : "Followers")} />
         <div className="mx-5 mt-2 grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist">
           {(["followers", "following"] as const).map((k) => (
             <button key={k} type="button" role="tab" aria-selected={kind === k} onClick={() => onKind(k)}
-              className={cn("h-8 rounded-lg text-[12px] font-bold capitalize", kind === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
-              {k}
+              className={cn("h-8 rounded-lg text-[12px] font-bold", kind === k ? "bg-background shadow-sm" : "text-muted-foreground")}>
+              {tab(k)}
             </button>
           ))}
         </div>
@@ -187,29 +197,51 @@ function FollowListSheet({ userId, isMe, kind, onKind, onOpen }: {
         ) : (
           <ul className="mt-3 divide-y divide-border/60 border-y border-border/60">
             {people.map((a) => (
-              <PersonRow key={a.user_id} a={a} onOpen={onOpen ? () => { onKind(null); onOpen(a); } : undefined}>
+              <PersonRow key={a.user_id} a={a} followsYou={!(isMe && kind === "followers")} onOpen={onOpen ? () => { onKind(null); onOpen(a); } : undefined}>
                 {isMe && kind === "followers" ? (
-                  <button
-                    type="button"
-                    className="h-8 shrink-0 rounded-lg bg-muted px-3 text-[12px] font-bold"
-                    onClick={() => remove.mutate({ userId: a.user_id }, { onSuccess: () => toast(`Removed ${a.name}`, { description: "They aren't told." }), onError: () => toast.error("Couldn't remove them. Try again.") })}
-                  >
+                  <button type="button" className="h-8 shrink-0 rounded-lg bg-muted px-3 text-[12px] font-bold" onClick={() => setRemoving(a)}>
                     Remove
                   </button>
                 ) : a.user_id !== myId ? (
-                  <FollowButton userId={a.user_id} name={a.name} size="sm" />
+                  <FollowButton userId={a.user_id} name={a.name} avatarUrl={a.avatar_url} size="sm" />
                 ) : null}
               </PersonRow>
             ))}
           </ul>
         )}
       </SheetContent>
+      {/* Remove follower? (Instagram asks too: they'd have to ask again) */}
+      <Sheet open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
+        <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[420px]">
+          <div data-remove-follower-confirm className="flex flex-col items-center px-6 pb-3 pt-6 text-center">
+            <UserAvatar src={removing?.avatar_url ?? null} name={removing?.name ?? ""} size={72} expandable={false} />
+            <SheetTitle className="mt-3 text-[16px] font-black">Remove follower?</SheetTitle>
+            <SheetDescription className="mt-1 text-[13px] leading-snug">
+              We won't tell {removing?.name ?? "them"} they were removed from your followers.
+            </SheetDescription>
+          </div>
+          <div className="border-t border-border/60">
+            <button
+              type="button"
+              className="h-12 w-full text-[14px] font-bold text-destructive active:bg-muted"
+              onClick={() => {
+                const a = removing;
+                setRemoving(null);
+                if (a) remove.mutate({ userId: a.user_id }, { onSuccess: () => toast(`Removed ${a.name}`), onError: () => toast.error("Couldn't remove them. Try again.") });
+              }}
+            >
+              Remove
+            </button>
+            <SheetClose className="h-12 w-full border-t border-border/60 text-[14px] font-semibold active:bg-muted">Cancel</SheetClose>
+          </div>
+        </SheetContent>
+      </Sheet>
     </Sheet>
   );
 }
 
 /** Your own profile, private account: people asking to follow you. Confirm or Delete (silent). */
-export function FollowRequestsButton({ onOpen }: { onOpen?: (a: CommunityAuthor) => void }) {
+export function FollowRequestsButton({ onOpen, className }: { onOpen?: (a: CommunityAuthor) => void; className?: string }) {
   const { data: state } = useFollowState();
   const [open, setOpen] = useState(false);
   const { data: members = [], isLoading: membersLoading } = useCommunityMembers(open);
@@ -219,7 +251,7 @@ export function FollowRequestsButton({ onOpen }: { onOpen?: (a: CommunityAuthor)
   const people = ids.map((id) => members.find((m) => m.author.user_id === id)?.author).filter((a): a is CommunityAuthor => !!a);
   return (
     <>
-      <button type="button" data-follow-requests onClick={() => setOpen(true)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary/10 px-3 text-[12px] font-bold text-primary">
+      <button type="button" data-follow-requests onClick={() => setOpen(true)} className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary/10 px-3 text-[12px] font-bold text-primary", className)}>
         Requests <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[11px] text-primary-foreground tabular-nums">{ids.length}</span>
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
@@ -269,7 +301,8 @@ export function FollowRequestBanner({ userId, name }: { userId: string; name: st
   if (!state?.requests.includes(userId)) return null;
   return (
     <div data-follow-request-banner className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-3.5 py-2.5">
-      <span className="min-w-0 text-[13px] font-semibold">{name} wants to follow you</span>
+      {/* the name is right above in big type; this fits one line next to the buttons on a phone */}
+      <span className="min-w-0 text-[13px] font-semibold" aria-label={`${name} wants to follow you`}>Wants to follow you</span>
       <RespondButtons userId={userId} respond={respond} />
     </div>
   );
@@ -279,7 +312,7 @@ export function FollowRequestBanner({ userId, name }: { userId: string; name: st
  * Your Close Friends: who gets your Close Friends posts and stories (green
  * ring). Nobody is told they were added or taken off.
  */
-export function CloseFriendsButton() {
+export function CloseFriendsButton({ className }: { className?: string }) {
   const { data: state } = useFollowState();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -299,7 +332,7 @@ export function CloseFriendsButton() {
   }, [members, ids, q, state]);
   return (
     <>
-      <button type="button" data-close-friends onClick={() => setOpen(true)} className="inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-500/15 px-3 text-[12px] font-bold text-emerald-700 dark:text-emerald-300">
+      <button type="button" data-close-friends onClick={() => setOpen(true)} className={cn("inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-500/15 px-3 text-[12px] font-bold text-emerald-700 dark:text-emerald-300", className)}>
         <Star className="h-3.5 w-3.5 fill-current" /> Close friends <span className="tabular-nums opacity-70">· {ids.length}</span>
       </button>
       <Sheet open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ(""); }}>

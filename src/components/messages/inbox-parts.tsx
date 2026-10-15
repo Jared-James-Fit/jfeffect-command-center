@@ -324,7 +324,7 @@ export function NewMessageSheet({
 
   return (
     <>
-      <TallSheet open={open} onOpenChange={close} title="New message" sub="People you haven't chatted with get a message request. They decide if they want to chat.">
+      <TallSheet open={open} onOpenChange={close} title="New message" sub="Someone who follows you gets a chat straight away. Anyone else gets a message request, and they decide if they want to chat.">
         <div className="relative shrink-0 px-4 pb-2">
           <Search className="pointer-events-none absolute left-7 top-1/2 h-4 w-4 -translate-y-[60%] text-muted-foreground" />
           <input

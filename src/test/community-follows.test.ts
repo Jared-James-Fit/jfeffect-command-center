@@ -166,7 +166,10 @@ describe("crew screen wiring", () => {
   it("puts Follow on profiles, members and suggestions", () => {
     expect(readFileSync("src/components/community/profile-view.tsx", "utf8")).toContain("<FollowButton");
     expect(readFileSync("src/components/community/crew-list.tsx", "utf8")).toContain("<FollowButton");
-    expect(readFileSync("src/components/community/suggested-athletes.tsx", "utf8")).toContain("Only you see who you follow");
+    const suggested = readFileSync("src/components/community/suggested-athletes.tsx", "utf8");
+    expect(suggested).toContain("Suggested for you");
+    // lists are visible on profiles now (Instagram-style), so the old promise is gone
+    expect(suggested).not.toContain('text-muted-foreground">Only you see who you follow');
   });
 });
 

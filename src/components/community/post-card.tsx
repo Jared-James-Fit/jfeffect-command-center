@@ -375,7 +375,10 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         <div className="flex shrink-0 items-center gap-1">
           {post.visibility === "close_friends" ? (
             <Star className="h-3.5 w-3.5 fill-emerald-500 text-emerald-500" aria-label="Close friends only" />
-          ) : post.visibility !== "community" && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : post.visibility === "followers" ? "Only their followers see this" : "Only visible to you"} />}
+          ) : post.visibility !== "community" && (post.visibility !== "followers" || post.is_mine) && (
+            // a private account's post looks like any other to its followers (as on Instagram); the author sees the lock
+            <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : post.visibility === "followers" ? "Only your followers see this" : "Only visible to you"} />
+          )}
           <PostActions post={post} viewerIsStaff={viewerIsStaff} />
         </div>
       </header>

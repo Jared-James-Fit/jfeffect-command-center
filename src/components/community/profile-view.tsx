@@ -6,7 +6,9 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useAuth } from "@/lib/auth";
 import { UserAvatar } from "@/components/user-avatar";
 import { CloseFriendsButton, FollowButton, FollowCounts, FollowRequestBanner, FollowRequestsButton, FollowsYouTag } from "@/components/community/follow-button";
 import { useFollowState, useSetPrivate } from "@/lib/community-social";
@@ -24,6 +26,9 @@ import { useCommunityFeed, useCommunityProfile, useMyArchived, useMyCommunitySet
  */
 export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId: string; unit: "kg" | "lb"; onOpenPost: (post: CommunityPost) => void; onOpenPerson?: (a: CommunityAuthor) => void }) {
   const { data: profile, isLoading } = useCommunityProfile(userId);
+  // coaches follow a private account straight away (no request), so it acts public for them
+  const { role } = useAuth();
+  const viewerIsStaff = role === "admin" || role === "coach";
   const feed = useCommunityFeed(userId);
   const shown = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
   // Your own profile: Posts | Archived (Instagram-style, only you see Archived)
@@ -129,25 +134,14 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
           </div>
           <FollowCounts
             userId={profile.author.user_id}
+            name={profile.author.name}
             isMe={profile.is_me}
             canSee={profile.can_see ?? true}
             followers={profile.followers ?? 0}
             following={profile.following ?? 0}
             onOpen={onOpenPerson}
           />
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
-            {profile.is_me ? (
-              <>
-                <FollowRequestsButton onOpen={onOpenPerson} />
-                {!profile.author.is_coach && <CloseFriendsButton />}
-              </>
-            ) : (
-              <>
-                <FollowButton userId={profile.author.user_id} name={profile.author.name} avatarUrl={profile.author.avatar_url} isPrivate={profile.is_private} />
-                <FollowsYouTag userId={profile.author.user_id} />
-              </>
-            )}
-          </div>
+          {!profile.is_me && <FollowsYouTag userId={profile.author.user_id} className="mt-1.5 inline-block" />}
         </div>
       </div>
 
@@ -185,6 +179,20 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
           </button>
         ) : null}
       </div>
+
+      {/* Instagram's row: full-width actions under the bio */}
+      {profile.is_me ? (
+        !profile.author.is_coach && (
+          <div className="mt-3 flex gap-2">
+            <FollowRequestsButton onOpen={onOpenPerson} className="h-9 flex-1 justify-center text-[13px]" />
+            <CloseFriendsButton className="h-9 flex-1 justify-center text-[13px]" />
+          </div>
+        )
+      ) : (
+        <div className="mt-3 flex gap-2">
+          <FollowButton userId={profile.author.user_id} name={profile.author.name} avatarUrl={profile.author.avatar_url} isPrivate={!!profile.is_private && !viewerIsStaff} className="flex-1" />
+        </div>
+      )}
 
       {!profile.is_me && <FollowRequestBanner userId={profile.author.user_id} name={profile.author.name} />}
 
@@ -273,27 +281,54 @@ function PrivateSwitch() {
   const { isImpersonating } = useClientImpersonation();
   const { data: state } = useFollowState(!isImpersonating);
   const set = useSetPrivate();
+  // Instagram asks before either switch: going public shows everything at once and lets everyone waiting in
+  const [ask, setAsk] = useState<boolean | null>(null);
   if (isImpersonating || !state) return null;
+  const waiting = state.requests.length;
+  const save = (on: boolean) =>
+    set.mutate(on, {
+      onSuccess: () => toast.success(on ? "Your account is private" : "Your account is public", { description: on ? "People who already follow you still do." : waiting ? "Everyone waiting to follow you is in now." : undefined }),
+      onError: (e: any) => toast.error(e?.message ?? "Couldn't save that"),
+    });
   return (
-    <label data-private-switch className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-3.5 py-3">
-      <span className="min-w-0">
-        <span className="block text-[13px] font-bold">Private account</span>
-        <span className="block text-[11.5px] leading-snug text-muted-foreground">
-          {state.is_private
-            ? "Only followers you approve see your posts and stories. Your automatic workout stories still show for everyone."
-            : "Anyone in the crew can follow you and see your posts. Turn on to approve followers first."}
+    <>
+      <label data-private-switch className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-3.5 py-3">
+        <span className="min-w-0">
+          <span className="block text-[13px] font-bold">Private account</span>
+          <span className="block text-[11.5px] leading-snug text-muted-foreground">
+            {state.is_private
+              ? "Only followers you approve see your posts and stories. Your automatic workout stories still show for everyone."
+              : "Anyone in the crew can follow you and see your posts. Turn on to approve followers first."}
+          </span>
         </span>
-      </span>
-      <Switch
-        checked={state.is_private}
-        disabled={set.isPending}
-        onCheckedChange={(on) =>
-          set.mutate(on, {
-            onSuccess: () => toast.success(on ? "Your account is private" : "Your account is public", { description: on ? "People you've already let in keep following you." : "Anyone waiting to follow you is in now." }),
-            onError: (e: any) => toast.error(e?.message ?? "Couldn't save that"),
-          })
-        }
-      />
-    </label>
+        <Switch checked={state.is_private} disabled={set.isPending} onCheckedChange={(on) => setAsk(on)} />
+      </label>
+      <Sheet open={ask !== null} onOpenChange={(o) => !o && setAsk(null)}>
+        <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[420px]">
+          <div data-private-confirm className="px-6 pb-3 pt-6 text-center">
+            <SheetTitle className="text-[16px] font-black">{ask ? "Switch to private account?" : "Switch to public account?"}</SheetTitle>
+            <SheetDescription className="mt-2 text-[13px] leading-snug">
+              {ask
+                ? "Only followers you approve will see your posts and stories. People who already follow you still will. Your automatic workout stories still show for everyone."
+                : `Anyone in the crew will be able to see your posts and stories.${waiting ? ` ${waiting === 1 ? "The 1 person" : `The ${waiting} people`} waiting to follow you will be approved.` : ""}`}
+            </SheetDescription>
+          </div>
+          <div className="border-t border-border/60">
+            <button
+              type="button"
+              className="h-12 w-full text-[14px] font-bold text-primary active:bg-muted"
+              onClick={() => {
+                const on = !!ask;
+                setAsk(null);
+                save(on);
+              }}
+            >
+              {ask ? "Switch to private" : "Switch to public"}
+            </button>
+            <SheetClose className="h-12 w-full border-t border-border/60 text-[14px] font-semibold active:bg-muted">Cancel</SheetClose>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

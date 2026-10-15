@@ -16,20 +16,23 @@ export function AudiencePicker({
   hideLoads,
   onHideLoads,
   tone = "light",
+  autoStory = false,
 }: {
   value: CommunityVisibility;
   onChange: (v: CommunityVisibility) => void;
   hideLoads: boolean;
   onHideLoads: (v: boolean) => void;
   tone?: "light" | "dark";
+  /** Editing an automatic workout story (a Pulse): its crew choice reaches everyone, private account or not. */
+  autoStory?: boolean;
 }) {
   const dark = tone === "dark";
-  const audiences = useAudiences();
+  const audiences = useAudiences(autoStory);
   const picked = pickerAudience(value);
   const hint = audiences.find((a) => a.key === picked)?.hint;
   return (
     <div className="space-y-2">
-      <div className={cn("grid grid-cols-4 gap-1 rounded-xl p-1", dark ? "bg-white/10" : "bg-muted")} role="radiogroup" aria-label="Who can see it">
+      <div className={cn("grid grid-cols-2 gap-1 rounded-xl p-1 sm:grid-cols-4", dark ? "bg-white/10" : "bg-muted")} role="radiogroup" aria-label="Who can see it">
         {audiences.map((a) => {
           const Icon = ICON[a.key];
           const on = picked === a.key;
@@ -52,7 +55,7 @@ export function AudiencePicker({
         })}
       </div>
       <div className="flex items-center justify-between gap-2">
-        <span className={cn("min-w-0 truncate text-[11px]", dark ? "text-white/55" : "text-muted-foreground")}>{hint}</span>
+        <span className={cn("line-clamp-2 min-w-0 text-[11px] leading-snug", dark ? "text-white/55" : "text-muted-foreground")}>{hint}</span>
         <button
           type="button"
           role="switch"
@@ -77,10 +80,13 @@ export function AudiencePicker({
  * reads "Followers", and Close friends says so when the list is still empty
  * (a post to an empty list reaches nobody).
  */
-export function useAudiences() {
+export function useAudiences(autoStory = false) {
   const { data: follows } = useFollowState();
   return AUDIENCES.map((a) => {
-    if (a.key === "community" && follows?.is_private) return { ...a, label: "Followers", hint: "Only the followers you've approved" };
+    if (a.key === "community" && follows?.is_private)
+      return autoStory
+        ? { ...a, hint: "Your automatic workout stories show for the whole crew" }
+        : { ...a, label: "Followers", hint: "Only the followers you've approved" };
     if (a.key === "close_friends" && follows && follows.close_friends.length === 0)
       return { ...a, hint: "Your Close friends list is empty. Add people from your profile first." };
     return a;
