@@ -12,7 +12,7 @@ describe("the coach's community, in one place", () => {
     expect(read("src/routes/_authenticated/admin/community.tsx")).toContain("component: AdminCommunityHub,");
     expect(hub).toContain('{ key: "feed", label: "Feed" },\n  { key: "league", label: "League" },');
     expect(hub).toContain('<h1 className="text-[22px] font-black tracking-tight">Crew</h1>');
-    expect(hub).toContain('{ key: "daily", label: "Daily" }');
+    expect(hub).toContain('{ key: "daily", label: "Posts" }');
     expect(hub).toContain('{ key: "birthdays", label: "Birthdays" }');
     expect(hub).toContain("<StaffLeagueTab tools={!viewOnly} />");
     // the week at a glance heads the feed; anything waiting shows on every other tab

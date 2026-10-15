@@ -8,6 +8,7 @@
 import { formatLoad, formatTonnage } from "@/lib/training-records";
 import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
 import { dayScheduledDate, type WorkoutItem } from "@/lib/workout-today";
+import type { LessonExtra, PostSticker } from "@/lib/lessons";
 
 /** Longest workout caption (Instagram's limit). Matches community_posts_caption_check. */
 export const CAPTION_MAX = 2200;
@@ -126,7 +127,9 @@ export type CommunitySeries =
   | "try_it_thursday"
   | "finish_strong_friday"
   | "saturday_spirit"
-  | "sunday_recap";
+  | "sunday_recap"
+  /** A coach lesson (lessons.ts): the five lesson days, planned and reviewed ahead. */
+  | "lesson";
 
 /** The daily coach posts, Monday first: name + the one-line idea behind each. */
 export const SERIES_LABEL: Record<CommunitySeries, { name: string; tagline: string; short: string }> = {
@@ -137,6 +140,7 @@ export const SERIES_LABEL: Record<CommunitySeries, { name: string; tagline: stri
   finish_strong_friday: { name: "Finish Strong Friday", tagline: "Finish what you started", short: "Fri" },
   saturday_spirit: { name: "Saturday Spirit", tagline: "Trust the process", short: "Sat" },
   sunday_recap: { name: "Sunday Recap", tagline: "How the week went", short: "Sun" },
+  lesson: { name: "Coach's lesson", tagline: "One thing worth knowing", short: "Learn" },
 };
 
 /** Tuesday's kinds of tip, as the little tag on the post. */
@@ -211,6 +215,8 @@ export type CommunityPost = {
   comment_preview?: CommentPreview[];
   /** A poll on a coach's text post (null / missing = none). */
   poll?: CommunityPoll | null;
+  /** A story sticker (poll, slider, question box), answered from the story. */
+  sticker?: PostSticker | null;
   /** A GIF from the library on the post (its public link). */
   gif_url?: string | null;
   /** A voice memo on the post. */
@@ -872,7 +878,9 @@ export type SeriesExtra =
   /** Tuesday from the crew's own data. */
   | (CrewCompare & { observation: "frequency" | "consistency" | "sleep" })
   /** Thursday: the feature, where to find it, and (when it says something) how the people who use it train. */
-  | { feature: string; title: string; where: string[]; stat?: CrewCompare | null };
+  | { feature: string; title: string; where: string[]; stat?: CrewCompare | null }
+  /** A coach lesson: its track, level, lift, diagram and sources (extraLesson). */
+  | LessonExtra;
 
 export function extraScene(e: SeriesExtra | null | undefined): string | null {
   return e && "scene" in e && typeof e.scene === "string" ? e.scene : null;

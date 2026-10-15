@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Trash2, UserMinus } from "lucide-react";
+import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -10,6 +10,7 @@ import type { CommunityPost } from "@/lib/community";
 import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useRemoveNoteScene, useSetPostMedia, useUpdateNote } from "@/lib/community.queries";
 import { extraScene, postSlides } from "@/lib/community";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
+import { PostStickerEditor } from "@/components/community/sticker-editor";
 
 /**
  * The "…" on a post, Instagram-style. Your own post: Edit, Archive (only you
@@ -21,6 +22,7 @@ import { isSpiritScene } from "@/components/community/spirit-scenes";
 export function PostActions({ post, viewerIsStaff, onGone, className }: { post: CommunityPost; viewerIsStaff: boolean; onGone?: () => void; className?: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [sticker, setSticker] = useState(false);
   const del = useDeletePost();
   const archive = useArchivePost();
   const updateNote = useUpdateNote();
@@ -93,6 +95,11 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
               <Pencil className="mr-2 h-4 w-4" /> Edit
             </DropdownMenuItem>
           )}
+          {mine && post.visibility === "community" && !archived && (
+            <DropdownMenuItem onSelect={() => setSticker(true)}>
+              <Sticker className="mr-2 h-4 w-4" /> {post.sticker ? "Story sticker" : "Add a story sticker"}
+            </DropdownMenuItem>
+          )}
           {mine && (
             <DropdownMenuItem onSelect={() => setArchived(!archived)} disabled={archive.isPending}>
               {archived ? <ArchiveRestore className="mr-2 h-4 w-4" /> : <Archive className="mr-2 h-4 w-4" />}
@@ -160,6 +167,7 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
       ) : (
         <EditPostSheet post={editing ? post : null} onClose={() => setEditing(false)} />
       )}
+      {mine && <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />}
     </>
   );
 }

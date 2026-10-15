@@ -10,6 +10,7 @@ import { SERIES_LABEL } from "@/lib/community";
 import { useCommunityFeed, useCommunityPulse, useSeriesAction, useViewerUnit, type CommunityPulse } from "@/lib/community.queries";
 import { CommunityScreen } from "@/components/community/community-screen";
 import { CoachWeeklyPosts } from "@/components/community/coach-weekly-posts";
+import { CoachLessons } from "@/components/community/coach-lessons";
 import { BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { CoachPostRow } from "@/components/community/community-entry";
 import { NoteEditor } from "@/components/community/note-editor";
@@ -49,9 +50,11 @@ export function groupReplies(rows: CommunityPulse["to_reply"]) {
 }
 
 function nextPost(p: CommunityPulse): { title: string; when: string | null } {
-  if (p.paused) return { title: "Daily posts are paused", when: "Turn them back on in Daily posts" };
+  if (p.paused) return { title: "Coach posts are paused", when: "Turn them back on in Posts" };
   if (!p.next) return { title: "Nothing scheduled", when: null };
-  return { title: `Next: ${SERIES_LABEL[p.next.series]?.name ?? "Daily post"}`, when: whenLabel(p.next.at) };
+  if (p.next.series === "lesson")
+    return { title: `Next lesson: ${p.next.title ?? "from the library"}`, when: `${whenLabel(p.next.at)}${p.next.needs_ok ? " · needs your OK" : ""}` };
+  return { title: `Next: ${SERIES_LABEL[p.next.series]?.name ?? "Coach post"}`, when: whenLabel(p.next.at) };
 }
 
 function birthdayPost(p: CommunityPulse): { title: string; when: string | null } | null {
@@ -65,7 +68,7 @@ type HubTab = "league" | "feed" | "daily" | "birthdays";
 const HUB_TABS: { key: HubTab; label: string }[] = [
   { key: "feed", label: "Feed" },
   { key: "league", label: "League" },
-  { key: "daily", label: "Daily" },
+  { key: "daily", label: "Posts" },
   { key: "birthdays", label: "Birthdays" },
 ];
 
@@ -154,7 +157,10 @@ export function AdminCommunityHub() {
           </div>
         </>
       ) : tab === "daily" ? (
-        <CoachWeeklyPosts />
+        <div className="space-y-3">
+          <CoachLessons />
+          <CoachWeeklyPosts />
+        </div>
       ) : (
         <div className="space-y-3">
           <BirthdayPostsCard />
@@ -190,17 +196,19 @@ function NeedsYouStrip({ onGo }: { onGo: (t: HubTab) => void }) {
   const { data: p } = useCommunityPulse();
   if (!p) return null;
   const replies = groupReplies(p.to_reply).length;
+  const lessons = p.lessons_review ?? 0;
   const parts = [
     replies > 0 && `${replies} to reply`,
     p.waiting_props > 0 && `${p.waiting_props} waiting on props`,
     p.birthday_review > 0 && `${p.birthday_review} birthday ${p.birthday_review === 1 ? "post" : "posts"} to approve`,
+    lessons > 0 && `${lessons} ${lessons === 1 ? "lesson" : "lessons"} to approve`,
   ].filter(Boolean) as string[];
   if (!parts.length) return null;
-  const onlyBirthdays = replies === 0 && p.waiting_props === 0;
+  const feedStuff = replies > 0 || p.waiting_props > 0;
   return (
     <button
       type="button"
-      onClick={() => onGo(onlyBirthdays ? "birthdays" : "feed")}
+      onClick={() => onGo(feedStuff ? "feed" : p.birthday_review > 0 ? "birthdays" : "daily")}
       className="flex w-full items-center gap-2.5 rounded-2xl border border-primary/30 bg-primary/10 px-3.5 py-2.5 text-left text-[13px] font-bold text-primary active:scale-[0.99]"
     >
       <Flame className="h-4 w-4 shrink-0" />

@@ -47,7 +47,7 @@ describe("a post for every day of the week", () => {
   });
   it("labels every day, Monday first", () => {
     expect(Object.keys(SERIES_LABEL)).toEqual([
-      "monday_motivation", "tuesday_tips", "wednesday_wins", "try_it_thursday", "finish_strong_friday", "saturday_spirit", "sunday_recap",
+      "monday_motivation", "tuesday_tips", "wednesday_wins", "try_it_thursday", "finish_strong_friday", "saturday_spirit", "sunday_recap", "lesson",
     ]);
     expect(SERIES_LABEL.tuesday_tips.name).toBe("Tuesday Tips & Tricks");
     expect(SERIES_LABEL.try_it_thursday.name).toBe("Try it Thursday");
@@ -182,10 +182,11 @@ describe("the words sound like the coach and stay inside the lines", () => {
       for (const w of banned) expect(b.toLowerCase(), b).not.toContain(w);
     }
   });
-  it("the coach screen shows all seven days and what the data days would say right now", () => {
+  it("the coach screen shows Wins and Recap as they'd read right now (the other five days are lessons)", () => {
     const coach = read("src/components/community/coach-weekly-posts.tsx");
-    for (const k of Object.keys(SERIES_LABEL)) expect(coach).toContain(`"${k}"`);
-    expect(coach).toContain('useSeriesPreview("sunday_recap", isOpen("sunday_recap"))');
+    for (const k of ["wednesday_wins", "sunday_recap"]) expect(coach).toContain(`"${k}"`);
+    expect(coach).toContain('useSeriesPreview("sunday_recap", open === "sunday_recap")');
+    expect(read("src/components/community/admin-community-hub.tsx")).toContain("<CoachLessons />\n          <CoachWeeklyPosts />");
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.community_series_preview(_series text)");
   });
 });
