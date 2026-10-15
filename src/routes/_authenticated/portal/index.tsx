@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
-import { Bell } from "lucide-react";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import type { TrainingPhase } from "@/lib/training-phases";
 import { toast } from "sonner";
@@ -138,7 +137,6 @@ function PortalHome() {
       .then(() => ensureMessengerCheckins({ data: { clientId: client.id } }))
       .then((res) => {
         if (res?.created) {
-          qc.invalidateQueries({ queryKey: ["portal-coach-updates", client.id] });
           qc.invalidateQueries({ queryKey: ["messages", client.id, "client"] });
         }
       })
@@ -169,68 +167,6 @@ function PortalHome() {
     if (!isGoalsSetupComplete(goalsSetup ?? null)) setGoalsSetupPromptOpen(true);
   }, [client?.id, coaching, goalsSetup, goalsSetupPromptDismissed]);
 
-  // Coach response surfaces — power "Today / This Week" cards so clients see
-  // when their coach has replied to anything (messages, lift reviews, check-ins).
-  const { data: coachUpdates } = useQuery({
-    queryKey: ["portal-coach-updates", client?.id],
-    enabled: !!client?.id,
-    queryFn: async () => {
-      const [{ data: msgs }, { data: state }, { data: vids }, { data: vcomments }] = await Promise.all([
-        (supabase.from("messages") as any)
-          .select("body, attachments, created_at, sender_role, is_internal_note")
-          .eq("client_id", client!.id)
-          .eq("sender_role", "admin")
-          .eq("is_internal_note", false)
-          .order("created_at", { ascending: false })
-          .limit(10),
-        (supabase.from("conversation_state") as any)
-          .select("client_last_read_at").eq("client_id", client!.id).maybeSingle(),
-        (supabase.from("lift_videos") as any)
-          .select("id, exercise, watched_at, liked_at, reviewed_at, status, client_last_viewed_at, updated_at")
-          .eq("client_id", client!.id)
-          .eq("archived", false)
-          .order("updated_at", { ascending: false })
-          .limit(20),
-        (supabase.from("lift_video_comments") as any)
-          .select("video_id, body, created_at, author_role, is_internal_note")
-          .eq("client_id", client!.id)
-          .eq("author_role", "admin")
-          .eq("is_internal_note", false)
-          .order("created_at", { ascending: false })
-          .limit(20),
-      ]);
-      const lastRead = (state as any)?.client_last_read_at;
-      const unreadMsgs = (msgs ?? []).filter((m: any) => !lastRead || new Date(m.created_at).getTime() > new Date(lastRead).getTime());
-      const vidMap = new Map<string, any>();
-      for (const v of (vids ?? []) as any[]) vidMap.set(v.id, v);
-      const liftPings: { videoId: string; exercise: string; preview: string; at: string }[] = [];
-      for (const c of (vcomments ?? []) as any[]) {
-        const v = vidMap.get(c.video_id);
-        const seen = v?.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
-        if (new Date(c.created_at).getTime() <= seen) continue;
-        liftPings.push({ videoId: c.video_id, exercise: v?.exercise || "Lift video", preview: c.body || "New coach reply", at: c.created_at });
-      }
-      for (const v of (vids ?? []) as any[]) {
-        const seen = v.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
-        const ev = v.reviewed_at && new Date(v.reviewed_at).getTime() > seen
-          ? { verb: "reviewed", at: v.reviewed_at }
-          : v.status === "Needs Follow-Up" && (!v.client_last_viewed_at || new Date(v.updated_at).getTime() > seen)
-          ? { verb: "requested a follow-up on", at: v.updated_at }
-          : null;
-        if (ev) liftPings.push({ videoId: v.id, exercise: v.exercise || "Lift video", preview: `Coach Jared ${ev.verb} your video.`, at: ev.at });
-      }
-      // newest first, one per video
-      liftPings.sort((a, b) => +new Date(b.at) - +new Date(a.at));
-      const seenIds = new Set<string>();
-      const liftDeduped = liftPings.filter((p) => (seenIds.has(p.videoId) ? false : (seenIds.add(p.videoId), true)));
-      return {
-        unreadMessages: unreadMsgs as any[],
-        liftPings: liftDeduped,
-      };
-    },
-  });
-  useEffect(() => { if (coachUpdates) logPerf("card:coach-updates loaded"); }, [coachUpdates]);
-
   // Compact upcoming appointment (single, only if within ~14 days).
   const fetchPortalAppointments = usePovFn(useServerFn(listMyPortalAppointments));
   const povKey = usePovArgs().viewAsClientId ?? null;
@@ -248,8 +184,6 @@ function PortalHome() {
   // email username mid-load caused a visible "jaredm…" → "Jared" flash.
   const firstName = (client?.full_name ?? "").split(" ")[0];
   void user;
-
-  const unreadMsgs = coachUpdates?.unreadMessages ?? [];
 
   // We render the shell + per-section skeletons immediately so the dashboard
   // never blocks waiting on one query. Each section is wrapped in a local
@@ -299,7 +233,7 @@ function PortalHome() {
 
         {/* ── Today ───────────────────────────────────────────── */}
         <section className="space-y-3" aria-label="Today">
-          <GreetingHeader firstName={firstName} unreadCount={unreadMsgs.length} />
+          <GreetingHeader firstName={firstName} />
           <DashboardRefreshIndicator />
 
           {/* the week strip and the selected day's workout / sessions (full calendar one tap away) */}
@@ -434,9 +368,9 @@ function SectionSkeleton({ height = "h-32" }: { height?: string }) {
   return <div className={`rounded-2xl border border-border bg-card animate-pulse ${height}`} />;
 }
 
-function GreetingHeader({
-  firstName, unreadCount,
-}: { firstName: string; unreadCount: number }) {
+// No bell: what clients need to see reaches them in Messages (its tab shows
+// the count) and Crew; announcements pop up on open and live in the ☰ menu.
+function GreetingHeader({ firstName }: { firstName: string }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000);
@@ -444,27 +378,9 @@ function GreetingHeader({
   }, []);
   void now;
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-      <div className="min-w-0">
-        <h1 className="truncate text-xl font-black tracking-tight md:text-2xl">
-          {greeting()}{firstName ? `, ${firstName}` : ""}
-        </h1>
-      </div>
-      <div className="flex items-center gap-2">
-      <Link
-        to="/portal/announcements"
-        aria-label="Notifications"
-        className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-card transition hover:border-primary/40"
-      >
-        <Bell className="h-5 w-5" />
-        {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
-        )}
-      </Link>
-      </div>
-    </div>
+    <h1 className="truncate text-xl font-black tracking-tight md:text-2xl">
+      {greeting()}{firstName ? `, ${firstName}` : ""}
+    </h1>
   );
 }
 
