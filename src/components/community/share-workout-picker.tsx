@@ -52,10 +52,13 @@ export function ShareWorkoutButton({
   variant = "pill",
   previewOnly = false,
   labelClassName,
+  trigger,
 }: {
   unit: "kg" | "lb";
   className?: string;
   label?: string;
+  /** Its own button instead of the built-in looks (handed the one tap that opens the camera). */
+  trigger?: (begin: () => void) => React.ReactNode;
   /** e.g. hide the words on small phones (the button keeps them as its name) */
   labelClassName?: string;
   variant?: "pill" | "block" | "bubble" | "tile";
@@ -185,7 +188,9 @@ export function ShareWorkoutButton({
 
   return (
     <>
-      {variant === "tile" ? (
+      {trigger ? (
+        trigger(begin)
+      ) : variant === "tile" ? (
         // First in Home's shelf: quieter than the posts, but always there.
         <button type="button" onClick={begin} className={cn("flex h-[140px] w-[84px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-muted/40 px-2 active:scale-95", className)} aria-label={label}>
           <span className={cn("grid h-11 w-11 place-items-center rounded-full text-white shadow-md shadow-primary/25", SHARE_GRADIENT)}>

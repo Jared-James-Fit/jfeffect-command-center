@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Eye, Heart, Play, X } from "lucide-react";
+import { Check, ChevronRight, Eye, Heart, Play, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { PREVIEW_ONLY_MESSAGE, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
-import { useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
+import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { ViewersSheet, markPostViewed } from "@/components/community/post-views";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -34,14 +34,19 @@ const FRAME_MS = 5000;
  * automatic-sharing switch on your profile and who-sees-it on every post
  * apply exactly as in the feed.
  */
-export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, lead, addYours }: {
+export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, addStory, addYours }: {
   posts: CommunityPost[];
   unit: "kg" | "lb";
   viewerIsStaff: boolean;
   onOpenPost: (id: string) => void;
   /** Close and take them to this post in the feed. */
   onJumpTo?: (id: string) => void;
-  lead?: React.ReactNode;
+  /**
+   * Adding to your story (the camera), Instagram's way: "Your story" leads the
+   * row with a + on it, and your own story has a + too. Hands over the button
+   * that opens it; nothing to add (coaches, nobody to post as) = no bubble.
+   */
+  addStory?: (trigger: (begin: () => void) => React.ReactNode) => React.ReactNode;
   /** The end card's "add yours" (when they have nothing in the stories themselves). */
   addYours?: React.ReactNode;
 }) {
@@ -57,8 +62,13 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
   const [open, setOpen] = useState<number | null>(null);
   // the order is fixed while watching (rings change as you go)
   const frozen = useRef<StoryGroup<CommunityPost>[]>([]);
-  // a quiet day: no row at all (Post is in the header)
-  if (!groups.length && !mine) return null;
+  // opens the camera (from the bubble's +, or the + on your own story)
+  const addRef = useRef<(() => void) | null>(null);
+  // your picture for "Your story" before there's anything in it
+  const { user } = useAuth();
+  const { data: me } = useCommunityProfile(addStory && !mine ? (user?.id ?? null) : null);
+  // a quiet day with nothing to add either: no row at all
+  if (!groups.length && !mine && !addStory) return null;
   /** i = a person's bubble; -1 = yours. */
   const watch = (i: number) => {
     frozen.current = [...(mine ? [mine] : []), ...groups];
@@ -67,8 +77,34 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
   return (
     <>
       <div className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-4 sm:px-4" data-story-rail data-no-swipe-back aria-label="Crew stories">
-        {lead}
-        {mine && (
+        {addStory ? (
+          addStory((begin) => {
+            addRef.current = begin;
+            const who = mine?.author ?? me?.author ?? null;
+            return (
+              <div className="relative flex w-[64px] shrink-0 flex-col items-center gap-1" data-story-mine={mine ? "" : "empty"}>
+                {/* your story plays from the picture; with nothing in it yet, the picture adds one */}
+                <button type="button" onClick={mine ? () => watch(-1) : begin} className="active:scale-95" aria-label={mine ? `Your story${mine.prs ? `, ${prTag(mine.prs)}` : ""}` : "Add to your story"}>
+                  <span className={cn("relative grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", mine ? "bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)]" : "bg-transparent")}>
+                    <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
+                      <UserAvatar src={who?.avatar_url ?? null} name={who?.name ?? "You"} size={54} expandable={false} />
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={begin}
+                  className="absolute right-[-1px] top-[42px] grid h-[22px] w-[22px] place-items-center rounded-full bg-primary text-primary-foreground ring-[3px] ring-background active:scale-90"
+                  aria-label="Add to your story"
+                  data-story-add
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={3.5} />
+                </button>
+                <span className="w-full truncate text-center text-[11px] font-bold">Your story</span>
+              </div>
+            );
+          })
+        ) : mine && (
           <button type="button" onClick={() => watch(-1)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`Your story${mine.prs ? `, ${prTag(mine.prs)}` : ""}`} data-story-mine>
             <span className="relative grid h-[64px] w-[64px] place-items-center rounded-full bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)] p-[2.5px]">
               <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
@@ -110,6 +146,7 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, le
             else onOpenPost(id);
           }}
           addYours={addYours}
+          onAdd={addStory ? () => addRef.current?.() : undefined}
         />
       )}
     </>
@@ -142,6 +179,7 @@ function StoryViewer({
   onOpenPost,
   onJumpTo,
   addYours,
+  onAdd,
 }: {
   groups: StoryGroup<CommunityPost>[];
   posts: CommunityPost[];
@@ -153,6 +191,8 @@ function StoryViewer({
   onOpenPost: (id: string) => void;
   onJumpTo: (id: string) => void;
   addYours?: React.ReactNode;
+  /** Your own story: the + on your picture adds another (the story closes, the camera opens). */
+  onAdd?: () => void;
 }) {
   const { isImpersonating } = useClientImpersonation();
   const firstUnseen = (g: StoryGroup<CommunityPost>) => Math.max(0, g.items.findIndex((p) => !p.seen));
@@ -381,7 +421,25 @@ function StoryViewer({
               ))}
             </div>
             <div className="mt-2.5 flex items-center gap-2">
-              <UserAvatar src={who.avatar_url} name={who.name} size={32} expandable={false} />
+              {group.mine && onAdd ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    window.setTimeout(onAdd, 240);
+                  }}
+                  className="relative shrink-0 active:scale-95"
+                  aria-label="Add to your story"
+                  data-story-viewer-add
+                >
+                  <UserAvatar src={who.avatar_url} name={who.name} size={32} expandable={false} />
+                  <span className="absolute -bottom-0.5 -right-1 grid h-[16px] w-[16px] place-items-center rounded-full bg-primary text-primary-foreground ring-2 ring-black">
+                    <Plus className="h-2.5 w-2.5" strokeWidth={4} />
+                  </span>
+                </button>
+              ) : (
+                <UserAvatar src={who.avatar_url} name={who.name} size={32} expandable={false} />
+              )}
               <span className="min-w-0">
                 <span className="flex items-baseline gap-2">
                   <span className="truncate text-[14px] font-bold">{group.mine ? "Your story" : who.name.split(" ")[0]}</span>

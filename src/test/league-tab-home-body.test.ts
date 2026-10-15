@@ -20,10 +20,12 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
     expect(menu?.label).toBe("Crew");
     expect(menu?.keywords).toEqual(expect.arrayContaining(["league", "leaderboard", "rankings", "community", "feed", "crew", "members"]));
   });
-  it("Feed · Rankings; Members is a secondary entry, and your profile is its first row", () => {
+  it("Feed · Rankings; Activity is the heart beside them, Members opens from Activity, and your profile is its first row", () => {
     expect(screen).toContain('(["feed", "rankings"] as const)');
     expect(screen).toContain("<RankingsHub />");
-    expect(screen).toContain('aria-label="Members"');
+    expect(screen).toContain('aria-label={activityNew ? "Activity, new" : "Activity"}');
+    expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "activity" };');
+    expect(read("src/components/community/crew-activity.tsx")).toContain('aria-label="Find people"');
     expect(crew).toContain("data-crew-me");
     expect(screen).toContain('onOpenMe={() => setScope({ kind: "you", from: "members" })}');
   });

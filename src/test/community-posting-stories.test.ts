@@ -105,7 +105,9 @@ describe("Crew Stories", () => {
   it("sits at the top of the feed with your own + first; seen comes from the server", () => {
     const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain("<StoryRail");
-    expect(screen).toContain('variant="bubble"');
+    // "Your story" leads with a + that opens the camera (Instagram's)
+    expect(screen).toContain("addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} /> : undefined}");
+    expect(read("src/components/community/crew-stories.tsx")).toContain("data-story-add");
     expect(read("src/components/community/crew-stories.tsx")).toContain("markPostViewed(post.id)");
     expect(read("supabase/migrations/20261101110000_community_post_seen.sql")).toContain("'seen', EXISTS");
   });
