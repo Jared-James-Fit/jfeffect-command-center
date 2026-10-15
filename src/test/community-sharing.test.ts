@@ -537,8 +537,8 @@ describe("the crew: find anyone's profile", () => {
     expect(sql).not.toMatch(/community_follow|is_following/i);
   });
   it("is the Members directory (you're its first row), and Home never dead-ends: a post opens over the feed", () => {
-    expect(screen).toContain('(["feed", "rankings"] as const)');
-    expect(screen).toContain('<CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "members" })} />');
+    expect(screen).toContain('(previewOnly ? ["feed", "rankings"] : ["feed", "rankings", "you"])');
+    expect(screen).toContain('<CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you" })} />');
     expect(entry).toContain("onOpen={() => openPost(post.id)}");
   });
 });

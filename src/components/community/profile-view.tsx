@@ -333,26 +333,34 @@ function PrivateSwitch() {
   );
 }
 
+/** Your photo, small, for the You tab: a ring on it while you're there (Instagram's profile tab). */
+export function MyTabPhoto({ active = false }: { active?: boolean }) {
+  const { user } = useAuth();
+  const { data: me } = useCommunityProfile(user?.id ?? null);
+  return (
+    <span className={cn("shrink-0 rounded-full", active ? "ring-[1.5px] ring-foreground ring-offset-1 ring-offset-background" : "ring-1 ring-border")} aria-hidden>
+      <UserAvatar src={me?.author.avatar_url ?? null} name={me?.author.name ?? "You"} size={22} expandable={false} />
+    </span>
+  );
+}
+
 /**
- * Your own profile, one tap from the top of Crew: your photo, the way
- * Instagram, TikTok and Strava keep "you" in reach. Same profile query the
- * screen already has, so nothing extra loads.
+ * Your own profile from the coach's Crew page (no tab row there): your photo
+ * and "You" in a pill beside Post, so it reads as a button, not a picture.
  */
 export function MyProfileButton({ onOpen, className }: { onOpen: () => void; className?: string }) {
   const { user } = useAuth();
-  const { data: me } = useCommunityProfile(user?.id ?? null);
   if (!user?.id) return null;
   return (
     <button
       type="button"
       onClick={onOpen}
-      className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full transition-transform active:scale-95", className)}
+      className={cn("inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card pl-1.5 pr-3.5 text-[13px] font-bold shadow-sm transition-transform active:scale-95", className)}
       aria-label="Your profile"
       data-my-profile
     >
-      <span className="rounded-full ring-1 ring-border">
-        <UserAvatar src={me?.author.avatar_url ?? null} name={me?.author.name ?? "You"} size={30} expandable={false} />
-      </span>
+      <MyTabPhoto />
+      You
     </button>
   );
 }

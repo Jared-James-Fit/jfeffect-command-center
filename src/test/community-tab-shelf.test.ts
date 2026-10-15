@@ -109,7 +109,7 @@ describe("client tab bar: Crew in the centre", () => {
     // the Crew screen follows the hash, so the shortcut and Crew switch the view in place
     const crew = read("src/components/community/community-screen.tsx");
     expect(crew).toContain('if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });');
-    expect(crew).toContain('void navigate({ to: ".", hash: k === "rankings" ? "rankings" : "", replace: true, resetScroll: false });');
+    expect(crew).toContain('void navigate({ to: ".", hash: k === "feed" ? "" : k, replace: true, resetScroll: false });');
   });
 
   it("no community for this account: no centre button", () => {

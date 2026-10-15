@@ -12,7 +12,7 @@ import { CommentsSheet } from "@/components/community/comments-sheet";
 import { OPEN_POST_EVENT } from "@/components/community/shared-comment";
 import { OPEN_PERSON_EVENT } from "@/lib/community-notifications";
 import { PostDetailDialog } from "@/components/community/post-detail";
-import { MyProfileButton, ProfileView } from "@/components/community/profile-view";
+import { MyTabPhoto, ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { StoryRail } from "@/components/community/crew-stories";
 import { ShareNudge } from "@/components/community/share-nudge";
@@ -34,10 +34,11 @@ import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
  * follows) opens from beside them, and Members (the directory) from Activity's
  * search, Instagram's way.
  */
-type Tab = "feed" | "rankings" | "members" | "activity";
-/** A tab, or a profile opened from one (yours, or someone else's). */
-type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab } | { kind: "you"; from: Tab };
-const TAB_LABEL: Record<Tab, string> = { feed: "Feed", rankings: "Rankings", members: "Members", activity: "Activity" };
+/** "you" is your own profile, a tab of its own (Strava's You, Instagram's profile tab). */
+type Tab = "feed" | "rankings" | "you" | "members" | "activity";
+/** A tab, or someone else's profile opened from one. */
+type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
+const TAB_LABEL: Record<Tab, string> = { feed: "Feed", rankings: "Rankings", you: "You", members: "Members", activity: "Activity" };
 /** Pages opened from another one, and where their back arrow goes. */
 const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "activity" };
 
@@ -53,6 +54,11 @@ function atFromHash(): string | null {
   if (typeof window === "undefined") return null;
   const m = window.location.hash.match(/(?:^#|&)at=([0-9a-f-]{36})/i);
   return m ? m[1] : null;
+}
+
+/** `#you`: your own profile (the You tab). */
+export function youFromHash(hash = typeof window === "undefined" ? "" : window.location.hash): boolean {
+  return /^#?you(?:$|&)/.test(hash);
 }
 
 /** `#person=<user id>` opens someone's profile (used from Home). */
@@ -92,12 +98,14 @@ export function CommunityScreen({
     if (person) return { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "feed" };
     // the coach's own Community page is just the feed
     if (hideTabs) return { kind: "feed" };
-    // Home's ranking tiles (and old #league links) land on Rankings; everything else on the Feed
+    // Home's ranking tiles (and old #league links) land on Rankings; #you on your profile; everything else on the Feed
     if (rankingsFromHash()) return { kind: "rankings" };
+    if (youFromHash() && !previewOnly) return { kind: "you" };
     return { kind: "feed" };
   });
-  const tab: Tab = scope.kind === "author" || scope.kind === "you" ? scope.from : scope.kind;
-  const inProfile = scope.kind === "author" || scope.kind === "you";
+  const tab: Tab = scope.kind === "author" ? scope.from : scope.kind;
+  // someone else's profile is a page with a back arrow; yours is a tab
+  const inProfile = scope.kind === "author";
   // the heart's dot: something new in Activity (never the coach's own while viewing as a client)
   const { data: activityItems } = useCrewActivity(!hideTabs && !previewOnly);
   const activityNew = (activityItems ?? []).some((i) => i.unread);
@@ -170,8 +178,8 @@ export function CommunityScreen({
   useEffect(() => {
     const onRetap = (e: Event) => {
       if ((e as CustomEvent).detail !== window.location.pathname) return;
-      // out of a profile first; on the feed, back to the top and fresh
-      setScope((sc) => (sc.kind === "author" || sc.kind === "you" ? { kind: sc.from } : sc));
+      // out of someone's profile first, out of yours to the feed; on the feed, back to the top and fresh
+      setScope((sc) => (sc.kind === "author" ? { kind: sc.from } : sc.kind === "you" ? { kind: "feed" } : sc));
       if (scopeRef.current.kind === "feed") showNew.current();
     };
     window.addEventListener("nav-retap", onRetap);
@@ -197,17 +205,22 @@ export function CommunityScreen({
     if (hideTabs || routeHash === seenHash.current) return;
     seenHash.current = routeHash;
     if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });
-    else if (!routeHash) setScope((sc) => (sc.kind === "rankings" ? { kind: "feed" } : sc));
-  }, [routeHash, hideTabs]);
+    else if (youFromHash(`#${routeHash}`) && !previewOnly) setScope({ kind: "you" });
+    // no hash (Crew's own button) or #feed (after posting): back on the feed
+    else if (!routeHash || routeHash === "feed") setScope((sc) => (sc.kind === "rankings" || sc.kind === "you" ? { kind: "feed" } : sc));
+  }, [routeHash, hideTabs, previewOnly]);
   const parent = PARENT[scope.kind as Tab];
-  const canSwipeBack = inProfile || !!parent || !!backTo;
+  // the coach's Crew page has no tab row: there your profile is a page with a way back to the feed
+  const youAsPage = hideTabs && scope.kind === "you";
+  const canSwipeBack = inProfile || youAsPage || !!parent || !!backTo;
   const leaveAuthor = () => {
-    if (scope.kind !== "author" && scope.kind !== "you") return;
+    if (youAsPage) return setScope({ kind: "feed" });
+    if (scope.kind !== "author") return;
     setScope({ kind: scope.from });
     if (window.location.hash.includes("person=")) history.replaceState(null, "", window.location.pathname + window.location.search);
   };
   const swipeBack = () => {
-    if (inProfile) return leaveAuthor();
+    if (inProfile || youAsPage) return leaveAuthor();
     if (parent) return setScope({ kind: parent });
     if (!backTo) return;
     if (router.history.canGoBack()) router.history.back();
@@ -269,10 +282,8 @@ export function CommunityScreen({
       if (typeof id !== "string" || !id) return;
       setDetailId(null);
       setScope((sc) => {
-        const from = sc.kind === "author" || sc.kind === "you" ? sc.from : sc.kind;
-        return meRef.current.includes(id)
-          ? { kind: "you", from }
-          : { kind: "author", author: { user_id: id, name: "", avatar_url: null, is_coach: false }, from };
+        const from = sc.kind === "author" ? sc.from : sc.kind;
+        return meRef.current.includes(id) ? { kind: "you" } : { kind: "author", author: { user_id: id, name: "", avatar_url: null, is_coach: false }, from };
       });
       window.scrollTo({ top: 0 });
     };
@@ -304,7 +315,7 @@ export function CommunityScreen({
 
   const openAuthor = (a: CommunityAuthor) => {
     setDetailId(null);
-    if (a.user_id === user?.id || a.user_id === myId) setScope({ kind: "you", from: tab });
+    if (a.user_id === user?.id || a.user_id === myId) setScope({ kind: "you" });
     else setScope({ kind: "author", author: a, from: tab });
     window.scrollTo({ top: 0 });
   };
@@ -318,14 +329,14 @@ export function CommunityScreen({
   return (
     <>
     <div ref={rootRef} className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 [touch-action:pan-x_pan-y] sm:px-4">
-      {inProfile ? (
+      {inProfile || youAsPage ? (
         <Button
           type="button"
           variant="ghost"
           className="-ml-2 h-10 rounded-full px-3"
           onClick={leaveAuthor}
         >
-          <ArrowLeft className="mr-1.5 h-4 w-4" /> {TAB_LABEL[tab]}
+          <ArrowLeft className="mr-1.5 h-4 w-4" /> {TAB_LABEL[youAsPage ? "feed" : tab]}
         </Button>
       ) : hideTabs || scope.kind === "activity" ? null : parent ? (
         <Button type="button" variant="ghost" className="-ml-2 h-10 rounded-full px-3" onClick={() => setScope({ kind: parent })}>
@@ -340,7 +351,8 @@ export function CommunityScreen({
           </Link>
         )}
         <div className="inline-flex rounded-full bg-muted p-1" role="tablist" aria-label="Crew view">
-          {(["feed", "rankings"] as const).map((k) => (
+          {/* You: your own profile, with your photo on the tab (not while a coach views as a client: it'd be the coach's) */}
+          {((previewOnly ? ["feed", "rankings"] : ["feed", "rankings", "you"]) as Tab[]).map((k) => (
             <button
               key={k}
               type="button"
@@ -349,10 +361,16 @@ export function CommunityScreen({
               onClick={() => {
                 setScope({ kind: k });
                 window.scrollTo({ top: 0 });
-                void navigate({ to: ".", hash: k === "rankings" ? "rankings" : "", replace: true, resetScroll: false });
+                void navigate({ to: ".", hash: k === "feed" ? "" : k, replace: true, resetScroll: false });
               }}
-              className={cn("h-9 rounded-full px-3 text-[13px] font-bold transition-colors min-[360px]:px-3.5", scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}
+              className={cn(
+                "inline-flex h-9 items-center rounded-full text-[13px] font-bold transition-colors",
+                k === "you" ? "gap-1.5 pl-1.5 pr-3 min-[360px]:pr-3.5" : "px-3 min-[360px]:px-3.5",
+                scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
+              )}
+              data-crew-tab={k}
             >
+              {k === "you" && <MyTabPhoto active={scope.kind === "you"} />}
               {TAB_LABEL[k]}
             </button>
           ))}
@@ -375,18 +393,8 @@ export function CommunityScreen({
               {activityNew && <span className="absolute right-[5px] top-[5px] h-2 w-2 rounded-full bg-primary ring-2 ring-background" data-activity-dot />}
             </button>
           )}
-          {/* small phones: just the "+", so Feed · Rankings keep their room */}
-          {canShare && <ShareWorkoutButton unit={unit} label="Post" previewOnly={previewOnly} className="max-[389px]:w-9 max-[389px]:px-0" labelClassName="max-[389px]:sr-only" />}
-          {/* you: your photo, top right (not while a coach is viewing as a client: that'd be the coach's) */}
-          {!previewOnly && (
-            <MyProfileButton
-              className="ml-1"
-              onOpen={() => {
-                setScope({ kind: "you", from: tab });
-                window.scrollTo({ top: 0 });
-              }}
-            />
-          )}
+          {/* phones: just the round "+", so Feed · Rankings · You keep their room */}
+          {canShare && <ShareWorkoutButton unit={unit} label="Post" previewOnly={previewOnly} className="max-[419px]:w-9 max-[419px]:px-0" labelClassName="max-[419px]:sr-only" />}
         </div>
         </div>
       )}
@@ -404,7 +412,7 @@ export function CommunityScreen({
           }}
         />
       ) : scope.kind === "members" ? (
-        <CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you", from: "members" })} />
+        <CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you" })} />
       ) : scope.kind === "you" && user?.id ? (
         <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : scope.kind === "author" ? (
