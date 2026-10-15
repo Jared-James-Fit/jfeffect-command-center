@@ -88,8 +88,12 @@ describe("camera like Instagram's", () => {
     expect(carousel).toContain('el.scrollTo({ left: at * STEP, behavior: "smooth" });');
     expect(carousel).toContain("if (steering.current != null) {");
   });
-  it("the modes sit under the camera, the one you're on in the middle", () => {
+  it("every mode is in view under the camera (Meal was off the edge); flip sits up top", () => {
     expect(cam).toContain("<ModeTabs");
-    expect(cam).toContain("on.offsetLeft + on.offsetWidth / 2 - el.clientWidth / 2");
+    // no spacers pushing the row wider than the screen; it scrolls only when a tiny screen can't fit them
+    expect(cam).not.toContain('<span className="w-1/2 shrink-0" aria-hidden />');
+    expect(cam).toContain('<div className="mx-auto flex w-max">');
+    expect(cam).toContain("setOver(el.scrollWidth > el.clientWidth + 1)");
+    expect(cam).toContain('<button type="button" onClick={flip} className={pill} aria-label="Flip camera">');
   });
 });
