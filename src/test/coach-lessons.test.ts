@@ -166,7 +166,7 @@ describe("a lesson in the feed and the story", () => {
 
   it("plays as a lesson in stories (title, diagram, hook), with the sticker above the reply bar", () => {
     const stories = read("src/components/community/crew-stories.tsx");
-    expect(stories).toContain('if (post.series === "lesson") return <LessonStoryFrame post={post} />;');
+    expect(stories).toContain('if (kind === "lesson") return <LessonStoryFrame post={post} />;');
     expect(stories).toContain('<div className="absolute inset-x-0 z-40" style={{ bottom: barH ? ');
     expect(stories).toContain('closest("button, a, input, textarea, [data-story-interactive]")');
   });

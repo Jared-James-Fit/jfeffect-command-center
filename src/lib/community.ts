@@ -1564,6 +1564,41 @@ export type StoryGroup<T> = {
   closeFriends?: boolean;
 };
 
+/**
+ * What a story shows full screen for a post (tested). Every crew post becomes
+ * a story, so every kind has a frame and none plays blank:
+ *  - "lesson": a coach lesson, as its lesson;
+ *  - "win": a workout with nothing to look at (posted by itself, or shared
+ *    without a photo or GIF) leads with its win, as in the feed;
+ *  - "media": a photo, a clip's first frame or a GIF;
+ *  - "words": everything else, in words (storyWords).
+ */
+export type StoryFrameKind = "lesson" | "win" | "media" | "words";
+export function storyFrameKind(p: Pick<CommunityPost, "series" | "stats" | "auto" | "media_type" | "gif_url">): StoryFrameKind {
+  if (p.series === "lesson") return "lesson";
+  if (p.stats && (isPulsePost(p) || (!p.media_type && !p.gif_url))) return "win";
+  if (p.media_type || p.gif_url) return "media";
+  return "words";
+}
+
+/** A words-only story's words: the caption, else what the post is (a quote, a shared comment, the session…), never nothing. */
+export function storyWords(
+  p: Pick<CommunityPost, "caption" | "quote" | "quote_author" | "shared_comment" | "session_title" | "locked_in_at" | "audio" | "poll">,
+): { text: string; by: string | null } {
+  const caption = p.caption?.trim();
+  if (caption) return { text: caption, by: null };
+  const quote = p.quote?.trim();
+  if (quote) return { text: `\u201c${quote}\u201d`, by: p.quote_author?.trim() || null };
+  const shared = p.shared_comment && !p.shared_comment.gone ? p.shared_comment.body?.trim() : "";
+  if (shared && p.shared_comment && !p.shared_comment.gone) return { text: shared, by: p.shared_comment.author.name };
+  const session = p.session_title?.trim();
+  if (session) return { text: session, by: null };
+  if (p.locked_in_at) return { text: "Locked in", by: null };
+  if (p.audio) return { text: "A voice memo", by: null };
+  if (p.poll) return { text: "A poll", by: null };
+  return { text: "A new post", by: null };
+}
+
 /** PRs set in a set of moments (a workout post carries its session's count). */
 export function storyPrs(items: { stats?: unknown }[]): number {
   let n = 0;
