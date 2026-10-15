@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyWords, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyWords, workoutHeadline, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { ViewersSheet, markPostViewed } from "@/components/community/post-views";
@@ -40,11 +40,13 @@ const TURN_MS = 320;
  * automatic-sharing switch on your profile and who-sees-it on every post
  * apply exactly as in the feed.
  */
-export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, addStory, addYours }: {
+export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson, onJumpTo, addStory, addYours }: {
   posts: CommunityPost[];
   unit: "kg" | "lb";
   viewerIsStaff: boolean;
   onOpenPost: (id: string) => void;
+  /** Their profile (Instagram: tap the name or photo on a story). The story closes first. */
+  onOpenPerson?: (a: CommunityAuthor) => void;
   /** Close and take them to this post in the feed. */
   onJumpTo?: (id: string) => void;
   /**
@@ -152,6 +154,7 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, ad
             if (onJumpTo) onJumpTo(id);
             else onOpenPost(id);
           }}
+          onOpenPerson={onOpenPerson}
           addYours={addYours}
           onAdd={addStory ? () => addRef.current?.() : undefined}
         />
@@ -185,6 +188,7 @@ function StoryViewer({
   onClose,
   onOpenPost,
   onJumpTo,
+  onOpenPerson,
   addYours,
   onAdd,
 }: {
@@ -197,6 +201,7 @@ function StoryViewer({
   onClose: () => void;
   onOpenPost: (id: string) => void;
   onJumpTo: (id: string) => void;
+  onOpenPerson?: (a: CommunityAuthor) => void;
   addYours?: React.ReactNode;
   /** Your own story: the + on your picture adds another (the story closes, the camera opens). */
   onAdd?: () => void;
@@ -283,6 +288,13 @@ function StoryViewer({
     setDrag({ y: window.innerHeight, settle: true });
     window.setTimeout(onClose, 210);
   };
+  // someone's profile: the story slides away and their page is underneath
+  const openPerson = onOpenPerson
+    ? (a: CommunityAuthor) => {
+        close();
+        window.setTimeout(() => onOpenPerson(a), 230);
+      }
+    : undefined;
 
   const next = () => {
     if (!group) return close();
@@ -529,7 +541,7 @@ function StoryViewer({
             // where the poster put it; else above the reply bar's fade, so the
             // whole sticker takes taps (the bar's top 40px is its fade, not buttons)
             <div className="absolute inset-x-0 z-40" style={stickerSpot(post.sticker.y, barH)}>
-              <StorySticker post={post} onComposing={setComposing} />
+              <StorySticker post={post} onComposing={setComposing} onOpenPerson={openPerson} />
             </div>
           )}
 
@@ -559,12 +571,22 @@ function StoryViewer({
                     <Plus className="h-2.5 w-2.5" strokeWidth={4} />
                   </span>
                 </button>
+              ) : openPerson ? (
+                <button type="button" onClick={() => openPerson(who)} className="shrink-0 rounded-full active:scale-95" aria-label={group.mine ? "Open your profile" : `Open ${who.name}'s profile`} data-story-profile>
+                  <UserAvatar src={who.avatar_url} name={who.name} size={32} expandable={false} />
+                </button>
               ) : (
                 <UserAvatar src={who.avatar_url} name={who.name} size={32} expandable={false} />
               )}
               <span className="min-w-0">
                 <span className="flex items-baseline gap-2">
-                  <span className="truncate text-[14px] font-bold">{group.mine ? "Your story" : who.name.split(" ")[0]}</span>
+                  {openPerson ? (
+                    <button type="button" onClick={() => openPerson(who)} className="min-w-0 truncate text-left text-[14px] font-bold active:opacity-70" data-story-profile-name>
+                      {group.mine ? "Your story" : who.name.split(" ")[0]}
+                    </button>
+                  ) : (
+                    <span className="truncate text-[14px] font-bold">{group.mine ? "Your story" : who.name.split(" ")[0]}</span>
+                  )}
                   <span className="shrink-0 text-[12px] text-white/70">{postTimeLabel(post.created_at)}</span>
                 </span>
               </span>
@@ -575,7 +597,7 @@ function StoryViewer({
           </div>
 
           {post.is_mine ? (
-            <MyStoryBar post={post} onOpen={() => onOpenPost(post.id)} onHold={setComposing} />
+            <MyStoryBar post={post} onOpen={() => onOpenPost(post.id)} onHold={setComposing} onOpenPerson={openPerson} />
           ) : (
             <StoryBar post={post} viewerIsStaff={viewerIsStaff} onOpen={() => onOpenPost(post.id)} onComposing={setComposing} />
           )}
@@ -615,7 +637,7 @@ function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: 
 }
 
 /** Your own story: who's seen it and the hearts (nothing to reply to). Tap Seen by for the names. */
-function MyStoryBar({ post, onOpen, onHold }: { post: CommunityPost; onOpen: () => void; onHold: (on: boolean) => void }) {
+function MyStoryBar({ post, onOpen, onHold, onOpenPerson }: { post: CommunityPost; onOpen: () => void; onHold: (on: boolean) => void; onOpenPerson?: (a: CommunityAuthor) => void }) {
   const [viewers, setViewers] = useState(false);
   const [sticker, setSticker] = useState(false);
   // the story waits while the list (or the sticker editor) is open
@@ -662,7 +684,7 @@ function MyStoryBar({ post, onOpen, onHold }: { post: CommunityPost; onOpen: () 
       <button type="button" onClick={onOpen} className={cn("inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full bg-white/15 pl-4 pr-3 text-[14px] font-bold backdrop-blur-sm active:scale-95", post.visibility !== "community" && "ml-auto")}>
         {storyFrameKind(post) === "win" ? "Workout" : "Post"} <ChevronRight className="h-4 w-4" />
       </button>
-      <ViewersSheet postId={viewers ? post.id : null} onClose={() => setViewers(false)} />
+      <ViewersSheet postId={viewers ? post.id : null} onClose={() => setViewers(false)} onOpenAuthor={onOpenPerson} />
       <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />
     </div>
   );

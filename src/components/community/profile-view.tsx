@@ -332,3 +332,27 @@ function PrivateSwitch() {
     </>
   );
 }
+
+/**
+ * Your own profile, one tap from the top of Crew: your photo, the way
+ * Instagram, TikTok and Strava keep "you" in reach. Same profile query the
+ * screen already has, so nothing extra loads.
+ */
+export function MyProfileButton({ onOpen, className }: { onOpen: () => void; className?: string }) {
+  const { user } = useAuth();
+  const { data: me } = useCommunityProfile(user?.id ?? null);
+  if (!user?.id) return null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full transition-transform active:scale-95", className)}
+      aria-label="Your profile"
+      data-my-profile
+    >
+      <span className="rounded-full ring-1 ring-border">
+        <UserAvatar src={me?.author.avatar_url ?? null} name={me?.author.name ?? "You"} size={30} expandable={false} />
+      </span>
+    </button>
+  );
+}
