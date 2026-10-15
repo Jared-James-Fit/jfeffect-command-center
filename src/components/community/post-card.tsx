@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
-import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Play, Send, Trophy } from "lucide-react";
+import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Play, Send, Star, Trophy } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { cn } from "@/lib/utils";
@@ -81,11 +81,13 @@ export function LockInHero({ post, size = "feed" }: { post: CommunityPost; size?
   );
 }
 
-/** "Only me" · "Just my coach" (author) · "Just you" (the coach) · "Weights hidden" (author). */
+/** "Only me" · "Just my coach" (author) · "Just you" (the coach) · "Close friends" · "Followers" (author) · "Weights hidden" (author). */
 export function audienceNote(post: Pick<CommunityPost, "visibility" | "is_mine" | "hide_loads">): string | null {
   const parts: string[] = [];
   if (post.visibility === "private") parts.push("Only me");
   else if (post.visibility === "coach") parts.push(post.is_mine ? "Just my coach" : "Just you");
+  else if (post.visibility === "close_friends") parts.push("Close friends");
+  else if (post.visibility === "followers" && post.is_mine) parts.push("Followers");
   if (post.is_mine && post.hide_loads) parts.push("Weights hidden");
   return parts.length ? parts.join(" · ") : null;
 }
@@ -373,7 +375,12 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       <header className="flex items-center justify-between gap-2 px-3.5 py-3">
         <AuthorLine author={post.author} sub={sub} onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined} collaborators={post.collaborators} onOpenPerson={onOpenAuthor} />
         <div className="flex shrink-0 items-center gap-1">
-          {post.visibility !== "community" && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : "Only visible to you"} />}
+          {post.visibility === "close_friends" ? (
+            <Star className="h-3.5 w-3.5 fill-emerald-500 text-emerald-500" aria-label="Close friends only" />
+          ) : post.visibility !== "community" && (post.visibility !== "followers" || post.is_mine) && (
+            // a private account's post looks like any other to its followers (as on Instagram); the author sees the lock
+            <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : post.visibility === "followers" ? "Only your followers see this" : "Only visible to you"} />
+          )}
           <PostActions post={post} viewerIsStaff={viewerIsStaff} />
         </div>
       </header>

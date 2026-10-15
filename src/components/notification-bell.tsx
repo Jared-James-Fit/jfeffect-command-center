@@ -532,7 +532,7 @@ export function useNotificationFeed() {
         raw.push({
           id: makeId("community", n.anchor),
           kind: "community", sourceId: n.anchor, clientId: "",
-          ...(n.kind === "follow" ? { personId: n.anchor } : { postId: n.post_id ?? undefined }),
+          ...(n.kind === "follow" || n.kind === "follow_request" ? { personId: n.anchor } : { postId: n.post_id ?? undefined }),
           name: n.actors?.[0]?.name ?? "Crew",
           title: t.title, body: t.body, created_at: n.at,
         });

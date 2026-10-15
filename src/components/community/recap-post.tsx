@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { CAPTION_MAX, pickWorkoutWin, postPointsHint, type WorkoutShareStats } from "@/lib/community";
+import { CAPTION_MAX, isCrewAudience, pickWorkoutWin, postPointsHint, type WorkoutShareStats } from "@/lib/community";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { MentionSuggestBar } from "@/components/community/mentions";
 import {
@@ -133,11 +133,13 @@ export function RecapPostFooter({
   if (!unshared) {
     const postId = justPosted ?? existing!.id;
     const where =
-      justPosted || existing?.visibility === "community"
+      justPosted || isCrewAudience(existing?.visibility)
         ? "It's in the crew's feed"
         : existing?.visibility === "coach"
           ? "Shared with your coach"
-          : "Saved to your profile";
+          : existing?.visibility === "close_friends"
+            ? "Shared with your Close friends"
+            : "Saved to your profile";
     return (
       <div className="w-full">
         <div className="mb-2 flex items-center justify-center gap-1.5 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">

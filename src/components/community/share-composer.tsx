@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { CAPTION_MAX, buildShareCardFields, lockInTimeLabel, postPointsHint, type CommunityVisibility, postFiles } from "@/lib/community";
+import { CAPTION_MAX, buildShareCardFields, isCrewAudience, lockInTimeLabel, pickerAudience, postPointsHint, type CommunityVisibility, postFiles } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, usePostPointsStatus, type SavePostInput } from "@/lib/community.queries";
 import { AudiencePicker } from "@/components/community/audience-picker";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
@@ -97,7 +97,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
     hydratedFor.current = completionId;
     if (existing) {
       setCaption(existing.caption ?? "");
-      setVisibility(existing.visibility);
+      setVisibility(pickerAudience(existing.visibility));
       setHideLoads(!!existing.hide_loads);
     }
   }, [open, existing, completionId]);
@@ -150,7 +150,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   const drawable = media?.drawable ?? existingDrawable ?? null;
   const hasMedia = !!media || (!!existing?.media_path && !removedExisting);
   const { data: pointsStatus } = usePostPointsStatus(postOpen);
-  const pointsHint = postPointsHint(pointsStatus, visibility, existing?.visibility === "community", { completedAt: stats?.completed_at });
+  const pointsHint = postPointsHint(pointsStatus, visibility, isCrewAudience(existing?.visibility), { completedAt: stats?.completed_at });
 
   const base = useMemo(() => {
     if (!stats) return null;
@@ -354,6 +354,8 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         });
       } else if (visibility === "coach") {
         toast.success("Sent to your coach", { description: "Only you and your coach can see it." });
+      } else if (visibility === "close_friends") {
+        toast.success(existing ? "Post updated" : "Sent to Close friends", { description: "Only your Close friends can see it." });
       } else {
         toast.success("Saved to your profile", { description: "Only you can see it." });
       }
@@ -514,7 +516,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
             className="h-12 w-full rounded-2xl bg-white text-[15px] font-black text-black hover:bg-white/90"
           >
             {postedAs ? <Check className="mr-2 h-5 w-5 text-emerald-600" /> : <Users className="mr-2 h-5 w-5" />}
-            {postedAs === "community" ? "Posted. Edit post" : postedAs === "coach" ? "Sent to coach. Edit" : postedAs === "private" ? "Saved. Edit post" : existing ? "Edit community post" : "Post to JF Community"}
+            {isCrewAudience(postedAs) ? "Posted. Edit post" : postedAs === "close_friends" ? "Sent to Close friends. Edit" : postedAs === "coach" ? "Sent to coach. Edit" : postedAs === "private" ? "Saved. Edit post" : existing ? "Edit community post" : "Post to JF Community"}
           </Button>
         </div>
 
@@ -565,7 +567,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
               <Send className="mr-2 h-5 w-5" />
               {posting
                 ? media?.kind === "video" && progress > 0 && progress < 100 ? `Uploading ${progress}%` : "Posting…"
-                : visibility === "private" ? "Save to my profile" : visibility === "coach" ? (existing ? "Update" : "Send to my coach") : existing ? "Update post" : "Post"}
+                : visibility === "private" ? "Save to my profile" : visibility === "coach" ? (existing ? "Update" : "Send to my coach") : existing ? "Update post" : visibility === "close_friends" ? "Send to Close friends" : "Post"}
             </Button>
             <p className="mt-2 text-center text-[11px] text-muted-foreground">Sharing to Instagram never posts here, and posting here never shares outside the app.</p>
           </Overlay>

@@ -15,6 +15,7 @@ export type StudioWorkout = { completion_id: string; title: string; athlete_name
 export function postedToast(visibility: CommunityVisibility, lockIn: boolean, updated: boolean) {
   if (visibility === "coach") return { title: lockIn ? "Sent to your coach 🔒" : "Sent to your coach", description: "Only you and your coach can see it." };
   if (visibility === "private") return { title: "Saved to your profile", description: "Only you can see it." };
+  if (visibility === "close_friends") return { title: lockIn ? "Sent to Close friends 🔒" : "Sent to Close friends", description: "Only your Close friends can see it." };
   if (lockIn) return { title: updated ? "Lock in updated 🔒" : "You're locked in 🔒", description: "The crew sees you showed up. Your numbers land on it when you finish." };
   return { title: updated ? "Post updated 🔥" : "You're in the feed 🔥", description: undefined };
 }

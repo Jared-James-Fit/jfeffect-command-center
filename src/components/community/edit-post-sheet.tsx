@@ -5,7 +5,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AudiencePicker } from "@/components/community/audience-picker";
-import { CAPTION_MAX, postSlides, type CommunityPost, type CommunityVisibility } from "@/lib/community";
+import { CAPTION_MAX, isPulsePost, pickerAudience, postSlides, type CommunityPost, type CommunityVisibility } from "@/lib/community";
 import { useEditPost, useSetPostMedia } from "@/lib/community.queries";
 import { MentionSuggestBar } from "@/components/community/mentions";
 import { MediaStrip, useMediaDraft } from "@/components/community/media-strip";
@@ -32,7 +32,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
     if (!post) return;
     setCaption(post.caption ?? "");
     // an archived post shows "only me" until it's restored; edit the audience it goes back to
-    setVisibility(archived ? post.archived_from ?? "community" : post.visibility);
+    setVisibility(pickerAudience(archived ? post.archived_from : post.visibility));
     setHideLoads(!!post.hide_loads);
   }, [post, archived]);
 
@@ -86,7 +86,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
             </div>
           </div>
           <PostAttachRow a={att} />
-          <AudiencePicker value={visibility} onChange={setVisibility} hideLoads={hideLoads} onHideLoads={setHideLoads} />
+          <AudiencePicker value={visibility} onChange={setVisibility} hideLoads={hideLoads} onHideLoads={setHideLoads} autoStory={!!post && isPulsePost(post)} />
         </div>
         <div className="border-t border-border/60 px-5 pb-[max(env(safe-area-inset-bottom),16px)] pt-3">
           <Button type="button" className="h-12 w-full rounded-2xl text-[15px] font-black" disabled={busy || draft.tray.uploading > 0 || att.recorder.recording} onClick={() => void save()}>

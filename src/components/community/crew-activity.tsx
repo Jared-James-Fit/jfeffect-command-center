@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Dumbbell, Heart, Lock, Play, Search, Trophy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
-import { FollowButton } from "@/components/community/follow-button";
+import { FollowButton, FollowRequestActions } from "@/components/community/follow-button";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { cn } from "@/lib/utils";
 import type { CommunityAuthor } from "@/lib/community";
@@ -119,7 +119,7 @@ function ActivityRow({ it, isNew, thumb, onOpenPost, onOpenPerson }: {
   const actors = it.actors ?? [];
   const first = actors[0];
   const open = () => {
-    if (it.kind === "follow") return first && onOpenPerson(first);
+    if (it.kind === "follow" || it.kind === "follow_request") return first && onOpenPerson(first);
     if (it.post_id) onOpenPost(it.post_id);
   };
   return (
@@ -157,7 +157,9 @@ function ActivityRow({ it, isNew, thumb, onOpenPost, onOpenPerson }: {
           {line.quote && <> {line.quote}</>} <span className="text-muted-foreground">{activityAge(it.at)}</span>
         </span>
       </button>
-      {it.kind === "follow" ? (
+      {it.kind === "follow_request" ? (
+        first ? <FollowRequestActions userId={first.user_id} /> : null
+      ) : it.kind === "follow" ? (
         first ? <FollowButton userId={first.user_id} name={first.name} size="sm" /> : null
       ) : (
         <PostThumb it={it} url={thumb} onOpen={open} />

@@ -3,9 +3,10 @@
  * coach always first), hold a chat for Pin / Mark as Unread / Hide Alerts /
  * Delete, swipe for the same, and a compose button for "New message".
  *
- * New people only ever get a message request (chat_direct_start): they can
- * read it without the sender knowing, accept, leave it pending, or delete or
- * block it without the sender ever being told.
+ * New people get a message request (chat_direct_start): they can read it
+ * without the sender knowing, accept, leave it pending, or delete or block it
+ * without the sender ever being told. Someone who follows you is the
+ * exception (Instagram's rule): your message opens a chat straight away.
  */
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -26,6 +27,7 @@ import { useLongPress } from "@/hooks/use-long-press";
 import { useCommunityMembers } from "@/lib/community.queries";
 import type { CommunityAuthor } from "@/lib/community";
 import { useBlockedPeople, useBlockPerson, useStartDirect, type DirectThread } from "@/lib/direct-chats";
+import { useFollowState } from "@/lib/community-social";
 import type { CrewThread } from "@/lib/crew-chats";
 import { TallSheet } from "@/components/crew-chat";
 
@@ -271,6 +273,7 @@ export function NewMessageSheet({
   const [q, setQ] = useState("");
   const [askUnblock, setAskUnblock] = useState<CommunityAuthor | null>(null);
   const blocked = useMemo(() => new Set(blockedList.map((b) => b.user_id)), [blockedList]);
+  const { data: follows } = useFollowState(open);
 
   const everyone = useMemo(
     () => members.map((m) => m.author).filter((a) => a && !a.is_coach && a.user_id !== me),
@@ -321,7 +324,7 @@ export function NewMessageSheet({
 
   return (
     <>
-      <TallSheet open={open} onOpenChange={close} title="New message" sub="People you haven't chatted with get a message request. They decide if they want to chat.">
+      <TallSheet open={open} onOpenChange={close} title="New message" sub="Someone who follows you gets a chat straight away. Anyone else gets a message request, and they decide if they want to chat.">
         <div className="relative shrink-0 px-4 pb-2">
           <Search className="pointer-events-none absolute left-7 top-1/2 h-4 w-4 -translate-y-[60%] text-muted-foreground" />
           <input
@@ -359,7 +362,7 @@ export function NewMessageSheet({
                 <UserAvatar src={a.avatar_url} name={a.name} size={40} expandable={false} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15px] font-semibold">{a.name}</span>
-                  <span className={cn("block truncate text-[12px]", state === "blocked" ? "text-destructive" : "text-muted-foreground")}>{STATE_HINT[state]}</span>
+                  <span className={cn("block truncate text-[12px]", state === "blocked" ? "text-destructive" : "text-muted-foreground")}>{state === "new" && follows?.followers.includes(a.user_id) ? "Follows you · opens a chat" : STATE_HINT[state]}</span>
                 </span>
               </button>
             );
@@ -393,6 +396,9 @@ export function NewRequestView({
   onSent: (groupId: string) => void | Promise<void>;
 }) {
   const start = useStartDirect();
+  const { data: follows } = useFollowState();
+  // they follow you: it opens a chat, no request (the server decides; this is just the wording)
+  const direct = !!follows?.followers.includes(to.user_id);
   const [text, setText] = useState("");
   const send = async () => {
     const body = text.trim();
@@ -414,7 +420,7 @@ export function NewRequestView({
         <UserAvatar src={to.avatar_url} name={to.name} size={36} expandable={false} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-bold">{to.name}</div>
-          <div className="truncate text-[11px] text-muted-foreground">New message request</div>
+          <div className="truncate text-[11px] text-muted-foreground">{direct ? "Follows you" : "New message request"}</div>
         </div>
         <Button variant="ghost" size="icon" className="hidden h-8 w-8 md:inline-flex" onClick={onBack} aria-label="Cancel">
           <X className="h-5 w-5" />
@@ -423,11 +429,17 @@ export function NewRequestView({
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 text-center">
         <UserAvatar src={to.avatar_url} name={to.name} size={72} expandable={false} />
         <div className="mt-3 text-[17px] font-bold">{to.name}</div>
-        <div className="mt-4 max-w-sm space-y-2 rounded-2xl border border-border bg-secondary/30 p-4 text-left text-[13px] text-muted-foreground">
-          <p><span className="font-semibold text-foreground">This goes to {to.name} as a message request.</span> They can read it and decide whether to chat.</p>
-          <p>They can open it without you knowing, so you won't see "Seen" until they reply.</p>
-          <p>Until they accept you can send up to 3 messages, text only. Keep it friendly.</p>
-        </div>
+        {direct ? (
+          <div className="mt-4 max-w-sm rounded-2xl border border-border bg-secondary/30 p-4 text-left text-[13px] text-muted-foreground">
+            <p><span className="font-semibold text-foreground">{to.name} follows you,</span> so this opens a chat straight away. No request to accept.</p>
+          </div>
+        ) : (
+          <div className="mt-4 max-w-sm space-y-2 rounded-2xl border border-border bg-secondary/30 p-4 text-left text-[13px] text-muted-foreground">
+            <p><span className="font-semibold text-foreground">This goes to {to.name} as a message request.</span> They can read it and decide whether to chat.</p>
+            <p>They can open it without you knowing, so you won't see "Seen" until they reply.</p>
+            <p>Until they accept you can send up to 3 messages, text only. Keep it friendly.</p>
+          </div>
+        )}
       </div>
       <div className="flex items-end gap-2 border-t border-border bg-card px-3 pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
         <textarea
@@ -445,7 +457,7 @@ export function NewRequestView({
           aria-label={`Message ${to.name}`}
           className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl border border-border bg-background px-3.5 py-2 text-base outline-none focus:border-primary/50 sm:text-sm"
         />
-        <Button type="button" size="icon" className="h-10 w-10 shrink-0 rounded-full" disabled={!text.trim() || start.isPending} onClick={send} aria-label="Send request">
+        <Button type="button" size="icon" className="h-10 w-10 shrink-0 rounded-full" disabled={!text.trim() || start.isPending} onClick={send} aria-label={direct ? "Send" : "Send request"}>
           {start.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>

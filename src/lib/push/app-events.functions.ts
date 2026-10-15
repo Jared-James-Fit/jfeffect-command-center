@@ -95,7 +95,8 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
         // person really reacted or commented on it (the caller just names the post).
         if (!(await isStaff())) return { skipped: true };
         const { data: p } = await db.from("community_posts").select("client_id, visibility, author_user_id").eq("id", data.id).maybeSingle();
-        if (!p || p.visibility !== "community" || p.author_user_id === userId) return { skipped: true };
+        // shared with others: the crew, a private account's followers, or Close friends (never coach-only / only me)
+        if (!p || !["community", "followers", "close_friends"].includes(p.visibility) || p.author_user_id === userId) return { skipped: true };
         const [{ count: reacted }, { count: commented }] = await Promise.all([
           db.from("community_reactions").select("post_id", { count: "exact", head: true }).eq("post_id", data.id).eq("user_id", userId),
           db.from("community_comments").select("id", { count: "exact", head: true }).eq("post_id", data.id).eq("author_user_id", userId),

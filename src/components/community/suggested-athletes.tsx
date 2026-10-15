@@ -23,8 +23,8 @@ export function SuggestedAthletes({ onOpen }: { onOpen: (a: CommunityAuthor) => 
   return (
     <section data-suggested className="-mx-3 border-y border-border/60 py-3 sm:mx-0 sm:rounded-3xl sm:border">
       <div className="flex items-baseline justify-between px-4">
+        {/* follower / following lists are on profiles now, so no "only you see who you follow" */}
         <h3 className="text-[14px] font-black">Suggested for you</h3>
-        <span className="text-[11px] text-muted-foreground">Only you see who you follow</span>
       </div>
       <div className="mt-2.5 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {people.map((m) => {
