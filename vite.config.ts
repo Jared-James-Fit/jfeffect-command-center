@@ -70,6 +70,10 @@ export default defineConfig({
           // No navigateFallback: the worker never answers a page load. Every
           // page (and its JS/CSS) comes from Lovable hosting, so a worker left
           // over from an earlier publish can't hold the app on a white screen.
+          // It has to be null: left out, the plugin falls back to "index.html",
+          // which nothing precaches, so Workbox threw "non-precached-url" every
+          // time the worker started and skipped the icon route below.
+          navigateFallback: null,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           // Pull in our Web Push handlers (push, notificationclick,
           // pushsubscriptionchange) inside the same SW Workbox generates.
