@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { AuthorLine, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote } from "@/components/community/post-card";
+import { InlineFollow } from "@/components/community/follow-button";
 import { CommentThread } from "@/components/community/comments-sheet";
 import { MentionText } from "@/components/community/mentions";
 import { PostActions } from "@/components/community/post-actions";
@@ -144,6 +145,7 @@ function Detail({
           onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined}
           collaborators={post.collaborators}
           onOpenPerson={onOpenAuthor}
+          trailing={!post.is_mine && onOpenAuthor ? <InlineFollow userId={post.author.user_id} name={post.author.name} /> : null}
         />
       </div>
 

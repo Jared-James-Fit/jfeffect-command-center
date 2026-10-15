@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { CalendarClock, Cake, ChevronDown, ChevronRight, Eye, Flame, MessageCircle, PenLine, Star } from "lucide-react";
+import { CalendarClock, Cake, ChevronDown, ChevronRight, Eye, Flame, MessageCircle, PenLine, Search, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
@@ -11,6 +11,7 @@ import { useCommunityFeed, useCommunityPulse, useSeriesAction, useViewerUnit, ty
 import { CommunityScreen } from "@/components/community/community-screen";
 import { MyProfileButton } from "@/components/community/profile-view";
 import { openCommunityPerson } from "@/lib/community-notifications";
+import { openCommunityDiscover } from "@/lib/community-discover";
 import { CoachWeeklyPosts } from "@/components/community/coach-weekly-posts";
 import { CoachLessons } from "@/components/community/coach-lessons";
 import { BirthdayPostsCard } from "@/components/community/birthday-posts";
@@ -128,6 +129,20 @@ export function AdminCommunityHub() {
             className="inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-black text-primary-foreground shadow-sm active:scale-95"
           >
             <PenLine className="h-4 w-4" /> Post
+          </button>
+          {/* Find athletes: search the Crew by name or @username (opens on the feed tab, where profiles live) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (tab === "feed") return openCommunityDiscover();
+              setTab("feed");
+              window.setTimeout(openCommunityDiscover, 0);
+            }}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground active:bg-muted"
+            aria-label="Find athletes"
+            data-discover-open
+          >
+            <Search className="h-5 w-5" />
           </button>
           {/* your profile: the feed tab opens it (the feed is where profiles live) */}
           <MyProfileButton

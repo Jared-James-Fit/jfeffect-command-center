@@ -51,6 +51,7 @@ import { useAuth } from "@/lib/auth";
 import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
 import { SharedCommentCard, openCommunityPost } from "@/components/community/shared-comment";
 import { CollaboratorsSheet } from "@/components/community/mentions";
+import { InlineFollow } from "@/components/community/follow-button";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -152,6 +153,7 @@ export function AuthorLine({
   size = 40,
   collaborators,
   onOpenPerson,
+  trailing,
 }: {
   author: CommunityAuthor;
   sub?: string;
@@ -160,6 +162,8 @@ export function AuthorLine({
   /** A collab post's other people: "Jared McIntyre and Dwayne" / "and 2 others". */
   collaborators?: CommunityAuthor[] | null;
   onOpenPerson?: (a: CommunityAuthor) => void;
+  /** After the name, on its line: "· Follow" for someone you don't follow yet. */
+  trailing?: React.ReactNode;
 }) {
   const collabs = collaborators ?? [];
   const [listOpen, setListOpen] = useState(false);
@@ -208,24 +212,44 @@ export function AuthorLine({
     );
   }
 
-  const body = (
-    <>
-      <UserAvatar src={author.avatar_url} name={author.name} size={size} expandable={false} />
-      <div className="min-w-0 text-left">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-bold leading-tight">{author.name}</span>
-          {author.is_coach && <CoachBadge />}
-        </div>
-        {subLine}
-      </div>
-    </>
+  const nameLine = (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate text-sm font-bold leading-tight">{author.name}</span>
+      {author.is_coach && <CoachBadge />}
+    </div>
   );
-  return onOpen ? (
-    <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-2.5 rounded-lg text-left" aria-label={`${author.name}'s profile`}>
-      {body}
-    </button>
-  ) : (
-    <div className="flex min-w-0 items-center gap-2.5">{body}</div>
+  if (!onOpen) {
+    return (
+      <div className="flex min-w-0 items-center gap-2.5">
+        <UserAvatar src={author.avatar_url} name={author.name} size={size} expandable={false} />
+        <div className="min-w-0 text-left">
+          {nameLine}
+          {subLine}
+        </div>
+      </div>
+    );
+  }
+  // the photo and the name lines open the profile; "· Follow" sits on the name's line, its own button
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <button type="button" onClick={onOpen} className="shrink-0 rounded-full" aria-label={`${author.name}'s profile`}>
+        <UserAvatar src={author.avatar_url} name={author.name} size={size} expandable={false} />
+      </button>
+      <div className="min-w-0 text-left">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-1.5 rounded-md text-left" tabIndex={-1} aria-hidden>
+            <span className="truncate text-sm font-bold leading-tight">{author.name}</span>
+            {author.is_coach && <CoachBadge />}
+          </button>
+          {trailing}
+        </div>
+        {subLine && (
+          <button type="button" onClick={onOpen} className="block w-full min-w-0 text-left" tabIndex={-1} aria-hidden>
+            {subLine}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -378,7 +402,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     // posts. A wider screen keeps the soft card (the feed column is centred there).
     <article ref={articleRef} data-feed-post className="-mx-3 overflow-hidden border-b border-border/60 bg-background pb-2 sm:mx-0 sm:rounded-3xl sm:border sm:border-border/70 sm:bg-card sm:pb-0 sm:shadow-sm">
       <header className="flex items-center justify-between gap-2 px-3.5 py-3">
-        <AuthorLine author={post.author} sub={sub} onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined} collaborators={post.collaborators} onOpenPerson={onOpenAuthor} />
+        <AuthorLine
+          author={post.author}
+          sub={sub}
+          onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined}
+          collaborators={post.collaborators}
+          onOpenPerson={onOpenAuthor}
+          trailing={!post.is_mine && onOpenAuthor ? <InlineFollow userId={post.author.user_id} name={post.author.name} /> : null}
+        />
         <div className="flex shrink-0 items-center gap-1">
           {post.visibility === "close_friends" ? (
             <Star className="h-3.5 w-3.5 fill-emerald-500 text-emerald-500" aria-label="Close friends only" />

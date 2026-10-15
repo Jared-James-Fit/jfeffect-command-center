@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Copy, CornerUpLeft, Eye, EyeOff, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Send, Share2, Trash2, X } from "lucide-react";
+import { Copy, CornerUpLeft, Eye, EyeOff, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Send, Share2, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -10,6 +10,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge } from "@/components/community/post-card";
 import { SharedCommentCard } from "@/components/community/shared-comment";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
+import { followLabel, useFollow, useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
 import { COMMENT_MAX, likesLabel, pinnedFirst, postTimeLabel, threadComments, type CommunityAuthor, type CommunityComment, type CommunityPost } from "@/lib/community";
 import { pickMedia, releasePicked, type PickedMedia } from "@/lib/community-media";
@@ -772,6 +774,7 @@ function CommentMenu({
                 iconClass={c.liked ? "fill-[#ef3340] text-[#ef3340]" : undefined}
                 onClick={act(() => onLike(c))}
               />
+              {!c.is_mine && <FollowMenuRow author={c.author} onDone={onClose} />}
               {c.can_share && <MenuRow icon={Share2} label="Share as a post" onClick={act(() => onShare(c))} />}
               {!!c.body && (
                 <MenuRow
@@ -799,6 +802,35 @@ function CommentMenu({
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** "Follow Nicole" on a comment you're holding, for someone you don't follow yet (not for coaches, or a coach viewing as a client). */
+function FollowMenuRow({ author, onDone }: { author: CommunityAuthor; onDone: () => void }) {
+  const { user, role, viewOnly } = useAuth();
+  const { isImpersonating } = useClientImpersonation();
+  const hidden = role === "admin" || role === "coach" || viewOnly || isImpersonating || author.user_id === user?.id;
+  const { data: state } = useFollowState(!hidden);
+  const follow = useFollow();
+  if (hidden || !state) return null;
+  const label = followLabel(state, author.user_id);
+  if (label === "Following" || label === "Requested") return null;
+  const first = author.name.split(" ")[0];
+  return (
+    <MenuRow
+      icon={UserPlus}
+      label={label === "Follow back" ? `Follow ${first} back` : `Follow ${first}`}
+      onClick={() => {
+        onDone();
+        follow.mutate(
+          { userId: author.user_id, on: true },
+          {
+            onError: () => toast.error("Couldn't follow. Try again."),
+            onSuccess: (st) => toast(st.requested.includes(author.user_id) ? `Requested to follow ${first}` : `Following ${first}`),
+          },
+        );
+      }}
+    />
   );
 }
 

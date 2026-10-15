@@ -24,10 +24,12 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
     expect(screen).toContain('(previewOnly ? ["feed", "rankings"] : ["feed", "rankings", "you"])');
     expect(screen).toContain("<RankingsHub />");
     expect(screen).toContain('aria-label={activityNew ? "Activity, new" : "Activity"}');
-    expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "activity" };');
+    // Find athletes (the members directory) opens from Activity's search or the top bar, and goes back where it came from
+    expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed" };');
+    expect(screen).toContain('const parent = scope.kind === "members" ? discoverBack : PARENT[scope.kind as Tab];');
     expect(read("src/components/community/crew-activity.tsx")).toContain('aria-label="Find people"');
     expect(crew).toContain("data-crew-me");
-    expect(screen).toContain('onOpenMe={() => setScope({ kind: "you" })}');
+    expect(screen).toContain('onOpenMe={previewOnly ? undefined : () => setScope({ kind: "you" })}');
   });
   it("opens on the Feed; ranking links land on Rankings (Monthly or Strength)", () => {
     expect(screen).toContain('if (rankingsFromHash()) return { kind: "rankings" };');

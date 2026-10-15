@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { CommunityAuthor, CommunityMember } from "@/lib/community";
+import type { CommunityAuthor } from "@/lib/community";
 
 const db = supabase as any;
 
@@ -168,22 +168,3 @@ export function followLabel(s: FollowState | undefined, userId: string): "Follow
   return s?.followers.includes(userId) ? "Follow back" : "Follow";
 }
 
-/**
- * Who to suggest: crew members you don't follow yet. People who follow you
- * come first, then whoever trained most this week, then most recently.
- * Never you, never staff-linked duplicates (the members list already drops those).
- */
-export function suggestAthletes(members: CommunityMember[], state: FollowState | undefined, limit = 8): CommunityMember[] {
-  const following = new Set(state?.following ?? []);
-  const followers = new Set(state?.followers ?? []);
-  return members
-    .filter((m) => !following.has(m.author.user_id))
-    .map((m) => ({
-      m,
-      score: (followers.has(m.author.user_id) ? 100 : 0) + (m.week_days?.length ?? 0) * 10 + (m.trained_at ? 5 : 0) + (m.author.avatar_url ? 1 : 0),
-      at: m.trained_at ? Date.parse(m.trained_at) : 0,
-    }))
-    .sort((a, b) => b.score - a.score || b.at - a.at)
-    .slice(0, limit)
-    .map((x) => x.m);
-}

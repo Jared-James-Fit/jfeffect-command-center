@@ -102,7 +102,7 @@ export function CrewActivity({ onBack, onOpenPost, onOpenPerson, onFindPeople }:
 
       {/* Instagram ends Activity with people to follow */}
       <div className="pt-2">
-        <SuggestedAthletes onOpen={onOpenPerson} />
+        <SuggestedAthletes onOpen={onOpenPerson} onSeeAll={onFindPeople} />
       </div>
     </div>
   );
