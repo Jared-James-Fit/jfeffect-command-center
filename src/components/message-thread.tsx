@@ -53,7 +53,7 @@ import { ScheduledStrip } from "@/components/messages/scheduled-strip";
 import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { ScheduleButton } from "@/components/messages/schedule-button";
 import { renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
-import { CommunityPostChatCard, type PostCardAttachment } from "@/components/community/post-chat-card";
+import { CommunityPostChatCard, PostReplyText, postReplyCard, type PostCardAttachment } from "@/components/community/post-chat-card";
 import { WorkoutNoteCard } from "@/components/messages/workout-note-card";
 import type { WorkoutNoteCardAttachment } from "@/lib/workout-notes";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
@@ -1931,6 +1931,8 @@ export function MessageThread({
           const isDeleted = !!m.deleted_at;
           const isEditing = editingId === m.id;
           const isSelected = selectedIds.has(m.id);
+          // A reply to a story/post: its cover leads and the words sit under it (Instagram style).
+          const replyCard = !isDeleted && !m.is_internal_note ? postReplyCard(m.attachments) : null;
           const canModify = mine && !isDeleted;
           const otherName = mine
             ? null
@@ -2057,13 +2059,15 @@ export function MessageThread({
                 className={cn(
                   "group relative select-none touch-manipulation",
                   isEditing && "hidden",
-                  "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm transition-shadow",
-                  m.is_internal_note
-                    ? "border border-warning/40 bg-warning/10"
+                  "max-w-[80%] rounded-2xl text-sm transition-shadow",
+                  replyCard
+                    ? "text-foreground"
+                    : m.is_internal_note
+                    ? "border border-warning/40 bg-warning/10 px-3 py-2 shadow-sm"
                     : mine
-                    ? "bg-primary text-primary-foreground rounded-br-md"
-                    : "bg-secondary text-foreground",
-                  !mine && !m.is_internal_note && "rounded-bl-md",
+                    ? "bg-primary text-primary-foreground rounded-br-md px-3 py-2 shadow-sm"
+                    : "bg-secondary text-foreground px-3 py-2 shadow-sm",
+                  !mine && !m.is_internal_note && !replyCard && "rounded-bl-md",
                   isDeleted && "italic opacity-70",
                   selectionMode && isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
                 )}
@@ -2198,11 +2202,16 @@ export function MessageThread({
                       </button>
                     )}
                   </div>
+                ) : replyCard ? (
+                  <>
+                    <CommunityPostChatCard att={replyCard} mine={mine} staff={role !== "client"} />
+                    {m.body?.trim() && <PostReplyText body={m.body} mine={mine}>{renderBodyWithMeet(m.body, mine)}</PostReplyText>}
+                  </>
                 ) : (
                   // A session request's (or workout note's) card says it all; its text is for inbox previews.
                   m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "workout_note") && renderBodyWithMeet(m.body, mine)
                 )}
-                {!isDeleted && !isEditing && m.attachments?.length > 0 && (
+                {!isDeleted && !isEditing && m.attachments?.some((a) => a !== replyCard) && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
                     {(() => {
                       // Several photos/videos sent at once: each one can be
@@ -2211,6 +2220,7 @@ export function MessageThread({
                       const clipReplies = media.length > 1 && !m.is_internal_note && !m.id.startsWith("optimistic-");
                       const clipAt = new Map(media.map((x, k) => [x.index, k]));
                       return m.attachments.map((a, i) => {
+                        if (a === replyCard) return null;
                         const view = (
                           <AttachmentView
                             key={i}
@@ -2256,7 +2266,10 @@ export function MessageThread({
                     )}
                   </div>
                 )}
-                <div className={cn("mt-1 flex items-center gap-2 text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                <div className={cn(
+                  "mt-1 flex items-center gap-2 text-[10px]",
+                  replyCard ? cn("px-1 text-muted-foreground", mine && "justify-end") : mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                )}>
                   <span>{fmtTime(m.created_at)}</span>
                   {m.edited_at && !isDeleted && <span>· edited</span>}
                   {m.message_type !== "General" && <span>· {m.message_type}</span>}
