@@ -3,24 +3,15 @@
 // Loaded by the Workbox-generated /sw.js via `importScripts: ['/push-sw.js']`
 // so we share ONE service worker with the offline shell.
 
-// jf-home-hotfix activation refresh:
-// When this worker version activates, refresh already-open window clients so
-// an installed iOS PWA that has kept an old JS runtime alive actually loads
-// the newly published app. Skip an actively-open workout detail route to avoid
-// interrupting a set in progress.
+// Take over open pages when this worker activates, and nothing else: it never
+// reloads or navigates them. Every publish ships a new worker, and forcing each
+// open window to reload on activation (with the page also reloading itself)
+// left the app on a blank white screen after a run of publishes. Picking up a
+// new build is the app's own job (app-freshness.ts: reloads on reopen, only on
+// screens where nothing can be lost).
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     try { await self.clients.claim(); } catch {}
-    try {
-      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      await Promise.all(wins.map(async (client) => {
-        try {
-          const u = new URL(client.url);
-          if (/\/portal\/workouts\//.test(u.pathname)) return;
-          await client.navigate(client.url);
-        } catch {}
-      }));
-    } catch {}
   })());
 });
 
