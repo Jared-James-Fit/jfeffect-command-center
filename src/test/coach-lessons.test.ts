@@ -167,7 +167,8 @@ describe("a lesson in the feed and the story", () => {
   it("plays as a lesson in stories (title, diagram, hook), with the sticker above the reply bar", () => {
     const stories = read("src/components/community/crew-stories.tsx");
     expect(stories).toContain('if (kind === "lesson") return <LessonStoryFrame post={post} />;');
-    expect(stories).toContain('<div className="absolute inset-x-0 z-40" style={{ bottom: barH ? ');
+    // where the coach put it, else just above the reply bar (stickerSpot)
+    expect(stories).toContain('<div className="absolute inset-x-0 z-40" style={stickerSpot(post.sticker.y, barH)}>');
     expect(stories).toContain('closest("button, a, input, textarea, [data-story-interactive]")');
   });
 
@@ -286,7 +287,8 @@ describe("story stickers", () => {
   it("sit a story sticker above the bottom bar, however tall the bar is", () => {
     const viewer = read("src/components/community/crew-stories.tsx");
     expect(viewer).toContain('stage.current?.querySelector<HTMLElement>("[data-story-bar], [data-story-mine-bar]")');
-    expect(viewer).toContain("bottom: barH ? `${barH - 40 + 12}px`");
+    // the usual spot (unless the poster moved it): stickerSpot
+    expect(read("src/lib/lessons.ts")).toContain("bottom: barH ? `${barH - 40 + 12}px`");
   });
 
   it("only the poster sees who answered, question answers are theirs alone, and nobody is pushed", () => {

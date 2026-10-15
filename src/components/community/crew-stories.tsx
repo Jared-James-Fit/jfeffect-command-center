@@ -10,6 +10,7 @@ import { WIN_STYLE } from "@/components/community/pulse-style";
 import { ViewersSheet, markPostViewed } from "@/components/community/post-views";
 import { LessonStoryFrame } from "@/components/community/lesson-card";
 import { StorySticker } from "@/components/community/story-sticker";
+import { stickerSpot } from "@/lib/lessons";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useFollowState } from "@/lib/community-social";
@@ -525,9 +526,9 @@ function StoryViewer({
         >
           <StoryFrame post={post} unit={unit} />
           {post.sticker && (
-            // above the reply bar's fade, so the whole sticker takes taps
-            // (the bar's top 40px is its fade, not buttons)
-            <div className="absolute inset-x-0 z-40" style={{ bottom: barH ? `${barH - 40 + 12}px` : "calc(env(safe-area-inset-bottom) + 132px)" }}>
+            // where the poster put it; else above the reply bar's fade, so the
+            // whole sticker takes taps (the bar's top 40px is its fade, not buttons)
+            <div className="absolute inset-x-0 z-40" style={stickerSpot(post.sticker.y, barH)}>
               <StorySticker post={post} onComposing={setComposing} />
             </div>
           )}

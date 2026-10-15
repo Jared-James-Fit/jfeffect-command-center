@@ -64,7 +64,8 @@ export function StickerEditorSheet({
         : { type, q };
 
   const save = async () => {
-    const r = cleanSticker(build());
+    // a reworded sticker stays where it was put on the story
+    const r = cleanSticker({ ...build(), ...(initial?.y !== undefined ? { y: initial.y } : {}) });
     if (!r.ok) return setError(r.error);
     setError(null);
     await onSave(r.sticker);
@@ -192,12 +193,13 @@ export function StickerEditorSheet({
 /** The editor for a post you made: saves straight onto it. */
 export function PostStickerEditor({ post, open, onClose }: { post: CommunityPost; open: boolean; onClose: () => void }) {
   const set = useSetSticker();
-  const initial = post.sticker
+  const at = post.sticker?.y !== undefined ? { y: post.sticker.y } : {};
+  const initial: StickerSpec | null = post.sticker
     ? post.sticker.type === "poll"
-      ? { type: "poll" as const, q: post.sticker.q, options: post.sticker.options.map(({ label, tag }) => ({ label, ...(tag ? { tag } : {}) })) }
+      ? { type: "poll" as const, q: post.sticker.q, options: post.sticker.options.map(({ label, tag }) => ({ label, ...(tag ? { tag } : {}) })), ...at }
       : post.sticker.type === "slider"
-        ? { type: "slider" as const, q: post.sticker.q, emoji: post.sticker.emoji }
-        : { type: "question" as const, q: post.sticker.q }
+        ? { type: "slider" as const, q: post.sticker.q, emoji: post.sticker.emoji, ...at }
+        : { type: "question" as const, q: post.sticker.q, ...at }
     : null;
   const run = (sticker: StickerSpec | null, ok: string) =>
     set.mutateAsync({ postId: post.id, sticker }).then(

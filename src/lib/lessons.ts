@@ -10,6 +10,7 @@
  * Also the story stickers (poll, slider, question box) any post can carry:
  * lessons get theirs from the library, anyone can add one to their own story.
  */
+import type { CSSProperties } from "react";
 import type { CommunityAuthor, CommunityPost } from "@/lib/community";
 
 export type LessonTrack = "strength" | "hypertrophy" | "methods" | "mind" | "fix";
@@ -134,10 +135,14 @@ export function hookLine(caption: string | null | undefined): string {
 /* ---- story stickers ------------------------------------------------- */
 
 export type StickerOption = { label: string; tag?: string };
-export type StickerSpec =
+export type StickerSpec = (
   | { type: "poll"; q: string; options: StickerOption[] }
   | { type: "slider"; q: string; emoji: string }
-  | { type: "question"; q: string };
+  | { type: "question"; q: string }
+) & {
+  /** Where it sits on the story: its middle, as a share of the screen's height (stickerY). Missing = just above the reply bar. */
+  y?: number;
+};
 export type StickerType = StickerSpec["type"];
 
 export type StickerAnswer = CommunityAuthor & { choice?: number; value?: number; body?: string; at?: string };
@@ -148,6 +153,8 @@ export type PostSticker = (
   | { type: "slider"; q: string; emoji: string; average?: number | null }
   | { type: "question"; q: string }
 ) & {
+  /** Where the poster put it (StickerSpec.y). */
+  y?: number;
   total: number;
   is_mine: boolean;
   mine?: { choice?: number; value?: number; body?: string } | null;
@@ -155,6 +162,36 @@ export type PostSticker = (
 };
 
 export const STICKER_Q_MAX = 80;
+
+/**
+ * The band a sticker can be moved within on a story (its middle, as a share of
+ * the screen's height): clear of the name and progress at the top and of the
+ * reply bar at the bottom. The database keeps it to the same band
+ * (community_sticker_clean).
+ */
+export const STICKER_Y_MIN = 0.2;
+export const STICKER_Y_MAX = 0.66;
+
+/** A sticker's spot, kept in the band and to 2 places; anything else means "the usual spot" (tested). */
+export function stickerY(y: unknown): number | undefined {
+  if (typeof y !== "number" || !Number.isFinite(y)) return undefined;
+  return Math.round(Math.min(STICKER_Y_MAX, Math.max(STICKER_Y_MIN, y)) * 100) / 100;
+}
+
+/** Moved up into the top half: the story's words go underneath it instead of on top. */
+export function stickerUpTop(y: number | undefined): boolean {
+  return y !== undefined && y < 0.45;
+}
+
+/**
+ * Where a story's sticker sits (tested): the spot its poster dragged it to (its
+ * middle, as a share of the screen's height), or just above the reply bar of
+ * `barH` px (its top 40px is the bar's fade, not buttons).
+ */
+export function stickerSpot(y: number | undefined, barH: number | null): CSSProperties {
+  if (y !== undefined) return { top: `${y * 100}%`, transform: "translateY(-50%)" };
+  return { bottom: barH ? `${barH - 40 + 12}px` : "calc(env(safe-area-inset-bottom) + 132px)" };
+}
 export const STICKER_OPTION_MAX = 24;
 export const STICKER_ANSWER_MAX = 300;
 
@@ -166,15 +203,17 @@ export function cleanSticker(s: StickerSpec): { ok: true; sticker: StickerSpec }
   const q = s.q.trim();
   if (!q) return { ok: false, error: "Ask something" };
   if (q.length > STICKER_Q_MAX) return { ok: false, error: `Keep the question to ${STICKER_Q_MAX} characters` };
+  const y = stickerY(s.y);
+  const at = y !== undefined ? { y } : {};
   if (s.type === "poll") {
     const options = s.options.map((o) => ({ ...o, label: o.label.trim() })).filter((o) => o.label);
     if (options.length < 2 || options.length > 4) return { ok: false, error: "A poll needs 2 to 4 answers" };
     if (options.some((o) => o.label.length > STICKER_OPTION_MAX)) return { ok: false, error: `Keep each answer to ${STICKER_OPTION_MAX} characters` };
     if (new Set(options.map((o) => o.label.toLowerCase())).size !== options.length) return { ok: false, error: "Each answer needs to be different" };
-    return { ok: true, sticker: { type: "poll", q, options } };
+    return { ok: true, sticker: { type: "poll", q, options, ...at } };
   }
-  if (s.type === "slider") return { ok: true, sticker: { type: "slider", q, emoji: s.emoji?.trim() || "🔥" } };
-  return { ok: true, sticker: { type: "question", q } };
+  if (s.type === "slider") return { ok: true, sticker: { type: "slider", q, emoji: s.emoji?.trim() || "🔥", ...at } };
+  return { ok: true, sticker: { type: "question", q, ...at } };
 }
 
 /** Whole-number shares that add up to 100 (largest remainder), for a poll's bars. */
@@ -268,6 +307,11 @@ export type LessonPlanRow = {
   approved_at: string | null;
   item: LessonItem | null;
 };
+
+/** What the coach's story preview steps through (tested): every lesson from today on that will be (or is) a story. */
+export function storyRows(plan: LessonPlanRow[], today: string): LessonPlanRow[] {
+  return plan.filter((r) => r.day >= today && !!r.item && r.status !== "skipped" && r.posted_as !== "data");
+}
 
 export type LessonStats = {
   posts: number;

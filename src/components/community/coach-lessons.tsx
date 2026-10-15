@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle, BarChart3, BookOpen, CalendarClock, Check, ChevronDown, ChevronRight, Clock, Eye, ImageIcon, Library, PenLine, Plus,
-  RefreshCw, Send, Shuffle, SkipForward, Sparkles, Sticker, Undo2, X,
+  Play, RefreshCw, Send, Shuffle, SkipForward, Sparkles, Sticker, Undo2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,19 +11,17 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { CommunityPost, PostSlide } from "@/lib/community";
 import { useFullMediaUrl, useSeriesAction, useSeriesOverview } from "@/lib/community.queries";
 import { lessonArtStatus, makeLessonArt } from "@/lib/lesson-art.functions";
 import {
   LESSON_LEVELS, LESSON_LIFTS, LESSON_TRACK, LESSON_TRACKS, LEVEL_LABEL, LIFT_LABEL, clockLabel, coachClock, coachInstant, coachTimeLabel, dayLabel,
-  canHaveArt, lessonKicker, lessonStatusLabel, missingLevels, needsReview,
+  canHaveArt, lessonKicker, lessonStatusLabel, missingLevels, needsReview, storyRows,
   type LessonItem, type LessonLevel, type LessonLift, type LessonPlanRow, type LessonsOverview, type LessonTrack, type StickerSpec,
 } from "@/lib/lessons";
 import { lessonKeys, useLessonAct, useLessonLibrary, useLessonsOverview, useLessonsSettings, useSaveLessonItem, type LessonAction } from "@/lib/lessons.queries";
-import { LessonCard, LessonStoryFrame } from "@/components/community/lesson-card";
-import { StickerPreview } from "@/components/community/story-sticker";
+import { LessonCard } from "@/components/community/lesson-card";
 import { StickerEditorSheet } from "@/components/community/sticker-editor";
-import { NoteEditor } from "@/components/community/note-editor";
+import { LessonEditors, LessonStoryPlayer, StoryThumb, previewPost } from "@/components/community/lesson-story-player";
 import { openCommunityPost } from "@/components/community/shared-comment";
 
 /**
@@ -43,6 +41,7 @@ export function CoachLessons() {
   const act = useLessonAct();
   const settings = useLessonsSettings();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [playId, setPlayId] = useState<string | null>(null);
   const [library, setLibrary] = useState(false);
   const [stats, setStats] = useState(false);
   const [approveAll, setApproveAll] = useState(false);
@@ -65,6 +64,7 @@ export function CoachLessons() {
   const upcoming = data.plan.filter((r) => r.day >= data.today);
   const earlier = data.plan.filter((r) => r.day < data.today && r.status === "posted").slice(-3);
   const weeks = groupWeeks(upcoming, data.today);
+  const stories = storyRows(data.plan, data.today);
   const month = data.coverage?.[0];
   const missing = missingLevels(month?.levels);
 
@@ -159,7 +159,7 @@ export function CoachLessons() {
             <div className="bg-muted/40 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">{w.label}</div>
             <ul className="divide-y divide-border/60">
               {w.rows.map((r) => (
-                <PlanRow key={r.id} row={r} mode={data.mode} onOpen={() => setOpenId(r.id)} />
+                <PlanRow key={r.id} row={r} mode={data.mode} onOpen={() => setOpenId(r.id)} onPlay={stories.some((x) => x.id === r.id) ? () => setPlayId(r.id) : undefined} />
               ))}
             </ul>
           </div>
@@ -182,7 +182,14 @@ export function CoachLessons() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2 border-t border-border/60 px-4 py-3">
+        {stories.length > 0 && (
+          <div className="border-t border-border/60 px-4 pt-3">
+            <button type="button" onClick={() => setPlayId(stories[0].id)} className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-foreground text-[13px] font-black text-background active:scale-[0.99]" data-lesson-play-all>
+              <Play className="h-4 w-4 fill-current" /> Preview the stories · {stories.length}
+            </button>
+          </div>
+        )}
+        <div className={cn("grid grid-cols-2 gap-2 px-4 py-3", stories.length === 0 && "border-t border-border/60")}>
           <button type="button" onClick={() => setLibrary(true)} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-border text-[12px] font-bold" data-lesson-library-open>
             <Library className="h-4 w-4" /> Library
           </button>
@@ -205,7 +212,8 @@ export function CoachLessons() {
         )}
       </div>
 
-      {open && <LessonSheet row={open} data={data} onClose={() => setOpenId(null)} />}
+      {open && <LessonSheet row={open} data={data} onClose={() => setOpenId(null)} onPlay={stories.some((x) => x.id === open.id) ? () => setPlayId(open.id) : undefined} />}
+      {playId && <LessonStoryPlayer rows={stories} startId={playId} data={data} onClose={() => setPlayId(null)} />}
       <LibrarySheet open={library} onClose={() => setLibrary(false)} />
 
       <AlertDialog open={approveAll} onOpenChange={setApproveAll}>
@@ -278,13 +286,13 @@ const STATUS_TONE: Record<string, string> = {
   "Nothing picked": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
 };
 
-function PlanRow({ row, mode, onOpen }: { row: LessonPlanRow; mode: "review" | "auto"; onOpen: () => void }) {
+function PlanRow({ row, mode, onOpen, onPlay }: { row: LessonPlanRow; mode: "review" | "auto"; onOpen: () => void; onPlay?: () => void }) {
   const status = lessonStatusLabel(row, mode);
   const it = row.item;
   const off = row.status === "skipped";
   return (
-    <li>
-      <button type="button" onClick={onOpen} className={cn("flex w-full items-center gap-3 px-4 py-3 text-left active:bg-muted/60", off && "opacity-60")} data-lesson-row={row.status}>
+    <li className="flex items-center">
+      <button type="button" onClick={onOpen} className={cn("flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 text-left active:bg-muted/60", onPlay ? "pr-2" : "pr-4", off && "opacity-60")} data-lesson-row={row.status}>
         <div className="w-11 shrink-0 text-center">
           <div className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground">{dayLabel(row.day).slice(0, 3)}</div>
           <div className="text-[19px] font-black leading-none">{Number(row.day.slice(8, 10))}</div>
@@ -315,6 +323,14 @@ function PlanRow({ row, mode, onOpen }: { row: LessonPlanRow; mode: "review" | "
           </div>
         </div>
       </button>
+      {onPlay && (
+        // the story, one tap: a story ring, like the Crew's
+        <button type="button" onClick={onPlay} className="mr-3 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[conic-gradient(from_180deg,#ef3340,#f59e0b,#ef3340)] p-[2px] active:scale-95" aria-label={`Play ${it?.title ?? "this lesson"} as a story`} data-lesson-row-play>
+          <span className="grid h-full w-full place-items-center rounded-full bg-card">
+            <Play className="ml-0.5 h-3.5 w-3.5 fill-current" />
+          </span>
+        </button>
+      )}
     </li>
   );
 }
@@ -441,7 +457,7 @@ function StatsPanel({ data }: { data: LessonsOverview }) {
 
 /* ---- one lesson ------------------------------------------------------ */
 
-function LessonSheet({ row, data, onClose }: { row: LessonPlanRow; data: LessonsOverview; onClose: () => void }) {
+function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data: LessonsOverview; onClose: () => void; onPlay?: () => void }) {
   const act = useLessonAct();
   const [tab, setTab] = useState<"post" | "story">("post");
   const [words, setWords] = useState(false);
@@ -519,7 +535,7 @@ function LessonSheet({ row, data, onClose }: { row: LessonPlanRow; data: Lessons
                   <LessonCard post={preview} className="mx-4 mb-3 mt-2" />
                 </div>
               ) : (
-                <StoryPreview post={preview} sticker={row.sticker} />
+                <StoryThumb row={row} data={data} onOpen={onPlay} />
               )}
             </>
           ) : (
@@ -579,28 +595,14 @@ function LessonSheet({ row, data, onClose }: { row: LessonPlanRow; data: Lessons
           {it && it.refs.length > 0 && <p className="text-center text-[11px] text-muted-foreground">Sources are checked against their published records. Edit the words freely, keep the claims to what they say.</p>}
         </div>
 
-        {it && (
-          <NoteEditor
-            open={words}
-            title={`${dayLabel(row.day)}: ${it.title}`}
-            initial={row.body ?? it.body}
-            saving={act.isPending}
-            onClose={() => setWords(false)}
-            media={{ initial: row.media as PostSlide[], key: `lesson-${row.id}`, hint: "Photos go on top of this lesson. The diagram stays under the words." }}
-            onSave={async (body, _poll, media) => {
-              await act.mutateAsync({ kind: "save", id: row.id, body, ...(media ? { media } : {}) });
-              toast.success("Saved. It goes out like this.");
-            }}
-          />
-        )}
-        <StickerEditorSheet
-          open={stickerOpen}
-          initial={row.sticker}
-          title="Lesson sticker"
-          saving={act.isPending}
-          onClose={() => setStickerOpen(false)}
-          onSave={(s: StickerSpec) => run({ kind: "save", id: row.id, sticker: s, stickerSet: true }, "Sticker saved", () => setStickerOpen(false))}
-          onRemove={() => run({ kind: "save", id: row.id, sticker: null, stickerSet: true }, "No sticker on this one", () => setStickerOpen(false))}
+        <LessonEditors
+          row={row}
+          words={words}
+          sticker={stickerOpen}
+          onClose={() => {
+            setWords(false);
+            setStickerOpen(false);
+          }}
         />
         <LibrarySheet open={swap} onClose={() => setSwap(false)} pickFor={row} onPicked={() => setSwap(false)} />
         <MoveSheet open={move} row={row} onClose={() => setMove(false)} />
@@ -655,54 +657,6 @@ function Tool({ icon: Icon, label, onClick }: { icon: typeof Check; label: strin
       <Icon className="h-4 w-4" />
       {label}
     </button>
-  );
-}
-
-/** The post as the crew will see it (built from the plan row, nothing posted). */
-function previewPost(row: LessonPlanRow, data: LessonsOverview): CommunityPost {
-  const it = row.item;
-  return {
-    id: `preview-${row.id}`,
-    created_at: row.post_at,
-    visibility: "community",
-    caption: row.body ?? it?.body ?? "",
-    media_path: null,
-    media_thumb_path: null,
-    media_type: null,
-    media_width: null,
-    media_height: null,
-    completion_id: null,
-    kind: "note",
-    series: "lesson",
-    series_extra: it
-      ? { key: it.key, track: it.track, title: it.title, level: it.level, lift: it.lift, tags: it.tags, visual: it.visual, refs: it.refs }
-      : null,
-    is_mine: true,
-    author: data.author ?? { user_id: "", name: "Coach", avatar_url: null, is_coach: true },
-    stats: null,
-    reactions: {},
-    my_reaction: null,
-    coach_reactions: [],
-    comment_count: 0,
-    coach_commented: false,
-    sticker: null,
-  } as CommunityPost;
-}
-
-/** The story frame, small: phone-shaped, the sticker where it'll sit. */
-function StoryPreview({ post, sticker }: { post: CommunityPost; sticker: StickerSpec | null }) {
-  const scale = 0.62;
-  return (
-    <div className="mx-auto overflow-hidden rounded-[22px] bg-black" style={{ width: 390 * scale, height: 720 * scale }} data-lesson-preview="story">
-      <div className="relative flex flex-col text-white" style={{ width: 390, height: 720, transform: `scale(${scale})`, transformOrigin: "top left" }}>
-        <LessonStoryFrame post={{ ...post, sticker: sticker ? ({ ...sticker, total: 0, is_mine: true, ...(sticker.type === "poll" ? { options: sticker.options.map((o) => ({ ...o, votes: 0 })) } : {}) } as CommunityPost["sticker"]) : null }} />
-        {sticker && (
-          <div className="absolute inset-x-0" style={{ bottom: 96 }}>
-            <StickerPreview sticker={sticker} />
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
