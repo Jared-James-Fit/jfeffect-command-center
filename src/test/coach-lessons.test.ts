@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import {
   LESSON_VISUAL_KINDS, answerSticker, canHaveArt, cleanSticker, coachClock, coachInstant, extraLesson, hookLine, lessonArtPrompt, lessonKicker,
   lessonStatusLabel, missingLevels, needsReview, safeRefUrl, stickerCountLabel, stickerPercents, type LessonPlanRow, type PostSticker,
@@ -13,14 +14,24 @@ import { lessonReminder } from "@/lib/lesson-reminders.server";
 const read = (f: string) => readFileSync(f, "utf8");
 const sql = read("supabase/migrations/20261129110000_community_lessons.sql");
 const seed = read("supabase/migrations/20261129111000_community_lessons_library.sql");
+const rewrite = read("supabase/migrations/20261204090000_lesson_library_rewrite.sql");
 
-/** The library as seeded: body ($l$…$l$) and data ($j$…$j$) of each lesson. */
-function library() {
+/** Body ($l$…$l$) and data ($j$…$j$) of each lesson row in a migration. */
+function lessonRows(src: string) {
   const rows: { body: string; data: any }[] = [];
   const re = /\$l\$([\s\S]*?)\$l\$, \$j\$([\s\S]*?)\$j\$::jsonb/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(seed))) rows.push({ body: m[1], data: JSON.parse(m[2]) });
+  while ((m = re.exec(src))) rows.push({ body: m[1], data: JSON.parse(m[2]) });
   return rows;
+}
+
+/** The library as it posts: the seed, with the second pass's wording and refs on top. */
+function library() {
+  const second = new Map(lessonRows(rewrite).map((r) => [r.data.key, r]));
+  return lessonRows(seed).map((l) => {
+    const r = second.get(l.data.key);
+    return r ? { body: r.body, data: { ...l.data, ...r.data } } : l;
+  });
 }
 
 describe("the lesson library", () => {
@@ -72,6 +83,30 @@ describe("the lesson library", () => {
   it("is inserted once per key: a lesson the coach has edited is never overwritten", () => {
     expect(seed).toContain("ON CONFLICT ((data->>'key')) WHERE series = 'lesson' DO NOTHING;");
     expect(sql).toContain("CREATE UNIQUE INDEX IF NOT EXISTS community_series_items_lesson_key_uidx");
+  });
+
+  it("the second pass only rewrites a lesson still exactly as seeded and never posted", () => {
+    expect(rewrite).toContain("AND md5(i.body) = v.seeded_md5");
+    expect(rewrite).toContain("AND coalesce(i.use_count, 0) = 0;");
+    const seeded = new Map(lessonRows(seed).map((l) => [l.data.key, l.body]));
+    const rows = [...rewrite.matchAll(/\('([a-z0-9-]+)', '([0-9a-f]{32})', \$l\$/g)];
+    expect(rows.length).toBe(lessonRows(rewrite).length);
+    for (const [, key, md5] of rows) {
+      expect(seeded.has(key), key).toBe(true);
+      expect(createHash("md5").update(seeded.get(key)!, "utf8").digest("hex"), key).toBe(md5);
+    }
+    // the lesson that already went out (the coach rewrote it himself) isn't touched
+    expect(rows.some(([, key]) => key === "methods-attentional-focus")).toBe(false);
+  });
+
+  it("reads like the coach's own rewrite: sentence case, studies by year not author, refs kept for him", () => {
+    const second = lessonRows(rewrite);
+    for (const { body, data } of second) {
+      expect(body.trimStart().replace(/^"/, "")[0], data.key).toMatch(/[A-Z0-9]/);
+      expect(body, data.key).not.toMatch(/& co\b/);
+    }
+    // a lesson that names a study or an athlete still lists where it came from
+    for (const { body, data } of library()) if (/\b(19|20)\d\d (study|review|trial|survey|pilot)\b/.test(body)) expect(data.refs?.length ?? 0, data.key).toBeGreaterThan(0);
   });
 });
 
