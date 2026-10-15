@@ -67,18 +67,15 @@ export default defineConfig({
         manifest: false,
         devOptions: { enabled: false },
         workbox: {
-          navigateFallback: "/",
+          // No navigateFallback: the worker never answers a page load. Every
+          // page (and its JS/CSS) comes from Lovable hosting, so a worker left
+          // over from an earlier publish can't hold the app on a white screen.
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           // Pull in our Web Push handlers (push, notificationclick,
           // pushsubscriptionchange) inside the same SW Workbox generates.
           // This keeps us at ONE service worker for offline + push.
-          importScripts: ["/push-sw.js?v=20261014-open-link"],
-          navigateFallbackDenylist: [
-            /^\/~oauth/,         // Supabase OAuth callback — must hit network
-            /^\/api\//,
-            /^\/_serverFn\//,
-            /^\/_server\//,
-          ],
+          // (The version makes every installed worker update to this one.)
+          importScripts: ["/push-sw.js?v=20261015-no-reload"],
           cleanupOutdatedCaches: true,
           // skipWaiting:true activates new SW versions immediately on next navigate
           // instead of waiting for all tabs to close. This prevents the "blank screen

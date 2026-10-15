@@ -77,23 +77,19 @@ export function registerServiceWorker() {
     void caches.keys().then((keys) => Promise.allSettled(keys.filter((k) => k.startsWith("jf-")).map((k) => caches.delete(k))));
   }
 
-  // When a newly deployed worker takes control, reload this client once so an
-  // installed iOS PWA cannot keep running the previous JavaScript bundle.
-  // controllerchange only fires when the controlling worker actually changes,
-  // so this does not create a normal reload loop.
-  let reloadingForNewWorker = false;
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (reloadingForNewWorker) return;
-      reloadingForNewWorker = true;
-      window.location.reload();
-    });
-  }
+  // A newly deployed worker taking control never reloads the page. Every
+  // publish ships a new worker, and reloading on each one (with the worker
+  // navigating open windows too) left the app on a blank white screen after a
+  // run of publishes. A new build is picked up by app-freshness.ts instead: on
+  // reopen, and only on screens where nothing can be lost.
 
   // Dynamic import keeps the virtual module out of SSR / Lovable preview bundles.
   import("virtual:pwa-register").then(({ registerSW }) => {
     const updateSW = registerSW({
       immediate: true,
+      // The plugin reloads the page itself when a new worker activates unless
+      // this is given: never reload here (see above; app-freshness.ts does it).
+      onNeedReload() {},
       onNeedRefresh() {
         status = "update-available";
         notify();
