@@ -1,89 +1,32 @@
-import { useState } from "react";
-import { BookOpen, ChevronDown, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CommunityPost } from "@/lib/community";
-import { extraLesson, hookLine, lessonKicker, safeRefUrl, stickerUpTop, type LessonExtra } from "@/lib/lessons";
-import { LessonVisualArt, visualLabel, visualNote } from "@/components/community/lesson-visuals";
+import { extraLesson, hookLine, stickerUpTop } from "@/lib/lessons";
+import { LessonVisualArt, visualLabel } from "@/components/community/lesson-visuals";
 
 /**
- * What a coach lesson shows under its words: the diagram (when it has one) on
- * the same quiet card as the other info posts (Tuesday's data, Thursday's
- * features), what kind of lesson it is ("Technique fix · Squat · Beginner"),
- * its sources one tap away, and the line that keeps it a lesson and not an
- * instruction: your program stays as written.
+ * A coach lesson's diagram, shown like a picture the coach posted: just the
+ * drawing on a quiet card, nothing over or under it. A lesson reads like any
+ * other post of his, so there's no series label ("Methods & cues"), no
+ * sources list and no disclaimer in the feed or the story: the words cite
+ * the research the way he would ("a 2021 meta-analysis found…"), and the
+ * sources stay on file for him in the lesson planner. Null without a diagram.
  */
-export function LessonCard({ post, className }: { post: CommunityPost; className?: string }) {
+export function LessonDiagram({ post, className }: { post: CommunityPost; className?: string }) {
   const lesson = extraLesson(post);
-  const [open, setOpen] = useState(false);
-  if (!lesson) return null;
-  const refs = lesson.refs ?? [];
-  const first = post.author.name.split(" ")[0];
+  if (!lesson?.visual) return null;
   return (
-    <div className={className} data-lesson-card={lesson.track}>
-      {lesson.visual ? (
-        <div className="rounded-2xl border border-border/70 bg-muted/40 px-3.5 pb-3 pt-3" data-lesson-diagram>
-          <Kicker lesson={lesson} />
-          <LessonVisualArt visual={lesson.visual} className="mt-3" />
-          <div className="mt-2.5 text-[11px] leading-snug text-muted-foreground">{visualNote(lesson.visual)}</div>
-        </div>
-      ) : (
-        <Kicker lesson={lesson} />
-      )}
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-        {refs.length > 0 && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpen((o) => !o);
-            }}
-            className="inline-flex items-center gap-1 text-[12px] font-bold text-muted-foreground active:text-foreground"
-            aria-expanded={open}
-            data-lesson-sources
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            {refs.length === 1 ? "1 source" : `${refs.length} sources`}
-            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
-          </button>
-        )}
-        <span className="text-[12px] text-muted-foreground" data-lesson-note>
-          Good to know, not a change to your program. Big technique changes, ask {first} first.
-        </span>
-      </div>
-      {open && (
-        <ol className="mt-1.5 space-y-1 border-l-2 border-border pl-3" onClick={(e) => e.stopPropagation()}>
-          {refs.map((r, i) => {
-            const url = safeRefUrl(r.url);
-            return (
-              <li key={i} className="text-[12px] leading-snug text-muted-foreground">
-                {url ? (
-                  <a href={url} target="_blank" rel="noopener noreferrer" className="font-semibold text-foreground underline decoration-border underline-offset-2">
-                    {r.label}
-                  </a>
-                ) : (
-                  <span className="font-semibold text-foreground">{r.label}</span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </div>
-  );
-}
-
-function Kicker({ lesson }: { lesson: LessonExtra }) {
-  return (
-    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground" data-lesson-kicker>
-      <GraduationCap className="h-3 w-3 shrink-0 text-primary" aria-hidden />
-      <span className="truncate">{lessonKicker(lesson)}</span>
+    <div
+      className={cn("rounded-2xl border border-border/70 bg-muted/40 px-3.5 py-3", className)}
+      data-lesson-diagram={lesson.track}
+    >
+      <LessonVisualArt visual={lesson.visual} />
     </div>
   );
 }
 
 /**
- * A lesson as a story: what it's about, the diagram, and the first line of
- * the post. The rest is one swipe up ("Post"), and the sticker sits under it.
+ * A lesson as a story: its title, the diagram, and the first line of the post.
+ * The rest is one swipe up ("Post"), and the sticker sits under it.
  */
 export function LessonStoryFrame({ post }: { post: CommunityPost }) {
   const lesson = extraLesson(post);
@@ -102,8 +45,8 @@ export function LessonStoryFrame({ post }: { post: CommunityPost }) {
       )}
       data-story-frame="lesson"
     >
-      <span className="text-[11px] font-black uppercase tracking-[0.18em] text-red-400">{lessonKicker(lesson)}</span>
-      <span className="mt-2 block text-[28px] font-black leading-[1.08]">{lesson.title}</span>
+      {/* no "Methods & cues" style label: it's his story, not a series' */}
+      <span className="block text-[28px] font-black leading-[1.08]">{lesson.title}</span>
       {lesson.visual && (
         <div className="mt-4 rounded-2xl bg-white/[0.04] px-3 py-3 ring-1 ring-white/10" aria-label={visualLabel(lesson.visual)}>
           <LessonVisualArt visual={lesson.visual} tone="dark" />
