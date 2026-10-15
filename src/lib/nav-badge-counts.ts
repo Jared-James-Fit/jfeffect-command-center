@@ -6,12 +6,15 @@
  * number doesn't say what's waiting or how much, and a stale cached thread list
  * could leave one lit with nothing unread (Jared McIntyre, Oct 2026). Every
  * source is now counted, so the tab shows exactly how many things are waiting.
+ *
+ * Every source must be something the inbox itself shows as new. Lift-video
+ * feedback was dropped (Oct 2026): lift reviews moved into the coach chat, no
+ * screen showed it any more, and coach comments on deleted videos kept the tab
+ * at 2 (Jared), 33 (Nicole) with nothing to open.
  */
 export type MessagesBadgeSources = {
   /** Unread messages from the coach in the 1:1 coaching thread. */
   coachMessages: number;
-  /** Lift videos with coach feedback the client hasn't opened. */
-  liftFeedback: number;
   /** Member 1:1 chats / requests with something new. */
   directThreads: number;
   /** Crew chats with something new (or an unopened invite). */
@@ -22,7 +25,7 @@ export type MessagesBadgeSources = {
 
 export function messagesBadgeCount(s: MessagesBadgeSources): number {
   const n = (v: number) => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
-  return n(s.coachMessages) + n(s.liftFeedback) + n(s.directThreads) + n(s.crewThreads) + n(s.groupThreads);
+  return n(s.coachMessages) + n(s.directThreads) + n(s.crewThreads) + n(s.groupThreads);
 }
 
 /** Coach groups with a message from someone else newer than my last read. */

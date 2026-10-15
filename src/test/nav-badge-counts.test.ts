@@ -5,17 +5,28 @@ import { shouldPersistQueryKey } from "@/lib/query-persister";
 
 describe("Messages tab badge is always a number", () => {
   it("adds every source into one count", () => {
-    expect(messagesBadgeCount({ coachMessages: 2, liftFeedback: 1, directThreads: 1, crewThreads: 0, groupThreads: 3 })).toBe(7);
+    expect(messagesBadgeCount({ coachMessages: 2, directThreads: 1, crewThreads: 0, groupThreads: 3 })).toBe(6);
   });
 
-  it("a lift-feedback-only or chat-only badge is a count of 1, not a bare dot", () => {
-    expect(messagesBadgeCount({ coachMessages: 0, liftFeedback: 1, directThreads: 0, crewThreads: 0, groupThreads: 0 })).toBe(1);
-    expect(messagesBadgeCount({ coachMessages: 0, liftFeedback: 0, directThreads: 0, crewThreads: 1, groupThreads: 0 })).toBe(1);
+  it("a chat-only badge is a count of 1, not a bare dot", () => {
+    expect(messagesBadgeCount({ coachMessages: 0, directThreads: 0, crewThreads: 1, groupThreads: 0 })).toBe(1);
   });
 
   it("nothing waiting means no badge", () => {
-    expect(messagesBadgeCount({ coachMessages: 0, liftFeedback: 0, directThreads: 0, crewThreads: 0, groupThreads: 0 })).toBe(0);
-    expect(messagesBadgeCount({ coachMessages: NaN, liftFeedback: -1, directThreads: 0, crewThreads: 0, groupThreads: 0 })).toBe(0);
+    expect(messagesBadgeCount({ coachMessages: 0, directThreads: 0, crewThreads: 0, groupThreads: 0 })).toBe(0);
+    expect(messagesBadgeCount({ coachMessages: NaN, directThreads: -1, crewThreads: 0, groupThreads: 0 })).toBe(0);
+  });
+
+  it("a coach message that was deleted doesn't count", () => {
+    const hook = readFileSync("src/hooks/use-client-nav-badges.ts", "utf8");
+    expect(hook).toContain('.eq("sender_role", "admin").eq("is_internal_note", false).is("deleted_at", null)');
+  });
+
+  it("counts only what the inbox shows: no retired lift-video feedback (ghost 2s and 33s)", () => {
+    const hook = readFileSync("src/hooks/use-client-nav-badges.ts", "utf8");
+    for (const gone of ['from("lift_videos")', 'from("lift_video_comments")', "liftFeedback", 'table: "lift_video_comments"']) {
+      expect(hook, gone).not.toContain(gone);
+    }
   });
 });
 
