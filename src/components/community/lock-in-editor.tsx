@@ -201,13 +201,15 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
       if (mediaArg.action !== "keep" && existing?.media_path) await removeCommunityFiles(mediaArg.action === "remove" ? postFiles(existing) : [existing.media_path, existing.media_thumb_path]);
       invalidateCommunity(qc);
       setPosted(true);
-      toast.success(visibility === "community" ? "You're locked in 🔒" : visibility === "coach" ? "Sent to your coach 🔒" : "Saved to your profile", {
+      toast.success(visibility === "community" ? "You're locked in 🔒" : visibility === "partners" ? "Sent to your partners 🔒" : visibility === "coach" ? "Sent to your coach 🔒" : "Saved to your profile", {
         description:
           visibility === "community"
             ? `The crew sees you showed up. Your numbers land on it when you finish.${pointsHint?.tone === "earn" ? ` +${pointsStatus?.points} league points when you do.` : ""}`
-            : visibility === "coach"
-              ? "Only you and your coach can see it."
-              : "Only you can see it.",
+            : visibility === "partners"
+              ? "Your training partners see you showed up."
+              : visibility === "coach"
+                ? "Only you and your coach can see it."
+                : "Only you can see it.",
       });
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't post. Try again.");

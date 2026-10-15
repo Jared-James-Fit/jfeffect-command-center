@@ -35,7 +35,7 @@ export function reactionEmoji(key: string | null | undefined): string | null {
   return REACTIONS.find((r) => r.key === key)?.emoji ?? null;
 }
 
-export type CommunityVisibility = "community" | "coach" | "private";
+export type CommunityVisibility = "community" | "partners" | "coach" | "private";
 
 /** Shown when a coach taps a post button while viewing as a client. */
 export const PREVIEW_ONLY_MESSAGE = "Preview only. This is what they see, but you can't post as them.";
@@ -43,6 +43,7 @@ export const PREVIEW_ONLY_MESSAGE = "Preview only. This is what they see, but yo
 /** Who a post is for. "JF crew" = every active JF Effect client + coaches, never the public. */
 export const AUDIENCES: { key: CommunityVisibility; label: string; hint: string }[] = [
   { key: "community", label: "JF crew", hint: "Only JF Effect clients and coaches see it" },
+  { key: "partners", label: "Partners", hint: "Only your training partners (you follow each other)" },
   { key: "coach", label: "My coach", hint: "Just you and your coach" },
   { key: "private", label: "Only me", hint: "Saved to your profile, nobody else sees it" },
 ];
@@ -1517,7 +1518,7 @@ export const STORY_WINDOW_MS = 24 * 3_600_000;
  * louder. Who-sees-it on the post still decides (coach-only or private never).
  */
 export function storyWorthy(p: Pick<CommunityPost, "visibility">): boolean {
-  return p.visibility === "community";
+  return p.visibility === "community" || p.visibility === "partners";
 }
 
 export type StoryGroup<T> = {

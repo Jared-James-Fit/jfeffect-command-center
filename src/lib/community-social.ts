@@ -6,12 +6,19 @@ const db = supabase as any;
 
 /* ---- Follow ------------------------------------------------------------
  * Private: you see who you follow and who follows you; nobody sees anyone
- * else's lists or any counts. It never decides what you can see (the crew
- * feed is club-wide); it orders Stories, powers "Following" and suggestions,
- * and sends one "followed you" to the bell. All through RPCs.
+ * else's lists or any counts. A one-way follow never decides what you can
+ * see (the crew feed is club-wide); it orders Stories, powers "Following" and
+ * suggestions, and sends one "followed you" to the bell. All through RPCs.
+ *
+ * Following each other makes two people training partners (worked out by the
+ * server: both in the crew, no block either way). Partners are the only thing
+ * a follow unlocks: "Partners" posts only they see, and a direct message that
+ * opens straight away instead of as a request.
  */
 
-export type FollowState = { following: string[]; followers: string[] };
+export type FollowState = { following: string[]; followers: string[]; partners: string[] };
+
+const toState = (data: any): FollowState => ({ following: data?.following ?? [], followers: data?.followers ?? [], partners: data?.partners ?? [] });
 
 export const followKeys = { state: ["community-follows"] as const };
 
@@ -23,7 +30,7 @@ export function useFollowState(enabled = true) {
     queryFn: async (): Promise<FollowState> => {
       const { data, error } = await db.rpc("community_follow_state");
       if (error) throw error;
-      return { following: data?.following ?? [], followers: data?.followers ?? [] };
+      return toState(data);
     },
   });
 }
@@ -35,12 +42,12 @@ export function useFollow() {
     mutationFn: async ({ userId, on }: { userId: string; on: boolean }): Promise<FollowState> => {
       const { data, error } = await db.rpc("community_follow", { _user_id: userId, _on: on });
       if (error) throw error;
-      return { following: data?.following ?? [], followers: data?.followers ?? [] };
+      return toState(data);
     },
     onMutate: async ({ userId, on }) => {
       await qc.cancelQueries({ queryKey: followKeys.state });
       const before = qc.getQueryData<FollowState>(followKeys.state);
-      qc.setQueryData<FollowState>(followKeys.state, (s) => applyFollow(s ?? { following: [], followers: [] }, userId, on));
+      qc.setQueryData<FollowState>(followKeys.state, (s) => applyFollow(s ?? { following: [], followers: [], partners: [] }, userId, on));
       return { before };
     },
     onError: (_e, _v, ctx) => {
@@ -52,10 +59,24 @@ export function useFollow() {
   });
 }
 
-/** The state after following (on) or unfollowing someone (pure, tested). */
+/**
+ * The state after following (on) or unfollowing someone (pure, tested).
+ * Following someone who follows you makes you partners straight away;
+ * unfollowing ends it. The server's answer replaces this guess.
+ */
 export function applyFollow(s: FollowState, userId: string, on: boolean): FollowState {
   const rest = s.following.filter((id) => id !== userId);
-  return { ...s, following: on ? [userId, ...rest] : rest };
+  const partners = (s.partners ?? []).filter((id) => id !== userId);
+  return {
+    ...s,
+    following: on ? [userId, ...rest] : rest,
+    partners: on && s.followers.includes(userId) ? [userId, ...partners] : partners,
+  };
+}
+
+/** Do you and this person follow each other? */
+export function isPartner(s: FollowState | undefined, userId: string): boolean {
+  return !!s?.partners?.includes(userId);
 }
 
 /**

@@ -1,11 +1,11 @@
-import { EyeOff, Lock, UserRound, Users } from "lucide-react";
+import { EyeOff, Handshake, Lock, UserRound, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AUDIENCES, type CommunityVisibility } from "@/lib/community";
 
-const ICON: Record<CommunityVisibility, typeof Users> = { community: Users, coach: UserRound, private: Lock };
+const ICON: Record<CommunityVisibility, typeof Users> = { community: Users, partners: Handshake, coach: UserRound, private: Lock };
 
 /**
- * Who sees a post (JF crew / My coach / Only me) + "Hide my weights".
+ * Who sees a post (JF crew / Partners / My coach / Only me) + "Hide my weights".
  * Shared by the workout share editor (light sheet) and Lock in (dark).
  */
 export function AudiencePicker({
@@ -25,7 +25,7 @@ export function AudiencePicker({
   const hint = AUDIENCES.find((a) => a.key === value)?.hint;
   return (
     <div className="space-y-2">
-      <div className={cn("grid grid-cols-3 gap-1 rounded-xl p-1", dark ? "bg-white/10" : "bg-muted")} role="radiogroup" aria-label="Who can see it">
+      <div className={cn("grid grid-cols-4 gap-1 rounded-xl p-1", dark ? "bg-white/10" : "bg-muted")} role="radiogroup" aria-label="Who can see it">
         {AUDIENCES.map((a) => {
           const Icon = ICON[a.key];
           const on = value === a.key;
@@ -70,5 +70,5 @@ export function AudiencePicker({
 
 /** Short label for where a post went ("Sent to coach"). */
 export function audienceDoneLabel(v: CommunityVisibility): string {
-  return v === "community" ? "Posted" : v === "coach" ? "Sent to coach" : "Saved";
+  return v === "community" ? "Posted" : v === "partners" ? "Sent to partners" : v === "coach" ? "Sent to coach" : "Saved";
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { Camera, Check, ChevronLeft, Download, EyeOff, Images, Lock, PenLine, RefreshCcw, Send, Smile, Timer, Type, User, Users, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, Download, EyeOff, Handshake, Images, Lock, PenLine, RefreshCcw, Send, Smile, Timer, Type, User, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -64,6 +64,7 @@ const LIVE_SCALE = 0.72;
 const FRAME_MS = 33;
 const AUDIENCE: { key: CommunityVisibility; label: string; icon: typeof Users }[] = [
   { key: "community", label: "JF crew", icon: Users },
+  { key: "partners", label: "Partners", icon: Handshake },
   { key: "coach", label: "My coach", icon: User },
   { key: "private", label: "Only me", icon: Lock },
 ];
@@ -217,7 +218,7 @@ export function ShareStudio({
       restoring.current = false;
       if (!d || restoredFor.current !== key || postingRef.current) return;
       if (d.caption) setCaption(d.caption);
-      if (d.visibility === "community" || d.visibility === "coach" || d.visibility === "private") setVisibility(d.visibility);
+      if (d.visibility === "community" || d.visibility === "partners" || d.visibility === "coach" || d.visibility === "private") setVisibility(d.visibility);
       if (d.look && cardRef.current?.looks.includes(d.look as ShareTemplate)) cardRef.current.onLook(d.look as ShareTemplate);
       const startOver = () => {
         void clearDraft(key);

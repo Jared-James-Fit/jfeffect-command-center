@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { Handshake, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import type { CommunityAuthor } from "@/lib/community";
 import { useCommunityMembers } from "@/lib/community.queries";
-import { useFollow, useFollowState } from "@/lib/community-social";
+import { isPartner, useFollow, useFollowState } from "@/lib/community-social";
 
 /**
  * Instagram-style Follow: "Follow" (or "Follow back" when they follow you),
@@ -56,9 +56,16 @@ export function FollowButton({ userId, name, size = "md", tone = "solid", classN
   );
 }
 
-/** "Follows you", next to a name. */
+/** "Training partner" (you follow each other) or "Follows you", next to a name. */
 export function FollowsYouTag({ userId, className }: { userId: string; className?: string }) {
   const { data: state } = useFollowState();
+  if (isPartner(state, userId)) {
+    return (
+      <span data-partner-tag className={cn("inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300", className)}>
+        <Handshake className="h-3 w-3" /> Training partner
+      </span>
+    );
+  }
   if (!state?.followers.includes(userId)) return null;
   return <span className={cn("shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground", className)}>Follows you</span>;
 }
@@ -83,7 +90,7 @@ export function MyFollowing({ onOpen }: { onOpen: (a: CommunityAuthor) => void }
           <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 px-5 pb-1 pt-4 text-left">
             <div className="min-w-0">
               <SheetTitle className="text-[16px] font-black">Following</SheetTitle>
-              <SheetDescription className="text-[12px]">Only you see this list. People you follow come first in Stories and under Following.</SheetDescription>
+              <SheetDescription className="text-[12px]">Only you see this list. People you follow come first in Stories. Follow each other and you're training partners: Partners posts, and messages that skip the request.</SheetDescription>
             </div>
             <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
               <X className="h-4 w-4" />

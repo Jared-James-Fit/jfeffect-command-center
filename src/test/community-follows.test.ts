@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { applyFollow, suggestAthletes } from "@/lib/community-social";
+import { applyFollow, isPartner, suggestAthletes } from "@/lib/community-social";
+import { AUDIENCES, storyWorthy } from "@/lib/community";
 import { crewStories } from "@/lib/community";
 import { shouldPersistQueryKey } from "@/lib/query-persister";
 import { communityNoticeText, type CommunityNotice } from "@/lib/community-notifications";
@@ -11,10 +12,10 @@ const member = (id: string, extra: Partial<CommunityMember> = {}): CommunityMemb
 
 describe("follow", () => {
   it("follows to the front and unfollows cleanly, never duplicating", () => {
-    const s = { following: ["a", "b"], followers: ["c"] };
+    const s = { following: ["a", "b"], followers: ["c"], partners: [] as string[] };
     expect(applyFollow(s, "b", true).following).toEqual(["b", "a"]);
     expect(applyFollow(s, "a", false).following).toEqual(["b"]);
-    expect(applyFollow(s, "z", false)).toEqual({ following: ["a", "b"], followers: ["c"] });
+    expect(applyFollow(s, "z", false)).toEqual({ following: ["a", "b"], followers: ["c"], partners: [] });
     expect(applyFollow(s, "a", true).followers).toEqual(["c"]);
   });
 
@@ -25,9 +26,36 @@ describe("follow", () => {
       member("fan"),
       member("followed", { week_days: [1, 2, 3, 4] as any }),
     ];
-    const out = suggestAthletes(members, { following: ["followed"], followers: ["fan"] }).map((m) => m.author.user_id);
+    const out = suggestAthletes(members, { following: ["followed"], followers: ["fan"], partners: [] }).map((m) => m.author.user_id);
     expect(out).toEqual(["fan", "busy", "idle"]);
     expect(suggestAthletes(members, undefined, 2)).toHaveLength(2);
+  });
+});
+
+describe("training partners", () => {
+  it("following someone who follows you makes you partners; unfollowing ends it", () => {
+    const s = { following: [], followers: ["fan"], partners: [] as string[] };
+    const on = applyFollow(s, "fan", true);
+    expect(on.partners).toEqual(["fan"]);
+    expect(isPartner(on, "fan")).toBe(true);
+    expect(applyFollow(s, "stranger", true).partners).toEqual([]);
+    expect(applyFollow(on, "fan", false).partners).toEqual([]);
+    expect(isPartner(undefined, "fan")).toBe(false);
+  });
+
+  it("Partners is a post audience, shows in Stories, and is labelled on the post", () => {
+    expect(AUDIENCES.map((a) => a.key)).toEqual(["community", "partners", "coach", "private"]);
+    expect(storyWorthy({ visibility: "partners" })).toBe(true);
+    expect(storyWorthy({ visibility: "coach" })).toBe(false);
+    expect(readFileSync("src/components/community/post-card.tsx", "utf8")).toContain('post.visibility === "partners") parts.push(post.is_mine ? "Training partners" : "Training partners only")');
+  });
+
+  it("the database decides who's a partner, in one rule", () => {
+    const sql = readFileSync("supabase/migrations/20261130090000_crew_training_partners.sql", "utf8");
+    expect(sql).toContain("CHECK (visibility IN ('community', 'coach', 'partners', 'private'))");
+    expect(sql).toContain("OR (_visibility = 'partners' AND public.can_view_community()");
+    expect(sql).toContain("CASE WHEN v_partners THEN 'active' ELSE 'request' END");
+    expect(sql).toContain("'partners', coalesce((SELECT jsonb_agg(x ORDER BY x) FROM public.community_partner_ids() x)");
   });
 });
 

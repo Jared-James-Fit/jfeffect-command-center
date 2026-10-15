@@ -137,7 +137,9 @@ export function RecapPostFooter({
         ? "It's in the crew's feed"
         : existing?.visibility === "coach"
           ? "Shared with your coach"
-          : "Saved to your profile";
+          : existing?.visibility === "partners"
+            ? "Shared with your training partners"
+            : "Saved to your profile";
     return (
       <div className="w-full">
         <div className="mb-2 flex items-center justify-center gap-1.5 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">

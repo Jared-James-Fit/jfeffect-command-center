@@ -354,6 +354,8 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         });
       } else if (visibility === "coach") {
         toast.success("Sent to your coach", { description: "Only you and your coach can see it." });
+      } else if (visibility === "partners") {
+        toast.success(existing ? "Post updated" : "Sent to your partners", { description: "Only your training partners can see it." });
       } else {
         toast.success("Saved to your profile", { description: "Only you can see it." });
       }
@@ -565,7 +567,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
               <Send className="mr-2 h-5 w-5" />
               {posting
                 ? media?.kind === "video" && progress > 0 && progress < 100 ? `Uploading ${progress}%` : "Posting…"
-                : visibility === "private" ? "Save to my profile" : visibility === "coach" ? (existing ? "Update" : "Send to my coach") : existing ? "Update post" : "Post"}
+                : visibility === "private" ? "Save to my profile" : visibility === "coach" ? (existing ? "Update" : "Send to my coach") : existing ? "Update post" : visibility === "partners" ? "Send to partners" : "Post"}
             </Button>
             <p className="mt-2 text-center text-[11px] text-muted-foreground">Sharing to Instagram never posts here, and posting here never shares outside the app.</p>
           </Overlay>
