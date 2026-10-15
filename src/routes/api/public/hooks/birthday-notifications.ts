@@ -7,7 +7,8 @@ import { birthdayPushYear } from "@/lib/birthday-push";
  * safe to run hourly from pg_cron across timezones.
  *
  * Also: birthday posts (drafts for the coach to review, approved ones going
- * out at 8am their time; birthday-posts.server.ts), and the hourly push tick:
+ * out at 8am their time; birthday-posts.server.ts), the nudge for lessons
+ * waiting on the coach's OK (lesson-reminders.server.ts), and the hourly push tick:
  * releases pushes held during quiet hours, the
  * 8am-local daily game plan and the monthly recap-ready push.
  */
@@ -80,6 +81,15 @@ export const Route = createFileRoute("/api/public/hooks/birthday-notifications")
           birthdayPosts = { error: String(e?.message ?? e) };
         }
 
+        // Lessons waiting on the coach's OK: one nudge the day before.
+        let lessons: unknown = null;
+        try {
+          const { runLessonReminders } = await import("@/lib/lesson-reminders.server");
+          lessons = await runLessonReminders(supabaseAdmin, { sendWebPushToUser });
+        } catch (e: any) {
+          lessons = { error: String(e?.message ?? e) };
+        }
+
         let tick: unknown = null;
         try {
           const { runPushTick } = await import("@/lib/push/scheduled-pushes.server");
@@ -88,7 +98,7 @@ export const Route = createFileRoute("/api/public/hooks/birthday-notifications")
           tick = { error: String(e?.message ?? e) };
         }
 
-        return Response.json({ ok: true, day: now.toISOString().slice(0, 10), considered: todays.length, sent, skipped, results, birthdayPosts, tick });
+        return Response.json({ ok: true, day: now.toISOString().slice(0, 10), considered: todays.length, sent, skipped, results, birthdayPosts, lessons, tick });
       },
     },
   },

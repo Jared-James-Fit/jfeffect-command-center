@@ -114,7 +114,7 @@ export function useFullMediaUrl(path: string | null | undefined, enabled: boolea
   });
 }
 
-function patchPost(qc: ReturnType<typeof useQueryClient>, postId: string, patch: (p: CommunityPost) => CommunityPost) {
+export function patchPost(qc: ReturnType<typeof useQueryClient>, postId: string, patch: (p: CommunityPost) => CommunityPost) {
   qc.setQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: ["community-feed"] }, (old) =>
     old ? { ...old, pages: old.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => (p.id === postId ? patch(p) : p)) })) } : old,
   );
@@ -1051,7 +1051,9 @@ export type CommunityPulse = {
   to_reply: { post_id: string; comment_id: string; created_at: string; body: string; name: string; avatar_url: string | null }[];
   top_post: { post_id: string; series: CommunitySeries | null; name: string; line: string; reactions: number; comments: number } | null;
   paused: boolean;
-  next: { series: CommunitySeries; at: string } | null;
+  next: { series: CommunitySeries; at: string; title?: string | null; needs_ok?: boolean } | null;
+  /** Lessons in the next week still waiting on the coach's OK (review mode). */
+  lessons_review?: number;
   birthday_review: number;
   birthday_next: { id: string; status: "ready" | "scheduled"; post_at: string; birthday: string; name: string } | null;
 };
