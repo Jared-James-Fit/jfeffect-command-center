@@ -66,7 +66,8 @@ export function PostSkeleton() {
 }
 
 /** The bottom of the feed: you've seen it all (a small win), and what to do next. */
-export function CaughtUp({ action }: { action?: ReactNode }) {
+/** The end of the feed: caught up, then something to do next (share, or find people to follow) instead of a dead end. */
+export function CaughtUp({ action, more }: { action?: ReactNode; more?: ReactNode }) {
   return (
     <div className="flex flex-col items-center px-6 pb-4 pt-6 text-center">
       <div className="caught-up-ring grid h-14 w-14 place-items-center rounded-full border-2 border-primary text-primary">
@@ -75,6 +76,7 @@ export function CaughtUp({ action }: { action?: ReactNode }) {
       <div className="mt-3 text-[15px] font-black">You're all caught up</div>
       <p className="mt-0.5 text-[13px] text-muted-foreground">You've seen every new post from the crew.</p>
       {action && <div className="mt-3">{action}</div>}
+      {more && <div className={action ? "mt-2.5" : "mt-3"}>{more}</div>}
     </div>
   );
 }

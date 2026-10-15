@@ -526,8 +526,10 @@ export function CommunityScreen({
             </FeedItem>
             {/* now and then, until their first post: an invite to lock in or share (after the second post) */}
             {canShare && !following && i === Math.min(1, feedPosts.length - 1) && <ShareNudge surface="feed" unit={unit} />}
-            {/* people to follow, after the third post: only ones with a real reason (your coach, follows you, mutuals, same gym…) */}
-            {!hideTabs && !previewOnly && !following && i === Math.min(2, feedPosts.length - 1) && (
+            {/* people to follow right after the first post (Instagram's spot): the post they opened the app for first, then the row.
+                Crew data: 63% of visits see one new post and under 3 in 10 reach the third, so later spots go unseen.
+                Only people with a real reason (your coach, follows you, mutuals, same gym…) */}
+            {!hideTabs && !previewOnly && !following && i === 0 && (
               <SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} />
             )}
             </Fragment>
@@ -536,7 +538,14 @@ export function CommunityScreen({
           {isFetchingNextPage && <PostSkeleton />}
           {!hasNextPage && posts.length > 1 && (
             <FeedItem index={0}>
-              <CaughtUp action={canShare ? <ShareWorkoutButton unit={unit} label="Share your session" previewOnly={previewOnly} /> : null} />
+              <CaughtUp
+                action={canShare ? <ShareWorkoutButton unit={unit} label="Share your session" previewOnly={previewOnly} /> : null}
+                more={previewOnly ? null : (
+                  <button type="button" onClick={() => openDiscover("feed")} className="text-[13px] font-bold text-primary active:opacity-70" data-caught-up-discover>
+                    Find people to follow
+                  </button>
+                )}
+              />
             </FeedItem>
           )}
         </>
