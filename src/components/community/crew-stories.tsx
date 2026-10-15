@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyWords, workoutHeadline, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { ViewersSheet, markPostViewed } from "@/components/community/post-views";
@@ -659,7 +659,7 @@ function MyStoryBar({ post, onOpen, onHold }: { post: CommunityPost; onOpen: () 
         </button>
       )}
       <button type="button" onClick={onOpen} className={cn("inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full bg-white/15 pl-4 pr-3 text-[14px] font-bold backdrop-blur-sm active:scale-95", post.visibility !== "community" && "ml-auto")}>
-        {isPulsePost(post) ? "Workout" : "Post"} <ChevronRight className="h-4 w-4" />
+        {storyFrameKind(post) === "win" ? "Workout" : "Post"} <ChevronRight className="h-4 w-4" />
       </button>
       <ViewersSheet postId={viewers ? post.id : null} onClose={() => setViewers(false)} />
       <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />
@@ -667,16 +667,17 @@ function MyStoryBar({ post, onOpen, onHold }: { post: CommunityPost; onOpen: () 
   );
 }
 
-/** One moment, full screen: a win, a photo (or a clip's first frame), or words. */
+/** One moment, full screen: a lesson, a win, a photo (or a clip's first frame), or words (storyFrameKind). */
 function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
   const { data: thumbs } = usePostMediaUrls([post]);
   const isImage = post.media_type === "image";
   const { data: full } = useFullMediaUrl(isImage ? post.media_path : null, isImage);
   const thumb = thumbs?.[post.media_thumb_path ?? (isImage ? post.media_path ?? "" : "")] ?? null;
+  const kind = storyFrameKind(post);
 
   // a lesson always plays as its lesson (title, diagram, hook), photo or not
-  if (post.series === "lesson") return <LessonStoryFrame post={post} />;
-  if (isPulsePost(post)) {
+  if (kind === "lesson") return <LessonStoryFrame post={post} />;
+  if (kind === "win") {
     const win = pickWorkoutWin(post.stats!, unit);
     const style = WIN_STYLE[win.kind];
     return (
@@ -690,8 +691,9 @@ function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) 
       </div>
     );
   }
-  const src = full ?? thumb ?? (post.media_type ? null : post.gif_url ?? null);
-  if (src) {
+  if (kind === "media") {
+    const src = full ?? thumb ?? (post.media_type ? null : post.gif_url ?? null);
+    if (!src) return <div className="flex flex-1 items-center justify-center bg-black" data-story-frame="loading" />;
     return (
       <div className="relative flex flex-1 items-center justify-center bg-black" data-story-frame="photo">
         <img src={src} alt="" className="max-h-full w-full object-contain" draggable={false} />
@@ -703,10 +705,11 @@ function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) 
       </div>
     );
   }
-  if (post.media_type) return <div className="flex flex-1 items-center justify-center bg-black" data-story-frame="loading" />;
+  const words = storyWords(post);
   return (
-    <div className="flex flex-1 items-center justify-center bg-[radial-gradient(120%_90%_at_80%_0%,rgba(239,51,64,0.35),transparent_60%)] bg-zinc-950 px-8" data-story-frame="words">
-      <p className="line-clamp-[12] whitespace-pre-wrap text-center text-[24px] font-bold leading-snug">{post.caption}</p>
+    <div className="flex flex-1 flex-col items-center justify-center bg-[radial-gradient(120%_90%_at_80%_0%,rgba(239,51,64,0.35),transparent_60%)] bg-zinc-950 px-8" data-story-frame="words">
+      <p className="line-clamp-[12] whitespace-pre-wrap text-center text-[24px] font-bold leading-snug">{words.text}</p>
+      {words.by && <p className="mt-3 text-center text-[14px] font-semibold text-white/60">{words.by}</p>}
     </div>
   );
 }
@@ -730,7 +733,8 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing }: { post: Communit
   const { isImpersonating } = useClientImpersonation();
   const react = useReact(post, viewerIsStaff);
   const send = useMessageAuthor();
-  const win = isPulsePost(post);
+  const frame = storyFrameKind(post);
+  const win = frame === "win";
   const mine = post.my_reaction;
   const first = post.author.name.split(" ")[0];
   const staff = role === "admin" || role === "coach";
@@ -806,7 +810,8 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing }: { post: Communit
   // keep the keyboard up while a quick reaction is tapped
   const keepFocus = (e: React.MouseEvent) => e.preventDefault();
 
-  const caption = !win && post.media_type ? post.caption?.trim() : null;
+  // the frame shows a picture or a workout card: the words go here (a words frame already shows them)
+  const caption = frame === "media" || frame === "win" ? post.caption?.trim() : null;
   const typing = text.trim().length > 0;
   return (
     <>
@@ -919,7 +924,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing }: { post: Communit
 
 /** A moment in a few words: "Competition Squat PR · 140 kg × 3", "10th session this month", or the post's words. */
 function momentLine(post: CommunityPost): string {
-  if (isPulsePost(post)) {
+  if (storyFrameKind(post) === "win" && !post.caption?.trim()) {
     const win = pickWorkoutWin(post.stats!, "kg");
     if (win.kind === "pr") return `${win.headline} PR`;
     return win.headline;
