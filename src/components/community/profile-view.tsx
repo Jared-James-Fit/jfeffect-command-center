@@ -143,7 +143,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
               </>
             ) : (
               <>
-                <FollowButton userId={profile.author.user_id} name={profile.author.name} isPrivate={profile.is_private} />
+                <FollowButton userId={profile.author.user_id} name={profile.author.name} avatarUrl={profile.author.avatar_url} isPrivate={profile.is_private} />
                 <FollowsYouTag userId={profile.author.user_id} />
               </>
             )}

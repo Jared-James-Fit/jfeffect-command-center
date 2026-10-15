@@ -18,6 +18,9 @@
 --     on a public account and only to approved followers on a private one.
 --   * A new 1:1 opens straight away (no request, no daily cap) when the person
 --     you're writing to follows you, as Instagram does for story replies.
+--   * Blocking someone (chat_block_person) takes away what they could see
+--     because they follow you or are on your Close Friends; unblocking gives
+--     it back. A Close Friends post on a private account also needs the follow.
 --
 -- One rule still decides who sees a post: community_post_visible().
 
@@ -67,12 +70,13 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
   SELECT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = _user_id AND ur.role IN ('admin', 'coach'))
 $$;
 
-/** Does _follower (any login) follow _followee? Approved follows only. */
+/** Does _follower (any login) follow _followee? Approved follows only, and not if _followee blocked them. */
 CREATE OR REPLACE FUNCTION public.community_follows_user(_follower uuid, _followee uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
   SELECT EXISTS (SELECT 1 FROM public.community_follows f
                   WHERE f.follower_id = public.community_main_account(_follower)
                     AND f.followee_id = public.community_main_account(_followee))
+     AND NOT public.chat_has_blocked(public.community_main_account(_followee), public.community_main_account(_follower))
 $$;
 
 REVOKE ALL ON FUNCTION public.community_is_private(uuid) FROM PUBLIC, anon, authenticated;
@@ -93,23 +97,60 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
         AND (public.community_is_staff(auth.uid()) OR public.community_follows_user(auth.uid(), _author)))
     OR (_visibility = 'close_friends' AND public.can_view_community()
         AND (public.community_is_staff(auth.uid())
-             OR EXISTS (SELECT 1 FROM public.community_close_friends cf
-                         WHERE cf.owner_id = public.community_main_account(_author)
-                           AND cf.friend_id = public.community_main_account(auth.uid())))))
+             OR (EXISTS (SELECT 1 FROM public.community_close_friends cf
+                          WHERE cf.owner_id = public.community_main_account(_author)
+                            AND cf.friend_id = public.community_main_account(auth.uid()))
+                 -- a private account's list still needs the follow; a block ends it
+                 AND (public.community_follows_user(auth.uid(), _author)
+                      OR (NOT public.community_is_private(_author)
+                          AND NOT public.chat_has_blocked(public.community_main_account(_author), public.community_main_account(auth.uid()))))))))
 $$;
 REVOKE ALL ON FUNCTION public.community_post_visible(text, uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.community_post_visible(text, uuid, uuid) TO authenticated, service_role;
 
--- A private account's crew posts are followers-only; automatic workout stories stay crew-wide.
+-- The same rule as sets, for the feed and the "N new" badge, where a per-row
+-- check made every followers-only post cost a call (AGENTS.md: check the user
+-- once per query). Authors whose followers-only posts reach me: people I
+-- follow who haven't blocked me. Authors whose Close Friends posts reach me:
+-- their list has me, they haven't blocked me, and they're public or I follow
+-- them. Each with the person's linked logins, like community_main_account.
+CREATE OR REPLACE FUNCTION public.community_followed_authors()
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+  WITH me AS (SELECT public.community_main_account(auth.uid()) AS id),
+  a AS (SELECT f.followee_id AS id FROM public.community_follows f, me
+         WHERE f.follower_id = me.id AND NOT public.chat_has_blocked(f.followee_id, me.id))
+  SELECT a.id FROM a
+  UNION SELECT cp.user_id FROM public.community_profiles cp JOIN a ON cp.same_person_as = a.id
+$$;
+
+CREATE OR REPLACE FUNCTION public.community_close_friend_authors()
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+  WITH me AS (SELECT public.community_main_account(auth.uid()) AS id),
+  a AS (SELECT cf.owner_id AS id FROM public.community_close_friends cf, me
+         WHERE cf.friend_id = me.id AND NOT public.chat_has_blocked(cf.owner_id, me.id)
+           AND (NOT public.community_is_private(cf.owner_id)
+                OR EXISTS (SELECT 1 FROM public.community_follows f WHERE f.follower_id = me.id AND f.followee_id = cf.owner_id)))
+  SELECT a.id FROM a
+  UNION SELECT cp.user_id FROM public.community_profiles cp JOIN a ON cp.same_person_as = a.id
+$$;
+REVOKE ALL ON FUNCTION public.community_followed_authors() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.community_close_friend_authors() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.community_followed_authors() TO service_role;
+GRANT EXECUTE ON FUNCTION public.community_close_friend_authors() TO service_role;
+
+-- A private account's crew posts are followers-only; automatic workout stories and coaches' posts stay crew-wide.
 CREATE OR REPLACE FUNCTION public.community_posts_private_audience()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
 BEGIN
   IF NEW.visibility IN ('community', 'followers') THEN
     NEW.visibility := CASE WHEN NOT coalesce(NEW.auto_shared, false) AND public.community_is_private(NEW.author_user_id)
+                                AND NOT public.community_is_coach(NEW.author_user_id)
                            THEN 'followers' ELSE 'community' END;
   END IF;
   IF NEW.archived_from IN ('community', 'followers') THEN
-    NEW.archived_from := CASE WHEN public.community_is_private(NEW.author_user_id) THEN 'followers' ELSE 'community' END;
+    NEW.archived_from := CASE WHEN NOT coalesce(NEW.auto_shared, false) AND public.community_is_private(NEW.author_user_id)
+                                   AND NOT public.community_is_coach(NEW.author_user_id)
+                              THEN 'followers' ELSE 'community' END;
   END IF;
   RETURN NEW;
 END;
@@ -129,7 +170,10 @@ BEGIN
     RAISE EXCEPTION 'community_feed: anchor not found exactly once';
   END IF;
   EXECUTE replace(v_def, v_anchor, v_anchor || '
-            OR (p.visibility IN (''followers'', ''close_friends'') AND public.community_post_visible(p.visibility, p.author_user_id, p.client_id))');
+            OR (p.visibility = ''followers'' AND (p.author_user_id = uid OR (SELECT public.community_is_staff(uid))
+                                                OR p.author_user_id IN (SELECT public.community_followed_authors())))
+            OR (p.visibility = ''close_friends'' AND (p.author_user_id = uid OR (SELECT public.community_is_staff(uid))
+                                                    OR p.author_user_id IN (SELECT public.community_close_friend_authors())))');
 END $$;
 
 DO $$
@@ -142,7 +186,9 @@ BEGIN
     RAISE EXCEPTION 'community_activity: anchor not found exactly once';
   END IF;
   EXECUTE replace(v_def, v_anchor,
-    '(p.visibility = ''community'' OR (p.visibility IN (''coach'', ''followers'', ''close_friends'') AND public.community_post_visible(p.visibility, p.author_user_id, p.client_id)))');
+    '(p.visibility = ''community'' OR (p.visibility = ''coach'' AND public.community_post_visible(p.visibility, p.author_user_id, p.client_id))
+                      OR (p.visibility = ''followers'' AND ((SELECT public.community_is_staff(uid)) OR p.author_user_id IN (SELECT public.community_followed_authors())))
+                      OR (p.visibility = ''close_friends'' AND ((SELECT public.community_is_staff(uid)) OR p.author_user_id IN (SELECT public.community_close_friend_authors()))))');
 END $$;
 
 -- Posting / editing / sharing a workout take Close Friends ('followers' is the stored form of the crew choice).
@@ -280,14 +326,14 @@ BEGIN
 END;
 $$;
 
-/** Private account on / off. Members only (a coach's posts stay crew-wide). */
+/** Private account on / off. Members only: a coach (or a coach's linked athlete login) can't turn it on; anyone can turn it off. */
 CREATE OR REPLACE FUNCTION public.community_set_private(_on boolean)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
 DECLARE
   v_me uuid := public.community_main_account(auth.uid());
 BEGIN
   IF auth.uid() IS NULL OR NOT public.can_view_community() THEN RAISE EXCEPTION 'Not allowed' USING ERRCODE = '42501'; END IF;
-  IF public.community_is_staff(auth.uid()) OR public.community_is_staff(v_me) THEN
+  IF coalesce(_on, false) AND (public.community_is_staff(auth.uid()) OR public.community_is_coach(v_me)) THEN
     RAISE EXCEPTION 'Coach accounts stay public' USING ERRCODE = '42501';
   END IF;
   INSERT INTO public.community_profiles (user_id, is_private) VALUES (v_me, coalesce(_on, false))
@@ -467,3 +513,98 @@ BEGIN
 END;
 $$;
 REVOKE ALL ON FUNCTION public.chat_direct_open(uuid, uuid) FROM PUBLIC, anon, authenticated;
+
+-- Replying to a post or story goes through chat_direct_open too, so a reply to
+-- someone who follows you opens a chat. This is the function exactly as it is
+-- live (one version, with _story); the old two-argument version that a fresh
+-- database still gets from 20261121090000 is dropped so the app's call isn't
+-- ambiguous there.
+DROP FUNCTION IF EXISTS public.community_message_author(uuid, text);
+CREATE OR REPLACE FUNCTION public.community_message_author(_post_id uuid, _body text, _story boolean DEFAULT false)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE
+  uid uuid := auth.uid();
+  v_body text := btrim(coalesce(_body, ''));
+  p public.community_posts;
+  v_author jsonb;
+  v_me jsonb;
+  v_card jsonb;
+  v_client uuid;
+  v_staff uuid;
+  g public.chat_groups;
+  v_msg uuid;
+BEGIN
+  IF NOT public.can_view_community() THEN RAISE EXCEPTION 'Not allowed' USING ERRCODE = '42501'; END IF;
+  IF v_body = '' THEN RAISE EXCEPTION 'Write a message first'; END IF;
+  IF char_length(v_body) > 2000 THEN RAISE EXCEPTION 'That message is too long'; END IF;
+
+  IF coalesce(_story, false) THEN PERFORM public.community_fill_win_label(_post_id); END IF;
+  SELECT * INTO p FROM public.community_posts cp
+   WHERE cp.id = _post_id AND cp.archived_at IS NULL
+     AND public.community_post_visible(cp.visibility, cp.author_user_id, cp.client_id);
+  IF NOT FOUND THEN RAISE EXCEPTION 'Post not found'; END IF;
+
+  v_author := public.community_author(p.author_user_id);
+  v_me := public.community_author(uid);
+  IF (v_author->>'user_id') = (v_me->>'user_id') THEN RAISE EXCEPTION 'That''s your own post'; END IF;
+
+  v_card := jsonb_build_object(
+    'type', 'link', 'kind', 'community_post', 'post_id', p.id, 'reply', true, 'story', coalesce(_story, false),
+    'url', '/portal/community#post=' || p.id,
+    'name', v_author->>'name',
+    'title', (v_author->>'name') || CASE WHEN coalesce(_story, false) THEN '''s story' ELSE '''s post' END,
+    'request_note', coalesce(nullif(left(split_part(btrim(coalesce(p.caption, p.quote, '')), E'\n', 1), 140), ''),
+                                CASE WHEN coalesce(_story, false) THEN nullif(p.win_label, '') END),
+    'thumb_path', coalesce(p.media_thumb_path, CASE WHEN p.media_type = 'image' THEN p.media_path END));
+
+  IF (v_author->>'is_coach')::boolean AND (v_me->>'is_coach')::boolean THEN
+    RAISE EXCEPTION 'You''re both coaches. Message them in team chat.';
+  END IF;
+
+  IF (v_author->>'is_coach')::boolean THEN
+    SELECT c.id INTO v_client FROM public.clients c
+     WHERE c.user_id = uid AND coalesce(c.archived, false) = false AND c.archived_at IS NULL
+     ORDER BY c.created_at DESC LIMIT 1;
+    IF v_client IS NULL THEN RAISE EXCEPTION 'Not allowed' USING ERRCODE = '42501'; END IF;
+    INSERT INTO public.messages (client_id, sender_id, sender_role, body, attachments, message_type, read_by_client_at)
+    VALUES (v_client, uid, 'client', v_body, jsonb_build_array(v_card), 'General', now())
+    RETURNING id INTO v_msg;
+    RETURN jsonb_build_object('route', 'coach', 'message_id', v_msg, 'client_id', v_client);
+  END IF;
+
+  IF (v_me->>'is_coach')::boolean THEN
+    SELECT a.id INTO v_staff FROM (
+      SELECT uid AS id
+      UNION SELECT public.community_main_account(uid)
+      UNION SELECT cp.user_id FROM public.community_profiles cp WHERE cp.same_person_as = public.community_main_account(uid)
+    ) a WHERE public.has_role(a.id, 'admin') OR public.has_role(a.id, 'coach')
+    ORDER BY (a.id = uid) DESC LIMIT 1;
+    v_client := coalesce(p.client_id, (SELECT c.id FROM public.clients c WHERE c.user_id = p.author_user_id ORDER BY c.created_at DESC LIMIT 1));
+    IF v_staff IS NULL OR v_client IS NULL OR NOT (
+         public.has_role(v_staff, 'admin')
+         OR EXISTS (SELECT 1 FROM public.clients c JOIN public.coaches co ON co.id = c.assigned_coach_id
+                     WHERE c.id = v_client AND co.user_id = v_staff AND co.archived = false AND co.status = 'Active')) THEN
+      RAISE EXCEPTION 'Not allowed' USING ERRCODE = '42501';
+    END IF;
+    INSERT INTO public.messages (client_id, sender_id, sender_role, body, attachments, message_type, read_by_admin_at)
+    VALUES (v_client, v_staff, 'admin', v_body, jsonb_build_array(v_card), 'General', now())
+    RETURNING id INTO v_msg;
+    RETURN jsonb_build_object('route', 'client', 'message_id', v_msg, 'client_id', v_client);
+  END IF;
+
+  IF NOT public.chat_community_ok(uid) OR NOT public.chat_community_ok(p.author_user_id) THEN
+    RAISE EXCEPTION 'They can''t get messages right now';
+  END IF;
+  g := public.chat_direct_open(uid, p.author_user_id);
+
+  INSERT INTO public.group_messages (group_id, sender_id, sender_role, body, attachments)
+  VALUES (g.id, uid, 'member', v_body, jsonb_build_array(v_card))
+  RETURNING id INTO v_msg;
+
+  SELECT * INTO g FROM public.chat_groups WHERE id = g.id;
+  RETURN jsonb_build_object('route', 'direct', 'group_id', g.id, 'message_id', v_msg, 'status', g.direct_status);
+END;
+$function$;
+REVOKE ALL ON FUNCTION public.community_message_author(uuid, text, boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.community_message_author(uuid, text, boolean) TO authenticated, service_role;

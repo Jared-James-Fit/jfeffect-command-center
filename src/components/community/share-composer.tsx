@@ -516,7 +516,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
             className="h-12 w-full rounded-2xl bg-white text-[15px] font-black text-black hover:bg-white/90"
           >
             {postedAs ? <Check className="mr-2 h-5 w-5 text-emerald-600" /> : <Users className="mr-2 h-5 w-5" />}
-            {postedAs === "community" ? "Posted. Edit post" : postedAs === "coach" ? "Sent to coach. Edit" : postedAs === "private" ? "Saved. Edit post" : existing ? "Edit community post" : "Post to JF Community"}
+            {isCrewAudience(postedAs) ? "Posted. Edit post" : postedAs === "close_friends" ? "Sent to Close friends. Edit" : postedAs === "coach" ? "Sent to coach. Edit" : postedAs === "private" ? "Saved. Edit post" : existing ? "Edit community post" : "Post to JF Community"}
           </Button>
         </div>
 

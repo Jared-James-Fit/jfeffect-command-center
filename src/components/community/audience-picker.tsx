@@ -72,12 +72,19 @@ export function AudiencePicker({
   );
 }
 
-/** The audiences as this person sees them: a private account's crew choice reads "Followers". */
+/**
+ * The audiences as this person sees them: a private account's crew choice
+ * reads "Followers", and Close friends says so when the list is still empty
+ * (a post to an empty list reaches nobody).
+ */
 export function useAudiences() {
   const { data: follows } = useFollowState();
-  return follows?.is_private
-    ? AUDIENCES.map((a) => (a.key === "community" ? { ...a, label: "Followers", hint: "Only the followers you've approved" } : a))
-    : AUDIENCES;
+  return AUDIENCES.map((a) => {
+    if (a.key === "community" && follows?.is_private) return { ...a, label: "Followers", hint: "Only the followers you've approved" };
+    if (a.key === "close_friends" && follows && follows.close_friends.length === 0)
+      return { ...a, hint: "Your Close friends list is empty. Add people from your profile first." };
+    return a;
+  });
 }
 
 /** Short label for where a post went ("Sent to coach"). */

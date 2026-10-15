@@ -13,13 +13,15 @@ import {
 
 /**
  * Instagram-style Follow: "Follow" (or "Follow back" when they follow you),
- * "Requested" while a private account decides, then a quiet "Following".
- * Unfollowing is one tap with an Undo (on a private account the Undo asks again).
+ * "Requested" while a private account decides (tap again to cancel), then a
+ * quiet "Following". Unfollowing is one tap with an Undo; on a private account
+ * it asks first, because coming back means asking again.
  */
-export function FollowButton({ userId, name, isPrivate, size = "md", tone = "solid", className }: {
+export function FollowButton({ userId, name, avatarUrl, isPrivate, size = "md", tone = "solid", className }: {
   userId: string;
   name?: string;
-  /** Their account is private: a tap sends a request. */
+  avatarUrl?: string | null;
+  /** Their account is private: a tap sends a request, and unfollowing asks first. */
   isPrivate?: boolean;
   size?: "sm" | "md";
   /** soft: a quiet tint for long lists, where a column of solid buttons would shout */
@@ -28,37 +30,61 @@ export function FollowButton({ userId, name, isPrivate, size = "md", tone = "sol
 }) {
   const { data: state } = useFollowState();
   const follow = useFollow();
+  const [confirm, setConfirm] = useState(false);
   const label = followLabel(state, userId);
   const on = label === "Following" || label === "Requested";
   const set = (next: boolean) =>
     follow.mutate(
       { userId, on: next, isPrivate },
       {
-        onError: () => toast.error(next ? "Couldn't follow. Try again." : "Couldn't unfollow. Try again."),
+        onError: () => toast.error(next ? "Couldn't follow. Try again." : label === "Requested" ? "Couldn't cancel the request. Try again." : "Couldn't unfollow. Try again."),
         onSuccess: (s) => {
-          if (next && s.requested.includes(userId)) toast(`Request sent${name ? ` to ${name}` : ""}`, { description: "Their account is private. You'll see their posts once they confirm." });
-          if (!next && label === "Following") toast(`Unfollowed${name ? ` ${name}` : ""}`, { action: { label: "Undo", onClick: () => follow.mutate({ userId, on: true, isPrivate }) } });
+          if (next && s.requested.includes(userId)) toast(`Requested${name ? ` to follow ${name}` : ""}`, { description: "You'll see their posts once they confirm." });
+          if (!next && label === "Following")
+            toast(`Unfollowed${name ? ` ${name}` : ""}`, isPrivate ? undefined : { action: { label: "Undo", onClick: () => follow.mutate({ userId, on: true, isPrivate }) } });
         },
       },
     );
   return (
-    <button
-      type="button"
-      data-follow={label === "Following" ? "following" : label === "Requested" ? "requested" : "follow"}
-      aria-pressed={on}
-      onClick={(e) => {
-        e.stopPropagation();
-        set(!on);
-      }}
-      className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-lg font-bold transition active:scale-[0.97]",
-        size === "sm" ? "h-8 min-w-[72px] px-3 text-[12px]" : "h-9 min-w-[96px] px-4 text-[13px]",
-        on ? "bg-muted text-foreground" : tone === "soft" ? "bg-primary/10 text-primary" : "bg-primary text-primary-foreground",
-        className,
+    <>
+      <button
+        type="button"
+        data-follow={label === "Following" ? "following" : label === "Requested" ? "requested" : "follow"}
+        aria-pressed={on}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (label === "Following" && isPrivate) setConfirm(true);
+          else set(!on);
+        }}
+        className={cn(
+          "inline-flex shrink-0 items-center justify-center rounded-lg font-bold transition active:scale-[0.97]",
+          size === "sm" ? "h-8 min-w-[72px] px-3 text-[12px]" : "h-9 min-w-[96px] px-4 text-[13px]",
+          on ? "bg-muted text-foreground" : tone === "soft" ? "bg-primary/10 text-primary" : "bg-primary text-primary-foreground",
+          className,
+        )}
+      >
+        {label}
+      </button>
+      {isPrivate && (
+        <Sheet open={confirm} onOpenChange={setConfirm}>
+          <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[420px]" onClick={(e) => e.stopPropagation()}>
+            <div data-unfollow-confirm className="flex flex-col items-center px-6 pb-3 pt-6 text-center">
+              <UserAvatar src={avatarUrl ?? null} name={name ?? ""} size={72} expandable={false} />
+              <SheetTitle className="mt-3 text-[16px] font-black">Unfollow{name ? ` ${name}` : ""}?</SheetTitle>
+              <SheetDescription className="mt-1 text-[13px] leading-snug">
+                Their account is private. If you change your mind, you'll have to request to follow{name ? ` ${name}` : " them"} again.
+              </SheetDescription>
+            </div>
+            <div className="border-t border-border/60">
+              <button type="button" onClick={() => { setConfirm(false); set(false); }} className="h-12 w-full text-[14px] font-bold text-destructive active:bg-muted">
+                Unfollow
+              </button>
+              <SheetClose className="h-12 w-full border-t border-border/60 text-[14px] font-semibold active:bg-muted">Cancel</SheetClose>
+            </div>
+          </SheetContent>
+        </Sheet>
       )}
-    >
-      {label}
-    </button>
+    </>
   );
 }
 
@@ -186,7 +212,7 @@ function FollowListSheet({ userId, isMe, kind, onKind, onOpen }: {
 export function FollowRequestsButton({ onOpen }: { onOpen?: (a: CommunityAuthor) => void }) {
   const { data: state } = useFollowState();
   const [open, setOpen] = useState(false);
-  const { data: members = [] } = useCommunityMembers(open);
+  const { data: members = [], isLoading: membersLoading } = useCommunityMembers(open);
   const respond = useRespondToFollow();
   const ids = state?.requests ?? [];
   if (!ids.length && !open) return null;
@@ -201,6 +227,8 @@ export function FollowRequestsButton({ onOpen }: { onOpen?: (a: CommunityAuthor)
           <SheetTop title="Follow requests" sub="Deleting a request is silent. They can ask again later." />
           {ids.length === 0 ? (
             <p className="px-5 py-8 text-center text-[13px] text-muted-foreground">No requests right now.</p>
+          ) : membersLoading ? (
+            <p className="px-5 py-8 text-center text-[13px] text-muted-foreground">Loading…</p>
           ) : (
             <ul className="mt-3 divide-y divide-border/60 border-y border-border/60">
               {people.map((a) => (
@@ -257,7 +285,7 @@ export function CloseFriendsButton() {
   const [q, setQ] = useState("");
   const { data: members = [] } = useCommunityMembers(open);
   const set = useSetCloseFriend();
-  const ids = state?.close_friends ?? [];
+  const ids = useMemo(() => state?.close_friends ?? [], [state?.close_friends]);
   const list = useMemo(() => {
     const on = new Set(ids);
     const term = q.trim().toLowerCase();

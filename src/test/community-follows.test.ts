@@ -83,6 +83,37 @@ describe("private accounts and Close Friends", () => {
     expect(sql).toContain("NOT coalesce(NEW.auto_shared, false) AND public.community_is_private(NEW.author_user_id)");
     expect(sql).toContain("CASE WHEN v_open THEN 'active' ELSE 'request' END");
   });
+
+  it("a block ends access, Close Friends on a private account still needs the follow, coaches stay public", () => {
+    const sql = readFileSync("supabase/migrations/20261130090000_crew_private_accounts_close_friends.sql", "utf8");
+    // the account owner blocking you ends "follows" (reads only: unblocking gives it back)
+    expect(sql).toContain("AND NOT public.chat_has_blocked(public.community_main_account(_followee), public.community_main_account(_follower))");
+    expect(sql).toMatch(/AND \(public\.community_follows_user\(auth\.uid\(\), _author\)\s+OR \(NOT public\.community_is_private\(_author\)/);
+    // a coach (or a coach's linked athlete login) can't turn private on, and their posts never go followers-only
+    expect(sql).toContain("IF coalesce(_on, false) AND (public.community_is_staff(auth.uid()) OR public.community_is_coach(v_me)) THEN");
+    expect(sql).toContain("AND NOT public.community_is_coach(NEW.author_user_id)");
+    // story / post replies go through chat_direct_open (one version, as live)
+    expect(sql).toContain("DROP FUNCTION IF EXISTS public.community_message_author(uuid, text);");
+    expect(sql).toContain("g := public.chat_direct_open(uid, p.author_user_id);");
+  });
+
+  it("the feed and the badge check the viewer once per query (set lookups, AGENTS.md)", () => {
+    const sql = readFileSync("supabase/migrations/20261130090000_crew_private_accounts_close_friends.sql", "utf8");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.community_followed_authors()");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.community_close_friend_authors()");
+    expect(sql).toContain("p.author_user_id IN (SELECT public.community_followed_authors())");
+    expect(sql).toContain("(SELECT public.community_is_staff(uid))");
+    expect(sql).not.toContain("p.visibility IN (''followers'', ''close_friends'') AND public.community_post_visible");
+  });
+
+  it("app: a coach's props still reach a private member; Close friends is labelled; unfollowing a private account asks first", () => {
+    expect(readFileSync("src/lib/push/app-events.functions.ts", "utf8")).toContain('["community", "followers", "close_friends"].includes(p.visibility)');
+    expect(readFileSync("src/components/community/share-composer.tsx", "utf8")).toContain('postedAs === "close_friends" ? "Sent to Close friends. Edit"');
+    const btn = readFileSync("src/components/community/follow-button.tsx", "utf8");
+    expect(btn).toContain('if (label === "Following" && isPrivate) setConfirm(true);');
+    expect(btn).toContain("you'll have to request to follow");
+    expect(readFileSync("src/components/community/audience-picker.tsx", "utf8")).toContain("Your Close friends list is empty.");
+  });
 });
 
 describe("Crew Stories order", () => {
