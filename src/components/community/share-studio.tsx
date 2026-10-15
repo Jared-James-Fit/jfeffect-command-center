@@ -937,15 +937,23 @@ export function ShareStudio({
                       {timer ? `${timer}s` : null}
                     </button>
                   )}
-                  {canShoot && !adding && (card && allowNoPhoto ? (
-                    <button type="button" onClick={skipPhoto} className="ml-auto h-10 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
-                      No photo
-                    </button>
-                  ) : onWrite ? (
-                    <button type="button" onClick={onWrite} className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
-                      <PenLine className="h-4 w-4" /> Write
-                    </button>
-                  ) : null)}
+                  <div className="ml-auto flex items-center gap-2">
+                    {canShoot && !adding && (card && allowNoPhoto ? (
+                      <button type="button" onClick={skipPhoto} className="h-10 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
+                        No photo
+                      </button>
+                    ) : onWrite ? (
+                      <button type="button" onClick={onWrite} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
+                        <PenLine className="h-4 w-4" /> Write
+                      </button>
+                    ) : null)}
+                    {/* up here (Snapchat / TikTok's spot) so every mode fits along the bottom; double-tap the camera flips too */}
+                    {status === "live" && (
+                      <button type="button" onClick={flip} className={pill} aria-label="Flip camera">
+                        <RefreshCcw className="h-5 w-5" />
+                      </button>
+                    )}
+                  </div>
                 </>
               ) : (
                 <>
@@ -1002,7 +1010,7 @@ export function ShareStudio({
                   showName={fullScreen}
                 />
               </div>
-              {/* under the camera: library, what you're sharing, flip */}
+              {/* under the camera: the library, then everything you can share, all in view */}
               <div ref={setBarEl} className="pointer-events-auto mt-2 flex items-center gap-2 bg-black px-4 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.6rem)" }} data-camera-bar>
                 <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 border-white/85 bg-white/10 active:scale-95 disabled:opacity-30" aria-label="Choose from your library">
                   <Images className="h-5 w-5" />
@@ -1013,9 +1021,6 @@ export function ShareStudio({
                     onMode?.(k);
                   }} />}
                 </div>
-                <button type="button" disabled={status !== "live"} onClick={flip} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/12 active:scale-95 disabled:opacity-30" aria-label="Flip camera">
-                  <RefreshCcw className="h-5 w-5" />
-                </button>
               </div>
             </>
           ) : (
@@ -1109,39 +1114,49 @@ export function ShareStudio({
 }
 
 /**
- * What you're sharing, under the camera like Instagram's POST / STORY / REEL:
- * a row of words that slides so the one you're on sits in the middle.
+ * What you're sharing, under the camera like Instagram's POST / STORY / REEL.
+ * Every mode is in view (Meal was off the edge when the row centred the one
+ * you're on); only a screen too narrow for them all scrolls, and then it
+ * keeps the one you're on in view.
  */
 function ModeTabs({ modes, mode, onMode }: { modes: CameraMode[]; mode?: string; onMode: (key: string) => void }) {
   const row = useRef<HTMLDivElement | null>(null);
+  const [over, setOver] = useState(false);
+  useEffect(() => {
+    const el = row.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setOver(el.scrollWidth > el.clientWidth + 1));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     const el = row.current;
     const on = el?.querySelector<HTMLElement>("[aria-selected=true]");
-    if (!el || !on) return;
-    el.scrollTo({ left: on.offsetLeft + on.offsetWidth / 2 - el.clientWidth / 2, behavior: "smooth" });
+    if (!el || !on || el.scrollWidth <= el.clientWidth + 1) return;
+    on.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
   }, [mode]);
   return (
     <div
       ref={row}
-      className="flex min-w-0 overflow-x-auto [mask-image:linear-gradient(90deg,transparent,#000_14%,#000_86%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className={cn("min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", over && "[mask-image:linear-gradient(90deg,#000_88%,transparent)]")}
       role="tablist"
       aria-label="What you're sharing"
+      data-modes-over={over ? "" : undefined}
     >
-      {/* room either side, so the first and last can sit in the middle too */}
-      <span className="w-1/2 shrink-0" aria-hidden />
-      {modes.map((m) => (
-        <button
-          key={m.key}
-          type="button"
-          role="tab"
-          aria-selected={mode === m.key}
-          onClick={() => onMode(m.key)}
-          className={cn("h-10 shrink-0 px-2.5 text-[13px] font-black uppercase tracking-[0.08em] transition-colors", mode === m.key ? "text-white" : "text-white/50")}
-        >
-          {m.label}
-        </button>
-      ))}
-      <span className="w-1/2 shrink-0" aria-hidden />
+      <div className="mx-auto flex w-max">
+        {modes.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            role="tab"
+            aria-selected={mode === m.key}
+            onClick={() => onMode(m.key)}
+            className={cn("h-10 shrink-0 px-[6px] text-[12px] font-black uppercase tracking-[0.06em] transition-colors min-[375px]:px-[7px] min-[375px]:text-[13px] min-[385px]:px-2 min-[420px]:px-3", mode === m.key ? "text-white" : "text-white/50")}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
