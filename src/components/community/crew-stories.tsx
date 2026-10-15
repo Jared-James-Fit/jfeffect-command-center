@@ -117,7 +117,8 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onJumpTo, ad
         )}
         {groups.map((g, i) => (
           <button key={g.author.user_id} type="button" onClick={() => watch(i)} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={`${g.author.name}'s story${g.prs ? `, ${prTag(g.prs)}` : ""}${g.unseen ? ", new" : ""}`} data-story-unseen={g.unseen ? "" : undefined}>
-            <span className={cn("relative grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", g.unseen ? "bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)]" : "bg-border")}>
+            {/* Close Friends: green ring, as on Instagram */}
+            <span data-story-close-friends={g.unseen && g.closeFriends ? "" : undefined} className={cn("relative grid h-[64px] w-[64px] place-items-center rounded-full p-[2.5px]", g.unseen ? (g.closeFriends ? "bg-emerald-500" : "bg-[conic-gradient(from_200deg,#ef3340,#f59e0b,#ef3340)]") : "bg-border")}>
               <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
                 <UserAvatar src={g.author.avatar_url} name={g.author.name} size={54} expandable={false} />
               </span>

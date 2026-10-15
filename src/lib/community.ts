@@ -35,7 +35,22 @@ export function reactionEmoji(key: string | null | undefined): string | null {
   return REACTIONS.find((r) => r.key === key)?.emoji ?? null;
 }
 
-export type CommunityVisibility = "community" | "partners" | "coach" | "private";
+/**
+ * Who sees a post. 'followers' is how a private account's crew post is stored
+ * (the server picks it; the app always sends 'community' for "everyone I'd
+ * normally reach"), and reads as the crew choice in every picker.
+ */
+export type CommunityVisibility = "community" | "followers" | "close_friends" | "coach" | "private";
+
+/** The picker's choice for a stored audience ('followers' is the crew choice on a private account). */
+export function pickerAudience(v: CommunityVisibility | null | undefined): CommunityVisibility {
+  return !v || v === "followers" ? "community" : v;
+}
+
+/** Reaches everyone the author normally posts to: the whole crew, or a private account's followers. */
+export function isCrewAudience(v: CommunityVisibility | null | undefined): boolean {
+  return v === "community" || v === "followers";
+}
 
 /** Shown when a coach taps a post button while viewing as a client. */
 export const PREVIEW_ONLY_MESSAGE = "Preview only. This is what they see, but you can't post as them.";
@@ -43,7 +58,7 @@ export const PREVIEW_ONLY_MESSAGE = "Preview only. This is what they see, but yo
 /** Who a post is for. "JF crew" = every active JF Effect client + coaches, never the public. */
 export const AUDIENCES: { key: CommunityVisibility; label: string; hint: string }[] = [
   { key: "community", label: "JF crew", hint: "Only JF Effect clients and coaches see it" },
-  { key: "partners", label: "Partners", hint: "Only your training partners (you follow each other)" },
+  { key: "close_friends", label: "Close friends", hint: "Only the people on your Close Friends list" },
   { key: "coach", label: "My coach", hint: "Just you and your coach" },
   { key: "private", label: "Only me", hint: "Saved to your profile, nobody else sees it" },
 ];
@@ -398,6 +413,12 @@ export type CommunityProfile = {
   /** Your own profile only: how many posts you have archived. */
   archived?: number | null;
   training_since: string | null;
+  /** Private account: posts and lists only for approved followers. */
+  is_private?: boolean;
+  /** You can see their posts, lists and counts (public, you follow them, it's you, or you're staff). */
+  can_see?: boolean;
+  followers?: number;
+  following?: number;
 };
 
 export type CommunityActivity = { enabled: boolean; unseen: number; seen_at: string | null };
@@ -1290,7 +1311,7 @@ export function postPointsHint(
   const done = opts.completedAt ? new Date(opts.completedAt).getTime() : NaN;
   if (Number.isFinite(done) && now.getTime() - done > POST_POINTS_RECENT_DAYS * 86_400_000)
     return { tone: "muted", text: `Post points are for workouts from the last ${POST_POINTS_RECENT_DAYS} days.` };
-  if (visibility !== "community") return { tone: "muted", text: `Post to Community to earn +${status.points} league points.` };
+  if (!isCrewAudience(visibility)) return { tone: "muted", text: `Post to Community to earn +${status.points} league points.` };
   if (status.today_earned) return { tone: "muted", text: "Today's post points are banked. Post anyway, the crew wants to see it." };
   if (status.week_count >= status.week_cap)
     return { tone: "muted", text: `Post points maxed this week (${status.week_cap}/${status.week_cap}). They reset Monday.` };
@@ -1515,10 +1536,11 @@ export const STORY_WINDOW_MS = 24 * 3_600_000;
  * Worth a story: everything shared with the crew, like Instagram: what people
  * post themselves and every finished session (posted for them when automatic
  * sharing is on), a PR or a routine day alike; the win just makes its frame
- * louder. Who-sees-it on the post still decides (coach-only or private never).
+ * louder. Who-sees-it on the post still decides (coach-only or private never;
+ * Close Friends with a green ring).
  */
 export function storyWorthy(p: Pick<CommunityPost, "visibility">): boolean {
-  return p.visibility === "community" || p.visibility === "partners";
+  return isCrewAudience(p.visibility) || p.visibility === "close_friends";
 }
 
 export type StoryGroup<T> = {
@@ -1530,6 +1552,8 @@ export type StoryGroup<T> = {
   prs: number;
   /** Your own story (you see who saw it; nothing to reply to). */
   mine?: boolean;
+  /** Something new in it is Close Friends only: the bubble's ring is green. */
+  closeFriends?: boolean;
 };
 
 /** PRs set in a set of moments (a workout post carries its session's count). */
@@ -1569,6 +1593,7 @@ export function crewStories<T extends Pick<CommunityPost, "id" | "created_at" | 
   for (const g of groups) {
     g.items.sort((a, b) => a.created_at.localeCompare(b.created_at));
     g.prs = storyPrs(g.items);
+    g.closeFriends = g.items.some((p) => !p.seen && p.visibility === "close_friends");
   }
   // new first; among those, people you follow, then a PR; then the most recent
   const f = (g: StoryGroup<T>) => Number(!!followed?.has(g.author.user_id));

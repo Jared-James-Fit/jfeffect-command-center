@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { Camera, Check, ChevronLeft, Download, EyeOff, Handshake, Images, Lock, PenLine, RefreshCcw, Send, Smile, Timer, Type, User, Users, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, Download, EyeOff, Images, Lock, PenLine, RefreshCcw, Send, Smile, Star, Timer, Type, User, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { CommunityVisibility } from "@/lib/community";
+import { pickerAudience, type CommunityVisibility } from "@/lib/community";
+import { useFollowState } from "@/lib/community-social";
 import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
 import { CaptionEditor, CaptionField, captionThumb } from "@/components/community/caption-editor";
 import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach, type PostAttachInitial } from "@/components/community/post-attach";
@@ -64,7 +65,7 @@ const LIVE_SCALE = 0.72;
 const FRAME_MS = 33;
 const AUDIENCE: { key: CommunityVisibility; label: string; icon: typeof Users }[] = [
   { key: "community", label: "JF crew", icon: Users },
-  { key: "partners", label: "Partners", icon: Handshake },
+  { key: "close_friends", label: "Close friends", icon: Star },
   { key: "coach", label: "My coach", icon: User },
   { key: "private", label: "Only me", icon: Lock },
 ];
@@ -193,7 +194,7 @@ export function ShareStudio({
   useEffect(() => {
     if (!open || !post || postingRef.current) return;
     setCaption(post.caption ?? "");
-    setVisibility(post.visibility ?? "community");
+    setVisibility(pickerAudience(post.visibility));
     setHideLoads(!!post.hideLoads);
     setPosted(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -218,7 +219,7 @@ export function ShareStudio({
       restoring.current = false;
       if (!d || restoredFor.current !== key || postingRef.current) return;
       if (d.caption) setCaption(d.caption);
-      if (d.visibility === "community" || d.visibility === "partners" || d.visibility === "coach" || d.visibility === "private") setVisibility(d.visibility);
+      if (d.visibility === "community" || d.visibility === "close_friends" || d.visibility === "coach" || d.visibility === "private") setVisibility(d.visibility);
       if (d.look && cardRef.current?.looks.includes(d.look as ShareTemplate)) cardRef.current.onLook(d.look as ShareTemplate);
       const startOver = () => {
         void clearDraft(key);
@@ -796,7 +797,10 @@ export function ShareStudio({
     if (phase !== "edit" || showCard || !shot) return null;
     return shot.src instanceof HTMLImageElement ? shot.src.src : (shot.src as HTMLCanvasElement).toDataURL("image/jpeg", 0.8);
   }, [phase, showCard, shot]);
-  const aud = AUDIENCE.find((a) => a.key === visibility) ?? AUDIENCE[0];
+  const { data: follows } = useFollowState();
+  const audBase = AUDIENCE.find((a) => a.key === visibility) ?? AUDIENCE[0];
+  // a private account's crew choice reaches its followers
+  const aud = audBase.key === "community" && follows?.is_private ? { ...audBase, label: "Followers" } : audBase;
   const AudIcon = aud.icon;
   const stickerContext = useMemo(
     () => ({ time: timeLabel(shot?.at ?? new Date()), date: card?.data.dateLabel ?? new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }), workoutTitle: card?.data.workoutTitle ?? null }),
@@ -1057,7 +1061,7 @@ export function ShareStudio({
                 <button
                   type="button"
                   onClick={() => {
-                    setVisibility(AUDIENCE[(AUDIENCE.indexOf(aud) + 1) % AUDIENCE.length].key);
+                    setVisibility(AUDIENCE[(AUDIENCE.indexOf(audBase) + 1) % AUDIENCE.length].key);
                     setPosted(false);
                   }}
                   className="inline-flex h-14 shrink-0 items-center gap-1.5 rounded-2xl bg-white/10 px-3 text-[13px] font-black active:scale-95"

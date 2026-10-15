@@ -26,7 +26,7 @@ export function matchesActivityFilter(n: Pick<CommunityNotice, "kind">, f: Activ
     case "likes":
       return n.kind === "reaction" || n.kind === "comment_like";
     case "follows":
-      return n.kind === "follow";
+      return n.kind === "follow" || n.kind === "follow_request";
   }
 }
 
@@ -88,6 +88,8 @@ export function activityLine(n: CommunityNotice): { names: string[]; others: num
       return { names, others, action: said ? "liked your comment:" : "liked your comment", quote: said };
     case "follow":
       return { names, others, action: "started following you", quote: null };
+    case "follow_request":
+      return { names, others, action: "requested to follow you", quote: null };
   }
 }
 

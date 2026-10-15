@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { applyFollow, isPartner, suggestAthletes } from "@/lib/community-social";
-import { AUDIENCES, storyWorthy } from "@/lib/community";
+import { EMPTY_FOLLOW_STATE, applyFollow, followLabel, suggestAthletes } from "@/lib/community-social";
+import { AUDIENCES, isCrewAudience, pickerAudience, postPointsHint, storyWorthy } from "@/lib/community";
+import { activityLine, matchesActivityFilter } from "@/lib/crew-activity";
 import { crewStories } from "@/lib/community";
 import { shouldPersistQueryKey } from "@/lib/query-persister";
 import { communityNoticeText, type CommunityNotice } from "@/lib/community-notifications";
@@ -12,10 +13,10 @@ const member = (id: string, extra: Partial<CommunityMember> = {}): CommunityMemb
 
 describe("follow", () => {
   it("follows to the front and unfollows cleanly, never duplicating", () => {
-    const s = { following: ["a", "b"], followers: ["c"], partners: [] as string[] };
+    const s = { ...EMPTY_FOLLOW_STATE, following: ["a", "b"], followers: ["c"] };
     expect(applyFollow(s, "b", true).following).toEqual(["b", "a"]);
     expect(applyFollow(s, "a", false).following).toEqual(["b"]);
-    expect(applyFollow(s, "z", false)).toEqual({ following: ["a", "b"], followers: ["c"], partners: [] });
+    expect(applyFollow(s, "z", false)).toEqual({ ...EMPTY_FOLLOW_STATE, following: ["a", "b"], followers: ["c"] });
     expect(applyFollow(s, "a", true).followers).toEqual(["c"]);
   });
 
@@ -26,36 +27,61 @@ describe("follow", () => {
       member("fan"),
       member("followed", { week_days: [1, 2, 3, 4] as any }),
     ];
-    const out = suggestAthletes(members, { following: ["followed"], followers: ["fan"], partners: [] }).map((m) => m.author.user_id);
+    const out = suggestAthletes(members, { ...EMPTY_FOLLOW_STATE, following: ["followed"], followers: ["fan"] }).map((m) => m.author.user_id);
     expect(out).toEqual(["fan", "busy", "idle"]);
     expect(suggestAthletes(members, undefined, 2)).toHaveLength(2);
   });
 });
 
-describe("training partners", () => {
-  it("following someone who follows you makes you partners; unfollowing ends it", () => {
-    const s = { following: [], followers: ["fan"], partners: [] as string[] };
-    const on = applyFollow(s, "fan", true);
-    expect(on.partners).toEqual(["fan"]);
-    expect(isPartner(on, "fan")).toBe(true);
-    expect(applyFollow(s, "stranger", true).partners).toEqual([]);
-    expect(applyFollow(on, "fan", false).partners).toEqual([]);
-    expect(isPartner(undefined, "fan")).toBe(false);
+describe("private accounts and Close Friends", () => {
+  it("following a private account is a request until they confirm; unfollowing cancels it", () => {
+    const s = { ...EMPTY_FOLLOW_STATE, followers: ["fan"] };
+    const asked = applyFollow(s, "priv", true, true);
+    expect(asked.requested).toEqual(["priv"]);
+    expect(asked.following).toEqual([]);
+    expect(followLabel(asked, "priv")).toBe("Requested");
+    expect(applyFollow(asked, "priv", false).requested).toEqual([]);
+    expect(followLabel(s, "fan")).toBe("Follow back");
+    expect(followLabel(applyFollow(s, "pub", true), "pub")).toBe("Following");
   });
 
-  it("Partners is a post audience, shows in Stories, and is labelled on the post", () => {
-    expect(AUDIENCES.map((a) => a.key)).toEqual(["community", "partners", "coach", "private"]);
-    expect(storyWorthy({ visibility: "partners" })).toBe(true);
+  it("a private account's crew posts ('followers') act like crew posts everywhere", () => {
+    expect(AUDIENCES.map((a) => a.key)).toEqual(["community", "close_friends", "coach", "private"]);
+    expect(pickerAudience("followers")).toBe("community");
+    expect(pickerAudience(null)).toBe("community");
+    expect(pickerAudience("close_friends")).toBe("close_friends");
+    expect(isCrewAudience("followers")).toBe(true);
+    expect(isCrewAudience("close_friends")).toBe(false);
+    expect(storyWorthy({ visibility: "followers" })).toBe(true);
+    expect(storyWorthy({ visibility: "close_friends" })).toBe(true);
     expect(storyWorthy({ visibility: "coach" })).toBe(false);
-    expect(readFileSync("src/components/community/post-card.tsx", "utf8")).toContain('post.visibility === "partners") parts.push(post.is_mine ? "Training partners" : "Training partners only")');
+    const status = { points: 15, today_earned: false, week_count: 0, week_cap: 2 } as any;
+    expect(postPointsHint(status, "followers", false)?.tone).toBe("earn");
+    expect(postPointsHint(status, "close_friends", false)?.tone).toBe("muted");
   });
 
-  it("the database decides who's a partner, in one rule", () => {
-    const sql = readFileSync("supabase/migrations/20261130090000_crew_training_partners.sql", "utf8");
-    expect(sql).toContain("CHECK (visibility IN ('community', 'coach', 'partners', 'private'))");
-    expect(sql).toContain("OR (_visibility = 'partners' AND public.can_view_community()");
-    expect(sql).toContain("CASE WHEN v_partners THEN 'active' ELSE 'request' END");
-    expect(sql).toContain("'partners', coalesce((SELECT jsonb_agg(x ORDER BY x) FROM public.community_partner_ids() x)");
+  it("Close Friends stories ring green while something in them is new", () => {
+    const now = Date.UTC(2026, 9, 13, 20);
+    const post = (id: string, who: string, visibility: string, seen = false) =>
+      ({ id, created_at: new Date(now - 3600e3).toISOString(), auto: false, stats: null, visibility, is_mine: false, seen, author: { user_id: who, name: who, avatar_url: null, is_coach: false } }) as any;
+    const g = crewStories([post("a", "ann", "close_friends"), post("b", "bob", "community"), post("c", "cat", "close_friends", true)], now);
+    expect(Object.fromEntries(g.map((x) => [x.author.user_id, !!x.closeFriends]))).toEqual({ ann: true, bob: false, cat: false });
+    expect(readFileSync("src/components/community/crew-stories.tsx", "utf8")).toContain('g.closeFriends ? "bg-emerald-500"');
+  });
+
+  it("follow requests show in Activity under Follows", () => {
+    const n = { key: "q:x", kind: "follow_request", anchor: "x", post_id: null, comment_id: null, count: 1, at: "2026-10-13T10:00:00Z", actors: [{ user_id: "x", name: "Vicky", avatar_url: null, is_coach: false }], emojis: [], snippet: null, media_type: null, post_kind: "post" } as CommunityNotice;
+    expect(communityNoticeText(n).title).toBe("Vicky requested to follow you");
+    expect(activityLine(n).action).toBe("requested to follow you");
+    expect(matchesActivityFilter(n, "follows")).toBe(true);
+  });
+
+  it("the database decides who sees what, in one rule", () => {
+    const sql = readFileSync("supabase/migrations/20261130090000_crew_private_accounts_close_friends.sql", "utf8");
+    expect(sql).toContain("CHECK (visibility IN ('community', 'followers', 'close_friends', 'coach', 'private'))");
+    expect(sql).toContain("OR (_visibility = 'followers' AND public.can_view_community()");
+    expect(sql).toContain("NOT coalesce(NEW.auto_shared, false) AND public.community_is_private(NEW.author_user_id)");
+    expect(sql).toContain("CASE WHEN v_open THEN 'active' ELSE 'request' END");
   });
 });
 

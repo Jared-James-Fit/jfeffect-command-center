@@ -80,7 +80,7 @@ export function LockInBar({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-black">{existing?.locked_in_at ? `Locked in${time ? ` · ${time}` : ""}` : "Posted"}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">{existing?.visibility === "private" ? "Only you can see it" : existing?.visibility === "coach" ? "Only your coach sees it" : existing?.visibility === "partners" ? "Only your training partners see it" : "Your numbers land on it when you finish"}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{existing?.visibility === "private" ? "Only you can see it" : existing?.visibility === "coach" ? "Only your coach sees it" : existing?.visibility === "close_friends" ? "Only your Close friends see it" : "Your numbers land on it when you finish"}</span>
           </span>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         </button>
@@ -148,13 +148,13 @@ export function LockInBar({
                 if (!id) throw new Error("Couldn't start your session. Try again.");
                 await shareToCommunity(qc, { userId: user.id, completionId: id, caption: a.caption, visibility: a.visibility, photo: a.photo, existing, extras: a.extras, lockIn: true, attach: a.attach });
                 toast.success(
-                  a.visibility === "community" ? (existing ? "Lock in updated 🔒" : "You're locked in 🔒") : a.visibility === "partners" ? "Sent to your partners 🔒" : a.visibility === "coach" ? "Sent to your coach 🔒" : "Saved to your profile",
+                  a.visibility === "community" ? (existing ? "Lock in updated 🔒" : "You're locked in 🔒") : a.visibility === "close_friends" ? "Sent to Close friends 🔒" : a.visibility === "coach" ? "Sent to your coach 🔒" : "Saved to your profile",
                   {
                     description:
                       a.visibility === "community"
                         ? "The crew sees you showed up. Your numbers land on it when you finish."
-                        : a.visibility === "partners"
-                          ? "Your training partners see you showed up."
+                        : a.visibility === "close_friends"
+                          ? "Only your Close friends can see it."
                           : a.visibility === "coach"
                             ? "Only you and your coach can see it."
                             : "Only you can see it.",

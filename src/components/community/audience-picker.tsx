@@ -1,11 +1,13 @@
-import { EyeOff, Handshake, Lock, UserRound, Users } from "lucide-react";
+import { EyeOff, Lock, Star, UserRound, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AUDIENCES, type CommunityVisibility } from "@/lib/community";
+import { AUDIENCES, pickerAudience, type CommunityVisibility } from "@/lib/community";
+import { useFollowState } from "@/lib/community-social";
 
-const ICON: Record<CommunityVisibility, typeof Users> = { community: Users, partners: Handshake, coach: UserRound, private: Lock };
+const ICON: Record<CommunityVisibility, typeof Users> = { community: Users, followers: Users, close_friends: Star, coach: UserRound, private: Lock };
 
 /**
- * Who sees a post (JF crew / Partners / My coach / Only me) + "Hide my weights".
+ * Who sees a post (JF crew, or Followers on a private account / Close friends /
+ * My coach / Only me) + "Hide my weights".
  * Shared by the workout share editor (light sheet) and Lock in (dark).
  */
 export function AudiencePicker({
@@ -22,13 +24,15 @@ export function AudiencePicker({
   tone?: "light" | "dark";
 }) {
   const dark = tone === "dark";
-  const hint = AUDIENCES.find((a) => a.key === value)?.hint;
+  const audiences = useAudiences();
+  const picked = pickerAudience(value);
+  const hint = audiences.find((a) => a.key === picked)?.hint;
   return (
     <div className="space-y-2">
       <div className={cn("grid grid-cols-4 gap-1 rounded-xl p-1", dark ? "bg-white/10" : "bg-muted")} role="radiogroup" aria-label="Who can see it">
-        {AUDIENCES.map((a) => {
+        {audiences.map((a) => {
           const Icon = ICON[a.key];
-          const on = value === a.key;
+          const on = picked === a.key;
           return (
             <button
               key={a.key}
@@ -41,7 +45,7 @@ export function AudiencePicker({
                 on ? (dark ? "bg-white text-black" : "bg-background text-foreground shadow-sm") : dark ? "text-white/70" : "text-muted-foreground",
               )}
             >
-              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <Icon className={cn("h-3.5 w-3.5 shrink-0", a.key === "close_friends" && "fill-emerald-500 text-emerald-500")} />
               <span className="truncate">{a.label}</span>
             </button>
           );
@@ -68,7 +72,15 @@ export function AudiencePicker({
   );
 }
 
+/** The audiences as this person sees them: a private account's crew choice reads "Followers". */
+export function useAudiences() {
+  const { data: follows } = useFollowState();
+  return follows?.is_private
+    ? AUDIENCES.map((a) => (a.key === "community" ? { ...a, label: "Followers", hint: "Only the followers you've approved" } : a))
+    : AUDIENCES;
+}
+
 /** Short label for where a post went ("Sent to coach"). */
 export function audienceDoneLabel(v: CommunityVisibility): string {
-  return v === "community" ? "Posted" : v === "partners" ? "Sent to partners" : v === "coach" ? "Sent to coach" : "Saved";
+  return v === "community" || v === "followers" ? "Posted" : v === "close_friends" ? "Close friends" : v === "coach" ? "Sent to coach" : "Saved";
 }
