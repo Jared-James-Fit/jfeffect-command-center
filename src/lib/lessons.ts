@@ -35,6 +35,9 @@ export const LIFT_LABEL: Record<LessonLift, string> = { squat: "Squat", bench: "
 export type LessonVisualKind =
   | "bar_path"
   | "squat_torso"
+  | "squat_balance"
+  | "squat_rise"
+  | "squat_depth"
   | "deadlift_start"
   | "bench_touch"
   | "sticking_point"
@@ -45,11 +48,13 @@ export type LessonVisualKind =
   | "sra"
   | "rpe_rir"
   | "dose_response"
-  | "velocity_loss";
+  | "velocity_loss"
+  | "set_structure";
 
 export const LESSON_VISUAL_KINDS: LessonVisualKind[] = [
-  "bar_path", "squat_torso", "deadlift_start", "bench_touch", "sticking_point", "strength_curve", "length_tension",
-  "force_velocity", "fitness_fatigue", "sra", "rpe_rir", "dose_response", "velocity_loss",
+  "bar_path", "squat_torso", "squat_balance", "squat_rise", "squat_depth", "deadlift_start", "bench_touch", "sticking_point",
+  "strength_curve", "length_tension", "force_velocity", "fitness_fatigue", "sra", "rpe_rir", "dose_response", "velocity_loss",
+  "set_structure",
 ];
 
 export type LessonVisual = {
@@ -59,6 +64,11 @@ export type LessonVisual = {
   fault?: string | null;
   /** strength_curve: ascending | descending | bell */
   shape?: string | null;
+  /**
+   * squat_torso: build (default) | lean · bench_touch: tuck/flare (default) | consistency ·
+   * sra: stress · velocity_loss: cluster · set_structure: myo
+   */
+  variant?: string | null;
 };
 
 export type LessonRef = { label: string; url?: string | null };
@@ -367,6 +377,16 @@ export function coachTimeLabel(iso: string): string {
  * subject, and no text (image models garble words and numbers). Technical
  * content stays in the drawn diagrams; this is only a cover.
  */
+/**
+ * Which lessons can get an OpenAI cover: never a technique fix or one with a
+ * drawn diagram (positions and curves need to be exact and look like the app;
+ * a generated picture can't promise either). The rest (mind, methods, most
+ * hypertrophy) can have an optional mood picture.
+ */
+export function canHaveArt(l: Pick<LessonExtra, "track" | "visual">): boolean {
+  return l.track !== "fix" && !l.visual;
+}
+
 export function lessonArtPrompt(l: Pick<LessonExtra, "title" | "lift" | "track">): string {
   const subject = l.lift
     ? `a powerlifter performing a ${l.lift === "bench" ? "bench press" : l.lift}, side view, realistic proportions and technique`
@@ -378,8 +398,8 @@ export function lessonArtPrompt(l: Pick<LessonExtra, "title" | "lift" | "track">
   return [
     `Cover illustration for a strength coaching post titled "${l.title}".`,
     `Subject: ${subject}.`,
-    "Style: minimal premium editorial illustration, flat shapes with soft depth, dark charcoal background (#0a0a0d), off-white figure, one red accent colour (#ef3340), plenty of empty space.",
-    "Anatomically plausible, no exaggerated muscles.",
+    "Style: minimal flat vector illustration that matches a clean fitness app: simple rounded shapes, no outlines, no texture, soft even light, dark charcoal background (#0a0a0d), warm grey and off-white shapes, one small red accent (#ef3340), lots of empty space.",
+    "Plain silhouettes without facial detail, realistic proportions, no exaggerated muscles, no clutter.",
     "Absolutely no text, letters, numbers, logos or watermarks anywhere in the image.",
   ].join(" ");
 }

@@ -16,7 +16,7 @@ import { useFullMediaUrl, useSeriesAction, useSeriesOverview } from "@/lib/commu
 import { lessonArtStatus, makeLessonArt } from "@/lib/lesson-art.functions";
 import {
   LESSON_LEVELS, LESSON_LIFTS, LESSON_TRACK, LESSON_TRACKS, LEVEL_LABEL, LIFT_LABEL, clockLabel, coachClock, coachInstant, coachTimeLabel, dayLabel,
-  lessonKicker, lessonStatusLabel, missingLevels, needsReview,
+  canHaveArt, lessonKicker, lessonStatusLabel, missingLevels, needsReview,
   type LessonItem, type LessonLevel, type LessonLift, type LessonPlanRow, type LessonsOverview, type LessonTrack, type StickerSpec,
 } from "@/lib/lessons";
 import { lessonKeys, useLessonAct, useLessonLibrary, useLessonsOverview, useLessonsSettings, useSaveLessonItem, type LessonAction } from "@/lib/lessons.queries";
@@ -234,8 +234,8 @@ function ArtLine() {
     <p data-lesson-art={art.enabled ? "on" : "off"}>
       <span className="font-bold text-foreground">Illustrations:</span>{" "}
       {art.enabled
-        ? "tap Illustration on a lesson for an OpenAI cover. Only when you tap, and you see it before it posts."
-        : "off. The diagrams are drawn in the app; an OpenAI key (OPENAI_API_KEY) in the app's settings turns on optional covers."}
+        ? "technique and diagram lessons use the app's own drawings. Others can get an OpenAI cover when you tap Illustration, and you see it before it posts."
+        : "the diagrams are drawn in the app. An OpenAI key (OPENAI_API_KEY) in the app's settings adds optional covers for lessons without one."}
     </p>
   );
 }
@@ -565,7 +565,7 @@ function LessonSheet({ row, data, onClose }: { row: LessonPlanRow; data: Lessons
                 <Tool icon={CalendarClock} label="Move" onClick={() => setMove(true)} />
                 {row.status !== "skipped" && <Tool icon={SkipForward} label="Skip" onClick={() => run({ kind: "skip", id: row.id }, "Skipped. It stays in the library for later.", onClose)} />}
                 {it && row.status !== "skipped" && <Tool icon={Send} label="Post now" onClick={() => setConfirmNow(true)} />}
-                {it && row.status !== "skipped" && art.enabled && (
+                {it && row.status !== "skipped" && art.enabled && canHaveArt(it) && (
                   <Tool icon={Sparkles} label={art.busy ? "Drawing…" : cover ? "New illustration" : "Illustration"} onClick={() => !art.busy && art.make()} />
                 )}
               </div>

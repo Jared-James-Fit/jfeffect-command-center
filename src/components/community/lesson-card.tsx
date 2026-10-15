@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { BookOpen, ChevronDown } from "lucide-react";
+import { BookOpen, ChevronDown, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CommunityPost } from "@/lib/community";
 import { extraLesson, hookLine, lessonKicker, safeRefUrl, type LessonExtra } from "@/lib/lessons";
-import { LessonVisualArt, visualLabel } from "@/components/community/lesson-visuals";
+import { LessonVisualArt, visualLabel, visualNote } from "@/components/community/lesson-visuals";
 
 /**
  * What a coach lesson shows under its words: the diagram (when it has one) on
- * the app's dark card, what kind of lesson it is ("Technique fix · Squat ·
- * Beginner"), its sources one tap away, and the line that keeps it a lesson
- * and not an instruction: your program stays as written.
+ * the same quiet card as the other info posts (Tuesday's data, Thursday's
+ * features), what kind of lesson it is ("Technique fix · Squat · Beginner"),
+ * its sources one tap away, and the line that keeps it a lesson and not an
+ * instruction: your program stays as written.
  */
 export function LessonCard({ post, className }: { post: CommunityPost; className?: string }) {
   const lesson = extraLesson(post);
@@ -20,9 +21,10 @@ export function LessonCard({ post, className }: { post: CommunityPost; className
   return (
     <div className={className} data-lesson-card={lesson.track}>
       {lesson.visual ? (
-        <div className="overflow-hidden rounded-2xl bg-[#0a0a0d] bg-[radial-gradient(120%_80%_at_0%_0%,rgba(239,51,64,0.32),rgba(127,29,29,0.08)_45%,#0a0a0d_75%)] px-3 pb-2 pt-3 text-white">
-          <Kicker lesson={lesson} dark />
-          <LessonVisualArt visual={lesson.visual} className="mt-1.5" />
+        <div className="rounded-2xl border border-border/70 bg-muted/40 px-3.5 pb-3 pt-3" data-lesson-diagram>
+          <Kicker lesson={lesson} />
+          <LessonVisualArt visual={lesson.visual} className="mt-3" />
+          <div className="mt-2.5 text-[11px] leading-snug text-muted-foreground">{visualNote(lesson.visual)}</div>
         </div>
       ) : (
         <Kicker lesson={lesson} />
@@ -70,10 +72,10 @@ export function LessonCard({ post, className }: { post: CommunityPost; className
   );
 }
 
-function Kicker({ lesson, dark = false }: { lesson: LessonExtra; dark?: boolean }) {
+function Kicker({ lesson }: { lesson: LessonExtra }) {
   return (
-    <div className={cn("flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em]", dark ? "text-white/70" : "text-muted-foreground")} data-lesson-kicker>
-      {dark && <img src="/logo.png" alt="" className="h-3.5 w-3.5 shrink-0 rounded-sm object-contain" />}
+    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground" data-lesson-kicker>
+      <GraduationCap className="h-3 w-3 shrink-0 text-primary" aria-hidden />
       <span className="truncate">{lessonKicker(lesson)}</span>
     </div>
   );
@@ -101,8 +103,8 @@ export function LessonStoryFrame({ post }: { post: CommunityPost }) {
       <span className="text-[11px] font-black uppercase tracking-[0.18em] text-red-400">{lessonKicker(lesson)}</span>
       <span className="mt-2 block text-[28px] font-black leading-[1.08]">{lesson.title}</span>
       {lesson.visual && (
-        <div className="mt-4 rounded-2xl bg-white/[0.04] p-2 ring-1 ring-white/10" aria-label={visualLabel(lesson.visual)}>
-          <LessonVisualArt visual={lesson.visual} />
+        <div className="mt-4 rounded-2xl bg-white/[0.04] px-3 py-3 ring-1 ring-white/10" aria-label={visualLabel(lesson.visual)}>
+          <LessonVisualArt visual={lesson.visual} tone="dark" />
         </div>
       )}
       {showHook && <p className="mt-4 line-clamp-3 text-[17px] font-semibold leading-snug text-white/85">{hook}</p>}

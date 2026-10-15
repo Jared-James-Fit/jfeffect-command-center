@@ -1,14 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { lessonArtPrompt, type LessonExtra } from "@/lib/lessons";
+import { canHaveArt, lessonArtPrompt, type LessonExtra } from "@/lib/lessons";
 
 /**
  * Optional cover illustrations for lessons, from OpenAI's image model, only
  * when the coach taps for one and only with an OPENAI_API_KEY set (nothing
  * here runs on a schedule, so nothing costs anything unasked). The image goes
  * on the planned lesson as its photo, for the coach to look at before he
- * approves it; the technical diagrams stay drawn in the app.
+ * approves it. Technique fixes and anything with a drawn diagram stay native
+ * (canHaveArt): exact positions and curves are drawn in the app.
  */
 async function assertStaff(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -38,6 +39,7 @@ export const makeLessonArt = createServerFn({ method: "POST" })
     const { data: item } = await admin.from("community_series_items").select("data").eq("id", row.item_id).maybeSingle();
     const lesson = (item?.data ?? {}) as LessonExtra;
     if (!lesson.title) return { ok: false as const, reason: "That lesson has no title." };
+    if (!canHaveArt(lesson)) return { ok: false as const, reason: "This one has a drawn diagram (or is a technique fix), so it keeps that." };
 
     const res = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",

@@ -1,537 +1,1119 @@
-import { useId, type ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import type { LessonLift, LessonVisual } from "@/lib/lessons";
 
 /**
- * The diagrams under a coach lesson, drawn in code: crisp at any size, the
- * app's own dark card and red, nothing generated or uploaded. Where a shape
- * is a model rather than data it says so ("illustration"). The body
- * positions (squat, deadlift start, bench) are worked out from segment
- * lengths and angles with the bar kept over midfoot, so what's drawn is a
- * position a lifter could actually be in, not a sketch.
+ * The pictures under a coach lesson, drawn in code so they belong to the app:
+ * its colours (they follow light and dark mode), its type, crisp at any size,
+ * nothing generated or uploaded.
+ *
+ * Bodies are solid silhouettes built from real segment proportions (Winter,
+ * Biomechanics and Motor Control of Human Movement) and solved, not sketched:
+ * a squat keeps the bar over midfoot, a deadlift hangs straight arms from the
+ * shoulders to a bar on 45 cm plates, a bench stacks the forearm under the
+ * bar. So every position drawn is one a lifter could actually hold. Red only
+ * ever marks the part that matters (the fault, the lever, the sticking
+ * region); curves that are models say so in the card's note.
  */
 
-const INK = "rgba(255,255,255,0.92)";
-const SOFT = "rgba(255,255,255,0.62)";
-const MUTED = "rgba(255,255,255,0.42)";
-const GRID = "rgba(255,255,255,0.10)";
-const RED = "#ff5a64";
-const GOLD = "#fcd34d";
+export type VisualTone = "auto" | "dark";
+
+/** The palette, as variables: "auto" follows the app's theme, "dark" is for stories (always on black). */
+const TONES: Record<VisualTone, CSSProperties> = {
+  auto: {
+    "--lv-ink": "var(--foreground)",
+    "--lv-body": "color-mix(in oklab, var(--foreground) 64%, var(--card))",
+    "--lv-gap": "color-mix(in oklab, var(--muted) 40%, var(--card))",
+    "--lv-sub": "var(--muted-foreground)",
+    "--lv-line": "color-mix(in oklab, var(--foreground) 17%, transparent)",
+    "--lv-faint": "color-mix(in oklab, var(--foreground) 6%, transparent)",
+    "--lv-accent": "var(--primary)",
+    "--lv-soft": "color-mix(in oklab, var(--primary) 13%, transparent)",
+  } as CSSProperties,
+  dark: {
+    "--lv-ink": "rgba(255,255,255,0.94)",
+    "--lv-body": "#c9c9cf",
+    "--lv-gap": "#121215",
+    "--lv-sub": "rgba(255,255,255,0.58)",
+    "--lv-line": "rgba(255,255,255,0.18)",
+    "--lv-faint": "rgba(255,255,255,0.07)",
+    "--lv-accent": "#ff4d58",
+    "--lv-soft": "rgba(255,77,88,0.17)",
+  } as CSSProperties,
+};
+
+const C = {
+  ink: "var(--lv-ink)",
+  body: "var(--lv-body)",
+  sub: "var(--lv-sub)",
+  line: "var(--lv-line)",
+  faint: "var(--lv-faint)",
+  accent: "var(--lv-accent)",
+  soft: "var(--lv-soft)",
+  gap: "var(--lv-gap)",
+};
+
 const W = 320;
-const H = 200;
 
-type Pt = { x: number; y: number };
-
-export function LessonVisualArt({ visual, className }: { visual: LessonVisual; className?: string }) {
-  const art = (() => {
-    switch (visual.kind) {
-      case "bar_path":
-        return <BarPath lift={visual.lift ?? "squat"} fault={visual.fault ?? "none"} />;
-      case "squat_torso":
-        return <SquatTorso />;
-      case "deadlift_start":
-        return <DeadliftStart fault={visual.fault ?? "hips_low"} />;
-      case "bench_touch":
-        return <BenchTouch />;
-      case "sticking_point":
-        return <StickingPoint lift={visual.lift ?? "bench"} />;
-      case "strength_curve":
-        return <StrengthCurve shape={visual.shape ?? "ascending"} />;
-      case "length_tension":
-        return <LengthTension />;
-      case "force_velocity":
-        return <ForceVelocity />;
-      case "fitness_fatigue":
-        return <FitnessFatigue />;
-      case "sra":
-        return <Sra />;
-      case "rpe_rir":
-        return <RpeRir />;
-      case "dose_response":
-        return <DoseResponse />;
-      case "velocity_loss":
-        return <VelocityLoss />;
-      default:
-        return null;
-    }
-  })();
+export function LessonVisualArt({ visual, tone = "auto", className }: { visual: LessonVisual; tone?: VisualTone; className?: string }) {
+  const art = draw(visual);
   if (!art) return null;
   return (
-    <div className={className} data-lesson-visual={visual.kind}>
+    <div className={cn("w-full", className)} style={TONES[tone]} data-lesson-visual={visual.kind} data-tone={tone}>
       {art}
     </div>
   );
 }
 
-/** What a diagram shows, for screen readers and the alt text. */
+function draw(v: LessonVisual): ReactNode {
+  switch (v.kind) {
+    case "bar_path":
+      return v.lift === "bench" ? <BenchPath fault={v.fault === "forward"} /> : <PullPath lift={v.lift === "squat" ? "squat" : "deadlift"} />;
+    case "squat_torso":
+      return <SquatLevers variant={v.variant === "lean" ? "lean" : "build"} />;
+    case "squat_balance":
+      return <SquatBalance />;
+    case "squat_rise":
+      return <SquatRise />;
+    case "squat_depth":
+      return <SquatDepth />;
+    case "deadlift_start":
+      return <DeadliftStart fault={v.fault === "hips_high" || v.fault === "bar_forward" ? v.fault : "hips_low"} />;
+    case "bench_touch":
+      return v.variant === "consistency" ? <BenchConsistency /> : <BenchTuckFlare />;
+    case "sticking_point":
+      return <StickingPoint lift={v.lift ?? "bench"} />;
+    case "strength_curve":
+      return <StrengthCurve shape={v.shape ?? "ascending"} />;
+    case "length_tension":
+      return <LengthTension />;
+    case "force_velocity":
+      return <ForceVelocity />;
+    case "fitness_fatigue":
+      return <FitnessFatigue />;
+    case "sra":
+      return <Sra stress={v.variant === "stress"} />;
+    case "rpe_rir":
+      return <RpeRir />;
+    case "dose_response":
+      return <DoseResponse />;
+    case "velocity_loss":
+      return v.variant === "cluster" ? <ClusterSets /> : <VelocityLoss />;
+    case "set_structure":
+      return <MyoReps />;
+    default:
+      return null;
+  }
+}
+
+/** What a picture shows, for screen readers. */
 export function visualLabel(v: LessonVisual): string {
   const lift = v.lift ? `${v.lift} ` : "";
   switch (v.kind) {
     case "bar_path":
-      return `Side view of the ${lift}bar path${v.fault && v.fault !== "none" ? ", ideal versus drifting" : ""}`;
+      return v.lift === "bench"
+        ? `Bench from the side: the bar comes off the lower chest and back over the shoulder${v.fault === "forward" ? ", versus finishing over the chest" : ""}`
+        : `Side view of the ${lift}bar path: straight up over midfoot versus drifting forward`;
     case "squat_torso":
-      return "Two squat bottoms, more upright versus more lean, with hip and knee moment arms";
+      return v.variant === "lean"
+        ? "Two squat bottoms with the bar over midfoot: a few degrees more lean moves the hips further behind the bar"
+        : "Two squat bottoms with the bar over midfoot: shorter thighs sit more upright, longer thighs lean more and load the hips more";
+    case "squat_balance":
+      return "Squat bottom: bar over midfoot with the whole foot down, versus weight on the toes with the heels up";
+    case "squat_rise":
+      return "Coming out of the hole: hips and chest rise together, versus hips rising while the bar barely moves";
+    case "squat_depth":
+      return "Squat depth from the side: hip crease above the top of the knee, versus below it";
     case "deadlift_start":
-      return "Deadlift start position: bar over midfoot versus the fault";
+      return v.fault === "hips_high"
+        ? "Deadlift start: shoulders just over the bar, versus hips high with the back nearly flat"
+        : v.fault === "bar_forward"
+          ? "Deadlift start: bar over midfoot, versus the bar out over the toes"
+          : "Deadlift start: shoulders over the bar, versus starting low with shoulders behind it, where the hips rise first";
     case "bench_touch":
-      return "Bench from the side: forearm stacked under the bar versus tilted";
+      return v.variant === "consistency"
+        ? "Bench from the side: the bar landing on the same spot every rep, versus a different spot each rep"
+        : "Bench from the side: forearm stacked under the bar with a lower touch and more tuck, or a higher touch and more flare";
     case "sticking_point":
       return `Bar speed through the ${lift}rep, with the sticking region marked`;
     case "strength_curve":
       return "How much force you can produce across the range of motion";
     case "length_tension":
-      return "Muscle force across muscle length";
+      return "Muscle force across muscle length: most in the middle";
     case "force_velocity":
-      return "Force velocity curve: heavy is slow, power peaks in the middle";
+      return "Force and speed: heavy is slow, power peaks in between";
     case "fitness_fatigue":
-      return "Fitness, fatigue and performance through a training block and taper";
+      return "Fitness, fatigue and performance through a hard block and a taper";
     case "sra":
-      return "Stimulus, recovery, adaptation";
+      return v.variant === "stress" ? "Recovery after a workout, normally and in a stressful week" : "Stimulus, recovery, adaptation";
     case "rpe_rir":
       return "RPE and reps in reserve";
     case "dose_response":
-      return "More weekly sets, more growth, with diminishing returns";
+      return "More weekly sets, more growth, with smaller gains each step";
     case "velocity_loss":
-      return "Rep speed falling across a set";
+      return v.variant === "cluster" ? "Rep speed in a straight set versus singles with short rests" : "Rep speed falling across a set taken close to failure";
+    case "set_structure":
+      return "A myo-rep set: one activation set, then short mini sets on a few breaths until you can't match the first";
   }
 }
 
-/* ---- frame ------------------------------------------------------------ */
+/** The one line under a picture: what it is, honestly (a drawing, a model, an example). */
+export function visualNote(v: LessonVisual): string {
+  switch (v.kind) {
+    case "bar_path":
+      return v.lift === "bench" ? "Side view, head on the left · illustration" : "Side view · dashed line is midfoot · illustration";
+    case "squat_torso":
+    case "squat_balance":
+    case "squat_rise":
+      return "Side view · dashed line is midfoot · illustration";
+    case "squat_depth":
+      return "Side view, about hip height · illustration";
+    case "deadlift_start":
+      return "Side view · dashed line is midfoot · illustration";
+    case "bench_touch":
+      return v.variant === "consistency" ? "Side view, head on the left · illustration" : "Side view, head on the left · forearm stacked under the bar in both";
+    case "sticking_point":
+      return "Typical shape · where yours sits shows on video";
+    case "strength_curve":
+    case "length_tension":
+    case "sra":
+      return "Simplified model, not measured data";
+    case "force_velocity":
+      return "Force–velocity relationship (Hill) · simplified";
+    case "fitness_fatigue":
+      return "Fitness–fatigue model (Banister) · simplified";
+    case "rpe_rir":
+      return "RPE as reps in reserve";
+    case "dose_response":
+      return "Shape of the research average · people vary";
+    case "velocity_loss":
+      return v.variant === "cluster" ? "Illustration · short rests inside the set keep reps fast" : "Illustration · rep speed slows as a set gets close to failure";
+    case "set_structure":
+      return "Example · your rep counts will differ";
+  }
+}
 
-function Frame({ label, children, note, noteAt = "bottom" }: { label: string; children: ReactNode; note?: string; noteAt?: "top" | "bottom" }) {
+/* ======================================================================
+ * Building blocks
+ * ==================================================================== */
+
+type Pt = { x: number; y: number };
+const pt = (x: number, y: number): Pt => ({ x, y });
+const add = (a: Pt, b: Pt) => pt(a.x + b.x, a.y + b.y);
+const sub = (a: Pt, b: Pt) => pt(a.x - b.x, a.y - b.y);
+const mul = (a: Pt, k: number) => pt(a.x * k, a.y * k);
+const len = (a: Pt) => Math.hypot(a.x, a.y);
+const unit = (a: Pt) => mul(a, 1 / (len(a) || 1));
+const rad = (d: number) => (d * Math.PI) / 180;
+/** A direction `d` degrees forward of straight up. */
+const tilt = (d: number) => pt(Math.sin(rad(d)), Math.cos(rad(d)));
+/** The chest side of a segment pointing along u (lifters face right). */
+const front = (u: Pt) => pt(u.y, -u.x);
+const f1 = (n: number) => n.toFixed(1);
+
+function Svg({ label, h, children }: { label: string; h: number; children: ReactNode }) {
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label={label}>
+    <svg viewBox={`0 0 ${W} ${h}`} className="block h-auto w-full" role="img" aria-label={label} style={{ fontFamily: "inherit" }}>
       {children}
-      {note && (
-        <text x={W - 8} y={noteAt === "top" ? 12 : H - 5} textAnchor="end" fontSize="8.5" fontWeight={700} letterSpacing="0.08em" fill={MUTED}>
-          {note}
-        </text>
-      )}
     </svg>
   );
 }
 
-function Label({ x, y, children, anchor = "start", color = SOFT, size = 9.5, weight = 800 }: {
-  x: number; y: number; children: ReactNode; anchor?: "start" | "middle" | "end"; color?: string; size?: number; weight?: number;
+function T({ x, y, children, c = C.sub, size = 10.5, weight = 600, anchor = "start", caps = false }: {
+  x: number; y: number; children: ReactNode; c?: string; size?: number; weight?: number; anchor?: "start" | "middle" | "end"; caps?: boolean;
 }) {
   return (
-    <text x={x} y={y} textAnchor={anchor} fontSize={size} fontWeight={weight} letterSpacing="0.06em" fill={color}>
+    <text x={f1(x)} y={f1(y)} textAnchor={anchor} fontSize={size} fontWeight={weight} letterSpacing={caps ? "0.1em" : undefined} style={{ fill: c }}>
       {children}
     </text>
   );
 }
 
-/** The key, top left, one line each (they never run into each other). */
-function Legend({ items, x = 12, y = 15 }: { items: { label: string; color: string; dash?: boolean }[]; x?: number; y?: number }) {
+/** A panel's name (the app's small caps label) and up to two short plain lines under it. */
+function Head({ x, title, lines = [], c = C.ink }: { x: number; title: string; lines?: string[]; c?: string }) {
+  return (
+    <g>
+      <T x={x} y={12} anchor="middle" c={c} size={9.5} weight={800} caps>{title}</T>
+      {lines.map((l, i) => (
+        <T key={i} x={x} y={25 + i * 12} anchor="middle" size={10}>{l}</T>
+      ))}
+    </g>
+  );
+}
+
+/** A small key, top left: a short stroke and its name. */
+function Legend({ items, x = 8, y = 13 }: { items: { label: string; c: string; dash?: boolean }[]; x?: number; y?: number }) {
   return (
     <g>
       {items.map((it, i) => (
         <g key={it.label}>
-          <line x1={x} y1={y + i * 13 - 3} x2={x + 18} y2={y + i * 13 - 3} stroke={it.color} strokeWidth={3} strokeLinecap="round" strokeDasharray={it.dash ? "4 3" : undefined} />
-          <Label x={x + 24} y={y + i * 13} color={SOFT} size={9}>{it.label}</Label>
+          <line x1={x} y1={y + i * 15 - 3.5} x2={x + 18} y2={y + i * 15 - 3.5} style={{ stroke: it.c }} strokeWidth={2.4} strokeLinecap="round" strokeDasharray={it.dash ? "4 3" : undefined} />
+          <T x={x + 25} y={y + i * 15} c={it.c} size={10.5} weight={700}>{it.label}</T>
         </g>
       ))}
     </g>
   );
 }
 
-/** A chart's axes: y up the left, x along the bottom, with their names. */
-function Axes({ x0, y0, x1, y1, xLabel, yLabel }: { x0: number; y0: number; x1: number; y1: number; xLabel: string; yLabel: string }) {
+function Divider({ x = W / 2, y0 = 4, y1 }: { x?: number; y0?: number; y1: number }) {
+  return <line x1={x} y1={y0} x2={x} y2={y1} style={{ stroke: C.line }} strokeWidth={1} />;
+}
+
+function Floor({ y, x0 = 6, x1 = W - 6 }: { y: number; x0?: number; x1?: number }) {
+  return <line x1={x0} y1={f1(y)} x2={x1} y2={f1(y)} style={{ stroke: C.line }} strokeWidth={1.5} strokeLinecap="round" />;
+}
+
+/** A dashed plumb line: midfoot, or straight down from the bar. */
+function Plumb({ x, y0, y1, c = C.sub }: { x: number; y0: number; y1: number; c?: string }) {
+  return <line x1={f1(x)} y1={f1(y0)} x2={f1(x)} y2={f1(y1)} style={{ stroke: c }} strokeWidth={1.1} strokeDasharray="2.5 3" strokeLinecap="round" />;
+}
+
+function Arrow({ from, to, c = C.accent, w = 1.8 }: { from: Pt; to: Pt; c?: string; w?: number }) {
+  const u = unit(sub(to, from));
+  const n = front(u);
+  const tip = to;
+  const b = sub(tip, mul(u, 6));
+  const l = add(b, mul(n, 3.4));
+  const r = sub(b, mul(n, 3.4));
   return (
     <g>
-      <line x1={x0} y1={y0} x2={x0} y2={y1} stroke={MUTED} strokeWidth={1.2} />
-      <line x1={x0} y1={y0} x2={x1} y2={y0} stroke={MUTED} strokeWidth={1.2} />
-      <Label x={x1} y={y0 + 14} anchor="end" color={MUTED}>{xLabel}</Label>
-      <text x={x0 - 6} y={y1} transform={`rotate(-90 ${x0 - 6} ${y1})`} textAnchor="end" fontSize={9.5} fontWeight={800} letterSpacing="0.06em" fill={MUTED}>
-        {yLabel}
-      </text>
+      <line x1={f1(from.x)} y1={f1(from.y)} x2={f1(b.x)} y2={f1(b.y)} style={{ stroke: c }} strokeWidth={w} strokeLinecap="round" />
+      <path d={`M${f1(tip.x)} ${f1(tip.y)} L${f1(l.x)} ${f1(l.y)} L${f1(r.x)} ${f1(r.y)} Z`} style={{ fill: c }} />
     </g>
   );
 }
 
-function path(points: Pt[]): string {
-  return points.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+/** A limb as a tapered capsule: circles of radius ra at a and rb at b, joined by their outer tangents. */
+function capsule(a: Pt, ra: number, b: Pt, rb: number): string {
+  const d = len(sub(b, a));
+  if (d <= Math.abs(ra - rb) + 0.01) {
+    const c = ra >= rb ? a : b;
+    const r = Math.max(ra, rb);
+    return `M${f1(c.x - r)} ${f1(c.y)} a${f1(r)} ${f1(r)} 0 1 0 ${f1(2 * r)} 0 a${f1(r)} ${f1(r)} 0 1 0 ${f1(-2 * r)} 0 Z`;
+  }
+  const th = Math.atan2(b.y - a.y, b.x - a.x);
+  const ph = Math.acos(Math.max(-1, Math.min(1, (ra - rb) / d)));
+  const on = (c: Pt, r: number, ang: number) => pt(c.x + r * Math.cos(ang), c.y + r * Math.sin(ang));
+  const a1 = on(a, ra, th + ph);
+  const b1 = on(b, rb, th + ph);
+  const b2 = on(b, rb, th - ph);
+  const a2 = on(a, ra, th - ph);
+  return [
+    `M${f1(a1.x)} ${f1(a1.y)}`,
+    `L${f1(b1.x)} ${f1(b1.y)}`,
+    `A${f1(rb)} ${f1(rb)} 0 ${2 * ph > Math.PI ? 1 : 0} 0 ${f1(b2.x)} ${f1(b2.y)}`,
+    `L${f1(a2.x)} ${f1(a2.y)}`,
+    `A${f1(ra)} ${f1(ra)} 0 ${ph < Math.PI / 2 ? 1 : 0} 0 ${f1(a1.x)} ${f1(a1.y)}`,
+    "Z",
+  ].join(" ");
 }
 
-/** A function sampled across a chart's box: f(t) for t in 0..1 → 0..1 (up). */
-function plot(f: (t: number) => number, box: { x0: number; y0: number; w: number; h: number }, n = 60): Pt[] {
-  return Array.from({ length: n + 1 }, (_, i) => {
-    const t = i / n;
-    return { x: box.x0 + t * box.w, y: box.y0 - Math.max(0, Math.min(1.05, f(t))) * box.h };
-  });
+/** A smooth line through points (Catmull-Rom as cubic Béziers). */
+function smooth(p: Pt[], closed = false): string {
+  if (p.length < 2) return "";
+  const at = (i: number) => (closed ? p[(i + p.length) % p.length] : p[Math.max(0, Math.min(p.length - 1, i))]);
+  let d = `M${f1(p[0].x)} ${f1(p[0].y)}`;
+  const n = closed ? p.length : p.length - 1;
+  for (let i = 0; i < n; i++) {
+    const p0 = at(i - 1);
+    const p1 = at(i);
+    const p2 = at(i + 1);
+    const p3 = at(i + 2);
+    const c1 = add(p1, mul(sub(p2, p0), 1 / 6));
+    const c2 = sub(p2, mul(sub(p3, p1), 1 / 6));
+    d += ` C${f1(c1.x)} ${f1(c1.y)} ${f1(c2.x)} ${f1(c2.y)} ${f1(p2.x)} ${f1(p2.y)}`;
+  }
+  return closed ? `${d} Z` : d;
 }
 
-/* ---- bodies ----------------------------------------------------------- */
-
-const deg = (d: number) => (d * Math.PI) / 180;
-
-/** Where two circles meet (the one with the smaller x, i.e. behind). */
-function circleMeet(a: Pt, ra: number, b: Pt, rb: number, pick: "back" | "front" = "back"): Pt | null {
+/** Both points where two circles meet. */
+function meet(a: Pt, ra: number, b: Pt, rb: number): [Pt, Pt] | null {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const d = Math.hypot(dx, dy);
   if (d > ra + rb || d < Math.abs(ra - rb) || d === 0) return null;
   const l = (ra * ra - rb * rb + d * d) / (2 * d);
   const h = Math.sqrt(Math.max(0, ra * ra - l * l));
-  const mx = a.x + (dx * l) / d;
-  const my = a.y + (dy * l) / d;
-  const p1 = { x: mx + (dy * h) / d, y: my - (dx * h) / d };
-  const p2 = { x: mx - (dy * h) / d, y: my + (dx * h) / d };
-  return (pick === "back" ? p1.x < p2.x : p1.x > p2.x) ? p1 : p2;
+  const m = pt(a.x + (dx * l) / d, a.y + (dy * l) / d);
+  return [pt(m.x + (dy * h) / d, m.y - (dx * h) / d), pt(m.x - (dy * h) / d, m.y + (dx * h) / d)];
 }
 
-/** Model space (metres-ish, y up) → the panel's pixels. */
-function toPx(p: Pt, o: { x: number; y: number; s: number }): Pt {
-  return { x: o.x + p.x * o.s, y: o.y - p.y * o.s };
+/* ======================================================================
+ * Bodies
+ *
+ * Model space: metres scaled to a 1.0-tall lifter, y up, floor at 0, the
+ * ankle at x = 0, lifters facing right. A View puts that on the page.
+ * ==================================================================== */
+
+/** Segment lengths as a share of height (Winter 2009). */
+const SEG = {
+  heel: 0.042, // heel behind the ankle
+  toe: 0.11, // toes in front of the ankle
+  ankleH: 0.039,
+  shank: 0.246,
+  thigh: 0.245,
+  torso: 0.288, // hip joint to shoulder joint
+  upperArm: 0.186,
+  forearm: 0.146,
+  grip: 0.04, // wrist to the middle of the hand
+  neck: 0.105, // shoulder joint to the middle of the head
+};
+/** Midfoot sits this far in front of the ankle joint. */
+const MIDFOOT = (SEG.toe - SEG.heel) / 2;
+/** A 45 cm plate on a 175 cm lifter. */
+const PLATE_R = 0.129;
+
+/** Limb thickness (radius) at each end: a touch slimmer than life, so a shape reads at a glance. */
+const R = { ankle: 0.018, knee: 0.028, thighKnee: 0.031, hip: 0.05, pelvis: 0.052, chest: 0.056, neck: 0.022, shoulder: 0.03, elbow: 0.022, wrist: 0.016, head: 0.054 };
+
+type View = { x: number; y: number; s: number };
+const toPx = (q: Pt, v: View) => pt(v.x + q.x * v.s, v.y - q.y * v.s);
+
+type Pose = { heel: Pt; toe: Pt; ankle: Pt; knee: Pt; hip: Pt; shoulder: Pt; head: Pt; elbow: Pt; hand: Pt; bar: Pt; torsoDeg: number };
+
+function footAt(heelUpDeg = 0) {
+  const toe = pt(SEG.toe, 0);
+  const a = rad(heelUpDeg);
+  const back = pt(-Math.cos(a), Math.sin(a));
+  const up = pt(Math.sin(a), Math.cos(a));
+  const heel = add(toe, mul(back, SEG.toe + SEG.heel));
+  const ankle = add(add(toe, mul(back, SEG.toe)), mul(up, SEG.ankleH));
+  return { heel, toe, ankle };
 }
 
-function Foot({ heel, toe, y }: { heel: number; toe: number; y: number }) {
-  return <path d={`M${heel} ${y} L${toe} ${y} L${toe - 6} ${y - 7} L${heel + 4} ${y - 9} Z`} fill="rgba(255,255,255,0.22)" />;
+/**
+ * A squat position: shin `shank`° forward, thigh `thighDeg`° below level (hip
+ * under the knee when positive), torso leaned until the bar on the back sits
+ * over `barX` (midfoot by default). Solved for balance, not posed.
+ */
+function squatPose(o: { shank: number; thighDeg: number; thigh?: number; torso?: number; heelUp?: number; barX?: number }): Pose {
+  const f = footAt(o.heelUp ?? 0);
+  const thigh = o.thigh ?? SEG.thigh;
+  const torso = o.torso ?? SEG.torso;
+  const knee = add(f.ankle, mul(tilt(o.shank), SEG.shank));
+  const hip = add(knee, mul(pt(-Math.cos(rad(o.thighDeg)), -Math.sin(rad(o.thighDeg))), thigh));
+  // the bar rides on the upper back: just above the shoulder joint, on the back of the torso
+  const barAt = (deg: number) => {
+    const u = tilt(deg);
+    return add(add(hip, mul(u, torso + 0.008)), mul(front(u), -0.052));
+  };
+  const target = o.barX ?? MIDFOOT;
+  let lo = -15;
+  let hi = 88;
+  for (let i = 0; i < 40; i++) {
+    const m = (lo + hi) / 2;
+    if (barAt(m).x < target) lo = m;
+    else hi = m;
+  }
+  const deg = (lo + hi) / 2;
+  const u = tilt(deg);
+  const shoulder = add(hip, mul(u, torso));
+  const bar = barAt(deg);
+  const head = add(add(shoulder, mul(u, SEG.neck)), mul(front(u), 0.024));
+  // hands on the bar, elbows pointing down along the back (from the side the arms look short: they reach out to the sides too)
+  const elbow = add(add(shoulder, mul(u, -0.112)), mul(front(u), -0.036));
+  return { ...f, knee, hip, shoulder, head, elbow, hand: bar, bar, torsoDeg: deg };
 }
 
-function Body({ pts, color = INK, head }: { pts: Pt[]; color?: string; head?: { from: Pt; to: Pt; r: number } }) {
-  // the head sits on past the shoulder, along the line of the torso
-  const h = head ? (() => {
-    const dx = head.to.x - head.from.x;
-    const dy = head.to.y - head.from.y;
-    const d = Math.hypot(dx, dy) || 1;
-    return { x: head.to.x + (dx / d) * head.r * 2.3, y: head.to.y + (dy / d) * head.r * 2.3 };
-  })() : null;
+/**
+ * A deadlift start: bar on the floor (45 cm plates) at `barX`, shins `shank`°
+ * forward, straight arms from the shoulders, shoulders `lead` in front of the
+ * bar (negative = behind it). The hip is where thigh and torso meet.
+ */
+function pullPose(o: { shank: number; lead: number; barX?: number }): Pose | null {
+  const f = footAt(0);
+  const knee = add(f.ankle, mul(tilt(o.shank), SEG.shank));
+  const bar = pt(o.barX ?? MIDFOOT, PLATE_R);
+  const arm = SEG.upperArm + SEG.forearm + SEG.grip;
+  const shoulder = pt(bar.x + o.lead, bar.y + Math.sqrt(arm ** 2 - o.lead ** 2));
+  const both = meet(knee, SEG.thigh, shoulder, SEG.torso);
+  if (!both) return null;
+  const hip = both[0].x < both[1].x ? both[0] : both[1];
+  const u = unit(sub(shoulder, hip));
+  const head = add(add(shoulder, mul(u, SEG.neck)), mul(front(u), 0.024));
+  const elbow = add(shoulder, mul(unit(sub(bar, shoulder)), SEG.upperArm));
+  return { ...f, knee, hip, shoulder, head, elbow, hand: bar, bar, torsoDeg: (Math.atan2(u.x, u.y) * 180) / Math.PI };
+}
+
+/** A circle as a path drawn the same way round as a capsule (so they can share one path). */
+function circle(c: Pt, r: number): string {
+  return `M${f1(c.x - r)} ${f1(c.y)} a${f1(r)} ${f1(r)} 0 1 0 ${f1(2 * r)} 0 a${f1(r)} ${f1(r)} 0 1 0 ${f1(-2 * r)} 0 Z`;
+}
+
+/**
+ * The silhouette: legs, torso and head in one tone, then the near arm on top
+ * with a hairline gap in the card's colour, so it reads over the body.
+ * Fade the whole group for a ghost (a position a moment earlier or later).
+ */
+function Figure({ pose, v, fill = C.body, opacity, arms = true }: { pose: Pose; v: View; fill?: string; opacity?: number; arms?: boolean }) {
+  const P = (q: Pt) => toPx(q, v);
+  const r = (n: number) => n * v.s;
+  const fdir = unit(sub(pose.toe, pose.heel));
+  const fup = pt(-fdir.y, fdir.x);
+  const footBack = add(add(pose.heel, mul(fdir, 0.018)), mul(fup, 0.018));
+  const footFront = add(sub(pose.toe, mul(fdir, 0.01)), mul(fup, 0.01));
+  const body = [
+    capsule(P(footBack), r(0.018), P(footFront), r(0.01)),
+    capsule(P(pose.ankle), r(R.ankle), P(pose.knee), r(R.knee)),
+    capsule(P(pose.knee), r(R.thighKnee), P(pose.hip), r(R.hip)),
+    capsule(P(pose.hip), r(R.pelvis), P(pose.shoulder), r(R.chest)),
+    capsule(P(pose.shoulder), r(R.neck), P(pose.head), r(R.neck)),
+    circle(P(pose.head), r(R.head)),
+  ];
+  const arm = [capsule(P(pose.shoulder), r(R.shoulder), P(pose.elbow), r(R.elbow)), capsule(P(pose.elbow), r(R.elbow), P(pose.hand), r(R.wrist))].join(" ");
   return (
-    <g>
-      {h && <circle cx={h.x} cy={h.y} r={head!.r} fill="#0a0a0d" stroke={color} strokeWidth={3} />}
-      <path d={path(pts)} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
-      {pts.slice(1, -1).map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r={3.4} fill="#0a0a0d" stroke={color} strokeWidth={2} />
+    <g opacity={opacity}>
+      {body.map((d, i) => (
+        <path key={i} d={d} style={{ fill }} />
       ))}
+      {arms && <path d={arm} style={{ fill, stroke: C.gap, paintOrder: "stroke" }} strokeWidth={2.6} strokeLinejoin="round" />}
     </g>
   );
 }
 
-function Plate({ at, r = 14, color = INK }: { at: Pt; r?: number; color?: string }) {
+/** A plate seen from the side, behind the lifter (so the shins and arms still read). */
+function Plate({ at, v, r = PLATE_R }: { at: Pt; v: View; r?: number }) {
+  const c = toPx(at, v);
   return (
     <g>
-      <circle cx={at.x} cy={at.y} r={r} fill="rgba(255,255,255,0.08)" stroke={color} strokeWidth={2} />
-      <circle cx={at.x} cy={at.y} r={2.6} fill={color} />
+      <circle cx={f1(c.x)} cy={f1(c.y)} r={f1(r * v.s)} style={{ fill: C.faint, stroke: C.sub }} strokeOpacity={0.55} strokeWidth={1.3} />
+      <circle cx={f1(c.x)} cy={f1(c.y)} r={f1(0.04 * v.s)} style={{ fill: "none", stroke: C.sub }} strokeOpacity={0.45} strokeWidth={1} />
     </g>
   );
 }
 
-/* ---- bar path ----------------------------------------------------------- */
+/** The end of the bar, with the same hairline gap so it reads on a body. */
+function BarEnd({ at, c = C.ink, r = 4.4 }: { at: Pt; c?: string; r?: number }) {
+  return <circle cx={f1(at.x)} cy={f1(at.y)} r={r} style={{ fill: c, stroke: C.gap, paintOrder: "stroke" }} strokeWidth={2.4} />;
+}
 
-function BarPath({ lift, fault }: { lift: LessonLift; fault: string }) {
-  const showFault = fault === "forward" || fault === "loop";
-  if (lift === "bench") return <BenchPath showFault={showFault} />;
-  const floor = 170;
-  const mid = 160;
-  const top = 46;
-  const bottom = lift === "deadlift" ? floor - 16 : 122;
-  const start = lift === "deadlift" ? bottom : top;
-  const end = lift === "deadlift" ? 70 : bottom;
-  // the ideal: straight up and down over midfoot (a squat travels down then up the same line)
-  const ideal = lift === "deadlift" ? [{ x: mid, y: start }, { x: mid, y: end }] : [{ x: mid, y: top }, { x: mid, y: bottom }];
-  const span = Math.abs(end - start);
-  const drift = (t: number) => (fault === "loop" ? Math.sin(t * Math.PI) * 26 * (1 - t * 0.35) : Math.sin(t * Math.PI * 0.85) * 30);
-  const faultPts = Array.from({ length: 31 }, (_, i) => {
-    const t = i / 30;
-    // the way up: from the bottom (squat) / the floor (deadlift) to the top
-    const y = lift === "deadlift" ? start - t * span : bottom - t * (bottom - top);
-    return { x: mid + drift(t), y };
-  });
+function JointDot({ at, c }: { at: Pt; c: string }) {
+  return <circle cx={f1(at.x)} cy={f1(at.y)} r={3.1} style={{ fill: c, stroke: C.gap, paintOrder: "stroke" }} strokeWidth={2.2} />;
+}
+
+/* ======================================================================
+ * Squat
+ * ==================================================================== */
+
+const SQ: { s: number; floor: number; left: number; right: number } = { s: 205, floor: 176, left: 94, right: 254 };
+
+function SquatScene({ pose, v, ghost, plumb = C.sub, plumbTo }: { pose: Pose; v: View; ghost?: Pose; plumb?: string; plumbTo?: number }) {
+  const bar = toPx(pose.bar, v);
   return (
-    <Frame label={visualLabel({ kind: "bar_path", lift, fault })} note="SIDE VIEW · ILLUSTRATION" noteAt="top">
-      <Legend items={[{ label: "BAR OVER MIDFOOT", color: INK }, ...(showFault ? [{ label: "DRIFTING FORWARD", color: RED, dash: true }] : [])]} y={30} />
-      <line x1={20} y1={floor} x2={300} y2={floor} stroke={MUTED} strokeWidth={1.5} />
-      <Foot heel={mid - 34} toe={mid + 40} y={floor} />
-      <line x1={mid} y1={floor + 2} x2={mid} y2={top - 10} stroke={GRID} strokeWidth={1.2} strokeDasharray="3 4" />
-      <Label x={mid} y={floor + 14} anchor="middle" color={MUTED}>MIDFOOT</Label>
-      <Label x={mid + 44} y={floor + 14} anchor="start" color={MUTED}>TOES →</Label>
-      <path d={path(ideal)} fill="none" stroke={INK} strokeWidth={3.5} strokeLinecap="round" />
-      {showFault && <path d={path(faultPts)} fill="none" stroke={RED} strokeWidth={3} strokeLinecap="round" strokeDasharray="6 5" />}
-      <Plate at={{ x: mid, y: lift === "deadlift" ? start : top }} r={lift === "deadlift" ? 16 : 12} />
-      <Label x={mid - 26} y={lift === "deadlift" ? end + 4 : bottom + 4} anchor="end" color={SOFT}>{lift === "deadlift" ? "LOCKOUT" : "DEPTH"}</Label>
-      {showFault && (
-        <Label x={mid + 44} y={(start + end) / 2 + (lift === "deadlift" ? 0 : 0)} color={RED}>
-          {fault === "loop" ? "OUT & BACK" : "LONGER LEVER"}
-        </Label>
+    <g>
+      <Plumb x={bar.x} y0={bar.y - 12} y1={plumbTo ?? v.y} c={plumb} />
+      {ghost && <Figure pose={ghost} v={v} opacity={0.2} />}
+      <Figure pose={pose} v={v} />
+      <BarEnd at={bar} />
+    </g>
+  );
+}
+
+/**
+ * Hip and knee moment arms as dimension lines under the floor: each joint's
+ * horizontal distance from the line straight down from the bar.
+ */
+function Levers({ pose, v, y, hip = C.accent }: { pose: Pose; v: View; y: number; hip?: string }) {
+  const h = toPx(pose.hip, v);
+  const k = toPx(pose.knee, v);
+  const b = toPx(pose.bar, v).x;
+  const tick = (x: number, c: string) => <line x1={f1(x)} y1={f1(y - 4)} x2={f1(x)} y2={f1(y + 4)} style={{ stroke: c }} strokeWidth={1.6} strokeLinecap="round" />;
+  return (
+    <g>
+      <Plumb x={h.x} y0={h.y} y1={y} c={hip} />
+      <Plumb x={k.x} y0={k.y} y1={y} />
+      <line x1={f1(h.x)} y1={f1(y)} x2={f1(b)} y2={f1(y)} style={{ stroke: hip }} strokeWidth={2.6} strokeLinecap="round" />
+      <line x1={f1(b)} y1={f1(y)} x2={f1(k.x)} y2={f1(y)} style={{ stroke: C.ink }} strokeWidth={2.6} strokeLinecap="round" />
+      {tick(h.x, hip)}
+      {tick(b, C.sub)}
+      {tick(k.x, C.ink)}
+      <JointDot at={h} c={hip} />
+      <JointDot at={k} c={C.ink} />
+      <T x={h.x - 7} y={y + 3.5} anchor="end" c={hip} size={10} weight={700}>hip</T>
+      <T x={k.x + 7} y={y + 3.5} c={C.ink} size={10} weight={700}>knee</T>
+    </g>
+  );
+}
+
+function SquatLevers({ variant }: { variant: "build" | "lean" }) {
+  const { s, floor } = SQ;
+  const left = variant === "build" ? squatPose({ shank: 33, thighDeg: 7, thigh: 0.226, torso: 0.304 }) : squatPose({ shank: 34, thighDeg: 7 });
+  const right = variant === "build" ? squatPose({ shank: 31, thighDeg: 7, thigh: 0.266, torso: 0.27 }) : squatPose({ shank: 27, thighDeg: 8 });
+  const vl: View = { x: SQ.left, y: floor, s };
+  const vr: View = { x: SQ.right, y: floor, s };
+  const dim = floor + 12;
+  return (
+    <Svg label={visualLabel({ kind: "squat_torso", variant })} h={floor + 22}>
+      {variant === "build" ? (
+        <>
+          <Head x={80} title="Shorter thighs" lines={["more upright,", "knees do more"]} />
+          <Head x={240} title="Longer thighs" lines={["more lean,", "hips do more"]} />
+        </>
+      ) : (
+        <>
+          <Head x={80} title="Around 85%" lines={["bar over midfoot"]} />
+          <Head x={240} title="Near max" lines={["a bit more lean,", "longer hip lever"]} c={C.accent} />
+        </>
       )}
-    </Frame>
+      <Divider y1={floor + 18} />
+      <SquatScene pose={left} v={vl} plumbTo={dim} />
+      <SquatScene pose={right} v={vr} plumbTo={dim} />
+      <Floor y={floor} />
+      <Levers pose={left} v={vl} y={dim} hip={variant === "lean" ? C.ink : C.accent} />
+      <Levers pose={right} v={vr} y={dim} />
+    </Svg>
   );
 }
 
-function BenchPath({ showFault }: { showFault: boolean }) {
-  // the lifter lies along the bench, head on the left; the bar starts over the shoulder
-  const bench = 160;
-  const shoulder = { x: 92, y: bench - 18 };
-  const touch = { x: 168, y: bench - 30 };
-  const lock = { x: shoulder.x + 4, y: 56 };
-  // the J: off the chest it moves up and back toward the shoulder, then straight up
-  const j = Array.from({ length: 31 }, (_, i) => {
-    const t = i / 30;
-    const back = 1 - Math.pow(1 - Math.min(1, t * 1.6), 2);
-    return { x: touch.x + (lock.x - touch.x) * back, y: touch.y + (lock.y - touch.y) * t };
-  });
-  const straight = Array.from({ length: 31 }, (_, i) => {
-    const t = i / 30;
-    return { x: touch.x + 10 * Math.sin(t * Math.PI * 0.6), y: touch.y + (lock.y + 4 - touch.y) * t };
-  });
+function SquatBalance() {
+  const { s, floor } = SQ;
+  const good = squatPose({ shank: 33, thighDeg: 7 });
+  const bad = squatPose({ shank: 40, thighDeg: 3, heelUp: 13, barX: SEG.toe - 0.035 });
+  const vl: View = { x: SQ.left, y: floor, s };
+  const vr: View = { x: SQ.right - 6, y: floor, s };
+  const heel = toPx(bad.heel, vr);
+  const mid = toPx(pt(MIDFOOT, 0), vr).x;
   return (
-    <Frame label={visualLabel({ kind: "bar_path", lift: "bench", fault: showFault ? "forward" : "none" })} note="SIDE VIEW · ILLUSTRATION" noteAt="top">
-      <Legend items={[{ label: "OFF THE CHEST, BACK OVER THE SHOULDER", color: INK }, ...(showFault ? [{ label: "DRIFTING TOWARD THE FEET", color: RED, dash: true }] : [])]} y={30} />
-      {/* bench and a lying torso */}
-      <rect x={30} y={bench} width={250} height={8} rx={3} fill="rgba(255,255,255,0.16)" />
-      <path d={`M34 ${bench - 2} Q52 ${bench - 30} 92 ${bench - 22} Q150 ${bench - 42} 210 ${bench - 22} L262 ${bench - 12} L262 ${bench - 2} Z`} fill="rgba(255,255,255,0.10)" />
-      <circle cx={shoulder.x} cy={shoulder.y} r={4} fill={SOFT} />
-      <Label x={shoulder.x} y={bench + 22} anchor="middle" color={MUTED}>SHOULDER</Label>
-      <Label x={touch.x} y={bench + 22} anchor="middle" color={MUTED}>LOWER CHEST</Label>
-      <line x1={shoulder.x} y1={shoulder.y} x2={shoulder.x} y2={48} stroke={GRID} strokeWidth={1.2} strokeDasharray="3 4" />
-      <path d={path(j)} fill="none" stroke={INK} strokeWidth={3.5} strokeLinecap="round" />
-      {showFault && <path d={path(straight)} fill="none" stroke={RED} strokeWidth={3} strokeLinecap="round" strokeDasharray="6 5" />}
-      <Plate at={touch} r={7} />
-      <Plate at={lock} r={7} />
-      <Label x={lock.x + 14} y={lock.y + 4} color={SOFT}>LOCKOUT</Label>
-      <Label x={touch.x + 14} y={touch.y + 4} color={SOFT}>TOUCH</Label>
-    </Frame>
+    <Svg label={visualLabel({ kind: "squat_balance" })} h={floor + 8}>
+      <Head x={80} title="Balanced" lines={["bar over midfoot,", "whole foot down"]} />
+      <Head x={240} title="On the toes" lines={["bar over the toes,", "heels up"]} c={C.accent} />
+      <Divider y1={floor} />
+      <SquatScene pose={good} v={vl} />
+      <SquatScene pose={bad} v={vr} plumb={C.accent} />
+      <Plumb x={mid} y0={floor - 30} y1={floor} />
+      <Arrow from={pt(heel.x - 9, floor - 1)} to={pt(heel.x - 9, heel.y - 4)} w={1.6} />
+      <Floor y={floor} />
+    </Svg>
   );
 }
 
-/* ---- squat: torso angle and moment arms ----------------------------------- */
-
-type Squat = { ankle: Pt; knee: Pt; hip: Pt; shoulder: Pt; mid: number };
-
-/** A squat bottom with the bar (on the shoulders) right over midfoot. */
-function squatBottom(o: { shank: number; thigh: number; torso: number; shankDeg: number; hipBelow: number }): Squat | null {
-  const ankle = { x: 0, y: 0.08 };
-  const mid = 0.06;
-  const knee = { x: ankle.x + o.shank * Math.sin(deg(o.shankDeg)), y: ankle.y + o.shank * Math.cos(deg(o.shankDeg)) };
-  // thigh back from the knee, hip a touch below the knee (below parallel)
-  const hip = { x: knee.x - Math.sqrt(Math.max(0, o.thigh ** 2 - o.hipBelow ** 2)), y: knee.y - o.hipBelow };
-  const dx = mid - hip.x;
-  if (Math.abs(dx) > o.torso) return null;
-  const shoulder = { x: mid, y: hip.y + Math.sqrt(o.torso ** 2 - dx ** 2) };
-  return { ankle, knee, hip, shoulder, mid };
-}
-
-function SquatPanel({ s, at, title, accent }: { s: Squat; at: { x: number; y: number; s: number }; title: string; accent: string }) {
-  const P = (p: Pt) => toPx(p, at);
-  const ankle = P(s.ankle);
-  const knee = P(s.knee);
-  const hip = P(s.hip);
-  const sh = P(s.shoulder);
-  const midX = P({ x: s.mid, y: 0 }).x;
-  const floor = at.y;
-  const hipArm = midX - hip.x;
-  const kneeArm = Math.max(1, knee.x - midX);
-  return (
-    <g>
-      <Foot heel={ankle.x - 10} toe={ankle.x + 26} y={floor} />
-      <line x1={midX} y1={floor} x2={midX} y2={sh.y - 12} stroke={GRID} strokeWidth={1.2} strokeDasharray="3 4" />
-      <Body pts={[ankle, knee, hip, sh]} head={{ from: hip, to: sh, r: 8 }} />
-      <Plate at={{ x: sh.x, y: sh.y + 3 }} r={7} />
-      {/* moment arms: horizontal distance from each joint to the bar's line */}
-      <line x1={hip.x} y1={hip.y + 10} x2={midX} y2={hip.y + 10} stroke={accent} strokeWidth={3} strokeLinecap="round" />
-      <line x1={midX} y1={knee.y - 10} x2={knee.x} y2={knee.y - 10} stroke={GOLD} strokeWidth={3} strokeLinecap="round" />
-      <Label x={hip.x - 4} y={hip.y + 13} anchor="end" color={accent} size={8.5}>HIP</Label>
-      <Label x={knee.x + 5} y={knee.y - 7} color={GOLD} size={8.5}>KNEE</Label>
-      <Label x={at.x + 6} y={26} anchor="middle" color={INK}>{title}</Label>
-      <Label x={at.x + 6} y={38} anchor="middle" color={MUTED} size={8}>{hipArm > kneeArm * 1.6 ? "HIPS & BACK DO MORE" : "KNEES SHARE MORE"}</Label>
-    </g>
-  );
-}
-
-function SquatTorso() {
-  const upright = squatBottom({ shank: 0.44, thigh: 0.44, torso: 0.6, shankDeg: 40, hipBelow: 0.03 });
-  const lean = squatBottom({ shank: 0.42, thigh: 0.5, torso: 0.54, shankDeg: 27, hipBelow: 0.03 });
-  if (!upright || !lean) return null;
-  return (
-    <Frame label={visualLabel({ kind: "squat_torso" })} note="BAR OVER MIDFOOT IN BOTH · ILLUSTRATION">
-      <SquatPanel s={upright} at={{ x: 82, y: 180, s: 122 }} title="MORE UPRIGHT" accent={RED} />
-      <SquatPanel s={lean} at={{ x: 232, y: 180, s: 122 }} title="MORE LEAN" accent={RED} />
-      <line x1={160} y1={20} x2={160} y2={178} stroke={GRID} strokeWidth={1} />
-      <line x1={14} y1={180} x2={306} y2={180} stroke={MUTED} strokeWidth={1.5} />
-    </Frame>
-  );
-}
-
-/* ---- deadlift start ------------------------------------------------------- */
-
-type Pull = { ankle: Pt; knee: Pt; hip: Pt; shoulder: Pt; bar: Pt; mid: number };
-
-/** A deadlift start: shins in, arms straight to the bar, shoulders `lead` in front of (or behind) the bar. */
-function pullStart(o: { barX: number; lead: number; shankDeg: number }): Pull | null {
-  const shank = 0.45;
-  const thigh = 0.45;
-  const torso = 0.52;
-  const arm = 0.66;
-  const ankle = { x: 0, y: 0.08 };
-  const bar = { x: o.barX, y: 0.225 };
-  const knee = { x: ankle.x + shank * Math.sin(deg(o.shankDeg)), y: ankle.y + shank * Math.cos(deg(o.shankDeg)) };
-  const shoulder = { x: bar.x + o.lead, y: bar.y + Math.sqrt(arm ** 2 - o.lead ** 2) };
-  const hip = circleMeet(knee, thigh, shoulder, torso, "back");
-  if (!hip) return null;
-  return { ankle, knee, hip, shoulder, bar, mid: 0.06 };
-}
-
-function PullPanel({ p, at, title, color }: { p: Pull; at: { x: number; y: number; s: number }; title: string; color: string }) {
-  const P = (q: Pt) => toPx(q, at);
-  const ankle = P(p.ankle);
-  const knee = P(p.knee);
-  const hip = P(p.hip);
-  const sh = P(p.shoulder);
-  const bar = P(p.bar);
-  const midX = P({ x: p.mid, y: 0 }).x;
-  return (
-    <g>
-      <Foot heel={ankle.x - 10} toe={ankle.x + 26} y={at.y} />
-      <line x1={midX} y1={at.y} x2={midX} y2={sh.y - 14} stroke={GRID} strokeWidth={1.2} strokeDasharray="3 4" />
-      <line x1={sh.x} y1={sh.y} x2={bar.x} y2={bar.y} stroke={color} strokeWidth={3} strokeLinecap="round" opacity={0.85} />
-      <Body pts={[ankle, knee, hip, sh]} color={color} head={{ from: hip, to: sh, r: 8 }} />
-      <Plate at={bar} r={15} color={color} />
-      <Label x={at.x + 4} y={26} anchor="middle" color={color === RED ? RED : INK}>{title}</Label>
-    </g>
-  );
-}
-
-function DeadliftStart({ fault }: { fault: string }) {
-  const good = pullStart({ barX: 0.06, lead: 0.05, shankDeg: 18 });
-  const bad =
-    fault === "hips_high"
-      ? pullStart({ barX: 0.06, lead: 0.17, shankDeg: 8 })
-      : fault === "bar_forward"
-        ? pullStart({ barX: 0.15, lead: 0.05, shankDeg: 18 })
-        : pullStart({ barX: 0.06, lead: -0.07, shankDeg: 30 });
-  if (!good || !bad) return null;
-  const badTitle = fault === "hips_high" ? "HIPS TOO HIGH" : fault === "bar_forward" ? "BAR OVER TOES" : "HIPS TOO LOW";
-  return (
-    <Frame label={visualLabel({ kind: "deadlift_start", fault })} note="SIDE VIEW · ILLUSTRATION" noteAt="top">
-      <PullPanel p={good} at={{ x: 92, y: 172, s: 128 }} title="BAR OVER MIDFOOT" color={INK} />
-      <PullPanel p={bad} at={{ x: 238, y: 172, s: 128 }} title={badTitle} color={RED} />
-      <line x1={160} y1={20} x2={160} y2={170} stroke={GRID} strokeWidth={1} />
-      <line x1={14} y1={172} x2={306} y2={172} stroke={MUTED} strokeWidth={1.5} />
-      <Label x={92} y={188} anchor="middle" color={MUTED} size={8}>SHOULDERS OVER THE BAR</Label>
-      <Label x={238} y={188} anchor="middle" color={RED} size={8}>{fault === "hips_low" ? "SHOULDERS BEHIND THE BAR" : fault === "hips_high" ? "BACK DOES MORE WORK" : "BAR FAR FROM THE HIPS"}</Label>
-    </Frame>
-  );
-}
-
-/* ---- bench touch ----------------------------------------------------------- */
-
-function BenchTouch() {
-  // side view, head on the left: the shoulder, the bar on the lower chest, the elbow under it (or not)
-  const bench = 132;
-  const Panel = ({ x, stacked }: { x: number; stacked: boolean }) => {
-    const shoulder = { x: x - 40, y: bench - 18 };
-    const bar = { x: x + 16, y: bench - 36 };
-    const elbow = stacked ? { x: bar.x, y: bench + 38 } : { x: x - 30, y: bench + 36 };
-    const color = stacked ? INK : RED;
+function SquatRise() {
+  const { s, floor } = SQ;
+  // both frames lift the hips the same amount (about 12% of height). Kept over midfoot, the bar rises
+  // about as much when the chest comes up with them, and only a fifth of that when the torso tips over.
+  const bottom = squatPose({ shank: 34, thighDeg: 8 });
+  const together = squatPose({ shank: 26, thighDeg: -15 });
+  const hipsFirst = squatPose({ shank: 8, thighDeg: -10.25 });
+  const vl: View = { x: SQ.left + 4, y: floor, s };
+  const vr: View = { x: SQ.right + 4, y: floor, s };
+  const rise = (p: Pose, v: View, hipColor: string, barColor: string) => {
+    const hb = toPx(bottom.hip, v);
+    const hn = toPx(p.hip, v);
+    const bb = toPx(bottom.bar, v);
+    const bn = toPx(p.bar, v);
+    const hx = Math.min(hb.x, hn.x) - R.hip * v.s - 9;
+    const bx = Math.min(bb.x, bn.x) - 12;
     return (
       <g>
-        <path d={`M${x - 60} ${bench - 2} Q${x - 56} ${bench - 22} ${x - 42} ${bench - 22} Q${x + 2} ${bench - 40} ${x + 46} ${bench - 22} L${x + 64} ${bench - 6} L${x + 64} ${bench - 2} Z`} fill="rgba(255,255,255,0.12)" />
-        <circle cx={x - 62} cy={bench - 16} r={8} fill="#0a0a0d" stroke={SOFT} strokeWidth={2.5} />
-        <line x1={bar.x} y1={bar.y - 14} x2={bar.x} y2={bench + 50} stroke={GRID} strokeWidth={1.2} strokeDasharray="3 4" />
-        <Body pts={[shoulder, elbow, bar]} color={color} />
-        <Plate at={bar} r={8} color={color} />
-        <Label x={x} y={36} anchor="middle" color={color}>{stacked ? "FOREARM STACKED" : "FOREARM TILTED"}</Label>
-        <Label x={x} y={bench + 62} anchor="middle" color={MUTED} size={8}>{stacked ? "ELBOW UNDER THE BAR" : "BAR AHEAD OF ELBOW"}</Label>
+        <Arrow from={pt(hx, hb.y)} to={pt(hx, hn.y)} c={hipColor} />
+        <T x={hx - 4} y={(hb.y + hn.y) / 2 + 3.5} anchor="end" c={hipColor} size={10} weight={700}>hips</T>
+        <Arrow from={pt(bx, bb.y)} to={pt(bx, bn.y)} c={barColor} />
+        <T x={bx - 4} y={(bb.y + bn.y) / 2 + 3.5} anchor="end" c={barColor} size={10} weight={700}>bar</T>
       </g>
     );
   };
   return (
-    <Frame label={visualLabel({ kind: "bench_touch" })} note="SIDE VIEW · ILLUSTRATION" noteAt="top">
-      <rect x={14} y={bench} width={292} height={6} rx={3} fill="rgba(255,255,255,0.18)" />
-      <Panel x={88} stacked />
-      <Panel x={238} stacked={false} />
-      <line x1={160} y1={24} x2={160} y2={190} stroke={GRID} strokeWidth={1} />
-    </Frame>
+    <Svg label={visualLabel({ kind: "squat_rise" })} h={floor + 8}>
+      <Head x={80} title="Together" lines={["hips and chest", "rise as one"]} />
+      <Head x={240} title="Hips first" lines={["hips rise,", "the bar barely moves"]} c={C.accent} />
+      <Divider y1={floor} />
+      <SquatScene pose={together} v={vl} ghost={bottom} />
+      <SquatScene pose={hipsFirst} v={vr} ghost={bottom} />
+      {rise(together, vl, C.ink, C.ink)}
+      {rise(hipsFirst, vr, C.accent, C.ink)}
+      <Floor y={floor} />
+    </Svg>
   );
 }
 
-/* ---- curves ------------------------------------------------------------------ */
+function SquatDepth() {
+  const { s, floor } = SQ;
+  const high = squatPose({ shank: 29, thighDeg: -11 });
+  const deep = squatPose({ shank: 34, thighDeg: 11 });
+  const vl: View = { x: SQ.left, y: floor, s };
+  const vr: View = { x: SQ.right, y: floor, s };
+  const marks = (p: Pose, v: View, ok: boolean) => {
+    const d = unit(sub(p.knee, p.hip));
+    const up = pt(-d.y, d.x);
+    const crease = toPx(add(p.hip, mul(up, R.hip * 0.95)), v);
+    const kneeTop = toPx(add(p.knee, pt(0, R.thighKnee)), v);
+    const c = ok ? C.ink : C.accent;
+    return (
+      <g>
+        <line x1={f1(crease.x - 22)} y1={f1(kneeTop.y)} x2={f1(kneeTop.x + 18)} y2={f1(kneeTop.y)} style={{ stroke: c }} strokeWidth={1.3} strokeDasharray="3 3" strokeLinecap="round" />
+        <JointDot at={crease} c={c} />
+      </g>
+    );
+  };
+  return (
+    <Svg label={visualLabel({ kind: "squat_depth" })} h={floor + 8}>
+      <Head x={80} title="Above parallel" lines={["hip crease above", "the top of the knee"]} c={C.accent} />
+      <Head x={240} title="Depth" lines={["hip crease below", "the top of the knee"]} />
+      <Divider y1={floor} />
+      <SquatScene pose={high} v={vl} />
+      <SquatScene pose={deep} v={vr} />
+      {marks(high, vl, false)}
+      {marks(deep, vr, true)}
+      <Floor y={floor} />
+    </Svg>
+  );
+}
 
-const BOX = { x0: 30, y0: 168, w: 272, h: 120 };
+/* ======================================================================
+ * Deadlift
+ * ==================================================================== */
+
+function PullScene({ pose, v, ghost }: { pose: Pose; v: View; ghost?: Pose | null }) {
+  const mid = toPx(pt(MIDFOOT, 0), v).x;
+  return (
+    <g>
+      <Plumb x={mid} y0={toPx(pose.shoulder, v).y - 12} y1={v.y} />
+      <Plate at={pose.bar} v={v} />
+      {ghost && <Figure pose={ghost} v={v} opacity={0.2} />}
+      <Figure pose={pose} v={v} />
+      <BarEnd at={toPx(pose.bar, v)} />
+    </g>
+  );
+}
+
+function DeadliftStart({ fault }: { fault: "hips_low" | "hips_high" | "bar_forward" }) {
+  const s = 205;
+  const floor = 180;
+  const good = pullPose({ shank: 6, lead: 0.03 });
+  const bad =
+    fault === "hips_high"
+      ? pullPose({ shank: 1, lead: 0.12 })
+      : fault === "bar_forward"
+        ? pullPose({ shank: 9, lead: 0.03, barX: SEG.toe - 0.02 })
+        : pullPose({ shank: 15, lead: -0.035, barX: MIDFOOT + 0.018 });
+  // when the start is too low the hips rise first, until the shoulders are over the bar
+  const after = fault === "hips_low" ? pullPose({ shank: 6, lead: 0.03, barX: MIDFOOT + 0.018 }) : null;
+  if (!good || !bad) return null;
+  const vl: View = { x: 90, y: floor, s };
+  const vr: View = { x: fault === "hips_high" ? 238 : 252, y: floor, s };
+  const head =
+    fault === "hips_high"
+      ? { title: "Hips high", lines: ["back nearly flat,", "the back does more"] }
+      : fault === "bar_forward"
+        ? { title: "Bar over the toes", lines: ["bar away from the shins"] }
+        : { title: "Too low", lines: ["shoulders behind the bar,", "so the hips rise first"] };
+  return (
+    <Svg label={visualLabel({ kind: "deadlift_start", fault })} h={floor + 8}>
+      <Head x={80} title="Set" lines={["shoulders just", "over the bar"]} />
+      <Head x={240} title={head.title} lines={head.lines} c={C.accent} />
+      <Divider y1={floor} />
+      <PullScene pose={good} v={vl} />
+      <PullScene pose={bad} v={vr} ghost={after} />
+      {after &&
+        (() => {
+          const a = toPx(bad.hip, vr);
+          const b = toPx(after.hip, vr);
+          const x = Math.min(a.x, b.x) - R.hip * s - 8;
+          return <Arrow from={pt(x, a.y)} to={pt(x, b.y)} />;
+        })()}
+      <Floor y={floor} />
+    </Svg>
+  );
+}
+
+/** A standing lifter at lockout, bar in the hands. */
+function lockoutBar(barX = MIDFOOT): Pt {
+  const f = footAt(0);
+  const knee = add(f.ankle, mul(tilt(1), SEG.shank));
+  const hip = add(knee, mul(tilt(-3), SEG.thigh));
+  const shoulder = add(hip, mul(tilt(-4), SEG.torso));
+  const arm = SEG.upperArm + SEG.forearm + SEG.grip;
+  return pt(barX, shoulder.y - Math.sqrt(Math.max(0, arm ** 2 - (barX - shoulder.x) ** 2)));
+}
+
+/** The bar's path from the floor (deadlift) or the hole (squat): straight over midfoot vs drifting forward. */
+function PullPath({ lift }: { lift: "deadlift" | "squat" }) {
+  const floor = 196;
+  const s = lift === "deadlift" ? 215 : 172;
+  const v: View = { x: 150, y: floor, s };
+  const start = lift === "deadlift" ? pullPose({ shank: 6, lead: 0.03 }) : squatPose({ shank: 33, thighDeg: 7 });
+  if (!start) return null;
+  // the top: the bar in the hands standing (deadlift) or on the shoulders standing (squat)
+  const topY = lift === "deadlift" ? lockoutBar().y : SEG.ankleH + SEG.shank + SEG.thigh + SEG.torso + 0.008;
+  const a = toPx(start.bar, v);
+  const b = toPx(pt(start.bar.x, topY), v);
+  const span = a.y - b.y;
+  const drift = Array.from({ length: 25 }, (_, i) => {
+    const t = i / 24;
+    return pt(a.x + Math.sin(t * Math.PI * 0.9) * 30 * (1 - 0.25 * t), a.y - t * span);
+  });
+  return (
+    <Svg label={visualLabel({ kind: "bar_path", lift })} h={floor + 8}>
+      <Legend items={[{ label: lift === "deadlift" ? "Over midfoot, close to the legs" : "Over midfoot", c: C.ink }, { label: "Drifting forward: a longer lever", c: C.accent, dash: true }]} />
+      <Plumb x={toPx(pt(MIDFOOT, 0), v).x} y0={b.y - 12} y1={floor} />
+      {lift === "deadlift" && <Plate at={start.bar} v={v} />}
+      <Figure pose={start} v={v} opacity={0.26} />
+      <path d={smooth(drift)} fill="none" style={{ stroke: C.accent }} strokeWidth={2.4} strokeDasharray="5 4" strokeLinecap="round" />
+      <line x1={f1(a.x)} y1={f1(a.y)} x2={f1(b.x)} y2={f1(b.y)} style={{ stroke: C.ink }} strokeWidth={2.6} strokeLinecap="round" />
+      <BarEnd at={a} />
+      <BarEnd at={b} />
+      <BarEnd at={drift[drift.length - 1]} c={C.accent} />
+      <T x={b.x - 10} y={b.y + 4} anchor="end" c={C.ink} size={10} weight={700}>{lift === "deadlift" ? "lockout" : "standing"}</T>
+      <Floor y={floor} />
+    </Svg>
+  );
+}
+
+/* ======================================================================
+ * Bench (side view, lying, head on the left)
+ * ==================================================================== */
+
+const BENCH_TOP = 0.245;
+
+type BenchBody = { S: Pt; hip: Pt; knee: Pt; heel: Pt; toe: Pt; ankle: Pt; headC: Pt; outline: Pt[]; chest: Pt[] };
+
+function benchBody(): BenchBody {
+  const T0 = BENCH_TOP;
+  const S = pt(0.2, T0 + 0.065);
+  const hip = pt(S.x + 0.285, T0 + 0.06);
+  const knee = pt(hip.x + Math.sqrt(SEG.thigh ** 2 - 0.03 ** 2), hip.y - 0.03);
+  const drop = knee.y - SEG.ankleH;
+  const ankle = pt(knee.x - Math.sqrt(Math.max(0, SEG.shank ** 2 - drop ** 2)), SEG.ankleH);
+  const heel = pt(ankle.x - SEG.heel, 0);
+  const toe = pt(ankle.x + SEG.toe, 0);
+  const headC = pt(S.x - 0.118, T0 + R.head + 0.002);
+  // the chest's top line, neck to hip: an arch lifts the lower chest
+  const chest = [
+    pt(S.x - 0.065, T0 + 0.08),
+    pt(S.x - 0.01, T0 + 0.135),
+    pt(S.x + 0.065, T0 + 0.158),
+    pt(S.x + 0.135, T0 + 0.148),
+    pt(S.x + 0.215, T0 + 0.112),
+    pt(hip.x + 0.05, T0 + 0.098),
+  ];
+  // the back on the pad: upper back pinned, lower back arched off, glutes down
+  const outline = [pt(S.x - 0.07, T0 + 0.012), pt(S.x + 0.06, T0), pt(S.x + 0.18, T0 + 0.03), pt(hip.x - 0.005, T0), pt(hip.x + 0.055, T0 + 0.03), ...chest.slice().reverse()];
+  return { S, hip, knee, heel, toe, ankle, headC, outline, chest };
+}
+
+/** The chest's height at x (where the bar lands). */
+function chestY(b: BenchBody, x: number): number {
+  const c = b.chest;
+  for (let i = 0; i < c.length - 1; i++) {
+    if (x >= c[i].x && x <= c[i + 1].x) {
+      const t = (x - c[i].x) / (c[i + 1].x - c[i].x);
+      const e = (1 - Math.cos(t * Math.PI)) / 2;
+      return c[i].y + (c[i + 1].y - c[i].y) * e;
+    }
+  }
+  return c[c.length - 1].y;
+}
+
+type BenchArm = { bar: Pt; elbow: Pt };
+
+/**
+ * The bottom of a bench with the forearm stacked straight under the bar.
+ * `upper` is how long the upper arm looks from the side: tucked toward the
+ * ribs it looks long (lower touch), flared out it looks short (higher touch).
+ */
+function benchBottom(b: BenchBody, upper: number): BenchArm {
+  const reach = SEG.forearm + SEG.grip + 0.008;
+  let lo = b.S.x;
+  let hi = b.S.x + 0.3;
+  const elbowAt = (x: number) => pt(x, chestY(b, x) + 0.01 - reach);
+  for (let i = 0; i < 40; i++) {
+    const m = (lo + hi) / 2;
+    if (len(sub(elbowAt(m), b.S)) < upper) lo = m;
+    else hi = m;
+  }
+  const x = (lo + hi) / 2;
+  return { bar: pt(x, chestY(b, x) + 0.01), elbow: elbowAt(x) };
+}
+
+function benchLockout(b: BenchBody): BenchArm {
+  const arm = SEG.upperArm + SEG.forearm + SEG.grip;
+  const bar = pt(b.S.x + 0.004, b.S.y + arm);
+  return { bar, elbow: add(b.S, mul(unit(sub(bar, b.S)), SEG.upperArm)) };
+}
+
+function BenchArmPath({ b, a, v, opacity }: { b: BenchBody; a: BenchArm; v: View; opacity?: number }) {
+  const P = (q: Pt) => toPx(q, v);
+  const r = (n: number) => n * v.s;
+  const d = [capsule(P(b.S), r(R.shoulder), P(a.elbow), r(R.elbow)), capsule(P(a.elbow), r(R.elbow), P(a.bar), r(R.wrist))].join(" ");
+  return <path d={d} opacity={opacity} style={{ fill: C.body, stroke: C.gap, paintOrder: "stroke" }} strokeWidth={2.6} strokeLinejoin="round" />;
+}
+
+function BenchFigure({ b, v, arm, opacity }: { b: BenchBody; v: View; arm?: BenchArm | null; opacity?: number }) {
+  const P = (q: Pt) => toPx(q, v);
+  const r = (n: number) => n * v.s;
+  return (
+    <g opacity={opacity}>
+      <g style={{ fill: C.body }}>
+        <path d={smooth(b.outline.map(P), true)} />
+        <path d={capsule(P(b.S), r(R.neck), P(b.headC), r(R.neck))} />
+        <circle cx={f1(P(b.headC).x)} cy={f1(P(b.headC).y)} r={f1(r(R.head))} />
+        <path d={capsule(P(b.hip), r(R.hip), P(b.knee), r(R.thighKnee))} />
+        <path d={capsule(P(b.knee), r(R.knee), P(b.ankle), r(R.ankle))} />
+        <path d={capsule(P(add(b.heel, pt(0.018, 0.018))), r(0.018), P(sub(b.toe, pt(0.01, -0.01))), r(0.01))} />
+      </g>
+      {arm && <BenchArmPath b={b} a={arm} v={v} />}
+    </g>
+  );
+}
+
+function Bench({ b, v }: { b: BenchBody; v: View }) {
+  const P = (q: Pt) => toPx(q, v);
+  const a = P(pt(b.S.x - 0.2, BENCH_TOP));
+  const z = P(pt(b.hip.x + 0.17, BENCH_TOP - 0.042));
+  const leg = (x: number) => {
+    const t = P(pt(x, BENCH_TOP - 0.042));
+    return <rect x={f1(t.x)} y={f1(t.y)} width={f1(0.026 * v.s)} height={f1(v.y - t.y)} rx={1.5} style={{ fill: C.faint, stroke: C.line }} strokeWidth={1} />;
+  };
+  return (
+    <g>
+      {leg(b.S.x - 0.13)}
+      {leg(b.hip.x + 0.09)}
+      <rect x={f1(a.x)} y={f1(a.y)} width={f1(z.x - a.x)} height={f1(z.y - a.y)} rx={3} style={{ fill: C.faint, stroke: C.line }} strokeWidth={1} />
+    </g>
+  );
+}
+
+const BN = { s: 178, floor: 150 };
+
+/** Touch point and elbows move together: both forearms stacked, one tucked and low, one flared and high. */
+function BenchTuckFlare() {
+  const { s, floor } = BN;
+  const b = benchBody();
+  const tuck = benchBottom(b, 0.16);
+  const flare = benchBottom(b, 0.094);
+  const vl: View = { x: 4, y: floor, s };
+  const vr: View = { x: 164, y: floor, s };
+  const stack = (a: BenchArm, v: View) => {
+    const top = toPx(a.bar, v);
+    const el = toPx(a.elbow, v);
+    return (
+      <g>
+        <Plumb x={top.x} y0={top.y - 16} y1={el.y + 10} c={C.accent} />
+        <BarEnd at={top} />
+      </g>
+    );
+  };
+  return (
+    <Svg label={visualLabel({ kind: "bench_touch" })} h={floor + 8}>
+      <Head x={80} title="Lower touch" lines={["more tuck"]} />
+      <Head x={240} title="Higher touch" lines={["more flare"]} />
+      <Divider y1={floor} />
+      <Bench b={b} v={vl} />
+      <Bench b={b} v={vr} />
+      <BenchFigure b={b} v={vl} arm={tuck} />
+      <BenchFigure b={b} v={vr} arm={flare} />
+      {stack(tuck, vl)}
+      {stack(flare, vr)}
+      <Floor y={floor} />
+    </Svg>
+  );
+}
+
+/** Same spot every rep vs a different spot each rep (and the elbows changing with it). */
+function BenchConsistency() {
+  const { s, floor } = BN;
+  const b = benchBody();
+  const same = [0.144, 0.147, 0.15].map((u) => benchBottom(b, u));
+  const spread = [0.1, 0.128, 0.156].map((u) => benchBottom(b, u));
+  const vl: View = { x: 4, y: floor, s };
+  const vr: View = { x: 164, y: floor, s };
+  // where each rep touched, as small marks on the chest
+  const marks = (arms: BenchArm[], v: View, c: string) =>
+    arms.map((a, i) => {
+      const p = toPx(pt(a.bar.x, chestY(b, a.bar.x) + 0.004), v);
+      return <circle key={i} cx={f1(p.x)} cy={f1(p.y)} r={3.2} style={{ fill: c, stroke: C.gap, paintOrder: "stroke" }} strokeWidth={2} />;
+    });
+  return (
+    <Svg label={visualLabel({ kind: "bench_touch", variant: "consistency" })} h={floor + 8}>
+      <Head x={80} title="Same spot" lines={["same elbows every rep"]} />
+      <Head x={240} title="A different spot" lines={["elbows change,", "so the touch changes"]} c={C.accent} />
+      <Divider y1={floor} />
+      <Bench b={b} v={vl} />
+      <Bench b={b} v={vr} />
+      <BenchFigure b={b} v={vl} />
+      <BenchFigure b={b} v={vr} />
+      {same.map((a, i) => (
+        <BenchArmPath key={i} b={b} a={a} v={vl} opacity={i === 1 ? 1 : 0.3} />
+      ))}
+      {spread.map((a, i) => (
+        <BenchArmPath key={i} b={b} a={a} v={vr} opacity={0.3 + 0.35 * i} />
+      ))}
+      {marks(same, vl, C.ink)}
+      {marks(spread, vr, C.accent)}
+      <Floor y={floor} />
+    </Svg>
+  );
+}
+
+/** Off the chest the bar travels up and back to lock out over the shoulder; drifting toward the feet leaves it over the chest. */
+function BenchPath({ fault }: { fault: boolean }) {
+  const floor = 196;
+  const s = 205;
+  const b = benchBody();
+  const v: View = { x: 70, y: floor, s };
+  const bottom = benchBottom(b, 0.14);
+  const lock = benchLockout(b);
+  const P = (q: Pt) => toPx(q, v);
+  const t0 = P(bottom.bar);
+  const t1 = P(lock.bar);
+  const j = Array.from({ length: 25 }, (_, i) => {
+    const t = i / 24;
+    const back = 1 - (1 - Math.min(1, t / 0.7)) ** 2;
+    return pt(t0.x + (t1.x - t0.x) * back, t0.y + (t1.y - t0.y) * t);
+  });
+  const drift = Array.from({ length: 25 }, (_, i) => {
+    const t = i / 24;
+    return pt(t0.x + 0.03 * s * Math.sin(t * Math.PI * 0.55), t0.y + (t1.y - t0.y) * t);
+  });
+  const sh = P(b.S);
+  return (
+    <Svg label={visualLabel({ kind: "bar_path", lift: "bench", fault: fault ? "forward" : "none" })} h={floor + 8}>
+      <Legend
+        items={[
+          { label: "Up and back, over the shoulder", c: C.ink },
+          ...(fault ? [{ label: "Finishing over the chest", c: C.accent, dash: true }] : []),
+        ]}
+      />
+      <Bench b={b} v={v} />
+      <Plumb x={sh.x} y0={t1.y - 12} y1={sh.y} />
+      <BenchFigure b={b} v={v} arm={lock} opacity={0.2} />
+      <BenchFigure b={b} v={v} arm={bottom} />
+      {fault && <path d={smooth(drift)} fill="none" style={{ stroke: C.accent }} strokeWidth={2.4} strokeDasharray="5 4" strokeLinecap="round" />}
+      <path d={smooth(j)} fill="none" style={{ stroke: C.ink }} strokeWidth={2.6} strokeLinecap="round" />
+      <BarEnd at={t0} />
+      <BarEnd at={t1} />
+      {fault && <BarEnd at={drift[drift.length - 1]} c={C.accent} />}
+      <T x={sh.x - 9} y={t1.y + 4} anchor="end" c={C.ink} size={10} weight={700}>lockout</T>
+      <T x={t0.x + 8} y={t0.y - 7} c={C.ink} size={10} weight={700}>touch</T>
+      <Floor y={floor} />
+    </Svg>
+  );
+}
+
+/* ======================================================================
+ * Charts: one quiet baseline, direct labels, red only where it matters
+ * ==================================================================== */
+
+const BOX = { x0: 14, x1: 306, y0: 138, y1: 34 };
+const CH = 166;
+
+function Chart({ label, y, ends, children }: { label: string; y: string; ends: [string, string]; children: ReactNode }) {
+  return (
+    <Svg label={label} h={CH}>
+      <T x={BOX.x0} y={14} size={10.5} weight={700} c={C.sub}>{y}</T>
+      {children}
+      <line x1={BOX.x0} y1={BOX.y0} x2={BOX.x1} y2={BOX.y0} style={{ stroke: C.line }} strokeWidth={1.5} strokeLinecap="round" />
+      <T x={BOX.x0} y={BOX.y0 + 17} size={10}>{ends[0]}</T>
+      <T x={BOX.x1} y={BOX.y0 + 17} anchor="end" size={10}>{ends[1]}</T>
+    </Svg>
+  );
+}
+
+/** f(t), t in 0..1, value 0..1 (up), across the chart box. */
+function plot(f: (t: number) => number, n = 48, top = BOX.y1, x0 = BOX.x0, x1 = BOX.x1): Pt[] {
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const t = i / n;
+    return pt(x0 + t * (x1 - x0), BOX.y0 - Math.max(0, Math.min(1.04, f(t))) * (BOX.y0 - top));
+  });
+}
+
+function Curve({ pts, c = C.ink, w = 2.6, dash }: { pts: Pt[]; c?: string; w?: number; dash?: string }) {
+  return <path d={smooth(pts)} fill="none" style={{ stroke: c }} strokeWidth={w} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} />;
+}
+
+/** A soft fill under a curve, fading to nothing at the baseline. */
+function Area({ pts, c = C.accent }: { pts: Pt[]; c?: string }) {
+  const id = `lv${useId().replace(/:/g, "")}`;
+  const d = `${smooth(pts)} L${f1(pts[pts.length - 1].x)} ${BOX.y0} L${f1(pts[0].x)} ${BOX.y0} Z`;
+  return (
+    <g>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" style={{ stopColor: c, stopOpacity: 0.09 }} />
+          <stop offset="1" style={{ stopColor: c, stopOpacity: 0 }} />
+        </linearGradient>
+      </defs>
+      <path d={d} style={{ fill: `url(#${id})` }} />
+    </g>
+  );
+}
+
+const yAt = (pts: Pt[], x: number) => {
+  for (let i = 0; i < pts.length - 1; i++) if (x >= pts[i].x && x <= pts[i + 1].x) return pts[i].y + ((pts[i + 1].y - pts[i].y) * (x - pts[i].x)) / (pts[i + 1].x - pts[i].x);
+  return pts[pts.length - 1].y;
+};
 
 function StickingPoint({ lift }: { lift: LessonLift }) {
-  const ends: Record<LessonLift, [string, string]> = { squat: ["HOLE", "LOCKOUT"], bench: ["CHEST", "LOCKOUT"], deadlift: ["FLOOR", "LOCKOUT"] };
-  const dip = lift === "deadlift" ? 0.45 : lift === "squat" ? 0.33 : 0.3;
-  // fast off the bottom, a slow patch, faster again, stopping at lockout
-  const f = (t: number) => {
-    const rise = 1 - Math.exp(-t * 14);
-    const slow = 0.62 * Math.exp(-((t - dip) ** 2) / 0.012);
-    const stop = t > 0.9 ? Math.max(0, 1 - (t - 0.9) / 0.1) : 1;
-    return Math.max(0.03, (0.85 * rise - slow + 0.1 * t) * stop);
-  };
-  const pts = plot(f, BOX);
-  const x0 = BOX.x0 + (dip - 0.11) * BOX.w;
-  const x1 = BOX.x0 + (dip + 0.11) * BOX.w;
+  const ends: Record<LessonLift, [string, string]> = { squat: ["Bottom", "Lockout"], bench: ["Chest", "Lockout"], deadlift: ["Floor", "Lockout"] };
+  const dip = lift === "deadlift" ? 0.42 : lift === "squat" ? 0.3 : 0.32;
+  // speed builds off the bottom, sags through the sticking region, then slows to a stop at lockout
+  const f = (t: number) => Math.sin(Math.PI * t) ** 0.7 * (1 - 0.62 * Math.exp(-((t - dip) ** 2) / 0.0095)) * 0.93;
+  const pts = plot(f, 64);
+  const a = BOX.x0 + (dip - 0.1) * (BOX.x1 - BOX.x0);
+  const b = BOX.x0 + (dip + 0.1) * (BOX.x1 - BOX.x0);
   return (
-    <Frame label={visualLabel({ kind: "sticking_point", lift })} note="ILLUSTRATION">
-      <rect x={x0} y={BOX.y0 - BOX.h - 4} width={x1 - x0} height={BOX.h + 4} fill="rgba(255,90,100,0.14)" />
-      <Label x={(x0 + x1) / 2} y={BOX.y0 - BOX.h - 8} anchor="middle" color={RED}>STICKING REGION</Label>
-      <Axes x0={BOX.x0} y0={BOX.y0} x1={BOX.x0 + BOX.w} y1={BOX.y0 - BOX.h} xLabel="" yLabel="BAR SPEED" />
-      <path d={path(pts)} fill="none" stroke={INK} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
-      <Label x={BOX.x0} y={BOX.y0 + 14} color={MUTED}>{ends[lift][0]}</Label>
-      {lift === "deadlift" && <Label x={BOX.x0 + 0.45 * BOX.w} y={BOX.y0 + 14} anchor="middle" color={MUTED}>KNEES</Label>}
-      <Label x={BOX.x0 + BOX.w} y={BOX.y0 + 14} anchor="end" color={MUTED}>{ends[lift][1]}</Label>
-    </Frame>
+    <Chart label={visualLabel({ kind: "sticking_point", lift })} y="Bar speed" ends={ends[lift]}>
+      <rect x={f1(a)} y={BOX.y1 - 6} width={f1(b - a)} height={BOX.y0 - BOX.y1 + 6} rx={6} style={{ fill: C.soft }} />
+      <T x={(a + b) / 2} y={BOX.y1 + 6} anchor="middle" c={C.accent} size={10} weight={700}>{lift === "deadlift" ? "around the knees" : "sticking region"}</T>
+      <Area pts={pts} c={C.ink} />
+      <Curve pts={pts} />
+    </Chart>
   );
 }
 
 function StrengthCurve({ shape }: { shape: string }) {
   const f =
     shape === "descending"
-      ? (t: number) => 0.95 - 0.6 * t * t
+      ? (t: number) => 0.9 - 0.55 * t
       : shape === "bell"
-        ? (t: number) => 0.3 + 0.65 * Math.sin(Math.PI * t)
-        : (t: number) => 0.3 + 0.65 * Math.pow(t, 1.3);
-  const name = shape === "descending" ? "STRONGEST AT THE START" : shape === "bell" ? "STRONGEST MID RANGE" : "STRONGEST NEAR LOCKOUT";
+        ? (t: number) => 0.3 + 0.62 * Math.sin(Math.PI * t)
+        : (t: number) => 0.3 + 0.62 * t ** 1.3;
+  const pts = plot(f);
+  const name = shape === "descending" ? "strongest at the start" : shape === "bell" ? "strongest mid range" : "strongest near lockout";
   return (
-    <Frame label={visualLabel({ kind: "strength_curve", shape })} note="ILLUSTRATION">
-      <Legend items={[{ label: name, color: INK }]} />
-      <Axes x0={BOX.x0} y0={BOX.y0} x1={BOX.x0 + BOX.w} y1={BOX.y0 - BOX.h} xLabel="RANGE OF MOTION →" yLabel="FORCE YOU CAN MAKE" />
-      <path d={path(plot(f, BOX))} fill="none" stroke={INK} strokeWidth={3.5} strokeLinecap="round" />
-      <Label x={BOX.x0} y={BOX.y0 + 14} color={MUTED}>START</Label>
-    </Frame>
+    <Chart label={visualLabel({ kind: "strength_curve" })} y="Force you can make" ends={["Start", "End of the range"]}>
+      <Area pts={pts} c={C.ink} />
+      <Curve pts={pts} />
+      <T x={BOX.x1} y={BOX.y1 - 4} anchor="end" c={C.ink} size={10.5} weight={700}>{name}</T>
+    </Chart>
   );
 }
 
 function LengthTension() {
-  // active force: rises, plateaus around resting length, falls when overstretched
-  const f = (t: number) => (t < 0.38 ? 0.15 + 0.85 * (t / 0.38) ** 0.9 : t < 0.55 ? 1 : Math.max(0.08, 1 - ((t - 0.55) / 0.45) * 0.92));
-  const peakX = BOX.x0 + 0.465 * BOX.w;
+  const f = (t: number) => Math.max(0.06, Math.exp(-((t - 0.47) ** 2) / 0.045) * 0.94);
+  const pts = plot(f);
+  const peak = BOX.x0 + 0.47 * (BOX.x1 - BOX.x0);
   return (
-    <Frame label={visualLabel({ kind: "length_tension" })} note="SIMPLIFIED MODEL">
-      <Axes x0={BOX.x0} y0={BOX.y0} x1={BOX.x0 + BOX.w} y1={BOX.y0 - BOX.h} xLabel="MUSCLE LENGTH →" yLabel="FORCE" />
-      <path d={path(plot(f, BOX))} fill="none" stroke={INK} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
-      <Label x={peakX} y={BOX.y0 - BOX.h - 8} anchor="middle" color={GOLD}>MOST FORCE</Label>
-      <Label x={BOX.x0 + 6} y={BOX.y0 + 14} color={MUTED}>SHORT</Label>
-      <Label x={BOX.x0 + BOX.w} y={BOX.y0 - 0.32 * BOX.h} anchor="end" color={SOFT} size={8.5}>OVERSTRETCHED</Label>
-    </Frame>
+    <Chart label={visualLabel({ kind: "length_tension" })} y="Force" ends={["Short", "Long (stretched)"]}>
+      <Area pts={pts} c={C.ink} />
+      <Curve pts={pts} />
+      <T x={peak} y={BOX.y1 - 4} anchor="middle" c={C.ink} size={10.5} weight={700}>most force in the middle</T>
+    </Chart>
   );
 }
 
 function ForceVelocity() {
-  // Hill's curve (a = 0.25): force falls as speed rises; power = force × speed peaks around a third of max speed
   const a = 0.25;
-  const force = (v: number) => Math.max(0, ((1 + a) / (v + a)) * a - a);
-  const pts = plot((t) => force(t), BOX);
-  const power = (v: number) => force(v) * v;
+  const force = (vv: number) => Math.max(0, ((1 + a) / (vv + a)) * a - a);
+  const pts = plot((t) => force(t) * 0.94);
+  const power = (vv: number) => force(vv) * vv;
   const pmax = Math.max(...Array.from({ length: 101 }, (_, i) => power(i / 100)));
-  const powPts = plot((t) => (power(t) / pmax) * 0.62, BOX);
+  const pow = plot((t) => (power(t) / pmax) * 0.5);
+  const peak = pow.reduce((m, p) => (p.y < m.y ? p : m), pow[0]);
   return (
-    <Frame label={visualLabel({ kind: "force_velocity" })} note="CLASSIC MODEL">
-      <Legend items={[{ label: "FORCE", color: INK }, { label: "POWER", color: GOLD, dash: true }]} />
-      <Axes x0={BOX.x0} y0={BOX.y0} x1={BOX.x0 + BOX.w} y1={BOX.y0 - BOX.h} xLabel="SPEED →" yLabel="FORCE" />
-      <path d={path(pts)} fill="none" stroke={INK} strokeWidth={3.5} strokeLinecap="round" />
-      <path d={path(powPts)} fill="none" stroke={GOLD} strokeWidth={2.5} strokeDasharray="5 4" />
-      <Label x={BOX.x0 + 14} y={BOX.y0 - BOX.h + 6} color={SOFT} size={8.5}>A MAX: HEAVY, SLOW</Label>
-      <Label x={BOX.x0 + BOX.w} y={BOX.y0 - 40} anchor="end" color={SOFT} size={8.5}>LIGHT: FAST</Label>
-    </Frame>
+    <Chart label={visualLabel({ kind: "force_velocity" })} y="Force" ends={["Slow", "Fast"]}>
+      <Curve pts={pow} c={C.accent} w={2.2} dash="5 4" />
+      <Curve pts={pts} />
+      <T x={BOX.x0 + 16} y={BOX.y1 + 6} c={C.ink} size={10.5} weight={700}>heavy = slow</T>
+      <T x={BOX.x1} y={BOX.y0 - 30} anchor="end" c={C.ink} size={10.5} weight={700}>light = fast</T>
+      <T x={peak.x + 8} y={peak.y - 7} c={C.accent} size={10.5} weight={700}>power peaks in between</T>
+    </Chart>
   );
 }
 
 /**
- * Banister's model run on a real schedule: 4 weeks of hard training then a
- * 10-day taper at a third of the load. Fitness (k 1, τ 42 days) and fatigue
- * (k 2, τ 7 days); performance is the difference.
+ * Banister's model: fitness builds slowly and fades slowly, fatigue builds and
+ * fades fast. Performance = fitness − fatigue, so it comes up in a taper.
  */
 export function banister(days = 42, hardDays = 30) {
   const fit: number[] = [];
@@ -549,118 +1131,185 @@ export function banister(days = 42, hardDays = 30) {
   return { fit, fat, perf };
 }
 
+/** Labels at the right edge, nudged apart so they never touch. */
+function spread(ys: number[], gap = 13): number[] {
+  const order = ys.map((y, i) => ({ y, i })).sort((p, q) => p.y - q.y);
+  for (let k = 1; k < order.length; k++) if (order[k].y - order[k - 1].y < gap) order[k].y = order[k - 1].y + gap;
+  const out = [...ys];
+  for (const o of order) out[o.i] = o.y;
+  return out;
+}
+
 function FitnessFatigue() {
   const days = 42;
   const hard = 30;
   const { fit, fat, perf } = banister(days, hard);
   const top = Math.max(...fit, ...fat);
   const low = Math.min(...perf, 0);
-  const box = { x0: 30, y0: 172, w: 272, h: 124 };
-  const y = (v: number) => box.y0 - ((v - low) / (top - low)) * box.h;
-  const xs = (i: number) => box.x0 + (i / (days - 1)) * box.w;
-  const line = (arr: number[]) => path(arr.map((v, i) => ({ x: xs(i), y: y(v) })));
-  const taperX = xs(hard);
+  const x1 = BOX.x1 - 78;
+  const y = (val: number) => BOX.y0 - ((val - low) / (top - low)) * (BOX.y0 - BOX.y1);
+  const xs = (i: number) => BOX.x0 + (i / (days - 1)) * (x1 - BOX.x0);
+  const line = (arr: number[]) => arr.map((val, i) => pt(xs(i), y(val)));
+  const taper = xs(hard);
+  const ends = spread([y(fit[days - 1]), y(fat[days - 1]), y(perf[days - 1])]);
   return (
-    <Frame label={visualLabel({ kind: "fitness_fatigue" })} note="BANISTER MODEL" noteAt="top">
-      <Legend items={[{ label: "FITNESS", color: INK }, { label: "FATIGUE", color: RED, dash: true }, { label: "PERFORMANCE", color: GOLD }]} />
-      <rect x={taperX} y={box.y0 - box.h} width={box.x0 + box.w - taperX} height={box.h} fill="rgba(255,255,255,0.05)" />
-      <Label x={(taperX + box.x0 + box.w) / 2} y={box.y0 + 14} anchor="middle" color={SOFT}>TAPER</Label>
-      <Label x={box.x0 + 2} y={box.y0 + 14} color={MUTED}>HARD TRAINING</Label>
-      <line x1={box.x0} y1={y(0)} x2={box.x0 + box.w} y2={y(0)} stroke={GRID} strokeWidth={1} />
-      <line x1={box.x0} y1={box.y0} x2={box.x0} y2={box.y0 - box.h} stroke={MUTED} strokeWidth={1.2} />
-      <path d={line(fit)} fill="none" stroke={INK} strokeWidth={3} strokeLinecap="round" />
-      <path d={line(fat)} fill="none" stroke={RED} strokeWidth={2.5} strokeDasharray="5 4" />
-      <path d={line(perf)} fill="none" stroke={GOLD} strokeWidth={3.5} strokeLinecap="round" />
-    </Frame>
+    <Chart label={visualLabel({ kind: "fitness_fatigue" })} y="Training effect" ends={["Hard training", ""]}>
+      <rect x={f1(taper)} y={BOX.y1 - 6} width={f1(x1 - taper + 4)} height={BOX.y0 - BOX.y1 + 6} rx={6} style={{ fill: C.faint }} />
+      <T x={(taper + x1) / 2 + 2} y={BOX.y0 + 17} anchor="middle" size={10}>Taper</T>
+      <Curve pts={line(fat)} c={C.sub} w={2} dash="4 4" />
+      <Curve pts={line(fit)} />
+      <Curve pts={line(perf)} c={C.accent} w={2.8} />
+      <T x={x1 + 10} y={ends[0] + 3.5} c={C.ink} size={10.5} weight={700}>Fitness</T>
+      <T x={x1 + 10} y={ends[1] + 3.5} size={10.5} weight={700}>Fatigue</T>
+      <T x={x1 + 10} y={ends[2] + 3.5} c={C.accent} size={10.5} weight={700}>Performance</T>
+    </Chart>
   );
 }
 
-function Sra() {
-  const f = (t: number) => {
-    // baseline, a dip after the session, back up past baseline, drifting back down
-    const base = 0.5;
-    if (t < 0.12) return base;
-    const u = (t - 0.12) / 0.88;
-    return base - 0.32 * Math.sin(Math.min(1, u / 0.4) * Math.PI) * (u < 0.4 ? 1 : 0) + (u > 0.25 ? 0.16 * Math.sin(Math.min(1, (u - 0.25) / 0.75) * Math.PI) : 0);
+function Sra({ stress }: { stress: boolean }) {
+  const base = 0.55;
+  const f = (t: number, slow = 1) => {
+    const tt = t / slow;
+    const dip = -0.3 * Math.exp(-(((tt - 0.16) / 0.11) ** 2));
+    const up = 0.15 * Math.exp(-(((tt - 0.6) / 0.17) ** 2));
+    return base + dip + up;
   };
-  const pts = plot(f, BOX, 80);
-  const baseY = BOX.y0 - 0.5 * BOX.h;
+  const pts = plot((t) => f(t));
+  const slowPts = plot((t) => f(t, 1.45) - (t > 0.4 ? 0.02 : 0));
+  const baseY = BOX.y0 - base * (BOX.y0 - BOX.y1);
+  const dipX = BOX.x0 + 0.16 * (BOX.x1 - BOX.x0);
+  const peakX = BOX.x0 + 0.6 * (BOX.x1 - BOX.x0);
   return (
-    <Frame label={visualLabel({ kind: "sra" })} note="SIMPLIFIED MODEL">
-      <line x1={BOX.x0} y1={baseY} x2={BOX.x0 + BOX.w} y2={baseY} stroke={GRID} strokeWidth={1.2} strokeDasharray="3 4" />
-      <Label x={BOX.x0 + BOX.w} y={baseY + 14} anchor="end" color={MUTED}>WHERE YOU STARTED</Label>
-      <line x1={BOX.x0} y1={BOX.y0} x2={BOX.x0} y2={BOX.y0 - BOX.h} stroke={MUTED} strokeWidth={1.2} />
-      <path d={path(pts)} fill="none" stroke={INK} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
-      <Label x={BOX.x0 + 0.12 * BOX.w} y={BOX.y0 - 0.5 * BOX.h - 12} anchor="middle" color={RED}>SESSION</Label>
-      <Label x={BOX.x0 + 0.3 * BOX.w} y={BOX.y0 + 2} anchor="middle" color={SOFT}>RECOVERY</Label>
-      <Label x={BOX.x0 + 0.66 * BOX.w} y={BOX.y0 - 0.74 * BOX.h} anchor="middle" color={GOLD}>ADAPTATION</Label>
-      <Label x={BOX.x0} y={BOX.y0 + 14} color={MUTED}>TIME →</Label>
-    </Frame>
+    <Chart label={visualLabel({ kind: "sra", variant: stress ? "stress" : undefined })} y="Performance" ends={["Workout", "Days after"]}>
+      {stress && <Legend items={[{ label: "Normal week", c: C.ink }, { label: "Stressful week: slower", c: C.accent, dash: true }]} x={BOX.x1 - 150} y={13} />}
+      <line x1={BOX.x0} y1={f1(baseY)} x2={BOX.x1} y2={f1(baseY)} style={{ stroke: C.line }} strokeWidth={1.1} strokeDasharray="3 4" />
+      <T x={BOX.x1} y={baseY + 13} anchor="end" size={9.5}>where you started</T>
+      {stress && <Curve pts={slowPts} c={C.accent} w={2.2} dash="5 4" />}
+      <Curve pts={pts} />
+      <T x={dipX} y={yAt(pts, dipX) + 16} anchor="middle" c={C.ink} size={10.5} weight={700}>recovery</T>
+      <T x={peakX} y={yAt(pts, peakX) - 9} anchor="middle" c={C.ink} size={10.5} weight={700}>adaptation</T>
+    </Chart>
   );
 }
 
 function RpeRir() {
   const rows = [
-    { rpe: "10", rir: "0", note: "MAX, NOTHING LEFT" },
-    { rpe: "9", rir: "1", note: "COULD DO 1 MORE" },
-    { rpe: "8", rir: "2", note: "COULD DO 2 MORE" },
-    { rpe: "7", rir: "3", note: "COULD DO 3 MORE" },
-    { rpe: "6", rir: "4+", note: "4 OR MORE LEFT" },
+    { rpe: "10", left: 0, text: "nothing left" },
+    { rpe: "9", left: 1, text: "1 rep left" },
+    { rpe: "8", left: 2, text: "2 reps left" },
+    { rpe: "7", left: 3, text: "3 reps left" },
+    { rpe: "6", left: 4, text: "4 or more left" },
   ];
   return (
-    <Frame label={visualLabel({ kind: "rpe_rir" })}>
-      <Label x={20} y={22} color={MUTED}>RPE</Label>
-      <Label x={70} y={22} color={MUTED}>REPS LEFT</Label>
+    <Svg label={visualLabel({ kind: "rpe_rir" })} h={150}>
+      <T x={16} y={13} size={9.5} weight={800} caps>RPE</T>
+      <T x={66} y={13} size={9.5} weight={800} caps>Reps left in the tank</T>
       {rows.map((r, i) => {
-        const y = 34 + i * 31;
-        const w = 110 + (4 - i) * 22;
+        const y = 36 + i * 25;
         return (
           <g key={r.rpe}>
-            <rect x={110} y={y} width={w} height={22} rx={6} fill={i === 0 ? RED : `rgba(255,255,255,${0.32 - i * 0.05})`} />
-            <text x={20} y={y + 17} fontSize={20} fontWeight={900} fill={INK}>{r.rpe}</text>
-            <text x={70} y={y + 17} fontSize={18} fontWeight={900} fill={i === 0 ? RED : SOFT}>{r.rir}</text>
-            <Label x={118} y={y + 15} color={i === 0 ? "#fff" : INK} size={9}>{r.note}</Label>
+            {i > 0 && <line x1={14} y1={y - 15} x2={306} y2={y - 15} style={{ stroke: C.line }} strokeWidth={1} opacity={0.6} />}
+            <T x={16} y={y + 5} c={i === 0 ? C.accent : C.ink} size={17} weight={800}>{r.rpe}</T>
+            {r.left === 0 ? (
+              <circle cx={72} cy={y} r={5} style={{ fill: "none", stroke: C.accent }} strokeWidth={1.6} />
+            ) : (
+              Array.from({ length: r.left }, (_, k) => <circle key={k} cx={72 + k * 15} cy={y} r={5} style={{ fill: C.ink }} />)
+            )}
+            <T x={r.left >= 4 ? 140 : 72 + Math.max(1, r.left) * 15 + 6} y={y + 4} c={i === 0 ? C.accent : C.sub} size={11} weight={i === 0 ? 700 : 600}>{r.text}</T>
           </g>
         );
       })}
-    </Frame>
+    </Svg>
   );
 }
 
 function DoseResponse() {
-  const growth = (t: number) => 0.92 * (1 - Math.exp(-t * 3.2));
-  const fatigue = (t: number) => 0.08 + 0.85 * Math.pow(t, 1.8);
+  const f = (t: number) => 0.9 * (1 - Math.exp(-3.1 * t)) + 0.04;
+  const pts = plot(f);
+  const dots = [0.18, 0.38, 0.6, 0.85].map((t) => pts[Math.round(t * (pts.length - 1))]);
   return (
-    <Frame label={visualLabel({ kind: "dose_response" })} note="ILLUSTRATION · NOT DATA">
-      <Legend items={[{ label: "GROWTH", color: INK }, { label: "FATIGUE", color: RED, dash: true }]} />
-      <Axes x0={BOX.x0} y0={BOX.y0} x1={BOX.x0 + BOX.w} y1={BOX.y0 - BOX.h} xLabel="HARD SETS A WEEK →" yLabel="" />
-      <path d={path(plot(growth, BOX))} fill="none" stroke={INK} strokeWidth={3.5} strokeLinecap="round" />
-      <path d={path(plot(fatigue, BOX))} fill="none" stroke={RED} strokeWidth={2.5} strokeDasharray="5 4" />
-      <Label x={BOX.x0 + BOX.w * 0.62} y={BOX.y0 - 0.95 * BOX.h} anchor="middle" color={SOFT} size={8.5}>EACH SET ADDS A LITTLE LESS</Label>
-    </Frame>
+    <Chart label={visualLabel({ kind: "dose_response" })} y="Growth" ends={["Fewer sets", "More sets a week"]}>
+      <Area pts={pts} c={C.ink} />
+      <Curve pts={pts} />
+      {dots.map((p, i) => (
+        <circle key={i} cx={f1(p.x)} cy={f1(p.y)} r={3.6} style={{ fill: i === dots.length - 1 ? C.accent : C.ink }} />
+      ))}
+      <T x={dots[0].x + 10} y={dots[0].y + 14} c={C.ink} size={10.5} weight={700}>more sets, more growth</T>
+      <T x={dots[3].x} y={dots[3].y - 11} anchor="end" c={C.accent} size={10.5} weight={700}>each step adds less</T>
+    </Chart>
+  );
+}
+
+function Bars({ values, x0, x1, top = BOX.y1, red = () => false, gap = 6 }: { values: number[]; x0: number; x1: number; top?: number; red?: (i: number) => boolean; gap?: number }) {
+  const w = (x1 - x0 - gap * (values.length - 1)) / values.length;
+  return (
+    <g>
+      {values.map((val, i) => {
+        const h = val * (BOX.y0 - top);
+        return <rect key={i} x={f1(x0 + i * (w + gap))} y={f1(BOX.y0 - h)} width={f1(w)} height={f1(h)} rx={Math.min(5, w / 3)} style={{ fill: red(i) ? C.accent : C.body }} opacity={red(i) ? 1 : 0.85} />;
+      })}
+    </g>
   );
 }
 
 function VelocityLoss() {
-  const reps = [1, 0.96, 0.91, 0.86, 0.8, 0.71, 0.58, 0.38];
-  const box = { x0: 30, y0: 170, w: 272, h: 120 };
-  const bw = box.w / reps.length - 8;
+  const vals = [1, 0.97, 0.93, 0.87, 0.8, 0.71, 0.59, 0.45];
   return (
-    <Frame label={visualLabel({ kind: "velocity_loss" })} note="ILLUSTRATION">
-      <Axes x0={box.x0} y0={box.y0} x1={box.x0 + box.w} y1={box.y0 - box.h} xLabel="" yLabel="REP SPEED" />
-      {reps.map((v, i) => {
-        const x = box.x0 + 6 + i * (bw + 8);
-        const h = v * box.h;
-        const last = i >= reps.length - 2;
-        return <rect key={i} x={x} y={box.y0 - h} width={bw} height={h} rx={4} fill={last ? RED : `rgba(255,255,255,${0.75 - i * 0.05})`} />;
-      })}
-      <Label x={box.x0 + 6} y={box.y0 + 14} color={MUTED}>REP 1</Label>
-      <Label x={box.x0 + box.w} y={box.y0 + 14} anchor="end" color={RED}>CLOSE TO FAILURE</Label>
-    </Frame>
+    <Chart label={visualLabel({ kind: "velocity_loss" })} y="Rep speed" ends={["Rep 1", ""]}>
+      <Bars values={vals} x0={BOX.x0} x1={BOX.x1} top={BOX.y1 + 4} red={(i) => i >= 6} gap={8} />
+      <T x={BOX.x1} y={BOX.y0 + 17} anchor="end" c={C.accent} size={10} weight={700}>close to failure</T>
+    </Chart>
   );
 }
 
-/** A stable id for gradients if a diagram ever needs one. */
-export function useVisualId(prefix: string) {
-  return `${prefix}-${useId().replace(/:/g, "")}`;
+function ClusterSets() {
+  const straight = [1, 0.94, 0.86, 0.77, 0.66];
+  const cluster = [1, 0.98, 0.97, 0.96, 0.94];
+  const mid = (BOX.x0 + BOX.x1) / 2;
+  return (
+    <Chart label={visualLabel({ kind: "velocity_loss", variant: "cluster" })} y="Rep speed" ends={["Straight set", "Singles, short rests"]}>
+      <Bars values={straight} x0={BOX.x0} x1={mid - 14} top={BOX.y1 + 4} red={(i) => i >= 3} gap={5} />
+      <Bars values={cluster} x0={mid + 14} x1={BOX.x1} top={BOX.y1 + 4} gap={12} />
+      <line x1={mid} y1={BOX.y1} x2={mid} y2={BOX.y0} style={{ stroke: C.line }} strokeWidth={1} />
+    </Chart>
+  );
 }
+
+function MyoReps() {
+  const reps = [15, 4, 4, 4, 3];
+  const max = 16;
+  const top = BOX.y1 + 6;
+  const x0 = BOX.x0 + 4;
+  const wBig = 54;
+  const w = 30;
+  const gap = 26;
+  const xs = [x0, x0 + wBig + gap + 8];
+  for (let i = 2; i < reps.length; i++) xs.push(xs[i - 1] + w + gap);
+  const h = (r: number) => (r / max) * (BOX.y0 - top);
+  return (
+    <Chart label={visualLabel({ kind: "set_structure" })} y="Reps" ends={["", ""]}>
+      {reps.map((r, i) => {
+        const bw = i === 0 ? wBig : w;
+        const last = i === reps.length - 1;
+        return (
+          <g key={i}>
+            <rect x={f1(xs[i])} y={f1(BOX.y0 - h(r))} width={bw} height={f1(h(r))} rx={6} style={{ fill: last ? C.accent : C.body }} opacity={last ? 1 : 0.85} />
+            <T x={xs[i] + bw / 2} y={BOX.y0 - h(r) - 6} anchor="middle" c={last ? C.accent : C.ink} size={12} weight={800}>{String(r)}</T>
+          </g>
+        );
+      })}
+      {reps.slice(1).map((_, i) => {
+        const a = xs[i] + (i === 0 ? wBig : w);
+        const b = xs[i + 1];
+        return <line key={i} x1={f1(a + 5)} y1={BOX.y0 - 8} x2={f1(b - 5)} y2={BOX.y0 - 8} style={{ stroke: C.sub }} strokeWidth={1.4} strokeDasharray="1.5 3.5" strokeLinecap="round" />;
+      })}
+      <T x={xs[0] + wBig / 2} y={BOX.y0 + 17} anchor="middle" size={10}>Activation set</T>
+      <T x={(xs[1] + xs[3] + w) / 2} y={BOX.y0 + 17} anchor="middle" size={10}>3–5 breaths, then mini sets</T>
+      <T x={xs[4] + w} y={BOX.y0 - h(3) - 32} anchor="end" c={C.accent} size={10} weight={700}>can't match 4,</T>
+      <T x={xs[4] + w} y={BOX.y0 - h(3) - 20} anchor="end" c={C.accent} size={10} weight={700}>so stop</T>
+    </Chart>
+  );
+}
+
+/** The body solvers, for tests: every position drawn has to be one a lifter could hold. */
+export const lessonGeometry = { SEG, MIDFOOT, PLATE_R, squatPose, pullPose, benchBody, benchBottom, chestY };

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  LESSON_VISUAL_KINDS, answerSticker, cleanSticker, coachClock, coachInstant, extraLesson, hookLine, lessonArtPrompt, lessonKicker,
+  LESSON_VISUAL_KINDS, answerSticker, canHaveArt, cleanSticker, coachClock, coachInstant, extraLesson, hookLine, lessonArtPrompt, lessonKicker,
   lessonStatusLabel, missingLevels, needsReview, safeRefUrl, stickerCountLabel, stickerPercents, type LessonPlanRow, type PostSticker,
 } from "@/lib/lessons";
-import { banister } from "@/components/community/lesson-visuals";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { LessonVisualArt, banister, lessonGeometry as G, visualLabel, visualNote } from "@/components/community/lesson-visuals";
 import { groupWeeks } from "@/components/community/coach-lessons";
 import { lessonReminder } from "@/lib/lesson-reminders.server";
 
@@ -167,6 +169,79 @@ describe("a lesson in the feed and the story", () => {
     expect(stories).toContain('if (post.series === "lesson") return <LessonStoryFrame post={post} />;');
     expect(stories).toContain('<div className="absolute inset-x-0 z-40" style={{ bottom: barH ? ');
     expect(stories).toContain('closest("button, a, input, textarea, [data-story-interactive]")');
+  });
+
+  it("draws every diagram from the app's own colours, in the feed and in stories", () => {
+    const all: any[] = [
+      { kind: "squat_balance" }, { kind: "squat_rise" }, { kind: "squat_depth" }, { kind: "squat_torso" }, { kind: "squat_torso", variant: "lean" },
+      { kind: "deadlift_start", fault: "hips_low" }, { kind: "deadlift_start", fault: "hips_high" }, { kind: "deadlift_start", fault: "bar_forward" },
+      { kind: "bar_path", lift: "deadlift", fault: "forward" }, { kind: "bar_path", lift: "squat", fault: "forward" }, { kind: "bar_path", lift: "bench", fault: "forward" },
+      { kind: "bench_touch" }, { kind: "bench_touch", variant: "consistency" }, { kind: "sticking_point", lift: "squat" }, { kind: "strength_curve" },
+      { kind: "length_tension" }, { kind: "force_velocity" }, { kind: "fitness_fatigue" }, { kind: "sra" }, { kind: "sra", variant: "stress" },
+      { kind: "rpe_rir" }, { kind: "dose_response" }, { kind: "velocity_loss" }, { kind: "velocity_loss", variant: "cluster" }, { kind: "set_structure", variant: "myo" },
+    ];
+    expect(new Set(all.map((v) => v.kind))).toEqual(new Set(LESSON_VISUAL_KINDS));
+    for (const v of all) {
+      const html = renderToStaticMarkup(createElement(LessonVisualArt, { visual: v }));
+      expect(html, JSON.stringify(v)).toContain("<svg");
+      expect(html).not.toMatch(/NaN|undefined/);
+      // colours come from the theme (they follow light and dark mode), never a hard-coded hex in the drawing
+      expect(html.slice(html.indexOf("<svg"))).not.toMatch(/#[0-9a-f]{6}/i);
+      expect(renderToStaticMarkup(createElement(LessonVisualArt, { visual: v, tone: "dark" }))).toContain('data-tone="dark"');
+      expect(visualLabel(v).length).toBeGreaterThan(10);
+      expect(visualNote(v).length).toBeGreaterThan(5);
+    }
+    const card = read("src/components/community/lesson-card.tsx");
+    expect(card).toContain('<div className="rounded-2xl border border-border/70 bg-muted/40 px-3.5 pb-3 pt-3" data-lesson-diagram>');
+    expect(card).toContain('<LessonVisualArt visual={lesson.visual} tone="dark" />');
+  });
+
+  it("only draws positions a lifter could hold", () => {
+    const near = (a: number, b: number, eps = 1e-3) => expect(Math.abs(a - b)).toBeLessThan(eps);
+    // squat: the bar on the back stays over midfoot, whatever the build
+    for (const o of [{ shank: 33, thighDeg: 7 }, { shank: 31, thighDeg: 7, thigh: 0.266, torso: 0.27 }, { shank: 8, thighDeg: -10.25 }]) near(G.squatPose(o).bar.x, G.MIDFOOT);
+    // longer thighs for the same torso lean more
+    expect(G.squatPose({ shank: 31, thighDeg: 7, thigh: 0.266, torso: 0.27 }).torsoDeg).toBeGreaterThan(G.squatPose({ shank: 33, thighDeg: 7, thigh: 0.226, torso: 0.304 }).torsoDeg);
+    // hips first: the same hip rise as rising together, a fraction of the bar rise
+    const bottom = G.squatPose({ shank: 34, thighDeg: 8 });
+    const together = G.squatPose({ shank: 26, thighDeg: -15 });
+    const hipsFirst = G.squatPose({ shank: 8, thighDeg: -10.25 });
+    near(hipsFirst.hip.y - bottom.hip.y, together.hip.y - bottom.hip.y, 0.01);
+    expect(hipsFirst.bar.y - bottom.bar.y).toBeLessThan((together.bar.y - bottom.bar.y) / 2.5);
+    // deadlift: bar on 45 cm plates, straight arms, real segment lengths
+    const pull = G.pullPose({ shank: 6, lead: 0.03 })!;
+    near(pull.bar.y, G.PLATE_R);
+    near(Math.hypot(pull.shoulder.x - pull.bar.x, pull.shoulder.y - pull.bar.y), G.SEG.upperArm + G.SEG.forearm + G.SEG.grip);
+    near(Math.hypot(pull.hip.x - pull.knee.x, pull.hip.y - pull.knee.y), G.SEG.thigh);
+    near(Math.hypot(pull.shoulder.x - pull.hip.x, pull.shoulder.y - pull.hip.y), G.SEG.torso);
+    expect(pull.hip.y).toBeGreaterThan(pull.knee.y);
+    expect(pull.shoulder.y).toBeGreaterThan(pull.hip.y);
+    // too low: the shoulders start behind the bar
+    const low = G.pullPose({ shank: 15, lead: -0.035, barX: G.MIDFOOT + 0.018 })!;
+    expect(low.shoulder.x).toBeLessThan(low.bar.x);
+    expect(low.hip.y).toBeLessThan(pull.hip.y);
+    // bench: the forearm stacked straight under the bar; more tuck touches lower (toward the feet)
+    const b = G.benchBody();
+    const tuck = G.benchBottom(b, 0.16);
+    const flare = G.benchBottom(b, 0.094);
+    near(tuck.elbow.x, tuck.bar.x);
+    near(flare.elbow.x, flare.bar.x);
+    expect(tuck.bar.x).toBeGreaterThan(flare.bar.x);
+    near(tuck.bar.y, G.chestY(b, tuck.bar.x) + 0.01);
+  });
+
+  it("keeps image-model covers off technique and diagram lessons", () => {
+    expect(canHaveArt({ track: "fix", visual: null })).toBe(false);
+    expect(canHaveArt({ track: "strength", visual: { kind: "rpe_rir" } })).toBe(false);
+    expect(canHaveArt({ track: "mind", visual: null })).toBe(true);
+    expect(read("src/lib/lesson-art.functions.ts")).toContain("if (!canHaveArt(lesson)) return { ok: false as const");
+    expect(read("src/components/community/coach-lessons.tsx")).toContain("art.enabled && canHaveArt(it) && (");
+  });
+
+  it("points each lesson at the diagram that shows its problem, without touching a coach's edit", () => {
+    const m = read("supabase/migrations/20261129120000_community_lesson_visuals.sql");
+    expect(m).toContain(`('squat-heels-lift', '{"kind": "bar_path", "lift": "squat", "fault": "forward"}'::jsonb, '{"kind": "squat_balance"}'::jsonb)`);
+    expect(m).toContain("AND (i.data->'visual') IS NOT DISTINCT FROM v.old_visual;");
   });
 
   it("models fitness and fatigue honestly: performance comes up in the taper", () => {
