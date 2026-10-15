@@ -2,8 +2,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 const db = supabase as any;
 
-export const DEFAULT_REACTION = "✅";
-export const ALLOWED_REACTIONS = ["✅", "👍", "🔥", "💪", "❤️", "👀", "😂"] as const;
+/** Double-tap likes a message with a heart, as on Instagram (the coach can pick another in Chat Settings). */
+export const DEFAULT_REACTION = "❤️";
+export const ALLOWED_REACTIONS = ["❤️", "🔥", "💪", "👍", "😂", "👀", "✅"] as const;
 
 export type ChatSettings = {
   defaultReaction: string;

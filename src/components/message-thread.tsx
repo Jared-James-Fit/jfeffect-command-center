@@ -68,6 +68,7 @@ import { runJob } from "@/lib/progress-jobs";
 import { toast } from "sonner";
 import { playUiSound } from "@/lib/ui-sounds";
 import { haptic } from "@/platform/haptics";
+import { doubleTapAdds, useLikePops } from "@/lib/message-like";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
 import { useChatSignedUrls } from "@/hooks/use-chat-signed-urls";
@@ -811,6 +812,7 @@ export function MessageThread({
   // fire, flipping the reaction off immediately after adding it. This ref
   // ignores repeat toggles on the same message within ~600ms.
   const lastReactionAtRef = useRef<Map<string, number>>(new Map());
+  const likePops = useLikePops();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -1116,6 +1118,17 @@ export function MessageThread({
         toast.error(e?.message ?? "Reaction failed. Try again.");
       }
     })();
+  };
+
+  // Double-tap likes it with the heart, Instagram style: it springs in, and a
+  // double-tap never takes it back (tap the heart under the message for that).
+  const onDoubleTapLike = (messageId: string) => {
+    if (!user || !likePops.pop(messageId)) return;
+    haptic("light");
+    const mine = (qc.getQueryData<MessageReaction[]>(["message-reactions", clientId]) ?? reactions).filter(
+      (r) => r.user_id === user.id && r.message_id === messageId,
+    );
+    if (doubleTapAdds(mine, defaultReaction)) onToggleReaction(messageId, defaultReaction);
   };
 
   // Realtime
@@ -2115,7 +2128,7 @@ export function MessageThread({
                     (m as any).__lastTap = undefined;
                     e.preventDefault();
                     suppressClickRef.current = true;
-                    void onToggleReaction(m.id, defaultReaction);
+                    onDoubleTapLike(m.id);
                   } else {
                     (m as any).__lastTap = { t: now, x: t.clientX, y: t.clientY };
                   }
@@ -2127,7 +2140,7 @@ export function MessageThread({
                     const sel = window.getSelection();
                     if (sel && !sel.isCollapsed) return;
                   } catch {}
-                  void onToggleReaction(m.id, defaultReaction);
+                  onDoubleTapLike(m.id);
                 }}
                 onClickCapture={(e) => {
                   if (suppressClickRef.current && !fromPortal(e)) {
@@ -2292,13 +2305,17 @@ export function MessageThread({
                     )}>
                       {Array.from(groups.entries()).map(([emoji, rs]) => {
                         const minePicked = rs.some((r) => r.user_id === user?.id);
+                        // just double-tapped: the heart springs in (again on every double-tap)
+                        const popN = likePops.pops[m.id];
+                        const popping = !!popN && minePicked && emoji === defaultReaction;
                         return (
                           <button
-                            key={emoji}
+                            key={popping ? `${emoji}:${popN}` : emoji}
                             type="button"
                             onClick={(e) => { e.stopPropagation(); void onToggleReaction(m.id, emoji); }}
                             className={cn(
-                              "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[11px] shadow-sm transition animate-reaction-pop",
+                              "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[13px] leading-none shadow-sm transition",
+                              popping ? "animate-like-pop" : "animate-reaction-pop",
                               minePicked ? "border-primary bg-primary/10" : "border-border hover:bg-secondary",
                             )}
                           >
