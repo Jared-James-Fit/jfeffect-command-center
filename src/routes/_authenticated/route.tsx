@@ -1,7 +1,9 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { readStoredSession } from "@/lib/session-hint";
 import { DashboardSplash } from "@/components/dashboard-splash";
+import { SignedInAppContext } from "@/components/route-pending";
 import { NavigationProgress } from "@/components/navigation-progress";
 import { ClientProfileOverlayMount } from "@/components/clients/profile/client-profile-overlay";
 import { MemberProfileOverlayMount } from "@/components/members/member-profile-overlay";
@@ -42,9 +44,27 @@ function isTerminalRefreshError(error: unknown): boolean {
   );
 }
 
+// A tab switch must not wait on Supabase: this runs before every navigation,
+// and when getSession stalls (a token refresh on a weak signal, the auth lock
+// held by another read) past the router's pendingMs, the whole app swapped to
+// the full-screen splash between two pages. Already validated this app
+// lifetime, same person, token good for a while yet: go straight through.
+// Sign-out removes the stored session, so it still lands on /auth below.
+const FAST_PASS_MARGIN_MS = 60_000;
+
+function warmUserStillSignedIn(): User | null {
+  if (!warmUser) return null;
+  const stored = readStoredSession();
+  if (!stored || stored.userId !== warmUser.id) return null;
+  if (stored.expiresAt !== null && stored.expiresAt - Date.now() < FAST_PASS_MARGIN_MS) return null;
+  return warmUser;
+}
+
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async ({ location }) => {
+    const fast = warmUserStillSignedIn();
+    if (fast) return { user: fast };
     // Resilient session read for PWA cold launches on flaky networks.
     // A transient failure here (offline moment, slow Supabase response on
     // resume) was bubbling up as the router's default error fallback —
@@ -142,7 +162,9 @@ function AuthenticatedLayout() {
     // signed-in page so the popup shows once per app open wherever the client lands.
     <CoachingAgreementProvider>
       <NavigationProgress />
-      <Outlet />
+      <SignedInAppContext.Provider value>
+        <Outlet />
+      </SignedInAppContext.Provider>
       <ClientProfileOverlayMount />
       <MemberProfileOverlayMount />
       <ThemeAnnouncementGate />
