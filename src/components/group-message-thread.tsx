@@ -58,6 +58,8 @@ import {
   CheckCircle2, Circle, CheckSquare, Copy, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
+import { haptic } from "@/platform/haptics";
+import { doubleTapAdds, useLikePops } from "@/lib/message-like";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { listenChannel } from "@/lib/realtime-channel";
 
@@ -132,6 +134,7 @@ export function GroupMessageThread({
   // Long-press + swipe gesture
   const longPressRef = useRef<{ id: string; t: any; x: number; y: number } | null>(null);
   const suppressClickRef = useRef(false);
+  const likePops = useLikePops();
   const [swipeX, setSwipeX] = useState(0);
   const swipeRef = useRef<{ x: number; y: number; decided: boolean; horizontal: boolean } | null>(null);
 
@@ -384,6 +387,17 @@ export function GroupMessageThread({
         toast.error(e?.message ?? "Reaction failed. Try again.");
       }
     })();
+  };
+
+  // Double-tap likes it with the heart, Instagram style: it springs in, and a
+  // double-tap never takes it back (tap the heart under the message for that).
+  const onDoubleTapLike = (messageId: string) => {
+    if (!user || !canReact || !likePops.pop(messageId)) return;
+    haptic("light");
+    const mine = (qc.getQueryData<GroupReaction[]>(["group-reactions", groupId]) ?? reactions).filter(
+      (r) => r.user_id === user.id && r.message_id === messageId,
+    );
+    if (doubleTapAdds(mine, defaultReaction)) onToggleReaction(messageId, defaultReaction);
   };
 
   /* ---------------- Long-press + swipe + selection ---------------- */
@@ -771,7 +785,7 @@ export function GroupMessageThread({
                       (m as any).__lastTap = undefined;
                       e.preventDefault();
                       suppressClickRef.current = true;
-                      void onToggleReaction(m.id, defaultReaction);
+                      onDoubleTapLike(m.id);
                     } else {
                       (m as any).__lastTap = { t: now, x: t.clientX, y: t.clientY };
                     }
@@ -783,7 +797,7 @@ export function GroupMessageThread({
                       const sel = window.getSelection();
                       if (sel && !sel.isCollapsed) return;
                     } catch {}
-                    void onToggleReaction(m.id, defaultReaction);
+                    onDoubleTapLike(m.id);
                   }}
                   onClickCapture={(e) => {
                     if (suppressClickRef.current) {
@@ -855,13 +869,17 @@ export function GroupMessageThread({
                       )}>
                         {Array.from(groups.entries()).map(([emoji, rs]) => {
                           const minePicked = rs.some((r) => r.user_id === user?.id);
+                          // just double-tapped: the heart springs in (again on every double-tap)
+                          const popN = likePops.pops[m.id];
+                          const popping = !!popN && minePicked && emoji === defaultReaction;
                           return (
                             <button
-                              key={emoji}
+                              key={popping ? `${emoji}:${popN}` : emoji}
                               type="button"
                               onClick={(e) => { e.stopPropagation(); void onToggleReaction(m.id, emoji); }}
                               className={cn(
-                                "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[11px] shadow-sm transition animate-reaction-pop",
+                                "inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 text-[13px] leading-none shadow-sm transition",
+                                popping ? "animate-like-pop" : "animate-reaction-pop",
                                 minePicked ? "border-primary bg-primary/10" : "border-border hover:bg-secondary",
                               )}
                             >

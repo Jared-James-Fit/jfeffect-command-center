@@ -416,6 +416,21 @@ html[data-keyboard-open="true"] {
   animation: reaction-pop 240ms cubic-bezier(.2,.8,.2,1);
 }
 
+/* Double-tap like on a message (Instagram): the heart springs in, overshoots, settles. */
+@keyframes like-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  35%  { transform: scale(1.45); opacity: 1; }
+  55%  { transform: scale(0.86); }
+  75%  { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-like-pop {
+  animation: like-pop 520ms cubic-bezier(.2,.8,.2,1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-like-pop { animation-duration: 0.01s; }
+}
+
 /* iMessage-style typing indicator */
 @keyframes typing-bounce {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }

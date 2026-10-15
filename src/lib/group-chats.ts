@@ -226,7 +226,7 @@ export async function toggleGroupReaction(messageId: string, userId: string, emo
   await db.from("group_message_reactions").insert({ message_id: messageId, user_id: userId, emoji });
 }
 
-export const GROUP_REACTION_EMOJIS = ["👍", "🔥", "💪", "✅", "👀", "❤️", "😂"];
+export const GROUP_REACTION_EMOJIS = ["❤️", "🔥", "💪", "👍", "😂", "👀", "✅"];
 
 export async function uploadGroupAttachment(groupId: string, file: File): Promise<GroupAttachment> {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "";

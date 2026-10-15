@@ -604,7 +604,7 @@ export type MessageReaction = {
   created_at: string;
 };
 
-export const REACTION_EMOJIS = ["👍", "🔥", "💪", "✅", "👀", "❤️", "😂"];
+export const REACTION_EMOJIS = ["❤️", "🔥", "💪", "👍", "😂", "👀", "✅"];
 
 export async function listReactions(clientId: string): Promise<MessageReaction[]> {
   // Pull all reactions for messages in this client's thread in one shot.
