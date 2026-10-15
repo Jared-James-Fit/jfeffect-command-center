@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/app-shell";
+import { PageBodySkeleton } from "@/components/route-pending";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,10 +47,21 @@ export const Route = createFileRoute("/_authenticated/portal/nutrition-targets")
   component: PortalNutritionByTier,
 });
 
-/** Members set their own targets; coaching clients see their coach's. */
+/**
+ * Members set their own targets; coaching clients see their coach's. Until the
+ * tier is known the title stays and the body waits: never one version first
+ * and then the other.
+ */
 function PortalNutritionByTier() {
   const { tier, loading } = useServiceTier();
-  if (loading) return null;
+  if (loading) {
+    return (
+      <>
+        <PageHeader title="Nutrition" />
+        <PageBodySkeleton />
+      </>
+    );
+  }
   return tier === "self_serve" ? <MemberNutritionPage /> : <PortalNutrition />;
 }
 

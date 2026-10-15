@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
+import { useAuth } from "@/lib/auth";
+import { readServiceTierHint, writeServiceTierHint } from "@/lib/service-tier-hint";
 
 /**
  * One athlete record, two service layers. Everyone in the portal has a
@@ -69,18 +71,27 @@ export const serviceTierKey = (userId: string | null | undefined) => ["service-t
  * The portal user's tier (the viewed client's in "View as client"). A member
  * whose client row is missing (signup raced, or joined before Phase 1) gets
  * it created on the spot, never for someone else's view.
+ *
+ * `loading` is true until the tier is actually known (not merely "no query
+ * yet"), so a screen that differs by tier can wait instead of guessing.
  */
 export function useServiceTier() {
   const userId = usePortalUserId();
   const { isImpersonating } = useClientImpersonation();
+  const { loading: authLoading } = useAuth();
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: serviceTierKey(userId),
     enabled: !!userId,
     staleTime: 5 * 60_000,
+    placeholderData: () => (userId ? readServiceTierHint(userId) ?? undefined : undefined),
     queryFn: async (): Promise<MyServiceTier | null> => {
-      const read = async () =>
-        (await supabase.from("clients").select("id, service_tier, status").eq("user_id", userId!).maybeSingle()).data as any;
+      // A failed read throws (the last known tier stays), never reads as "no row".
+      const read = async () => {
+        const { data, error } = await supabase.from("clients").select("id, service_tier, status").eq("user_id", userId!).maybeSingle();
+        if (error) throw error;
+        return data as any;
+      };
       let row = await read();
       let made = false;
       if (!row && !isImpersonating) {
@@ -90,8 +101,13 @@ export function useServiceTier() {
           made = !!row;
         }
       }
-      if (!row) return null;
-      return { clientId: row.id, tier: row.service_tier === "self_serve" ? "self_serve" : "coaching", status: row.status ?? null, made };
+      if (!row) {
+        writeServiceTierHint(userId!, null);
+        return null;
+      }
+      const result: MyServiceTier = { clientId: row.id, tier: row.service_tier === "self_serve" ? "self_serve" : "coaching", status: row.status ?? null, made };
+      writeServiceTierHint(userId!, result);
+      return result;
     },
   });
   // a freshly made row: everything keyed on "my client" refetches (once)
@@ -99,14 +115,43 @@ export function useServiceTier() {
   useEffect(() => {
     if (madeId) void qc.invalidateQueries({ queryKey: ["my-client"] });
   }, [madeId, qc]);
-  const tier: ServiceTier | null = q.data?.tier ?? null;
+  const known = resolveTierState({
+    userId,
+    isImpersonating,
+    authLoading,
+    data: q.data,
+    isError: q.isError,
+    hint: () => (userId ? readServiceTierHint(userId) : null),
+  });
+  const tier: ServiceTier | null = known.data?.tier ?? null;
   return {
-    loading: q.isLoading,
-    clientId: q.data?.clientId ?? null,
+    loading: known.loading,
+    clientId: known.data?.clientId ?? null,
     tier,
     isSelfServe: tier === "self_serve",
     isCoaching: tier === "coaching",
   };
+}
+
+/**
+ * Pure: what the portal knows about the tier right now (tested). `null` data
+ * is an answer ("no client row"); only `undefined` means not known yet. Not
+ * known: auth still resolving (no user id yet), or the first read hasn't
+ * answered. A read that failed falls back to the last tier seen on this
+ * device, else coaching screens, as before.
+ */
+export function resolveTierState(i: {
+  userId: string | undefined;
+  isImpersonating: boolean;
+  authLoading: boolean;
+  data: MyServiceTier | null | undefined;
+  isError: boolean;
+  hint: () => MyServiceTier | null;
+}): { loading: boolean; data: MyServiceTier | null | undefined } {
+  const data = i.data !== undefined ? i.data : i.isError ? i.hint() ?? undefined : undefined;
+  const waitingForUser = !i.userId && !i.isImpersonating && i.authLoading;
+  const waitingForRead = !!i.userId && data === undefined && !i.isError;
+  return { loading: waitingForUser || waitingForRead, data };
 }
 
 /** Gate a screen or a card: `useEntitlement("coach_chat")`. True while unknown for coaching keys (no flash for clients). */

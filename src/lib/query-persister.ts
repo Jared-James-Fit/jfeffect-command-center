@@ -1,5 +1,6 @@
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import type { Persister } from "@tanstack/react-query-persist-client";
+import { readStoredSession } from "@/lib/session-hint";
 
 // Bumping the buster invalidates all previously persisted caches across
 // every browser/PWA. Bump when the persisted query shapes change in a
@@ -15,6 +16,10 @@ import type { Persister } from "@tanstack/react-query-persist-client";
 // v9 evicts saved Maps that came back as `{}` (the Hall of Strength's "T?.get is not a function").
 export const QUERY_PERSIST_BUSTER = "v9";
 export const QUERY_PERSIST_KEY = "jfeffect-rq-cache";
+// Whose cache that is (a user id). Kept through sign-out on purpose: queries
+// still running while signing out can save a little of the old account back,
+// and the next person to sign in here must never see it.
+export const QUERY_PERSIST_OWNER_KEY = "jfeffect-rq-cache-owner";
 export const QUERY_PERSIST_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
 
 // Query keys we never want to persist to disk. These are either large,
@@ -107,8 +112,30 @@ export function shouldPersistQuery(q: { queryKey: readonly unknown[]; state: { s
   }
 }
 
+/**
+ * The saved cache belongs to one person. Many query keys aren't per-user, and a
+ * restored copy paints before any refetch, so a cache saved by someone else on
+ * this device is dropped instead of shown (one account's screens flashing in
+ * another's). Returns true when it dropped one; the caller clears memory too.
+ */
+export function claimPersistedCacheFor(userId: string): boolean {
+  if (typeof window === "undefined" || !userId) return false;
+  try {
+    const owner = window.localStorage.getItem(QUERY_PERSIST_OWNER_KEY);
+    if (owner !== userId) window.localStorage.setItem(QUERY_PERSIST_OWNER_KEY, userId);
+    if (owner && owner !== userId) {
+      window.localStorage.removeItem(QUERY_PERSIST_KEY);
+      return true;
+    }
+  } catch { /* best-effort */ }
+  return false;
+}
+
 export function createQueryPersister(): Persister | null {
   if (typeof window === "undefined") return null;
+  // Before anything is restored: only this device's signed-in person's cache.
+  const stored = readStoredSession();
+  if (stored) claimPersistedCacheFor(stored.userId);
   try {
     return createSyncStoragePersister({
       storage: window.localStorage,

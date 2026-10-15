@@ -32,6 +32,8 @@ import { CommandPalette } from "@/components/command-palette";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { AdminRole } from "@/lib/admin-route-registry";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
+import { ShellPageContext } from "@/components/route-pending";
+import { usePreloadTabs } from "@/hooks/use-preload-tabs";
 import { useExerciseLibraryRealtime } from "@/hooks/use-exercise-library-realtime";
 import { useExerciseAliasIndex } from "@/hooks/use-exercise-alias-index";
 import { useSalesRealtime } from "@/hooks/use-sales-realtime";
@@ -438,6 +440,9 @@ export function AppShell({
   const grouped = useMemo(() => groupNavItems(items), [items]);
   const allGroupLabels = useMemo(() => grouped.map((g) => g.label).filter(Boolean) as string[], [grouped]);
   const bottomItems = customBottomItems ?? items.slice(0, 5);
+  // The tabs people flip between: their code is fetched ahead of the first tap
+  // (pages only; bar actions like Search or More aren't routes).
+  usePreloadTabs(bottomItems.map((i) => i.to).filter((to) => to.startsWith("/")));
 
   // ── Sidebar pinned shortcuts (per-role) ───────────────────────────────
   const pinScope: PinScope = useMemo(() => {
@@ -945,7 +950,7 @@ export function AppShell({
 
         <main className="w-full max-w-full box-border min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
           <DualAccountSwitcher />
-          {children}
+          <ShellPageContext.Provider value>{children}</ShellPageContext.Provider>
         </main>
 
         {/* Mobile bottom nav — fixed, app-like tab bar */}

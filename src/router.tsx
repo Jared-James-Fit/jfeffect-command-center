@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { RouterErrorFallback } from "./components/router-error-fallback";
+import { RoutePending } from "./components/route-pending";
 
 export const getRouter = () => {
   // Sensible defaults so the same data doesn't get refetched on every mount,
@@ -39,6 +40,10 @@ export const getRouter = () => {
     // slower than 400ms still shows the route's pendingComponent.
     defaultPendingMs: 400,
     defaultPendingMinMs: 200,
+    // Every route gets its own pending boundary, so a slow page waits inside
+    // the shell (skeleton) instead of throwing up to the signed-in layout's
+    // boundary and swapping the whole app for the full-screen splash.
+    defaultPendingComponent: RoutePending,
     defaultErrorComponent: RouterErrorFallback,
   });
 

@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { markClientSignedIn } from "@/lib/activity";
 import { logPerf } from "@/lib/perf-timing";
 import { clearLastRoute } from "@/lib/route-persistence";
+import { claimPersistedCacheFor, clearPersistedQueryCache } from "@/lib/query-persister";
 import { setAdminView } from "@/lib/admin-view";
 import { stopTeamPreview, useTeamPreview, type TeamPreview } from "@/lib/team-preview";
 
@@ -268,11 +269,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(sess);
         setUser(sess.user);
 
+        if (identityChanged && newUid && claimPersistedCacheFor(newUid)) {
+          // Someone else's cache was on this device (they never signed out, or
+          // their last reads landed after it): drop it, never paint it.
+          queryClient.clear();
+        }
         if (identityChanged) {
           // Real user change (sign-in, account switch). A cached role can make
           // session restoration instant, but never expose the login form before
           // the user object itself has been restored.
           const cached = newUid ? readCachedRole(newUid) : null;
+          // Straight from one account to another: never keep the last one's role.
+          if (prevUid) setRole(cached);
           if (cached) {
             setRole((prev) => prev ?? cached);
             setLoading(false);
@@ -505,14 +513,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
     // Wipe persisted RQ cache so the next signed-in user on this device
     // never sees the previous user's cached dashboard data.
-    try {
-      const { clearPersistedQueryCache } = await import("@/lib/query-persister");
-      clearPersistedQueryCache();
-    } catch { /* best-effort */ }
+    clearPersistedQueryCache();
 
     try {
       await supabase.auth.signOut();
     } finally {
+      // Again: screens still mounted refetched while Supabase signed out.
+      queryClient.clear();
+      clearPersistedQueryCache();
       clearResolvedAuth();
       if (uid) clearCachedRole(uid); // clear role cache on explicit sign-out
       // and the saved last screen, so the next person here never lands in it
