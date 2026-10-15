@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Eye, Heart, Play, Plus, X } from "lucide-react";
+import { Check, ChevronRight, Eye, Heart, Play, Plus, Sticker as StickerIcon, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
@@ -8,6 +8,9 @@ import { PREVIEW_ONLY_MESSAGE, crewStories, isPulsePost, myStory, namesLine, pic
 import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { ViewersSheet, markPostViewed } from "@/components/community/post-views";
+import { LessonStoryFrame } from "@/components/community/lesson-card";
+import { StorySticker } from "@/components/community/story-sticker";
+import { PostStickerEditor } from "@/components/community/sticker-editor";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useFollowState } from "@/lib/community-social";
 import { useAuth } from "@/lib/auth";
@@ -233,6 +236,19 @@ function StoryViewer({
   const stage = useRef<HTMLDivElement | null>(null);
   const lastX = useRef<{ x: number; t: number } | null>(null);
   const vx = useRef(0);
+  // a sticker sits just above the bottom bar, however tall it is (a caption, View post, the reply box)
+  const [barH, setBarH] = useState<number | null>(null);
+  const hasSticker = !!post?.sticker;
+  useEffect(() => {
+    const bar = hasSticker ? stage.current?.querySelector<HTMLElement>("[data-story-bar], [data-story-mine-bar]") : null;
+    if (!bar) return;
+    const measure = () => setBarH(bar.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, [post?.id, post?.is_mine, hasSticker]);
   const nextPerson = gi + 1 < groups.length ? gi + 1 : null;
   const prevPerson = gi > 0 ? gi - 1 : null;
   const reduced = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -328,7 +344,7 @@ function StoryViewer({
   const onDown = (e: React.PointerEvent) => {
     // never from a sheet opened on top (who viewed it): it isn't the story
     if (!e.currentTarget.contains(e.target as Node)) return;
-    if ((e.target as Element).closest("button, a, input, textarea")) return;
+    if ((e.target as Element).closest("button, a, input, textarea, [data-story-interactive]")) return;
     // replying: a tap on the story just puts the keyboard away
     if (composing) {
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -507,6 +523,13 @@ function StoryViewer({
           data-story-viewer
         >
           <StoryFrame post={post} unit={unit} />
+          {post.sticker && (
+            // above the reply bar's fade, so the whole sticker takes taps
+            // (the bar's top 40px is its fade, not buttons)
+            <div className="absolute inset-x-0 z-40" style={{ bottom: barH ? `${barH - 40 + 12}px` : "calc(env(safe-area-inset-bottom) + 132px)" }}>
+              <StorySticker post={post} onComposing={setComposing} />
+            </div>
+          )}
 
           {/* top: progress, who, close */}
           <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6" style={{ paddingTop: "max(env(safe-area-inset-top), 0.6rem)" }}>
@@ -592,10 +615,11 @@ function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: 
 /** Your own story: who's seen it and the hearts (nothing to reply to). Tap Seen by for the names. */
 function MyStoryBar({ post, onOpen, onHold }: { post: CommunityPost; onOpen: () => void; onHold: (on: boolean) => void }) {
   const [viewers, setViewers] = useState(false);
-  // the story waits while the list is open
+  const [sticker, setSticker] = useState(false);
+  // the story waits while the list (or the sticker editor) is open
   useEffect(() => {
-    onHold(viewers);
-  }, [viewers, onHold]);
+    onHold(viewers || sticker);
+  }, [viewers, sticker, onHold]);
   useEffect(() => () => onHold(false), [onHold]);
   const v = post.views;
   const hearts = post.reaction_count ?? 0;
@@ -622,10 +646,22 @@ function MyStoryBar({ post, onOpen, onHold }: { post: CommunityPost; onOpen: () 
         <span className="truncate">{v?.count ? `Seen by ${v.count}` : "No views yet"}</span>
       </button>
       {hearts > 0 && <span className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full bg-white/15 px-3.5 text-[14px] font-bold backdrop-blur-sm">❤️ {hearts}</span>}
-      <button type="button" onClick={onOpen} className="ml-auto inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full bg-white/15 pl-4 pr-3 text-[14px] font-bold backdrop-blur-sm active:scale-95">
+      {post.visibility === "community" && (
+        <button
+          type="button"
+          onClick={() => setSticker(true)}
+          className="ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/15 backdrop-blur-sm active:scale-95"
+          aria-label={post.sticker ? "Change your sticker" : "Add a poll, slider or question"}
+          data-story-add-sticker
+        >
+          <StickerIcon className="h-5 w-5" />
+        </button>
+      )}
+      <button type="button" onClick={onOpen} className={cn("inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full bg-white/15 pl-4 pr-3 text-[14px] font-bold backdrop-blur-sm active:scale-95", post.visibility !== "community" && "ml-auto")}>
         {isPulsePost(post) ? "Workout" : "Post"} <ChevronRight className="h-4 w-4" />
       </button>
       <ViewersSheet postId={viewers ? post.id : null} onClose={() => setViewers(false)} />
+      <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />
     </div>
   );
 }
@@ -637,6 +673,8 @@ function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) 
   const { data: full } = useFullMediaUrl(isImage ? post.media_path : null, isImage);
   const thumb = thumbs?.[post.media_thumb_path ?? (isImage ? post.media_path ?? "" : "")] ?? null;
 
+  // a lesson always plays as its lesson (title, diagram, hook), photo or not
+  if (post.series === "lesson") return <LessonStoryFrame post={post} />;
   if (isPulsePost(post)) {
     const win = pickWorkoutWin(post.stats!, unit);
     const style = WIN_STYLE[win.kind];

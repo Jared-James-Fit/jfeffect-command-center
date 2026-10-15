@@ -190,11 +190,11 @@ export function AutomationsHub() {
         </Section>
 
         <Section title="Community posts" hint="Posted to the community feed as you.">
-          <Row icon={Megaphone} tone="bg-amber-500/15 text-amber-500" title="Daily posts" to="/admin/community" hash="tab=daily"
-            when="Mon Motivation · Tue Tips · Wed Wins · Thu Try-it · Fri Finish Strong · Sat Spirit · Sun Recap."
+          <Row icon={Megaphone} tone="bg-amber-500/15 text-amber-500" title="Coach posts" to="/admin/community" hash="tab=daily"
+            when="Lessons Mon · Tue · Thu · Fri · Sat (Sat: technique fixes) · Wed Wins · Sun Recap. Lessons wait for your OK unless you let them run."
             on={series.data ? !series.data.paused : undefined}
             onToggle={(v) => seriesAction.mutate({ kind: "pause", paused: !v }, {
-              onSuccess: () => toast.success(v ? "Daily posts back on" : "Daily posts paused"),
+              onSuccess: () => toast.success(v ? "Coach posts back on" : "Coach posts paused"),
               onError: (e: any) => toast.error(e?.message ?? "Couldn't change that"),
             })} />
           <Row icon={Cake} tone="bg-amber-500/15 text-amber-500" title="Birthday post" to="/admin/community" hash="tab=birthdays"

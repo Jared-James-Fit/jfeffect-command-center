@@ -36,6 +36,7 @@ import {
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
 import { WinsStatsCard } from "@/components/community/wins-stats";
 import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-cards";
+import { LessonCard } from "@/components/community/lesson-card";
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
@@ -128,9 +129,10 @@ export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: C
   );
 }
 
-/** Whatever a series post carries under its words: Sunday's report card, Wednesday's numbers, Tuesday's / Thursday's card. */
+/** Whatever a series post carries under its words: Sunday's report card, Wednesday's numbers, Tuesday's / Thursday's card, a lesson's diagram and sources. */
 export function NoteExtras({ post, unit, className }: { post: CommunityPost; unit: "kg" | "lb"; className?: string }) {
   if (post.shared_comment) return <SharedCommentCard shared={post.shared_comment} className={className} onOpenPost={openCommunityPost} />;
+  if (post.series === "lesson") return <LessonCard post={post} className={className} />;
   if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return <SundayRecapCard stats={post.series_data} unit={unit} className={className} />;
   if (isWinsStats(post.series_data)) return <WinsStatsCard stats={post.series_data} unit={unit} className={className} />;
   return <SeriesExtraCard post={post} className={className} />;
