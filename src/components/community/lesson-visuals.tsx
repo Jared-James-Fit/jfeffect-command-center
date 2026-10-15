@@ -408,7 +408,7 @@ function DeadliftStart({ fault }: { fault: string }) {
       <line x1={160} y1={20} x2={160} y2={170} stroke={GRID} strokeWidth={1} />
       <line x1={14} y1={172} x2={306} y2={172} stroke={MUTED} strokeWidth={1.5} />
       <Label x={92} y={188} anchor="middle" color={MUTED} size={8}>SHOULDERS OVER THE BAR</Label>
-      <Label x={238} y={188} anchor="middle" color={RED} size={8}>{fault === "hips_low" ? "SHOULDERS BEHIND THE BAR" : fault === "hips_high" ? "CHEST DOWN, BACK DOES MORE" : "BAR FURTHER FROM THE HIPS"}</Label>
+      <Label x={238} y={188} anchor="middle" color={RED} size={8}>{fault === "hips_low" ? "SHOULDERS BEHIND THE BAR" : fault === "hips_high" ? "BACK DOES MORE WORK" : "BAR FAR FROM THE HIPS"}</Label>
     </Frame>
   );
 }
