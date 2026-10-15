@@ -94,7 +94,12 @@ function ClientMessages() {
         base().neq("sender_role", "client").maybeSingle(),
       ]);
       if (!last) return null;
-      return { ...(last as CoachLast), coachUnread: !!fromCoach && !(fromCoach as CoachLast).read_by_client_at };
+      const coach = fromCoach as CoachLast | null;
+      return {
+        ...(last as CoachLast),
+        coachUnread: !!coach && !coach.read_by_client_at,
+        coachText: coach ? coach.body?.trim() || (coach.attachments?.length ? "Attachment" : "") : "",
+      };
     },
   });
   useEffect(() => {
@@ -139,6 +144,7 @@ function ClientMessages() {
     when: coachWhen,
     searchText: `${coachName} coach ${coachLast?.body ?? ""}`,
     unread: coachUnread,
+    unreadPreview: coachUnread ? coachLast?.coachText : null,
     markUnread: markCoachUnread,
     onOpenChange: setCoachChatOpen,
     markRead: async () => {

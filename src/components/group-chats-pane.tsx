@@ -64,6 +64,8 @@ export type PinnedChat = {
   /** When the latest message was sent, already formatted. */
   when: string;
   unread?: boolean;
+  /** The coach's newest unread message, shown over the pinned face. */
+  unreadPreview?: string | null;
   /** What search matches against (name + latest message). */
   searchText?: string;
   renderThread: (p: { onBack: () => void }) => ReactNode;
@@ -748,12 +750,13 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
             />
           )}
           {showGrid && (
-            <div className="flex flex-wrap justify-center border-b border-border/60 px-2 py-2" aria-label="Pinned chats">
+            <div className="flex flex-wrap items-end justify-center border-b border-border/60 px-2 py-2" aria-label="Pinned chats">
               {pinned && (
                 <PinTile
                   name={pinned.name}
                   avatar={<UserAvatar src={pinned.avatarUrl} name={pinned.name} size={60} ring expandable={false} />}
                   unread={!!pinned.unread}
+                  preview={pinned.unreadPreview}
                   live={pinned.live}
                   selected={pinnedSelected}
                   onOpen={() => openChat(pinned.id)}
@@ -766,6 +769,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
                   name={r.title}
                   avatar={rowAvatar(r, 60)}
                   unread={r.unread}
+                  preview={r.preview}
                   muted={r.muted}
                   selected={selectedId === r.key}
                   onOpen={() => openChat(r.key)}

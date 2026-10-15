@@ -173,11 +173,13 @@ export function ChatRowShell({
 /* ------------------------------ pinned faces ------------------------------ */
 
 export function PinTile({
-  name, avatar, unread, muted, live, selected, onOpen, onHold,
+  name, avatar, unread, preview, muted, live, selected, onOpen, onHold,
 }: {
   name: string;
   avatar: ReactNode;
   unread: boolean;
+  /** What's new, shown in a bubble over the face while unread (iMessage pins). */
+  preview?: string | null;
   muted?: boolean;
   live?: boolean;
   selected?: boolean;
@@ -185,17 +187,24 @@ export function PinTile({
   onHold?: () => void;
 }) {
   const press = useLongPress(() => onHold?.());
+  const bubble = unread ? preview?.trim() || null : null;
   return (
     <button
       type="button"
       onClick={onOpen}
       {...(onHold ? press : {})}
-      aria-label={`${name}${unread ? ", unread" : ""}`}
+      aria-label={`${name}${unread ? `, unread${bubble ? `: ${bubble}` : ""}` : ""}`}
       className={cn(
         "flex w-1/3 select-none flex-col items-center gap-1.5 rounded-2xl px-1 py-2 transition [-webkit-touch-callout:none] active:scale-95",
         selected && "bg-secondary/70",
       )}
     >
+      {bubble && (
+        <span className="relative mb-0.5 max-w-full rounded-2xl bg-secondary px-2.5 py-1.5 shadow-sm" data-pin-preview aria-hidden>
+          <span className="line-clamp-2 break-words text-left text-[11px] leading-snug text-foreground">{bubble}</span>
+          <span className="absolute -bottom-1 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 rounded-[3px] bg-secondary" />
+        </span>
+      )}
       <span className="relative">
         {/* one signal at a time: live is the turning ring and LIVE tag (an unread
             chat still shows in the bold name); otherwise the unread dot */}
