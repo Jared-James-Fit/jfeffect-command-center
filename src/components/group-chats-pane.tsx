@@ -956,7 +956,7 @@ function GroupFaces({ groupId, size }: { groupId: string; size: number }) {
   );
 }
 
-/** Stacked member avatars with a green live-now dot if anyone is present. */
+/** Stacked member avatars; anyone here now gets the turning live ring. */
 function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "coach" | "client" | "member" }) {
   const { data: rawMembers = [] } = useQuery({
     queryKey: ["group-member-profiles", groupId],
@@ -968,7 +968,6 @@ function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "c
   const liveIds = new Set(others.map((p) => p.user_id));
   const visible = (members as GroupMemberProfile[]).slice(0, 2);
   const extra = Math.max(0, members.length - visible.length);
-  const anyLive = visible.some((m) => liveIds.has(m.user_id));
 
   if (visible.length === 0) {
     return (
@@ -985,20 +984,18 @@ function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "c
     >
       <div className="flex -space-x-2.5">
         {visible.map((m) => (
-          <UserAvatar
-            key={m.user_id}
-            src={m.avatar_url}
-            name={m.full_name ?? "Member"}
-            size={32}
-            tone="neutral"
-            expandable={false}
-            className="border-2 border-card"
-          />
+          <LiveAvatar key={m.user_id} live={liveIds.has(m.user_id)} size={32} tag={false}>
+            <UserAvatar
+              src={m.avatar_url}
+              name={m.full_name ?? "Member"}
+              size={32}
+              tone="neutral"
+              expandable={false}
+              className="border-2 border-card"
+            />
+          </LiveAvatar>
         ))}
       </div>
-      {anyLive && (
-        <span className="absolute -bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-card" />
-      )}
       {extra > 0 && (
         <span className="absolute -bottom-1 -right-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-secondary px-1 text-[9px] font-bold leading-none text-foreground ring-2 ring-card">
           +{extra}
