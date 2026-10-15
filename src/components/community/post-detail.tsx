@@ -236,7 +236,7 @@ function Detail({
 
       <section className="border-t border-border/60">
         <div className="px-4 pt-3 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Comments</div>
-        <CommentThread post={post} viewerIsStaff={viewerIsStaff} inline />
+        <CommentThread post={post} viewerIsStaff={viewerIsStaff} inline onOpenAuthor={onOpenAuthor} />
       </section>
     </div>
   );

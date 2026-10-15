@@ -9,6 +9,8 @@ import { useAuth } from "@/lib/auth";
 import { SERIES_LABEL } from "@/lib/community";
 import { useCommunityFeed, useCommunityPulse, useSeriesAction, useViewerUnit, type CommunityPulse } from "@/lib/community.queries";
 import { CommunityScreen } from "@/components/community/community-screen";
+import { MyProfileButton } from "@/components/community/profile-view";
+import { openCommunityPerson } from "@/lib/community-notifications";
 import { CoachWeeklyPosts } from "@/components/community/coach-weekly-posts";
 import { CoachLessons } from "@/components/community/coach-lessons";
 import { BirthdayPostsCard } from "@/components/community/birthday-posts";
@@ -91,7 +93,7 @@ function tabFromHash(h: string = typeof window === "undefined" ? "" : window.loc
  * review, who's next). "+ Post" writes to the crew from any tab.
  */
 export function AdminCommunityHub() {
-  const { viewOnly } = useAuth();
+  const { viewOnly, user } = useAuth();
   const [picked, setPicked] = useState<HubTab>(() => tabFromHash());
   // The tab lives in the hash: Back from a page opened here (Athlete Records
   // from League) returns to the same tab, the bar's League shortcut
@@ -119,13 +121,25 @@ export function AdminCommunityHub() {
     <div className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 sm:px-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-[22px] font-black tracking-tight">Crew</h1>
-        {!viewOnly && <button
-          type="button"
-          onClick={() => setWriting(true)}
-          className="inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-black text-primary-foreground shadow-sm active:scale-95"
-        >
-          <PenLine className="h-4 w-4" /> Post
-        </button>}
+        {!viewOnly && <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setWriting(true)}
+            className="inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-black text-primary-foreground shadow-sm active:scale-95"
+          >
+            <PenLine className="h-4 w-4" /> Post
+          </button>
+          {/* your profile: the feed tab opens it (the feed is where profiles live) */}
+          <MyProfileButton
+            onOpen={() => {
+              if (!user?.id) return;
+              const id = user.id;
+              if (tab === "feed") return openCommunityPerson(id);
+              setTab("feed");
+              window.setTimeout(() => openCommunityPerson(id), 0);
+            }}
+          />
+        </div>}
       </div>
 
       {tabs.length > 1 && <div className="sticky top-0 z-20 -mx-3 bg-background/95 px-3 py-1.5 md:top-[41px] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-4 sm:px-4">

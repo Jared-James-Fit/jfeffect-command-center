@@ -41,7 +41,13 @@ const REPLIES_SHOWN = 2;
  * Light chatter on a post. Coaching conversations stay in Messages — this is
  * the "nice work" and the banter.
  */
-export function CommentsSheet({ post, viewerIsStaff, onClose }: { post: CommunityPost | null; viewerIsStaff: boolean; onClose: () => void }) {
+export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor }: {
+  post: CommunityPost | null;
+  viewerIsStaff: boolean;
+  onClose: () => void;
+  /** A commenter's photo or name opens their profile (the sheet closes first). */
+  onOpenAuthor?: (a: CommunityAuthor) => void;
+}) {
   return (
     <Sheet open={!!post} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="bottom" hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
@@ -58,7 +64,12 @@ export function CommentsSheet({ post, viewerIsStaff, onClose }: { post: Communit
                 </SheetClose>
               </div>
             </SheetHeader>
-            <CommentThread key={post.id} post={post} viewerIsStaff={viewerIsStaff} />
+            <CommentThread
+              key={post.id}
+              post={post}
+              viewerIsStaff={viewerIsStaff}
+              onOpenAuthor={onOpenAuthor ? (a) => { onClose(); onOpenAuthor(a); } : undefined}
+            />
           </>
         )}
       </SheetContent>
@@ -72,7 +83,7 @@ type ReplyTarget = { id: string; threadId: string; name: string; mine: boolean }
  * Comment list + composer. Comments and likes sync live; hold any comment for
  * its options. `inline` renders without its own scroll area (post detail).
  */
-export function CommentThread({ post, viewerIsStaff, inline = false }: { post: CommunityPost; viewerIsStaff: boolean; inline?: boolean }) {
+export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAuthor }: { post: CommunityPost; viewerIsStaff: boolean; inline?: boolean; onOpenAuthor?: (a: CommunityAuthor) => void }) {
   const { user } = useAuth();
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
@@ -256,7 +267,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
               const shown = open ? replies : replies.slice(-REPLIES_SHOWN);
               return (
                 <div key={comment.id}>
-                  <CommentRow c={comment} pinned={comment.id === pinnedId && !comment.hidden} url={urlFor(comment, urls)} progress={progress[comment.id]} onReply={startReply} onLike={toggleLike} onHold={openMenu} onOpenMedia={setViewing} />
+                  <CommentRow c={comment} pinned={comment.id === pinnedId && !comment.hidden} url={urlFor(comment, urls)} progress={progress[comment.id]} onReply={startReply} onLike={toggleLike} onHold={openMenu} onOpenMedia={setViewing} onOpenAuthor={onOpenAuthor} />
                   {replies.length > 0 && (
                     <div className="ml-10 space-y-0.5">
                       {!open && (
@@ -269,7 +280,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false }: { post: C
                         </button>
                       )}
                       {shown.map((r) => (
-                        <CommentRow key={r.id} c={r} reply url={urlFor(r, urls)} progress={progress[r.id]} onReply={startReply} onLike={toggleLike} onHold={openMenu} onOpenMedia={setViewing} />
+                        <CommentRow key={r.id} c={r} reply url={urlFor(r, urls)} progress={progress[r.id]} onReply={startReply} onLike={toggleLike} onHold={openMenu} onOpenMedia={setViewing} onOpenAuthor={onOpenAuthor} />
                       ))}
                     </div>
                   )}
@@ -558,6 +569,7 @@ function CommentRow({
   onLike,
   onHold,
   onOpenMedia,
+  onOpenAuthor,
 }: {
   c: CommunityComment;
   reply?: boolean;
@@ -569,8 +581,10 @@ function CommentRow({
   onLike: (c: CommunityComment) => void;
   onHold: (c: CommunityComment) => void;
   onOpenMedia: (c: CommunityComment) => void;
+  onOpenAuthor?: (a: CommunityAuthor) => void;
 }) {
   const hold = useHold(() => onHold(c), !!c.pending);
+  const toProfile = onOpenAuthor && !c.pending ? () => onOpenAuthor(c.author) : undefined;
   const likes = likesLabel(c.likes);
   return (
     <div
@@ -586,7 +600,13 @@ function CommentRow({
       )}
       style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", WebkitTapHighlightColor: "transparent" }}
     >
-      <UserAvatar src={c.author.avatar_url} name={c.author.name} size={reply ? 26 : 32} expandable={false} />
+      {toProfile ? (
+        <button type="button" onClick={toProfile} className="shrink-0 rounded-full active:scale-95" aria-label={`Open ${c.author.name}'s profile`} data-comment-person>
+          <UserAvatar src={c.author.avatar_url} name={c.author.name} size={reply ? 26 : 32} expandable={false} />
+        </button>
+      ) : (
+        <UserAvatar src={c.author.avatar_url} name={c.author.name} size={reply ? 26 : 32} expandable={false} />
+      )}
       <div className="min-w-0 flex-1">
         {pinned && (
           <div className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
@@ -594,7 +614,13 @@ function CommentRow({
           </div>
         )}
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[13px] font-bold">{c.author.name}</span>
+          {toProfile ? (
+            <button type="button" onClick={toProfile} className="min-w-0 truncate text-left text-[13px] font-bold active:opacity-70">
+              {c.author.name}
+            </button>
+          ) : (
+            <span className="truncate text-[13px] font-bold">{c.author.name}</span>
+          )}
           {c.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
           <span className="shrink-0 text-[11px] text-muted-foreground">
             {c.pending ? (progress != null && progress < 100 ? `Uploading ${progress}%` : "Sending…") : postTimeLabel(c.created_at)}

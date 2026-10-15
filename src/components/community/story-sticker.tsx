@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, type CommunityPost } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { STICKER_ANSWER_MAX, stickerCountLabel, stickerPercents, type PostSticker, type StickerAnswer, type StickerSpec } from "@/lib/lessons";
 import { useAnswerSticker } from "@/lib/lessons.queries";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -18,7 +18,13 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
  * the card says so). Answers never push anyone. A coach previewing a client
  * can look but not answer.
  */
-export function StorySticker({ post, onComposing, className }: { post: CommunityPost; onComposing?: (on: boolean) => void; className?: string }) {
+export function StorySticker({ post, onComposing, onOpenPerson, className }: {
+  post: CommunityPost;
+  onComposing?: (on: boolean) => void;
+  /** The poster's list of who answered: a name opens that person's profile. */
+  onOpenPerson?: (a: CommunityAuthor) => void;
+  className?: string;
+}) {
   const s = post.sticker;
   const [sheet, setSheet] = useState(false);
   if (!s) return null;
@@ -44,7 +50,14 @@ export function StorySticker({ post, onComposing, className }: { post: Community
       ) : (
         s.mine && <p className="mt-2 text-center text-[11px] font-semibold text-black/45">Only {first} sees your answer</p>
       )}
-      {s.is_mine && <StickerAnswersSheet open={sheet} onClose={() => setSheet(false)} sticker={s} />}
+      {s.is_mine && (
+        <StickerAnswersSheet
+          open={sheet}
+          onClose={() => setSheet(false)}
+          sticker={s}
+          onOpenPerson={onOpenPerson ? (a) => { setSheet(false); onOpenPerson(a); } : undefined}
+        />
+      )}
     </div>
   );
 }
@@ -258,7 +271,7 @@ function QuestionSticker({ post, first, onComposing }: { post: CommunityPost; fi
 }
 
 /** The poster's view: everyone who answered, newest first. */
-export function StickerAnswersSheet({ open, onClose, sticker }: { open: boolean; onClose: () => void; sticker: PostSticker }) {
+export function StickerAnswersSheet({ open, onClose, sticker, onOpenPerson }: { open: boolean; onClose: () => void; sticker: PostSticker; onOpenPerson?: (a: CommunityAuthor) => void }) {
   const answers: StickerAnswer[] = sticker.answers ?? [];
   const what = (a: StickerAnswer) =>
     sticker.type === "poll" ? sticker.options[a.choice ?? -1]?.label ?? "" : sticker.type === "slider" ? `${sticker.emoji} ${a.value ?? 0}` : a.body ?? "";
@@ -278,9 +291,20 @@ export function StickerAnswersSheet({ open, onClose, sticker }: { open: boolean;
           {answers.length === 0 && <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">No answers yet.</p>}
           {answers.map((a) => (
             <div key={a.user_id} className="flex items-start gap-3 rounded-xl px-3 py-2">
-              <UserAvatar src={a.avatar_url} name={a.name} size={36} expandable={false} />
+              <button
+                type="button"
+                disabled={!onOpenPerson}
+                onClick={() => onOpenPerson?.(a)}
+                className="shrink-0 rounded-full active:scale-95 disabled:active:scale-100"
+                aria-label={`Open ${a.name}'s profile`}
+                data-sticker-answer-person
+              >
+                <UserAvatar src={a.avatar_url} name={a.name} size={36} expandable={false} />
+              </button>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[14px] font-bold">{a.name}</div>
+                <button type="button" disabled={!onOpenPerson} onClick={() => onOpenPerson?.(a)} className="block max-w-full truncate text-left text-[14px] font-bold">
+                  {a.name}
+                </button>
                 <div className={cn("text-[14px]", sticker.type === "question" ? "whitespace-pre-wrap break-words" : "font-semibold text-muted-foreground")}>{what(a)}</div>
               </div>
             </div>

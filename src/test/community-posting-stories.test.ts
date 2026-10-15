@@ -130,7 +130,7 @@ describe("Crew Stories", () => {
       const viewer = read("src/components/community/crew-stories.tsx");
       expect(viewer).toContain("const who = group.author;");
       expect(viewer).not.toContain("ActivityCoverFrame");
-      expect(viewer).toContain("<MyStoryBar post={post} onOpen={() => onOpenPost(post.id)} onHold={setComposing} />");
+      expect(viewer).toContain("<MyStoryBar post={post} onOpen={() => onOpenPost(post.id)} onHold={setComposing} onOpenPerson={openPerson} />");
       expect(viewer).toContain("const j = groups.findIndex((g, k) => k > gi && !g.mine && g.items.some(fresh));");
     });
   });

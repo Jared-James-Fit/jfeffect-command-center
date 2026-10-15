@@ -256,7 +256,7 @@ describe("the finance phone bar: Home, Money, Crew (raised), Clients, Tasks", ()
     expect(hub).toContain('const VIEW_TABS: HubTab[] = ["feed", "league"];');
     expect(hub).toContain("{tabs.length > 1 && <div");
     expect(hub).toContain('const tab = tabs.some((t) => t.key === picked) ? picked : "feed";');
-    expect(hub).toContain("{!viewOnly && <button");
+    expect(hub).toContain('{!viewOnly && <div className="flex items-center gap-1.5">');
     expect(hub).toContain("<StaffLeagueTab tools={!viewOnly} />");
     expect(hub).toContain("{!viewOnly && <PulsePanel onGo={setTab} />}");
     expect(hub).toContain('{tab !== "feed" && !viewOnly && <NeedsYouStrip onGo={setTab} />}');

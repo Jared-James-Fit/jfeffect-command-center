@@ -12,7 +12,7 @@ import { CommentsSheet } from "@/components/community/comments-sheet";
 import { OPEN_POST_EVENT } from "@/components/community/shared-comment";
 import { OPEN_PERSON_EVENT } from "@/lib/community-notifications";
 import { PostDetailDialog } from "@/components/community/post-detail";
-import { ProfileView } from "@/components/community/profile-view";
+import { MyProfileButton, ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { StoryRail } from "@/components/community/crew-stories";
 import { ShareNudge } from "@/components/community/share-nudge";
@@ -260,13 +260,20 @@ export function CommunityScreen({
     return () => window.removeEventListener(OPEN_POST_EVENT, open);
   }, []);
 
-  // A follow notice opens the follower's profile.
+  // A follow notice (or anything else that names someone) opens their profile; your own id, yours.
+  const meRef = useRef<(string | null | undefined)[]>([]);
+  meRef.current = [user?.id, myId];
   useEffect(() => {
     const open = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
       if (typeof id !== "string" || !id) return;
       setDetailId(null);
-      setScope((sc) => ({ kind: "author", author: { user_id: id, name: "", avatar_url: null, is_coach: false }, from: sc.kind === "author" || sc.kind === "you" ? sc.from : sc.kind }));
+      setScope((sc) => {
+        const from = sc.kind === "author" || sc.kind === "you" ? sc.from : sc.kind;
+        return meRef.current.includes(id)
+          ? { kind: "you", from }
+          : { kind: "author", author: { user_id: id, name: "", avatar_url: null, is_coach: false }, from };
+      });
       window.scrollTo({ top: 0 });
     };
     window.addEventListener(OPEN_PERSON_EVENT, open);
@@ -370,6 +377,16 @@ export function CommunityScreen({
           )}
           {/* small phones: just the "+", so Feed · Rankings keep their room */}
           {canShare && <ShareWorkoutButton unit={unit} label="Post" previewOnly={previewOnly} className="max-[389px]:w-9 max-[389px]:px-0" labelClassName="max-[389px]:sr-only" />}
+          {/* you: your photo, top right (not while a coach is viewing as a client: that'd be the coach's) */}
+          {!previewOnly && (
+            <MyProfileButton
+              className="ml-1"
+              onOpen={() => {
+                setScope({ kind: "you", from: tab });
+                window.scrollTo({ top: 0 });
+              }}
+            />
+          )}
         </div>
         </div>
       )}
@@ -421,6 +438,7 @@ export function CommunityScreen({
             unit={unit}
             viewerIsStaff={viewerIsStaff}
             onOpenPost={(id) => setDetailId(id)}
+            onOpenPerson={openAuthor}
             onJumpTo={setJumpTo}
             addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} /> : undefined}
             addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} /> : null}
@@ -479,7 +497,7 @@ export function CommunityScreen({
           )}
         </>
       )}
-      <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} />
+      <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} onOpenAuthor={openAuthor} />
       <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} />
     </div>
     {/* outside the page that slides, so they stay put */}
