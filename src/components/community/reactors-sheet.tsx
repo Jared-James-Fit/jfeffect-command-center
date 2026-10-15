@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { postTimeLabel, reactionEmoji, type CommunityAuthor } from "@/lib/community";
 import { usePostReactors } from "@/lib/community.queries";
+import { FollowButton } from "@/components/community/follow-button";
 
 /** Everyone who reacted to a post, and with what. Tap someone to open their profile. */
 export function ReactorsSheet({
@@ -40,28 +41,37 @@ export function ReactorsSheet({
             </div>
           )}
           {data?.map((r) => (
-            <button
-              key={r.author.user_id}
-              type="button"
-              disabled={!onOpenAuthor || r.is_me}
-              onClick={() => {
-                if (!onOpenAuthor) return;
-                onClose();
-                onOpenAuthor(r.author);
-              }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-muted disabled:hover:bg-transparent"
-            >
-              <UserAvatar src={r.author.avatar_url} name={r.author.name} size={38} expandable={false} />
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-1 text-[14px] font-bold">
-                  <span className="truncate">{r.is_me ? "You" : r.author.name}</span>
-                  {r.author.is_coach && <BadgeCheck className="h-4 w-4 shrink-0 fill-primary text-primary-foreground" aria-label="Coach" />}
+            <div key={r.author.user_id} className="flex w-full items-center gap-2 rounded-xl pr-2 hover:bg-muted" data-reactor-row>
+              <button
+                type="button"
+                disabled={!onOpenAuthor || r.is_me}
+                onClick={() => {
+                  if (!onOpenAuthor) return;
+                  onClose();
+                  onOpenAuthor(r.author);
+                }}
+                className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left"
+              >
+                {/* the reaction sits on the photo (Facebook), so it lines up whatever the Follow button says */}
+                <span className="relative shrink-0">
+                  <UserAvatar src={r.author.avatar_url} name={r.author.name} size={38} expandable={false} />
+                  {reactionEmoji(r.emoji) && (
+                    <span className="absolute -bottom-1 -right-1 grid h-[20px] w-[20px] place-items-center rounded-full bg-background text-[12px] leading-none shadow-sm" aria-label={`Reacted ${reactionEmoji(r.emoji)}`}>
+                      {reactionEmoji(r.emoji)}
+                    </span>
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-1 text-[14px] font-bold">
+                    <span className="truncate">{r.is_me ? "You" : r.author.name}</span>
+                    {r.author.is_coach && <BadgeCheck className="h-4 w-4 shrink-0 fill-primary text-primary-foreground" aria-label="Coach" />}
+                  </div>
+                  <div className="truncate text-[11px] text-muted-foreground">{[r.author.title, postTimeLabel(r.created_at)].filter(Boolean).join(" · ")}</div>
                 </div>
-                {r.author.title && <div className="truncate text-[11px] text-muted-foreground">{r.author.title}</div>}
-              </div>
-              <span className="shrink-0 text-[11px] text-muted-foreground">{postTimeLabel(r.created_at)}</span>
-              {reactionEmoji(r.emoji) && <span className="w-7 shrink-0 text-center text-[20px] leading-none" aria-label={`Reacted ${reactionEmoji(r.emoji)}`}>{reactionEmoji(r.emoji)}</span>}
-            </button>
+              </button>
+              {/* Instagram's likes list: follow people right from it */}
+              {!r.is_me && <FollowButton userId={r.author.user_id} name={r.author.name} avatarUrl={r.author.avatar_url} size="sm" tone="soft" />}
+            </div>
           ))}
           {data && data.length === 0 && <div className="p-6 text-center text-[13px] text-muted-foreground">No reactions yet.</div>}
         </div>

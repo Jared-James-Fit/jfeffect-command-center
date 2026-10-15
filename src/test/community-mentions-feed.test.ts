@@ -67,7 +67,7 @@ describe("collab header", () => {
   it("'Jared McIntyre and Dwayne' / 'and N others', each tappable", () => {
     expect(card).toMatch(/collabs\.length === 1 \?/);
     expect(card).toMatch(/\{collabs\.length\} others/);
-    expect(card).toMatch(/collaborators=\{post\.collaborators\} onOpenPerson=\{onOpenAuthor\}/);
+    expect(card).toMatch(/collaborators=\{post\.collaborators\}\s+onOpenPerson=\{onOpenAuthor\}/);
   });
 });
 

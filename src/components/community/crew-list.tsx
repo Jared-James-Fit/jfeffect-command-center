@@ -126,7 +126,7 @@ function CrewRow({ m, today, onOpen }: { m: CommunityMember; today: number; onOp
         </span>
       </span>
     </button>
-    <FollowButton userId={m.author.user_id} name={m.author.name} size="sm" tone="soft" />
+    <FollowButton userId={m.author.user_id} name={m.author.name} avatarUrl={m.author.avatar_url} isPrivate={m.is_private} size="sm" tone="soft" />
     </div>
   );
 }

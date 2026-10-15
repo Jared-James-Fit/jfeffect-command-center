@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import type { MyCommunitySettings } from "@/lib/community-discover";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import {
@@ -1279,16 +1280,16 @@ export function usePublicSessionTitle(by: { dayId?: string | null; completionId?
   });
 }
 
-/** Your community switches: Pulse (post finished workouts by themselves), view privately. */
+/** Your community switches and public details: Pulse, view privately, suggest my account, @username, training, gym. */
 export function useMyCommunitySettings(enabled = true) {
   return useQuery({
     queryKey: ["community-my-settings"],
     enabled,
     staleTime: 5 * 60_000,
-    queryFn: async (): Promise<{ auto_share_workouts: boolean; private_views: boolean }> => {
+    queryFn: async (): Promise<MyCommunitySettings> => {
       const { data, error } = await db.rpc("community_my_settings");
       if (error) throw error;
-      return (data ?? { auto_share_workouts: true, private_views: false }) as { auto_share_workouts: boolean; private_views: boolean };
+      return (data ?? { auto_share_workouts: true, private_views: false }) as MyCommunitySettings;
     },
   });
 }

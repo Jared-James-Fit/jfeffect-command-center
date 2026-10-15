@@ -10,6 +10,7 @@ import { WIN_STYLE } from "@/components/community/pulse-style";
 import { ViewersSheet, markPostViewed } from "@/components/community/post-views";
 import { LessonStoryFrame } from "@/components/community/lesson-card";
 import { StorySticker } from "@/components/community/story-sticker";
+import { InlineFollow } from "@/components/community/follow-button";
 import { stickerSpot } from "@/lib/lessons";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -588,6 +589,8 @@ function StoryViewer({
                     <span className="truncate text-[14px] font-bold">{group.mine ? "Your story" : who.name.split(" ")[0]}</span>
                   )}
                   <span className="shrink-0 text-[12px] text-white/70">{postTimeLabel(post.created_at)}</span>
+                  {/* someone you don't follow yet: "· Follow", right here (Instagram's story header) */}
+                  {!group.mine && openPerson && <InlineFollow userId={who.user_id} name={who.name} tone="story" />}
                 </span>
               </span>
               <button type="button" onClick={close} className="ml-auto grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-white/10" aria-label="Close">

@@ -538,7 +538,9 @@ describe("the crew: find anyone's profile", () => {
   });
   it("is the Members directory (you're its first row), and Home never dead-ends: a post opens over the feed", () => {
     expect(screen).toContain('(previewOnly ? ["feed", "rankings"] : ["feed", "rankings", "you"])');
-    expect(screen).toContain('<CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you" })} />');
+    // the Members directory is the second half of Find athletes (your own row first), under the search and suggestions
+    expect(screen).toContain('<DiscoverPage onBack={() => setScope({ kind: discoverBack })} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => setScope({ kind: "you" })}');
+    expect(read("src/components/community/discover.tsx")).toContain("<CrewList onOpen={onOpen} onOpenMe={onOpenMe} />");
     expect(entry).toContain("onOpen={() => openPost(post.id)}");
   });
 });

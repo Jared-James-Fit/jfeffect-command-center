@@ -1,22 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, Camera, Lock, Pencil, Star } from "lucide-react";
+import { Archive, Camera, Dumbbell, Lock, MapPin, MoreHorizontal, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
 import { UserAvatar } from "@/components/user-avatar";
 import { CloseFriendsButton, FollowButton, FollowCounts, FollowRequestBanner, FollowRequestsButton, FollowsYouTag } from "@/components/community/follow-button";
-import { useFollowState, useSetPrivate } from "@/lib/community-social";
+import { followLabel, useFollowState, useSetPrivate } from "@/lib/community-social";
+import { disciplineLabel, followedByLabel } from "@/lib/community-discover";
+import { useBlockPerson } from "@/lib/direct-chats";
+import { ProfileEditSheet } from "@/components/community/profile-edit";
+import { SuggestedAthletes } from "@/components/community/suggested-athletes";
+import { useQueryClient } from "@tanstack/react-query";
 import { AvatarCropper } from "@/components/avatar-cropper";
 import { CoachBadge } from "@/components/community/post-card";
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
-import { BIO_MAX, trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
-import { useCommunityFeed, useCommunityProfile, useMyArchived, useMyCommunitySettings, usePostMediaUrls, useSetAutoShare, useSetBio, useSetCommunityAvatar } from "@/lib/community.queries";
+import { trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
+import { useCommunityFeed, useCommunityProfile, useMyArchived, useMyCommunitySettings, usePostMediaUrls, useSetAutoShare, useSetCommunityAvatar } from "@/lib/community.queries";
 
 /**
  * A person's corner of the community: photo, name, a short bio, follower /
@@ -30,16 +34,29 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   const { role } = useAuth();
   const viewerIsStaff = role === "admin" || role === "coach";
   const feed = useCommunityFeed(userId);
-  const shown = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
+  // a block (either way) shows no grid: the server already sends none, so no "Nothing shared yet" either
+  const blocked = !!profile?.blocked;
+  const shown = useMemo(() => (blocked ? [] : feed.data?.pages.flatMap((p) => p.posts) ?? []), [feed.data, blocked]);
   // Your own profile: Posts | Archived (Instagram-style, only you see Archived)
   const [showArchived, setShowArchived] = useState(false);
   const archivedQ = useMyArchived(showArchived);
   const posts = showArchived ? archivedQ.data ?? [] : shown;
   const { data: urls } = usePostMediaUrls(posts);
   const [editing, setEditing] = useState(false);
-  const [bio, setBio] = useState("");
-  const saveBio = useSetBio(userId);
+  const { isImpersonating } = useClientImpersonation();
   const setAvatar = useSetCommunityAvatar(userId);
+  // Instagram: follow someone and people close to them slide in under their profile
+  const { data: follows } = useFollowState(!!profile && !profile.is_me);
+  const fl = followLabel(follows, profile?.author.user_id ?? userId);
+  const followed = fl === "Following" || fl === "Requested";
+  const wasFollowed = useRef<boolean | null>(null);
+  const [similar, setSimilar] = useState(false);
+  useEffect(() => {
+    if (!follows || !profile || profile.is_me) return;
+    if (wasFollowed.current === false && followed) setSimilar(true);
+    if (!followed) setSimilar(false);
+    wasFollowed.current = followed;
+  }, [follows, followed, profile]);
   const photoRef = useRef<HTMLInputElement | null>(null);
   // A picked photo goes through "Move and scale" before it's saved.
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -127,6 +144,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
             <h2 className="font-display truncate text-[28px] uppercase leading-none">{profile.author.name}</h2>
             {profile.author.is_coach && <CoachBadge />}
           </div>
+          {profile.username && <div className="mt-1 truncate text-[13px] font-semibold text-muted-foreground" data-profile-username>@{profile.username}</div>}
           {profile.author.is_coach && <div className="mt-1 text-[12px] font-bold text-foreground/80">{profile.author.title || "Coach · JF Effect"}</div>}
           <div className="mt-1 flex items-center gap-1 text-[12px] font-semibold text-muted-foreground">
             {profile.is_private && <Lock className="h-3 w-3" aria-label="Private account" />}
@@ -142,56 +160,48 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
             onOpen={onOpenPerson}
           />
           {!profile.is_me && <FollowsYouTag userId={profile.author.user_id} className="mt-1.5 inline-block" />}
+          {!profile.is_me && followedByLabel(profile.followed_by) && (
+            <div className="mt-1 truncate text-[12px] text-muted-foreground" data-followed-by>{followedByLabel(profile.followed_by)}</div>
+          )}
         </div>
       </div>
 
       <div className="mt-3">
-        {editing ? (
-          <div className="space-y-2">
-            <Textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX))} rows={2} autoFocus placeholder="Lifter, goal, weight class… whatever you want people to know." className="resize-none rounded-2xl text-[16px]" />
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] tabular-nums text-muted-foreground">{bio.length}/{BIO_MAX}</span>
-              <div className="flex gap-2">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={saveBio.isPending}
-                  onClick={() => saveBio.mutate(bio, { onSuccess: () => setEditing(false), onError: (e: any) => toast.error(e?.message ?? "Couldn't save") })}
-                >
-                  Save
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : profile.bio ? (
-          <p className="whitespace-pre-line text-[14px] leading-snug">
-            {profile.bio}
-            {profile.is_me && (
-              <button type="button" className="ml-2 inline-flex items-center gap-1 text-[12px] font-bold text-muted-foreground" onClick={() => { setBio(profile.bio ?? ""); setEditing(true); }}>
-                <Pencil className="h-3 w-3" /> Edit
-              </button>
-            )}
-          </p>
-        ) : profile.is_me ? (
-          <button type="button" className="text-[13px] font-bold text-primary" onClick={() => { setBio(""); setEditing(true); }}>
+        {profile.bio ? (
+          <p className="whitespace-pre-line text-[14px] leading-snug">{profile.bio}</p>
+        ) : profile.is_me && !isImpersonating ? (
+          <button type="button" className="text-[13px] font-bold text-primary" onClick={() => setEditing(true)}>
             + Add a short bio
           </button>
         ) : null}
+        <ProfileFacts disciplines={profile.disciplines} gym={profile.home_gym} />
       </div>
 
       {/* Instagram's row: full-width actions under the bio */}
       {profile.is_me ? (
-        !profile.author.is_coach && (
+        !isImpersonating && (
           <div className="mt-3 flex gap-2">
-            <FollowRequestsButton onOpen={onOpenPerson} className="h-9 flex-1 justify-center text-[13px]" />
-            <CloseFriendsButton className="h-9 flex-1 justify-center text-[13px]" />
+            <button type="button" onClick={() => setEditing(true)} className="inline-flex h-9 flex-1 items-center justify-center rounded-lg bg-muted px-3 text-[13px] font-bold active:bg-muted/70" data-edit-profile>
+              Edit profile
+            </button>
+            {!profile.author.is_coach && <FollowRequestsButton onOpen={onOpenPerson} className="h-9 flex-1 justify-center text-[13px]" />}
+            {!profile.author.is_coach && <CloseFriendsButton className="h-9 flex-1 justify-center text-[13px]" />}
           </div>
         )
+      ) : profile.blocked_by_me ? (
+        <div className="mt-3 flex gap-2">
+          <BlockButton author={profile.author} blocked className="h-9 flex-1" />
+        </div>
       ) : (
         <div className="mt-3 flex gap-2">
           <FollowButton userId={profile.author.user_id} name={profile.author.name} avatarUrl={profile.author.avatar_url} isPrivate={!!profile.is_private && !viewerIsStaff} className="flex-1" />
+          {/* Block lives behind ••• (never for a coach, or for coaches looking at a client) */}
+          {!viewerIsStaff && !isImpersonating && !profile.author.is_coach && <ProfileMore author={profile.author} />}
         </div>
+      )}
+
+      {similar && !profile.is_me && (
+        <SuggestedAthletes context={profile.author.user_id} onOpen={(a) => onOpenPerson?.(a)} onClose={() => setSimilar(false)} className="mt-3" />
       )}
 
       {!profile.is_me && <FollowRequestBanner userId={profile.author.user_id} name={profile.author.name} />}
@@ -199,7 +209,14 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
       {profile.is_me && <PulseSwitch />}
       {profile.is_me && !profile.author.is_coach && <PrivateSwitch />}
 
-      {!profile.is_me && profile.can_see === false && (
+      {profile.blocked_by_me && (
+        <div data-blocked-profile className="mt-4 rounded-2xl border border-border/70 bg-card px-3.5 py-3">
+          <span className="block text-[13px] font-bold">You blocked {profile.author.name}</span>
+          <span className="block text-[11.5px] leading-snug text-muted-foreground">They can't find you, see your posts or message you. They aren't told.</span>
+        </div>
+      )}
+
+      {!profile.is_me && profile.can_see === false && !profile.blocked && (
         <div data-private-profile className="mt-4 flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-3.5 py-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 border-foreground/80"><Lock className="h-4 w-4" /></span>
           <span className="min-w-0">
@@ -245,12 +262,15 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
           );
         })}
       </div>
-      {posts.length === 0 && !(showArchived ? archivedQ.isLoading : feed.isLoading) && (
+      {posts.length === 0 && !blocked && !(showArchived ? archivedQ.isLoading : feed.isLoading) && (
         <div className="mt-2 rounded-2xl border border-dashed border-border px-6 py-10 text-center text-[13px] text-muted-foreground">
           {showArchived ? "Nothing archived." : profile.is_me ? "Lock in at your next session, or share a finished workout. It shows up here." : "Nothing shared yet."}
         </div>
       )}
-      {!showArchived && feed.hasNextPage && (
+      {profile.is_me && (
+        <ProfileEditSheet open={editing} onOpenChange={setEditing} userId={userId} bio={profile.bio} isCoach={profile.author.is_coach} />
+      )}
+      {!showArchived && !blocked && feed.hasNextPage && (
         <Button type="button" variant="ghost" className="mt-2 w-full" disabled={feed.isFetchingNextPage} onClick={() => void feed.fetchNextPage()}>
           {feed.isFetchingNextPage ? "Loading…" : "Show more"}
         </Button>
@@ -362,5 +382,120 @@ export function MyProfileButton({ onOpen, className }: { onOpen: () => void; cla
       <MyTabPhoto />
       You
     </button>
+  );
+}
+
+/** What they train and where, under the bio: "Powerlifting · Strength" and their gym. Nothing when they haven't said. */
+function ProfileFacts({ disciplines, gym }: { disciplines?: string[]; gym?: string | null }) {
+  const trains = (disciplines ?? []).map(disciplineLabel);
+  if (!trains.length && !gym) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] font-semibold text-muted-foreground" data-profile-facts>
+      {trains.length > 0 && (
+        <span className="inline-flex min-w-0 items-center gap-1">
+          <Dumbbell className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="truncate">{trains.join(" · ")}</span>
+        </span>
+      )}
+      {gym && (
+        <span className="inline-flex min-w-0 items-center gap-1">
+          <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="truncate">{gym}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Someone else's profile: ••• with Block. */
+function ProfileMore({ author }: { author: CommunityAuthor }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="grid h-9 w-10 shrink-0 place-items-center rounded-lg bg-muted active:bg-muted/70" aria-label={`More for ${author.name}`} data-profile-more>
+        <MoreHorizontal className="h-5 w-5" />
+      </button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[420px]">
+          <div className="flex items-center gap-2.5 border-b border-border/60 px-5 py-3.5">
+            <UserAvatar src={author.avatar_url} name={author.name} size={28} expandable={false} />
+            <SheetTitle className="truncate text-[14px] font-bold">{author.name}</SheetTitle>
+            <SheetDescription className="sr-only">Options for {author.name}</SheetDescription>
+          </div>
+          <BlockButton author={author} blocked={false} variant="row" onDone={() => setOpen(false)} />
+          <SheetClose className="h-12 w-full border-t border-border/60 text-[14px] font-semibold active:bg-muted">Cancel</SheetClose>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+
+/**
+ * Block or unblock, with a confirm. A block works both ways and quietly: they
+ * can't find you, see your posts or stories, follow or message you (and you
+ * won't see theirs). They aren't told. Coaches can't be blocked.
+ */
+function BlockButton({ author, blocked, variant = "button", className, onDone }: {
+  author: CommunityAuthor;
+  blocked: boolean;
+  variant?: "button" | "row";
+  className?: string;
+  onDone?: () => void;
+}) {
+  const [ask, setAsk] = useState(false);
+  const block = useBlockPerson();
+  const qc = useQueryClient();
+  const run = () =>
+    block.mutate(
+      { userId: author.user_id, blocked: !blocked },
+      {
+        onSuccess: () => {
+          toast(blocked ? `${author.name} is unblocked` : `Blocked ${author.name}`);
+          // who you can see, find and follow all change with it
+          for (const key of ["community-profile", "community-feed", "community-members", "community-suggestions", "community-people-search", "community-follows", "community-follow-list"]) {
+            void qc.invalidateQueries({ queryKey: [key] });
+          }
+          onDone?.();
+        },
+        onError: (e: any) => toast.error(e?.message ?? "That didn't work. Try again."),
+      },
+    );
+  return (
+    <>
+      {variant === "row" ? (
+        <button type="button" onClick={() => setAsk(true)} className="flex min-h-[52px] w-full items-center px-5 text-left text-[15px] font-semibold text-destructive active:bg-muted" data-block-person>
+          Block
+        </button>
+      ) : (
+        <button type="button" onClick={() => setAsk(true)} className={cn("inline-flex items-center justify-center rounded-lg bg-muted px-4 text-[13px] font-bold active:bg-muted/70", className)} data-unblock-person>
+          Unblock
+        </button>
+      )}
+      <Sheet open={ask} onOpenChange={setAsk}>
+        <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[420px]">
+          <div className="flex flex-col items-center px-6 pb-3 pt-6 text-center">
+            <UserAvatar src={author.avatar_url} name={author.name} size={64} expandable={false} />
+            <SheetTitle className="mt-3 text-[16px] font-black">{blocked ? `Unblock ${author.name}?` : `Block ${author.name}?`}</SheetTitle>
+            <SheetDescription className="mt-1 text-[13px] leading-snug">
+              {blocked
+                ? "They'll be able to find you, see your posts and message you again, and follows between you work again."
+                : "They won't be able to find you, see your posts or stories, follow you or message you, and you won't see theirs. They won't be told."}
+            </SheetDescription>
+          </div>
+          <div className="border-t border-border/60">
+            <button
+              type="button"
+              disabled={block.isPending}
+              onClick={() => { setAsk(false); run(); }}
+              className={cn("h-12 w-full text-[14px] font-bold active:bg-muted", !blocked && "text-destructive")}
+              data-block-confirm
+            >
+              {blocked ? "Unblock" : "Block"}
+            </button>
+            <SheetClose className="h-12 w-full border-t border-border/60 text-[14px] font-semibold active:bg-muted">Cancel</SheetClose>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

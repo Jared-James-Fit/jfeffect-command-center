@@ -4,6 +4,8 @@ import { Search, Star, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import type { CommunityAuthor } from "@/lib/community";
 import { useCommunityMembers, useMyCommunityId } from "@/lib/community.queries";
 import {
@@ -31,6 +33,9 @@ export function FollowButton({ userId, name, avatarUrl, isPrivate, size = "md", 
   const { data: state } = useFollowState();
   const follow = useFollow();
   const [confirm, setConfirm] = useState(false);
+  // coaches follow a private account straight away (no request), so it acts public for them
+  const { role } = useAuth();
+  isPrivate = !!isPrivate && role !== "admin" && role !== "coach";
   const label = followLabel(state, userId);
   const on = label === "Following" || label === "Requested";
   const set = (next: boolean) =>
@@ -85,6 +90,64 @@ export function FollowButton({ userId, name, avatarUrl, isPrivate, size = "md", 
         </Sheet>
       )}
     </>
+  );
+}
+
+/**
+ * "· Follow" right after a name (a post's header, a story's), the way
+ * Instagram does it: only for someone you don't follow yet. After a tap it
+ * reads "Following" (or "Requested") until you scroll on; it isn't shown at
+ * all on your own posts, to coaches (they see everyone's posts anyway), or
+ * while a coach views the app as a client.
+ */
+export function InlineFollow({ userId, name, isPrivate, tone = "default", className }: {
+  userId: string;
+  name?: string;
+  isPrivate?: boolean;
+  /** "story": white, on the dark story frame. */
+  tone?: "default" | "story";
+  className?: string;
+}) {
+  const { user, role, viewOnly } = useAuth();
+  const { isImpersonating } = useClientImpersonation();
+  const myId = useMyCommunityId();
+  const staff = role === "admin" || role === "coach";
+  const hidden = staff || viewOnly || isImpersonating || !user || userId === user.id || userId === myId;
+  const { data: state } = useFollowState(!hidden);
+  const follow = useFollow();
+  const [tapped, setTapped] = useState(false);
+  if (hidden || !state) return null;
+  const label = followLabel(state, userId);
+  const on = label === "Following" || label === "Requested";
+  if (on && !tapped) return null;
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1 text-[13px] leading-tight", className)}>
+      <span aria-hidden className={tone === "story" ? "text-white/60" : "text-muted-foreground"}>·</span>
+      <button
+        type="button"
+        data-inline-follow={on ? "on" : "off"}
+        disabled={on}
+        onClick={(e) => {
+          e.stopPropagation();
+          setTapped(true);
+          follow.mutate(
+            { userId, on: true, isPrivate },
+            {
+              onError: () => toast.error("Couldn't follow. Try again."),
+              onSuccess: (st) => {
+                if (st.requested.includes(userId)) toast(`Requested${name ? ` to follow ${name}` : ""}`, { description: "You'll see their posts once they confirm." });
+              },
+            },
+          );
+        }}
+        className={cn(
+          "font-bold transition-colors active:opacity-70 disabled:cursor-default",
+          on ? (tone === "story" ? "text-white/70" : "text-muted-foreground") : tone === "story" ? "text-white" : "text-primary",
+        )}
+      >
+        {on ? label : label === "Follow back" ? "Follow back" : "Follow"}
+      </button>
+    </span>
   );
 }
 

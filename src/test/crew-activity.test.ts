@@ -71,7 +71,7 @@ describe("Crew Activity screen", () => {
   it("follow back right on the line, the post on the right, people to follow at the end", () => {
     expect(page).toContain('<FollowButton userId={first.user_id} name={first.name} size="sm" />');
     expect(page).toContain("<PostThumb");
-    expect(page).toContain("<SuggestedAthletes onOpen={onOpenPerson} />");
+    expect(page).toContain("<SuggestedAthletes onOpen={onOpenPerson} onSeeAll={onFindPeople} />");
     expect(read("supabase/migrations/20261128090000_community_activity_thumbs.sql")).toContain("'post_thumb', coalesce(p.media_thumb_path");
   });
 });

@@ -379,6 +379,10 @@ export function reactorsLine(post: Pick<CommunityPost, "reaction_count" | "react
 export type CommunityMember = {
   author: CommunityAuthor;
   bio: string | null;
+  /** Their @username (without the @). */
+  username?: string | null;
+  /** Private account: following them sends a request. */
+  is_private?: boolean;
   posts: number;
   last_post_at: string | null;
   live: boolean;
@@ -425,6 +429,17 @@ export type CommunityProfile = {
   can_see?: boolean;
   followers?: number;
   following?: number;
+  /** @username (without the @). */
+  username?: string | null;
+  /** What they train (keys from DISCIPLINES, up to 3) and their gym, if they added them. */
+  disciplines?: string[];
+  home_gym?: string | null;
+  /** People you follow who follow them ("Followed by Nicole + 2 more"); not on your own profile. */
+  followed_by?: { count: number; names: string[] } | null;
+  /** One of you blocked the other: nothing to see either way. */
+  blocked?: boolean;
+  /** You blocked them (so you can unblock). */
+  blocked_by_me?: boolean;
 };
 
 export type CommunityActivity = { enabled: boolean; unseen: number; seen_at: string | null };

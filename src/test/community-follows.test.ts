@@ -1,15 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { EMPTY_FOLLOW_STATE, applyFollow, followLabel, suggestAthletes } from "@/lib/community-social";
+import { EMPTY_FOLLOW_STATE, applyFollow, followLabel } from "@/lib/community-social";
 import { AUDIENCES, isCrewAudience, pickerAudience, postPointsHint, storyWorthy } from "@/lib/community";
 import { activityLine, matchesActivityFilter } from "@/lib/crew-activity";
 import { crewStories } from "@/lib/community";
 import { shouldPersistQueryKey } from "@/lib/query-persister";
 import { communityNoticeText, type CommunityNotice } from "@/lib/community-notifications";
-import type { CommunityMember } from "@/lib/community";
 
-const member = (id: string, extra: Partial<CommunityMember> = {}): CommunityMember =>
-  ({ author: { user_id: id, name: id, avatar_url: null, is_coach: false }, week_days: [], trained_at: null, ...extra }) as CommunityMember;
 
 describe("follow", () => {
   it("follows to the front and unfollows cleanly, never duplicating", () => {
@@ -20,17 +17,6 @@ describe("follow", () => {
     expect(applyFollow(s, "a", true).followers).toEqual(["c"]);
   });
 
-  it("suggests people you don't follow: your followers first, then who's training", () => {
-    const members = [
-      member("idle"),
-      member("busy", { week_days: [1, 2, 3] as any, trained_at: "2026-10-12T10:00:00Z" }),
-      member("fan"),
-      member("followed", { week_days: [1, 2, 3, 4] as any }),
-    ];
-    const out = suggestAthletes(members, { ...EMPTY_FOLLOW_STATE, following: ["followed"], followers: ["fan"] }).map((m) => m.author.user_id);
-    expect(out).toEqual(["fan", "busy", "idle"]);
-    expect(suggestAthletes(members, undefined, 2)).toHaveLength(2);
-  });
 });
 
 describe("private accounts and Close Friends", () => {

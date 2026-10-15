@@ -44,6 +44,10 @@ const DO_NOT_PERSIST_PREFIXES = [
   "community-activity",
   // Who you follow: per person, and the keys aren't per-user.
   "community-follows",
+  // Find athletes: who to suggest moves with every follow; searches are throwaway.
+  "community-suggestions",
+  "community-people-search",
+  "community-username-check",
   "client-nav-badges",
   "conversation",
   "notifications",

@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Dumbbell, Heart } from "lucide-react";
+import { ArrowLeft, Dumbbell, Heart, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,7 +16,8 @@ import { MyTabPhoto, ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { StoryRail } from "@/components/community/crew-stories";
 import { ShareNudge } from "@/components/community/share-nudge";
-import { CrewList } from "@/components/community/crew-list";
+import { DiscoverPage } from "@/components/community/discover";
+import { OPEN_DISCOVER_EVENT } from "@/lib/community-discover";
 import { CrewActivity } from "@/components/community/crew-activity";
 import { useCrewActivity } from "@/lib/crew-activity.queries";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
@@ -38,9 +39,10 @@ import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 type Tab = "feed" | "rankings" | "you" | "members" | "activity";
 /** A tab, or someone else's profile opened from one. */
 type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
-const TAB_LABEL: Record<Tab, string> = { feed: "Feed", rankings: "Rankings", you: "You", members: "Members", activity: "Activity" };
+const TAB_LABEL: Record<Tab, string> = { feed: "Feed", rankings: "Rankings", you: "You", members: "Find athletes", activity: "Activity" };
 /** Pages opened from another one, and where their back arrow goes. */
-const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "activity" };
+/** (Find athletes goes back to wherever it was opened from: the feed, Activity, a tab.) */
+const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed" };
 
 /** `#post=<id>` opens a post straight away (used by the Home strip and pushes). */
 function postFromHash(): string | null {
@@ -104,6 +106,15 @@ export function CommunityScreen({
     return { kind: "feed" };
   });
   const tab: Tab = scope.kind === "author" ? scope.from : scope.kind;
+  // Find athletes: where its back arrow goes, and whether the search box takes the keyboard straight away
+  const [discoverBack, setDiscoverBack] = useState<Tab>("feed");
+  const [discoverFocus, setDiscoverFocus] = useState(false);
+  const openDiscover = (from: Tab, focus = false) => {
+    setDiscoverBack(from === "members" ? "feed" : from);
+    setDiscoverFocus(focus);
+    setScope({ kind: "members" });
+    window.scrollTo({ top: 0 });
+  };
   // someone else's profile is a page with a back arrow; yours is a tab
   const inProfile = scope.kind === "author";
   // the heart's dot: something new in Activity (never the coach's own while viewing as a client)
@@ -179,7 +190,7 @@ export function CommunityScreen({
     const onRetap = (e: Event) => {
       if ((e as CustomEvent).detail !== window.location.pathname) return;
       // out of someone's profile first, out of yours to the feed; on the feed, back to the top and fresh
-      setScope((sc) => (sc.kind === "author" ? { kind: sc.from } : sc.kind === "you" ? { kind: "feed" } : sc));
+      setScope((sc) => (sc.kind === "author" ? { kind: sc.from } : sc.kind === "you" || sc.kind === "members" ? { kind: "feed" } : sc));
       if (scopeRef.current.kind === "feed") showNew.current();
     };
     window.addEventListener("nav-retap", onRetap);
@@ -209,7 +220,7 @@ export function CommunityScreen({
     // no hash (Crew's own button) or #feed (after posting): back on the feed
     else if (!routeHash || routeHash === "feed") setScope((sc) => (sc.kind === "rankings" || sc.kind === "you" ? { kind: "feed" } : sc));
   }, [routeHash, hideTabs, previewOnly]);
-  const parent = PARENT[scope.kind as Tab];
+  const parent = scope.kind === "members" ? discoverBack : PARENT[scope.kind as Tab];
   // the coach's Crew page has no tab row: there your profile is a page with a way back to the feed
   const youAsPage = hideTabs && scope.kind === "you";
   const canSwipeBack = inProfile || youAsPage || !!parent || !!backTo;
@@ -291,6 +302,19 @@ export function CommunityScreen({
     return () => window.removeEventListener(OPEN_PERSON_EVENT, open);
   }, []);
 
+  // The coach's Crew header opens Find athletes here.
+  useEffect(() => {
+    const open = () => {
+      setDetailId(null);
+      setDiscoverBack("feed");
+      setDiscoverFocus(true);
+      setScope({ kind: "members" });
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener(OPEN_DISCOVER_EVENT, open);
+    return () => window.removeEventListener(OPEN_DISCOVER_EVENT, open);
+  }, []);
+
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
@@ -338,7 +362,7 @@ export function CommunityScreen({
         >
           <ArrowLeft className="mr-1.5 h-4 w-4" /> {TAB_LABEL[youAsPage ? "feed" : tab]}
         </Button>
-      ) : hideTabs || scope.kind === "activity" ? null : parent ? (
+      ) : hideTabs || scope.kind === "activity" || scope.kind === "members" ? null : parent ? (
         <Button type="button" variant="ghost" className="-ml-2 h-10 rounded-full px-3" onClick={() => setScope({ kind: parent })}>
           <ArrowLeft className="mr-1.5 h-4 w-4" /> {TAB_LABEL[parent]}
         </Button>
@@ -365,18 +389,31 @@ export function CommunityScreen({
               }}
               className={cn(
                 "inline-flex h-9 items-center rounded-full text-[13px] font-bold transition-colors",
-                k === "you" ? "gap-1.5 pl-1.5 pr-3 min-[360px]:pr-3.5" : "px-3 min-[360px]:px-3.5",
+                // room for Search, Activity and + on small phones: tighter tabs under 400px, just your photo on "You" under 360px
+                k === "you" ? "gap-1.5 pl-1.5 pr-2.5 max-[359px]:pr-1.5 min-[400px]:pr-3.5" : "px-2.5 min-[400px]:px-3.5",
                 scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
               )}
               data-crew-tab={k}
             >
               {k === "you" && <MyTabPhoto active={scope.kind === "you"} />}
-              {TAB_LABEL[k]}
+              {k === "you" ? <span className="max-[359px]:sr-only">{TAB_LABEL[k]}</span> : TAB_LABEL[k]}
             </button>
           ))}
         </div>
         </div>
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="flex shrink-0 items-center min-[400px]:gap-0.5">
+          {/* Find athletes: search by name or @username, people to follow (not while a coach views as a client) */}
+          {!previewOnly && (
+            <button
+              type="button"
+              aria-label="Find athletes"
+              onClick={() => openDiscover(tab, true)}
+              className="grid h-9 w-8 shrink-0 place-items-center rounded-full text-foreground transition-colors active:bg-muted min-[400px]:w-9"
+              data-discover-open
+            >
+              <Search className="h-[21px] w-[21px]" strokeWidth={2.1} />
+            </button>
+          )}
           {/* Activity: who liked, commented, followed (Instagram's heart), a dot when there's something new */}
           {!previewOnly && (
             <button
@@ -386,7 +423,7 @@ export function CommunityScreen({
                 setScope({ kind: "activity" });
                 window.scrollTo({ top: 0 });
               }}
-              className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground transition-colors active:bg-muted"
+              className="relative grid h-9 w-8 shrink-0 place-items-center rounded-full text-foreground transition-colors active:bg-muted min-[400px]:w-9"
               data-activity-open
             >
               <Heart className="h-[21px] w-[21px]" strokeWidth={2.1} />
@@ -406,13 +443,10 @@ export function CommunityScreen({
           onBack={() => setScope({ kind: "feed" })}
           onOpenPost={(id) => setDetailId(id)}
           onOpenPerson={openAuthor}
-          onFindPeople={() => {
-            setScope({ kind: "members" });
-            window.scrollTo({ top: 0 });
-          }}
+          onFindPeople={() => openDiscover("activity", true)}
         />
       ) : scope.kind === "members" ? (
-        <CrewList onOpen={openAuthor} onOpenMe={() => setScope({ kind: "you" })} />
+        <DiscoverPage onBack={() => setScope({ kind: discoverBack })} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => setScope({ kind: "you" })} autoFocus={discoverFocus} />
       ) : scope.kind === "you" && user?.id ? (
         <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : scope.kind === "author" ? (
@@ -492,8 +526,10 @@ export function CommunityScreen({
             </FeedItem>
             {/* now and then, until their first post: an invite to lock in or share (after the second post) */}
             {canShare && !following && i === Math.min(1, feedPosts.length - 1) && <ShareNudge surface="feed" unit={unit} />}
-            {/* people to follow, after the third post, until you follow a handful */}
-            {!hideTabs && !following && i === Math.min(2, feedPosts.length - 1) && <SuggestedAthletes onOpen={openAuthor} />}
+            {/* people to follow, after the third post: only ones with a real reason (your coach, follows you, mutuals, same gym…) */}
+            {!hideTabs && !previewOnly && !following && i === Math.min(2, feedPosts.length - 1) && (
+              <SuggestedAthletes onOpen={openAuthor} strongOnly onSeeAll={() => openDiscover("feed")} />
+            )}
             </Fragment>
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
