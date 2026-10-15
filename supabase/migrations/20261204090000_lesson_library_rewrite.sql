@@ -342,6 +342,31 @@ Bench is the classic. Fast off the chest, slow a few inches up, then faster agai
 That slow spot caps how much you can lift, and it's usually where form breaks first.
 
 Next heavy set, notice where the bar slows. That's useful info for us.$l$, $j${"key":"sticking-points"}$j$::jsonb),
+  ('rpe-rir-scale', '0447cc633f86f7c09b0fe8120c6a1151', $l$RPE 8 doesn't mean 8/10 hard. It means 2 reps left
+
+Powerlifting got this version of RPE from a lifter. Mike Tuchscherer, a 2009 World Games champion, tied each number to reps left in The Reactive Training Manual.
+
+RPE 10 = nothing left
+RPE 9 = 1 left
+RPE 8 = 2 left
+RPE 7 = 3 left
+
+Researchers built on his work in 2016 and found counting reps left is way more concrete than rating how hard a set felt.
+
+Right after a set ask yourself: if I had to, how many more clean reps could I do?
+
+That's your number. Not how tired you are. Just what's left in the tank.$l$, $j${"key":"rpe-rir-scale","refs":[{"label":"Zourdos et al. 2016, J Strength Cond Res","url":"https://pubmed.ncbi.nlm.nih.gov/26049792/"},{"label":"Helms et al. 2016, Strength Cond J","url":"https://pmc.ncbi.nlm.nih.gov/articles/PMC4961270/"},{"label":"IPF results: 2009 World Games, men's statistics (Tuchscherer, super heavyweight gold)","url":"https://www.powerlifting.sport/fileadmin/ipf/data/results/2009/world_games_2009/men/statistics.htm"},{"label":"Reactive Training Systems: Mike Tuchscherer bio (The Reactive Training Manual)","url":"https://store.reactivetrainingsystems.com/pages/mike-tuchscherer"},{"label":"Zourdos, MASS Research Review 2023: RPE and RIR, the complete guide","url":"https://massresearchreview.com/2023/05/22/rpe-and-rir-the-complete-guide/"}]}$j$::jsonb),
+  ('force-velocity-intent', 'e990ede7d0a235cecb69b0ccbb9a28bd', $l$A max is supposed to look slow. That's physics, not weakness
+
+The heavier the load, the slower you can move it. Light weight flies. A true max grinds.
+
+Trying to move fast still matters though. Louie Simmons gave it a whole day at Westside Barbell. Lifters moved about half their max, often with bands or chains, as fast as possible.
+
+Research backs the intent part. In a 2014 bench study, pressing every rep as fast as possible gave close to double the 1RM gains of pressing at half speed on purpose.
+
+So every rep on the way up is a fast rep. Not rushed. Just pushed hard.
+
+Tempo work is slow on purpose though. Keep that as written.$l$, $j${"key":"force-velocity-intent","refs":[{"label":"Behm & Sale 1993, J Appl Physiol","url":"https://pubmed.ncbi.nlm.nih.gov/8444715/"},{"label":"González-Badillo et al. 2014, Eur J Sport Sci","url":"https://pubmed.ncbi.nlm.nih.gov/24734902/"},{"label":"Westside Barbell: The WSBB guide to dynamic effort training","url":"https://www.westside-barbell.com/blogs/the-blog/the-wsbb-guide-to-dynamic-effort-training"}]}$j$::jsonb),
   ('fitness-fatigue-taper', '51a2aeaace9d268683388a769e1ad555', $l$How does doing less make you lift more?
 
 Training gives you fitness and fatigue at the same time. What you can lift on the day is roughly fitness minus fatigue.
@@ -351,6 +376,18 @@ Fatigue builds fast and clears fast. Fitness builds slow and fades slow. So when
 That's a taper. A 2007 review found the biggest effect from about 2 weeks of cutting volume by roughly 40-60% while keeping intensity the same.
 
 Pull back too long though and fitness starts fading too. That's why tapers are short 🏆$l$, $j${"key":"fitness-fatigue-taper"}$j$::jsonb),
+  ('progressive-overload-beyond-weight', '9a9b845030c3db5bfee736c4fd174427', $l$Legend says Milo of Croton carried a calf every day until it was a full grown bull
+
+It's the oldest picture of progressive overload. Ask a bit more of your body over time.
+
+More weight is the obvious way. It's not the only one.
+• Same weight, more reps or sets
+• Same weight, lower RPE or faster bar speed
+• Same weight, cleaner reps
+
+A single that was RPE 9 last month and moves at RPE 7.5 now is real progress.
+
+Judge it across a block, not one session 📊$l$, $j${"key":"progressive-overload-beyond-weight","refs":[{"label":"Encyclopaedia Britannica: Milo of Croton","url":"https://www.britannica.com/biography/Milo-of-Croton"},{"label":"Quintilian, Institutio Oratoria 1.9.5 (the calf story)","url":"https://cts.perseids.org/read/latinLit/phi1002/phi001/perseus-eng2/1.9.5-1.10.3"}]}$j$::jsonb),
   ('rpe-accuracy-near-failure', '8a6b5e6805e31c01fcb737a881ce5012', $l$Your RPE 6 is a guess. Your RPE 9 is way more accurate
 
 A 2022 review pooled the studies on predicting reps left. On average people underestimated by about 1 rep. Most of us have a bit more in the tank than we think.
@@ -379,6 +416,37 @@ That's why a lot of programming picks top sets by RPE instead of a fixed %. Good
 A 2021 study found squatting off reps in reserve gave bigger strength gains over 12 weeks than fixed percentages. Not every study finds a difference.
 
 A lighter top set on a bad day isn't a failed session. That's the system working 🫡$l$, $j${"key":"daily-strength-varies"}$j$::jsonb),
+  ('heavy-singles-skill', 'fe650d7a2e832f16eae45948ab146b02', $l$Bulgarian weightlifters worked up to a heavy single almost every session
+
+Their coach Ivan Abadjiev's teams won 57 world titles. Not saying you should copy it. But it shows something. Lifting a max is a skill, not just a test.
+
+A single has a slower bar, more pressure and more nerves, and your positions have to hold the whole way. If meet day is the only time you touch that, you're doing a new skill under max pressure.
+
+A small 2017 study had one group just practice the 1RM for 8 weeks while another did 4 sets to failure. Strength gains came out about the same.
+
+That's why singles get built in before a meet. Not to test. To practice.
+
+The ones in your program are placed on purpose. This isn't a pass for daily maxing 💀$l$, $j${"key":"heavy-singles-skill","refs":[{"label":"Mattocks et al. 2017, Med Sci Sports Exerc","url":"https://doi.org/10.1249/MSS.0000000000001300"},{"label":"IWF: Ivan Abadzhiev died at 85 (2017)","url":"https://iwf.sport/2017/03/27/ivan-abadzhiev-died-at-85/"},{"label":"BTA: Bulgarian weightlifting legend Ivan Abadjiev dies","url":"https://www.bta.bg/en/news/129958-Bulgarian-Weightlifting-Legend-Ivan-Abadjiev-Dies"}]}$j$::jsonb),
+  ('weekly-sets-dose-response', '3ec53714c173cfbec12bd0d387dd8e0d', $l$Arnold trained twice a day. Dorian Yates did 1 all-out set per exercise 🤔
+
+Arnold won 7 Mr. Olympias. Yates won 6 straight. So how much volume do you actually need?
+
+A 2017 review of 15 studies found more weekly sets built more muscle, up to a point. Groups doing 10+ hard sets per muscle a week grew the most on average.
+
+But each extra set adds less than the one before, while fatigue keeps stacking. Yates made very few sets work by taking every one to failure after his warmups.
+
+Only count hard sets. Warmups don't count.
+
+Accessories feel like too much or too little? Bring it to me before piling sets on.$l$, $j${"key":"weekly-sets-dose-response","refs":[{"label":"Schoenfeld, Ogborn & Krieger 2017, J Sports Sci","url":"https://doi.org/10.1080/02640414.2016.1210197"},{"label":"Encyclopaedia Britannica: Mr. Olympia (Schwarzenegger 1970-75 and 1980, Yates 1992-97)","url":"https://www.britannica.com/topic/Mr-Olympia"},{"label":"Schwarzenegger.com: Don't forget the dumbbell pullover (his double-split routines)","url":"https://www.schwarzenegger.com/fitness/post/dont-forget-the-dumbbell-pullover"},{"label":"Fitness Volt: Dorian Yates explains why he cut back from 2 to 1 working sets","url":"https://fitnessvolt.com/dorian-yates-working-sets/"}]}$j$::jsonb),
+  ('failure-proximity-growth', '0e475fa18d502379e4debf55e9472e45', $l$Mike Mentzer took his sets past failure. Research says you just need to get close
+
+His Heavy Duty training added forced reps and negatives after failure, and he won the 1978 Mr. Universe heavyweight class with a perfect 300 score.
+
+Two big reviews since then. One found going all the way to failure wasn't clearly better for growth than stopping a bit short. The other found growth improved the closer sets ended to failure, while strength looked similar across a wide range.
+
+So for accessories, ending around 0-3 reps in the tank is a good zone. Sets with 5+ left probably do less.
+
+Comp lifts are different. We keep those further from failure on purpose 🫡$l$, $j${"key":"failure-proximity-growth","refs":[{"label":"Refalo et al. 2023, Sports Med","url":"https://doi.org/10.1007/s40279-022-01784-y"},{"label":"Robinson et al. 2024, Sports Med","url":"https://doi.org/10.1007/s40279-024-02069-2"},{"label":"Iron Man: The 1980 Mr. Olympia controversy (Mentzer's perfect 300 at the 1978 Mr. Universe)","url":"https://www.ironmanmagazine.com/the-1980-mr-olympia-controversy/"},{"label":"Iron Man: Heavy Duty, Mike Mentzer's most productive routine","url":"https://www.ironmanmagazine.com/heavy-duty-mike-mentzers-most-productive-routine/"}]}$j$::jsonb),
   ('long-muscle-length', '49ff8cead207e213926d6c272a93e441', $l$Same muscle, different exercise, different amount of growth
 
 Two studies had people train one limb each way for 12 weeks.
@@ -399,15 +467,24 @@ Studies on leg extensions and calf raises found partials in the stretched half g
 So full ROM is a safe default. If you go partial, keep the stretched end.
 
 Accessories only. Comp lifts still follow comp depth.$l$, $j${"key":"full-rom-vs-partials"}$j$::jsonb),
-  ('light-vs-heavy-growth', '1cd168bd197e882489411c8d0169c855', $l$Sets of 20 grow muscle about as well as sets of 5. If they're hard
+  ('light-vs-heavy-growth', '1cd168bd197e882489411c8d0169c855', $l$"Everybody wanna be a bodybuilder, but nobody wants to lift no heavy ass weight"
+
+Ronnie Coleman, 8x Mr. Olympia. For strength he's right. For growth, light works too. If it's hard.
 
 A 2017 review of 21 studies compared light loads (60% or less) with heavy loads, sets taken to failure. Growth came out similar. Max strength went up more with heavy.
 
 The catch: a light set only works when it gets hard. The first 10 reps of a 25 rep set are easy. It's the grindy reps at the end that count.
 
-So comp lifts stay heavy, because 1RM strength is specific. Accessories can live anywhere from about 6 to 20+ reps.
+So comp lifts stay heavy. Accessories can live anywhere from about 6 to 20+ reps.$l$, $j${"key":"light-vs-heavy-growth","refs":[{"label":"Schoenfeld et al. 2017, J Strength Cond Res","url":"https://pubmed.ncbi.nlm.nih.gov/28834797/"},{"label":"RonnieColeman.net: How to be hardcore (the quote)","url":"https://ronniecoleman.net/blogs/articles/how-to-be-hardcore"},{"label":"Encyclopaedia Britannica: Mr. Olympia (Coleman 1998-2005)","url":"https://www.britannica.com/topic/Mr-Olympia"}]}$j$::jsonb),
+  ('frequency-volume-equated', '3390da16774fd63d5bd98376200c7a49', $l$Is hitting a muscle 3x a week better than 1x? Less than you think
 
-Your program picks rep ranges on purpose. This is the why, not a reason to change them.$l$, $j${"key":"light-vs-heavy-growth"}$j$::jsonb),
+When weekly sets were matched, a 2019 review of 25 studies found frequency didn't clearly change growth. The edge showed up when more sessions also meant more total sets.
+
+So frequency is mostly a way to spread volume out. 15 sets for one muscle in one day gets sloppy. Split over 2-3 days, more of them are quality sets.
+
+It matters more for the lifts themselves. Boris Sheiko, who became head coach of Russia's national powerlifting team in 1998, has lifters squat and bench several times a week at loads averaging around 70%.
+
+That's practice, not just muscle.$l$, $j${"key":"frequency-volume-equated","refs":[{"label":"Schoenfeld, Ogborn & Krieger 2016, Sports Med","url":"https://pubmed.ncbi.nlm.nih.gov/27102172/"},{"label":"Schoenfeld, Grgic & Krieger 2019, J Sports Sci","url":"https://doi.org/10.1080/02640414.2018.1555906"},{"label":"Stronger by Science: Interview with coach Boris Sheiko","url":"https://www.strongerbyscience.com/interview-with-coach-boris-sheiko/"}]}$j$::jsonb),
   ('rest-periods-growth', '9ee16b06749989c5accbd263bb87ba8f', $l$Resting 60 seconds to keep the pump isn't the growth hack it was sold as
 
 In a 2016 study trained guys ran the same 8 week program resting either 1 or 3 minutes. The 3 minute group gained more strength and grew a bit more, probably because they kept more reps and weight on the bar each set.
@@ -466,6 +543,18 @@ Where it can bite
 • So much that it eats into recovery or food
 
 Separate days or a few hours apart keeps it out of the way. Thinking of adding a lot? Tell me first.$l$, $j${"key":"cardio-interference"}$j$::jsonb),
+  ('methods-myo-reps', '1489ae1b47f84e971e8aaf4658a89ebd', $l$Short on time but want your accessories to count? Try myo-reps
+
+Norwegian coach Børge Fagerli came up with them in the mid-2000s.
+• One activation set, 1-2 reps shy of failure
+• Rest 3-5 deep breaths, then 3-5 more reps
+• Repeat until you can't hit the mini set
+
+Every mini set lands close to failure, so you get a lot of hard reps fast. An 8 week study in trained guys found rest-pause sets grew muscle about as well as regular sets.
+
+Great for cables, machines, curls, raises and calves. Not for heavy barbell lifts.
+
+Accessories written as straight sets? Ask before swapping. Anyone tried these?$l$, $j${"key":"methods-myo-reps","refs":[{"label":"Enes et al. 2021, Appl Physiol Nutr Metab","url":"https://pubmed.ncbi.nlm.nih.gov/34260860/"},{"label":"Barbell Medicine: Myo-reps","url":"https://www.barbellmedicine.com/blog/myo-reps/"},{"label":"StrengthLog: Myo-reps","url":"https://www.strengthlog.com/myo-reps/"}]}$j$::jsonb),
   ('methods-drop-sets', '1bce57188e33577911daa8c7a79417c6', $l$Drop sets won't build more muscle. But they can save a ton of time
 
 Go close to failure, strip about 20-30% of the weight and keep going with no rest. Maybe drop once more.
@@ -475,6 +564,20 @@ Two reviews found they grow muscle about as well as regular sets, and in some st
 Use them on the last set of a machine or isolation exercise. Skip them on the main lifts. Stripping plates at failure is a mess.
 
 Want to try one? A single drop on the last set is plenty.$l$, $j${"key":"methods-drop-sets"}$j$::jsonb),
+  ('methods-antagonist-supersets', 'f7a9d47614def5f1633dd99d99649d4c', $l$Arnold paired chest and back in supersets. Research says he was onto something
+
+Think bench press straight into chin-ups. One muscle rests while the other works.
+
+Pairs that work
+• Rows + DB bench
+• Curls + pushdowns
+• Leg curls + leg extensions
+
+A 2025 review found supersets cut session time without costing strength or size. Opposite muscle pairs even let people get more reps than straight sets.
+
+The catch: they feel harder, and holding two stations in a busy gym is a pain.
+
+Keep heavy squat, bench and deadlift as straight sets. Pair the accessories after.$l$, $j${"key":"methods-antagonist-supersets","refs":[{"label":"Zhang et al. 2025, Sports Med","url":"https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12011898/"},{"label":"Bodybuilding.com: Arnold A to Z, superset man","url":"https://bodybuilding.com/fun/arnold-a-to-z-superset-man.html"},{"label":"T3: Arnold Schwarzenegger shares his Golden Era chest and back workout","url":"https://www.t3.com/news/arnold-schwarzenegger-shares-his-golden-era-chest-and-back-workout-and-its-insane"}]}$j$::jsonb),
   ('methods-lengthened-partials', '566b581a78835e5e698886f151d600e0', $l$Hit failure on full reps? The bottom half might still have more in it
 
 Lengthened partials are reps in just the stretched part of the range. Bottom half of a curl. Bottom of a leg press.
@@ -484,6 +587,29 @@ As a set extender, take the set to failure with full reps, then grind out 3-5 st
 A 2025 study in trained lifters trained one arm each way and both grew about the same. Research on doing it after failure is thin, so it's a tool, not a must.
 
 Good on machines, cables, curls and calves. Never on squat, bench or deadlift 💀$l$, $j${"key":"methods-lengthened-partials"}$j$::jsonb),
+  ('methods-eccentric-tempo', 'bfa72ebc7873d20944bbbcea3c0c41a9', $l$In the early 80s, SuperSlow had people take about 10 seconds to lift a weight
+
+Ken Hutchins built it during a Nautilus-funded study, with 5-10 seconds back down. So do slower reps build more muscle? Not past a point.
+
+A 2015 review found similar growth with reps lasting anywhere from about half a second to 8 seconds. Really slow reps (10+ seconds) looked worse, probably because you have to go way lighter.
+
+Controlling the way down is still useful. Same position every rep, no bouncing out of the bottom. It just won't double your gains because you went from 2 seconds down to 4.
+
+A 3 second down on squats or a long pause on bench in your program is there for technique. Keep it.$l$, $j${"key":"methods-eccentric-tempo","refs":[{"label":"Schoenfeld, Ogborn & Krieger 2015, Sports Med","url":"https://pubmed.ncbi.nlm.nih.gov/25601394/"},{"label":"Kravitz, University of New Mexico: SuperSlow training","url":"https://www.unm.edu/~lkravitz/Article%20folder/superslow.html"}]}$j$::jsonb),
+  ('methods-cheat-reps', '03b596bb104ac8fa6d3113d264f61527', $l$Arnold used cheat reps on curls. Just not the way most people do 🤣
+
+Strict until he couldn't get another rep, then just enough body english to squeeze out a couple more.
+
+Fine when
+• It's the last 1-3 reps of curls, laterals or rows
+• You've already hit failure with clean reps
+• The lowering stays strict
+
+A waste when
+• You're swinging from rep 1. The weight's just too heavy
+• It's squat, bench or deadlift. There's no cheat rep there, just a bad rep
+
+The cheat should help the muscle finish the set, not do the set for it.$l$, $j${"key":"methods-cheat-reps","refs":[{"label":"Bodybuilding.com: Arnold Schwarzenegger's secrets for building arms","url":"https://amp.bodybuilding.com/content/arnold_arm_secrets.html"},{"label":"Schwarzenegger.com: The science of advanced bodybuilding exercise prescription","url":"https://www.schwarzenegger.com/fitness/post/the-science-of-advanced-bodybuilding-exercise-prescription"}]}$j$::jsonb),
   ('methods-unilateral-work', '0e05e40e536882886ce9de1820754ad0', $l$One side always feels weaker? Here's where single side work fits
 
 On a barbell the stronger side can quietly take more of the load. Split squats, single leg RDLs and one arm rows make each side do its own work.
@@ -528,6 +654,30 @@ Jumps get smaller and reps drop as the weight climbs.
 Common mistakes: sets of 8-10 past 70%, and going straight from your heaviest warmup into the top set. Give that one a real rest.
 
 Program lists specific warmups? Use those 🫡$l$, $j${"key":"methods-warmup-sets"}$j$::jsonb),
+  ('sleep-extension-basketball', '05dacce50b8dff86b11df0d307641c3a', $l$Stanford asked its basketball team to spend 10 hours a night in bed 👀
+
+11 players kept their normal sleep for a few weeks, then aimed for 10+ hours in bed for 5-7 weeks. They ended up sleeping almost 2 hours more a night.
+
+Free throws went from 79% to 88%. Threes went from 68% to 77%. Sprints got faster too.
+
+Big caveats. 11 guys, one team, no control group. Promising, not proof.
+
+LeBron has talked about his trainer asking if he got his 8 or 9 hours. You probably don't need 10. But if you're living on 6, more sleep is the cheapest recovery tool there is.
+
+Easiest start: same wake up time, bedtime 20-30 minutes earlier.$l$, $j${"key":"sleep-extension-basketball","refs":[{"label":"Mah et al. 2011, Sleep","url":"https://pubmed.ncbi.nlm.nih.gov/21731144/"},{"label":"The Tim Ferriss Show #349 transcript: LeBron James and Mike Mancias (2018)","url":"https://tim.blog/2018/11/30/the-tim-ferriss-show-transcripts-lebron-james-and-mike-mancias/"}]}$j$::jsonb),
+  ('self-talk-what-helps', '92870a9db5bb8449057c2d4d14e63381', $l$Muhammad Ali called himself the greatest before he won the heavyweight title
+
+He even put out an album called I Am the Greatest in 1963. Months later he beat Sonny Liston as an 8 to 1 underdog.
+
+Research on self-talk is less dramatic, but it's real. A 2011 review of 32 studies found it improved performance by a moderate amount, most on precise skills and things people were still learning.
+
+Two kinds
+• Instructional: chest up, push the floor
+• Motivational: let's go, you got this
+
+People who practiced their self-talk beforehand got more out of it. Pick one short phrase and use it on every top set.
+
+What's yours? 👇$l$, $j${"key":"self-talk-what-helps","refs":[{"label":"Hatzigeorgiadis et al. 2011, Perspect Psychol Sci","url":"https://pubmed.ncbi.nlm.nih.gov/26167788/"},{"label":"Andscape: Muhammad Ali's I Am the Greatest album (1963)","url":"https://andscape.com/features/muhammad-ali-i-am-the-greatest-album/"},{"label":"NBC News: Fifty years ago, Cassius Clay shook the world (Liston fight, 1964)","url":"https://www.nbcnews.com/news/photo/fifty-years-ago-cassius-clay-shook-world-n38071"}]}$j$::jsonb),
   ('deload-what-it-does', '3e7d67ad051aefa7c8f37be5096724f2', $l$A deload doesn't make you stronger. It lets you show what you built
 
 Hard training builds fitness and fatigue. Fatigue fades faster when you back off, so a lighter week lets performance come back without losing much fitness 📊
@@ -546,6 +696,16 @@ Tiny study, 50+ years old, so don't trust the exact numbers. But a 2000 study fo
 The takeaway isn't go find sugar pills. Belief changes how hard you push.
 
 Reps you've already hit are how you build that belief for real.$l$, $j${"key":"placebo-fake-steroids"}$j$::jsonb),
+  ('process-vs-outcome-goals', '0e8827887f354026edc98e02e72c8ab3', $l$Nick Saban built 7 national titles on one idea: forget the scoreboard
+
+He called it the Process. Do this rep, this play, this day right.
+
+Research backs him up. A 2022 review of 27 studies in sport found process goals had the biggest effect on performance. Outcome goals barely had any.
+• Outcome: hit a total, win
+• Performance: a 5kg squat PR
+• Process: fully in your control. Pause every first bench rep, hit every session, in bed by 11
+
+Keep the big goal. Write 2-3 process goals under it for this block.$l$, $j${"key":"process-vs-outcome-goals","refs":[{"label":"Williamson et al. 2022, Int Rev Sport Exerc Psychol","url":"https://doi.org/10.1080/1750984X.2022.2116723"},{"label":"AP via KSL: Alabama's Nick Saban retires after 7 national titles (2024)","url":"https://www.ksl.com/article/50841236/alabamas-nick-saban-retires-after-7-national-titles-most-in-major-college-football-history"},{"label":"FootballScoop: Nick Saban on where the Process began","url":"https://footballscoop.com/news/nick-saban-breaks-process-really-belief-began"}]}$j$::jsonb),
   ('caffeine-for-lifting', 'e3c5925be0cd1011a5d1c957b4f547c4', $l$Caffeine is one of the few supplements with real evidence for lifting
 
 A 2018 review found a small boost to 1RM strength and jump power. A 2019 umbrella review of 21 reviews backed it for strength, endurance and power.
@@ -560,6 +720,18 @@ What the ISSN position stand says
 Late caffeine can wreck sleep. Heart issues or pregnant? Ask your doctor.
 
 Never try a new dose for the first time on meet day.$l$, $j${"key":"caffeine-for-lifting"}$j$::jsonb),
+  ('meet-day-pre-lift-routine', '80fc4fa9bdfbd226b3059acab5759b96', $l$Rafael Nadal lined up his water bottles the same way every match. Not superstition
+
+"It's a way of placing myself in a match," he wrote, "ordering my surroundings to match the order I seek in my head."
+
+That's what a routine does under pressure. Pressure makes you consciously control movements that normally run on autopilot, and thinking your way through a squat you've done 1000 times rarely helps. A routine gives your attention a job.
+
+A 2021 review found pre-performance routines improved performance in experiments, including under pressure.
+
+Build yours in training
+• Same steps every time. Chalk, walk up, hands, breath
+• One cue, not five
+• Short. Most feds give you about a minute to start the attempt$l$, $j${"key":"meet-day-pre-lift-routine","refs":[{"label":"Rupprecht, Tran & Gröpel 2021, Int Rev Sport Exerc Psychol","url":"https://doi.org/10.1080/1750984X.2021.1944271"},{"label":"Nadal & Carlin, Rafa (2011), as quoted in The National","url":"https://www.thenationalnews.com/sport/superstition-or-habits-falling-in-place-if-rafael-nadal-breaks-the-curse-of-the-ninth-1.652911"}]}$j$::jsonb),
   ('life-stress-and-gains', 'a769c3d9e86039134f9a17068d410fdb', $l$Exams, work chaos, a breakup. Your training notices
 
 A 2008 study followed 135 students through 12 weeks of lifting. The ones reporting less life stress gained more on squat and bench.
@@ -569,6 +741,15 @@ That's a correlation, not proof. Stressed people might also sleep less or miss m
 Think of recovery as one budget that the gym and life both draw from.
 
 In a rough week, showing up still counts. And tell me. We can adjust the week instead of you grinding through it.$l$, $j${"key":"life-stress-and-gains"}$j$::jsonb),
+  ('imagery-and-strength', 'd60184132bcd08ac0cf150ed1967a343', $l$Michael Phelps played a perfect race in his head every night and morning
+
+His coach Bob Bowman called it watching the videotape. In the 2008 Olympic 200m butterfly final his goggles filled with water. He counted his strokes and still won gold in world record time.
+
+Can picturing a lift make you stronger? Kinda. A 2018 review found imagery alone moderately improved max strength compared to doing nothing. Real training still beat it.
+
+Where it fits for us is rehearsing meet day. The walkout, the commands, your setup, the grind if the rep slows down.
+
+Same speed as the real lift. Picture the real place. Include the hard part, not just the lockout.$l$, $j${"key":"imagery-and-strength","refs":[{"label":"Paravlic et al. 2018, Sports Med","url":"https://link.springer.com/article/10.1007/s40279-018-0874-8"},{"label":"Duhigg, The Power of Habit (2012), Random House (Bowman's \"watch the videotape\")"},{"label":"China Daily / AP: Phelps on swimming the 200m fly final with water-filled goggles (2008)","url":"https://language.chinadaily.com.cn/news/2008-08/15/content_6938062.htm"}]}$j$::jsonb),
   ('training-log-review', '8dd04b9ebe19326508035a0ba12473e5', $l$Logging your sets is half of it. Reading them back is the other half 📊
 
 A 2016 review of 138 studies found tracking progress helped people reach their goals, more so when it was written down.

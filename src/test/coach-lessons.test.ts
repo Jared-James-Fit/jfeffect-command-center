@@ -102,7 +102,7 @@ describe("the lesson library", () => {
   it("reads like the coach's own rewrite: sentence case, studies by year not author, refs kept for him", () => {
     const second = lessonRows(rewrite);
     for (const { body, data } of second) {
-      expect(body.trimStart()[0], data.key).toMatch(/[A-Z0-9]/);
+      expect(body.trimStart().replace(/^"/, "")[0], data.key).toMatch(/[A-Z0-9]/);
       expect(body, data.key).not.toMatch(/& co\b/);
     }
     // a lesson that names a study or an athlete still lists where it came from
