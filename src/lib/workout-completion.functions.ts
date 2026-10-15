@@ -947,10 +947,11 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
             review_updated_by: userId,
           })
           .eq("id", existing.id)
-          .select("id")
+          .select("id, coach_message_id" as "id")
           .single();
         if (error) throw error;
-        return { id: row.id, edited: true };
+        // a note or pain went to the coach in Messages (DB trigger): the app pushes it
+        return { id: row.id, edited: true, coachMessageId: ((row as any).coach_message_id as string | null) ?? null };
       }
       const { data: row, error } = await writer
         .from("pl_workout_feedback")
@@ -960,10 +961,10 @@ export const submitOrEditReview = createServerFn({ method: "POST" })
           review_edit_count: 0,
           review_updated_by: userId,
         })
-        .select("id")
+        .select("id, coach_message_id" as "id")
         .single();
       if (error) throw error;
-      return { id: row.id, edited: false };
+      return { id: row.id, edited: false, coachMessageId: ((row as any).coach_message_id as string | null) ?? null };
     }
 
     // member

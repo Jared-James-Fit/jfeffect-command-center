@@ -54,6 +54,8 @@ import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/d
 import { ScheduleButton } from "@/components/messages/schedule-button";
 import { renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
 import { CommunityPostChatCard, type PostCardAttachment } from "@/components/community/post-chat-card";
+import { WorkoutNoteCard } from "@/components/messages/workout-note-card";
+import type { WorkoutNoteCardAttachment } from "@/lib/workout-notes";
 import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
@@ -466,6 +468,10 @@ function AttachmentView({
   clientId: string;
   onUseReply?: (text: string) => void;
 }) {
+  // what an athlete told their coach in a workout (pain, a review note, an exercise note)
+  if (att.kind === "workout_note" && message) {
+    return <WorkoutNoteCard att={att as unknown as WorkoutNoteCardAttachment} messageId={message.id} role={role === "client" ? "client" : "admin"} clientId={clientId} />;
+  }
   if (att.kind === "community_post" && att.post_id) {
     return <CommunityPostChatCard att={att as PostCardAttachment} mine={mine} staff={role !== "client"} />;
   }
@@ -2193,8 +2199,8 @@ export function MessageThread({
                     )}
                   </div>
                 ) : (
-                  // A session request's card says it all; its text is for inbox previews.
-                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request") && renderBodyWithMeet(m.body, mine)
+                  // A session request's (or workout note's) card says it all; its text is for inbox previews.
+                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "workout_note") && renderBodyWithMeet(m.body, mine)
                 )}
                 {!isDeleted && !isEditing && m.attachments?.length > 0 && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>

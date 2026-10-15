@@ -57,6 +57,8 @@ import {
 import { WorkoutEmptyCard } from "@/components/workout-empty-state";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useServiceTier } from "@/lib/service-tier";
+import { pushWorkoutNote } from "@/lib/workout-notes";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
 import { isMainLiftFamily, resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
@@ -4747,6 +4749,11 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
   useEffect(() => { setDraft(existingNote?.content ?? ""); }, [existingNote?.id, open]);
   const adapter = useOptionalAdapter();
   const qc = useQueryClient();
+  // A coaching client's note goes to their coach in Messages (a member has no coach; a coach in
+  // "View as client" isn't the athlete talking, so nothing is sent then).
+  const { isSelfServe } = useServiceTier();
+  const { isImpersonating } = useClientImpersonation();
+  const toCoach = !isSelfServe && !isImpersonating;
 
   // Per-exercise note history. Lazy: only fetched when the sheet is open,
   // keyed by canonical exercise identity, and cached so reopening is instant.
@@ -4792,7 +4799,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
         <div className="px-5 py-4 space-y-4 pb-32">
           <div>
             <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your note</label>
+              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{toCoach ? "Note for your coach" : "Your note"}</label>
               {existingNote && (
                 <span className="text-[10px] text-muted-foreground">
                   Last saved {new Date(existingNote.updated_at).toLocaleString()}
@@ -4811,7 +4818,11 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
                 className="mt-1"
               />
             )}
-            {existingNote && (
+            {toCoach ? (
+              <p className="mt-1 text-[11px] text-muted-foreground" data-exercise-note-to-coach>
+                Goes to your coach in Messages.{existingNote ? " Edit it anytime, they see the change." : ""}
+              </p>
+            ) : existingNote && (
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Edit your note anytime — tap above to change it, then tap Save Note.
               </p>
@@ -4850,7 +4861,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
             size="lg"
             loadingLabel="Saving…"
             successLabel={existingNote ? "Updated" : "Saved"}
-            successToast={existingNote ? "Note updated" : "Note saved"}
+            successToast={existingNote ? "Note updated" : toCoach ? "Sent to your coach" : "Note saved"}
             disabled={!clientId || (draft.trim() === (existingNote?.content ?? "").trim())}
             onAction={async () => {
               if (!clientId) return;
@@ -4885,6 +4896,13 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
               };
               await saveExerciseNoteWithRetry(doSave);
               qc.invalidateQueries({ queryKey: ["exercise-note-history", clientId] });
+              // the database put it in the coach's Messages: push them (the same card again is never pushed twice)
+              if (toCoach) {
+                void (async () => {
+                  const { data } = await sb.from("pl_exercise_notes").select("coach_message_id").eq("client_id", clientId).eq("day_id", dayId).eq("row_id", rowId).maybeSingle();
+                  await pushWorkoutNote(data?.coach_message_id ?? null);
+                })().catch(() => {});
+              }
               onSaved();
             }}
           >

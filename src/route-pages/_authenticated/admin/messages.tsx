@@ -19,7 +19,8 @@ import {
   setConversationStatus, setConversationPriority, PRIORITIES,
   markUnread, markRead, setConversationWorkflow, type WorkflowStatus,
 } from "@/lib/messages";
-import { ClipboardCheck, ClipboardList, Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, Video } from "lucide-react";
+import { ClipboardCheck, ClipboardList, Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, Video, NotebookPen } from "lucide-react";
+import { ClientNotesSheet } from "@/components/messages/client-notes-log";
 import { SwipeableRow } from "@/components/ui/swipeable-row";
 import { toast } from "sonner";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
@@ -139,6 +140,8 @@ export function MessagesInbox({
   const [filter, setFilter] = useState<Filter>("Inbox");
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
   const [smsOpen, setSmsOpen] = useState(false);
+  // the selected client's workout notes log (pain, review and exercise notes)
+  const [notesOpen, setNotesOpen] = useState(false);
   const [ownTab, setTab] = useState<"chats" | "groups">("chats");
   // The Communication page drives 1:1 vs Groups from its own top tabs.
   const tab = view ?? ownTab;
@@ -1003,6 +1006,18 @@ export function MessagesInbox({
                   <MessageSquare className="h-4 w-4" />
                 </Button>
               ) : null}
+              {/* everything they've told you in workouts: pain, review notes, exercise notes */}
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
+                title={`${selected.full_name ?? "Client"}'s workout notes`}
+                aria-label="Workout notes"
+                onClick={() => setNotesOpen(true)}
+                data-thread-notes
+              >
+                <NotebookPen className="h-4 w-4" />
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-7 shrink-0 sm:h-9 sm:w-9">
@@ -1055,6 +1070,7 @@ export function MessagesInbox({
               peerName={selected.full_name}
               peerAvatarPath={selected.profile_picture_url}
             />
+            <ClientNotesSheet clientId={notesOpen ? selected.id : null} name={selected.full_name ?? null} onClose={() => setNotesOpen(false)} />
             <SendSmsDialog
               open={smsOpen}
               onOpenChange={setSmsOpen}

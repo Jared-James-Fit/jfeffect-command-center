@@ -25,7 +25,6 @@ import { isPulsePost, storiesNeedMore, type CommunityAuthor, type CommunityPost,
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
-import { NotificationBell } from "@/components/notification-bell";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
 import { CaughtUp, FeedItem, NewPostsPill, PostSkeleton, useNewPosts } from "@/components/community/feed-motion";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
@@ -76,12 +75,10 @@ export const swipeTipKeys = Array.from({ length: SWIPE_TIP_VISITS }, (_, i) => `
 let swipeTipShownThisVisit = false;
 
 export function CommunityScreen({
-  canShare = false, previewOnly = false, bell = false, backTo, hideTabs = false,
+  canShare = false, previewOnly = false, backTo, hideTabs = false,
 }: {
   canShare?: boolean;
   previewOnly?: boolean;
-  /** The page has no header of its own: put the notifications bell in the top row. */
-  bell?: boolean;
   /** A small back arrow at the start of the top row (instead of a page header). */
   backTo?: string;
   /** Just the feed, no Feed / Crew / You row (the coach's Community page has its own tabs). */
@@ -371,7 +368,6 @@ export function CommunityScreen({
               {activityNew && <span className="absolute right-[5px] top-[5px] h-2 w-2 rounded-full bg-primary ring-2 ring-background" data-activity-dot />}
             </button>
           )}
-          {bell && <NotificationBell />}
           {/* small phones: just the "+", so Feed · Rankings keep their room */}
           {canShare && <ShareWorkoutButton unit={unit} label="Post" previewOnly={previewOnly} className="max-[389px]:w-9 max-[389px]:px-0" labelClassName="max-[389px]:sr-only" />}
         </div>
