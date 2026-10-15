@@ -16,6 +16,8 @@ import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
+/** One turn of the cube from one person's story to the next. */
+const TURN_MS = 320;
 
 /**
  * Crew Stories: the crew's last day, Instagram-style, at the top of the
@@ -220,6 +222,42 @@ function StoryViewer({
   const closing = useRef(false);
   const lastMove = useRef<{ y: number; t: number } | null>(null);
   const velocity = useRef(0);
+  // Swipe sideways for the next (or the last) person, Instagram's cube: their story and yours
+  // follow the finger round the corner; let go past a quarter (or flick) and it turns, else it
+  // settles back. A story that runs out turns the same way. p: -1 = the next person, 1 = the last.
+  const [swipe, setSwipe] = useState<{ p: number; settle: boolean } | null>(null);
+  // the turn in progress: who it lands on (an automatic one can skip people already watched)
+  const [turn, setTurn] = useState<{ to: number; ii: number; dir: 1 | -1 } | null>(null);
+  const swiping = useRef(false);
+  const turning = useRef(false);
+  const stage = useRef<HTMLDivElement | null>(null);
+  const lastX = useRef<{ x: number; t: number } | null>(null);
+  const vx = useRef(0);
+  const nextPerson = gi + 1 < groups.length ? gi + 1 : null;
+  const prevPerson = gi > 0 ? gi - 1 : null;
+  const reduced = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const land = (j: number, at: number) => {
+    setEnd(null);
+    setGi(j);
+    setIi(at);
+  };
+  /** Turn the cube to person j (from wherever a finger left it), then show them from frame `at`. */
+  const turnTo = (j: number, at: number, dir: 1 | -1) => {
+    if (turning.current) return;
+    if (reduced()) return land(j, at);
+    turning.current = true;
+    setPaused(true);
+    setTurn({ to: j, ii: at, dir });
+    setSwipe((sw) => ({ p: sw?.p ?? 0, settle: false }));
+    requestAnimationFrame(() => requestAnimationFrame(() => setSwipe({ p: dir === 1 ? -1 : 1, settle: true })));
+    window.setTimeout(() => {
+      land(j, at);
+      setSwipe(null);
+      setTurn(null);
+      setPaused(false);
+      turning.current = false;
+    }, TURN_MS);
+  };
   const close = () => {
     if (closing.current) return;
     closing.current = true;
@@ -238,8 +276,7 @@ function StoryViewer({
     if (j >= 0) {
       const items = groups[j].items;
       const at = items.findIndex((p) => fresh(p) && !p.seen);
-      setGi(j);
-      setIi(at >= 0 ? at : Math.max(0, items.findIndex(fresh)));
+      turnTo(j, at >= 0 ? at : Math.max(0, items.findIndex(fresh)), 1);
     } else {
       setPaused(false);
       setEnd(storyEnd(groups, posts, watched.current));
@@ -252,10 +289,8 @@ function StoryViewer({
   };
   const prev = () => {
     if (ii > 0) setIi(ii - 1);
-    else if (gi > 0) {
-      setGi(gi - 1);
-      setIi(frames(groups[gi - 1]) - 1);
-    } else setProgress(0);
+    else if (gi > 0) turnTo(gi - 1, frames(groups[gi - 1]) - 1, -1);
+    else setProgress(0);
   };
 
   // count it seen the moment it shows (never as the coach previewing a client)
@@ -299,23 +334,39 @@ function StoryViewer({
       (document.activeElement as HTMLElement | null)?.blur?.();
       return;
     }
+    if (turning.current) return;
     press.current = { x: e.clientX, y: e.clientY, t: Date.now() };
     lastMove.current = { y: e.clientY, t: performance.now() };
+    lastX.current = { x: e.clientX, t: performance.now() };
     velocity.current = 0;
+    vx.current = 0;
     holdTimer.current = window.setTimeout(() => setPaused(true), 220);
   };
   const onMove = (e: React.PointerEvent) => {
     const p = press.current;
-    if (!p || closing.current) return;
+    if (!p || closing.current || turning.current) return;
     const dy = e.clientY - p.y;
-    if (!dragging.current) {
-      // a downward drag (not a tap, not sideways) picks the story up
-      if (dy < 12 || dy < Math.abs(e.clientX - p.x) * 1.2) return;
-      dragging.current = true;
+    const dx = e.clientX - p.x;
+    if (!dragging.current && !swiping.current) {
+      // sideways turns to another person; a downward drag picks the story up; anything less is a tap
+      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) swiping.current = true;
+      else if (dy >= 12 && dy >= Math.abs(dx) * 1.2) dragging.current = true;
+      else return;
       window.clearTimeout(holdTimer.current);
       setPaused(true);
     }
     const now = performance.now();
+    if (swiping.current) {
+      const lx = lastX.current;
+      if (lx && now > lx.t) vx.current = 0.7 * ((e.clientX - lx.x) / (now - lx.t)) + 0.3 * vx.current;
+      lastX.current = { x: e.clientX, t: now };
+      const w = stage.current?.clientWidth || window.innerWidth;
+      let q = dx / w;
+      // nobody that way: it gives a little, then holds
+      if ((q < 0 && nextPerson == null) || (q > 0 && prevPerson == null)) q = Math.sign(q) * Math.min(0.12, Math.abs(q) * 0.3);
+      setSwipe({ p: Math.max(-1, Math.min(1, q)), settle: false });
+      return;
+    }
     const last = lastMove.current;
     if (last && now > last.t) velocity.current = 0.7 * ((e.clientY - last.y) / (now - last.t)) + 0.3 * velocity.current;
     lastMove.current = { y: e.clientY, t: now };
@@ -330,6 +381,25 @@ function StoryViewer({
     window.clearTimeout(holdTimer.current);
     const p = press.current;
     press.current = null;
+    if (swiping.current) {
+      swiping.current = false;
+      const q = swipe?.p ?? 0;
+      const v = vx.current;
+      const toNext = q < 0 && (q < -0.25 || (v < -0.4 && q < -0.03));
+      const toPrev = q > 0 && (q > 0.25 || (v > 0.4 && q > 0.03));
+      if (toNext && nextPerson != null) return turnTo(nextPerson, firstUnseen(groups[nextPerson]), 1);
+      if (toPrev && prevPerson != null) return turnTo(prevPerson, firstUnseen(groups[prevPerson]), -1);
+      setPaused(false);
+      // past the last person: the end card (what's next, who saw yours)
+      if (toNext) {
+        setSwipe(null);
+        setEnd(storyEnd(groups, posts, watched.current));
+        return;
+      }
+      setSwipe({ p: 0, settle: true });
+      window.setTimeout(() => setSwipe((sw) => (sw && sw.p === 0 ? null : sw)), TURN_MS);
+      return;
+    }
     if (dragging.current) {
       dragging.current = false;
       const dy = p ? e.clientY - p.y : 0;
@@ -362,6 +432,17 @@ function StoryViewer({
       }
     : undefined;
   const who = group.author;
+  // the cube: this story on the front, the next person's on the right side, the last one's on the left
+  const sp = swipe?.p ?? 0;
+  const turnEase = swipe?.settle ? `transform ${TURN_MS}ms cubic-bezier(0.25, 0.8, 0.25, 1)` : "none";
+  const face = (offset: number): React.CSSProperties => ({
+    transform: `translate3d(${(sp + offset) * 100}%, 0, 0) rotateY(${(sp + offset) * 90}deg)`,
+    transformOrigin: sp + offset < 0 ? "100% 50%" : "0% 50%",
+    transition: turnEase,
+    backfaceVisibility: "hidden",
+  });
+  const nextFace = turn?.dir === 1 ? { j: turn.to, at: turn.ii } : nextPerson != null ? { j: nextPerson, at: firstUnseen(groups[nextPerson]) } : null;
+  const prevFace = turn?.dir === -1 ? { j: turn.to, at: turn.ii } : prevPerson != null ? { j: prevPerson, at: firstUnseen(groups[prevPerson]) } : null;
 
   return (
     <Dialog open onOpenChange={(o) => !o && close()}>
@@ -377,7 +458,19 @@ function StoryViewer({
           }
         }}
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black will-change-transform sm:rounded-[28px]" style={lifted} data-story-card>
+        <div ref={stage} className={cn("relative flex min-h-0 flex-1 flex-col sm:rounded-[28px]", swipe && "bg-black")} style={{ perspective: "1100px" }} data-story-stage>
+        {/* the people either side, ready (their pictures load before you get there) */}
+        {!end && nextFace && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col" style={{ ...face(1), visibility: swipe && sp < 0 ? "visible" : "hidden" }} aria-hidden data-story-face="next">
+            <StoryPeek group={groups[nextFace.j]} at={nextFace.at} unit={unit} />
+          </div>
+        )}
+        {!end && prevFace && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col" style={{ ...face(-1), visibility: swipe && sp > 0 ? "visible" : "hidden" }} aria-hidden data-story-face="prev">
+            <StoryPeek group={groups[prevFace.j]} at={prevFace.at} unit={unit} />
+          </div>
+        )}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black will-change-transform sm:rounded-[28px]" style={swipe ? face(0) : lifted} data-story-card>
         {end ? (
           <StoryEndCard
             end={end}
@@ -393,7 +486,7 @@ function StoryViewer({
         ) : (
         <>
         <DialogTitle className="sr-only">{group.mine ? "Your story" : `${group.author.name}'s story`}</DialogTitle>
-        <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe up for the post, swipe down to close. Reply or send a quick reaction at the bottom.</DialogDescription>
+        <DialogDescription className="sr-only">Tap the right side for the next moment, the left to go back, hold to pause, swipe left or right for the next or last person, swipe up for the post, swipe down to close. Reply or send a quick reaction at the bottom.</DialogDescription>
         <div
           className="relative flex min-h-0 flex-1 select-none flex-col touch-none"
           onPointerDown={onDown}
@@ -402,7 +495,11 @@ function StoryViewer({
           onPointerCancel={() => {
             window.clearTimeout(holdTimer.current);
             press.current = null;
-            if (dragging.current) {
+            if (swiping.current) {
+              swiping.current = false;
+              setSwipe(null);
+              setPaused(false);
+            } else if (dragging.current) {
               dragging.current = false;
               springBack();
             } else setPaused(false);
@@ -461,8 +558,34 @@ function StoryViewer({
         </>
         )}
         </div>
+        </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Another person's story as it'll look when the cube turns to them: their frame and their header. */
+function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: number; unit: "kg" | "lb" }) {
+  const post = group.items[at] ?? group.items[0];
+  if (!post) return null;
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-black sm:rounded-[28px]">
+      <StoryFrame post={post} unit={unit} />
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6" style={{ paddingTop: "max(env(safe-area-inset-top), 0.6rem)" }}>
+        <div className="flex gap-1">
+          {group.items.map((it, i) => (
+            <span key={it.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/30">
+              <span className="block h-full bg-white" style={{ width: i < at ? "100%" : "0%" }} />
+            </span>
+          ))}
+        </div>
+        <div className="mt-2.5 flex h-10 items-center gap-2">
+          <UserAvatar src={group.author.avatar_url} name={group.author.name} size={32} expandable={false} />
+          <span className="truncate text-[14px] font-bold">{group.mine ? "Your story" : group.author.name.split(" ")[0]}</span>
+          <span className="shrink-0 text-[12px] text-white/70">{postTimeLabel(post.created_at)}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
