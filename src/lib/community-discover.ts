@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { CommunityAuthor } from "@/lib/community";
+import { share } from "@/platform/share";
 
 /**
  * Finding athletes in the Crew: search by name or @username, and suggestions
@@ -43,13 +44,23 @@ export type SuggestionReason =
   | { kind: "active" }
   | { kind: "crew" };
 
+/** People you follow who also follow them: how many, and up to 3 of their faces (newest first). */
+export type Mutuals = { count: number; faces: { user_id: string; name: string; avatar_url: string | null }[] };
+
 export type DiscoverPerson = CommunityAuthor & {
   username?: string | null;
   is_private?: boolean;
   disciplines?: string[];
   follows_you?: boolean;
+  mutuals?: Mutuals;
   reason?: SuggestionReason;
 };
+
+/** "Followed by Nicole", "Followed by Nicole and Vicky", "Followed by Nicole, Vicky + 3 more", or null with no mutuals. */
+export function mutualsLabel(m: Mutuals | null | undefined): string | null {
+  if (!m?.count) return null;
+  return followedByLabel({ count: m.count, names: m.faces.map((f) => f.name) });
+}
 
 /** The one line under a suggested person: why they're here. */
 export function reasonLabel(r: SuggestionReason | undefined): string {
@@ -92,6 +103,7 @@ export function isStrongReason(r: SuggestionReason | undefined): boolean {
 
 export const discoverKeys = {
   suggestions: (context: string | null) => ["community-suggestions", context ?? "all"] as const,
+  followBack: ["community-follow-back"] as const,
   search: (q: string) => ["community-people-search", q] as const,
   gyms: (q: string) => ["community-gym-names", q] as const,
 };
@@ -130,22 +142,71 @@ export function usePeopleSearch(q: string) {
   });
 }
 
-/** "Not for me": that person stops being suggested (they're still findable by search). */
+/** Everyone who follows you that you don't follow back, newest first (its own section in Find athletes). */
+export function useFollowBack(enabled = true) {
+  return useQuery({
+    queryKey: discoverKeys.followBack,
+    enabled,
+    staleTime: 60_000,
+    queryFn: async (): Promise<DiscoverPerson[]> => {
+      const { data, error } = await db.rpc("community_follow_back", { _limit: 30 });
+      if (error) throw error;
+      return (data ?? []) as DiscoverPerson[];
+    },
+  });
+}
+
+/** "Not for me": that person stops being suggested and leaves Follow back (they're still findable by search). */
 export function useHideSuggestion() {
   const qc = useQueryClient();
+  const lists = [["community-suggestions"], discoverKeys.followBack] as const;
   return useMutation({
     mutationFn: async (userId: string) => {
       const { error } = await db.rpc("community_hide_suggestion", { _user_id: userId, _hidden: true });
       if (error) throw error;
     },
     onMutate: async (userId) => {
-      await qc.cancelQueries({ queryKey: ["community-suggestions"] });
-      const before = qc.getQueriesData<DiscoverPerson[]>({ queryKey: ["community-suggestions"] });
-      qc.setQueriesData<DiscoverPerson[]>({ queryKey: ["community-suggestions"] }, (old) => old?.filter((p) => p.user_id !== userId));
+      await Promise.all(lists.map((queryKey) => qc.cancelQueries({ queryKey })));
+      const before = lists.flatMap((queryKey) => qc.getQueriesData<DiscoverPerson[]>({ queryKey }));
+      for (const queryKey of lists) qc.setQueriesData<DiscoverPerson[]>({ queryKey }, (old) => old?.filter((p) => p.user_id !== userId));
       return { before };
     },
     onError: (_e, _v, ctx) => ctx?.before.forEach(([key, data]) => qc.setQueryData(key, data)),
   });
+}
+
+/** The feed's "Suggested for you" row: ••• → Hide takes it off the feed for 30 days (every device). Undo passes false. */
+export function useHideFeedSuggestions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (hide: boolean) => {
+      const { data, error } = await db.rpc("community_hide_feed_suggestions", { _hide: hide });
+      if (error) throw error;
+      return (data ?? null) as string | null;
+    },
+    onMutate: async (hide) => {
+      await qc.cancelQueries({ queryKey: ["community-my-settings"] });
+      const before = qc.getQueryData<MyCommunitySettings>(["community-my-settings"]);
+      const until = hide ? new Date(Date.now() + 30 * 86_400_000).toISOString() : null;
+      if (before) qc.setQueryData<MyCommunitySettings>(["community-my-settings"], { ...before, feed_suggestions_hidden_until: until });
+      return { before };
+    },
+    onError: (_e, _v, ctx) => ctx?.before && qc.setQueryData(["community-my-settings"], ctx.before),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["community-my-settings"] }),
+  });
+}
+
+/** Is the feed's suggestion row hidden right now? */
+export function feedSuggestionsHidden(s: MyCommunitySettings | undefined, now = Date.now()): boolean {
+  return !!s?.feed_suggestions_hidden_until && Date.parse(s.feed_suggestions_hidden_until) > now;
+}
+
+/** The public membership page (the same link the sales tools share). */
+export const INVITE_URL = "https://jfeffect.com/join";
+
+/** Invite a friend: the phone's share sheet, or the link copied where there isn't one. */
+export function inviteFriends() {
+  return share({ title: "JF Effect", text: "Come train with me on JF Effect 💪", url: INVITE_URL });
 }
 
 export type MyCommunitySettings = {
@@ -155,6 +216,8 @@ export type MyCommunitySettings = {
   username?: string | null;
   disciplines?: string[];
   home_gym?: string | null;
+  /** Set while the feed's "Suggested for you" row is hidden (••• → Hide, 30 days). */
+  feed_suggestions_hidden_until?: string | null;
 };
 
 /** Is this username free (and allowed)? Checked as they type. */

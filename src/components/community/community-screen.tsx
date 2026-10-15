@@ -446,7 +446,7 @@ export function CommunityScreen({
           onFindPeople={() => openDiscover("activity", true)}
         />
       ) : scope.kind === "members" ? (
-        <DiscoverPage onBack={() => setScope({ kind: discoverBack })} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => setScope({ kind: "you" })} autoFocus={discoverFocus} />
+        <DiscoverPage onBack={() => setScope({ kind: discoverBack })} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => setScope({ kind: "you" })} autoFocus={discoverFocus} canInvite={!previewOnly} />
       ) : scope.kind === "you" && user?.id ? (
         <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : scope.kind === "author" ? (
@@ -528,7 +528,7 @@ export function CommunityScreen({
             {canShare && !following && i === Math.min(1, feedPosts.length - 1) && <ShareNudge surface="feed" unit={unit} />}
             {/* people to follow, after the third post: only ones with a real reason (your coach, follows you, mutuals, same gym…) */}
             {!hideTabs && !previewOnly && !following && i === Math.min(2, feedPosts.length - 1) && (
-              <SuggestedAthletes onOpen={openAuthor} strongOnly onSeeAll={() => openDiscover("feed")} />
+              <SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} />
             )}
             </Fragment>
           ))}

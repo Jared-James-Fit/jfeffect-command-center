@@ -46,6 +46,7 @@ const DO_NOT_PERSIST_PREFIXES = [
   "community-follows",
   // Find athletes: who to suggest moves with every follow; searches are throwaway.
   "community-suggestions",
+  "community-follow-back",
   "community-people-search",
   "community-username-check",
   "client-nav-badges",
