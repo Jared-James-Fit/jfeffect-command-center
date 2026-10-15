@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { disciplineLabel, followedByLabel, isStrongReason, isValidUsername, reasonLabel, searchTerm } from "@/lib/community-discover";
+import { disciplineLabel, feedSuggestionsHidden, followedByLabel, isStrongReason, isValidUsername, mutualsLabel, reasonLabel, searchTerm } from "@/lib/community-discover";
 import { shouldPersistQueryKey } from "@/lib/query-persister";
 
 const read = (f: string) => readFileSync(f, "utf8");
 const sql = read("supabase/migrations/20261203090000_crew_discover.sql");
+const round2 = read("supabase/migrations/20261205090000_crew_discover_mutuals_follow_back.sql");
 
 describe("why someone is suggested", () => {
   it("says it in a few words", () => {
@@ -136,8 +137,8 @@ describe("follow from anywhere", () => {
   });
 
   it("suggests in the feed only for real reasons, and similar athletes right after you follow someone", () => {
-    expect(read("src/components/community/community-screen.tsx")).toContain('<SuggestedAthletes onOpen={openAuthor} strongOnly onSeeAll={() => openDiscover("feed")} />');
-    expect(read("src/components/community/suggested-athletes.tsx")).toContain("if (people.length < (strongOnly ? 2 : 1)) return null;");
+    expect(read("src/components/community/community-screen.tsx")).toContain('<SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} />');
+    expect(read("src/components/community/suggested-athletes.tsx")).toContain("if (hiddenFromFeed || people.length < (strongOnly ? 2 : 1)) return null;");
     const profile = read("src/components/community/profile-view.tsx");
     expect(profile).toContain("<SuggestedAthletes context={profile.author.user_id}");
     expect(profile).toContain("if (wasFollowed.current === false && followed) setSimilar(true);");
@@ -153,5 +154,53 @@ describe("follow from anywhere", () => {
     expect(edit).toContain("Suggest my account");
     expect(edit).toContain("Blocked accounts");
     expect(edit).toContain("lazyWithRetry");
+  });
+});
+
+describe("Discover people, round two", () => {
+  it("names mutuals the way Instagram does, and only when there are some", () => {
+    expect(mutualsLabel(undefined)).toBeNull();
+    expect(mutualsLabel({ count: 0, faces: [] })).toBeNull();
+    expect(mutualsLabel({ count: 1, faces: [{ user_id: "j", name: "Jared", avatar_url: null }] })).toBe("Followed by Jared");
+    expect(mutualsLabel({ count: 10, faces: [{ user_id: "a", name: "Alyssa", avatar_url: null }, { user_id: "b", name: "Bri", avatar_url: null }] })).toBe("Followed by Alyssa, Bri + 8 more");
+  });
+
+  it("mutuals are people you follow who follow them: members only, never blocked either way, 3 newest faces", () => {
+    expect(round2).toContain("WHERE f1.follower_id = _viewer AND f2.followee_id = _them");
+    expect(round2).toContain("AND NOT public.chat_has_blocked(_viewer, f2.follower_id)");
+    expect(round2).toContain("AND NOT public.chat_has_blocked(f2.follower_id, _viewer)");
+    expect(round2).toContain("AND public.community_is_member(f2.follower_id)");
+    expect(round2).toContain("ORDER BY m.at DESC LIMIT 3");
+    expect(round2).toContain("'mutuals', public.community_mutuals(_viewer, _user_id))");
+    expect(round2).toContain("REVOKE ALL ON FUNCTION public.community_mutuals(uuid, uuid) FROM PUBLIC, anon, authenticated;");
+    // faces are photos only: initials at 18px read as garbled letters
+    expect(read("src/components/community/discover.tsx")).toContain("const faces = (m?.faces ?? []).filter((f) => !!f.avatar_url);");
+  });
+
+  it("Follow back is everyone who follows you that you don't follow (or asked to), from the same findable set as search", () => {
+    expect(round2).toContain("FROM public.community_findable_people(v_me) p");
+    expect(round2).toContain("JOIN public.community_follows f ON f.follower_id = p.user_id AND f.followee_id = v_me");
+    expect(round2).toContain("NOT EXISTS (SELECT 1 FROM public.community_follow_requests r WHERE r.requester_id = v_me AND r.target_id = p.user_id)");
+    expect(round2).toContain("GRANT EXECUTE ON FUNCTION public.community_follow_back(integer) TO authenticated;");
+    const page = read("src/components/community/discover.tsx");
+    expect(page).toContain("<FollowBackList onOpen={onOpen} />");
+    // nobody shows twice: suggestions skip anyone already in Follow back
+    expect(page).toContain(".filter((p) => !back.has(p.user_id))");
+    expect(shouldPersistQueryKey(["community-follow-back"])).toBe(false);
+  });
+
+  it("Hide on the feed row lasts 30 days on the account (every device), and Find athletes still shows everyone", () => {
+    expect(round2).toContain("now() + interval '30 days'");
+    expect(round2).toContain("AND cp.feed_suggestions_hidden_until > now()))");
+    expect(feedSuggestionsHidden(undefined)).toBe(false);
+    expect(feedSuggestionsHidden({ auto_share_workouts: true, private_views: false, feed_suggestions_hidden_until: new Date(Date.now() + 86_400_000).toISOString() })).toBe(true);
+    expect(feedSuggestionsHidden({ auto_share_workouts: true, private_views: false, feed_suggestions_hidden_until: new Date(Date.now() - 1000).toISOString() })).toBe(false);
+    // the row waits for the setting, so a hidden row never flashes in
+    expect(read("src/components/community/suggested-athletes.tsx")).toContain("settings.data === undefined ? !settings.isError : feedSuggestionsHidden(settings.data)");
+  });
+
+  it("Invite friends shares the public membership link, and never while a coach views as a client", () => {
+    expect(read("src/lib/community-discover.ts")).toContain('export const INVITE_URL = "https://jfeffect.com/join";');
+    expect(read("src/components/community/community-screen.tsx")).toContain("canInvite={!previewOnly}");
   });
 });
