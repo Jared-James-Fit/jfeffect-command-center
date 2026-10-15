@@ -390,7 +390,7 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
     // its own tab now, so Home no longer lights up for it
     expect(shellSrc).not.toContain('(item.to === "/portal" && pathname === "/portal/community")');
     // a tab: no back arrow, no page header
-    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} bell />");
+    expect(page).toContain("<CommunityScreen canShare previewOnly={isImpersonating} />");
     expect(page).not.toContain("PageHeader");
   });
   it("Home's Crew feed: the newest posts as cards, then one that opens the feed; a post opens in full over the feed", () => {

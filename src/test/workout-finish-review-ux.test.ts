@@ -17,7 +17,10 @@ describe("workout finish review UX", () => {
 
   it("waits for parent finalization before claiming the workout is complete", () => {
     expect(review).toContain("await onSaved?.()");
-    expect(review).toContain('toast.success(res?.edited ? "Review updated." : "Workout complete.")');
+    const toast = 'toast.success(res?.edited ? "Review updated." : "Workout complete.", toCoach ?';
+    expect(review).toContain(toast);
+    // the success toast only after the parent finished the workout
+    expect(review.indexOf("await onSaved?.()")).toBeLessThan(review.indexOf(toast));
   });
 
   it("surfaces 100%-logged but unreviewed workouts as amber review-to-finish", () => {

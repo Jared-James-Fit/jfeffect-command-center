@@ -88,7 +88,7 @@ const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-met
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
 const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-file-notes"), "ClientFileNotes");
-const ClientExerciseNotesCard = lazyDefault(() => import("@/components/client-exercise-notes-card"), "ClientExerciseNotesCard");
+const ClientNotesCard = lazyDefault(() => import("@/components/messages/client-notes-log"), "ClientNotesCard");
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
 const ClientAgreementPanel = lazyDefault(() => import("@/components/coaching-agreement/client-agreement-panel"), "ClientAgreementPanel");
@@ -788,7 +788,8 @@ export function ClientProfileWorkspace({
               <AssignedProgramsCard clientId={id} mode="admin" />
               <TrainingPhasesPanel clientId={id} />
               <ImportantDatesPanel clientId={id} />
-              <ClientExerciseNotesCard clientId={id} />
+              {/* pain, review notes and exercise notes they've sent (the same log as Notes in their chat) */}
+              <ClientNotesCard clientId={id} name={form.full_name ?? null} />
               <ClientMaxesPanel clientId={id} />
               <ClientWarmupCard clientId={id} />
             </div>

@@ -31,6 +31,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
+import { useServiceTier } from "@/lib/service-tier";
+import { pushWorkoutNote } from "@/lib/workout-notes";
 import {
   EFFORT_OPTIONS,
   PAIN_AREAS,
@@ -158,6 +160,9 @@ export function WorkoutReviewEditor({
 }: Props) {
   const submit = useServerFn(submitOrEditReview);
   const qc = useQueryClient();
+  // A member has no coach: nothing here says it goes to one (their notes stay theirs).
+  const { isSelfServe } = useServiceTier();
+  const coached = hasCoach && !isSelfServe;
   // Fixed for the whole open → save → close cycle: saving writes the review,
   // which flips `initial.submittedAt` before the sheet has finished closing.
   const [isEdit, setIsEdit] = useState(!!initial?.submittedAt);
@@ -253,7 +258,10 @@ export function WorkoutReviewEditor({
         return;
       }
 
-      toast.success(res?.edited ? "Review updated." : "Workout complete.");
+      // a note or pain went to the coach's Messages (made by the database): tell them, push the coach
+      const toCoach = coached && !actAsClientId && !!res?.coachMessageId;
+      if (toCoach) void pushWorkoutNote(res.coachMessageId);
+      toast.success(res?.edited ? "Review updated." : "Workout complete.", toCoach ? { description: "Your coach has your note in Messages." } : undefined);
       // Review answers feed the Training Readiness ring and tomorrow's load
       // suggestions — refresh both.
       qc.invalidateQueries({ queryKey: ["training-readiness"] });
@@ -301,7 +309,7 @@ export function WorkoutReviewEditor({
               {isEdit ? "Edit your review" : "How'd it go?"}
             </SheetTitle>
             <SheetDescription className="text-xs">
-              {hasCoach ? "4 quick taps. Your coach sees this." : "4 quick taps. Tunes your next session."}
+              {coached ? "4 quick taps. Your coach sees this." : "4 quick taps. Tunes your next session."}
             </SheetDescription>
           </SheetHeader>
         </div>
@@ -452,15 +460,23 @@ export function WorkoutReviewEditor({
           </Row>
 
           {noteOpen ? (
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={pain ? "What happened? Which movement?" : "Anything your coach should know?"}
-              rows={2}
-              maxLength={600}
-              className="resize-none"
-              aria-label="Note"
-            />
+            <div>
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={pain ? "What happened? Which movement?" : coached ? "Anything your coach should know?" : "Anything to remember about today?"}
+                rows={2}
+                maxLength={600}
+                className="resize-none"
+                aria-label="Note"
+              />
+              {/* say where it goes, so nobody wonders if the coach saw it */}
+              {coached && (
+                <p className="mt-1 text-[11px] text-muted-foreground" data-review-to-coach>
+                  {pain ? "This and your pain report go to your coach in Messages." : "Goes to your coach in Messages."}
+                </p>
+              )}
+            </div>
           ) : (
             <button
               type="button"
@@ -468,7 +484,7 @@ export function WorkoutReviewEditor({
               className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
             >
               <Plus className="h-3.5 w-3.5" />
-              Add a note
+              {coached ? "Add a note for your coach" : "Add a note"}
             </button>
           )}
 

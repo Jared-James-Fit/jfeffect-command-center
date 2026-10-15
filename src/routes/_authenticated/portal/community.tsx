@@ -4,8 +4,8 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 
 /**
  * Crew: the raised centre tab (also Home's Crew section, pushes and the
- * post-share toast). A tab, so no back arrow: Feed / Rankings, Members, the
- * bell and + Share on one row, right under the app bar. `#post=<id>` opens a
+ * post-share toast). A tab, so no back arrow: Feed / Rankings, the Activity
+ * heart and + Post on one row, right under the app bar. `#post=<id>` opens a
  * post straight away, `#at=<id>` scrolls to it, `#rankings` opens Rankings.
  */
 export const Route = createFileRoute("/_authenticated/portal/community")({
@@ -15,5 +15,5 @@ export const Route = createFileRoute("/_authenticated/portal/community")({
 
 function PortalCommunity() {
   const { isImpersonating } = useClientImpersonation();
-  return <CommunityScreen canShare previewOnly={isImpersonating} bell />;
+  return <CommunityScreen canShare previewOnly={isImpersonating} />;
 }

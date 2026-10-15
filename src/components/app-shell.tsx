@@ -7,7 +7,6 @@ import {
   ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard, Pin, PinOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NotificationBell } from "@/components/notification-bell";
 import { CommunityNavButton } from "@/components/community/community-entry";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
@@ -1985,8 +1984,10 @@ export function PageHeader({
         <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-black leading-tight tracking-tight md:text-xl xl:text-2xl break-words">{title}</h1>
         {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground xl:text-sm break-words">{subtitle}</p> : null}
       </div>
-      {/* Mobile: back button and the bell/actions share ONE compact nav row so
-          the bell never floats alone in an empty band above the title. */}
+      {/* Mobile: back button and the actions share ONE compact nav row. No
+          notifications bell: what it listed lives where it belongs now (coach
+          chats and workout notes in Messages, likes/comments/follows in Crew
+          Activity). */}
       <div className="order-1 flex items-center justify-between gap-2 md:order-2 md:w-auto md:justify-end">
         {showBack ? (
           <button
@@ -2002,7 +2003,6 @@ export function PageHeader({
         <div className="flex flex-wrap items-center justify-end gap-2">
           {actions}
           <CommunityNavButton />
-          <NotificationBell />
         </div>
       </div>
     </div>

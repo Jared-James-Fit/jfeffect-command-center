@@ -64,6 +64,8 @@ export function deriveInboxWorkflow(input: {
     if (reason === "checkin_submitted" || input.lastInboundKind === "checkin" || k.includes("checkin_submission")) detail = "Check-in submitted";
     else if (reason === "form_submitted" || input.lastInboundKind === "form") detail = "Form submitted";
     else if (reason === "lift_video_uploaded" || input.lastInboundKind === "lift_video" || input.pendingLiftReview) detail = "Lift review";
+    // a note from their workout (pain first: it's what can't wait)
+    else if (k.includes("workout_note")) detail = ((last?.attachments ?? []) as { kind?: string; pain?: unknown }[]).some((x) => x?.kind === "workout_note" && x.pain) ? "Pain flagged" : "Workout note";
   }
 
   const isFormOrCheckin =

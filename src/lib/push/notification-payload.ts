@@ -78,6 +78,8 @@ export function messageAction(attachments: AttachmentLike[] | null | undefined, 
   const atts = (attachments ?? []).filter(Boolean) as Array<{ type?: string | null; kind?: string | null }>;
   const kinds = new Set(atts.map((a) => a.kind).filter(Boolean));
   if (kinds.has("checkin_submission")) return "submitted a check-in";
+  // a note from a workout (DB-made): pain is what the coach must see first
+  if (kinds.has("workout_note")) return atts.some((a) => a.kind === "workout_note" && (a as { pain?: unknown }).pain) ? "flagged pain in a workout" : `sent${you} a workout note`;
   if (kinds.has("checkin_request")) return `sent${you} a check-in`;
   if (kinds.has("form_request")) return `sent${you} a form to fill out`;
   if (kinds.has("signature_request")) return `sent${you} something to sign`;
