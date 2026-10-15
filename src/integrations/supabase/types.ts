@@ -2761,6 +2761,54 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_thread_prefs: {
+        Row: {
+          hidden_at: string | null
+          muted: boolean
+          pinned_at: string | null
+          thread_key: string
+          unread_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          hidden_at?: string | null
+          muted?: boolean
+          pinned_at?: string | null
+          thread_key: string
+          unread_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          hidden_at?: string | null
+          muted?: boolean
+          pinned_at?: string | null
+          thread_key?: string
+          unread_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      chat_user_blocks: {
+        Row: {
+          blocked_user_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          blocked_user_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          blocked_user_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       check_in_links: {
         Row: {
           active: boolean
@@ -3860,11 +3908,13 @@ export type Database = {
           created_at: string
           event_count: number
           google_email: string | null
+          granted_scopes: string | null
           last_checked_at: string | null
           last_error: string | null
           last_sync_hash: string | null
           last_synced_at: string | null
           refresh_token: string
+          show_calendar_ids: string[] | null
           status: string
           token_expires_at: string | null
           updated_at: string
@@ -3877,11 +3927,13 @@ export type Database = {
           created_at?: string
           event_count?: number
           google_email?: string | null
+          granted_scopes?: string | null
           last_checked_at?: string | null
           last_error?: string | null
           last_sync_hash?: string | null
           last_synced_at?: string | null
           refresh_token: string
+          show_calendar_ids?: string[] | null
           status?: string
           token_expires_at?: string | null
           updated_at?: string
@@ -3894,11 +3946,13 @@ export type Database = {
           created_at?: string
           event_count?: number
           google_email?: string | null
+          granted_scopes?: string | null
           last_checked_at?: string | null
           last_error?: string | null
           last_sync_hash?: string | null
           last_synced_at?: string | null
           refresh_token?: string
+          show_calendar_ids?: string[] | null
           status?: string
           token_expires_at?: string | null
           updated_at?: string
@@ -4314,9 +4368,9 @@ export type Database = {
           schedule_locked: boolean
           schedule_notes: string | null
           schedule_updated_at: string | null
+          service_tier: string
           sessions_purchased: number
           sessions_used: number
-          service_tier: string
           sex: string | null
           sex_updated_at: string | null
           sms_opt_out: boolean
@@ -4329,7 +4383,6 @@ export type Database = {
           tiktok: string | null
           timezone: string
           timezone_confirmed_at: string | null
-          weight_unit_confirmed_at: string | null
           training_notes: string | null
           training_schedule_completed: boolean
           training_schedule_last_updated: string | null
@@ -4344,6 +4397,7 @@ export type Database = {
           warmup_protocol_id: string | null
           water_target_locked_by_coach: boolean
           website: string | null
+          weight_unit_confirmed_at: string | null
           workout_scheduling_permission: string
           youtube: string | null
         }
@@ -4504,9 +4558,9 @@ export type Database = {
           schedule_locked?: boolean
           schedule_notes?: string | null
           schedule_updated_at?: string | null
+          service_tier?: string
           sessions_purchased?: number
           sessions_used?: number
-          service_tier?: string
           sex?: string | null
           sex_updated_at?: string | null
           sms_opt_out?: boolean
@@ -4519,7 +4573,6 @@ export type Database = {
           tiktok?: string | null
           timezone?: string
           timezone_confirmed_at?: string | null
-          weight_unit_confirmed_at?: string | null
           training_notes?: string | null
           training_schedule_completed?: boolean
           training_schedule_last_updated?: string | null
@@ -4534,6 +4587,7 @@ export type Database = {
           warmup_protocol_id?: string | null
           water_target_locked_by_coach?: boolean
           website?: string | null
+          weight_unit_confirmed_at?: string | null
           workout_scheduling_permission?: string
           youtube?: string | null
         }
@@ -4694,9 +4748,9 @@ export type Database = {
           schedule_locked?: boolean
           schedule_notes?: string | null
           schedule_updated_at?: string | null
+          service_tier?: string
           sessions_purchased?: number
           sessions_used?: number
-          service_tier?: string
           sex?: string | null
           sex_updated_at?: string | null
           sms_opt_out?: boolean
@@ -4709,7 +4763,6 @@ export type Database = {
           tiktok?: string | null
           timezone?: string
           timezone_confirmed_at?: string | null
-          weight_unit_confirmed_at?: string | null
           training_notes?: string | null
           training_schedule_completed?: boolean
           training_schedule_last_updated?: string | null
@@ -4724,6 +4777,7 @@ export type Database = {
           warmup_protocol_id?: string | null
           water_target_locked_by_coach?: boolean
           website?: string | null
+          weight_unit_confirmed_at?: string | null
           workout_scheduling_permission?: string
           youtube?: string | null
         }
@@ -5938,6 +5992,24 @@ export type Database = {
           },
         ]
       }
+      community_close_friends: {
+        Row: {
+          created_at: string
+          friend_id: string
+          owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          friend_id: string
+          owner_id: string
+        }
+        Update: {
+          created_at?: string
+          friend_id?: string
+          owner_id?: string
+        }
+        Relationships: []
+      }
       community_comment_likes: {
         Row: {
           comment_id: string
@@ -6043,6 +6115,42 @@ export type Database = {
           },
         ]
       }
+      community_follow_requests: {
+        Row: {
+          created_at: string
+          requester_id: string
+          target_id: string
+        }
+        Insert: {
+          created_at?: string
+          requester_id: string
+          target_id: string
+        }
+        Update: {
+          created_at?: string
+          requester_id?: string
+          target_id?: string
+        }
+        Relationships: []
+      }
+      community_follows: {
+        Row: {
+          created_at: string
+          followee_id: string
+          follower_id: string
+        }
+        Insert: {
+          created_at?: string
+          followee_id: string
+          follower_id: string
+        }
+        Update: {
+          created_at?: string
+          followee_id?: string
+          follower_id?: string
+        }
+        Relationships: []
+      }
       community_hints_seen: {
         Row: {
           hint: string
@@ -6061,6 +6169,135 @@ export type Database = {
         }
         Relationships: []
       }
+      community_holidays: {
+        Row: {
+          active: boolean
+          body: string
+          day: number | null
+          easter: boolean
+          image: string | null
+          isodow: number | null
+          key: string
+          month: number | null
+          name: string
+          nth: number | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          body: string
+          day?: number | null
+          easter?: boolean
+          image?: string | null
+          isodow?: number | null
+          key: string
+          month?: number | null
+          name: string
+          nth?: number | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          body?: string
+          day?: number | null
+          easter?: boolean
+          image?: string | null
+          isodow?: number | null
+          key?: string
+          month?: number | null
+          name?: string
+          nth?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      community_lesson_plan: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          attempts: number
+          body: string | null
+          created_at: string
+          day: string
+          error: string | null
+          id: string
+          item_id: string | null
+          media: Json
+          post_at: string
+          post_id: string | null
+          posted_as: string | null
+          posted_at: string | null
+          reminded_at: string | null
+          status: string
+          sticker: Json | null
+          sticker_set: boolean
+          time_set: boolean
+          track: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          attempts?: number
+          body?: string | null
+          created_at?: string
+          day: string
+          error?: string | null
+          id?: string
+          item_id?: string | null
+          media?: Json
+          post_at: string
+          post_id?: string | null
+          posted_as?: string | null
+          posted_at?: string | null
+          reminded_at?: string | null
+          status?: string
+          sticker?: Json | null
+          sticker_set?: boolean
+          time_set?: boolean
+          track: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          attempts?: number
+          body?: string | null
+          created_at?: string
+          day?: string
+          error?: string | null
+          id?: string
+          item_id?: string | null
+          media?: Json
+          post_at?: string
+          post_id?: string | null
+          posted_as?: string | null
+          posted_at?: string | null
+          reminded_at?: string | null
+          status?: string
+          sticker?: Json | null
+          sticker_set?: boolean
+          time_set?: boolean
+          track?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_lesson_plan_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "community_series_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_lesson_plan_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_notifications: {
         Row: {
           actor_user_id: string
@@ -6069,7 +6306,7 @@ export type Database = {
           emoji: string | null
           id: string
           kind: string
-          post_id: string
+          post_id: string | null
           pushed_at: string | null
           recipient_user_id: string
         }
@@ -6080,7 +6317,7 @@ export type Database = {
           emoji?: string | null
           id?: string
           kind: string
-          post_id: string
+          post_id?: string | null
           pushed_at?: string | null
           recipient_user_id: string
         }
@@ -6091,7 +6328,7 @@ export type Database = {
           emoji?: string | null
           id?: string
           kind?: string
-          post_id?: string
+          post_id?: string | null
           pushed_at?: string | null
           recipient_user_id?: string
         }
@@ -6271,8 +6508,10 @@ export type Database = {
           series_item_id: string | null
           series_key: string | null
           shared_comment_id: string | null
+          sticker: Json | null
           updated_at: string
           visibility: string
+          win_label: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -6306,8 +6545,10 @@ export type Database = {
           series_item_id?: string | null
           series_key?: string | null
           shared_comment_id?: string | null
+          sticker?: Json | null
           updated_at?: string
           visibility?: string
+          win_label?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -6341,8 +6582,10 @@ export type Database = {
           series_item_id?: string | null
           series_key?: string | null
           shared_comment_id?: string | null
+          sticker?: Json | null
           updated_at?: string
           visibility?: string
+          win_label?: string | null
         }
         Relationships: [
           {
@@ -6394,6 +6637,7 @@ export type Database = {
           auto_share_workouts: boolean
           avatar_path: string | null
           bio: string | null
+          is_private: boolean
           private_views: boolean
           same_person_as: string | null
           title: string | null
@@ -6404,6 +6648,7 @@ export type Database = {
           auto_share_workouts?: boolean
           avatar_path?: string | null
           bio?: string | null
+          is_private?: boolean
           private_views?: boolean
           same_person_as?: string | null
           title?: string | null
@@ -6414,6 +6659,7 @@ export type Database = {
           auto_share_workouts?: boolean
           avatar_path?: string | null
           bio?: string | null
+          is_private?: boolean
           private_views?: boolean
           same_person_as?: string | null
           title?: string | null
@@ -6596,22 +6842,66 @@ export type Database = {
         Row: {
           author_user_id: string | null
           id: boolean
+          lesson_mode: string
+          lesson_time: string | null
           paused: boolean
           updated_at: string
         }
         Insert: {
           author_user_id?: string | null
           id?: boolean
+          lesson_mode?: string
+          lesson_time?: string | null
           paused?: boolean
           updated_at?: string
         }
         Update: {
           author_user_id?: string | null
           id?: boolean
+          lesson_mode?: string
+          lesson_time?: string | null
           paused?: boolean
           updated_at?: string
         }
         Relationships: []
+      }
+      community_sticker_answers: {
+        Row: {
+          body: string | null
+          choice: number | null
+          created_at: string
+          post_id: string
+          updated_at: string
+          user_id: string
+          value: number | null
+        }
+        Insert: {
+          body?: string | null
+          choice?: number | null
+          created_at?: string
+          post_id: string
+          updated_at?: string
+          user_id: string
+          value?: number | null
+        }
+        Update: {
+          body?: string | null
+          choice?: number | null
+          created_at?: string
+          post_id?: string
+          updated_at?: string
+          user_id?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_sticker_answers_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       conversation_staff_reads: {
         Row: {
@@ -7646,6 +7936,7 @@ export type Database = {
           default_load_type: string | null
           default_load_unit: string | null
           default_measurement_type: string
+          demo_exercise_id: string | null
           difficulty: string | null
           equipment: string | null
           exercise_category: string
@@ -7703,6 +7994,7 @@ export type Database = {
           default_load_type?: string | null
           default_load_unit?: string | null
           default_measurement_type?: string
+          demo_exercise_id?: string | null
           difficulty?: string | null
           equipment?: string | null
           exercise_category?: string
@@ -7760,6 +8052,7 @@ export type Database = {
           default_load_type?: string | null
           default_load_unit?: string | null
           default_measurement_type?: string
+          demo_exercise_id?: string | null
           difficulty?: string | null
           equipment?: string | null
           exercise_category?: string
@@ -7804,6 +8097,13 @@ export type Database = {
           youtube_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "exercises_demo_exercise_id_fkey"
+            columns: ["demo_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "exercises_warmup_protocol_id_fkey"
             columns: ["warmup_protocol_id"]
@@ -17163,6 +17463,7 @@ export type Database = {
       pl_exercise_notes: {
         Row: {
           client_id: string
+          coach_message_id: string | null
           coach_seen_at: string | null
           content: string
           created_at: string
@@ -17176,6 +17477,7 @@ export type Database = {
         }
         Insert: {
           client_id: string
+          coach_message_id?: string | null
           coach_seen_at?: string | null
           content: string
           created_at?: string
@@ -17189,6 +17491,7 @@ export type Database = {
         }
         Update: {
           client_id?: string
+          coach_message_id?: string | null
           coach_seen_at?: string | null
           content?: string
           created_at?: string
@@ -17214,6 +17517,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coaching_agreement_client_status"
             referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "pl_exercise_notes_coach_message_id_fkey"
+            columns: ["coach_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "pl_exercise_notes_day_id_fkey"
@@ -17479,6 +17789,183 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pl_program_versions: {
+        Row: {
+          block_id: string | null
+          cleo_action_id: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          payload: Json
+          restore_note: string | null
+          restored_at: string | null
+          restored_by: string | null
+          source: string
+          summary: string
+        }
+        Insert: {
+          block_id?: string | null
+          cleo_action_id?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          payload?: Json
+          restore_note?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          source?: string
+          summary: string
+        }
+        Update: {
+          block_id?: string | null
+          cleo_action_id?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          payload?: Json
+          restore_note?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          source?: string
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_program_versions_cleo_action_id_fkey"
+            columns: ["cleo_action_id"]
+            isOneToOne: false
+            referencedRelation: "cleo_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_program_versions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_program_versions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      pl_roadmap_notes: {
+        Row: {
+          ai_label: string | null
+          ai_style: string | null
+          ai_summary: string | null
+          block_id: string
+          client_id: string
+          coach_label: string | null
+          coach_summary: string | null
+          created_at: string
+          edited_at: string | null
+          edited_by: string | null
+          generated_at: string | null
+          hidden: boolean
+          id: string
+          source_hash: string | null
+          updated_at: string
+          week_id: string | null
+        }
+        Insert: {
+          ai_label?: string | null
+          ai_style?: string | null
+          ai_summary?: string | null
+          block_id: string
+          client_id: string
+          coach_label?: string | null
+          coach_summary?: string | null
+          created_at?: string
+          edited_at?: string | null
+          edited_by?: string | null
+          generated_at?: string | null
+          hidden?: boolean
+          id?: string
+          source_hash?: string | null
+          updated_at?: string
+          week_id?: string | null
+        }
+        Update: {
+          ai_label?: string | null
+          ai_style?: string | null
+          ai_summary?: string | null
+          block_id?: string
+          client_id?: string
+          coach_label?: string | null
+          coach_summary?: string | null
+          created_at?: string
+          edited_at?: string | null
+          edited_by?: string | null
+          generated_at?: string | null
+          hidden?: boolean
+          id?: string
+          source_hash?: string | null
+          updated_at?: string
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pl_roadmap_notes_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pl_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_roadmap_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pl_roadmap_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "pl_roadmap_notes_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "pl_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pl_roadmap_queue: {
+        Row: {
+          attempts: number
+          block_id: string
+          last_error: string | null
+          queued_at: string
+        }
+        Insert: {
+          attempts?: number
+          block_id: string
+          last_error?: string | null
+          queued_at?: string
+        }
+        Update: {
+          attempts?: number
+          block_id?: string
+          last_error?: string | null
+          queued_at?: string
+        }
+        Relationships: []
       }
       pl_row_results: {
         Row: {
@@ -18127,6 +18614,7 @@ export type Database = {
         Row: {
           client_id: string
           client_note: string | null
+          coach_message_id: string | null
           completion_id: string
           created_at: string
           day_id: string
@@ -18155,6 +18643,7 @@ export type Database = {
         Insert: {
           client_id: string
           client_note?: string | null
+          coach_message_id?: string | null
           completion_id: string
           created_at?: string
           day_id: string
@@ -18183,6 +18672,7 @@ export type Database = {
         Update: {
           client_id?: string
           client_note?: string | null
+          coach_message_id?: string | null
           completion_id?: string
           created_at?: string
           day_id?: string
@@ -18222,6 +18712,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "coaching_agreement_client_status"
             referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "pl_workout_feedback_coach_message_id_fkey"
+            columns: ["coach_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "pl_workout_feedback_completion_id_fkey"
@@ -20743,6 +21240,88 @@ export type Database = {
           },
         ]
       }
+      session_requests: {
+        Row: {
+          alt_times: string | null
+          client_id: string
+          created_at: string
+          decline_reason: string | null
+          duration_minutes: number
+          id: string
+          message_id: string | null
+          note: string | null
+          preferred_date: string
+          preferred_time: string | null
+          pt_session_id: string | null
+          request_type: string
+          requested_by: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          timezone: string | null
+        }
+        Insert: {
+          alt_times?: string | null
+          client_id: string
+          created_at?: string
+          decline_reason?: string | null
+          duration_minutes?: number
+          id?: string
+          message_id?: string | null
+          note?: string | null
+          preferred_date: string
+          preferred_time?: string | null
+          pt_session_id?: string | null
+          request_type: string
+          requested_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          timezone?: string | null
+        }
+        Update: {
+          alt_times?: string | null
+          client_id?: string
+          created_at?: string
+          decline_reason?: string | null
+          duration_minutes?: number
+          id?: string
+          message_id?: string | null
+          note?: string | null
+          preferred_date?: string
+          preferred_time?: string | null
+          pt_session_id?: string | null
+          request_type?: string
+          requested_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          timezone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "coaching_agreement_client_status"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "session_requests_pt_session_id_fkey"
+            columns: ["pt_session_id"]
+            isOneToOne: false
+            referencedRelation: "pt_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       setup_prompt_dismissals: {
         Row: {
           created_at: string
@@ -21583,8 +22162,67 @@ export type Database = {
           },
         ]
       }
+      summer_attachments: {
+        Row: {
+          created_at: string
+          message_id: string | null
+          path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          message_id?: string | null
+          path: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          message_id?: string | null
+          path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "summer_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "summer_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      summer_chats: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string
+          preview: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          preview?: string | null
+          title?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          preview?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       summer_messages: {
         Row: {
+          attachments: Json | null
+          chat_id: string | null
+          choices: Json | null
           content: string
           created_at: string
           id: string
@@ -21592,6 +22230,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attachments?: Json | null
+          chat_id?: string | null
+          choices?: Json | null
           content: string
           created_at?: string
           id?: string
@@ -21599,13 +22240,24 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          attachments?: Json | null
+          chat_id?: string | null
+          choices?: Json | null
           content?: string
           created_at?: string
           id?: string
           role?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "summer_messages_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "summer_chats"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       summer_profiles: {
         Row: {
@@ -22886,6 +23538,11 @@ export type Database = {
         Returns: Json
       }
       capture_league_prescriptions: { Args: { _now?: string }; Returns: number }
+      chat_block_person: {
+        Args: { _blocked?: boolean; _user_id: string }
+        Returns: Json
+      }
+      chat_blocked_people: { Args: never; Returns: Json }
       chat_can_post: {
         Args: { _attachments?: Json; _group_id: string; _uid: string }
         Returns: boolean
@@ -22914,8 +23571,36 @@ export type Database = {
         Returns: string
       }
       chat_crew_threads: { Args: never; Returns: Json }
+      chat_direct_open: {
+        Args: { _me: string; _other: string }
+        Returns: {
+          accepted_at: string | null
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          direct_key: string | null
+          direct_status: string | null
+          id: string
+          kind: string
+          name: string
+          permission_mode: Database["public"]["Enums"]["group_permission_mode"]
+          requested_by: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chat_groups"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       chat_direct_respond: {
         Args: { _action: string; _group_id: string; _reason?: string }
+        Returns: Json
+      }
+      chat_direct_start: {
+        Args: { _body: string; _user_id: string }
         Returns: Json
       }
       chat_direct_threads: { Args: never; Returns: Json }
@@ -22936,6 +23621,11 @@ export type Database = {
       chat_is_direct: { Args: { _group_id: string }; Returns: boolean }
       chat_kind: { Args: { _group_id: string }; Returns: string }
       chat_request_cap: { Args: never; Returns: number }
+      chat_request_daily_cap: { Args: never; Returns: number }
+      chat_set_person_block: {
+        Args: { _me: string; _on: boolean; _other: string }
+        Returns: undefined
+      }
       check_scheduled_jobs_health: { Args: never; Returns: Json }
       claim_message_for_retry: {
         Args: { _message_id: string }
@@ -23066,6 +23756,7 @@ export type Database = {
         Args: { p_existing: string; p_name: string }
         Returns: string
       }
+      cleo_chat_title: { Args: { q: string }; Returns: string }
       client_daily_training_load: {
         Args: { _client_id: string; _days?: number }
         Returns: {
@@ -23141,7 +23832,13 @@ export type Database = {
           workout_key: string
         }[]
       }
+      client_visible_pl_block_ids: { Args: never; Returns: string[] }
       client_visible_pl_day_ids: { Args: never; Returns: string[] }
+      client_visible_pl_week_ids: { Args: never; Returns: string[] }
+      client_workout_notes: {
+        Args: { _client_id: string; _limit?: number }
+        Returns: Json
+      }
       client_workout_tonnage: {
         Args: { _client_id: string }
         Returns: {
@@ -23163,8 +23860,12 @@ export type Database = {
         Args: { _template_id: string; _user_id: string }
         Returns: boolean
       }
+      coach_manageable_pl_block_ids: { Args: never; Returns: string[] }
       coach_manageable_pl_day_ids: { Args: never; Returns: string[] }
+      coach_manageable_pl_week_ids: { Args: never; Returns: string[] }
       coach_voice_words: { Args: { _key: string }; Returns: string[] }
+      coached_client_ids: { Args: never; Returns: string[] }
+      coached_member_ids: { Args: never; Returns: string[] }
       coaching_agreement_record_signature: { Args: { p: Json }; Returns: Json }
       coaching_agreement_resign_below_version: { Args: never; Returns: string }
       community_activity: { Args: never; Returns: Json }
@@ -23255,6 +23956,10 @@ export type Database = {
         Returns: number
       }
       community_birthdays_upcoming: { Args: never; Returns: Json }
+      community_can_see_account: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       community_caption_mentions: {
         Args: { _author: string; _caption: string; _plain?: boolean }
         Returns: {
@@ -23268,6 +23973,7 @@ export type Database = {
         Args: { _keep?: Json; _media: Json; _uid: string }
         Returns: Json
       }
+      community_close_friend_authors: { Args: never; Returns: string[] }
       community_comment_json: {
         Args: {
           _owner: string
@@ -23319,6 +24025,10 @@ export type Database = {
         Args: { _body: string; _media?: Json; _poll?: string[] }
         Returns: Json
       }
+      community_create_post: {
+        Args: { _caption?: string; _media?: Json; _visibility?: string }
+        Returns: Json
+      }
       community_crew_compare: {
         Args: {
           _habit: string
@@ -23365,6 +24075,10 @@ export type Database = {
         }
         Returns: Json
       }
+      community_fill_win_label: {
+        Args: { _post_id: string }
+        Returns: undefined
+      }
       community_fmt_lift: { Args: { _name: string }; Returns: string }
       community_fmt_lift_short: { Args: { _name: string }; Returns: string }
       community_fmt_load: {
@@ -23375,15 +24089,90 @@ export type Database = {
         Args: { _kg: number; _reps: number; _unit: string }
         Returns: string
       }
+      community_follow: {
+        Args: { _on?: boolean; _user_id: string }
+        Returns: Json
+      }
+      community_follow_list: {
+        Args: { _kind: string; _user_id: string }
+        Returns: Json
+      }
+      community_follow_respond: {
+        Args: { _approve: boolean; _user_id: string }
+        Returns: Json
+      }
+      community_follow_state: { Args: never; Returns: Json }
+      community_followed_authors: { Args: never; Returns: string[] }
+      community_follows_user: {
+        Args: { _followee: string; _follower: string }
+        Returns: boolean
+      }
       community_hide_comment: {
         Args: { _comment_id: string; _hidden?: boolean }
         Returns: undefined
       }
       community_hide_exercise_loads: { Args: { _e: Json }; Returns: Json }
       community_hide_loads: { Args: { _s: Json }; Returns: Json }
+      community_holiday_date: {
+        Args: { _key: string; _year: number }
+        Returns: string
+      }
       community_is_coach: { Args: { _user_id: string }; Returns: boolean }
+      community_is_member: { Args: { _user_id: string }; Returns: boolean }
       community_is_post_author: { Args: { _post_id: string }; Returns: boolean }
+      community_is_private: { Args: { _user_id: string }; Returns: boolean }
+      community_is_staff: { Args: { _user_id: string }; Returns: boolean }
       community_leave_post: { Args: { _post_id: string }; Returns: undefined }
+      community_lesson_act: {
+        Args: {
+          _action: string
+          _body?: string
+          _id: string
+          _item_id?: string
+          _media?: Json
+          _post_at?: string
+          _sticker?: Json
+          _sticker_set?: boolean
+        }
+        Returns: Json
+      }
+      community_lesson_default_at: {
+        Args: { _day: string; _learned?: Json }
+        Returns: string
+      }
+      community_lesson_item_json: {
+        Args: {
+          _i: Database["public"]["Tables"]["community_series_items"]["Row"]
+        }
+        Returns: Json
+      }
+      community_lesson_item_save: {
+        Args: { _active?: boolean; _body: string; _data: Json; _id: string }
+        Returns: Json
+      }
+      community_lesson_learned_time: { Args: never; Returns: Json }
+      community_lesson_library: { Args: never; Returns: Json }
+      community_lesson_pick: {
+        Args: { _day: string; _exclude?: string[]; _track: string }
+        Returns: string
+      }
+      community_lesson_pick_any: {
+        Args: { _day: string; _exclude?: string[]; _track: string }
+        Returns: string
+      }
+      community_lesson_post: {
+        Args: { _data_ok?: boolean; _id: string }
+        Returns: Json
+      }
+      community_lesson_track: { Args: { _day: string }; Returns: string }
+      community_lessons_overview: { Args: never; Returns: Json }
+      community_lessons_plan: { Args: { _days?: number }; Returns: number }
+      community_lessons_settings: {
+        Args: { _clear_time?: boolean; _mode?: string; _time?: string }
+        Returns: undefined
+      }
+      community_lessons_stats: { Args: never; Returns: Json }
+      community_lessons_waiting: { Args: { _hours?: number }; Returns: Json }
       community_like_comment: {
         Args: { _comment_id: string; _liked?: boolean }
         Returns: undefined
@@ -23415,6 +24204,7 @@ export type Database = {
       community_my_notifications: { Args: never; Returns: Json }
       community_my_session_title: { Args: { _day_id: string }; Returns: string }
       community_my_settings: { Args: never; Returns: Json }
+      community_next_post: { Args: never; Returns: Json }
       community_notify: {
         Args: {
           _actor: string
@@ -23426,6 +24216,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      community_ordinal: { Args: { _n: number }; Returns: string }
       community_pin_comment: {
         Args: { _comment_id: string; _pinned?: boolean }
         Returns: undefined
@@ -23468,10 +24259,16 @@ export type Database = {
         Returns: undefined
       }
       community_profile: { Args: { _user_id: string }; Returns: Json }
+      community_public_day_name: { Args: { _title: string }; Returns: string }
       community_public_session_title: {
         Args: { _at: string; _client_id: string; _day_id: string }
         Returns: string
       }
+      community_publish_holiday: {
+        Args: { _force?: boolean; _key?: string }
+        Returns: Json
+      }
+      community_publish_lessons: { Args: { _now?: string }; Returns: Json }
       community_publish_series: {
         Args: { _at?: string; _force?: boolean; _series?: string }
         Returns: Json
@@ -23481,6 +24278,7 @@ export type Database = {
         Returns: undefined
       }
       community_recent_completions: { Args: { _limit?: number }; Returns: Json }
+      community_remove_follower: { Args: { _user_id: string }; Returns: Json }
       community_remove_note_scene: {
         Args: { _post_id: string }
         Returns: undefined
@@ -23540,6 +24338,10 @@ export type Database = {
       community_set_auto_share: { Args: { _on: boolean }; Returns: undefined }
       community_set_avatar: { Args: { _path: string }; Returns: Json }
       community_set_bio: { Args: { _bio: string }; Returns: undefined }
+      community_set_close_friend: {
+        Args: { _on: boolean; _user_id: string }
+        Returns: Json
+      }
       community_set_post_extras: {
         Args: {
           _audio_duration: number
@@ -23553,14 +24355,34 @@ export type Database = {
         Args: { _media: Json; _post_id: string }
         Returns: Json
       }
+      community_set_private: { Args: { _on: boolean }; Returns: Json }
       community_set_private_views: {
         Args: { _on: boolean }
         Returns: undefined
+      }
+      community_set_sticker: {
+        Args: { _post_id: string; _sticker: Json }
+        Returns: Json
       }
       community_share_comment: {
         Args: { _caption?: string; _comment_id: string }
         Returns: string
       }
+      community_sticker_answer: {
+        Args: {
+          _body?: string
+          _choice?: number
+          _post_id: string
+          _value?: number
+        }
+        Returns: Json
+      }
+      community_sticker_clean: { Args: { _s: Json }; Returns: Json }
+      community_sticker_json: {
+        Args: { _post_id: string; _viewer: string }
+        Returns: Json
+      }
+      community_sticker_try: { Args: { _s: Json }; Returns: Json }
       community_update_note: {
         Args: { _body: string; _post_id: string }
         Returns: undefined
@@ -23573,6 +24395,7 @@ export type Database = {
         Args: { _exclude_user?: string; _week_start: string }
         Returns: Json
       }
+      community_win_label: { Args: { _completion_id: string }; Returns: string }
       community_workout_exercises: {
         Args: { _completion_id: string }
         Returns: Json
@@ -23681,6 +24504,8 @@ export type Database = {
         Returns: number
       }
       enqueue_monthly_nutrition_updates: { Args: never; Returns: number }
+      ensure_member_client: { Args: { _member_id: string }; Returns: string }
+      ensure_my_member_client: { Args: never; Returns: string }
       exercise_classify: {
         Args: { _category?: string; _name: string }
         Returns: {
@@ -24141,6 +24966,19 @@ export type Database = {
           sets: number
         }[]
       }
+      get_strength_board_roster: {
+        Args: { _as_user?: string }
+        Returns: {
+          avatar_url: string
+          client_id: string
+          display_name: string
+          is_alumni: boolean
+          is_coach: boolean
+          is_me: boolean
+          person: string
+          sex: string
+        }[]
+      }
       get_strength_board_tops: {
         Args: never
         Returns: {
@@ -24317,6 +25155,9 @@ export type Database = {
       }
       legal_kill_switch_active: { Args: never; Returns: boolean }
       linked_client_id: { Args: never; Returns: string }
+      linked_visible_pl_block_ids: { Args: never; Returns: string[] }
+      linked_visible_pl_day_ids: { Args: never; Returns: string[] }
+      linked_visible_pl_week_ids: { Args: never; Returns: string[] }
       list_portal_broadcasts: { Args: { _as_user?: string }; Returns: Json }
       mark_checkin_reviewed: {
         Args: { _checkin_id: string; _via?: string }
@@ -24405,6 +25246,7 @@ export type Database = {
         Returns: {
           client_id: string
           client_note: string | null
+          coach_message_id: string | null
           completion_id: string
           created_at: string
           day_id: string
@@ -24442,6 +25284,10 @@ export type Database = {
         Returns: undefined
       }
       member_can_consume: { Args: { _user_id: string }; Returns: boolean }
+      member_can_start_plan: {
+        Args: { p_client_id: string; p_template_id: string }
+        Returns: boolean
+      }
       member_has_access: {
         Args: { _key: string; _member_id: string }
         Returns: boolean
@@ -24608,9 +25454,14 @@ export type Database = {
       }
       pl_block_logger_enabled: { Args: never; Returns: boolean }
       pl_clone_blocks_for_rows: { Args: { p_mappings: Json }; Returns: number }
+      pl_day_logged: { Args: { _day_id: string }; Returns: boolean }
       pl_end_block_early: {
         Args: { _block_id: string; _new_end: string }
         Returns: Json
+      }
+      pl_logged_ids: {
+        Args: { _ids: string[]; _kind: string }
+        Returns: string[]
       }
       pl_move_row: {
         Args: { p_direction: string; p_row_id: string }
@@ -24625,6 +25476,7 @@ export type Database = {
         Returns: string
       }
       pl_recompute_week_status: { Args: { _week_id: string }; Returns: string }
+      pl_roadmap_enqueue: { Args: { _block_ids: string[] }; Returns: undefined }
       pl_row_has_unsupported_blocks: {
         Args: { p_row_id: string }
         Returns: boolean
@@ -24694,6 +25546,7 @@ export type Database = {
         Returns: Json
       }
       powerlifting_opl_tick: { Args: never; Returns: Json }
+      prune_cleo_chats: { Args: never; Returns: number }
       pt_gcal_claim: {
         Args: { _limit?: number }
         Returns: {
@@ -24830,6 +25683,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      rls_evaluate_once: { Args: { _table?: string }; Returns: number }
+      rls_once_expr: { Args: { e: string }; Returns: string }
       run_league_automation: { Args: never; Returns: Json }
       run_messenger_checkin_automation: { Args: never; Returns: Json }
       run_payment_setup_reminders: {
@@ -25018,6 +25873,11 @@ export type Database = {
           to_status: string
         }[]
       }
+      workout_note_needs_card: {
+        Args: { _msg: string; _pain_added: boolean }
+        Returns: boolean
+      }
+      workout_note_sender: { Args: { _client_id: string }; Returns: string }
       workout_points_summary: {
         Args: {
           _client_id: string
