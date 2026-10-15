@@ -157,42 +157,6 @@ export function visualLabel(v: LessonVisual): string {
   }
 }
 
-/** The one line under a picture: what it is, honestly (a drawing, a model, an example). */
-export function visualNote(v: LessonVisual): string {
-  switch (v.kind) {
-    case "bar_path":
-      return v.lift === "bench" ? "Side view, head on the left · illustration" : "Side view · dashed line is midfoot · illustration";
-    case "squat_torso":
-    case "squat_balance":
-    case "squat_rise":
-      return "Side view · dashed line is midfoot · illustration";
-    case "squat_depth":
-      return "Side view, about hip height · illustration";
-    case "deadlift_start":
-      return "Side view · dashed line is midfoot · illustration";
-    case "bench_touch":
-      return v.variant === "consistency" ? "Side view, head on the left · illustration" : "Side view, head on the left · forearm stacked under the bar in both";
-    case "sticking_point":
-      return "Typical shape · where yours sits shows on video";
-    case "strength_curve":
-    case "length_tension":
-    case "sra":
-      return "Simplified model, not measured data";
-    case "force_velocity":
-      return "Force–velocity relationship (Hill) · simplified";
-    case "fitness_fatigue":
-      return "Fitness–fatigue model (Banister) · simplified";
-    case "rpe_rir":
-      return "RPE as reps in reserve";
-    case "dose_response":
-      return "Shape of the research average · people vary";
-    case "velocity_loss":
-      return v.variant === "cluster" ? "Illustration · short rests inside the set keep reps fast" : "Illustration · rep speed slows as a set gets close to failure";
-    case "set_structure":
-      return "Example · your rep counts will differ";
-  }
-}
-
 /* ======================================================================
  * Building blocks
  * ==================================================================== */

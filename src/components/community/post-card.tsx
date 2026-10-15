@@ -36,7 +36,7 @@ import {
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
 import { WinsStatsCard } from "@/components/community/wins-stats";
 import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-cards";
-import { LessonCard } from "@/components/community/lesson-card";
+import { LessonDiagram } from "@/components/community/lesson-card";
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
@@ -111,12 +111,16 @@ export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: C
   const scene = post.series === "saturday_spirit" && !cover ? extraScene(post.series_extra) : null;
   // A holiday: its photo, unless the coach put their own on the post.
   const holiday = post.series === "holiday" && !cover ? extraHoliday(post.series_extra) : null;
+  // A lesson: its diagram is the picture (over the words), or sits under them
+  // when the coach put a photo on it. Nothing else: no label, no sources.
+  const lesson = post.series === "lesson";
   return (
     <div className="px-4 pb-1 pt-1">
       {/* no "Saturday Spirit" style day label: the post speaks for itself */}
       {cover && <div className="-mx-1 mb-3 overflow-hidden rounded-2xl">{cover}</div>}
       {scene && isSpiritScene(scene) && <SpiritScene scene={scene} className="mb-3 rounded-2xl" />}
       {holiday && <HolidayPhoto src={holiday.image} alt={holiday.name} />}
+      {lesson && !cover && <LessonDiagram post={post} className="mb-3" />}
       {post.quote && (
         <figure className="mb-3 border-l-[3px] border-primary pl-3.5">
           <blockquote className="whitespace-pre-line text-[18px] font-semibold leading-[1.32] tracking-[-0.01em]">“{post.quote}”</blockquote>
@@ -125,16 +129,17 @@ export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: C
         </figure>
       )}
       {post.caption && <NoteCaption text={post.caption} mentions={post.mentions} onOpenPerson={onOpenPerson} clamp={clamp} />}
+      {lesson && cover && <LessonDiagram post={post} className="mt-3" />}
       <PostExtras post={post} className="mt-3" />
       {post.poll && <PollCard post={post} onOpenPerson={onOpenPerson} className="mb-2" />}
     </div>
   );
 }
 
-/** Whatever a series post carries under its words: Sunday's report card, Wednesday's numbers, Tuesday's / Thursday's card, a lesson's diagram and sources. */
+/** Whatever a series post carries under its words: Sunday's report card, Wednesday's numbers, Tuesday's / Thursday's card (a lesson's diagram is in NoteBody). */
 export function NoteExtras({ post, unit, className }: { post: CommunityPost; unit: "kg" | "lb"; className?: string }) {
   if (post.shared_comment) return <SharedCommentCard shared={post.shared_comment} className={className} onOpenPost={openCommunityPost} />;
-  if (post.series === "lesson") return <LessonCard post={post} className={className} />;
+  if (post.series === "lesson") return null;
   if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return <SundayRecapCard stats={post.series_data} unit={unit} className={className} />;
   if (isWinsStats(post.series_data)) return <WinsStatsCard stats={post.series_data} unit={unit} className={className} />;
   return <SeriesExtraCard post={post} className={className} />;

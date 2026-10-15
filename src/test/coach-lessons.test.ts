@@ -6,7 +6,7 @@ import {
 } from "@/lib/lessons";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LessonVisualArt, banister, lessonGeometry as G, visualLabel, visualNote } from "@/components/community/lesson-visuals";
+import { LessonVisualArt, banister, lessonGeometry as G, visualLabel } from "@/components/community/lesson-visuals";
 import { groupWeeks } from "@/components/community/coach-lessons";
 import { lessonReminder } from "@/lib/lesson-reminders.server";
 
@@ -160,8 +160,16 @@ describe("a lesson in the feed and the story", () => {
     expect(safeRefUrl("https://pubmed.ncbi.nlm.nih.gov/1/")).toBe("https://pubmed.ncbi.nlm.nih.gov/1/");
   });
 
-  it("keeps it a lesson, not an instruction, on every card", () => {
-    expect(read("src/components/community/lesson-card.tsx")).toContain("Good to know, not a change to your program. Big technique changes, ask {first} first.");
+  it("reads like the coach's own post: the diagram and his words, no label, sources or disclaimer", () => {
+    const card = read("src/components/community/lesson-card.tsx");
+    for (const bit of ["lessonKicker", "GraduationCap", "BookOpen", "data-lesson-sources", "safeRefUrl", "Good to know", "ask {first} first"]) expect(card, bit).not.toContain(bit);
+    // the diagram is the picture: over the words, or under them when he put a photo on it
+    const postCard = read("src/components/community/post-card.tsx");
+    expect(postCard).toContain('{lesson && !cover && <LessonDiagram post={post} className="mb-3" />}');
+    expect(postCard).toContain('{lesson && cover && <LessonDiagram post={post} className="mt-3" />}');
+    expect(postCard).toContain('if (post.series === "lesson") return null;');
+    // the sources stay with the coach, in his planner
+    expect(read("src/components/community/coach-lessons.tsx")).toContain("Sources · only you see these");
   });
 
   it("plays as a lesson in stories (title, diagram, hook), with the sticker above the reply bar", () => {
@@ -190,10 +198,9 @@ describe("a lesson in the feed and the story", () => {
       expect(html.slice(html.indexOf("<svg"))).not.toMatch(/#[0-9a-f]{6}/i);
       expect(renderToStaticMarkup(createElement(LessonVisualArt, { visual: v, tone: "dark" }))).toContain('data-tone="dark"');
       expect(visualLabel(v).length).toBeGreaterThan(10);
-      expect(visualNote(v).length).toBeGreaterThan(5);
     }
     const card = read("src/components/community/lesson-card.tsx");
-    expect(card).toContain('<div className="rounded-2xl border border-border/70 bg-muted/40 px-3.5 pb-3 pt-3" data-lesson-diagram>');
+    expect(card).toContain('className={cn("rounded-2xl border border-border/70 bg-muted/40 px-3.5 py-3", className)}');
     expect(card).toContain('<LessonVisualArt visual={lesson.visual} tone="dark" />');
   });
 

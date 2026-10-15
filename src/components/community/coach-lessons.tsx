@@ -15,11 +15,11 @@ import { useFullMediaUrl, useSeriesAction, useSeriesOverview } from "@/lib/commu
 import { lessonArtStatus, makeLessonArt } from "@/lib/lesson-art.functions";
 import {
   LESSON_LEVELS, LESSON_LIFTS, LESSON_TRACK, LESSON_TRACKS, LEVEL_LABEL, LIFT_LABEL, clockLabel, coachClock, coachInstant, coachTimeLabel, dayLabel,
-  canHaveArt, lessonKicker, lessonStatusLabel, missingLevels, needsReview, storyRows,
+  canHaveArt, lessonKicker, lessonStatusLabel, missingLevels, needsReview, safeRefUrl, storyRows,
   type LessonItem, type LessonLevel, type LessonLift, type LessonPlanRow, type LessonsOverview, type LessonTrack, type StickerSpec,
 } from "@/lib/lessons";
 import { lessonKeys, useLessonAct, useLessonLibrary, useLessonsOverview, useLessonsSettings, useSaveLessonItem, type LessonAction } from "@/lib/lessons.queries";
-import { LessonCard } from "@/components/community/lesson-card";
+import { LessonDiagram } from "@/components/community/lesson-card";
 import { StickerEditorSheet } from "@/components/community/sticker-editor";
 import { LessonEditors, LessonStoryPlayer, StoryThumb, previewPost } from "@/components/community/lesson-story-player";
 import { openCommunityPost } from "@/components/community/shared-comment";
@@ -529,10 +529,15 @@ function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data:
                     <div className="h-8 w-8 shrink-0 rounded-full bg-muted" aria-hidden />
                     <div className="min-w-0 text-[13px] font-bold">{data.author?.name ?? "Coach"}</div>
                   </div>
-                  {coverUrl && <img src={coverUrl} alt="" className="mx-4 mt-3 aspect-square w-[calc(100%-2rem)] rounded-2xl object-cover" />}
-                  <p className="whitespace-pre-wrap px-4 pb-1 pt-2 text-[15px] leading-[1.45]">{preview.caption}</p>
-                  {row.media.length > 1 && <p className="px-4 text-[11px] font-bold text-primary">+ {row.media.length - 1} more photo{row.media.length === 2 ? "" : "s"}</p>}
-                  <LessonCard post={preview} className="mx-4 mb-3 mt-2" />
+                  {/* as the crew sees it (NoteBody): the picture, then his words. The diagram is the picture unless he put a photo on it */}
+                  {cover ? (
+                    coverUrl && <img src={coverUrl} alt="" className="mx-4 mt-3 aspect-square w-[calc(100%-2rem)] rounded-2xl object-cover" />
+                  ) : (
+                    <LessonDiagram post={preview} className="mx-4 mt-3" />
+                  )}
+                  <p className="whitespace-pre-wrap px-4 pb-3 pt-2 text-[15px] leading-[1.45]">{preview.caption}</p>
+                  {row.media.length > 1 && <p className="-mt-2 px-4 pb-3 text-[11px] font-bold text-primary">+ {row.media.length - 1} more photo{row.media.length === 2 ? "" : "s"}</p>}
+                  {cover && <LessonDiagram post={preview} className="mx-4 mb-3" />}
                 </div>
               ) : (
                 <StoryThumb row={row} data={data} onOpen={onPlay} />
@@ -592,7 +597,7 @@ function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data:
               )}
             </>
           )}
-          {it && it.refs.length > 0 && <p className="text-center text-[11px] text-muted-foreground">Sources are checked against their published records. Edit the words freely, keep the claims to what they say.</p>}
+          {it && it.refs.length > 0 && <LessonSources refs={it.refs} />}
         </div>
 
         <LessonEditors
@@ -895,5 +900,35 @@ function Select({ label, value, onChange, options }: { label: string; value: str
         <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       </span>
     </label>
+  );
+}
+
+/**
+ * The research behind a lesson, for the coach only: the post itself never
+ * lists sources (it reads like his own post), so this is where he checks
+ * what a claim rests on before he approves it or answers a question about it.
+ */
+function LessonSources({ refs }: { refs: LessonItem["refs"] }) {
+  return (
+    <div className="rounded-xl bg-muted/50 px-3 py-2.5" data-lesson-sources>
+      <div className="text-[11px] font-bold text-muted-foreground">Sources · only you see these</div>
+      <ul className="mt-1 space-y-0.5">
+        {refs.map((r, i) => {
+          const url = safeRefUrl(r.url);
+          return (
+            <li key={i} className="text-[12px] leading-snug">
+              {url ? (
+                <a href={url} target="_blank" rel="noopener noreferrer" className="font-semibold underline decoration-border underline-offset-2">
+                  {r.label}
+                </a>
+              ) : (
+                <span className="font-semibold">{r.label}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">Checked against their published records. Edit the words freely, keep the claims to what they say.</p>
+    </div>
   );
 }
