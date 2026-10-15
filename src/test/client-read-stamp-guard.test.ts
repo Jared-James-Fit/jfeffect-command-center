@@ -34,6 +34,12 @@ describe("a client's read stamp on coach messages saves again", () => {
     expect(migration).toContain("AND m.is_internal_note = false");
   });
 
+  it("the fillout guard compares its real column too", () => {
+    const fillout = read("supabase/migrations/20261129100000_fillout_guard_real_column.sql").replace(/--.*$/gm, "");
+    expect(fillout).toContain("NEW.fillout_submission_id IS DISTINCT FROM OLD.fillout_submission_id");
+    expect(fillout).not.toMatch(/NEW\.submission_id/);
+  });
+
   it("markRead no longer swallows a failed stamp", () => {
     const lib = read("src/lib/messages.ts");
     expect(lib).toContain("const { error: stampError } = await db.from(\"messages\").update({ [col]: now })");

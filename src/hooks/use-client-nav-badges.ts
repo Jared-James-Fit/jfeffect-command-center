@@ -42,8 +42,10 @@ export function markNavSeen(userId: string | undefined, route: string) {
 /**
  * Returns badge state per portal route. Only fetches data for clients.
  * Badge rules (kept minimal to avoid notification overload):
- *  - /portal/messages       — one count: unread coach messages + lift-video feedback
- *                             + member 1:1s + crews + coach groups (never a bare dot)
+ *  - /portal/messages       — one count: unread coach messages + member 1:1s + crews
+ *                             + coach groups (never a bare dot). Only what the inbox
+ *                             itself shows as new: a form check is a video in the
+ *                             coach chat, so retired lift-video feedback isn't counted.
  *  - /portal/program        — program/phase updated since client last opened (dot)
  *  - /portal/nutrition-targets — nutrition targets updated since client last opened (dot)
  *  - /portal/check-in       — coach feedback on check-in media, link updated, or due (dot)
@@ -77,11 +79,9 @@ export function useClientNavBadges(): Record<string, NavBadge> {
         .eq("user_id", user!.id)
         .maybeSingle();
       if (!client) return null;
-      const [{ data: msgs }, { data: state }, { data: vids }, { data: vcomments }, { data: nut }, { data: phases }, { data: mediaComments }] = await Promise.all([
-        (supabase.from("messages") as any).select("created_at").eq("client_id", client.id).eq("sender_role", "admin").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(50),
+      const [{ data: msgs }, { data: state }, { data: nut }, { data: phases }, { data: mediaComments }] = await Promise.all([
+        (supabase.from("messages") as any).select("created_at").eq("client_id", client.id).eq("sender_role", "admin").eq("is_internal_note", false).is("deleted_at", null).order("created_at", { ascending: false }).limit(50),
         (supabase.from("conversation_state") as any).select("client_last_read_at").eq("client_id", client.id).maybeSingle(),
-        (supabase.from("lift_videos") as any).select("id, watched_at, liked_at, reviewed_at, status, client_last_viewed_at, updated_at").eq("client_id", client.id).order("updated_at", { ascending: false }).limit(50),
-        (supabase.from("lift_video_comments") as any).select("video_id, created_at").eq("client_id", client.id).eq("author_role", "admin").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(50),
         (supabase.from("nutrition_targets") as any).select("updated_at, last_updated_at").eq("client_id", client.id).order("updated_at", { ascending: false }).limit(5),
         (supabase.from("training_phases") as any).select("updated_at").eq("client_id", client.id).order("updated_at", { ascending: false }).limit(5),
         (supabase.from("media_comments") as any).select("created_at, author_role, is_internal_note").eq("client_id", client.id).eq("author_role", "admin").eq("is_internal_note", false).order("created_at", { ascending: false }).limit(20),
@@ -104,7 +104,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
           .limit(200);
         groupMsgs = (gm ?? []) as any[];
       }
-      return { client, msgs, state, vids, vcomments, nut, phases, mediaComments, groupMemberships, groupMsgs };
+      return { client, msgs, state, nut, phases, mediaComments, groupMemberships, groupMsgs };
     },
   });
 
@@ -123,8 +123,6 @@ export function useClientNavBadges(): Record<string, NavBadge> {
     const ch = listenChannel(`nav-badges-${user.id}-${clientId}`)
       .on("postgres_changes", { ...scoped, table: "messages" }, invalidateBadges)
       .on("postgres_changes", { ...scoped, table: "conversation_state" }, invalidateBadges)
-      .on("postgres_changes", { ...scoped, table: "lift_videos" }, invalidateBadges)
-      .on("postgres_changes", { ...scoped, table: "lift_video_comments" }, invalidateBadges)
       .on("postgres_changes", { ...scoped, table: "media_comments" }, invalidateBadges)
       .on("postgres_changes", { ...scoped, table: "nutrition_targets" }, invalidateBadges)
       .on("postgres_changes", { ...scoped, table: "training_phases" }, invalidateBadges)
@@ -163,26 +161,8 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   const lastRead = data.state?.client_last_read_at ? new Date(data.state.client_last_read_at).getTime() : 0;
   const unread = (data.msgs ?? []).filter((m: any) => new Date(m.created_at).getTime() > lastRead).length;
 
-  // Lift videos: one per video with coach feedback / comments the client hasn't seen
-  const liftWithFeedback = new Set<string>();
-  for (const v of (data.vids ?? []) as any[]) {
-    const seen = v.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
-    const newer = (t: string | null | undefined) => !!t && new Date(t).getTime() > seen;
-    if (newer(v.watched_at) || newer(v.liked_at) || newer(v.reviewed_at) || (v.status === "Needs Follow-Up" && newer(v.updated_at))) {
-      liftWithFeedback.add(v.id);
-    }
-  }
-  {
-    const vidMap = new Map<string, any>((data.vids ?? []).map((v: any) => [v.id, v]));
-    for (const c of (data.vcomments ?? []) as any[]) {
-      const v = vidMap.get(c.video_id);
-      const seen = v?.client_last_viewed_at ? new Date(v.client_last_viewed_at).getTime() : 0;
-      if (new Date(c.created_at).getTime() > seen) liftWithFeedback.add(c.video_id);
-    }
-  }
   const messagesCount = messagesBadgeCount({
     coachMessages: unread,
-    liftFeedback: liftWithFeedback.size,
     directThreads: waitingChatCount((directs ?? []).map((t) => ({ key: t.group_id, unread: isUnread(t, user?.id), at: t.last_at })), chatPrefs),
     crewThreads: waitingChatCount((crews ?? []).map((t) => ({ key: t.group_id, unread: isCrewUnread(t, user?.id), at: t.last_at })), chatPrefs),
     groupThreads: user ? coachGroupsWaiting(data.groupMemberships ?? [], data.groupMsgs ?? [], user.id, chatPrefs) : 0,
