@@ -80,7 +80,7 @@ describe("feed that builds as you scroll", () => {
     // the first post is the first thing in the feed (Activity is a bubble in the story row)
     expect(screen).toMatch(/<Fragment key=\{p\.id\}>\s*<FeedItem index=\{i\}/);
     expect(screen).toMatch(/\{isFetchingNextPage && <PostSkeleton \/>\}/);
-    expect(screen).toMatch(/<CaughtUp /);
+    expect(screen).toMatch(/<CaughtUp\s/);
     expect(card).toMatch(/className="media-fade relative h-full w-full object-cover"/);
   });
   it("new posts from others: a pill when you're down the feed, slide in at the top", () => {

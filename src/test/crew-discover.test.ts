@@ -204,3 +204,13 @@ describe("Discover people, round two", () => {
     expect(read("src/components/community/community-screen.tsx")).toContain("canInvite={!previewOnly}");
   });
 });
+
+describe("where suggestions sit in the feed", () => {
+  it("right after the first post (most visits never reach the third), and the end of the feed points to Find athletes", () => {
+    const screen = read("src/components/community/community-screen.tsx");
+    expect(screen).toContain("{!hideTabs && !previewOnly && !following && i === 0 && (");
+    expect(screen).not.toContain("i === Math.min(2, feedPosts.length - 1)");
+    expect(screen).toContain("data-caught-up-discover");
+    expect(read("src/components/community/feed-motion.tsx")).toContain("{more && <div");
+  });
+});
