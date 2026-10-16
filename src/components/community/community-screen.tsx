@@ -31,7 +31,8 @@ import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
-import { CaughtUp, FeedItem, NewPostsPill, PostSkeleton, useNewPosts } from "@/components/community/feed-motion";
+import { CaughtUp, FeedItem, NewPostsPill, useNewPosts } from "@/components/community/feed-motion";
+import { ActivitySpinner } from "@/components/activity-spinner";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
 /**
@@ -612,7 +613,12 @@ export function CommunityScreen({
             </Fragment>
           ))}
           <div ref={sentinel} aria-hidden className="h-px" />
-          {isFetchingNextPage && <PostSkeleton />}
+          {/* more on the way (it reads well ahead, so this is rarely seen): Instagram's spinner at the end of the feed */}
+          {isFetchingNextPage && (
+            <div className="grid place-items-center py-6 text-muted-foreground" role="status" aria-label="Loading more posts" data-feed-more>
+              <ActivitySpinner size={24} />
+            </div>
+          )}
           {!hasNextPage && posts.length > 1 && (
             <FeedItem index={0}>
               <CaughtUp

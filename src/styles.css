@@ -977,6 +977,9 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   .activity-bubble[data-state="closing"] { animation: activity-bubble-calm-out 160ms linear both; }
   .activity-bubble-item, .activity-dot-in { animation: none; }
 }
+/* The activity spinner (pull to refresh, a tab's re-tap, loading more): turns a tick at a time, iOS's way. */
+@keyframes activity-spin { to { transform: rotate(360deg); } }
+.activity-spin { animation: activity-spin 0.8s steps(8) infinite; transform-origin: 50% 50%; }
 /* The Crew bar slides away as you read down and comes back the moment you scroll up. */
 .crew-bar { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .crew-bar[data-hidden] { transform: translateY(-100%); }

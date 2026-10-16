@@ -79,7 +79,7 @@ describe("feed that builds as you scroll", () => {
   it("posts ease in as they arrive; a post-shaped placeholder while loading; a caught-up card at the end", () => {
     // the first post is the first thing in the feed (Activity is a bubble in the story row)
     expect(screen).toMatch(/<Fragment key=\{p\.id\}>\s*<FeedItem index=\{i\}/);
-    expect(screen).toMatch(/\{isFetchingNextPage && <PostSkeleton \/>\}/);
+    expect(screen).toMatch(/\{isFetchingNextPage && \(\s*<div[^>]*data-feed-more>\s*<ActivitySpinner size=\{24\} \/>/);
     expect(screen).toMatch(/<CaughtUp\s/);
     expect(card).toMatch(/className="media-fade relative h-full w-full object-cover"/);
   });
