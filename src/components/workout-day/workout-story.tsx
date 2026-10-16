@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkoutView } from "@/lib/use-workout-view";
 import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs } from "@/components/workout-day/WorkoutTimer";
@@ -15,13 +15,21 @@ import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs
  */
 
 /**
- * What keeps its own tap in Focus (never "next exercise"): every control, the
- * set table (that's for logging), and a card swiped open to Delete.
+ * What keeps its own tap in Focus (never "next exercise"): every control
+ * (buttons, the set boxes, links, switches) and a card swiped open to Delete.
+ * Everything else on the screen moves, the set table's empty space included,
+ * so a tap is never silently lost.
  */
 const TAP_KEEPS =
   'button, a, input, textarea, select, label, summary, [role="button"], [role="slider"], [role="switch"], ' +
   '[role="checkbox"], [role="radio"], [role="menuitem"], [role="tab"], [role="link"], [contenteditable="true"], ' +
-  "[data-no-tap], [data-set-table], [data-swipe-open]";
+  "[data-no-tap], [data-swipe-open]";
+/** A finger can wander this far and still count as a tap. */
+export const TAP_SLOP_PX = 12;
+/** Held longer than this it's a press, not a tap. */
+export const TAP_MAX_MS = 550;
+/** Something on top of Focus that a tap should close, not move under. */
+const OPEN_LAYER = '[data-swipe-open], [role="menu"][data-state="open"], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
 export function focusTapIgnored(target: EventTarget | null): boolean {
   const el = typeof Element !== "undefined" && target instanceof Element ? target : null;
@@ -173,6 +181,7 @@ export function StoryChrome({
   onJump,
   onExit,
   onDone,
+  onHelp,
 }: {
   /** Exercise names in order. */
   names: string[];
@@ -193,6 +202,8 @@ export function StoryChrome({
   onExit: () => void;
   /** "Back to the list" at the end of a finished workout: just for now. */
   onDone: () => void;
+  /** The ? in the top bar: how Focus works (the tips). */
+  onHelp?: () => void;
 }) {
   const count = names.length;
   const [rawIndex, setIndex] = useState(initialIndex);
@@ -223,37 +234,77 @@ export function StoryChrome({
     };
   }, [listRef]);
 
-  // Tap to move, like Crew's stories; arrow keys on a keyboard. A small chevron
-  // flashes on the side that was tapped so it's clear what happened.
+  // Tap to move, like Crew's stories; arrow keys on a keyboard. Read from the
+  // finger itself (down → up, a little wander allowed), not the browser's
+  // click, which phones drop after a tiny drag or while a scroll settles.
+  // Quick taps queue: each one moves on from where the last one was going.
+  // A chevron flashes on the side that was tapped; at either end it nudges and
+  // the bottom button pulses, so a tap always shows it landed.
   const latest = useRef({ index, count, onJump });
   latest.current = { index, count, onJump };
-  const [flash, setFlash] = useState<{ dir: -1 | 1; k: number } | null>(null);
+  const [flash, setFlash] = useState<{ dir: -1 | 1; k: number; end: boolean } | null>(null);
+  const [bump, setBump] = useState(0);
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
+    let heading: number | null = null; // where the last tap sent us, until we get there
+    let settle: number | undefined;
     const go = (dir: -1 | 1) => {
       const { index: i, count: n, onJump: jump } = latest.current;
-      const to = i + dir;
-      if (to < 0 || to >= n) return;
-      setFlash({ dir, k: Date.now() });
+      const to = (heading ?? i) + dir;
+      if (to < 0 || to >= n) {
+        setFlash({ dir, k: Date.now(), end: true });
+        if (dir === 1) setBump(Date.now());
+        return;
+      }
+      heading = to;
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => { heading = null; }, 900);
+      setFlash({ dir, k: Date.now(), end: false });
       jump(to);
     };
-    const onClick = (e: MouseEvent) => {
-      if (e.defaultPrevented || e.button !== 0 || focusTapIgnored(e.target)) return;
-      if (window.getSelection?.()?.toString()) return;
+    const press = { id: -1, x: 0, y: 0, t: 0, moved: false, skip: false };
+    const onDown = (e: PointerEvent) => {
+      if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) { press.id = -1; return; }
+      press.id = e.pointerId;
+      press.x = e.clientX;
+      press.y = e.clientY;
+      press.t = performance.now();
+      press.moved = false;
+      // a control, or something open on top (a swiped card, a menu), keeps this tap
+      press.skip = focusTapIgnored(e.target) || !!document.querySelector(OPEN_LAYER);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP_PX) press.moved = true;
+    };
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== press.id) return;
+      press.id = -1;
+      if (press.skip || press.moved || performance.now() - press.t > TAP_MAX_MS) return;
+      // typing a number: the first tap just puts the keyboard away
+      const typing = document.activeElement?.closest?.('input, textarea, select, [contenteditable="true"]') as HTMLElement | null;
+      if (typing) { typing.blur(); return; }
       go(focusTapDirection(e.clientX, window.innerWidth));
     };
+    const onCancel = (e: PointerEvent) => { if (e.pointerId === press.id) press.id = -1; };
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.altKey || e.metaKey || e.ctrlKey) return;
       if (document.activeElement?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
-      if (document.querySelector('[role="dialog"][data-state="open"], [role="menu"][data-state="open"]')) return;
+      if (document.querySelector(OPEN_LAYER)) return;
       if (e.key === "ArrowRight") go(1);
       else if (e.key === "ArrowLeft") go(-1);
     };
-    el.addEventListener("click", onClick);
+    el.addEventListener("pointerdown", onDown, { passive: true });
+    el.addEventListener("pointermove", onMove, { passive: true });
+    el.addEventListener("pointerup", onUp, { passive: true });
+    el.addEventListener("pointercancel", onCancel, { passive: true });
     window.addEventListener("keydown", onKey);
     return () => {
-      el.removeEventListener("click", onClick);
+      window.clearTimeout(settle);
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onCancel);
       window.removeEventListener("keydown", onKey);
     };
   }, [listRef]);
@@ -320,8 +371,10 @@ export function StoryChrome({
           key={flash.k}
           aria-hidden
           data-testid="focus-tap-flash"
+          data-end={flash.end ? "" : undefined}
           className={cn(
-            "jf-tap-flash pointer-events-none fixed top-[calc(50%-24px)] z-[42] grid h-12 w-12 place-items-center rounded-full bg-foreground/15 text-foreground",
+            "pointer-events-none fixed top-[calc(50%-24px)] z-[42] grid h-12 w-12 place-items-center rounded-full bg-foreground/15 text-foreground",
+            flash.end ? "jf-tap-end" : "jf-tap-flash",
             flash.dir === 1 ? "right-3" : "left-3",
           )}
         >
@@ -363,6 +416,17 @@ export function StoryChrome({
                 <span className="truncate">{title}</span>
               </div>
             </div>
+            {onHelp && (
+              <button
+                type="button"
+                data-testid="focus-help"
+                onClick={onHelp}
+                aria-label="How Focus works"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-muted-foreground transition active:scale-95"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
+            )}
             <button
               type="button"
               data-testid="focus-exit"
@@ -394,7 +458,10 @@ export function StoryChrome({
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          {primary}
+          {/* at the end, a tap forward pulses this: it's the way on */}
+          <div key={bump} data-testid="story-primary" className={cn("flex min-w-0 flex-1", bump > 0 && "jf-bump")}>
+            {primary}
+          </div>
         </div>
       </div>
     </>

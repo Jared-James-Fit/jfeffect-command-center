@@ -641,8 +641,37 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
   25% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.05); }
 }
+/* at either end: the chevron nudges (nothing further that way) and the bottom button pulses */
+.jf-tap-end { animation: jf-tap-end 480ms ease-out forwards; }
+@keyframes jf-tap-end {
+  0% { opacity: 0; transform: translateX(0); }
+  20% { opacity: 1; transform: translateX(0); }
+  40% { transform: translateX(-6px); }
+  60% { transform: translateX(6px); }
+  80% { opacity: 1; transform: translateX(-3px); }
+  100% { opacity: 0; transform: translateX(0); }
+}
+.jf-bump { animation: jf-bump 520ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes jf-bump {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.04); }
+  65% { transform: scale(0.99); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .jf-tap-flash { animation: jf-list-in 120ms ease-out reverse forwards; }
+  .jf-tap-flash, .jf-tap-end { animation: jf-list-in 120ms ease-out reverse forwards; }
+  .jf-bump { animation: none; }
+}
+
+/* Focus tips (FocusTips): each zone's ring taps in turn, next then back. */
+.jf-tips-tap { animation: jf-tips-tap 2.4s ease-out infinite; }
+.jf-tips-back { animation-delay: 1.2s; }
+@keyframes jf-tips-tap {
+  0%, 40%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.45); }
+  8% { transform: scale(0.8); }
+  22% { transform: scale(1); box-shadow: 0 0 0 16px rgba(255, 255, 255, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jf-tips-tap { animation: none; }
 }
 
 /* Focus intro (focus-intro.tsx): a mini phone where a finger taps the right
