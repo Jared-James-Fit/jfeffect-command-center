@@ -29,7 +29,10 @@ describe("Pulse: a finished workout posts itself, with its real win", () => {
     expect(sql).toContain("AND coalesce(cl.portal_access_disabled, false) = false;");
     expect(sql).toContain("IF NEW.completed_at < now() - interval '2 days' THEN RETURN NULL; END IF;");
     expect(sql).toContain("coalesce(v_hide, false)");
-    expect(read("src/components/community/profile-view.tsx")).toContain("Post my finished workouts to my story automatically (24 hours)");
+    // the switch lives in Edit profile → Privacy
+    const privacy = read("src/components/community/privacy-settings.tsx");
+    expect(privacy).toContain("Finished workouts post to your story for 24 hours with the session's best win.");
+    expect(read("src/components/community/profile-edit.tsx")).toContain("<ShareWorkoutsRow />");
   });
   it("no share points for a post nobody shared; never blocks finishing a workout", () => {
     expect(sql).toContain("and not cp.auto_shared");
