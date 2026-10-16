@@ -1779,10 +1779,15 @@ export function storyPrs(items: { stats?: unknown }[]): number {
  * loads as the coach, so whose post it is, and what only its poster sees, is
  * worked out again for the client being previewed. Their own sticker answers
  * aren't loaded, so a sticker shows unanswered; the poster-only list of who
- * answered never reaches anyone else (tested).
+ * answered never reaches anyone else (tested). The coach's own posts always
+ * show the crew's way, previewing their own client account included.
  */
 export function seenAs<T extends Pick<CommunityPost, "is_mine" | "author" | "sticker">>(p: T, viewer: string | null | undefined): T {
-  const mine = !!viewer && p.author.user_id === viewer;
+  // What the coach posted (loaded as theirs) is never "yours" in the preview, even when the
+  // client being previewed is the coach's own client account: a coach's login is linked to it
+  // (same person), so their stories are authored by it, and the preview is for seeing what the
+  // crew sees: the box to type in, not Your story with its replies.
+  const mine = !!viewer && p.author.user_id === viewer && !p.is_mine;
   const s = p.sticker;
   if (!s) return mine === p.is_mine ? p : { ...p, is_mine: mine };
   return { ...p, is_mine: mine, sticker: { ...s, is_mine: mine, mine: null, answers: mine ? s.answers : undefined } };
