@@ -13,7 +13,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
  * A story's sticker, Instagram's way: one tap and you're in.
  *   poll      tap an answer, the bars show (tap another to switch)
  *   slider    drag the emoji, let go to answer; the crew's average shows after
- *   question  tap, type, send: only the poster sees it
+ *   question  tap, type, send: only the poster sees it (the poster can fill it in too)
  * The poster sees the tally and who answered what (and so does nobody else:
  * the card says so). Answers never push anyone. A coach previewing a client
  * can look but not answer. A question's poster answers a response on their
@@ -214,12 +214,13 @@ function QuestionSticker({ post, first, onComposing }: { post: CommunityPost; fi
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const sent = s.mine?.body;
-  if (s.is_mine) return <p className="mt-2 text-center text-[12px] font-semibold text-black/45">Answers come to you here</p>;
+  // the poster can fill in their own question too (Instagram's): it goes in their Responses like anyone's
+  const own = !!s.is_mine;
   if (sent && !open) {
     return (
-      <button type="button" onClick={() => { setText(sent); setOpen(true); onComposing?.(true); }} className="mt-3 w-full rounded-xl bg-black/[0.05] px-3 py-2.5 text-left text-[14px]">
+      <button type="button" onClick={() => { if (blocked()) return; setText(sent); setOpen(true); onComposing?.(true); }} className="mt-3 w-full rounded-xl bg-black/[0.05] px-3 py-2.5 text-left text-[14px]" data-sticker-question-sent>
         <span className="line-clamp-2">{sent}</span>
-        <span className="mt-1 block text-[11px] font-bold text-black/45">Sent to {first} · tap to change</span>
+        <span className="mt-1 block text-[11px] font-bold text-black/45">{own ? "In your responses" : `Sent to ${first}`} · tap to change</span>
       </button>
     );
   }
@@ -248,7 +249,7 @@ function QuestionSticker({ post, first, onComposing }: { post: CommunityPost; fi
         onSuccess: () => {
           setOpen(false);
           onComposing?.(false);
-          toast.success(`Sent to ${first}`);
+          toast.success(own ? "Added to your responses" : `Sent to ${first}`);
         },
         onError: (e: any) => toast.error(e?.message ?? "Couldn't send that"),
       },
