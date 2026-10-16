@@ -33,10 +33,10 @@ describe("workout timer lifecycle", () => {
     expect(logger).toContain("5_000");
   });
 
-  it("shows a live workout clock in the normal logger and in story view's top bar", () => {
+  it("shows a live workout clock in the normal logger and in Focus's top bar", () => {
     expect(logger).toContain("Workout time");
     expect(logger).toContain("<WorkoutTimer");
-    expect(logger).toContain("timer={\n            statusBarVisible && !completion?.completed_at ? (");
+    expect(logger).toContain("timer={!completion?.completed_at ? <FocusClock dayId={dayId} /> : undefined}");
   });
 
   it("persists the exact local wall-clock seconds instead of relying on server started_at", () => {

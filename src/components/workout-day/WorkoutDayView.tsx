@@ -50,7 +50,7 @@ import { cn } from "@/lib/utils";
 import { playAppSound } from "@/lib/app-sounds";
 import { haptic } from "@/platform/haptics";
 import { useWorkoutView } from "@/lib/use-workout-view";
-import { StoryChrome, WorkoutViewToggle, exerciseInView, pickStoryStart, runStoryTransition, slideCard, visibleCard, type StoryFinish } from "@/components/workout-day/workout-story";
+import { FocusClock, StoryChrome, WorkoutViewToggle, exerciseInView, pickStoryStart, runStoryTransition, slideCard, visibleCard, type StoryFinish } from "@/components/workout-day/workout-story";
 import {
   selectExerciseNoteHistory,
   noteContextLabel,
@@ -2672,7 +2672,7 @@ function WorkoutDay({
             {!readonly && (
               <WorkoutToolsButton unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"} />
             )}
-            {/* List or Story (one exercise at a time, full screen), saved on the account. */}
+            {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
             {rowsLoaded && (rows as any[]).length > 0 && (
               <WorkoutViewToggle className="ml-auto" view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} />
             )}
@@ -2762,7 +2762,7 @@ function WorkoutDay({
                 actionLabel={`Delete ${r.exercises?.name ?? r.exercise_name_override ?? "Exercise"} from this workout`}
                 onAction={() => removeExerciseNow(r.id, r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
               >
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" data-story-fill>
                 {unsupportedRows[r.id] ? (
                   <UnsupportedExerciseCard row={r} />
                 ) : (
@@ -2807,7 +2807,8 @@ function WorkoutDay({
                     onMoveTo={(position) => void moveExerciseTo(r.id, position)}
                   />
                 )}
-                {canEditWorkoutStructure && (
+                {/* Adding exercises lives in the list; Focus is for logging. */}
+                {canEditWorkoutStructure && !storyOpen && (
                   <WorkoutAddExercise
                     subtle
                     onAdd={(exercise) => addExerciseNow(exercise, rowIndex + 1)}
@@ -2904,11 +2905,7 @@ function WorkoutDay({
           done={(rows as any[]).map((r) => statusSummary.doneRowIds.has(String(r.id)))}
           index={Math.min(storyIndex, storyRowIds.length - 1)}
           title={cleanDayTitle(day.title, day.day_index)}
-          timer={
-            statusBarVisible && !completion?.completed_at ? (
-              <WorkoutTimer dayId={dayId} completedAt={null} savedDurationMin={null} readonly className="[&>span]:py-0 [&>span]:text-[11px]" />
-            ) : undefined
-          }
+          timer={!completion?.completed_at ? <FocusClock dayId={dayId} /> : undefined}
           finish={storyFinish}
           onJump={jumpStory}
           onExit={() => chooseWorkoutView("list")}
@@ -4141,7 +4138,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     <Card
       data-workout-exercise
       data-workout-row={row?.id}
-      className="workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 pl-4 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5 sm:pl-6"
+      className={cn(
+        "workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 pl-4 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5 sm:pl-6",
+        // Focus: the card fills the screen and its sets sit at the bottom, by the thumb and Next
+        focusMode && "flex flex-col",
+      )}
     >
       {/* Left stripe: inset top/bottom so it doesn't visually connect between cards */}
       <div className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full opacity-90 ${accent}`} aria-hidden />
@@ -4462,6 +4463,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </p>
       )}
 
+      {focusMode && <div aria-hidden className="flex-1" data-focus-spacer />}
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div
           className={cn(

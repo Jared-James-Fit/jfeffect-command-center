@@ -70,6 +70,29 @@ describe("story view: the same cards as the list, never a second copy", () => {
   });
 });
 
+describe("Focus view (stored as story): easy to read, sets by the thumb", () => {
+  const story = read("src/components/workout-day/workout-story.tsx");
+  const day = read("src/components/workout-day/WorkoutDayView.tsx");
+  const css = read("src/styles.css");
+  it("is called Focus, and the way out says List", () => {
+    expect(story).toContain('{ value: "story", label: "Focus", icon: RectangleVertical }');
+    expect(story).not.toContain('label: "Story"');
+    expect(story).toContain('data-testid="focus-exit"');
+  });
+  it("the top bar leads with where you are; the clock is plain and hides once stopped", () => {
+    expect(story).toContain("Exercise {index + 1} of {count}");
+    expect(story).toContain("if (!session || session.stoppedAt != null || isSessionAbandoned(session, now)) return null;");
+    expect(story).toContain("border-b border-border/60 bg-background");
+    expect(day).toContain("timer={!completion?.completed_at ? <FocusClock dayId={dayId} /> : undefined}");
+  });
+  it("the card fills the screen and its sets sit at the bottom (Focus only); adding exercises stays in the list", () => {
+    expect(css).toContain(".workout-story [data-story-fill] > [data-workout-exercise] { flex: 1 0 auto; }");
+    expect(day).toContain('focusMode && "flex flex-col"');
+    expect(day).toContain('{focusMode && <div aria-hidden className="flex-1" data-focus-spacer />}');
+    expect(day).toContain("{canEditWorkoutStructure && !storyOpen && (");
+  });
+});
+
 describe("workout logger: the Workouts tab goes to the top first", () => {
   it("only inside a workout", () => {
     expect(topFirstPage("/portal/workouts/0b5f3c3e-1111-4c2a-9d7e-123456789abc")).toBe(true);
