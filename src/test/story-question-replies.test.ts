@@ -32,6 +32,16 @@ describe("View as client: a story as the client sees it", () => {
     expect(p.sticker?.mine).toBeNull();
   });
 
+  it("the coach's own story shows the crew's way even when the client being previewed is the coach's own client account", () => {
+    // the coach's login is linked to their client account (same person), which authors their stories,
+    // so as loaded it's the coach's (is_mine) and its author is the client being previewed
+    const p = seenAs(post("jared-client", true, question()), "jared-client");
+    expect(p.is_mine).toBe(false);
+    expect(p.sticker?.is_mine).toBe(false);
+    expect(p.sticker?.answers).toBeUndefined();
+    expect(seenAs(post("jared-client", true), "jared-client").is_mine).toBe(false);
+  });
+
   it("the client's own posts are theirs, and a post with no sticker is left alone", () => {
     expect(seenAs(post("nicole", false), "nicole").is_mine).toBe(true);
     const other = post("vicky", false);

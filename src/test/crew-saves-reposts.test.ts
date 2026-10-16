@@ -40,7 +40,7 @@ describe("a repost's note", () => {
     expect(cleanRepostNote("💪".repeat(70))).toBe("💪".repeat(60));
     expect(noteLineCount("a\n\nb")).toBe(3);
     expect(noteLineCount("")).toBe(1);
-    const lines = read("supabase/migrations/20261211090000_repost_note_lines.sql");
+    const lines = read("supabase/migrations/20261211100000_repost_note_lines.sql");
     expect(lines).toContain("CREATE OR REPLACE FUNCTION public.community_repost_note_clean(_note text)");
     expect(lines).toContain("IF v_n > 6 THEN");
     expect(lines).toContain("left(array_to_string(v_lines, E'\\n'), 60)");
