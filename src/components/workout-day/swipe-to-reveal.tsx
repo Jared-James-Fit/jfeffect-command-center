@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
  *    the Delete button must still be tapped.
  *  - One open card at a time; tapping elsewhere or scrolling closes it.
  *  - Gestures that start on inputs or [data-no-swipe] controls are ignored.
+ *  - `paused` (story view, where a sideways swipe is the next exercise) keeps
+ *    the same elements, so nothing inside remounts, but ignores gestures.
  */
 
 export const SWIPE_SLOP = 24;
@@ -64,11 +66,14 @@ function ignoreTarget(target: EventTarget | null): boolean {
 
 export function SwipeToReveal({
   enabled,
+  paused = false,
   actionLabel,
   onAction,
   children,
 }: {
   enabled: boolean;
+  /** Ignore swipes for now without changing the elements (see above). */
+  paused?: boolean;
   /** Accessible label, e.g. "Delete Lateral Raise from this workout". */
   actionLabel: string;
   onAction: () => void;
@@ -108,9 +113,18 @@ export function SwipeToReveal({
     };
   }, [offset, dragging, close]);
 
+  // Paused while open: shut it.
+  useEffect(() => {
+    if (paused) setOffset(0);
+  }, [paused]);
+
   if (!enabled) return <>{children}</>;
 
   const begin = (x: number, y: number, target: EventTarget | null, pointerId: number | null) => {
+    if (paused) {
+      g.current = null;
+      return;
+    }
     if (ignoreTarget(target)) {
       g.current = null;
       if (offset !== 0) close(); // interacting with the card's inputs closes it
@@ -173,7 +187,7 @@ export function SwipeToReveal({
         </button>
       </div>
       <div
-        className={cn("relative bg-background touch-pan-y", !dragging && "transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]")}
+        className={cn("relative bg-background", !paused && "touch-pan-y", !dragging && "transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]")}
         style={{ transform: `translate3d(${offset}px,0,0)` }}
         onTouchStart={(e) => begin(e.touches[0].clientX, e.touches[0].clientY, e.target, null)}
         onTouchMove={(e) => move(e.touches[0].clientX, e.touches[0].clientY)}

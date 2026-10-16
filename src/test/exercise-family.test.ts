@@ -103,7 +103,8 @@ describe("numbering is derived, never stored", () => {
 
   it("the logger passes the live list index to every card", () => {
     const src = read("src/components/workout-day/WorkoutDayView.tsx");
-    expect((src.match(/position=\{rowIndex \+ 1\}/g) ?? []).length).toBe(2);
+    // one list of cards (story view is the same list laid out side by side)
+    expect((src.match(/position=\{rowIndex \+ 1\}/g) ?? []).length).toBe(1);
   });
 
   it("the builder derives the badge from the row's index in the day", () => {

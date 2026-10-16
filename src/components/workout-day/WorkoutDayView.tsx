@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, Maximize2, Minimize2, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight, Calculator } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight, Calculator } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -49,6 +49,8 @@ import { runJob } from "@/lib/progress-jobs";
 import { cn } from "@/lib/utils";
 import { playAppSound } from "@/lib/app-sounds";
 import { haptic } from "@/platform/haptics";
+import { useWorkoutView } from "@/lib/use-workout-view";
+import { StoryChrome, WorkoutViewToggle, exerciseInView, pickStoryStart, runStoryTransition, slideCard, visibleCard, type StoryFinish } from "@/components/workout-day/workout-story";
 import {
   selectExerciseNoteHistory,
   noteContextLabel,
@@ -137,7 +139,6 @@ import {
 } from "@/lib/workout-load-type";
 import { SetTimerInput } from "@/components/workout-day/set-timer-input";
 import { WorkoutSubmissionSummary } from "@/components/workout-submission-summary";
-import { LockInBar } from "@/components/community/lock-in";
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { collectSessionPRs } from "@/lib/workout-takeaways";
 import { useWorkoutPoints, useWorkoutRecords } from "@/lib/training-records";
@@ -165,7 +166,6 @@ import {
   WorkoutReviewEditor,
   type ReviewInitial,
 } from "@/components/workout/shared/workout-review-editor";
-import { WorkoutStatusBar } from "@/components/workout-day/WorkoutStatusBar";
 import {
   WorkoutTimer,
   beginWorkoutSession,
@@ -1309,7 +1309,7 @@ function WorkoutDay({
     },
   });
 
-  const { data: completion } = useQuery({
+  const { data: completion, isPending: completionPending } = useQuery({
     queryKey: ["pl-day-completion", dayId, client?.id, adapter?.kind ?? null, scheduledWorkoutId],
     enabled: !!client?.id,
     // Completion state is critical — always fetch fresh to prevent stuck UI states
@@ -1398,15 +1398,6 @@ function WorkoutDay({
     } catch (err) {
       console.warn("markInProgress failed", err);
     }
-  };
-
-  // Lock in (community): locking in is starting the session — same server
-  // path as the first logged set — and returns the completion it posts to.
-  const ensureStartedForLockIn = async (): Promise<string | null> => {
-    if (completion?.id && (completion.started_at || completion.in_progress_at)) return completion.id;
-    const res = await startWorkoutSrv({ data: { kind: "client" as const, dayId, scheduledWorkoutId } });
-    qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
-    return (res as any)?.id ?? null;
   };
 
   // Heartbeat: persist activity timestamps to localStorage while the
@@ -1678,8 +1669,25 @@ function WorkoutDay({
     return { value: Number(numeric.actual_load), unit: sourceUnit };
   };
 
-  // Focus / full-screen logging mode.
-  const [focusMode, setFocusMode] = useState(false);
+  // Story view: one exercise at a time, full screen (workout-story.tsx). The
+  // account's saved choice opens it; it's the list's own cards laid out side by
+  // side, so switching view never remounts a card or drops what's typed in it.
+  const { view: savedView, setView: saveWorkoutView } = useWorkoutView();
+  const [storyOpen, setStoryOpen] = useState(false);
+  // Without view transitions: "in" story view's cards rising in, "back" the list fading in after it
+  const [storyAnim, setStoryAnim] = useState<"in" | "back" | null>(null);
+  const [storyIndex, setStoryIndex] = useState(0);
+  const storyIndexRef = useRef(0);
+  const storyListRef = useRef<HTMLDivElement | null>(null);
+  // the slide to land on when it opens / the exercise to land on in the list when it closes
+  const storyStartRef = useRef<number | null>(null);
+  const storyReturnRef = useRef<string | null>(null);
+  // the workout the saved choice was already applied to (it opens story view once per workout)
+  const storyAutoDayRef = useRef<string | null>(null);
+  const storyTimerRef = useRef<number | undefined>(undefined);
+  const storyRafRef = useRef(0);
+  // every set logged, per exercise (written each render from statusSummary)
+  const storyDoneRef = useRef<ReadonlySet<string>>(new Set());
   // The exercise logger is isolated by WorkoutLoadBoundary while Finish Workout
   // renders outside that boundary. Track a caught body error at this level so a
   // fatal logger failure can never leave completion actionable by mistake.
@@ -1689,10 +1697,10 @@ function WorkoutDay({
   }, [dayId]);
   
   useEffect(() => {
-    if (!focusMode) return;
+    if (!storyOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // Hide the mobile bottom nav while in full-screen logging so it can't
+    // Hide the mobile bottom nav while in story view so it can't
     // overlap controls and so opened Sheets (z-50) are not trapped behind it.
     document.body.setAttribute("data-workout-focus", "1");
     const navEls = document.querySelectorAll<HTMLElement>("[data-mobile-bottom-nav]");
@@ -1707,7 +1715,7 @@ function WorkoutDay({
       document.body.removeAttribute("data-workout-focus");
       restores.forEach((fn) => fn());
     };
-  }, [focusMode]);
+  }, [storyOpen]);
 
   // Restore any unsynced draft for this workout's notes/duration before render.
   const draftKey = client?.id ? `workout:${dayId}:${client.id}:meta` : null;
@@ -2257,7 +2265,6 @@ function WorkoutDay({
     // 5-second review. The workout remains amber/in-progress until that review
     // is actually submitted.
     const id = window.setTimeout(() => {
-      setFocusMode(false);
       void (async () => {
         await markInProgress();
         setQuickFinishReviewOpen(true);
@@ -2278,6 +2285,133 @@ function WorkoutDay({
     scheduledWorkoutId,
     workoutBodyError,
   ]);
+
+  // ── Story view ─────────────────────────────────────────────────────────
+  const storyRowKey = (rows as any[]).map((r) => String(r.id)).join("|");
+  const storyRowIds = useMemo(() => (storyRowKey ? storyRowKey.split("|") : []), [storyRowKey]);
+  const storyReduced = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  useEffect(() => () => {
+    window.clearTimeout(storyTimerRef.current);
+    cancelAnimationFrame(storyRafRef.current);
+  }, []);
+
+  const openStory = useCallback((animate: boolean) => {
+    window.clearTimeout(storyTimerRef.current);
+    const list = storyListRef.current;
+    const start = pickStoryStart(storyRowIds, storyDoneRef.current, exerciseInView(list));
+    const update = () => {
+      storyStartRef.current = start;
+      storyIndexRef.current = start;
+      setStoryIndex(start);
+      setStoryAnim(null);
+      setStoryOpen(true);
+    };
+    // The card glides from its spot in the list to the top of the stage.
+    if (animate && runStoryTransition(update, visibleCard(list, storyRowIds[start]))) return;
+    update();
+    if (animate) setStoryAnim("in");
+  }, [storyRowIds]);
+
+  const closeStory = useCallback(() => {
+    window.clearTimeout(storyTimerRef.current);
+    const id = storyRowIds[storyIndexRef.current] ?? null;
+    storyReturnRef.current = id;
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    const update = () => {
+      setStoryOpen(false);
+      setStoryAnim(null);
+    };
+    // ...and back down into its place in the list.
+    if (runStoryTransition(update, slideCard(storyListRef.current, id))) return;
+    update();
+    setStoryAnim("back");
+    storyTimerRef.current = window.setTimeout(() => setStoryAnim(null), 260);
+  }, [storyRowIds]);
+
+  // The List / Story switch: saved to the account, and the view follows.
+  const chooseWorkoutView = useCallback((next: "list" | "story") => {
+    storyAutoDayRef.current = dayId;
+    saveWorkoutView(next);
+    haptic("light");
+    if (next === "story") openStory(true);
+    else closeStory();
+  }, [dayId, saveWorkoutView, openStory, closeStory]);
+
+  const jumpStory = useCallback((i: number) => {
+    const el = storyListRef.current;
+    if (!el) return;
+    const n = Math.max(0, Math.min(storyRowIds.length - 1, i));
+    // a set being typed saves on blur, and the keyboard doesn't ride along
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    el.scrollTo({ left: n * el.clientWidth, behavior: storyReduced() ? "auto" : "smooth" });
+  }, [storyRowIds.length]);
+
+  const onStoryScroll = useCallback(() => {
+    if (storyRafRef.current) return;
+    storyRafRef.current = requestAnimationFrame(() => {
+      storyRafRef.current = 0;
+      const el = storyListRef.current;
+      if (!el || !el.clientWidth) return;
+      const i = Math.round(el.scrollLeft / el.clientWidth);
+      if (i !== storyIndexRef.current) {
+        storyIndexRef.current = i;
+        setStoryIndex(i);
+      }
+    });
+  }, []);
+
+  // Opening: land on the right exercise before the first frame shows.
+  useLayoutEffect(() => {
+    const el = storyListRef.current;
+    if (!storyOpen || !el || storyStartRef.current == null) return;
+    el.scrollLeft = storyStartRef.current * el.clientWidth;
+    storyStartRef.current = null;
+  }, [storyOpen]);
+
+  // Closing: the list picks up at the exercise story view was on.
+  useLayoutEffect(() => {
+    const id = storyReturnRef.current;
+    if (storyOpen || !id) return;
+    storyReturnRef.current = null;
+    const card = storyListRef.current?.querySelector<HTMLElement>(`[data-story-slide="${CSS.escape(id)}"]`);
+    if (card) window.scrollTo({ top: Math.max(0, card.getBoundingClientRect().top + window.scrollY - 88), behavior: "auto" });
+  }, [storyOpen]);
+
+  // An exercise added, removed or moved while in story view: stay on the same one.
+  const storyPrevIdsRef = useRef(storyRowIds);
+  useLayoutEffect(() => {
+    const prev = storyPrevIdsRef.current;
+    storyPrevIdsRef.current = storyRowIds;
+    const el = storyListRef.current;
+    if (!storyOpen || prev === storyRowIds || !el || storyRowIds.length === 0) return;
+    const was = prev[storyIndexRef.current];
+    const at = was ? storyRowIds.indexOf(was) : -1;
+    const target = at >= 0 ? at : Math.min(storyIndexRef.current, storyRowIds.length - 1);
+    el.scrollLeft = target * el.clientWidth;
+    storyIndexRef.current = target;
+    setStoryIndex(target);
+  }, [storyRowIds, storyOpen]);
+
+  // The saved choice opens story view once per workout, for logging: not on a
+  // finished workout, and not when a link asks for something on the list (a
+  // note to look at, the review, the recap).
+  // Nothing left to show one at a time (load error, last exercise removed):
+  // back to the list for now, never stuck on an empty stage.
+  useEffect(() => {
+    if (storyOpen && (workoutBodyError || rowsIsError || (rowsLoaded && storyRowIds.length === 0))) {
+      setStoryOpen(false);
+      setStoryAnim(null);
+    }
+  }, [storyOpen, workoutBodyError, rowsIsError, rowsLoaded, storyRowIds.length]);
+
+  // Before the first paint, so the list never flashes up first.
+  useLayoutEffect(() => {
+    if (storyAutoDayRef.current === dayId || storyOpen || savedView !== "story") return;
+    if (!rowsLoaded || storyRowIds.length === 0 || (client?.id && completionPending)) return;
+    storyAutoDayRef.current = dayId;
+    if (completion?.completed_at || search.focus || search.review === 1 || search.recap === 1 || search.edit === 1) return;
+    openStory(false);
+  }, [dayId, savedView, rowsLoaded, storyRowIds.length, client?.id, completionPending, completion?.completed_at, search.focus, search.review, search.recap, search.edit, storyOpen, openStory]);
 
   if (!day) {
     return (
@@ -2349,9 +2483,14 @@ function WorkoutDay({
         loggedByRow.set(s.rowId, (loggedByRow.get(s.rowId) ?? 0) + 1);
       }
       let exercisesDone = 0;
+      // Every set logged (skipped exercises count as done): story view's bars.
+      const doneRowIds = new Set<string>((rows as any[]).filter((r: any) => r?.skipped).map((r: any) => String(r.id)));
       for (const r of required) {
         const need = Math.max(1, Number(r.prescribedSets) || 1);
-        if ((loggedByRow.get(r.rowId) ?? 0) >= need) exercisesDone++;
+        if ((loggedByRow.get(r.rowId) ?? 0) >= need) {
+          exercisesDone++;
+          doneRowIds.add(r.rowId);
+        }
       }
       // Confirmed sets count (for the status bar).
       let confirmedSets = 0;
@@ -2362,11 +2501,30 @@ function WorkoutDay({
         exercisesTotal: required.length,
         setsDone: confirmedSets,
         setsTotal: sum?.requiredSets ?? 0,
+        doneRowIds,
       };
     } catch {
-      return { summary: null, exercisesDone: 0, exercisesTotal: 0, setsDone: 0, setsTotal: 0 };
+      return { summary: null, exercisesDone: 0, exercisesTotal: 0, setsDone: 0, setsTotal: 0, doneRowIds: new Set<string>() };
     }
   })();
+
+  storyDoneRef.current = statusSummary.doneRowIds;
+  // Story view's last button: the same finish as the list's card, under the same gate.
+  const storyFinish: StoryFinish =
+    !readonly && !workoutBodyError && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0
+      ? {
+          kind: "finish",
+          review: autoFinishReady,
+          onFinish: async () => {
+            if (autoFinishReady) {
+              setQuickFinishReviewOpen(true);
+              return;
+            }
+            await handleFinishWorkout();
+            refresh();
+          },
+        }
+      : { kind: "done" };
 
   const reviewSubmitted = !!(
     existingReview?.review_submitted_at ??
@@ -2403,224 +2561,6 @@ function WorkoutDay({
 
   return (
     <WorkoutRecordsContext.Provider value={recordsContextValue}>
-      {focusMode && (
-        <div
-          className="fixed inset-0 z-40 overflow-y-auto overflow-x-hidden bg-background workout-scroll-container"
-          data-workout-focus
-        >
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
-            <div className="font-bold">{cleanDayTitle(day.title, day.day_index)} · Full Screen</div>
-            {/* Global KG/LB toggle removed — each exercise carries its own
-                authoritative unit control. */}
-            <Button size="sm" variant="outline" onClick={() => setFocusMode(false)}>
-              <Minimize2 className="mr-1 h-4 w-4" /> Exit Full Screen
-            </Button>
-          </div>
-          {statusBarVisible && (
-            <WorkoutStatusBar
-              sessionTimer={
-                <WorkoutTimer
-                  dayId={dayId}
-                  completedAt={completion?.completed_at ?? null}
-                  savedDurationMin={completion?.actual_duration_min ?? null}
-                  readonly
-                />
-              }
-              exercisesDone={statusSummary.exercisesDone}
-              exercisesTotal={statusSummary.exercisesTotal}
-              setsDone={statusSummary.setsDone}
-              setsTotal={statusSummary.setsTotal}
-              className="top-[52px]"
-            />
-          )}
-          <div className="mx-auto max-w-3xl p-4 md:p-6">
-            <WorkoutLoadBoundary
-              clientId={client?.id ?? null}
-              clientName={(client as any)?.full_name ?? null}
-              dayId={dayId}
-              route={`/portal/workouts/${dayId}`}
-              onCaught={() => setWorkoutBodyError(true)}
-              onRetry={() => setWorkoutBodyError(false)}
-            >
-              <div className="workout-stack-surface space-y-4 p-3 sm:p-4 workout-snap-list">
-              {!rowsLoaded ? (
-                <WorkoutExerciseCardsSkeleton focusMode />
-              ) : rowsIsError ? (
-                <WorkoutLoadFailureCard
-                  clientId={client?.id ?? null}
-                  clientName={(client as any)?.full_name ?? null}
-                  dayId={dayId}
-                  route={`/portal/workouts/${dayId}`}
-                  error={(rowsError as Error) ?? null}
-                  onRetry={() => { void (refetchRows as any)(); }}
-                />
-              ) : authReady && rowsLoaded && !rowsFetching && (rows as any[]).length === 0 ? (
-                <WorkoutEmptyCard
-                  clientId={client?.id ?? null}
-                  clientName={(client as any)?.full_name ?? null}
-                  workoutId={dayId}
-                  route={`/portal/workouts/${dayId}`}
-                  onRetry={() => Promise.all([
-                    qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] }),
-                    qc.refetchQueries({ queryKey: ["pl-day", dayId] }),
-                    qc.refetchQueries({ queryKey: ["pl-day-results", dayId] }),
-                    qc.refetchQueries({ queryKey: ["pl-day-completion", dayId] }),
-                  ])}
-                />
-              ) : null}
-              {isClientWorkout && !completion?.completed_at && rowsLoaded && (rows as any[]).length > 0 && (
-                <LockInBar
-                  previewOnly={isImpersonating}
-                  dayId={dayId}
-                  completionId={completion?.id ?? null}
-                  ensureStarted={ensureStartedForLockIn}
-                  workoutTitle={cleanDayTitle(day.title, day.day_index)}
-                  athleteName={(client as any)?.full_name ?? null}
-                />
-              )}
-              {canEditWorkoutStructure && rowsLoaded && (rows as any[]).length === 0 && (
-                <WorkoutAddExercise onAdd={(exercise) => addExerciseNow(exercise, 0)} disabled={rowsFetching} />
-              )}
-              {(rows as any[]).map((r, rowIndex) => (
-                <div key={r.id} className="space-y-1.5">
-                  {unsupportedRows[r.id] ? (
-                    <UnsupportedExerciseCard row={r} />
-                  ) : (
-                    <ExerciseBlock
-                      row={r}
-                      dayId={dayId}
-                      dayTitle={cleanDayTitle(day.title, day.day_index)}
-                      dayIndex={day?.day_index ?? null}
-                      clientId={client?.id}
-                      previousLift={previousLiftByRow.get(r.id) ?? null}
-                      warmedUp={warmedUpRowIds.has(r.id)}
-                      lastWeekSwap={lastWeekSwapByRow.get(r.id) ?? null}
-                      dayRead={dayReadByRow.get(r.id) ?? null}
-                      suggestNudge={suggestNudgeRowId === r.id ? hideSuggestNudge : null}
-                      onSuggestEligible={reportSuggestEligible}
-                      repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
-                      loadHistory={loadHistoryByRow.get(r.id) ?? null}
-                      bodyweightKg={bodyweightNowKg}
-                      readiness={readiness}
-                      assistedBests={assistedBestsByRow.get(r.id) ?? null}
-                      blockId={blockId}
-                      topSetBasis={topSetBasisForRow(r, rowIndex)}
-                      existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
-                      resultsReady={resultsLoaded && !resultsFetching}
-                      existingNote={notesByRowId.get(r.id)}
-                      notesLoading={notesLoading}
-                      readonly={readonly}
-                      unit={unitForRow(r)}
-                      onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u)}
-                      focusMode
-                      onChange={refresh}
-                      onNoteChange={refreshNotes}
-                      purposeLabel={purposeLabelById.get(r.id) ?? null}
-                      swapContext={swapContextForRow(adapter, dayId, r.id)}
-                      canMoveUp={canEditWorkoutStructure && rowIndex > 0}
-                      canMoveDown={canEditWorkoutStructure && rowIndex < (rows as any[]).length - 1}
-                      position={rowIndex + 1}
-                      movePosition={canEditWorkoutStructure ? rowIndex + 1 : undefined}
-                      moveCount={canEditWorkoutStructure ? (rows as any[]).length : undefined}
-                      onMoveUp={() => void moveExerciseNow(r.id, -1)}
-                      onMoveDown={() => void moveExerciseNow(r.id, 1)}
-                      onMoveTo={(position) => void moveExerciseTo(r.id, position)}
-                    />
-                  )}
-                  {canEditWorkoutStructure && (
-                    <WorkoutAddExercise
-                      subtle
-                      onAdd={(exercise) => addExerciseNow(exercise, rowIndex + 1)}
-                      disabled={rowsFetching}
-                    />
-                  )}
-                </div>
-              ))}
-              </div>
-            </WorkoutLoadBoundary>
-
-            {/* Finish Workout + Completed Actions inside fullscreen mode.
-                 Mirror the primary Finish gate: only render once rows have
-                 successfully loaded and there is at least one exercise, so a
-                 transient load-failure or empty-rows state cannot complete a
-                 workout. */}
-            {!readonly && !workoutBodyError && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0 && (
-              <div className="mx-auto max-w-3xl px-4 pb-4">
-                <Card className="p-4">
-                  {autoFinishReady ? (
-                    <Button
-                      className="w-full bg-amber-500 text-black hover:bg-amber-400"
-                      onClick={() => {
-                        setFocusMode(false);
-                        setQuickFinishReviewOpen(true);
-                      }}
-                    >
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      Review to Finish
-                    </Button>
-                  ) : (
-                    <ActionButton
-                      className="w-full"
-                      loadingLabel="Saving…"
-                      successLabel="Finish Workout"
-                      successToast="Tap to finish"
-                      icon={<CheckCircle2 className="h-4 w-4" />}
-                      onAction={async () => {
-                        setFocusMode(false);
-                        await handleFinishWorkout();
-                        refresh();
-                      }}
-                    >
-                      Finish Workout
-                    </ActionButton>
-                  )}
-                </Card>
-              </div>
-            )}
-            {completion?.completed_at && client?.id && (
-              <div className="mx-auto max-w-3xl px-4 pb-4">
-                <CompletedWorkoutActions
-                  ctx={{ kind: "client", dayId, scheduledWorkoutId }}
-                  hasCoach
-                  actAsClientId={isImpersonating ? client.id : null}
-                  initialReview={
-                    existingReview
-                      ? {
-                          overallRating: existingReview.overall_rating ?? null,
-                          sessionRpe: existingReview.session_rpe ?? null,
-                          pain: existingReview.pain ?? false,
-                          painLevel: existingReview.pain_level ?? null,
-                          painArea: existingReview.pain_area ?? null,
-                          painNote: existingReview.pain_note ?? null,
-                          clientNote: existingReview.client_note ?? null,
-                          strengthFeel: existingReview.strength_feel ?? null,
-                          fatigueFeel: existingReview.fatigue_feel ?? null,
-                          hitTarget: existingReview.hit_target ?? null,
-                          recoveryToday: existingReview.recovery_today ?? null,
-                          sleepBucket: existingReview.sleep_bucket ?? null,
-                          sleepNotes: existingReview.sleep_notes ?? null,
-                    reviewVersion: existingReview.review_version ?? null,
-                          editCount: existingReview.review_edit_count ?? 0,
-                          submittedAt: existingReview.review_submitted_at ?? existingReview.created_at ?? null,
-                        }
-                      : null
-                  }
-                  onReviewSaved={() => {
-                    qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] });
-                    qc.invalidateQueries({ queryKey: ["my-workouts", client.id] });
-                  }}
-                  onViewScore={(rating) => {
-                    setLastSessionRating(rating);
-                    openRecapSummary();
-                  }}
-                  autoOpenReview={autoOpenReviewAfterFinish}
-                  onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
       <PageHeader
         backTo={navigation.backTo}
         backLabel="Workouts"
@@ -2732,6 +2672,10 @@ function WorkoutDay({
             {!readonly && (
               <WorkoutToolsButton unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"} />
             )}
+            {/* List or Story (one exercise at a time, full screen), saved on the account. */}
+            {rowsLoaded && (rows as any[]).length > 0 && (
+              <WorkoutViewToggle className="ml-auto" view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} />
+            )}
           </div>
         )}
 
@@ -2750,7 +2694,6 @@ function WorkoutDay({
 
         {/* Workouts are always editable — no date/block/program lock banners. */}
 
-        {!focusMode && (
         <WorkoutLoadBoundary
           clientId={client?.id ?? null}
           clientName={(client as any)?.full_name ?? null}
@@ -2759,7 +2702,22 @@ function WorkoutDay({
           onCaught={() => setWorkoutBodyError(true)}
           onRetry={() => setWorkoutBodyError(false)}
         >
-          <div className="workout-stack-surface grid grid-cols-1 gap-3.5 p-2 sm:p-4 lg:grid-cols-2 lg:items-start">
+          {/* The same list in both views: story view only swaps its classes (one
+              exercise per screen, side by side), so no card ever remounts. */}
+          <div
+            ref={storyListRef}
+            data-testid="workout-exercise-list"
+            data-view={storyOpen ? "story" : "list"}
+            data-anim={storyOpen && storyAnim === "in" ? "in" : undefined}
+            data-no-pull-refresh={storyOpen ? "" : undefined}
+            aria-roledescription={storyOpen ? "carousel" : undefined}
+            onScroll={storyOpen ? onStoryScroll : undefined}
+            className={
+              storyOpen
+                ? "workout-story"
+                : cn("workout-stack-surface grid grid-cols-1 gap-3.5 p-2 sm:p-4 lg:grid-cols-2 lg:items-start", storyAnim === "back" && "workout-story-list-in")
+            }
+          >
             {!rowsLoaded ? (
               <WorkoutExerciseCardsSkeleton />
             ) : rowsIsError ? (
@@ -2791,9 +2749,16 @@ function WorkoutDay({
               </div>
             )}
             {(rows as any[]).map((r, rowIndex) => (
-              <SwipeToReveal
+              <div
                 key={r.id}
+                data-story-slide={r.id}
+                className="min-w-0"
+                aria-label={storyOpen ? `Exercise ${rowIndex + 1} of ${(rows as any[]).length}` : undefined}
+                aria-roledescription={storyOpen ? "slide" : undefined}
+              >
+              <SwipeToReveal
                 enabled={canEditWorkoutStructure && !readonly}
+                paused={storyOpen}
                 actionLabel={`Delete ${r.exercises?.name ?? r.exercise_name_override ?? "Exercise"} from this workout`}
                 onAction={() => removeExerciseNow(r.id, r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
               >
@@ -2827,6 +2792,7 @@ function WorkoutDay({
                     readonly={readonly}
                     unit={unitForRow(r)}
                     onUnitChange={(u) => setExerciseUnit(r.exercises?.id ?? r.exercise_id ?? null, r.id, u)}
+                    focusMode={storyOpen}
                     onChange={refresh}
                     onNoteChange={refreshNotes}
                     purposeLabel={purposeLabelById.get(r.id) ?? null}
@@ -2850,10 +2816,10 @@ function WorkoutDay({
                 )}
               </div>
               </SwipeToReveal>
+              </div>
             ))}
           </div>
         </WorkoutLoadBoundary>
-        )}
 
         {/* Finish Workout card — only show when workout is NOT yet completed.
              Guard: !completion?.completed_at prevents the glitchy state where
@@ -2887,8 +2853,7 @@ function WorkoutDay({
           </Card>
         )}
 
-        {/* Focus mode renders its own copy; two would stack two review sheets. */}
-        {!focusMode && completion?.completed_at && client?.id && (
+        {completion?.completed_at && client?.id && (
           <CompletedWorkoutActions
             ctx={{ kind: "client", dayId, scheduledWorkoutId }}
             hasCoach
@@ -2932,6 +2897,24 @@ function WorkoutDay({
         )}
         {children}
       </div>
+
+      {storyOpen && storyRowIds.length > 0 && (
+        <StoryChrome
+          names={(rows as any[]).map((r) => r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
+          done={(rows as any[]).map((r) => statusSummary.doneRowIds.has(String(r.id)))}
+          index={Math.min(storyIndex, storyRowIds.length - 1)}
+          title={cleanDayTitle(day.title, day.day_index)}
+          timer={
+            statusBarVisible && !completion?.completed_at ? (
+              <WorkoutTimer dayId={dayId} completedAt={null} savedDurationMin={null} readonly className="[&>span]:py-0 [&>span]:text-[11px]" />
+            ) : undefined
+          }
+          finish={storyFinish}
+          onJump={jumpStory}
+          onExit={() => chooseWorkoutView("list")}
+          onDone={closeStory}
+        />
+      )}
 
       {client?.id && (quickFinishReviewOpen || quickFinishMounted || (!completion?.completed_at && autoFinishReady)) && (
         <WorkoutReviewEditor

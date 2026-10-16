@@ -14,7 +14,8 @@ describe("workout critical payload contract", () => {
     expect(view).toContain("enabled: secondaryHydrationReady && !!historyOwnerId");
     expect(view).toContain("enabled: secondaryHydrationReady && (rows as any[]).length > 0");
     expect(view).toContain("<WorkoutExerciseCardsSkeleton />");
-    expect(view).toContain("<WorkoutExerciseCardsSkeleton focusMode />");
+    // Story view lays out the same list: one skeleton, never a second copy of the cards.
+    expect(view.match(/<WorkoutExerciseCardsSkeleton/g)).toHaveLength(1);
   });
 
   it("does not include video media in the logger’s initial prescription projection", () => {

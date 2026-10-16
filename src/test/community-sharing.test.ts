@@ -453,11 +453,11 @@ describe("lock in (I showed up)", () => {
   });
   it("still refuses anyone but the athlete (coach View-as-client included)", () => {
     expect(sql).toContain("WHERE pc.id = _completion_id AND c.user_id = uid");
-    expect(day).toContain("isClientWorkout && !completion?.completed_at && rowsLoaded");
-    expect(day).toContain("previewOnly={isImpersonating}");
+    // The bar isn't in the workout logger: it only ever sat inside the old
+    // full-screen mode, which nothing could open, so no one saw it.
+    expect(day).not.toContain("<LockInBar");
   });
   it("starts the session through the normal start path, never on its own", () => {
-    expect(day).toContain('await startWorkoutSrv({ data: { kind: "client" as const, dayId, scheduledWorkoutId } });');
     expect(editor).toContain("const id = await ensureStarted();");
   });
   it("opens the in-app camera and keeps the logger light", () => {
@@ -1107,7 +1107,6 @@ describe("lock in on a session row that was never started", () => {
     expect(read("src/components/community/lock-in.tsx")).toContain("const id = await ensureStarted();");
     expect(read("src/components/community/lock-in-editor.tsx")).toContain("const id = await ensureStarted();");
     expect(read("src/lib/community.queries.ts")).toContain("started: !!(it.completion?.started_at || it.completion?.in_progress_at)");
-    expect(read("src/components/workout-day/WorkoutDayView.tsx")).toContain("if (completion?.id && (completion.started_at || completion.in_progress_at)) return completion.id;");
   });
   it("only says In progress when it really is", () => {
     expect(read("src/components/community/share-workout-picker.tsx")).toContain('sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Posting it starts your session"}');
