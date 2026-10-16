@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bookmark, Check, ChevronLeft, Lock, MoreHorizontal, Plus, Repeat2 } from "lucide-react";
+import { Bookmark, ChevronLeft, Lock, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
+import { GridSkeleton, PostGrid } from "@/components/community/post-grid";
 import { CoverFace, useCoverUrls } from "@/components/community/repost-save";
 import { usePostMediaUrls } from "@/lib/community.queries";
 import {
@@ -182,11 +181,7 @@ function SavedGrid({ album, name, unit, onOpenPost, onBack }: { album: SavedAlbu
         </div>
       )}
       {q.isLoading ? (
-        <div className="grid grid-cols-3 gap-1">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-square w-full rounded-none" />
-          ))}
-        </div>
+        <GridSkeleton />
       ) : posts.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border px-6 py-8 text-center text-[13px] text-muted-foreground">
           {album ? (
@@ -201,12 +196,7 @@ function SavedGrid({ album, name, unit, onOpenPost, onBack }: { album: SavedAlbu
           )}
         </div>
       ) : (
-        <PostGrid posts={posts} urls={urls} unit={unit} picked={selecting ? picked : null} onTap={(p) => (selecting ? toggle(p.id) : onOpenPost(p))} />
-      )}
-      {q.hasNextPage && (
-        <Button type="button" variant="ghost" className="mt-2 w-full" disabled={q.isFetchingNextPage} onClick={() => void q.fetchNextPage()}>
-          {q.isFetchingNextPage ? "Loading…" : "Show more"}
-        </Button>
+        <PostGrid posts={posts} urls={urls} unit={unit} picked={selecting ? picked : null} onTap={(p) => (selecting ? toggle(p.id) : onOpenPost(p))} pager={q} />
       )}
       {album && posts.length > 0 && !selecting && (
         <button type="button" onClick={() => setAdding(true)} className="mt-3 inline-flex h-9 items-center gap-1 rounded-full px-1 text-[13px] font-bold text-primary" data-add-from-saved>
@@ -216,40 +206,6 @@ function SavedGrid({ album, name, unit, onOpenPost, onBack }: { album: SavedAlbu
       <MoveToAlbumSheet postIds={ids} open={moving} onOpenChange={setMoving} onDone={stopSelecting} />
       {album && <AlbumMenuSheet album={album} open={menu} onOpenChange={setMenu} onDeleted={onBack} />}
       {album && <AddFromSavedSheet album={album} unit={unit} open={adding} onOpenChange={setAdding} />}
-    </div>
-  );
-}
-
-/** Posts as squares (Instagram's grid); with `picked`, each shows a tick to select it. */
-export function PostGrid({ posts, urls, unit, picked, onTap, mark }: {
-  posts: CommunityPost[];
-  urls: Record<string, string> | undefined;
-  unit: "kg" | "lb";
-  picked?: Set<string> | null;
-  onTap: (p: CommunityPost) => void;
-  /** A corner mark on every tile (Reposts wears 🔁). */
-  mark?: "repost";
-}) {
-  return (
-    <div className="grid grid-cols-3 gap-1 overflow-hidden rounded-2xl">
-      {posts.map((p) => {
-        const thumb = urls?.[postThumbPath(p) ?? ""] ?? null;
-        const on = picked?.has(p.id) ?? false;
-        return (
-          <button key={p.id} type="button" onClick={() => onTap(p)} className="relative aspect-square overflow-hidden bg-muted" aria-pressed={picked ? on : undefined} aria-label={picked ? `${on ? "Selected" : "Select"} post` : "Open post"} data-grid-post>
-            <PostTileFace post={p} thumb={thumb} unit={unit} />
-            {mark === "repost" && <Repeat2 className="absolute right-1.5 top-1.5 h-4 w-4 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]" strokeWidth={2.6} aria-hidden />}
-            {picked && (
-              <>
-                {on && <span className="absolute inset-0 bg-black/35" aria-hidden />}
-                <span className={cn("absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full border-2 shadow", on ? "border-white bg-primary text-primary-foreground" : "border-white/90 bg-black/20")} aria-hidden>
-                  {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
-                </span>
-              </>
-            )}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -466,6 +422,8 @@ function AddFromSavedSheet({ album, unit, open, onOpenChange }: { album: SavedAl
               posts={posts}
               urls={urls}
               unit={unit}
+              edge={false}
+              pager={q}
               picked={picked}
               onTap={(p) =>
                 setPicked((cur) => {
@@ -476,11 +434,6 @@ function AddFromSavedSheet({ album, unit, open, onOpenChange }: { album: SavedAl
                 })
               }
             />
-          )}
-          {q.hasNextPage && (
-            <Button type="button" variant="ghost" className="mt-2 w-full" disabled={q.isFetchingNextPage} onClick={() => void q.fetchNextPage()}>
-              {q.isFetchingNextPage ? "Loading…" : "Show more"}
-            </Button>
           )}
         </div>
       </SheetContent>
@@ -493,15 +446,7 @@ export function RepostsGrid({ userId, isMe, unit, onOpenPost }: { userId: string
   const q = useUserReposts(userId);
   const posts = useMemo(() => q.data?.pages.flatMap((p) => p.posts) ?? [], [q.data]);
   const { data: urls } = usePostMediaUrls(posts);
-  if (q.isLoading) {
-    return (
-      <div className="grid grid-cols-3 gap-1">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="aspect-square w-full rounded-none" />
-        ))}
-      </div>
-    );
-  }
+  if (q.isLoading) return <GridSkeleton rows={2} />;
   if (!posts.length) {
     return (
       <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-[13px] text-muted-foreground" data-reposts-empty>
@@ -511,12 +456,7 @@ export function RepostsGrid({ userId, isMe, unit, onOpenPost }: { userId: string
   }
   return (
     <div data-reposts-grid>
-      <PostGrid posts={posts} urls={urls} unit={unit} onTap={onOpenPost} mark="repost" />
-      {q.hasNextPage && (
-        <Button type="button" variant="ghost" className="mt-2 w-full" disabled={q.isFetchingNextPage} onClick={() => void q.fetchNextPage()}>
-          {q.isFetchingNextPage ? "Loading…" : "Show more"}
-        </Button>
-      )}
+      <PostGrid posts={posts} urls={urls} unit={unit} onTap={onOpenPost} mark="repost" pager={q} />
     </div>
   );
 }

@@ -16,6 +16,9 @@ export const COMMENT_MAX = 300;
 export const FEED_PAGE_SIZE = 10;
 /** The first page is smaller: the top of the feed shows sooner, the rest loads as you scroll. */
 export const FIRST_FEED_PAGE = 5;
+/** A profile grid's pages are whole rows of three: 4 rows to fill the first screen, then 5 at a time. */
+export const GRID_FIRST_PAGE = 12;
+export const GRID_PAGE_SIZE = 15;
 
 /**
  * Reactions: ❤️ is the one-tap default (tap the heart, or double-tap the

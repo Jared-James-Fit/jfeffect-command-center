@@ -11,6 +11,8 @@ import { useAuth } from "@/lib/auth";
 import {
   FEED_PAGE_SIZE,
   FIRST_FEED_PAGE,
+  GRID_FIRST_PAGE,
+  GRID_PAGE_SIZE,
   buildCommentPreview,
   nextFeedCursor,
   votePoll,
@@ -68,8 +70,9 @@ export function useCommunityFeed(authorUserId: string | null = null) {
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
       // Unused arguments are left out (they default to null), so the call is
       // all plain values and a view-only login can make it as a read.
+      // A profile's grid loads whole rows of three; the feed, a few posts at a time.
       const { data, error } = await db.rpc("community_feed", {
-        _limit: pageParam ? FEED_PAGE_SIZE : FIRST_FEED_PAGE,
+        _limit: authorUserId ? (pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE) : pageParam ? FEED_PAGE_SIZE : FIRST_FEED_PAGE,
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
         ...(authorUserId ? { _author_user_id: authorUserId } : {}),
       });

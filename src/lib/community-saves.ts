@@ -10,11 +10,10 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteD
 import { supabase } from "@/integrations/supabase/client";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { communityKeys, patchPost, POST_LIST_KEYS } from "@/lib/community.queries";
-import { cleanRepostNote, nextFeedCursor, type CommunityFeedPage, type CommunityPost } from "@/lib/community";
+import { GRID_FIRST_PAGE, GRID_PAGE_SIZE, cleanRepostNote, nextFeedCursor, type CommunityFeedPage, type CommunityPost } from "@/lib/community";
 
 const db = supabase as any;
 
-export const SAVED_PAGE_SIZE = 24;
 
 /** A small picture (or a few words) standing for a saved post on an album tile. */
 export type SaveCover = { id: string; path: string | null; text: string | null; kind: "note" | "workout" };
@@ -86,7 +85,7 @@ export function useSavedPosts(albumId: string | null, enabled = true) {
     staleTime: 30_000,
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
       const { data, error } = await db.rpc("community_saved_posts", {
-        _limit: SAVED_PAGE_SIZE,
+        _limit: pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE,
         ...(albumId ? { _album_id: albumId } : {}),
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
       });
@@ -208,7 +207,7 @@ export function useUserReposts(userId: string | null, enabled = true) {
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
       const { data, error } = await db.rpc("community_user_reposts", {
         _user_id: userId,
-        _limit: SAVED_PAGE_SIZE,
+        _limit: pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE,
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
       });
       if (error) throw error;

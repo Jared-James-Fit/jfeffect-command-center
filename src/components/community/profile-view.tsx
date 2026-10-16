@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, Bookmark, Camera, Dumbbell, Grid3x3, Lock, MapPin, MoreHorizontal, Repeat2, Star } from "lucide-react";
+import { Archive, Bookmark, Camera, Dumbbell, Grid3x3, Lock, MapPin, MoreHorizontal, Repeat2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -17,7 +16,7 @@ import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useQueryClient } from "@tanstack/react-query";
 import { AvatarCropper } from "@/components/avatar-cropper";
 import { CoachBadge } from "@/components/community/post-card";
-import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
+import { GridSkeleton, PostGrid } from "@/components/community/post-grid";
 import { RepostsGrid, SavedView } from "@/components/community/saved-view";
 import { trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls, useSetCommunityAvatar } from "@/lib/community.queries";
@@ -73,11 +72,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
             <Skeleton className="h-4 w-48" />
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-1">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-square w-full rounded-none" />
-          ))}
-        </div>
+        <GridSkeleton />
       </div>
     );
   }
@@ -257,30 +252,25 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
         <div className="mt-4"><RepostsGrid userId={profile.author.user_id} isMe={profile.is_me} unit={unit} onOpenPost={onOpenPost} /></div>
       ) : (
       <>
-      <div className="mt-4 grid grid-cols-3 gap-1 overflow-hidden rounded-2xl">
-        {posts.map((p) => {
-          const thumb = urls?.[postThumbPath(p) ?? ""] ?? null;
-          return (
-            <button key={p.id} type="button" onClick={() => onOpenPost(p)} className="relative aspect-square overflow-hidden bg-muted" aria-label={`Open ${p.stats?.workout_title ?? p.session_title ?? "workout"}`}>
-              <PostTileFace post={p} thumb={thumb} unit={unit} />
-              {p.visibility === "close_friends" ? (
-                <Star className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 fill-emerald-400 text-emerald-400 drop-shadow" aria-label="Close friends" />
-              ) : p.visibility !== "community" && p.visibility !== "followers" ? (
-                <Lock className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 text-white drop-shadow" />
-              ) : null}
-            </button>
-          );
-        })}
+      <div className="mt-4">
+        {(showArchived ? archivedQ.isLoading : feed.isLoading) && !blocked ? (
+          <GridSkeleton />
+        ) : (
+          <PostGrid
+            posts={posts}
+            urls={urls}
+            unit={unit}
+            onTap={onOpenPost}
+            showAudience
+            // Archived comes all at once; Posts loads as you scroll, and simply ends
+            pager={showArchived || blocked ? undefined : feed}
+          />
+        )}
       </div>
       {posts.length === 0 && !blocked && !(showArchived ? archivedQ.isLoading : feed.isLoading) && (
         <div className="mt-2 rounded-2xl border border-dashed border-border px-6 py-10 text-center text-[13px] text-muted-foreground">
           {showArchived ? "Nothing archived." : profile.is_me ? "Lock in at your next session, or share a finished workout. It shows up here." : "Nothing shared yet."}
         </div>
-      )}
-      {!showArchived && !blocked && feed.hasNextPage && (
-        <Button type="button" variant="ghost" className="mt-2 w-full" disabled={feed.isFetchingNextPage} onClick={() => void feed.fetchNextPage()}>
-          {feed.isFetchingNextPage ? "Loading…" : "Show more"}
-        </Button>
       )}
       </>
       )}
