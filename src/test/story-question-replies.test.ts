@@ -123,3 +123,28 @@ describe("answering question responses on your story (Instagram's Share response
     expect(studio).toContain("onMove(Math.min(STICKER_Y_MAX, Math.max(STICKER_Y_MIN, d.at0 + dy / height)));");
   });
 });
+
+describe("who answered stays between the asker and the poster (Instagram's)", () => {
+  it("the answers list can't be read straight from the database by anyone signed in", () => {
+    const priv = read("supabase/migrations/20261211130000_sticker_answers_private.sql");
+    // it takes the viewer as an argument: called directly with the poster's id it gave anyone the names (checked on prod, Oct 16)
+    expect(priv).toContain("REVOKE ALL ON FUNCTION public.community_sticker_json(uuid, uuid) FROM PUBLIC, anon, authenticated;");
+    expect(priv).toContain("REVOKE ALL ON TABLE public.community_sticker_answers FROM anon, authenticated;");
+    // only the poster's own view carries the list
+    const lessons = read("supabase/migrations/20261129110000_community_lessons.sql");
+    expect(lessons).toContain("IF v_author = v_me THEN\n    v_out := v_out || jsonb_build_object('answers'");
+    expect(lessons).toContain("-- read and written only through the functions below");
+  });
+
+  it("an answer shared on the poster's story is the question and the words only: no name, no tag, no caption", () => {
+    const layer = read("src/components/community/sticker-layer.tsx");
+    expect(layer).toContain("export function responseCardItem(question: string, answer: string): StickerItem {");
+    expect(layer).toContain("function responseCard(question: string, answer: string): Bitmap {");
+    const studio = read("src/components/community/share-studio.tsx");
+    expect(studio).toContain('const id = await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true });');
+    // the asker's id only ever goes to marking it answered (the poster's own call)
+    const host = read("src/components/community/story-reply-host.tsx");
+    expect(host.match(/reply\.userId/g)?.length).toBe(2);
+    expect(host).toContain("const key = `reply:${reply.postId}:${reply.userId}`;");
+  });
+});
