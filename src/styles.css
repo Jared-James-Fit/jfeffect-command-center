@@ -961,6 +961,18 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   100% { transform: scale(1); }
 }
 .community-pop { animation: community-pop 0.32s ease-out; }
+/* A repost's note: pops out of its person's photo, and "Add a note…" bobs once so it's noticed. */
+@keyframes repost-note-in {
+  0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+  65% { transform: translateY(-2px) scale(1.05); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes repost-note-bob {
+  0%, 100% { transform: none; }
+  50% { transform: translateY(-3px); }
+}
+.repost-note { animation: repost-note-in 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards; transform-origin: 13px 100%; }
+.repost-note-ask { animation: repost-note-in 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards, repost-note-bob 1.6s ease-in-out 0.5s 2; }
 @keyframes community-picker {
   from { transform: translateY(6px) scale(0.92); opacity: 0; }
   to { transform: none; opacity: 1; }
@@ -1108,6 +1120,8 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
 }
 @media (prefers-reduced-motion: reduce) {
   .community-pop,
+  .repost-note,
+  .repost-note-ask,
   .community-picker,
   .community-picker-item,
   .community-tap2,

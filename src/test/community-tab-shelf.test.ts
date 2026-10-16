@@ -148,7 +148,8 @@ describe("Home's Crew feed", () => {
   });
 
   it("the profile grid and the shelf draw posts the same way, from a small file (no feed card in the app shell)", () => {
-    expect(profile).toContain("<PostTileFace post={p} thumb={thumb} unit={unit} />");
+    expect(read("src/components/community/post-grid.tsx")).toContain("<PostTileFace post={p} thumb={thumb} unit={unit} />");
+    expect(profile).toContain("<PostGrid");
     expect(entry).toContain('import { PostTileFace, postThumbPath } from "@/components/community/post-tile";');
     expect(tile).not.toMatch(/from "@\/components\/community\/post-card"/);
     expect(entry).not.toMatch(/from "@\/components\/community\/post-card"/);

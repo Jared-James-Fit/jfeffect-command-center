@@ -136,6 +136,10 @@ export function LockInBar({
             post={completionId && existing === undefined ? null : {
               key: `lock:${completionId ?? ""}:${existing?.id ?? ""}`,
               label: existing ? "Update" : "Post",
+              // a lock in on your story starts the session too
+              beforeStory: async () => {
+                if (!(await ensureStarted())) throw new Error("Couldn't start your session. Try again.");
+              },
               caption: existing?.caption,
               visibility: existing?.visibility,
               extras: existing?.extra_media ?? null,

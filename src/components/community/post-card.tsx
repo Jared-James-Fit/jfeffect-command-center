@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Trophy } from "lucide-react";
-import { InlineVideo } from "@/components/community/inline-video";
+import { InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ import {
   type WorkoutWin,
 } from "@/lib/community";
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
+import { feedAspect, focusPosition } from "@/lib/photo-frame";
 import { WinsStatsCard } from "@/components/community/wins-stats";
 import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-cards";
 import { LessonDiagram } from "@/components/community/lesson-card";
@@ -53,6 +54,7 @@ import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/commu
 import { SharedCommentCard, openCommunityPost } from "@/components/community/shared-comment";
 import { CollaboratorsSheet } from "@/components/community/mentions";
 import { InlineFollow } from "@/components/community/follow-button";
+import { RepostButton, RepostedHeader, SaveButton, useRepostNote } from "@/components/community/repost-save";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -92,6 +94,16 @@ export function audienceNote(post: Pick<CommunityPost, "visibility" | "is_mine" 
   else if (post.visibility === "followers" && post.is_mine) parts.push("Followers");
   if (post.is_mine && post.hide_loads) parts.push("Weights hidden");
   return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * A member's own photo / clip post (POST on the camera): shown like
+ * Instagram's, the picture edge to edge at its own shape, the words under it
+ * ("Name caption"). A coach's posts keep their note layout (words in the post
+ * font, the picture set in), so they read like his own posts.
+ */
+export function isPhotoPost(post: Pick<CommunityPost, "kind" | "media_type" | "series" | "quote" | "author">): boolean {
+  return post.kind === "note" && !!post.media_type && !post.series && !post.quote && !post.author.is_coach;
 }
 
 /** The coach mark next to a name: small, verified-style, never a banner. */
@@ -377,12 +389,17 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const isNote = post.kind === "note";
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
   const sub = [post.auto && s ? "Finished a session" : null, postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
+  // a repost's note floats on the post (yours: tap to change it; "Add a note…" right after reposting)
+  const note = useRepostNote(post);
+  const reposted = !!post.reposted_by?.length;
 
-  // Tap opens the workout; double-tap gives ❤️ (Instagram muscle memory).
+  // Instagram's taps: a tap on a picture does nothing (a post never opens from
+  // its picture: "View full workout" and the comments are buttons of their own),
+  // a tap on a clip turns the sound on or off, and two quick taps give ❤️.
   // Already reacted? It stays as it is (a double-tap never takes one back).
-  const onHeroTap = () => {
+  const onHeroTap = (e: React.MouseEvent) => {
     const now = Date.now();
-    if (now - lastTap.current < 280) {
+    if (now - lastTap.current < 300) {
       if (singleTimer.current) window.clearTimeout(singleTimer.current);
       singleTimer.current = null;
       lastTap.current = 0;
@@ -392,17 +409,25 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       return;
     }
     lastTap.current = now;
-    singleTimer.current = window.setTimeout(() => {
-      singleTimer.current = null;
-      onOpen(post);
-    }, 280);
+    // a clip: sound on / off, once it's clear this wasn't the first of two taps
+    if ((e.target as Element | null)?.closest?.("[data-inline-video]")) {
+      singleTimer.current = window.setTimeout(() => {
+        singleTimer.current = null;
+        toggleFeedSound();
+      }, 300);
+    }
   };
+  useEffect(() => () => {
+    if (singleTimer.current) window.clearTimeout(singleTimer.current);
+  }, []);
+  const photo = isPhotoPost(post);
 
   return (
     // Instagram-style on a phone: edge to edge, no card frame, a hairline between
     // posts. A wider screen keeps the soft card (the feed column is centred there).
     <article ref={articleRef} data-feed-post className="-mx-3 overflow-hidden border-b border-border/60 bg-background pb-2 sm:mx-0 sm:rounded-3xl sm:border sm:border-border/70 sm:bg-card sm:pb-0 sm:shadow-sm">
-      <header className="flex items-center justify-between gap-2 px-3.5 py-3">
+      <RepostedHeader post={post} onOpenAuthor={onOpenAuthor} />
+      <header className={cn("flex items-center justify-between gap-2 px-3.5 pb-3", reposted ? "pt-1.5" : "pt-3")}>
         <AuthorLine
           author={post.author}
           sub={sub}
@@ -422,9 +447,11 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </div>
       </header>
 
-      {/* Hero: the photo, or the workout itself when there isn't one */}
-      <div role="button" tabIndex={0} onClick={onHeroTap} onKeyDown={(e) => e.key === "Enter" && onOpen(post)} className="relative cursor-pointer select-none" aria-label="Open workout">
-        {isNote ? (
+      {/* on words or a workout card the note sits above it, never over the words */}
+      {note.bubble && !post.media_type && <div className="px-3.5 pb-2.5" data-note-above>{note.bubble}</div>}
+      {/* Hero: the photo, or the workout itself when there isn't one. Taps never open the post (see onHeroTap). */}
+      <div onClick={onHeroTap} className="relative select-none" data-post-hero>
+        {isNote && !photo ? (
           <>
             <NoteBody post={post} clamp onOpenPerson={onOpenAuthor} cover={post.media_type ? <PostMedia post={post} thumbUrl={thumbUrl} /> : undefined} />
             {/* a coach post's photos / videos, under its words */}
@@ -443,7 +470,10 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         )}
         {doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}
         <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+        {/* on a photo the note floats on its top-left corner, Instagram's spot */}
+        {note.bubble && post.media_type && <div className={cn("pointer-events-none absolute z-[2]", isNote && !photo ? "left-6 top-3" : "left-3 top-3")} data-note-over>{note.bubble}</div>}
       </div>
+      {note.sheet}
 
       {/* A photo lock-in: the stamp sits under it until the numbers arrive */}
       {post.media_type && !s && post.locked_in_at && (
@@ -489,8 +519,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {/* Every workout has more than the card shows: say so, plainly. */}
       {!isNote && s && <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />}
 
-      {post.caption && !isNote && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} />}
-      {!isNote && <PostExtras post={post} className="px-3.5 pt-2.5" />}
+      {post.caption && (!isNote || photo) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} />}
+      {(!isNote || photo) && <PostExtras post={post} className="px-3.5 pt-2.5" />}
 
       {(post.coach_reactions.length > 0 || post.coach_commented) && (
         <div className="px-3.5 pt-2.5">
@@ -504,7 +534,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </div>
       )}
 
-      <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} />
+      <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} />
       <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
       <CommentPreviewList post={post} onOpenComments={() => onOpenComments(post)} />
     </article>
@@ -575,20 +605,24 @@ export function CommentPreviewList({ post, onOpenComments }: { post: CommunityPo
 }
 
 /**
- * The heart (tap for ❤️, hold for 👍 ‼️ 🔥 😂) and how many, then the faces
- * of who reacted ("Jared, Vicky and 3 others", with the kinds they gave),
- * which opens the full list. Comments on the right.
+ * Instagram's row: the heart (tap for ❤️, hold for 👍 ‼️ 🔥 😂), comments,
+ * repost, message, and save at the end. Under it, the faces of who reacted
+ * ("Jared, Vicky and 3 others", with the kinds they gave), which opens the
+ * full list.
  */
 export function ReactionBar({
   post,
   onReact,
   onOpenComments,
   onOpenAuthor,
+  onReposted,
 }: {
   post: CommunityPost;
   onReact: (p: CommunityPost, next: ReactionKey | null) => void;
   onOpenComments?: (p: CommunityPost) => void;
   onOpenAuthor?: (a: CommunityAuthor) => void;
+  /** Just reposted: the card floats "Add a note…" on the post. */
+  onReposted?: () => void;
 }) {
   const [listFor, setListFor] = useState<string | null>(null);
   const [messaging, setMessaging] = useState(false);
@@ -610,54 +644,59 @@ export function ReactionBar({
     return () => window.clearTimeout(t);
   }, [on, done]);
   return (
-    <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative flex items-center gap-1 px-2 pb-2 pt-2">
-      <ReactionButton post={post} onReact={onReact} />
-      {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} className="bottom-1/2 left-5" />}
+    <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative px-2 pb-2 pt-1.5">
+      {/* Instagram's row: like, comment, repost, message ... save at the end */}
+      <div className="relative flex items-center">
+        <ReactionButton post={post} onReact={onReact} />
+        {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} className="bottom-1/2 left-5" />}
+        {onOpenComments && (
+          <button
+            type="button"
+            onClick={() => onOpenComments(post)}
+            className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-2 text-[14px] font-black tabular-nums text-muted-foreground hover:bg-muted"
+            aria-label={`Comments${post.comment_count ? `, ${post.comment_count}` : ""}`}
+          >
+            <MessageCircle className="h-[23px] w-[23px] text-foreground/80" strokeWidth={2} />
+            {post.comment_count > 0 && post.comment_count}
+          </button>
+        )}
+        <RepostButton post={post} onReposted={onReposted} />
+        {canMessage && (
+          <button
+            type="button"
+            onClick={() => setMessaging(true)}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground/80 hover:bg-muted hover:text-foreground"
+            aria-label={`Message ${post.author.name}`}
+            title={`Message ${post.author.name}`}
+          >
+            <Send className="h-[22px] w-[22px] -rotate-12" />
+          </button>
+        )}
+        <span className="ml-auto" />
+        <SaveButton post={post} />
+      </div>
+      {/* who reacted, on its own line under the row, so names never get cut short */}
       {who && (
         <button
           type="button"
           onClick={() => setListFor(post.id)}
-          className={cn("flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-left hover:bg-muted", on && "engage-chip")}
+          className={cn("-mt-0.5 flex max-w-full min-w-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-2 text-left hover:bg-muted", on && "engage-chip")}
           aria-label={`See who reacted: ${who}`}
+          data-who-reacted
         >
           {faces.length > 0 && (
             <span className="flex shrink-0 -space-x-1.5">
               {faces.map((r) => (
                 <span key={r.user_id} className="rounded-full ring-2 ring-card">
-                  <UserAvatar src={r.avatar_url} name={r.is_me ? "You" : r.name} size={24} expandable={false} />
+                  <UserAvatar src={r.avatar_url} name={r.is_me ? "You" : r.name} size={22} expandable={false} />
                 </span>
               ))}
             </span>
           )}
           {showKinds && <span className="shrink-0 text-[13px] leading-none tracking-[-0.15em]">{kinds.join("")}</span>}
-          <span className="truncate text-[12px] text-muted-foreground">
+          <span className="truncate text-[13px] text-muted-foreground">
             <span className="font-bold text-foreground">{who}</span>
           </span>
-        </button>
-      )}
-      {onOpenComments && (
-        <button
-          type="button"
-          onClick={() => onOpenComments(post)}
-          className="ml-auto flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold text-muted-foreground hover:bg-muted"
-          aria-label={`Comments${post.comment_count ? `, ${post.comment_count}` : ""}`}
-        >
-          <MessageCircle className="h-4 w-4" />
-          {post.comment_count > 0 ? post.comment_count : "Comment"}
-        </button>
-      )}
-      {canMessage && (
-        <button
-          type="button"
-          onClick={() => setMessaging(true)}
-          className={cn(
-            "grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
-            !onOpenComments && "ml-auto",
-          )}
-          aria-label={`Message ${post.author.name}`}
-          title={`Message ${post.author.name}`}
-        >
-          <Send className="h-[18px] w-[18px] -rotate-12" />
         </button>
       )}
       <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
@@ -672,7 +711,9 @@ export function PostMedia({ post, thumbUrl, full = false }: { post: CommunityPos
   const cover = slides[0] ?? null;
   // Never taller than 4:5, never wider than 16:9 — keeps the feed rhythm steady.
   // A carousel takes its cover's shape for every slide (Instagram does too).
-  const ratio = Math.min(Math.max((post.media_width ?? 4) / (post.media_height ?? 5), 0.8), 1.78);
+  // A picture framed in the studio is already exactly its shape; a clip (or an
+  // older photo) is cropped to it, showing the part its focus says.
+  const ratio = feedAspect(post.media_width, post.media_height);
   if (slides.length > 1) return <PostCarousel slides={slides} coverUrl={thumbUrl} ratio={ratio} full={full} />;
   return (
     <div className="relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }}>
@@ -687,13 +728,14 @@ function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide
   const { data: fullUrl } = useFullMediaUrl(slide.path, full && active && !isVideo);
   const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
   // data-pinch-zoom: pinch lifts just this (the page never zooms), see useMediaPinchZoom
+  const position = focusPosition(slide.focus);
   return isVideo ? (
     <div data-pinch-zoom className="absolute inset-0">
-      <InlineVideo path={slide.path} poster={thumbUrl} active={active} />
+      <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} />
     </div>
   ) : (
     <div data-pinch-zoom className="absolute inset-0">
-      {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+      {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
     </div>
   );
 }
@@ -710,7 +752,7 @@ function HolidayPhoto({ src, alt }: { src: string; alt: string }) {
 }
 
 /** A photo that fades in once it has loaded (cached ones show at once), over a soft shimmer. */
-function FadeImg({ src }: { src: string }) {
+function FadeImg({ src, position }: { src: string; position?: string }) {
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -729,6 +771,7 @@ function FadeImg({ src }: { src: string }) {
         onLoad={() => setLoaded(true)}
         data-loaded={loaded ? "" : undefined}
         className="media-fade relative h-full w-full object-cover"
+        style={position ? { objectPosition: position } : undefined}
       />
     </>
   );
@@ -737,7 +780,7 @@ function FadeImg({ src }: { src: string }) {
 /**
  * Up to 10 photos / videos: swipe sideways (it snaps one at a time), "2/5"
  * and the dots say where you are. Only the slide you're on and its
- * neighbours load; the rest wait. Taps still reach the post (open / double-tap).
+ * neighbours load; the rest wait. Taps still reach the post (double-tap ❤️, a clip's sound).
  */
 function PostCarousel({ slides, coverUrl, ratio, full }: { slides: PostSlide[]; coverUrl: string | null; ratio: number; full: boolean }) {
   const [index, setIndex] = useState(0);

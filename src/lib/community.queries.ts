@@ -11,6 +11,8 @@ import { useAuth } from "@/lib/auth";
 import {
   FEED_PAGE_SIZE,
   FIRST_FEED_PAGE,
+  GRID_FIRST_PAGE,
+  GRID_PAGE_SIZE,
   buildCommentPreview,
   nextFeedCursor,
   votePoll,
@@ -68,8 +70,9 @@ export function useCommunityFeed(authorUserId: string | null = null) {
     queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
       // Unused arguments are left out (they default to null), so the call is
       // all plain values and a view-only login can make it as a read.
+      // A profile's grid loads whole rows of three; the feed, a few posts at a time.
       const { data, error } = await db.rpc("community_feed", {
-        _limit: pageParam ? FEED_PAGE_SIZE : FIRST_FEED_PAGE,
+        _limit: authorUserId ? (pageParam ? GRID_PAGE_SIZE : GRID_FIRST_PAGE) : pageParam ? FEED_PAGE_SIZE : FIRST_FEED_PAGE,
         ...(pageParam ? { _before_at: pageParam.at, _before_id: pageParam.id } : {}),
         ...(authorUserId ? { _author_user_id: authorUserId } : {}),
       });
@@ -115,10 +118,15 @@ export function useFullMediaUrl(path: string | null | undefined, enabled: boolea
   });
 }
 
+/** Every list of posts that pages like the feed: the feed, Saved, someone's Reposts. */
+export const POST_LIST_KEYS = [["community-feed"], ["community-saved"], ["community-user-reposts"]] as const;
+
 export function patchPost(qc: ReturnType<typeof useQueryClient>, postId: string, patch: (p: CommunityPost) => CommunityPost) {
-  qc.setQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: ["community-feed"] }, (old) =>
-    old ? { ...old, pages: old.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => (p.id === postId ? patch(p) : p)) })) } : old,
-  );
+  for (const queryKey of POST_LIST_KEYS) {
+    qc.setQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: [...queryKey] }, (old) =>
+      old?.pages ? { ...old, pages: old.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => (p.id === postId ? patch(p) : p)) })) } : old,
+    );
+  }
   qc.setQueryData<CommunityPostDetail | null>(communityKeys.post(postId), (old) => (old ? (patch(old) as CommunityPostDetail) : old));
 }
 
@@ -840,7 +848,16 @@ export async function shareToCommunity(
  */
 export async function createCommunityPost(
   qc: ReturnType<typeof useQueryClient>,
-  i: { userId: string; caption: string; visibility: CommunityVisibility; photo: File | null; extras?: PostSlide[]; attach?: (postId: string) => Promise<void> },
+  i: {
+    userId: string;
+    caption: string;
+    visibility: CommunityVisibility;
+    photo: File | null;
+    extras?: PostSlide[];
+    attach?: (postId: string) => Promise<void>;
+    /** STORY on the camera: 24h in the story rail, never in the feed or on the profile grid. */
+    story?: boolean;
+  },
 ): Promise<string> {
   const media: PostSlide[] = [];
   let up: Awaited<ReturnType<typeof uploadPicked>> | null = null;
@@ -855,7 +872,8 @@ export async function createCommunityPost(
     media.push({ path: up.media_path, thumb: up.media_thumb_path, type: up.media_type, width: up.media_width, height: up.media_height });
   }
   media.push(...(i.extras ?? []));
-  const { data, error } = await db.rpc("community_create_post", { _caption: i.caption, _media: media, _visibility: i.visibility });
+  // (_story is only sent for a story, so a post never depends on it)
+  const { data, error } = await db.rpc("community_create_post", { _caption: i.caption, _media: media, _visibility: i.visibility, ...(i.story ? { _story: true } : {}) });
   if (error) {
     if (up && error.code) await removeCommunityFiles([up.media_path, up.media_thumb_path]);
     throw error;

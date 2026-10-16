@@ -48,12 +48,12 @@ describe("Meal on the camera", () => {
     expect(mealFuelMoment({ lastFinishedAt: null, sessionToday: false, now })).toBeNull();
     expect(mealCameraCard({ athleteName: null, fuel: "post" }).data.sessionLine).toBe("Post-workout");
   });
-  it("it's a mode next to Post / Lock in / Workout; posts as a plain post (never League points), photo only", () => {
+  it("its looks are filters in the row by the shutter, after Normal / Lock in / Workout; posts as a plain post (never League points), photo only", () => {
     const picker = read("src/components/community/share-workout-picker.tsx");
-    expect(picker).toContain('{ key: "meal", label: "Meal" },');
+    expect(picker).toContain('...group("meal", mealCard.looks),');
     expect(picker).toContain("allowNoPhoto={activeMode !== \"meal\"}");
     expect(picker).toContain('accept={activeMode === "lockin" || activeMode === "meal" ? "image/*" : "image/*,video/*"}');
-    const meal = picker.slice(picker.indexOf("const mealPost: StudioPost"), picker.indexOf("const modes = ["));
+    const meal = picker.slice(picker.indexOf("const mealPost: StudioPost"), picker.indexOf("const filters: LookItem[] = ["));
     expect(meal).toContain("createCommunityPost(qc,");
     expect(meal).not.toContain("shareToCommunity");
   });

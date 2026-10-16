@@ -9,6 +9,7 @@ import { formatLoad, formatTonnage } from "@/lib/training-records";
 import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
 import { dayScheduledDate, type WorkoutItem } from "@/lib/workout-today";
 import type { LessonExtra, PostSticker } from "@/lib/lessons";
+import type { MediaFocus } from "@/lib/photo-frame";
 
 /** Longest workout caption (Instagram's limit). Matches community_posts_caption_check. */
 export const CAPTION_MAX = 2200;
@@ -16,6 +17,9 @@ export const COMMENT_MAX = 300;
 export const FEED_PAGE_SIZE = 10;
 /** The first page is smaller: the top of the feed shows sooner, the rest loads as you scroll. */
 export const FIRST_FEED_PAGE = 5;
+/** A profile grid's pages are whole rows of three: 4 rows to fill the first screen, then 5 at a time. */
+export const GRID_FIRST_PAGE = 12;
+export const GRID_PAGE_SIZE = 15;
 
 /**
  * Reactions: ❤️ is the one-tap default (tap the heart, or double-tap the
@@ -163,6 +167,10 @@ export type CommunityPost = {
   media_height: number | null;
   /** Slides 2..10 of a carousel, in order (the cover is media_*). Missing / null = one. */
   extra_media?: PostSlide[] | null;
+  /** Which part of the cover shows when the feed or the grid crops it (a clip's framing); centred when unset. */
+  media_focus?: MediaFocus | null;
+  /** A story (STORY on the camera): 24h in the story rail, never in the feed or on the profile grid. */
+  story?: boolean;
   /** null for coach notes (no workout behind them). */
   completion_id: string | null;
   /** "workout" (a session) or "note" (a coach's text post). Missing = workout. */
@@ -227,7 +235,77 @@ export type CommunityPost = {
   views?: { count: number; faces: CommunityAuthor[] } | null;
   /** You've seen it (on any device): what rings people in the story rail. */
   seen?: boolean;
+  /** You saved it (Saved is private: only you ever see it). */
+  saved?: boolean;
+  /** Your repost of it, with the note that floats on it. */
+  my_repost?: { note: string | null; at: string } | null;
+  /** How many people reposted it. */
+  repost_count?: number;
+  /** A crew-wide post that isn't yours (and isn't an automatic story): you can repost it. */
+  can_repost?: boolean;
+  /** Where it sits in a list: its latest repost you may see (the feed), when you saved it (Saved), else when it was posted. */
+  feed_at?: string;
+  /** The feed: who reposted it, people you follow first (up to 3, each with their note). */
+  reposted_by?: Reposter[] | null;
+  /** The feed: how many reposts of it you may see. */
+  reposters_count?: number;
 };
+
+/** Someone who reposted a post, with the note they put on it. */
+export type Reposter = CommunityAuthor & { note: string | null; at: string; is_me?: boolean };
+
+/** A repost note: one line, at most this many characters (an emoji is enough). */
+export const REPOST_NOTE_MAX = 60;
+/** Quick picks for a repost note. */
+export const REPOST_NOTE_EMOJI = ["🔥", "💪", "🙌", "👏", "💯", "😂", "❤️", "🐐"] as const;
+
+/** The note as it's kept (the database does the same): one line, trimmed, at most 60 characters. */
+export function cleanRepostNote(note: string | null | undefined): string | null {
+  const one = (note ?? "").replace(/\s+/g, " ").trim();
+  if (!one) return null;
+  return [...one].slice(0, REPOST_NOTE_MAX).join("").trim() || null;
+}
+
+/** Only emoji (up to 3): shown big, like Instagram's notes. */
+export function isEmojiOnly(note: string | null | undefined): boolean {
+  const t = (note ?? "").replace(/\s+/g, "");
+  if (!t) return false;
+  const glyphs = typeof Intl !== "undefined" && "Segmenter" in Intl
+    ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(t)].map((g) => g.segment)
+    : t.match(/\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic})*/gu) ?? [t];
+  return glyphs.length <= 3 && glyphs.every((g) => /\p{Extended_Pictographic}/u.test(g));
+}
+
+/** The repost whose note floats on the post: the first (in feed order) that has one. */
+export function floatingNote(post: Pick<CommunityPost, "reposted_by" | "my_repost">): Reposter | null {
+  return (post.reposted_by ?? []).find((r) => !!r.note?.trim()) ?? null;
+}
+
+/** "Vicky reposted", "Vicky and Dwayne reposted", "Vicky and 3 others reposted", "You reposted". */
+export function repostedLine(post: Pick<CommunityPost, "reposted_by" | "reposters_count">): string | null {
+  const by = post.reposted_by ?? [];
+  if (!by.length) return null;
+  const total = Math.max(post.reposters_count ?? by.length, by.length);
+  const first = by[0].is_me ? "You" : by[0].name;
+  const rest = total - 1;
+  if (rest <= 0) return `${first} reposted`;
+  if (rest === 1 && by[1]) return `${first} and ${by[1].is_me ? "you" : by[1].name} reposted`;
+  return `${first} and ${rest} others reposted`;
+}
+
+/** Following: yours, the people you follow (or one of them is on it), and what they reposted. */
+export function inFollowingFeed(post: Pick<CommunityPost, "is_mine" | "author" | "collaborators" | "reposted_by" | "my_repost">, followingIds: ReadonlySet<string>): boolean {
+  return post.is_mine
+    || followingIds.has(post.author.user_id)
+    || !!post.collaborators?.some((c) => followingIds.has(c.user_id))
+    || !!post.my_repost
+    || !!post.reposted_by?.some((r) => followingIds.has(r.user_id));
+}
+
+/** Can this person repost it, or take back their repost? (No button at all on your own posts.) */
+export function showRepostButton(post: Pick<CommunityPost, "can_repost" | "my_repost">): boolean {
+  return !!post.can_repost || !!post.my_repost;
+}
 
 /** A comment line under a post in the feed (Instagram style). */
 export type CommentPreview = {
@@ -440,6 +518,8 @@ export type CommunityProfile = {
   blocked?: boolean;
   /** You blocked them (so you can unblock). */
   blocked_by_me?: boolean;
+  /** How many posts they reposted (their Reposts tab shows when there are some). */
+  reposts?: number;
 };
 
 export type CommunityActivity = { enabled: boolean; unseen: number; seen_at: string | null };
@@ -679,13 +759,21 @@ export function checkVideoDuration(seconds: number): MediaCheck {
 export const MAX_SLIDES = 10;
 export const MAX_SLIDE_VIDEOS = 3;
 
-export type PostSlide = { path: string; thumb: string | null; type: "image" | "video"; width: number | null; height: number | null };
+export type PostSlide = {
+  path: string;
+  thumb: string | null;
+  type: "image" | "video";
+  width: number | null;
+  height: number | null;
+  /** Which part shows when the feed or the profile grid crops it (a clip's, or an older photo's); centred when unset. */
+  focus?: MediaFocus | null;
+};
 
 /** Every slide of a post, cover first. [] when it has no photo. */
-export function postSlides(post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media">): PostSlide[] {
+export function postSlides(post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media"> & { media_focus?: MediaFocus | null }): PostSlide[] {
   if (!post.media_path || !post.media_type) return [];
   return [
-    { path: post.media_path, thumb: post.media_thumb_path, type: post.media_type, width: post.media_width, height: post.media_height },
+    { path: post.media_path, thumb: post.media_thumb_path, type: post.media_type, width: post.media_width, height: post.media_height, focus: post.media_focus ?? null },
     ...(post.extra_media ?? []).filter((s) => !!s?.path),
   ];
 }
@@ -756,7 +844,8 @@ export function postTimeLabel(iso: string, now: Date = new Date()): string {
 export function nextFeedCursor(page: CommunityFeedPage): { at: string; id: string } | null {
   if (!page.has_more || page.posts.length === 0) return null;
   const last = page.posts[page.posts.length - 1];
-  return { at: last.created_at, id: last.id };
+  // the feed pages by where a post sits (a repost moves it up), not by when it was posted
+  return { at: last.feed_at ?? last.created_at, id: last.id };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1457,14 +1546,14 @@ export function crewGoalStatus(g: CrewGoal, opts: { now?: Date; me?: string | nu
  * never sit among them: they're in the athlete's story. `more` is how many
  * recent posts people made beyond the ones shown.
  */
-export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; stats?: { pr_count?: number } | null }>(
+export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; story?: boolean; stats?: { pr_count?: number } | null }>(
   posts: T[],
   now = Date.now(),
   max = HOME_DECK_POSTS,
 ): { shown: T[]; more: number } {
   const t = (p: T) => new Date(p.created_at).getTime();
   const since = now - 14 * 86_400_000;
-  const own = [...posts].filter((p) => t(p) > since && !isPulsePost(p)).sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
+  const own = [...posts].filter((p) => t(p) > since && inFeed(p)).sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
   const shown = own.slice(0, max);
   return { shown, more: own.length - shown.length };
 }
@@ -1477,7 +1566,7 @@ export const HOME_DECK_PAGES = 5;
  * `max` posts people made, the feed has more, it hasn't read too many pages,
  * and what it has read is still inside the deck's two weeks.
  */
-export function homeDeckNeedsMore<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; stats?: unknown }>(
+export function homeDeckNeedsMore<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; story?: boolean; stats?: unknown }>(
   posts: T[],
   hasMore: boolean,
   pages: number,
@@ -1485,7 +1574,7 @@ export function homeDeckNeedsMore<T extends Pick<CommunityPost, "id" | "created_
   max = HOME_DECK_POSTS,
 ): boolean {
   if (!hasMore || pages >= HOME_DECK_PAGES) return false;
-  if (posts.filter((p) => !isPulsePost(p)).length >= max) return false;
+  if (posts.filter((p) => inFeed(p)).length >= max) return false;
   const oldest = Math.min(...posts.map((p) => new Date(p.created_at).getTime()));
   return !posts.length || oldest > now - 14 * 86_400_000;
 }
@@ -1500,6 +1589,15 @@ export const HOME_DECK_POSTS = 3;
  */
 export function isPulsePost(p: { auto?: boolean; stats?: unknown }): boolean {
   return !!p.auto && !!p.stats;
+}
+
+/**
+ * Whether a post belongs in the feed: not a Pulse (that's the athlete's
+ * story) and not a story someone posted (STORY on the camera: the rail only,
+ * for 24 hours, like Instagram's).
+ */
+export function inFeed(p: { auto?: boolean; stats?: unknown; story?: boolean }): boolean {
+  return !isPulsePost(p) && !p.story;
 }
 
 /** A moment worth celebrating, not a routine session: a PR, a monthly milestone, a 3rd+ session of the week. */
@@ -1729,7 +1827,7 @@ const STORY_END_FEED_MS = 7 * 86_400_000;
  * own story (or a nudge to add one). `posts` is the live feed, so reactions
  * given here show straight away.
  */
-export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author" | "my_reaction">>(
+export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author" | "my_reaction"> & { story?: boolean }>(
   groups: StoryGroup<T>[],
   posts: T[],
   watched: ReadonlySet<string>,
@@ -1761,7 +1859,7 @@ export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "au
     .sort((a, b) => Number(isWin(b)) - Number(isWin(a)))
     .slice(0, 3)
     .map((p) => p.id);
-  const feedNew = posts.filter((p) => !p.is_mine && !p.seen && !isPulsePost(p) && !inStories.has(p.id) && now - new Date(p.created_at).getTime() < STORY_END_FEED_MS);
+  const feedNew = posts.filter((p) => !p.is_mine && !p.seen && inFeed(p) && !inStories.has(p.id) && now - new Date(p.created_at).getTime() < STORY_END_FEED_MS);
   const mine = posts
     .filter((p) => p.is_mine && storyWorthy(p) && now - new Date(p.created_at).getTime() <= STORY_WINDOW_MS)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;

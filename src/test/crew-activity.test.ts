@@ -89,12 +89,13 @@ describe("camera like Instagram's", () => {
     expect(cam).toContain("<LookCarousel");
     expect(carousel).toContain("snap-x snap-mandatory");
     expect(carousel).toContain("snap-center snap-always");
-    expect(carousel).toContain("onClick={() => (on ? onShoot() : bring(i))}");
+    expect(carousel).toContain("if (!on) return bring(i);");
+    expect(carousel).toContain("onShoot();");
     // a swipe on the camera brings the row along; the looks it glides past while steering don't count
     expect(carousel).toContain('el.scrollTo({ left: at * STEP, behavior: "smooth" });');
     expect(carousel).toContain("if (steering.current != null) {");
   });
-  it("every mode is in view under the camera (Meal was off the edge); flip sits up top", () => {
+  it("Post / Story is in view under the camera (Instagram's row); flip sits up top", () => {
     expect(cam).toContain("<ModeTabs");
     // no spacers pushing the row wider than the screen; it scrolls only when a tiny screen can't fit them
     expect(cam).not.toContain('<span className="w-1/2 shrink-0" aria-hidden />');

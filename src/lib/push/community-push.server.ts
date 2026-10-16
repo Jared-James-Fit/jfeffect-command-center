@@ -1,10 +1,11 @@
 // Server-only: pushes for crew activity on your posts (reactions, comments,
-// replies, comment likes). The rows are written by database triggers; this
+// replies, comment likes, reposts). The rows are written by database triggers; this
 // claims the ones the signed-in person just caused (each pushes once) and
 // sends them, grouped and rate limited so a busy post is one alert, not ten:
 //   - reactions: one per post an hour ("Vicky and 3 others reacted…")
 //   - comments / replies: one per post / comment every 5 minutes
 //   - comment likes: one per comment every 3 hours
+//   - reposts: one per post an hour ("Vicky and 2 others reposted…")
 //   - at most COMMUNITY_DAILY_CAP a day per person, so the crew never
 //     crowds out what the coach sends
 // Lockscreen copy says who and what, never the comment itself.
@@ -15,12 +16,12 @@ export const COMMUNITY_DAILY_CAP = 5;
 
 const EMOJI: Record<string, string> = { heart: "❤️", thumbs: "👍", bang: "‼️", fire: "🔥", laugh: "😂" };
 const THING: Record<string, string> = { workout: "workout", lockin: "lock-in", post: "post" };
-const RATE_MINUTES: Record<string, number> = { reaction: 60, comment: 5, reply: 5, comment_like: 180 };
+const RATE_MINUTES: Record<string, number> = { reaction: 60, comment: 5, reply: 5, comment_like: 180, repost: 60 };
 
 export type ClaimedPush = {
   id: string;
   recipient: string;
-  kind: "reaction" | "comment" | "reply" | "comment_like";
+  kind: "reaction" | "comment" | "reply" | "comment_like" | "repost";
   post_id: string;
   comment_id: string | null;
   emoji: string | null;
@@ -55,6 +56,9 @@ export function communityPushCopy(n: ClaimedPush): { title: string; body: string
       return { title: `${name} replied to your comment`, body: n.media_type === "audio" ? "Tap to listen." : "Tap to read it." };
     case "comment_like":
       return { title: `${crowd} liked your comment`, body: "Tap to see it." };
+    case "repost":
+      // never the note itself on the lockscreen, like a comment
+      return { title: `${crowd} reposted your ${n.win ? n.win : thing}`, body: "Tap to see it." };
   }
 }
 
@@ -100,7 +104,7 @@ export async function pushCommunityActivity(admin: SupabaseClient, actorUserId: 
     for (const n of claimed) {
       if (coveredByCoachRecognition(n)) continue;
       const copy = communityPushCopy(n);
-      const anchor = n.kind === "reaction" || n.kind === "comment" ? n.post_id : n.comment_id ?? n.post_id;
+      const anchor = n.kind === "reaction" || n.kind === "comment" || n.kind === "repost" ? n.post_id : n.comment_id ?? n.post_id;
       for (const uid of await loginsFor(admin, n.recipient)) {
         if (uid === actorUserId) continue;
         const { data: prefs } = await (admin as any).from("push_notification_preferences").select("master_enabled, community").eq("user_id", uid).maybeSingle();

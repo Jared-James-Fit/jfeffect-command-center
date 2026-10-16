@@ -48,9 +48,9 @@ describe("posting never strands people", () => {
 });
 
 describe("members post anything, not only workouts", () => {
-  it("the + opens on a Post mode next to Lock in / Workout, with Write for words", () => {
+  it("the + opens on Normal next to the Lock in / Workout filters, with Write for words", () => {
     const btn = read("src/components/community/share-workout-picker.tsx");
-    expect(btn).toContain('{ key: "post", label: "Post" }');
+    expect(btn).toContain('{ key: "post:normal", look: "plain", label: "Normal" }');
     expect(btn).toContain("createCommunityPost(qc,");
     expect(btn).toContain('const fallbackMode: Mode = today ? "lockin" : freshWorkout ? "workout" : "post";');
     expect(btn).toContain('saveLabel="Post"');

@@ -3,6 +3,7 @@ import { LiveDot } from "@/components/live-indicator";
 import { Layers, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { featuredLift, formatTopSet, isTrainingNow, workoutHeadline, workoutSubtitle, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
+import { focusPosition } from "@/lib/photo-frame";
 
 // Small on purpose: Home's shelf loads this with the app, the feed card stays in its own chunk.
 
@@ -14,7 +15,7 @@ export function postThumbPath(p: Pick<CommunityPost, "media_thumb_path" | "media
 /**
  * A post, small: its photo, else its workout, lock-in or note card, with a
  * corner mark for a carousel or video (its first slide only: no swiping
- * inside it). Fills its box (the profile grid's squares, Home's Crew feed).
+ * inside it). Fills its box (the profile grid's 3:4 tiles, Home's Crew feed).
  * `footer`: keep the card's words clear of a strip along the bottom (the
  * like count). `large`: Home's Crew feed cards, with the author along the top.
  * A picture that won't load falls back to the card (never a broken-image box);
@@ -30,12 +31,14 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
   };
   const shared = post.shared_comment && !post.shared_comment.gone ? post.shared_comment : null;
   const pad = large ? "p-4 pt-12" : "p-2.5";
+  // which part of a cropped cover shows (a clip's framing, picked when it was posted)
+  const objectPosition = focusPosition(post.media_focus);
   const bottom = footer && (large ? "pb-11" : "pb-8");
   return (
     <>
       {post.kind === "note" && post.media_type && thumb ? (
         // a coach post with a photo shows the photo, like any other post
-        <img src={thumb} alt="" loading="lazy" decoding="async" onError={fail} className="h-full w-full object-cover" />
+        <TileImg src={thumb} onError={fail} position={objectPosition} />
       ) : post.kind === "note" ? (
         <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)] text-left", pad, bottom)}>
           <span className={cn("font-black uppercase tracking-[0.14em] text-primary", large ? "text-[10px]" : "text-[8px]")}>{post.poll ? "Poll" : "Note"}</span>
@@ -44,7 +47,7 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
           </span>
         </div>
       ) : post.media_type && thumb ? (
-        <img src={thumb} alt="" loading="lazy" decoding="async" onError={fail} className="h-full w-full object-cover" />
+        <TileImg src={thumb} onError={fail} position={objectPosition} />
       ) : post.stats ? (
         <WorkoutTile stats={post.stats} unit={unit} pad={pad} bottom={bottom} large={large} />
       ) : post.locked_in_at ? (
@@ -64,6 +67,29 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
         post.media_type === "video" && <Play className={cn("absolute fill-white text-white drop-shadow", large ? "right-3 top-3 h-5 w-5" : "right-1.5 top-1.5 h-4 w-4")} />
       )}
     </>
+  );
+}
+
+/** A tile's photo: fills the tile from its middle, and fades in once it's loaded (a cached one shows at once). */
+function TileImg({ src, onError, position }: { src: string; onError: () => void; position?: string }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      onLoad={() => setLoaded(true)}
+      onError={onError}
+      ref={(el) => {
+        if (el?.complete && el.naturalWidth > 0 && !loaded) setLoaded(true);
+      }}
+      data-loaded={loaded ? "" : undefined}
+      className="media-fade h-full w-full object-cover object-center"
+      // a clip's (or an older photo's) framing, picked when it was posted
+      style={position ? { objectPosition: position } : undefined}
+    />
   );
 }
 

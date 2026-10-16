@@ -913,7 +913,8 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
     // opens on a session to start, else a workout from the last day, else a plain post
     expect(picker).toContain('const fallbackMode: Mode = today ? "lockin" : freshWorkout ? "workout" : "post";');
     // the shutter freezes the frame in place: same dialog, no second screen
-    expect(studio).toContain('freeze({ src: c, file: null, live: true, at: new Date() });');
+    // (framed the way the camera's 4:5 guide showed it)
+    expect(studio).toContain("freeze({ src: c, file: null, live: true, at: new Date() }, card ? CENTRED : framingFromGuide(");
     expect(studio).toContain('setPhase("edit");');
     expect(studio.match(/<Dialog /g)?.length).toBe(1);
     // text + stickers sit on the card in the same screen
@@ -932,15 +933,13 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
     expect(cam).toContain('capture="environment"');
     expect(cam).toContain("if (video) video.srcObject = null;");
   });
-  it("stickers: on top of the story card, baked into the community photo through the same crop", () => {
-    const layer = read("src/components/community/sticker-layer.tsx");
+  it("stickers: on top of the card or photo, baked into what's posted exactly where they sit (the editor is the post's own shape)", () => {
     const studio = read("src/components/community/share-studio.tsx");
-    expect(layer).toContain("const k = Math.min(1, 2048 / Math.max(nw, nh));");
-    expect(layer).toContain("const s = Math.max(REF / W, CARD_H / H);");
-    expect(studio).toContain("drawStickers(context2d(c), items, CARD_W, CARD_H);");
-    expect(studio).toContain("const b = await bakeStickers(shot.src, items);");
-    // nothing added → the original photo, untouched
-    expect(studio).toContain("if (shot.file) return shot.file;");
+    // the framed photo (its shape, 1080 wide), stickers drawn at the same spots
+    expect(studio).toContain("const c = framedCanvas(shot.src as Drawable, framing, frameShape);");
+    expect(studio).toContain("if (items.length) drawStickers(context2d(c), items, c.width, c.height);");
+    // a card: painted at its format, the same stickers on top
+    expect(studio).toContain("drawStickers(context2d(c), items, c.width, c.height);\n      return await canvasToBlob(c, \"image/jpeg\", 0.92);");
   });
   it("full-screen editors really fill the screen", () => {
     for (const f of ["share-composer", "lock-in-editor", "share-studio", "post-detail"]) {
@@ -985,10 +984,11 @@ describe("share camera: options right away, no list in the way", () => {
   it("the viewfinder is the real card, live; swipe changes the look, before and after the shot", () => {
     expect(picker).toContain('card={activeMode === "post" ? null : cameraCard}');
     expect(read("src/components/community/lock-in.tsx")).toContain("lockInCameraCard({ workoutTitle: cardTitle, athleteName, plan: plan ?? [] })");
-    expect(cam).toContain("paintShareCard(cardEl, { ...c.data, lockedIn, template: c.look, media }, logo, LIVE_SCALE);");
+    expect(cam).toContain("paintShareCard(cardEl, { ...c.data, format: cardFormat, lockedIn, template: c.look, media }, logo, LIVE_SCALE);");
     expect(cam).toContain("if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) changeLook(dx < 0 ? 1 : -1);");
-    // the card is exactly 9:16 on screen, so what you see is what you share: edge to edge when shooting (when it fits above the bar)
-    expect(cam).toContain("const w = fullScreen ? areaSize.w : Math.min(areaSize.w, (areaSize.h * CARD_W) / CARD_H);");
+    // the camera is exactly 9:16 (edge to edge when it fits above the bar); editing, the frame is the post's own shape
+    expect(cam).toContain("const w = fullScreen ? areaSize.w : Math.min(areaSize.w, areaSize.h * boxAspect);");
+    expect(cam).toContain('const boxAspect = phase === "shoot" ? CARD_W / CARD_H : frameAspect;');
     expect(cam).toContain("screenSize.h - screenSize.top - (screenSize.w * CARD_H) / CARD_W >= barH - 2");
   });
   it("self-timer, double-tap flip, and the camera light goes off", () => {
@@ -1146,7 +1146,8 @@ describe("post what you see; rotate smooth and sharp; snap to centre", () => {
   it("the post is the look you're on (4:5), 'No filter' and Hide weights post just the photo", () => {
     expect(studio).toContain('const bare = card.look === "plain" || (post?.showHideLoads && hideLoads);');
     expect(studio).toContain("if (shot && bare) return finalPhoto();");
-    expect(studio).toContain('paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);');
+    expect(studio).toContain('const b = await cardImage("feed");');
+    expect(studio).toContain("paintShareCard(c, { ...card.data, format: fmt, lockedIn: frozenLockedIn(card.data), template: card.look, media }, logo, 1);");
     // no photo: nothing posted, unless it's a carousel (then slide 1 is the card itself)
     expect(studio).toContain("if (!shot && (!carousel || bare)) return null;");
     expect(studio).toContain("await post.onPost({ photo: await postPhoto(extras.length > 0),");
@@ -1297,7 +1298,7 @@ describe("captions: Instagram-length, written on their own screen", () => {
     expect(read("src/components/community/post-detail.tsx")).toContain('<p className="whitespace-pre-line');
   });
   it("the preview on the caption screen includes the stickers and text", () => {
-    expect(read("src/components/community/share-studio.tsx")).toContain("captionThumb(cardEl ?? (shot?.src as HTMLCanvasElement | undefined), (ctx, w, h) => drawStickers(ctx, items, w, h))");
+    expect(read("src/components/community/share-studio.tsx")).toContain("setThumb(smallFrame((ctx, w, h) => drawStickers(ctx, items, w, h)));");
   });
   it("long captions fold to three lines in the feed with 'more'", () => {
     expect(read("src/components/community/feed-caption.tsx")).toContain('!open && "line-clamp-3"');

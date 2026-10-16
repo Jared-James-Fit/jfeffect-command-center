@@ -90,6 +90,8 @@ export function activityLine(n: CommunityNotice): { names: string[]; others: num
       return { names, others, action: "started following you", quote: null };
     case "follow_request":
       return { names, others, action: "requested to follow you", quote: null };
+    case "repost":
+      return { names, others, action: n.snippet?.trim() ? "reposted your post:" : `reposted your ${thing}`, quote: n.snippet?.trim() || null };
   }
 }
 
@@ -109,15 +111,16 @@ export function activityAge(at: string, now = Date.now()): string {
  * after the last bubble (`fresh`, worked out on the server), so a line that
  * got one more like counts 1, not every like it ever had.
  */
-export type ActivityBubbleCounts = { likes: number; comments: number; follows: number; total: number };
+export type ActivityBubbleCounts = { likes: number; comments: number; reposts: number; follows: number; total: number };
 
 export function activityBubbleCounts(items: readonly Pick<ActivityItem, "kind" | "unread" | "fresh">[] | undefined | null): ActivityBubbleCounts {
-  const out: ActivityBubbleCounts = { likes: 0, comments: 0, follows: 0, total: 0 };
+  const out: ActivityBubbleCounts = { likes: 0, comments: 0, reposts: 0, follows: 0, total: 0 };
   for (const it of items ?? []) {
     const n = it.unread ? Math.max(0, Math.floor(it.fresh ?? 0)) : 0;
     if (!n) continue;
     if (matchesActivityFilter(it, "likes")) out.likes += n;
     else if (matchesActivityFilter(it, "comments")) out.comments += n;
+    else if (it.kind === "repost") out.reposts += n;
     else out.follows += n;
     out.total += n;
   }
@@ -127,7 +130,7 @@ export function activityBubbleCounts(items: readonly Pick<ActivityItem, "kind" |
 /** "3 new likes, 1 new comment" for screen readers. */
 export function activityBubbleLabel(c: ActivityBubbleCounts): string {
   const part = (n: number, one: string, many: string) => (n ? `${n} new ${n === 1 ? one : many}` : null);
-  return [part(c.likes, "like", "likes"), part(c.comments, "comment", "comments"), part(c.follows, "follower", "followers")]
+  return [part(c.likes, "like", "likes"), part(c.comments, "comment", "comments"), part(c.reposts, "repost", "reposts"), part(c.follows, "follower", "followers")]
     .filter(Boolean)
     .join(", ");
 }
