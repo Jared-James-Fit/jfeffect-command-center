@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Trophy } from "lucide-react";
-import { InlineVideo } from "@/components/community/inline-video";
+import { InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ import {
   type WorkoutWin,
 } from "@/lib/community";
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
+import { feedAspect, focusPosition } from "@/lib/photo-frame";
 import { WinsStatsCard } from "@/components/community/wins-stats";
 import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-cards";
 import { LessonDiagram } from "@/components/community/lesson-card";
@@ -93,6 +94,16 @@ export function audienceNote(post: Pick<CommunityPost, "visibility" | "is_mine" 
   else if (post.visibility === "followers" && post.is_mine) parts.push("Followers");
   if (post.is_mine && post.hide_loads) parts.push("Weights hidden");
   return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * A member's own photo / clip post (POST on the camera): shown like
+ * Instagram's, the picture edge to edge at its own shape, the words under it
+ * ("Name caption"). A coach's posts keep their note layout (words in the post
+ * font, the picture set in), so they read like his own posts.
+ */
+export function isPhotoPost(post: Pick<CommunityPost, "kind" | "media_type" | "series" | "quote" | "author">): boolean {
+  return post.kind === "note" && !!post.media_type && !post.series && !post.quote && !post.author.is_coach;
 }
 
 /** The coach mark next to a name: small, verified-style, never a banner. */
@@ -382,11 +393,13 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const note = useRepostNote(post);
   const reposted = !!post.reposted_by?.length;
 
-  // Tap opens the workout; double-tap gives ❤️ (Instagram muscle memory).
+  // Instagram's taps: a tap on a picture does nothing (a post never opens from
+  // its picture: "View full workout" and the comments are buttons of their own),
+  // a tap on a clip turns the sound on or off, and two quick taps give ❤️.
   // Already reacted? It stays as it is (a double-tap never takes one back).
-  const onHeroTap = () => {
+  const onHeroTap = (e: React.MouseEvent) => {
     const now = Date.now();
-    if (now - lastTap.current < 280) {
+    if (now - lastTap.current < 300) {
       if (singleTimer.current) window.clearTimeout(singleTimer.current);
       singleTimer.current = null;
       lastTap.current = 0;
@@ -396,11 +409,18 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       return;
     }
     lastTap.current = now;
-    singleTimer.current = window.setTimeout(() => {
-      singleTimer.current = null;
-      onOpen(post);
-    }, 280);
+    // a clip: sound on / off, once it's clear this wasn't the first of two taps
+    if ((e.target as Element | null)?.closest?.("[data-inline-video]")) {
+      singleTimer.current = window.setTimeout(() => {
+        singleTimer.current = null;
+        toggleFeedSound();
+      }, 300);
+    }
   };
+  useEffect(() => () => {
+    if (singleTimer.current) window.clearTimeout(singleTimer.current);
+  }, []);
+  const photo = isPhotoPost(post);
 
   return (
     // Instagram-style on a phone: edge to edge, no card frame, a hairline between
@@ -429,9 +449,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 
       {/* on words or a workout card the note sits above it, never over the words */}
       {note.bubble && !post.media_type && <div className="px-3.5 pb-2.5" data-note-above>{note.bubble}</div>}
-      {/* Hero: the photo, or the workout itself when there isn't one */}
-      <div role="button" tabIndex={0} onClick={onHeroTap} onKeyDown={(e) => e.key === "Enter" && onOpen(post)} className="relative cursor-pointer select-none" aria-label="Open workout">
-        {isNote ? (
+      {/* Hero: the photo, or the workout itself when there isn't one. Taps never open the post (see onHeroTap). */}
+      <div onClick={onHeroTap} className="relative select-none" data-post-hero>
+        {isNote && !photo ? (
           <>
             <NoteBody post={post} clamp onOpenPerson={onOpenAuthor} cover={post.media_type ? <PostMedia post={post} thumbUrl={thumbUrl} /> : undefined} />
             {/* a coach post's photos / videos, under its words */}
@@ -451,7 +471,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         {doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}
         <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
         {/* on a photo the note floats on its top-left corner, Instagram's spot */}
-        {note.bubble && post.media_type && <div className={cn("pointer-events-none absolute z-[2]", isNote ? "left-6 top-3" : "left-3 top-3")} data-note-over>{note.bubble}</div>}
+        {note.bubble && post.media_type && <div className={cn("pointer-events-none absolute z-[2]", isNote && !photo ? "left-6 top-3" : "left-3 top-3")} data-note-over>{note.bubble}</div>}
       </div>
       {note.sheet}
 
@@ -499,8 +519,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {/* Every workout has more than the card shows: say so, plainly. */}
       {!isNote && s && <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />}
 
-      {post.caption && !isNote && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} />}
-      {!isNote && <PostExtras post={post} className="px-3.5 pt-2.5" />}
+      {post.caption && (!isNote || photo) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} />}
+      {(!isNote || photo) && <PostExtras post={post} className="px-3.5 pt-2.5" />}
 
       {(post.coach_reactions.length > 0 || post.coach_commented) && (
         <div className="px-3.5 pt-2.5">
@@ -691,7 +711,9 @@ export function PostMedia({ post, thumbUrl, full = false }: { post: CommunityPos
   const cover = slides[0] ?? null;
   // Never taller than 4:5, never wider than 16:9 — keeps the feed rhythm steady.
   // A carousel takes its cover's shape for every slide (Instagram does too).
-  const ratio = Math.min(Math.max((post.media_width ?? 4) / (post.media_height ?? 5), 0.8), 1.78);
+  // A picture framed in the studio is already exactly its shape; a clip (or an
+  // older photo) is cropped to it, showing the part its focus says.
+  const ratio = feedAspect(post.media_width, post.media_height);
   if (slides.length > 1) return <PostCarousel slides={slides} coverUrl={thumbUrl} ratio={ratio} full={full} />;
   return (
     <div className="relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }}>
@@ -706,13 +728,14 @@ function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide
   const { data: fullUrl } = useFullMediaUrl(slide.path, full && active && !isVideo);
   const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
   // data-pinch-zoom: pinch lifts just this (the page never zooms), see useMediaPinchZoom
+  const position = focusPosition(slide.focus);
   return isVideo ? (
     <div data-pinch-zoom className="absolute inset-0">
-      <InlineVideo path={slide.path} poster={thumbUrl} active={active} />
+      <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} />
     </div>
   ) : (
     <div data-pinch-zoom className="absolute inset-0">
-      {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+      {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
     </div>
   );
 }
@@ -729,7 +752,7 @@ function HolidayPhoto({ src, alt }: { src: string; alt: string }) {
 }
 
 /** A photo that fades in once it has loaded (cached ones show at once), over a soft shimmer. */
-function FadeImg({ src }: { src: string }) {
+function FadeImg({ src, position }: { src: string; position?: string }) {
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -748,6 +771,7 @@ function FadeImg({ src }: { src: string }) {
         onLoad={() => setLoaded(true)}
         data-loaded={loaded ? "" : undefined}
         className="media-fade relative h-full w-full object-cover"
+        style={position ? { objectPosition: position } : undefined}
       />
     </>
   );
@@ -756,7 +780,7 @@ function FadeImg({ src }: { src: string }) {
 /**
  * Up to 10 photos / videos: swipe sideways (it snaps one at a time), "2/5"
  * and the dots say where you are. Only the slide you're on and its
- * neighbours load; the rest wait. Taps still reach the post (open / double-tap).
+ * neighbours load; the rest wait. Taps still reach the post (double-tap ❤️, a clip's sound).
  */
 function PostCarousel({ slides, coverUrl, ratio, full }: { slides: PostSlide[]; coverUrl: string | null; ratio: number; full: boolean }) {
   const [index, setIndex] = useState(0);

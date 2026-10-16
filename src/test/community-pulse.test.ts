@@ -61,7 +61,8 @@ describe("No Activity bubble: a finished session is the athlete's own story", ()
   it("the Activity bubble, its story, its week cover and its list are gone; the feed is the posts people made", () => {
     expect(existsSync("src/components/community/pulse-strip.tsx")).toBe(false);
     const screen = read("src/components/community/community-screen.tsx");
-    expect(screen).toContain("const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);");
+    // (inFeed: not a Pulse, and not a story someone posted)
+    expect(screen).toContain("const ownPosts = useMemo(() => posts.filter(inFeed), [posts]);");
     expect(screen).not.toMatch(/ActivitySheet|activityNeedsMore|activity=\{/);
     const rail = read("src/components/community/crew-stories.tsx");
     expect(rail).not.toMatch(/ActivityBubble|ActivityGlyph|ActivityCoverFrame|activityStoryGroup|onActivityList|group\.activity|data-story-activity-all/);

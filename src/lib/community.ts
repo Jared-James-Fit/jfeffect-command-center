@@ -9,6 +9,7 @@ import { formatLoad, formatTonnage } from "@/lib/training-records";
 import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
 import { dayScheduledDate, type WorkoutItem } from "@/lib/workout-today";
 import type { LessonExtra, PostSticker } from "@/lib/lessons";
+import type { MediaFocus } from "@/lib/photo-frame";
 
 /** Longest workout caption (Instagram's limit). Matches community_posts_caption_check. */
 export const CAPTION_MAX = 2200;
@@ -166,6 +167,10 @@ export type CommunityPost = {
   media_height: number | null;
   /** Slides 2..10 of a carousel, in order (the cover is media_*). Missing / null = one. */
   extra_media?: PostSlide[] | null;
+  /** Which part of the cover shows when the feed or the grid crops it (a clip's framing); centred when unset. */
+  media_focus?: MediaFocus | null;
+  /** A story (STORY on the camera): 24h in the story rail, never in the feed or on the profile grid. */
+  story?: boolean;
   /** null for coach notes (no workout behind them). */
   completion_id: string | null;
   /** "workout" (a session) or "note" (a coach's text post). Missing = workout. */
@@ -754,13 +759,21 @@ export function checkVideoDuration(seconds: number): MediaCheck {
 export const MAX_SLIDES = 10;
 export const MAX_SLIDE_VIDEOS = 3;
 
-export type PostSlide = { path: string; thumb: string | null; type: "image" | "video"; width: number | null; height: number | null };
+export type PostSlide = {
+  path: string;
+  thumb: string | null;
+  type: "image" | "video";
+  width: number | null;
+  height: number | null;
+  /** Which part shows when the feed or the profile grid crops it (a clip's, or an older photo's); centred when unset. */
+  focus?: MediaFocus | null;
+};
 
 /** Every slide of a post, cover first. [] when it has no photo. */
-export function postSlides(post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media">): PostSlide[] {
+export function postSlides(post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media"> & { media_focus?: MediaFocus | null }): PostSlide[] {
   if (!post.media_path || !post.media_type) return [];
   return [
-    { path: post.media_path, thumb: post.media_thumb_path, type: post.media_type, width: post.media_width, height: post.media_height },
+    { path: post.media_path, thumb: post.media_thumb_path, type: post.media_type, width: post.media_width, height: post.media_height, focus: post.media_focus ?? null },
     ...(post.extra_media ?? []).filter((s) => !!s?.path),
   ];
 }
@@ -1533,14 +1546,14 @@ export function crewGoalStatus(g: CrewGoal, opts: { now?: Date; me?: string | nu
  * never sit among them: they're in the athlete's story. `more` is how many
  * recent posts people made beyond the ones shown.
  */
-export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; stats?: { pr_count?: number } | null }>(
+export function homeCrewDeck<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; story?: boolean; stats?: { pr_count?: number } | null }>(
   posts: T[],
   now = Date.now(),
   max = HOME_DECK_POSTS,
 ): { shown: T[]; more: number } {
   const t = (p: T) => new Date(p.created_at).getTime();
   const since = now - 14 * 86_400_000;
-  const own = [...posts].filter((p) => t(p) > since && !isPulsePost(p)).sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
+  const own = [...posts].filter((p) => t(p) > since && inFeed(p)).sort((a, b) => t(b) - t(a) || (a.id < b.id ? 1 : -1));
   const shown = own.slice(0, max);
   return { shown, more: own.length - shown.length };
 }
@@ -1553,7 +1566,7 @@ export const HOME_DECK_PAGES = 5;
  * `max` posts people made, the feed has more, it hasn't read too many pages,
  * and what it has read is still inside the deck's two weeks.
  */
-export function homeDeckNeedsMore<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; stats?: unknown }>(
+export function homeDeckNeedsMore<T extends Pick<CommunityPost, "id" | "created_at"> & { auto?: boolean; story?: boolean; stats?: unknown }>(
   posts: T[],
   hasMore: boolean,
   pages: number,
@@ -1561,7 +1574,7 @@ export function homeDeckNeedsMore<T extends Pick<CommunityPost, "id" | "created_
   max = HOME_DECK_POSTS,
 ): boolean {
   if (!hasMore || pages >= HOME_DECK_PAGES) return false;
-  if (posts.filter((p) => !isPulsePost(p)).length >= max) return false;
+  if (posts.filter((p) => inFeed(p)).length >= max) return false;
   const oldest = Math.min(...posts.map((p) => new Date(p.created_at).getTime()));
   return !posts.length || oldest > now - 14 * 86_400_000;
 }
@@ -1576,6 +1589,15 @@ export const HOME_DECK_POSTS = 3;
  */
 export function isPulsePost(p: { auto?: boolean; stats?: unknown }): boolean {
   return !!p.auto && !!p.stats;
+}
+
+/**
+ * Whether a post belongs in the feed: not a Pulse (that's the athlete's
+ * story) and not a story someone posted (STORY on the camera: the rail only,
+ * for 24 hours, like Instagram's).
+ */
+export function inFeed(p: { auto?: boolean; stats?: unknown; story?: boolean }): boolean {
+  return !isPulsePost(p) && !p.story;
 }
 
 /** A moment worth celebrating, not a routine session: a PR, a monthly milestone, a 3rd+ session of the week. */
@@ -1805,7 +1827,7 @@ const STORY_END_FEED_MS = 7 * 86_400_000;
  * own story (or a nudge to add one). `posts` is the live feed, so reactions
  * given here show straight away.
  */
-export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author" | "my_reaction">>(
+export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "auto" | "stats" | "visibility" | "is_mine" | "seen" | "author" | "my_reaction"> & { story?: boolean }>(
   groups: StoryGroup<T>[],
   posts: T[],
   watched: ReadonlySet<string>,
@@ -1837,7 +1859,7 @@ export function storyEnd<T extends Pick<CommunityPost, "id" | "created_at" | "au
     .sort((a, b) => Number(isWin(b)) - Number(isWin(a)))
     .slice(0, 3)
     .map((p) => p.id);
-  const feedNew = posts.filter((p) => !p.is_mine && !p.seen && !isPulsePost(p) && !inStories.has(p.id) && now - new Date(p.created_at).getTime() < STORY_END_FEED_MS);
+  const feedNew = posts.filter((p) => !p.is_mine && !p.seen && inFeed(p) && !inStories.has(p.id) && now - new Date(p.created_at).getTime() < STORY_END_FEED_MS);
   const mine = posts
     .filter((p) => p.is_mine && storyWorthy(p) && now - new Date(p.created_at).getTime() <= STORY_WINDOW_MS)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;

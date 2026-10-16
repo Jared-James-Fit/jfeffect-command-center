@@ -4,8 +4,10 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { MAX_SLIDES, fitSlides, slideThumbPath, type PostSlide } from "@/lib/community";
-import { pickMedia, releasePicked, removeCommunityFiles, uploadPicked, type PickedMedia } from "@/lib/community-media";
+import { COMMUNITY_BUCKET, pickMedia, releasePicked, removeCommunityFiles, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import { useSlideThumbUrls } from "@/lib/community.queries";
+import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
+import type { MediaFocus } from "@/lib/photo-frame";
 
 /** Uploads at once. Three keeps a phone connection busy without starving any one file. */
 const PARALLEL = 3;
@@ -23,6 +25,13 @@ export type TrayItem = {
   slide: PostSlide | null;
   /** Already on the saved post: its files only go once the post is saved without it. */
   existing: boolean;
+  /** Its size (px), once it's been read. */
+  w?: number;
+  h?: number;
+  /** A clip: which part shows when the feed or the grid crops it (centred when unset). */
+  focus?: MediaFocus | null;
+  /** A clip: the cover frame picked for it (replaces the automatic one when it's posted). */
+  cover?: Blob | null;
 };
 
 type Job = { id: string; file?: File; picked?: PickedMedia; promise: Promise<PostSlide | null>; resolve: (s: PostSlide | null) => void };
@@ -140,6 +149,8 @@ export function useSlideTray({ open, initial, resetKey, coverCount }: { open: bo
         patch(f.id, {
           preview: res.media.kind === "image" ? res.media.previewUrl : (res.media.thumb ? URL.createObjectURL(res.media.thumb) : null),
           video: res.media.kind === "video" ? res.media.previewUrl : null,
+          w: res.media.width,
+          h: res.media.height,
         });
         enqueue(f.id, res.media);
       }
@@ -169,6 +180,40 @@ export function useSlideTray({ open, initial, resetKey, coverCount }: { open: bo
     [enqueue],
   );
 
+  /** A clip's cover frame, picked by hand: shown in the strip now, uploaded with the post. */
+  const setCover = useCallback(
+    (id: string, cover: Blob) => {
+      const it = itemsRef.current.find((x) => x.id === id);
+      if (!it) return;
+      const job = jobs.current.get(id);
+      if (it.preview?.startsWith("blob:") && it.preview !== job?.picked?.previewUrl) URL.revokeObjectURL(it.preview);
+      patch(id, { cover, preview: URL.createObjectURL(cover) });
+    },
+    [patch],
+  );
+  /** Which part of a clip shows when it's cropped (the feed's 4:5, the grid's 3:4). */
+  const setFocus = useCallback((id: string, focus: MediaFocus | null) => patch(id, { focus }), [patch]);
+
+  /** A picked cover goes up next to the clip; the automatic one it replaces is removed. */
+  const withCover = useCallback(
+    async (it: TrayItem, slide: PostSlide): Promise<PostSlide> => {
+      const focus = it.focus ?? slide.focus ?? null;
+      if (!it.cover || !user?.id) return focus ? { ...slide, focus } : slide;
+      try {
+        const up = await uploadLiftFileToStorage({ file: new File([it.cover], "cover.jpg", { type: "image/jpeg" }), userId: user.id, bucket: COMMUNITY_BUCKET });
+        if (slide.thumb && !it.existing) void removeCommunityFiles([slide.thumb]);
+        const next: PostSlide = { ...slide, thumb: up.path, ...(focus ? { focus } : {}) };
+        // posted again (a retry): don't upload it twice
+        patch(it.id, { cover: null, slide: next });
+        return next;
+      } catch {
+        // the clip still goes up with its automatic cover
+        return focus ? { ...slide, focus } : slide;
+      }
+    },
+    [patch, user?.id],
+  );
+
   /**
    * Everything uploaded, in order (failed ones get one more go). Throws if
    * something still won't go up, so nothing is posted half done.
@@ -180,17 +225,13 @@ export function useSlideTray({ open, initial, resetKey, coverCount }: { open: bo
     const out: PostSlide[] = [];
     let failed = 0;
     for (const it of list) {
-      if (it.slide) {
-        out.push(it.slide);
-        continue;
-      }
-      const s = await jobs.current.get(it.id)?.promise;
-      if (s) out.push(s);
+      const s = it.slide ?? (await jobs.current.get(it.id)?.promise);
+      if (s) out.push(await withCover(itemsRef.current.find((x) => x.id === it.id) ?? it, s));
       else if (!removed.current.has(it.id)) failed += 1;
     }
     if (failed) throw new Error(failed === 1 ? "One photo didn't upload. Tap it to try again or remove it." : `${failed} didn't upload. Tap them to try again or remove them.`);
     return out;
-  }, [retry]);
+  }, [retry, withCover]);
 
   const releaseAll = useCallback(() => {
     for (const job of jobs.current.values()) if (job.picked) releasePicked(job.picked);
@@ -226,7 +267,7 @@ export function useSlideTray({ open, initial, resetKey, coverCount }: { open: bo
   useEffect(() => () => discardRef.current(), []);
 
   const uploading = items.filter((it) => it.status === "preparing" || it.status === "uploading").length;
-  return { items, add, remove, retry, ready, commit, discard, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES };
+  return { items, add, remove, retry, ready, commit, discard, setCover, setFocus, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES };
 }
 
 export type SlideTrayState = ReturnType<typeof useSlideTray>;

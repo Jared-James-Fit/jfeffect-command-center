@@ -27,16 +27,24 @@ const ICON: Record<ShareTemplate, LucideIcon> = {
   plain: Circle,
 };
 
+/** One circle in the row: a look on a card, or Normal (no card). Keys are unique across the row. */
+export type LookItem = { key: string; look: ShareTemplate; label: string };
+
+/** A card's looks as circles (the studio for one workout or one lock in). */
+export function lookItems(looks: ShareTemplate[] | null | undefined): LookItem[] | null {
+  return looks ? looks.map((t) => ({ key: t, look: t, label: TEMPLATE_LABEL[t] })) : null;
+}
+
 const ITEM = 58;
 const GAP = 14;
 const STEP = ITEM + GAP;
 
 /**
- * The shutter, Instagram's way: the looks sit in a row of circles and the
- * one in the middle ring is the look you're on. Swipe and they glide, each
+ * The shutter, Instagram's way: the filters sit in a row of circles and the
+ * one in the middle ring is the one you're on. Swipe and they glide, each
  * one snapping into the ring and showing on the camera as it lands; tap a
  * circle to bring it in; tap the middle one (the shutter) to take the photo.
- * One look (or none): just the shutter.
+ * One (or none): just the shutter.
  */
 export function LookCarousel({
   looks,
@@ -48,39 +56,43 @@ export function LookCarousel({
   showName = true,
   hold,
 }: {
-  looks: ShareTemplate[] | null;
-  look: ShareTemplate | null;
-  onLook: (t: ShareTemplate) => void;
+  looks: LookItem[] | null;
+  /** The key of the one in the ring. */
+  look: string | null;
+  onLook: (key: string) => void;
   onShoot: () => void;
   disabled?: boolean;
   /** the self-timer is counting down: the shutter is a stop button */
   counting?: boolean;
   /** the look's name above the ring (left off where room is short: the card shows it) */
   showName?: boolean;
-  /** Hold to film (a plain post's camera): start / stop, and how far into the clip limit it is (null: not filming). */
+  /** Hold to film (Normal, no card): start / stop, and how far into the clip limit it is (null: not filming). */
   hold?: { onStart: () => void; onEnd: () => void; progress: number | null; seconds: number };
 }) {
-  const many = !!looks && looks.length > 1 && !!look;
+  const many = !!looks && looks.length > 1 && !!look && looks.some((l) => l.key === look);
   if (!many) return <Shutter onShoot={onShoot} disabled={disabled} counting={counting} hold={hold} />;
-  // a new set of looks (another mode) starts a fresh row, on its own look
-  return <Glide key={looks!.join("|")} looks={looks!} look={look!} onLook={onLook} onShoot={onShoot} disabled={disabled} counting={counting} showName={showName} />;
+  // a new set of filters starts a fresh row, on the one you're on
+  return <Glide key={looks!.map((l) => l.key).join("|")} looks={looks!} look={look!} onLook={onLook} onShoot={onShoot} disabled={disabled} counting={counting} showName={showName} hold={hold} />;
 }
 
+type Hold = { onStart: () => void; onEnd: () => void; progress: number | null; seconds: number };
+
 /**
- * The plain shutter: a tap takes a photo; with `hold`, holding it films
- * (Instagram's camera), the ring filling red up to the clip limit.
+ * Holding the shutter films: a finger down for HOLD_TO_RECORD_MS starts the
+ * clip, lifting it ends it, and the tap that a hold leaves behind is eaten
+ * (`consume`), so it never also takes a photo.
  */
-function Shutter({ onShoot, disabled, counting, hold }: {
-  onShoot: () => void;
-  disabled: boolean;
-  counting: boolean;
-  hold?: { onStart: () => void; onEnd: () => void; progress: number | null; seconds: number };
-}) {
+function useHold(hold: Hold | undefined, blocked: boolean) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
   const filming = hold?.progress != null;
-  const down = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!hold || disabled || counting || filming) return;
+  const holdRef = useRef(hold);
+  holdRef.current = hold;
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+  const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!hold || blocked || filming) return;
     // the finger can drift off the button while filming: it still ends where it lifts
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -91,47 +103,67 @@ function Shutter({ onShoot, disabled, counting, hold }: {
     timer.current = setTimeout(() => {
       timer.current = null;
       held.current = true;
-      hold.onStart();
+      holdRef.current?.onStart();
     }, HOLD_TO_RECORD_MS);
   };
-  const up = () => {
+  const onPointerUp = () => {
     if (timer.current) {
       clearTimeout(timer.current);
       timer.current = null;
     }
-    if (held.current) hold?.onEnd();
+    if (held.current) holdRef.current?.onEnd();
   };
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
-  const pct = Math.round((hold?.progress ?? 0) * 1000) / 10;
+  return {
+    filming,
+    handlers: { onPointerDown, onPointerUp, onPointerCancel: onPointerUp },
+    /** True (once) when the click after a hold should do nothing. */
+    consume: () => {
+      if (!held.current) return false;
+      held.current = false;
+      return true;
+    },
+  };
+}
+
+/** The clip's time over the shutter while it films. */
+function FilmingTime({ seconds }: { seconds: number }) {
+  return (
+    <span className="pointer-events-none absolute -top-9 left-1/2 z-10 -translate-x-1/2 rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-black tabular-nums text-white" data-recording-time>
+      {`0:${String(seconds).padStart(2, "0")}`}
+    </span>
+  );
+}
+
+const filmRing = (progress: number) => {
+  const pct = Math.round(progress * 1000) / 10;
+  return { background: `conic-gradient(rgb(239 68 68) ${pct}%, rgba(255,255,255,0.35) ${pct}% 100%)` };
+};
+
+/**
+ * The plain shutter: a tap takes a photo; with `hold`, holding it films
+ * (Instagram's camera), the ring filling red up to the clip limit.
+ */
+function Shutter({ onShoot, disabled, counting, hold }: { onShoot: () => void; disabled: boolean; counting: boolean; hold?: Hold }) {
+  const h = useHold(hold, disabled || counting);
+  const filming = h.filming;
   return (
     <div className="relative flex h-[88px] items-center justify-center">
-      {filming && (
-        <span className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-black tabular-nums text-white" data-recording-time>
-          {`0:${String(hold!.seconds).padStart(2, "0")}`}
-        </span>
-      )}
+      {filming && <FilmingTime seconds={hold!.seconds} />}
       <button
         type="button"
         disabled={disabled}
-        onPointerDown={down}
-        onPointerUp={up}
-        onPointerCancel={up}
+        {...h.handlers}
         onContextMenu={(e) => e.preventDefault()}
         onClick={() => {
           // a hold was a clip, not a photo
-          if (held.current) {
-            held.current = false;
-            return;
-          }
+          if (h.consume()) return;
           onShoot();
         }}
         className={cn(
           "grid h-[78px] w-[78px] touch-none select-none place-items-center rounded-full border-[5px] [-webkit-touch-callout:none] disabled:opacity-30",
           filming ? "scale-110 border-transparent transition-transform" : "border-white active:scale-95",
         )}
-        style={filming ? { background: `conic-gradient(rgb(239 68 68) ${pct}%, rgba(255,255,255,0.35) ${pct}% 100%)` } : undefined}
+        style={filming ? filmRing(hold!.progress!) : undefined}
         aria-label={filming ? "Stop filming" : counting ? "Cancel timer" : hold ? "Take photo, or hold to film" : "Take photo"}
         data-shutter
         data-filming={filming ? "" : undefined}
@@ -144,18 +176,22 @@ function Shutter({ onShoot, disabled, counting, hold }: {
   );
 }
 
-function Glide({ looks, look, onLook, onShoot, disabled, counting, showName }: {
-  looks: ShareTemplate[];
-  look: ShareTemplate;
-  onLook: (t: ShareTemplate) => void;
+function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hold }: {
+  looks: LookItem[];
+  look: string;
+  onLook: (key: string) => void;
   onShoot: () => void;
   disabled: boolean;
   counting: boolean;
   showName: boolean;
+  /** Hold to film: only while the one in the ring can film (Normal). */
+  hold?: Hold;
 }) {
   const row = useRef<HTMLDivElement | null>(null);
   const items = useRef<(HTMLButtonElement | null)[]>([]);
-  const at = Math.max(0, looks.indexOf(look));
+  const at = Math.max(0, looks.findIndex((l) => l.key === look));
+  const h = useHold(hold, disabled || counting);
+  const filming = h.filming;
   // the look in the ring as the row moves (ahead of React)
   const shown = useRef(at);
   // a scroll we started (a tap, or a swipe on the camera): it lands on `to`, the looks in between don't count
@@ -214,7 +250,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName }: {
         } catch {
           /* no haptics here */
         }
-        lookRef.current(looks[i]);
+        lookRef.current(looks[i].key);
       }
     });
   };
@@ -225,17 +261,23 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName }: {
     if (!el) return;
     steering.current = i;
     shown.current = i;
-    lookRef.current(looks[i]);
+    lookRef.current(looks[i].key);
     el.scrollTo({ left: i * STEP, behavior: "smooth" });
   };
 
   return (
     <div className="relative" data-look-carousel>
-      {/* what the ring holds, above it */}
-      <div className={cn("pointer-events-none mb-1.5 flex justify-center", !showName && "sr-only")}>
-        <span className="rounded-full bg-black/35 px-2.5 py-0.5 text-[12px] font-bold backdrop-blur-sm" data-look-name>
-          {TEMPLATE_LABEL[look]}
-        </span>
+      {/* what the ring holds, above it (the clip's time while filming) */}
+      <div className={cn("pointer-events-none mb-1.5 flex justify-center", !showName && !filming && "sr-only")}>
+        {filming ? (
+          <span className="rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-black tabular-nums text-white" data-recording-time>
+            {`0:${String(hold!.seconds).padStart(2, "0")}`}
+          </span>
+        ) : (
+          <span className="rounded-full bg-black/35 px-2.5 py-0.5 text-[12px] font-bold backdrop-blur-sm" data-look-name>
+            {looks[at]?.label}
+          </span>
+        )}
       </div>
       <div className="relative h-[88px]">
         <div
@@ -244,41 +286,66 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName }: {
           // a finger on the row takes over from any glide we started
           onPointerDown={() => (steering.current = null)}
           onTouchStart={() => (steering.current = null)}
-          className="flex h-full snap-x snap-mandatory items-center overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          // filming: the row holds still (a swipe mid-clip can't change the filter)
+          className={cn(
+            "flex h-full snap-x snap-mandatory items-center overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            filming ? "overflow-x-hidden" : "overflow-x-auto",
+          )}
           style={{ gap: GAP, paddingInline: `calc(50% - ${ITEM / 2}px)` }}
           role="listbox"
-          aria-label="Looks"
+          aria-label="Filters"
         >
-          {looks.map((t, i) => {
-            const Icon = ICON[t];
+          {looks.map((l, i) => {
+            const Icon = ICON[l.look];
             const on = i === at;
             return (
               <button
-                key={t}
+                key={l.key}
                 ref={(b) => {
                   items.current[i] = b;
                 }}
                 type="button"
                 role="option"
                 aria-selected={on}
-                aria-label={on ? (counting ? "Cancel timer" : `Take photo, ${TEMPLATE_LABEL[t]}`) : TEMPLATE_LABEL[t]}
-                disabled={on && disabled}
-                onClick={() => (on ? onShoot() : bring(i))}
+                aria-label={on ? (filming ? "Stop filming" : counting ? "Cancel timer" : `Take photo, ${l.label}${hold ? ", or hold to film" : ""}`) : l.label}
+                disabled={(on && disabled) || (!on && filming)}
+                {...(on ? h.handlers : {})}
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (!on) return bring(i);
+                  // a hold on the ring was a clip, not a photo
+                  if (h.consume()) return;
+                  onShoot();
+                }}
                 className={cn(
-                  "grid shrink-0 snap-center snap-always place-items-center rounded-full transition-colors duration-150 will-change-transform disabled:opacity-40",
-                  on ? "bg-white text-black" : "bg-white/20 text-white backdrop-blur-md",
+                  "grid shrink-0 snap-center snap-always place-items-center rounded-full transition-colors duration-150 will-change-transform [-webkit-touch-callout:none] disabled:opacity-40",
+                  on ? (filming ? "text-white" : "bg-white text-black") : "bg-white/20 text-white backdrop-blur-md",
+                  on && "touch-none select-none",
                 )}
-                style={{ width: ITEM, height: ITEM }}
-                data-look={t}
+                style={{ width: ITEM, height: ITEM, ...(on && filming ? filmRing(hold!.progress!) : {}) }}
+                data-look={l.look}
+                data-look-key={l.key}
                 data-shutter={on ? "" : undefined}
+                data-filming={on && filming ? "" : undefined}
               >
-                {on && counting ? <span className="block h-6 w-6 rounded-md bg-red-500" /> : <Icon className="h-6 w-6" strokeWidth={2.2} />}
+                {on && filming ? (
+                  <span className="block h-[46px] w-[46px] rounded-full bg-black/30 p-[11px]">
+                    <span className="block h-full w-full rounded-md bg-red-500" />
+                  </span>
+                ) : on && counting ? (
+                  <span className="block h-6 w-6 rounded-md bg-red-500" />
+                ) : on && l.look === "plain" ? (
+                  // no filter in the ring: just the shutter, like Instagram's
+                  <span className="sr-only">{l.label}</span>
+                ) : (
+                  <Icon className="h-6 w-6" strokeWidth={2.2} />
+                )}
               </button>
             );
           })}
         </div>
         {/* the shutter's ring, still in the middle while the looks glide through it */}
-        <span className="pointer-events-none absolute left-1/2 top-1/2 h-[80px] w-[80px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[5px] border-white" aria-hidden />
+        <span className={cn("pointer-events-none absolute left-1/2 top-1/2 h-[80px] w-[80px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[5px]", filming ? "border-transparent" : "border-white")} aria-hidden />
       </div>
     </div>
   );
