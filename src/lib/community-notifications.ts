@@ -1,10 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import { reactionEmoji, type CommunityAuthor } from "@/lib/community";
 
-/** One line in the bell: a post's reactions, one comment / reply, a comment's likes, a new follower, or a follow request. */
+/** One line in the bell: a post's reactions, one comment / reply, a comment's likes, a new follower, a follow request, or a post's reposts. */
 export type CommunityNotice = {
   key: string;
-  kind: "reaction" | "comment" | "reply" | "comment_like" | "follow" | "follow_request";
+  kind: "reaction" | "comment" | "reply" | "comment_like" | "follow" | "follow_request" | "repost";
   /** The post (reactions), the comment, or the follower (follow) the line is about: what read state hangs on. */
   anchor: string;
   /** null for a follow */
@@ -76,6 +76,9 @@ export function communityNoticeText(n: CommunityNotice): { title: string; body: 
       return { title: `${who} started following you`, body: "" };
     case "follow_request":
       return { title: `${who} requested to follow you`, body: "Open their profile to confirm or delete" };
+    case "repost":
+      // the latest note, as they wrote it
+      return { title: `${who} reposted your ${thing}`, body: n.snippet?.trim() ? `“${n.snippet.trim()}”` : "" };
   }
 }
 

@@ -53,6 +53,7 @@ import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/commu
 import { SharedCommentCard, openCommunityPost } from "@/components/community/shared-comment";
 import { CollaboratorsSheet } from "@/components/community/mentions";
 import { InlineFollow } from "@/components/community/follow-button";
+import { RepostButton, RepostedHeader, SaveButton, useRepostNote } from "@/components/community/repost-save";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
@@ -377,6 +378,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const isNote = post.kind === "note";
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
   const sub = [post.auto && s ? "Finished a session" : null, postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
+  // a repost's note floats on the post (yours: tap to change it; "Add a note…" right after reposting)
+  const note = useRepostNote(post);
+  const reposted = !!post.reposted_by?.length;
 
   // Tap opens the workout; double-tap gives ❤️ (Instagram muscle memory).
   // Already reacted? It stays as it is (a double-tap never takes one back).
@@ -402,7 +406,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     // Instagram-style on a phone: edge to edge, no card frame, a hairline between
     // posts. A wider screen keeps the soft card (the feed column is centred there).
     <article ref={articleRef} data-feed-post className="-mx-3 overflow-hidden border-b border-border/60 bg-background pb-2 sm:mx-0 sm:rounded-3xl sm:border sm:border-border/70 sm:bg-card sm:pb-0 sm:shadow-sm">
-      <header className="flex items-center justify-between gap-2 px-3.5 py-3">
+      <RepostedHeader post={post} onOpenAuthor={onOpenAuthor} />
+      <header className={cn("flex items-center justify-between gap-2 px-3.5 pb-3", reposted ? "pt-1.5" : "pt-3")}>
         <AuthorLine
           author={post.author}
           sub={sub}
@@ -422,6 +427,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </div>
       </header>
 
+      {/* on words or a workout card the note sits above it, never over the words */}
+      {note.bubble && !post.media_type && <div className="px-3.5 pb-2.5" data-note-above>{note.bubble}</div>}
       {/* Hero: the photo, or the workout itself when there isn't one */}
       <div role="button" tabIndex={0} onClick={onHeroTap} onKeyDown={(e) => e.key === "Enter" && onOpen(post)} className="relative cursor-pointer select-none" aria-label="Open workout">
         {isNote ? (
@@ -443,7 +450,10 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         )}
         {doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}
         <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+        {/* on a photo the note floats on its top-left corner, Instagram's spot */}
+        {note.bubble && post.media_type && <div className={cn("pointer-events-none absolute z-[2]", isNote ? "left-6 top-3" : "left-3 top-3")} data-note-over>{note.bubble}</div>}
       </div>
+      {note.sheet}
 
       {/* A photo lock-in: the stamp sits under it until the numbers arrive */}
       {post.media_type && !s && post.locked_in_at && (
@@ -504,7 +514,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </div>
       )}
 
-      <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} />
+      <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} />
       <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
       <CommentPreviewList post={post} onOpenComments={() => onOpenComments(post)} />
     </article>
@@ -575,20 +585,24 @@ export function CommentPreviewList({ post, onOpenComments }: { post: CommunityPo
 }
 
 /**
- * The heart (tap for ❤️, hold for 👍 ‼️ 🔥 😂) and how many, then the faces
- * of who reacted ("Jared, Vicky and 3 others", with the kinds they gave),
- * which opens the full list. Comments on the right.
+ * Instagram's row: the heart (tap for ❤️, hold for 👍 ‼️ 🔥 😂), comments,
+ * repost, message, and save at the end. Under it, the faces of who reacted
+ * ("Jared, Vicky and 3 others", with the kinds they gave), which opens the
+ * full list.
  */
 export function ReactionBar({
   post,
   onReact,
   onOpenComments,
   onOpenAuthor,
+  onReposted,
 }: {
   post: CommunityPost;
   onReact: (p: CommunityPost, next: ReactionKey | null) => void;
   onOpenComments?: (p: CommunityPost) => void;
   onOpenAuthor?: (a: CommunityAuthor) => void;
+  /** Just reposted: the card floats "Add a note…" on the post. */
+  onReposted?: () => void;
 }) {
   const [listFor, setListFor] = useState<string | null>(null);
   const [messaging, setMessaging] = useState(false);
@@ -610,54 +624,59 @@ export function ReactionBar({
     return () => window.clearTimeout(t);
   }, [on, done]);
   return (
-    <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative flex items-center gap-1 px-2 pb-2 pt-2">
-      <ReactionButton post={post} onReact={onReact} />
-      {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} className="bottom-1/2 left-5" />}
+    <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative px-2 pb-2 pt-1.5">
+      {/* Instagram's row: like, comment, repost, message ... save at the end */}
+      <div className="relative flex items-center">
+        <ReactionButton post={post} onReact={onReact} />
+        {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} className="bottom-1/2 left-5" />}
+        {onOpenComments && (
+          <button
+            type="button"
+            onClick={() => onOpenComments(post)}
+            className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-2 text-[14px] font-black tabular-nums text-muted-foreground hover:bg-muted"
+            aria-label={`Comments${post.comment_count ? `, ${post.comment_count}` : ""}`}
+          >
+            <MessageCircle className="h-[23px] w-[23px] text-foreground/80" strokeWidth={2} />
+            {post.comment_count > 0 && post.comment_count}
+          </button>
+        )}
+        <RepostButton post={post} onReposted={onReposted} />
+        {canMessage && (
+          <button
+            type="button"
+            onClick={() => setMessaging(true)}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground/80 hover:bg-muted hover:text-foreground"
+            aria-label={`Message ${post.author.name}`}
+            title={`Message ${post.author.name}`}
+          >
+            <Send className="h-[22px] w-[22px] -rotate-12" />
+          </button>
+        )}
+        <span className="ml-auto" />
+        <SaveButton post={post} />
+      </div>
+      {/* who reacted, on its own line under the row, so names never get cut short */}
       {who && (
         <button
           type="button"
           onClick={() => setListFor(post.id)}
-          className={cn("flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-left hover:bg-muted", on && "engage-chip")}
+          className={cn("-mt-0.5 flex max-w-full min-w-0 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-2 text-left hover:bg-muted", on && "engage-chip")}
           aria-label={`See who reacted: ${who}`}
+          data-who-reacted
         >
           {faces.length > 0 && (
             <span className="flex shrink-0 -space-x-1.5">
               {faces.map((r) => (
                 <span key={r.user_id} className="rounded-full ring-2 ring-card">
-                  <UserAvatar src={r.avatar_url} name={r.is_me ? "You" : r.name} size={24} expandable={false} />
+                  <UserAvatar src={r.avatar_url} name={r.is_me ? "You" : r.name} size={22} expandable={false} />
                 </span>
               ))}
             </span>
           )}
           {showKinds && <span className="shrink-0 text-[13px] leading-none tracking-[-0.15em]">{kinds.join("")}</span>}
-          <span className="truncate text-[12px] text-muted-foreground">
+          <span className="truncate text-[13px] text-muted-foreground">
             <span className="font-bold text-foreground">{who}</span>
           </span>
-        </button>
-      )}
-      {onOpenComments && (
-        <button
-          type="button"
-          onClick={() => onOpenComments(post)}
-          className="ml-auto flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold text-muted-foreground hover:bg-muted"
-          aria-label={`Comments${post.comment_count ? `, ${post.comment_count}` : ""}`}
-        >
-          <MessageCircle className="h-4 w-4" />
-          {post.comment_count > 0 ? post.comment_count : "Comment"}
-        </button>
-      )}
-      {canMessage && (
-        <button
-          type="button"
-          onClick={() => setMessaging(true)}
-          className={cn(
-            "grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
-            !onOpenComments && "ml-auto",
-          )}
-          aria-label={`Message ${post.author.name}`}
-          title={`Message ${post.author.name}`}
-        >
-          <Send className="h-[18px] w-[18px] -rotate-12" />
         </button>
       )}
       <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />

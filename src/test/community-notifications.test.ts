@@ -59,7 +59,7 @@ describe("crew activity notifications", () => {
   });
   it("grouped and rate limited, with their own switch and a daily cap", () => {
     const srv = read("src/lib/push/community-push.server.ts");
-    expect(srv).toContain('const RATE_MINUTES: Record<string, number> = { reaction: 60, comment: 5, reply: 5, comment_like: 180 };');
+    expect(srv).toContain('const RATE_MINUTES: Record<string, number> = { reaction: 60, comment: 5, reply: 5, comment_like: 180, repost: 60 };');
     expect(srv).toContain("export const COMMUNITY_DAILY_CAP = 5;");
     expect(srv).toContain('category: "community",');
     expect(sql).toContain("ADD COLUMN IF NOT EXISTS community boolean NOT NULL DEFAULT true;");

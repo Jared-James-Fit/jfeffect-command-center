@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, Camera, Dumbbell, Lock, MapPin, MoreHorizontal, Star } from "lucide-react";
+import { Archive, Bookmark, Camera, Dumbbell, Grid3x3, Lock, MapPin, MoreHorizontal, Repeat2, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AvatarCropper } from "@/components/avatar-cropper";
 import { CoachBadge } from "@/components/community/post-card";
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
+import { RepostsGrid, SavedView } from "@/components/community/saved-view";
 import { trainingSinceLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { useCommunityFeed, useCommunityProfile, useMyArchived, usePostMediaUrls, useSetCommunityAvatar } from "@/lib/community.queries";
 
@@ -36,8 +37,9 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   // a block (either way) shows no grid: the server already sends none, so no "Nothing shared yet" either
   const blocked = !!profile?.blocked;
   const shown = useMemo(() => (blocked ? [] : feed.data?.pages.flatMap((p) => p.posts) ?? []), [feed.data, blocked]);
-  // Your own profile: Posts | Archived (Instagram-style, only you see Archived)
-  const [showArchived, setShowArchived] = useState(false);
+  // Posts | Reposts | Saved | Archived (Instagram's tabs; only you see Saved and Archived)
+  const [tab, setTab] = useState<ProfileTab>("posts");
+  const showArchived = tab === "archived";
   const archivedQ = useMyArchived(showArchived);
   const posts = showArchived ? archivedQ.data ?? [] : shown;
   const { data: urls } = usePostMediaUrls(posts);
@@ -80,6 +82,7 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
     );
   }
 
+  const tabs = profileTabs({ isMe: profile.is_me && !isImpersonating, reposts: profile.reposts ?? 0, archived: profile.archived ?? 0, current: tab, blocked });
   const since = trainingSinceLabel(profile.training_since);
   const meta = [`${profile.posts} ${profile.posts === 1 ? "post" : "posts"}`, since].filter(Boolean).join(" · ");
 
@@ -224,27 +227,36 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
         </div>
       )}
 
-      {profile.is_me && ((profile.archived ?? 0) > 0 || showArchived) && (
-        <div className="mt-4 flex items-center gap-1.5" role="tablist" aria-label="Your posts">
-          {([[false, "Posts"], [true, `Archived${profile.archived ? ` · ${profile.archived}` : ""}`]] as const).map(([arch, label]) => (
+      {tabs.length > 1 && (
+        <div className="-mx-3 mt-4 flex border-b border-border/70" role="tablist" aria-label={profile.is_me ? "Your posts" : `${profile.author.name}'s posts`} data-profile-tabs>
+          {tabs.map((t) => (
             <button
-              key={label}
+              key={t.key}
               type="button"
               role="tab"
-              aria-selected={showArchived === arch}
-              onClick={() => setShowArchived(arch)}
+              aria-selected={tab === t.key}
+              aria-label={t.label}
+              onClick={() => setTab(t.key)}
               className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold",
-                showArchived === arch ? "bg-foreground text-background" : "bg-muted text-muted-foreground",
+                "relative grid h-11 flex-1 place-items-center transition-colors",
+                tab === t.key ? "text-foreground" : "text-muted-foreground",
               )}
+              data-profile-tab={t.key}
             >
-              {arch && <Archive className="h-3.5 w-3.5" />} {label}
+              <t.Icon className="h-[22px] w-[22px]" strokeWidth={tab === t.key ? 2.4 : 2} />
+              {tab === t.key && <span className="absolute inset-x-6 bottom-0 h-[2px] rounded-full bg-foreground" aria-hidden />}
             </button>
           ))}
         </div>
       )}
       {showArchived && <p className="mt-2 text-[11px] text-muted-foreground">Only you can see these. Open one and use ••• to show it on your profile again.</p>}
 
+      {tab === "saved" ? (
+        <div className="mt-4"><SavedView unit={unit} onOpenPost={onOpenPost} /></div>
+      ) : tab === "reposts" ? (
+        <div className="mt-4"><RepostsGrid userId={profile.author.user_id} isMe={profile.is_me} unit={unit} onOpenPost={onOpenPost} /></div>
+      ) : (
+      <>
       <div className="mt-4 grid grid-cols-3 gap-1 overflow-hidden rounded-2xl">
         {posts.map((p) => {
           const thumb = urls?.[postThumbPath(p) ?? ""] ?? null;
@@ -265,16 +277,35 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
           {showArchived ? "Nothing archived." : profile.is_me ? "Lock in at your next session, or share a finished workout. It shows up here." : "Nothing shared yet."}
         </div>
       )}
-      {profile.is_me && (
-        <ProfileEditSheet open={editing} onOpenChange={setEditing} userId={userId} bio={profile.bio} isCoach={profile.author.is_coach} />
-      )}
       {!showArchived && !blocked && feed.hasNextPage && (
         <Button type="button" variant="ghost" className="mt-2 w-full" disabled={feed.isFetchingNextPage} onClick={() => void feed.fetchNextPage()}>
           {feed.isFetchingNextPage ? "Loading…" : "Show more"}
         </Button>
       )}
+      </>
+      )}
+      {profile.is_me && (
+        <ProfileEditSheet open={editing} onOpenChange={setEditing} userId={userId} bio={profile.bio} isCoach={profile.author.is_coach} />
+      )}
     </div>
   );
+}
+
+type ProfileTab = "posts" | "reposts" | "saved" | "archived";
+
+/**
+ * A profile's tabs: Posts always; Reposts once they've reposted something
+ * (always on yours); Saved on yours only; Archived on yours while there's
+ * something in it. None across a block. One tab = no tab row at all.
+ */
+export function profileTabs({ isMe, reposts, archived, current, blocked }: { isMe: boolean; reposts: number; archived: number; current: ProfileTab; blocked: boolean }) {
+  if (blocked) return [{ key: "posts" as const, label: "Posts", Icon: Grid3x3 }];
+  return [
+    { key: "posts" as const, label: "Posts", Icon: Grid3x3, show: true },
+    { key: "reposts" as const, label: "Reposts", Icon: Repeat2, show: isMe || reposts > 0 },
+    { key: "saved" as const, label: "Saved (only you)", Icon: Bookmark, show: isMe },
+    { key: "archived" as const, label: `Archived${archived ? ` (${archived})` : ""}`, Icon: Archive, show: isMe && (archived > 0 || current === "archived") },
+  ].filter((t) => t.show);
 }
 
 /** Your photo, small, for the You tab: a ring on it while you're there (Instagram's profile tab). */

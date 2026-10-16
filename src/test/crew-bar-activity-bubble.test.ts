@@ -19,15 +19,18 @@ describe("the heart's bubble: what's new since it last showed", () => {
       line("reaction", false, 4),
       line("comment", true, 0),
       line("follow", true),
+      // someone reposted your post: its own count (🔁), never a follow
+      line("repost", true, 2),
     ]);
-    expect(c).toEqual({ likes: 4, comments: 3, follows: 2, total: 9 });
+    expect(c).toEqual({ likes: 4, comments: 3, reposts: 2, follows: 2, total: 11 });
     expect(activityBubbleCounts(undefined).total).toBe(0);
     expect(activityBubbleCounts([line("reaction", true, 0)]).total).toBe(0);
   });
 
   it("reads out what's new, and keeps big numbers short", () => {
-    expect(activityBubbleLabel({ likes: 3, comments: 1, follows: 0, total: 4 })).toBe("3 new likes, 1 new comment");
-    expect(activityBubbleLabel({ likes: 0, comments: 0, follows: 1, total: 1 })).toBe("1 new follower");
+    expect(activityBubbleLabel({ likes: 3, comments: 1, reposts: 0, follows: 0, total: 4 })).toBe("3 new likes, 1 new comment");
+    expect(activityBubbleLabel({ likes: 0, comments: 0, reposts: 0, follows: 1, total: 1 })).toBe("1 new follower");
+    expect(activityBubbleLabel({ likes: 0, comments: 0, reposts: 1, follows: 0, total: 1 })).toBe("1 new repost");
     expect(bubbleCount(7)).toBe("7");
     expect(bubbleCount(120)).toBe("99+");
   });

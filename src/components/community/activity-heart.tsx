@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Heart, MessageCircle, UserRound } from "lucide-react";
+import { Heart, MessageCircle, Repeat2, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { activityBubbleCounts, activityBubbleLabel, bubbleCount, type ActivityBubbleCounts, type ActivityItem } from "@/lib/crew-activity";
 import { useCrewActivity, useMarkActivityPreviewed } from "@/lib/crew-activity.queries";
@@ -182,12 +182,14 @@ export function ActivityHeart({ onOpen, canPreview = true, className }: {
               {([
                 ["likes", Heart],
                 ["comments", MessageCircle],
+                ["reposts", Repeat2],
                 ["follows", UserRound],
               ] as const)
                 .filter(([k]) => shown[k] > 0)
                 .map(([k, Icon], i) => (
                   <span key={k} className="activity-bubble-item inline-flex items-center gap-1" style={{ animationDelay: `${140 + i * 60}ms` }} data-bubble-kind={k}>
-                    <Icon className="h-[17px] w-[17px] shrink-0 fill-current" strokeWidth={0} aria-hidden />
+                    {/* 🔁 is drawn in lines, the others filled */}
+                    {k === "reposts" ? <Icon className="h-[17px] w-[17px] shrink-0" strokeWidth={2.8} aria-hidden /> : <Icon className="h-[17px] w-[17px] shrink-0 fill-current" strokeWidth={0} aria-hidden />}
                     <span className="text-[15px] font-bold leading-none tabular-nums">{bubbleCount(shown[k])}</span>
                   </span>
                 ))}
