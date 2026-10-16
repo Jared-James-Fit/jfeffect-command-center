@@ -227,7 +227,77 @@ export type CommunityPost = {
   views?: { count: number; faces: CommunityAuthor[] } | null;
   /** You've seen it (on any device): what rings people in the story rail. */
   seen?: boolean;
+  /** You saved it (Saved is private: only you ever see it). */
+  saved?: boolean;
+  /** Your repost of it, with the note that floats on it. */
+  my_repost?: { note: string | null; at: string } | null;
+  /** How many people reposted it. */
+  repost_count?: number;
+  /** A crew-wide post that isn't yours (and isn't an automatic story): you can repost it. */
+  can_repost?: boolean;
+  /** Where it sits in a list: its latest repost you may see (the feed), when you saved it (Saved), else when it was posted. */
+  feed_at?: string;
+  /** The feed: who reposted it, people you follow first (up to 3, each with their note). */
+  reposted_by?: Reposter[] | null;
+  /** The feed: how many reposts of it you may see. */
+  reposters_count?: number;
 };
+
+/** Someone who reposted a post, with the note they put on it. */
+export type Reposter = CommunityAuthor & { note: string | null; at: string; is_me?: boolean };
+
+/** A repost note: one line, at most this many characters (an emoji is enough). */
+export const REPOST_NOTE_MAX = 60;
+/** Quick picks for a repost note. */
+export const REPOST_NOTE_EMOJI = ["🔥", "💪", "🙌", "👏", "💯", "😂", "❤️", "🐐"] as const;
+
+/** The note as it's kept (the database does the same): one line, trimmed, at most 60 characters. */
+export function cleanRepostNote(note: string | null | undefined): string | null {
+  const one = (note ?? "").replace(/\s+/g, " ").trim();
+  if (!one) return null;
+  return [...one].slice(0, REPOST_NOTE_MAX).join("").trim() || null;
+}
+
+/** Only emoji (up to 3): shown big, like Instagram's notes. */
+export function isEmojiOnly(note: string | null | undefined): boolean {
+  const t = (note ?? "").replace(/\s+/g, "");
+  if (!t) return false;
+  const glyphs = typeof Intl !== "undefined" && "Segmenter" in Intl
+    ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(t)].map((g) => g.segment)
+    : t.match(/\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic})*/gu) ?? [t];
+  return glyphs.length <= 3 && glyphs.every((g) => /\p{Extended_Pictographic}/u.test(g));
+}
+
+/** The repost whose note floats on the post: the first (in feed order) that has one. */
+export function floatingNote(post: Pick<CommunityPost, "reposted_by" | "my_repost">): Reposter | null {
+  return (post.reposted_by ?? []).find((r) => !!r.note?.trim()) ?? null;
+}
+
+/** "Vicky reposted", "Vicky and Dwayne reposted", "Vicky and 3 others reposted", "You reposted". */
+export function repostedLine(post: Pick<CommunityPost, "reposted_by" | "reposters_count">): string | null {
+  const by = post.reposted_by ?? [];
+  if (!by.length) return null;
+  const total = Math.max(post.reposters_count ?? by.length, by.length);
+  const first = by[0].is_me ? "You" : by[0].name;
+  const rest = total - 1;
+  if (rest <= 0) return `${first} reposted`;
+  if (rest === 1 && by[1]) return `${first} and ${by[1].is_me ? "you" : by[1].name} reposted`;
+  return `${first} and ${rest} others reposted`;
+}
+
+/** Following: yours, the people you follow (or one of them is on it), and what they reposted. */
+export function inFollowingFeed(post: Pick<CommunityPost, "is_mine" | "author" | "collaborators" | "reposted_by" | "my_repost">, followingIds: ReadonlySet<string>): boolean {
+  return post.is_mine
+    || followingIds.has(post.author.user_id)
+    || !!post.collaborators?.some((c) => followingIds.has(c.user_id))
+    || !!post.my_repost
+    || !!post.reposted_by?.some((r) => followingIds.has(r.user_id));
+}
+
+/** Can this person repost it, or take back their repost? (No button at all on your own posts.) */
+export function showRepostButton(post: Pick<CommunityPost, "can_repost" | "my_repost">): boolean {
+  return !!post.can_repost || !!post.my_repost;
+}
 
 /** A comment line under a post in the feed (Instagram style). */
 export type CommentPreview = {
@@ -440,6 +510,8 @@ export type CommunityProfile = {
   blocked?: boolean;
   /** You blocked them (so you can unblock). */
   blocked_by_me?: boolean;
+  /** How many posts they reposted (their Reposts tab shows when there are some). */
+  reposts?: number;
 };
 
 export type CommunityActivity = { enabled: boolean; unseen: number; seen_at: string | null };
@@ -756,7 +828,8 @@ export function postTimeLabel(iso: string, now: Date = new Date()): string {
 export function nextFeedCursor(page: CommunityFeedPage): { at: string; id: string } | null {
   if (!page.has_more || page.posts.length === 0) return null;
   const last = page.posts[page.posts.length - 1];
-  return { at: last.created_at, id: last.id };
+  // the feed pages by where a post sits (a repost moves it up), not by when it was posted
+  return { at: last.feed_at ?? last.created_at, id: last.id };
 }
 
 /* ------------------------------------------------------------------ */

@@ -115,10 +115,15 @@ export function useFullMediaUrl(path: string | null | undefined, enabled: boolea
   });
 }
 
+/** Every list of posts that pages like the feed: the feed, Saved, someone's Reposts. */
+export const POST_LIST_KEYS = [["community-feed"], ["community-saved"], ["community-user-reposts"]] as const;
+
 export function patchPost(qc: ReturnType<typeof useQueryClient>, postId: string, patch: (p: CommunityPost) => CommunityPost) {
-  qc.setQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: ["community-feed"] }, (old) =>
-    old ? { ...old, pages: old.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => (p.id === postId ? patch(p) : p)) })) } : old,
-  );
+  for (const queryKey of POST_LIST_KEYS) {
+    qc.setQueriesData<InfiniteData<CommunityFeedPage>>({ queryKey: [...queryKey] }, (old) =>
+      old?.pages ? { ...old, pages: old.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => (p.id === postId ? patch(p) : p)) })) } : old,
+    );
+  }
   qc.setQueryData<CommunityPostDetail | null>(communityKeys.post(postId), (old) => (old ? (patch(old) as CommunityPostDetail) : old));
 }
 

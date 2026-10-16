@@ -26,7 +26,7 @@ import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { openAppMore } from "@/lib/shell-events";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
-import { isPulsePost, storiesNeedMore, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { inFollowingFeed, isPulsePost, storiesNeedMore, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
@@ -141,7 +141,7 @@ export function CommunityScreen({
   const [only, setOnly] = useState<"all" | "following">("all");
   const following = only === "following" && followingIds.size > 0;
   const feedPosts = useMemo(
-    () => (following ? ownPosts.filter((p) => p.is_mine || followingIds.has(p.author.user_id) || p.collaborators?.some((c) => followingIds.has(c.user_id))) : ownPosts),
+    () => (following ? ownPosts.filter((p) => inFollowingFeed(p, followingIds)) : ownPosts),
     [following, ownPosts, followingIds],
   );
   // "Double-tap to like": a few seconds on the first post (a workout before a
