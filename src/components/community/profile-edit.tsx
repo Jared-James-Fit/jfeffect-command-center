@@ -13,13 +13,16 @@ import {
   DISCIPLINES, MAX_DISCIPLINES, isValidUsername, useGymNames, useSetDiscoverable, useSetTraining, useSetUsername, useUsernameCheck,
 } from "@/lib/community-discover";
 
+import { CoachPublicRow, PrivateAccountRow, ShareWorkoutsRow } from "@/components/community/privacy-settings";
+
 // Messages' blocked list, loaded only when it's opened (it lives with the chat screens).
 const BlockedPeopleSheet = lazyWithRetry(() => import("@/components/messages/inbox-parts").then((m) => ({ default: m.BlockedPeopleSheet })));
 
 /**
  * Edit profile (Instagram's): @username, bio, what you train and your gym,
- * whether you're suggested to people you aren't connected with, and the people
- * you've blocked. Training and gym are optional and only help people who train
+ * then Privacy: a private account (athletes; a coach's is always public),
+ * automatic workout stories, whether you're suggested to people you aren't
+ * connected with, and the people you've blocked. Training and gym are optional and only help people who train
  * like you, or where you do, find you.
  */
 export function ProfileEditSheet({ open, onOpenChange, userId, bio: bioNow, isCoach }: {
@@ -97,7 +100,7 @@ export function ProfileEditSheet({ open, onOpenChange, userId, bio: bioNow, isCo
             </SheetClose>
             <div className="min-w-0 flex-1 text-center">
               <SheetTitle className="text-[16px] font-black">Edit profile</SheetTitle>
-              <SheetDescription className="sr-only">Your username, bio, training and gym</SheetDescription>
+              <SheetDescription className="sr-only">Your username, bio, training, gym and privacy</SheetDescription>
             </div>
             <Button type="button" size="sm" className="h-9 rounded-full px-4 font-bold" disabled={!dirty || usernameBlocking || saving} onClick={() => void save()} data-profile-save>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
@@ -180,7 +183,11 @@ export function ProfileEditSheet({ open, onOpenChange, userId, bio: bioNow, isCo
                 )}
               </Field>
 
-              <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
+              {/* who sees what you post: private account (athletes) or always public (coaches), automatic workout stories, suggestions, blocks */}
+              <Field label="Privacy">
+              <div className="overflow-hidden rounded-2xl border border-border/70 bg-card" data-privacy-settings>
+                {isCoach ? <CoachPublicRow /> : <PrivateAccountRow />}
+                <ShareWorkoutsRow />
                 {!isCoach && (
                   <label className="flex items-center justify-between gap-3 border-b border-border/60 px-3.5 py-3" data-discoverable-switch>
                     <span className="min-w-0">
@@ -202,6 +209,7 @@ export function ProfileEditSheet({ open, onOpenChange, userId, bio: bioNow, isCo
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
               </div>
+              </Field>
             </div>
           )}
         </SheetContent>
