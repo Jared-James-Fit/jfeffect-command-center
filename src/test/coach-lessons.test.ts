@@ -335,7 +335,13 @@ describe("story stickers", () => {
 
   it("only the poster sees who answered, question answers are theirs alone, and nobody is pushed", () => {
     expect(sql).toContain("IF v_author = v_me THEN\n    v_out := v_out || jsonb_build_object('answers'");
-    expect(sql).toContain("IF v_author = v_me THEN RAISE EXCEPTION 'That''s your own question'; END IF;");
+    // the poster can fill in their own question box too (Instagram's): the refusal is patched out
+    const own = read("supabase/migrations/20261211120000_own_question_answers.sql");
+    expect(own).toContain("EXECUTE replace(v_def, v_old, '');");
+    expect(own).toContain("IF v_author = v_me THEN RAISE EXCEPTION ''That''''s your own question''; END IF;");
+    const card = read("src/components/community/story-sticker.tsx");
+    expect(card).not.toContain("Answers come to you here");
+    expect(card).toContain('{own ? "In your responses" : `Sent to ${first}`} · tap to change');
     expect(sql).toContain("'sticker'', CASE WHEN n.sticker IS NOT NULL THEN public.community_sticker_json(n.id, _viewer) END,");
     expect(sql).not.toMatch(/community_notifications/);
   });
