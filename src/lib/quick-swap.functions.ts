@@ -267,10 +267,12 @@ export const reorderWorkoutExercises = createServerFn({ method: "POST" })
 
 
 /**
- * Remove one prescription row from this workout day only.
- * This intentionally does not touch sibling days, future weeks, program
- * templates, or the exercise library. Result/note rows tied to this row are
- * removed first so the day can be edited safely even without FK cascades.
+ * Remove one exercise from this workout only, reversibly. The row and
+ * everything tied to it (logged sets and their reviews, notes, warm-ups, set
+ * blocks, % references) moves to pl_exercise_row_trash in one transaction
+ * (pl_trash_exercise_row), so Undo / Restore puts it back exactly. Sibling
+ * days, other weeks, the program template and the exercise library are never
+ * touched.
  */
 export const removeExerciseFromWorkout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -278,20 +280,66 @@ export const removeExerciseFromWorkout = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertVisibleDay(context.supabase, data.dayId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error: rowErr } = await supabaseAdmin
-      .from("pl_exercise_rows")
-      .select("id, day_id")
-      .eq("id", data.rowId)
-      .eq("day_id", data.dayId)
-      .maybeSingle();
-    if (rowErr) throw rowErr;
-    if (!row) throw new Error("Exercise is no longer in this workout");
+    const { data: trashId, error } = await (supabaseAdmin as any).rpc("pl_trash_exercise_row", {
+      _day_id: data.dayId,
+      _row_id: data.rowId,
+      _by: (context as any).userId ?? null,
+    });
+    if (error) throw new Error(error.message || "Could not remove exercise");
+    return { removedRowId: data.rowId, dayId: data.dayId, trashId: String(trashId) };
+  });
 
-    const { error: resultsErr } = await supabaseAdmin.from("pl_row_results").delete().eq("row_id", data.rowId);
-    if (resultsErr) throw resultsErr;
-    const { error: notesErr } = await supabaseAdmin.from("pl_exercise_notes").delete().eq("row_id", data.rowId);
-    if (notesErr) throw notesErr;
-    const { error } = await supabaseAdmin.from("pl_exercise_rows").delete().eq("id", data.rowId).eq("day_id", data.dayId);
+const RestoreExerciseInput = z.object({
+  dayId: z.string().uuid(),
+  trashId: z.string().uuid(),
+});
+
+/** Put a removed exercise back in its workout, sets and all (Undo / Restore). */
+export const restoreExerciseToWorkout = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => RestoreExerciseInput.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVisibleDay(context.supabase, data.dayId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rowId, error } = await (supabaseAdmin as any).rpc("pl_restore_exercise_row", {
+      _trash_id: data.trashId,
+      _day_id: data.dayId,
+    });
+    if (error) throw new Error(error.message || "Could not restore exercise");
+    return { rowId: String(rowId), dayId: data.dayId };
+  });
+
+const ListRemovedInput = z.object({ dayId: z.string().uuid() });
+
+export type RemovedExercise = { trashId: string; rowId: string; name: string; setsLogged: number; removedAt: string };
+
+/** Exercises removed from this workout that can still be put back (newest first). */
+export const listRemovedExercises = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => ListRemovedInput.parse(data))
+  .handler(async ({ data, context }): Promise<RemovedExercise[]> => {
+    await assertVisibleDay(context.supabase, data.dayId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await (supabaseAdmin as any)
+      .from("pl_exercise_row_trash")
+      .select("id, row_id, removed_at, row_data, results")
+      .eq("day_id", data.dayId)
+      .is("restored_at", null)
+      .order("removed_at", { ascending: false })
+      .limit(20);
     if (error) throw error;
-    return { removedRowId: data.rowId, dayId: data.dayId };
+    const list = (rows ?? []) as Array<{ id: string; row_id: string; removed_at: string; row_data: any; results: any[] }>;
+    const exerciseIds = [...new Set(list.map((t) => t.row_data?.exercise_id).filter(Boolean))];
+    const names = new Map<string, string>();
+    if (exerciseIds.length) {
+      const { data: ex } = await (supabaseAdmin as any).from("exercises").select("id, name").in("id", exerciseIds);
+      for (const e of ex ?? []) names.set(e.id, e.name);
+    }
+    return list.map((t) => ({
+      trashId: t.id,
+      rowId: t.row_id,
+      name: names.get(t.row_data?.exercise_id) ?? t.row_data?.exercise_name_override ?? "Exercise",
+      setsLogged: (t.results ?? []).filter((r: any) => r?.completed_at).length,
+      removedAt: t.removed_at,
+    }));
   });

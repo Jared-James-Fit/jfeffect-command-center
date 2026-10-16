@@ -3,13 +3,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
-/** How the workout logger shows a workout: every card in a list, or one exercise at a time full screen. */
+/** How the workout logger shows a workout: every card in a list, or one exercise at a time full screen ("story" = Focus). */
 export type WorkoutView = "list" | "story";
+
+type Saved = { view: WorkoutView; tried: boolean };
 
 const db = supabase as any;
 const isView = (v: unknown): v is WorkoutView => v === "list" || v === "story";
 const cacheKey = (userId: string) => `jf-workout-view:${userId}`;
 const dirtyKey = (userId: string) => `jf-workout-view-dirty:${userId}`;
+const triedKey = (userId: string) => `jf-workout-view-tried:${userId}`;
 
 function ls(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -40,9 +43,8 @@ export function resolveWorkoutView(account: WorkoutView | null, device: WorkoutV
 
 async function saveToAccount(userId: string, view: WorkoutView, attempts = 3): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
-    const { error } = await db
-      .from("workout_view_prefs")
-      .upsert({ user_id: userId, view, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    // workout_view_set also stamps the first time they used the switch (tried_at)
+    const { error } = await db.rpc("workout_view_set", { _view: view });
     if (!error) {
       // a newer switch may have happened while this one was saving
       if (readCache(userId) === view) lsSet(dirtyKey(userId), null);
@@ -57,24 +59,32 @@ async function saveToAccount(userId: string, view: WorkoutView, attempts = 3): P
  * The signed-in person's workout view, saved on their account every time they
  * switch (workout_view_prefs) so every workout and every phone opens the same
  * way. A per-phone copy paints the right view instantly while the account loads.
+ * `tried`: they've used the List / Focus switch at least once (the Focus intro
+ * stops then); `known` is false until the account has answered, so the intro
+ * never shows to someone who already tried on another phone.
  */
 export function useWorkoutView() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const qc = useQueryClient();
-  const { data } = useQuery({
+  const { data, isPlaceholderData, isFetched } = useQuery({
     queryKey: workoutViewKey(userId),
     enabled: !!userId,
     staleTime: 5 * 60_000,
-    placeholderData: () => readCache(userId) ?? undefined,
-    queryFn: async (): Promise<WorkoutView> => {
-      const { data: row, error } = await db.from("workout_view_prefs").select("view").eq("user_id", userId).maybeSingle();
+    placeholderData: (): Saved | undefined => {
+      const view = readCache(userId);
+      return view ? { view, tried: !!userId && ls(triedKey(userId)) === "1" } : undefined;
+    },
+    queryFn: async (): Promise<Saved> => {
+      const { data: row, error } = await db.from("workout_view_prefs").select("view, tried_at").eq("user_id", userId).maybeSingle();
       if (error) throw error;
       const unsaved = ls(dirtyKey(userId!)) === "1";
       const view = resolveWorkoutView(isView(row?.view) ? row.view : null, readCache(userId), unsaved);
       if (unsaved) void saveToAccount(userId!, view);
       lsSet(cacheKey(userId!), view);
-      return view;
+      const tried = !!row?.tried_at || ls(triedKey(userId!)) === "1";
+      if (tried) lsSet(triedKey(userId!), "1");
+      return { view, tried };
     },
   });
 
@@ -83,11 +93,24 @@ export function useWorkoutView() {
       if (!userId) return;
       lsSet(cacheKey(userId), next);
       lsSet(dirtyKey(userId), "1");
-      qc.setQueryData(workoutViewKey(userId), next);
+      lsSet(triedKey(userId), "1");
+      qc.setQueryData(workoutViewKey(userId), { view: next, tried: true } satisfies Saved);
       void saveToAccount(userId, next);
     },
     [qc, userId],
   );
 
-  return { view: isView(data) ? data : ("list" as WorkoutView), setView };
+  /** The Focus intro was shown / closed with "Not now" (counts only; never changes the view). */
+  const noteIntro = useCallback((event: "shown" | "dismissed") => {
+    if (!userId) return;
+    void db.rpc("workout_view_intro", { _event: event }).then(() => {}, () => {});
+  }, [userId]);
+
+  return {
+    view: isView(data?.view) ? data!.view : ("list" as WorkoutView),
+    tried: !!data?.tried,
+    known: isFetched && !isPlaceholderData,
+    setView,
+    noteIntro,
+  };
 }
