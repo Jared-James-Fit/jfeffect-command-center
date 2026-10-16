@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import { CAPTION_MAX, buildShareCardFields, isCrewAudience, lockInTimeLabel, pickerAudience, postPointsHint, type CommunityVisibility, postFiles } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, usePostPointsStatus, type SavePostInput } from "@/lib/community.queries";
 import { AudiencePicker } from "@/components/community/audience-picker";
-import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadPicked, type PickedMedia } from "@/lib/community-media";
+import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, type PickedMedia } from "@/lib/community-media";
+import { useEarlyUpload } from "@/lib/use-early-upload";
 import {
   TEMPLATE_LABEL,
   availableTemplates,
@@ -64,6 +65,8 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   const { data: existing } = useMyPostForCompletion(completionId, open);
 
   const [media, setMedia] = useState<PickedMedia | null>(null);
+  // the photo or clip starts uploading the moment it's picked
+  const early = useEarlyUpload(media, user?.id);
   const [existingDrawable, setExistingDrawable] = useState<HTMLImageElement | null>(null);
   const [removedExisting, setRemovedExisting] = useState(false);
   const [shareFormat, setShareFormat] = useState<ShareFormat>("story");
@@ -331,10 +334,12 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
     setProgress(0);
     try {
       let mediaArg: SavePostInput["media"] = { action: "keep" };
-      if (media) mediaArg = { action: "set", ...(await uploadPicked(media, user.id, setProgress)) };
+      // (it's been uploading since it was picked: usually it's already up)
+      if (media) mediaArg = { action: "set", ...(await early.take(media, setProgress)) };
       else if (removedExisting) mediaArg = { action: "remove" };
 
       await saveCommunityPost({ completionId, caption, visibility, media: mediaArg, hideLoads });
+      early.keep(media);
       // removing the photo removes the whole carousel; replacing it keeps the other slides
       if (mediaArg.action !== "keep" && existing?.media_path) await removeCommunityFiles(mediaArg.action === "remove" ? postFiles(existing) : [existing.media_path, existing.media_thumb_path]);
 
@@ -566,7 +571,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
             <Button type="button" className="mt-4 h-13 w-full rounded-2xl py-3.5 text-[16px] font-black" disabled={posting} onClick={() => void post()}>
               <Send className="mr-2 h-5 w-5" />
               {posting
-                ? media?.kind === "video" && progress > 0 && progress < 100 ? `Uploading ${progress}%` : "Posting…"
+                ? media?.kind === "video" && Math.max(progress, early.progress) > 0 && Math.max(progress, early.progress) < 100 ? `Uploading ${Math.max(progress, early.progress)}%` : "Posting…"
                 : visibility === "private" ? "Save to my profile" : visibility === "coach" ? (existing ? "Update" : "Send to my coach") : existing ? "Update post" : visibility === "close_friends" ? "Send to Close friends" : "Post"}
             </Button>
             <p className="mt-2 text-center text-[11px] text-muted-foreground">Sharing to Instagram never posts here, and posting here never shares outside the app.</p>

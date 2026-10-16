@@ -76,6 +76,11 @@ export function projectedTooSlow(elapsedMs: number, progress: number, budgetMs: 
   return elapsedMs / progress > budgetMs;
 }
 
+/** This phone can re-encode a video (WebCodecs): a clip over the upload limit can still go once shrunk. */
+export function canCompressVideo(): boolean {
+  return supportsWebCodecs();
+}
+
 function supportsWebCodecs(): boolean {
   return typeof window !== "undefined" && typeof (window as any).VideoEncoder === "function"
     && typeof (window as any).VideoDecoder === "function";

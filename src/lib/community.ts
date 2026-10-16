@@ -617,32 +617,64 @@ export function isPrMoment(s: WorkoutShareStats | null | undefined): boolean {
 /*  Media rules                                                        */
 /* ------------------------------------------------------------------ */
 
+/** The most a posted video file can be (the storage bucket's limit). */
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
-export const MAX_VIDEO_SECONDS = 45;
+/** A clip straight off a phone can be bigger than that when the phone can shrink it first (4K, 60 fps). */
+export const MAX_PICK_VIDEO_BYTES = 1024 * 1024 * 1024;
+/** A story or post clip: up to a minute (Instagram's story length). */
+export const MAX_VIDEO_SECONDS = 60;
 
 export type MediaCheck = { ok: true; kind: "image" | "video" } | { ok: false; reason: string };
 
-/** Cheap pre-flight (type + size). Duration is checked after metadata loads. */
-export function checkMediaFile(file: { type: string; size: number }): MediaCheck {
-  if (file.type.startsWith("image/")) return { ok: true, kind: "image" };
-  if (file.type.startsWith("video/")) {
-    if (file.size > MAX_VIDEO_BYTES) return { ok: false, reason: "Keep videos under 50 MB — a short clip works best." };
+/** A video's type without codec details ("video/webm;codecs=vp8" → "video/webm"), lower case. */
+export function baseMediaType(type: string): string {
+  return (type.split(";")[0] ?? "").trim().toLowerCase();
+}
+
+const VIDEO_EXT = /\.(mp4|m4v|mov|qt|webm|3gp)$/i;
+
+/**
+ * Cheap pre-flight (type + size). Duration is checked after metadata loads.
+ * `canShrink`: this phone can re-encode a clip smaller before it uploads, so
+ * one over the storage limit is still fine.
+ */
+export function checkMediaFile(file: { type: string; size: number; name?: string }, opts: { canShrink?: boolean } = {}): MediaCheck {
+  const type = baseMediaType(file.type);
+  if (type.startsWith("image/")) return { ok: true, kind: "image" };
+  // some phones hand over a clip with no type: go by its name
+  if (type.startsWith("video/") || (!type && !!file.name && VIDEO_EXT.test(file.name))) {
+    if (file.size > MAX_VIDEO_BYTES && !(opts.canShrink && file.size <= MAX_PICK_VIDEO_BYTES)) {
+      return { ok: false, reason: "That clip is too big to post from this phone. Trim it in Photos and pick it again." };
+    }
     return { ok: true, kind: "video" };
   }
   return { ok: false, reason: "Choose a photo or a short video." };
 }
 
+/** A clip's type the storage bucket accepts (no codec details; m4v and type-less clips as what they are). */
+export function uploadableVideo(file: File): File {
+  const type = baseMediaType(file.type);
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const fixed =
+    type === "video/x-m4v" || (!type && (ext === "mp4" || ext === "m4v")) ? "video/mp4"
+    : !type && (ext === "mov" || ext === "qt") ? "video/quicktime"
+    : !type && ext === "webm" ? "video/webm"
+    : type;
+  if (fixed === file.type) return file;
+  return new File([file], file.name, { type: fixed || "video/mp4", lastModified: file.lastModified });
+}
+
 export function checkVideoDuration(seconds: number): MediaCheck {
-  if (Number.isFinite(seconds) && seconds > MAX_VIDEO_SECONDS) {
-    return { ok: false, reason: `Keep videos under ${MAX_VIDEO_SECONDS} seconds.` };
+  if (Number.isFinite(seconds) && seconds > MAX_VIDEO_SECONDS + 0.5) {
+    return { ok: false, reason: `Keep videos to ${MAX_VIDEO_SECONDS} seconds. Trim it in Photos and pick it again.` };
   }
   return { ok: true, kind: "video" };
 }
 
 /**
  * Carousels: up to 10 photos / videos on a post, at most 3 of them videos.
- * Photos are ~300 KB once resized, so 10 go up in seconds; three 45-second
- * clips is already a lot of upload on a phone connection.
+ * Photos are ~300 KB once resized, so 10 go up in seconds; three minute-long
+ * clips is already a lot of upload on a phone connection, even shrunk.
  */
 export const MAX_SLIDES = 10;
 export const MAX_SLIDE_VIDEOS = 3;

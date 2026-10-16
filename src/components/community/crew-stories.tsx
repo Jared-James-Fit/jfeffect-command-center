@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Eye, Heart, Play, Plus, Sticker as StickerIcon, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronRight, Eye, Heart, Play, Plus, Sticker as StickerIcon, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
@@ -219,6 +219,10 @@ function StoryViewer({
   const frameKey = post?.id;
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
+  // A clip's own length runs its bar (and it moves on when the clip ends); one that won't play falls back to the clock.
+  const isClip = !!post && post.media_type === "video" && storyFrameKind(post) === "media";
+  const [clipFailed, setClipFailed] = useState<string | null>(null);
+  const clipDrives = isClip && clipFailed !== post?.id;
   const press = useRef<{ x: number; y: number; t: number } | null>(null);
   const holdTimer = useRef<number | undefined>(undefined);
   // what's shown this sitting, and the end card once it's all been watched
@@ -335,9 +339,9 @@ function StoryViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameKey]);
 
-  // the clock (stopped on the end card, and while replying)
+  // the clock (stopped on the end card, and while replying; a clip runs its own)
   useEffect(() => {
-    if (!frameKey || paused || end || composing) return;
+    if (!frameKey || paused || end || composing || clipDrives) return;
     let raf = 0;
     let last = performance.now();
     const tick = (t: number) => {
@@ -348,7 +352,7 @@ function StoryViewer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [frameKey, paused, end, composing]);
+  }, [frameKey, paused, end, composing, clipDrives]);
   useEffect(() => {
     if (progress >= 1 && !end) next();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -539,7 +543,20 @@ function StoryViewer({
           }}
           data-story-viewer
         >
-          <StoryFrame post={post} unit={unit} />
+          <StoryFrame
+            post={post}
+            unit={unit}
+            clip={
+              clipDrives
+                ? {
+                    paused: paused || !!end || composing,
+                    onProgress: (p) => setProgress((cur) => (p > cur ? Math.min(0.999, p) : cur)),
+                    onEnd: () => setProgress(1),
+                    onFail: () => setClipFailed(post.id),
+                  }
+                : undefined
+            }
+          />
           {post.sticker && (
             // where the poster put it; else above the reply bar's fade, so the
             // whole sticker takes taps (the bar's top 40px is its fade, not buttons)
@@ -613,6 +630,110 @@ function StoryViewer({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Once the phone refuses a clip's sound without a tap, the next ones start muted (the tap brings it back). */
+let storySoundBlocked = false;
+
+/**
+ * A clip in a story: plays with sound (Instagram's stories do), muted with a
+ * "Tap for sound" pill when the phone won't allow sound without a tap. Its
+ * length runs the bar; holding the story pauses it; it moves on when it ends.
+ * One that won't play hands back to the clock (onFail).
+ */
+function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: string; poster: string | null } & ClipControl) {
+  const { data: url, isError } = useFullMediaUrl(path, true);
+  const vid = useRef<HTMLVideoElement | null>(null);
+  const [muted, setMuted] = useState(storySoundBlocked);
+  const [started, setStarted] = useState(false);
+  const failRef = useRef(onFail);
+  failRef.current = onFail;
+  const progressRef = useRef(onProgress);
+  progressRef.current = onProgress;
+
+  // nothing playing after a while (a dead link, no signal): the clock takes over
+  useEffect(() => {
+    if (started) return;
+    if (isError) return failRef.current();
+    const t = setTimeout(() => failRef.current(), 9000);
+    return () => clearTimeout(t);
+  }, [started, isError, url]);
+
+  useEffect(() => {
+    const v = vid.current;
+    if (!v || !url) return;
+    if (paused) {
+      v.pause();
+      return;
+    }
+    v.play().catch(() => {
+      if (!v.muted) {
+        storySoundBlocked = true;
+        setMuted(true);
+        v.muted = true;
+        void v.play().catch(() => failRef.current());
+      } else failRef.current();
+    });
+  }, [paused, url]);
+
+  // a smooth bar from the clip's own clock
+  useEffect(() => {
+    if (!started || paused) return;
+    let raf = 0;
+    const tick = () => {
+      const v = vid.current;
+      if (v && v.duration && Number.isFinite(v.duration)) progressRef.current(v.currentTime / v.duration);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [started, paused]);
+
+  const attach = useCallback((v: HTMLVideoElement | null) => {
+    vid.current = v;
+    if (!v) return;
+    v.muted = storySoundBlocked;
+    if (storySoundBlocked) v.setAttribute("muted", "");
+    v.setAttribute("playsinline", "");
+    v.setAttribute("webkit-playsinline", "");
+  }, []);
+
+  return (
+    <div className="relative flex flex-1 items-center justify-center bg-black" data-story-frame="clip">
+      {poster && !started && <img src={poster} alt="" className="absolute max-h-full w-full object-contain" draggable={false} />}
+      {url && (
+        <video
+          ref={attach}
+          src={url}
+          playsInline
+          preload="auto"
+          className={cn("max-h-full w-full object-contain", !started && "opacity-0")}
+          onPlaying={() => setStarted(true)}
+          onEnded={() => onEnd()}
+          onError={() => failRef.current()}
+        />
+      )}
+      {muted && started && (
+        <button
+          type="button"
+          onClick={() => {
+            const v = vid.current;
+            storySoundBlocked = false;
+            setMuted(false);
+            if (v) {
+              v.muted = false;
+              v.removeAttribute("muted");
+              void v.play().catch(() => {});
+            }
+          }}
+          className="absolute bottom-24 left-1/2 inline-flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3.5 text-[13px] font-bold text-white backdrop-blur active:scale-95"
+          data-story-sound
+        >
+          <VolumeX className="h-4 w-4" /> Tap for sound
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -695,8 +816,10 @@ function MyStoryBar({ post, onOpen, onHold, onOpenPerson }: { post: CommunityPos
   );
 }
 
-/** One moment, full screen: a lesson, a win, a photo (or a clip's first frame), or words (storyFrameKind). */
-function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
+type ClipControl = { paused: boolean; onProgress: (p: number) => void; onEnd: () => void; onFail: () => void };
+
+/** One moment, full screen: a lesson, a win, a photo or a clip (playing, when it's the one on screen), or words (storyFrameKind). */
+function StoryFrame({ post, unit, clip }: { post: CommunityPost; unit: "kg" | "lb"; clip?: ClipControl }) {
   const { data: thumbs } = usePostMediaUrls([post]);
   const isImage = post.media_type === "image";
   const { data: full } = useFullMediaUrl(isImage ? post.media_path : null, isImage);
@@ -721,6 +844,9 @@ function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) 
         <span className="mt-4 block text-[14px] font-semibold text-white/60">{workoutHeadline(post.stats!)}</span>
       </div>
     );
+  }
+  if (kind === "media" && post.media_type === "video" && clip && post.media_path) {
+    return <StoryClip path={post.media_path} poster={thumb} {...clip} />;
   }
   if (kind === "media") {
     const src = full ?? thumb ?? (post.media_type ? null : post.gif_url ?? null);
