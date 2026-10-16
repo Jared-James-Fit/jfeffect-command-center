@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight, MousePointerClick, Trash2 } from "lucide-react";
 
 /**
  * The Focus intro: a small card under the List / Focus switch that shows what
@@ -124,6 +125,65 @@ export function FocusIntro({ onTry, onDismiss }: { onTry: () => void; onDismiss:
             Not now
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * How Focus works, over Focus itself: the two tap zones lit up with a finger
+ * tapping each (right then left), and the four things to know. Shown once per
+ * account the first time someone is in Focus (`workout_view_prefs.focus_tips_at`)
+ * and any time from the ? in Focus's top bar. A tap anywhere closes it.
+ */
+export function FocusTips({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="How Focus works"
+      data-testid="focus-tips"
+      onClick={onClose}
+      className="fixed inset-0 z-[45] animate-in fade-in-0 duration-300"
+    >
+      <div className="absolute inset-0 bg-black/75" />
+      <div className="absolute inset-y-0 left-0 grid w-1/3 place-items-center border-r border-dashed border-white/35">
+        <div className="-mt-24 text-center text-white">
+          <span className="jf-tips-tap jf-tips-back mx-auto grid h-14 w-14 place-items-center rounded-full bg-white/15 ring-2 ring-white/70">
+            <ChevronLeft className="h-6 w-6" />
+          </span>
+          <div className="mt-2 text-sm font-bold">Tap</div>
+          <div className="text-xs text-white/75">back</div>
+        </div>
+      </div>
+      <div className="absolute inset-y-0 right-0 grid w-2/3 place-items-center">
+        <div className="-mt-24 text-center text-white">
+          <span className="jf-tips-tap jf-tips-next mx-auto grid h-14 w-14 place-items-center rounded-full bg-white/15 ring-2 ring-white/70">
+            <ChevronRight className="h-6 w-6" />
+          </span>
+          <div className="mt-2 text-sm font-bold">Tap</div>
+          <div className="text-xs text-white/75">next exercise</div>
+        </div>
+      </div>
+      <div
+        className="absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+16px)] mx-auto max-w-md rounded-2xl border border-border bg-card p-4 text-foreground shadow-2xl animate-in slide-in-from-bottom-4 duration-500"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-base font-bold">Focus: one exercise at a time</div>
+        <ul className="mt-2.5 space-y-2 text-[13px] leading-snug text-muted-foreground">
+          <li className="flex gap-2.5"><ChevronRight className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Tap the right side</b> for the next exercise</span></li>
+          <li className="flex gap-2.5"><ChevronLeft className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Tap the left side</b> to go back</span></li>
+          <li className="flex gap-2.5"><Trash2 className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Swipe a card left</b> to delete it. You can undo.</span></li>
+          <li className="flex gap-2.5"><MousePointerClick className="mt-px h-4 w-4 shrink-0 text-foreground" /><span>Buttons and your sets work as usual</span></li>
+        </ul>
+        <button
+          type="button"
+          data-testid="focus-tips-ok"
+          onClick={onClose}
+          className="mt-3.5 h-11 w-full rounded-full bg-primary text-sm font-bold text-primary-foreground transition active:scale-[0.98]"
+        >
+          Got it
+        </button>
       </div>
     </div>
   );

@@ -33,11 +33,25 @@ describe("Focus: tap to move, like Crew's stories", () => {
     expect(focusTapDirection(131, 390)).toBe(1);
     expect(focusTapDirection(380, 390)).toBe(1);
   });
-  it("controls and the set table keep their taps", () => {
+  it("only controls (and a card swiped open) keep their taps; empty space anywhere moves, the set table's included", () => {
     expect(focusTapIgnored(null)).toBe(true);
     const story = read("src/components/workout-day/workout-story.tsx");
-    for (const sel of ["button", "input", '[role="switch"]', "[data-set-table]", "[data-swipe-open]"]) expect(story).toContain(sel);
-    expect(read("src/components/workout-day/WorkoutDayView.tsx")).toContain("<div data-set-table className=");
+    for (const sel of ["button", "input", '[role="switch"]', "[data-swipe-open]"]) expect(story).toContain(sel);
+    expect(story).not.toContain("[data-set-table]");
+  });
+  it("a tap is read from the finger (with a little wander), queues behind the last, and always shows", () => {
+    const story = read("src/components/workout-day/workout-story.tsx");
+    expect(story).toContain('el.addEventListener("pointerup", onUp, { passive: true });');
+    expect(story).not.toContain('el.addEventListener("click"');
+    expect(story).toContain("const to = (heading ?? i) + dir;");
+    expect(story).toContain("if (typing) { typing.blur(); return; }");
+    expect(story).toContain('flash.end ? "jf-tap-end" : "jf-tap-flash"');
+  });
+  it("How Focus works: by itself once per account, and from the ? any time", () => {
+    const day = read("src/components/workout-day/WorkoutDayView.tsx");
+    expect(day).toContain("if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating) setFocusTipsOpen(true);");
+    expect(day).toContain("onHelp={() => setFocusTipsOpen(true)}");
+    expect(read("supabase/migrations/20261209090000_focus_tips_seen.sql")).toContain("focus_tips_at = coalesce(public.workout_view_prefs.focus_tips_at, now());");
   });
 });
 

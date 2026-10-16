@@ -50,7 +50,7 @@ import { cn } from "@/lib/utils";
 import { playAppSound } from "@/lib/app-sounds";
 import { haptic } from "@/platform/haptics";
 import { useWorkoutView } from "@/lib/use-workout-view";
-import { FocusIntro, useFocusIntro } from "@/components/workout-day/focus-intro";
+import { FocusIntro, FocusTips, useFocusIntro } from "@/components/workout-day/focus-intro";
 import { FocusUsageTracker } from "@/lib/focus-usage";
 import { FocusClock, StoryChrome, WorkoutViewToggle, exerciseInView, pickStoryStart, runStoryTransition, slideCard, visibleCard, type StoryFinish } from "@/components/workout-day/workout-story";
 import {
@@ -1709,7 +1709,9 @@ function WorkoutDay({
   // Story view: one exercise at a time, full screen (workout-story.tsx). The
   // account's saved choice opens it; it's the list's own cards laid out side by
   // side, so switching view never remounts a card or drops what's typed in it.
-  const { view: savedView, setView: saveWorkoutView, tried: focusTried, known: focusKnown, noteIntro } = useWorkoutView();
+  const { view: savedView, setView: saveWorkoutView, tried: focusTried, known: focusKnown, noteIntro, tipsSeen: focusTipsSeen, markTipsSeen } = useWorkoutView();
+  // How Focus works: by itself once per account (the first time in Focus), and from its ? any time.
+  const [focusTipsOpen, setFocusTipsOpen] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
   // Without view transitions: "in" story view's cards rising in, "back" the list fading in after it
   const [storyAnim, setStoryAnim] = useState<"in" | "back" | null>(null);
@@ -2438,6 +2440,13 @@ function WorkoutDay({
     openStory(false);
   }, [dayId, savedView, rowsLoaded, storyRowIds.length, client?.id, completionPending, completion?.completed_at, search.focus, search.review, search.recap, search.edit, storyOpen, openStory]);
 
+  useEffect(() => {
+    if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating) setFocusTipsOpen(true);
+  }, [storyOpen, focusKnown, focusTipsSeen, isImpersonating]);
+  useEffect(() => {
+    if (!storyOpen) setFocusTipsOpen(false);
+  }, [storyOpen]);
+
   // Invites people who haven't used the List / Focus switch yet: once per app launch.
   const focusIntro = useFocusIntro({
     dayId,
@@ -2977,6 +2986,15 @@ function WorkoutDay({
           onJump={jumpStory}
           onExit={() => chooseWorkoutView("list")}
           onDone={closeStory}
+          onHelp={() => setFocusTipsOpen(true)}
+        />
+      )}
+      {storyOpen && focusTipsOpen && (
+        <FocusTips
+          onClose={() => {
+            setFocusTipsOpen(false);
+            if (!focusTipsSeen && !isImpersonating) markTipsSeen();
+          }}
         />
       )}
 
@@ -4549,8 +4567,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       )}
 
       {focusMode && <div aria-hidden className="flex-1" data-focus-spacer />}
-      {/* data-set-table: in Focus a tap here is for logging, never "next exercise" */}
-      <div data-set-table className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
+      <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div
           className={cn(
             "grid items-center justify-items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground",
