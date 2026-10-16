@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useMemo, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery } from "@tanstack/react-query";
@@ -58,7 +59,7 @@ function ClientPovPicker() {
       { id: c.id, user_id: c.user_id, full_name: c.full_name },
       typeof window !== "undefined" ? window.location.pathname + window.location.search : "/admin/client-pov",
     );
-    navigate({ to: "/portal" });
+    navigate({ to: CLIENT_VIEW_HOME });
   };
 
   if (!canPov) {

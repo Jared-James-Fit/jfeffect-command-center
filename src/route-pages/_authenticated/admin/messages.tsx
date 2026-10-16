@@ -1,4 +1,5 @@
 import { Link, redirect, useNavigate } from "@tanstack/react-router";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useEffect, useMemo, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -580,7 +581,7 @@ export function MessagesInbox({
         ? window.location.pathname + window.location.search
         : `/admin/communication?tab=messages&client=${selected.id}`,
     );
-    navigate({ to: "/portal" });
+    navigate({ to: CLIENT_VIEW_HOME });
   };
 
   const updateStatus = async (status: ConversationState["status"]) => {

@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, Suspense, Fragment, type ComponentType } from "react";
@@ -529,7 +530,7 @@ export function ClientProfileWorkspace({
                     { id, user_id: form.user_id, full_name: form.full_name },
                     typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
                   );
-                  navigate({ to: "/portal" });
+                  navigate({ to: CLIENT_VIEW_HOME });
                 }}
               >
                 <Eye className="mr-2 h-4 w-4" />Client POV
@@ -588,7 +589,7 @@ export function ClientProfileWorkspace({
               { id, user_id: form.user_id, full_name: form.full_name },
               typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
             );
-            navigate({ to: "/portal" });
+            navigate({ to: CLIENT_VIEW_HOME });
           }}
           onSave={save}
           isDirty={isDirty}
@@ -674,7 +675,7 @@ export function ClientProfileWorkspace({
                 { id, user_id: form.user_id, full_name: form.full_name },
                 typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
               );
-              navigate({ to: "/portal" });
+              navigate({ to: CLIENT_VIEW_HOME });
             }}
             onSendSetup={sendSetup}
             onRequestUpdate={requestUpdate}

@@ -19,9 +19,16 @@ import { resumableWorkoutRoute } from "@/lib/route-persistence";
 
 export type LaunchRole = string | null | undefined;
 
+/**
+ * Where the client app opens: a client's or member's own launch, and every
+ * "View as client" / member preview a coach enters, so the coach sees the app
+ * the way the person does when they open it.
+ */
+export const CLIENT_VIEW_HOME = "/portal/community" as const;
+
 /** The Crew page for this role (or its desk / dashboard when it has no Crew). */
 export function crewHome(role: LaunchRole, view: "client" | "staff" | null = null): string {
-  if (view === "client" || role === "client" || role === "member") return "/portal/community";
+  if (view === "client" || role === "client" || role === "member") return CLIENT_VIEW_HOME;
   if (role === "admin" || role === "coach") return "/admin/community";
   if (role === "finance") return "/finance";
   return "/admin";

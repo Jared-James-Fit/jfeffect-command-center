@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -102,7 +103,7 @@ function useEnterMemberApp(returnTo: string) {
         qc.invalidateQueries({ queryKey: MEMBERS_KEY }),
       ]);
       toast.success(done);
-      navigate({ to: "/portal" });
+      navigate({ to: CLIENT_VIEW_HOME });
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't open the member app");
     } finally {

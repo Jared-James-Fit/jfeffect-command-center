@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/command";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useAuth } from "@/lib/auth";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { ChevronLeft, Eye, UserX } from "lucide-react";
 import { toast } from "sonner";
 
@@ -61,7 +62,7 @@ export function ClientPovQuickPicker() {
       toast.message("Entering POV preview — client account isn't set up yet, so personal data will be empty.");
     }
     setOpen(false);
-    navigate({ to: "/portal" });
+    navigate({ to: CLIENT_VIEW_HOME });
   };
 
   return (
