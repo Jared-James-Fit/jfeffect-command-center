@@ -4,8 +4,10 @@
  *   Lifting math       Calculator · e1RM (rough 1-rep max)
  *   Timers & counting  Timer · Stopwatch · Tally
  *
- * Opened from the Tools button at the top of the workout (and an exercise's
- * calculator button, straight onto the Calculator in that card's unit).
+ * Opened from the Tools row in any exercise card's ⋯ menu (`CardToolsRow`):
+ * one tap opens that tool over the workout, in the card's unit, so nothing is
+ * left behind (the list or Focus stays put). A running timer, stopwatch or
+ * tally also keeps a pill on screen to get back to it.
  *
  * Deliberately isolated from the prescribed Rest timer
  * (`RestTimerButton` + `ActiveRestTimerProvider`): separate provider,
@@ -23,7 +25,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { Calculator, ChevronDown, ChevronLeft, ChevronRight, Gauge, Hash, Minus, Pause, Play, Plus, RotateCcw, Timer as TimerIcon, Volume2, VolumeX, Watch, Wrench } from "lucide-react";
+import { Calculator, ChevronDown, ChevronLeft, ChevronRight, Gauge, Hash, Minus, Pause, Play, Plus, RotateCcw, Timer as TimerIcon, Volume2, VolumeX, Watch } from "lucide-react";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
   type StopwatchState,
   type TimerState,
@@ -83,7 +86,7 @@ type Actions = {
 // Two contexts: the actions never change (exercise cards use them without
 // re-rendering every second while a timer runs); the status does.
 const ActionsContext = React.createContext<Actions | null>(null);
-const StatusContext = React.createContext<{ hasActive: boolean } | null>(null);
+const StatusContext = React.createContext<{ active: "timer" | "stopwatch" | "tally" | null } | null>(null);
 
 export function useWorkoutToolsActions(): Actions | null {
   return React.useContext(ActionsContext);
@@ -247,7 +250,7 @@ export function WorkoutToolsProvider({ scopeKey, children }: { scopeKey: string;
 
   const pill = pillTool(state, now);
   const showPill = pill != null && view === null;
-  const status = React.useMemo(() => ({ hasActive: pill != null }), [pill]);
+  const status = React.useMemo(() => ({ active: pill }), [pill]);
 
   const pillLabel =
     pill === "tally"
@@ -717,25 +720,41 @@ function StepField({
   );
 }
 
+const CARD_TOOLS: Array<{ key: ToolKey; label: string; icon: React.ReactNode }> = [
+  { key: "calc", label: "Calc", icon: <Calculator className="h-[18px] w-[18px]" /> },
+  { key: "e1rm", label: "e1RM", icon: <Gauge className="h-[18px] w-[18px]" /> },
+  { key: "timer", label: "Timer", icon: <TimerIcon className="h-[18px] w-[18px]" /> },
+  { key: "stopwatch", label: "Stopwatch", icon: <Watch className="h-[18px] w-[18px]" /> },
+  { key: "tally", label: "Tally", icon: <Hash className="h-[18px] w-[18px]" /> },
+];
+
 /**
- * The workout's Tools button (top of the workout, next to Warm-Up). A dot
- * shows while a timer, stopwatch or tally is going.
+ * Workout Tools in an exercise card's ⋯ menu: one row, one tap straight into a
+ * tool over the workout (in the card's unit). The one that's running carries a
+ * dot. Rendered only while the menu is open, so cards never re-render for it.
  */
-export function WorkoutToolsButton({ unit, className }: { unit?: WarmupUnit; className?: string }) {
+export function CardToolsRow({ unit }: { unit?: WarmupUnit }) {
   const tools = useWorkoutToolsActions();
   const status = React.useContext(StatusContext);
   if (!tools) return null;
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      aria-label="Open Workout Tools: calculator, e1RM, timer, stopwatch, tally"
-      onClick={() => tools.open({ unit })}
-      className={cn("h-7 rounded-full px-2.5 text-xs", className)}
-      data-testid="workout-tools-button"
-    >
-      <Wrench className="mr-1 h-3 w-3" /> Tools
-      {status?.hasActive && <span aria-hidden className="ml-1 h-1.5 w-1.5 rounded-full bg-primary" />}
-    </Button>
+    <div data-testid="card-tools" role="group" aria-label="Workout tools">
+      <div className="px-2 pb-1 pt-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tools</div>
+      <div className="grid grid-cols-5 gap-0.5">
+        {CARD_TOOLS.map(({ key, label, icon }) => (
+          <DropdownMenuItem
+            key={key}
+            data-testid={`card-tool-${key}`}
+            aria-label={`${TOOLS[key].title}: ${TOOLS[key].desc}`}
+            onSelect={() => tools.open({ tool: key, unit })}
+            className="relative h-14 min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl bg-secondary/60 px-0 text-[10px] font-semibold leading-none tracking-tight"
+          >
+            {icon}
+            <span>{label}</span>
+            {status?.active === key && <span aria-hidden data-testid="card-tool-running" className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-primary" />}
+          </DropdownMenuItem>
+        ))}
+      </div>
+    </div>
   );
 }

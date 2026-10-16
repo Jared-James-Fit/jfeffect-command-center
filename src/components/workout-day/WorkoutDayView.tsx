@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight, Calculator } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -100,7 +100,7 @@ import {
   DeferredQuickSwapSheet,
   DeferredExerciseHistorySheet,
 } from "@/components/workout-day/deferred-exercise-actions";
-import { WorkoutToolsProvider, WorkoutToolsButton, useWorkoutToolsActions } from "@/components/workout-tools/workout-tools";
+import { CardToolsRow, WorkoutToolsProvider, useWorkoutToolsActions } from "@/components/workout-tools/workout-tools";
 import { WorkoutAddExercise } from "@/components/workout-day/workout-add-exercise";
 import { addExerciseToWorkout, listRemovedExercises, reorderWorkoutExercises, removeExerciseFromWorkout, restoreExerciseToWorkout } from "@/lib/quick-swap.functions";
 import { convertWeight } from "@/lib/progress-metrics";
@@ -2704,10 +2704,6 @@ function WorkoutDay({
               exerciseRows={rows as any[]}
               className="h-7 min-h-0 px-2.5 text-xs"
             />
-            {/* Calculator, e1RM, timer, stopwatch, tally — for the whole workout. */}
-            {!readonly && (
-              <WorkoutToolsButton unit={(client as any)?.preferred_weight_unit === "kg" ? "kg" : "lb"} />
-            )}
             {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
             {rowsLoaded && (rows as any[]).length > 0 && (
               <WorkoutViewToggle className="ml-auto" view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} hint={focusIntro.show} />
@@ -4341,7 +4337,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         hasNote={hasNote}
         onOpenNote={() => setNotesOpen(true)}
         moreMenu={(
-          <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5">
+          <DropdownMenuContent align="start" collisionPadding={8} className="w-80 max-w-[calc(100vw-16px)] rounded-xl p-1.5">
+            {/* Workout Tools, one tap each, over the workout (list or Focus) */}
+            {toolsActions && (
+              <>
+                <CardToolsRow unit={activeUnit} />
+                <DropdownMenuSeparator />
+              </>
+            )}
             {!readonly && clientId && (
               <>
                 {/* Undo / Redo stay open so a few taps walk back several steps. */}
@@ -4387,11 +4390,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               <DropdownMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
                 {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
                 {cuesOpen ? "Hide cues" : "Show cues"}
-              </DropdownMenuItem>
-            )}
-            {toolsActions && (
-              <DropdownMenuItem onSelect={() => toolsActions.open({ tool: "calc", unit: activeUnit })} className="rounded-lg" data-testid="card-calculator">
-                <Calculator className="mr-2 h-4 w-4" /> Calculator
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onSelect={() => setHelpOpen(true)} className="rounded-lg">
