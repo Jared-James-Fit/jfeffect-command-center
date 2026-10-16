@@ -15,6 +15,7 @@ import { PostDetailDialog } from "@/components/community/post-detail";
 import { MyTabPhoto, ProfileView } from "@/components/community/profile-view";
 import { ShareWorkoutButton } from "@/components/community/share-workout-picker";
 import { StoryRail } from "@/components/community/crew-stories";
+import { StoryReplyHost } from "@/components/community/story-reply-host";
 import { ShareNudge } from "@/components/community/share-nudge";
 import { DiscoverPage } from "@/components/community/discover";
 import { OPEN_DISCOVER_EVENT } from "@/lib/community-discover";
@@ -101,7 +102,8 @@ export function CommunityScreen({
 }) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
-  const viewerIsStaff = role === "admin" || role === "coach";
+  // viewing as a client: the client's screen, without the coach's extras (remove anyone's post, …)
+  const viewerIsStaff = (role === "admin" || role === "coach") && !previewOnly;
   const [scope, setScope] = useState<Scope>(() => {
     const person = personFromHash();
     if (person) return { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "feed" };
@@ -635,6 +637,8 @@ export function CommunityScreen({
         </>
       )}
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} onOpenAuthor={openAuthor} />
+      {/* answering a question response on your story (never while viewing as a client) */}
+      {!previewOnly && <StoryReplyHost />}
       <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} />
     </div>
     {/* outside the page that slides, so they stay put */}
