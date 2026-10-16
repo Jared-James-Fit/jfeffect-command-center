@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LiveWaveform, WaveformBars, fakePeaks, useVoiceRecorder } from "@/components/chat-shared";
 import { VOICE_MAX_SECONDS } from "@/lib/community-media";
+import { holdPlaybackSession } from "@/lib/audio-session";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
@@ -14,11 +15,25 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60))
  */
 export function VoiceMemoPlayer({ src, duration, seed = 1, className }: { src: string | null; duration: number | null | undefined; seed?: number; className?: string }) {
   const audio = useRef<HTMLAudioElement | null>(null);
+  // "playback" while it plays, so the Ring/Silent switch doesn't mute a memo
+  // someone tapped (this element isn't in the page, so the app's media
+  // watcher never hears it)
+  const session = useRef<(() => void) | null>(null);
   const [playing, setPlaying] = useState(false);
   const [at, setAt] = useState(0);
   const total = duration && duration > 0 ? duration : 0;
   const peaks = useMemo(() => fakePeaks(32, seed), [seed]);
-  useEffect(() => () => audio.current?.pause(), []);
+  const letGo = () => {
+    session.current?.();
+    session.current = null;
+  };
+  useEffect(
+    () => () => {
+      audio.current?.pause();
+      letGo();
+    },
+    [],
+  );
 
   const toggle = () => {
     if (!src) return;
@@ -30,13 +45,22 @@ export function VoiceMemoPlayer({ src, duration, seed = 1, className }: { src: s
       a.onended = () => {
         setPlaying(false);
         setAt(0);
+        letGo();
       };
-      a.onpause = () => setPlaying(false);
+      a.onpause = () => {
+        setPlaying(false);
+        letGo();
+      };
       a.onplay = () => setPlaying(true);
       audio.current = a;
     }
-    if (a.paused) a.play().catch(() => toast.error("That voice memo couldn't play"));
-    else a.pause();
+    if (a.paused) {
+      if (!session.current) session.current = holdPlaybackSession();
+      a.play().catch(() => {
+        letGo();
+        toast.error("That voice memo couldn't play");
+      });
+    } else a.pause();
   };
   const seek = (ratio: number) => {
     const a = audio.current;
