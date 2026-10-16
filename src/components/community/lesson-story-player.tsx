@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import type { CommunityAuthor, CommunityPost, PostSlide } from "@/lib/community";
-import { coachTimeLabel, dayLabel, lessonStatusLabel, stickerSpot, stickerY, type LessonPlanRow, type LessonsOverview, type StickerSpec } from "@/lib/lessons";
+import { STORY_PREVIEW_INSETS, coachTimeLabel, dayLabel, lessonStatusLabel, stickerSpot, stickerY, type LessonPlanRow, type LessonsOverview, type StickerSpec } from "@/lib/lessons";
 import { useLessonAct, type LessonAction } from "@/lib/lessons.queries";
 import { LessonStoryFrame } from "@/components/community/lesson-card";
 import { StickerPreview } from "@/components/community/story-sticker";
@@ -138,7 +138,7 @@ export function LessonStoryStage({
   };
 
   return (
-    <div ref={stage} onClick={tap} className="relative flex select-none flex-col overflow-hidden bg-black text-white" style={{ width: STAGE_W, height: STAGE_H }} data-lesson-stage>
+    <div ref={stage} onClick={tap} className="relative flex select-none flex-col overflow-hidden bg-black text-white" style={{ width: STAGE_W, height: STAGE_H, ...STORY_PREVIEW_INSETS }} data-lesson-stage>
       <LessonStoryFrame post={shown} />
       {sticker && (
         <div
@@ -158,7 +158,8 @@ export function LessonStoryStage({
       )}
 
       {/* top: progress and who */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6 pt-3">
+      {/* a phone's notch and home bar, so the preview lays out like the real thing (STORY_PREVIEW_INSETS) */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6" style={{ paddingTop: "var(--story-safe-top)" }}>
         <div className="flex gap-1">
           {Array.from({ length: Math.max(1, count) }, (_, i) => (
             <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/30">
@@ -174,7 +175,7 @@ export function LessonStoryStage({
       </div>
 
       {/* bottom: the reply bar, as the crew sees it */}
-      <div ref={bar} className="pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pb-3 pt-10" aria-hidden>
+      <div ref={bar} className="pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-10" style={{ paddingBottom: "var(--story-safe-bottom)" }} aria-hidden>
         <div className="mb-3 px-1">
           <span className="inline-flex h-8 items-center gap-0.5 rounded-full bg-white/15 pl-3 pr-2 text-[13px] font-bold">
             View post <ChevronRight className="h-4 w-4" />

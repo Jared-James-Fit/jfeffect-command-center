@@ -192,6 +192,32 @@ export function stickerSpot(y: number | undefined, barH: number | null): CSSProp
   if (y !== undefined) return { top: `${y * 100}%`, transform: "translateY(-50%)" };
   return { bottom: barH ? `${barH - 40 + 12}px` : "calc(env(safe-area-inset-bottom) + 132px)" };
 }
+/**
+ * Where a story's words may go (tested): below the progress + name row and
+ * above the reply bar, on every phone. The story viewer sets
+ * --story-safe-top / --story-safe-bottom from the phone's own safe areas
+ * (notch / Dynamic Island, home bar); the coach's preview sets an iPhone's, so
+ * what he arranges is where the crew sees it. The name row ends ~53px under
+ * the top inset (3px progress, 10px gap, 40px row), so 72px leaves ~19px air.
+ */
+export const STORY_SAFE_TOP = "calc(var(--story-safe-top, 0.6rem) + 72px)";
+export const STORY_SAFE_BOTTOM = "calc(var(--story-safe-bottom, 0.85rem) + 100px)";
+/** The phone's own safe areas, for the story viewer's root. */
+export const STORY_DEVICE_INSETS = { "--story-safe-top": "max(env(safe-area-inset-top), 0.6rem)", "--story-safe-bottom": "max(env(safe-area-inset-bottom), 0.85rem)" } as CSSProperties;
+/** An iPhone with a Dynamic Island, for the coach's full-size preview. */
+export const STORY_PREVIEW_INSETS = { "--story-safe-top": "59px", "--story-safe-bottom": "34px" } as CSSProperties;
+
+/**
+ * How a story frame's words sit (lesson, words, a workout win): centred
+ * between the header and the reply bar; with a sticker, up top so the sticker
+ * has the middle; with the sticker moved up top, underneath it.
+ */
+export function storyFrameLayout(sticker: { y?: number } | null | undefined): { place: "center" | "top" | "bottom"; style: CSSProperties } {
+  if (!sticker) return { place: "center", style: { paddingTop: STORY_SAFE_TOP, paddingBottom: STORY_SAFE_BOTTOM } };
+  if (stickerUpTop(sticker.y)) return { place: "bottom", style: { paddingTop: STORY_SAFE_TOP, paddingBottom: "calc(var(--story-safe-bottom, 0.85rem) + 124px)" } };
+  return { place: "top", style: { paddingTop: STORY_SAFE_TOP, paddingBottom: STORY_SAFE_BOTTOM } };
+}
+
 export const STICKER_OPTION_MAX = 24;
 export const STICKER_ANSWER_MAX = 300;
 

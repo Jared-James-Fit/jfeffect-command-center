@@ -11,7 +11,7 @@ import { ViewersSheet, markPostViewed } from "@/components/community/post-views"
 import { LessonStoryFrame } from "@/components/community/lesson-card";
 import { StorySticker } from "@/components/community/story-sticker";
 import { InlineFollow } from "@/components/community/follow-button";
-import { stickerSpot } from "@/lib/lessons";
+import { STORY_DEVICE_INSETS, stickerSpot, storyFrameLayout } from "@/lib/lessons";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useFollowState } from "@/lib/community-social";
@@ -479,6 +479,8 @@ function StoryViewer({
     <Dialog open onOpenChange={(o) => !o && close()}>
       <DialogContent
         className="fixed inset-0 left-0 top-0 flex h-[100dvh] max-h-none w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 text-white shadow-none dark:bg-transparent sm:left-1/2 sm:top-1/2 sm:h-[min(96dvh,900px)] sm:max-w-[460px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] outline-none [&>button]:hidden"
+        // the phone's safe areas, so every frame's words clear the name row and the reply bar
+        style={STORY_DEVICE_INSETS}
         overlayStyle={drag ? { opacity: 1 - pull, transition: drag.settle ? `opacity 210ms ${ease}` : "none" } : undefined}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => {
@@ -547,7 +549,7 @@ function StoryViewer({
           )}
 
           {/* top: progress, who, close */}
-          <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6" style={{ paddingTop: "max(env(safe-area-inset-top), 0.6rem)" }}>
+          <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6" style={{ paddingTop: "var(--story-safe-top)" }}>
             <div className="flex gap-1">
               {Array.from({ length: frames(group) }, (_, i) => (
                 <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/30">
@@ -621,7 +623,7 @@ function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-black sm:rounded-[28px]">
       <StoryFrame post={post} unit={unit} />
-      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6" style={{ paddingTop: "max(env(safe-area-inset-top), 0.6rem)" }}>
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-3 pb-6" style={{ paddingTop: "var(--story-safe-top)" }}>
         <div className="flex gap-1">
           {group.items.map((it, i) => (
             <span key={it.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/30">
@@ -703,11 +705,14 @@ function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) 
 
   // a lesson always plays as its lesson (title, diagram, hook), photo or not
   if (kind === "lesson") return <LessonStoryFrame post={post} />;
+  // words never sit under the name row or the reply bar, and make room for a sticker
+  const layout = storyFrameLayout(post.sticker);
+  const place = layout.place === "bottom" ? "justify-end" : layout.place === "top" ? "justify-start" : "justify-center";
   if (kind === "win") {
     const win = pickWorkoutWin(post.stats!, unit);
     const style = WIN_STYLE[win.kind];
     return (
-      <div className={cn("flex flex-1 flex-col justify-center px-7", style.tint)} data-story-frame="win">
+      <div className={cn("flex min-h-0 flex-1 flex-col px-7", place, style.tint)} style={layout.style} data-story-frame="win">
         <span className={cn("inline-flex items-center gap-1.5 text-[13px] font-black uppercase tracking-[0.16em]", style.text)}>
           <style.Icon className="h-5 w-5" /> {win.label}
         </span>
@@ -733,7 +738,7 @@ function StoryFrame({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) 
   }
   const words = storyWords(post);
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-[radial-gradient(120%_90%_at_80%_0%,rgba(239,51,64,0.35),transparent_60%)] bg-zinc-950 px-8" data-story-frame="words">
+    <div className={cn("flex min-h-0 flex-1 flex-col items-center bg-[radial-gradient(120%_90%_at_80%_0%,rgba(239,51,64,0.35),transparent_60%)] bg-zinc-950 px-8", place)} style={layout.style} data-story-frame="words">
       <p className="line-clamp-[12] whitespace-pre-wrap text-center text-[24px] font-bold leading-snug">{words.text}</p>
       {words.by && <p className="mt-3 text-center text-[14px] font-semibold text-white/60">{words.by}</p>}
     </div>

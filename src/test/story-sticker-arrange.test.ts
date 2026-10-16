@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { STICKER_Y_MAX, STICKER_Y_MIN, cleanSticker, stickerSpot, stickerUpTop, stickerY, storyRows, type LessonPlanRow } from "@/lib/lessons";
+import { STICKER_Y_MAX, STICKER_Y_MIN, STORY_SAFE_TOP, cleanSticker, stickerSpot, stickerUpTop, stickerY, storyFrameLayout, storyRows, type LessonPlanRow } from "@/lib/lessons";
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 
@@ -32,7 +32,11 @@ describe("a story sticker can be moved, and stays where it was put", () => {
     expect(stickerUpTop(0.3)).toBe(true);
     expect(stickerUpTop(0.6)).toBe(false);
     expect(stickerUpTop(undefined)).toBe(false);
-    expect(read("src/components/community/lesson-card.tsx")).toContain('below ? "justify-end pb-40" : sticker ? "justify-start pt-24"');
+    expect(storyFrameLayout({ y: 0.3 }).place).toBe("bottom");
+    expect(storyFrameLayout({ y: 0.6 }).place).toBe("top");
+    expect(storyFrameLayout({}).place).toBe("top");
+    expect(storyFrameLayout(null).place).toBe("center");
+    expect(read("src/components/community/lesson-card.tsx")).toContain("const layout = storyFrameLayout(post.sticker);");
   });
 
   it("the database keeps it to the same band, and every save path goes through that cleaner", () => {
@@ -84,5 +88,29 @@ describe("the coach previews the coming lessons as stories and arranges them", (
     expect(player).toContain('run({ kind: "approve", id: row.id }, `Approved for ${whenLabel(row)}`, () => go(1))');
     // a story that's already up isn't moved from here
     expect(player).toContain("onPlace={posted ? undefined : place}");
+  });
+});
+
+describe("a story's words never sit under the name row or the reply bar", () => {
+  it("start below the header on every phone (its safe area + the 53px row + air) and end above the bar", () => {
+    for (const l of [storyFrameLayout(null), storyFrameLayout({ y: 0.6 }), storyFrameLayout({ y: 0.3 })]) {
+      expect(l.style.paddingTop).toBe(STORY_SAFE_TOP);
+      expect(String(l.style.paddingBottom)).toContain("var(--story-safe-bottom");
+    }
+    expect(STORY_SAFE_TOP).toBe("calc(var(--story-safe-top, 0.6rem) + 72px)");
+  });
+
+  it("the viewer feeds in the phone's safe areas, and the coach's preview an iPhone's, so both lay out the same", () => {
+    const stories = read("src/components/community/crew-stories.tsx");
+    expect(stories).toContain("style={STORY_DEVICE_INSETS}");
+    expect(stories.match(/style=\{\{ paddingTop: "var\(--story-safe-top\)" \}\}/g)?.length).toBe(2);
+    // every frame with words uses the same rule: lesson, a workout win, a words post
+    expect(read("src/components/community/lesson-card.tsx")).toContain("style={layout.style}");
+    expect(stories).toContain('style={layout.style} data-story-frame="win"');
+    expect(stories).toContain('style={layout.style} data-story-frame="words"');
+    const preview = read("src/components/community/lesson-story-player.tsx");
+    expect(preview).toContain("...STORY_PREVIEW_INSETS");
+    expect(preview).toContain('style={{ paddingTop: "var(--story-safe-top)" }}');
+    expect(preview).toContain('style={{ paddingBottom: "var(--story-safe-bottom)" }}');
   });
 });
