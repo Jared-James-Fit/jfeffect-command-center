@@ -749,7 +749,9 @@ function WorkoutDay({
   const removedKey = ["pl-day-removed-exercises", dayId] as const;
   const restoreExerciseNow = async (trashId: string, exerciseName: string) => {
     try {
-      await restoreExerciseSrv({ data: { dayId, trashId } });
+      const { rowId } = await restoreExerciseSrv({ data: { dayId, trashId } });
+      // In Focus, land on the exercise that just came back.
+      storyLandRowRef.current = rowId;
       await Promise.all([
         qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] }),
         qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] }),
@@ -1718,6 +1720,8 @@ function WorkoutDay({
   // the slide to land on when it opens / the exercise to land on in the list when it closes
   const storyStartRef = useRef<number | null>(null);
   const storyReturnRef = useRef<string | null>(null);
+  // Focus lands here when this exercise appears (one just put back with Undo / Restore)
+  const storyLandRowRef = useRef<string | null>(null);
   // the workout the saved choice was already applied to (it opens story view once per workout)
   const storyAutoDayRef = useRef<string | null>(null);
   const storyTimerRef = useRef<number | undefined>(undefined);
@@ -2404,7 +2408,10 @@ function WorkoutDay({
     const el = storyListRef.current;
     if (!storyOpen || prev === storyRowIds || !el || storyRowIds.length === 0) return;
     const was = prev[storyIndexRef.current];
-    const at = was ? storyRowIds.indexOf(was) : -1;
+    const land = storyLandRowRef.current;
+    const landAt = land ? storyRowIds.indexOf(land) : -1;
+    if (landAt >= 0) storyLandRowRef.current = null;
+    const at = landAt >= 0 ? landAt : was ? storyRowIds.indexOf(was) : -1;
     const target = at >= 0 ? at : Math.min(storyIndexRef.current, storyRowIds.length - 1);
     el.scrollLeft = target * el.clientWidth;
     storyIndexRef.current = target;
@@ -2787,7 +2794,6 @@ function WorkoutDay({
               >
               <SwipeToReveal
                 enabled={canEditWorkoutStructure && !readonly}
-                paused={storyOpen}
                 actionLabel={`Delete ${r.exercises?.name ?? r.exercise_name_override ?? "Exercise"} from this workout`}
                 onAction={() => removeExerciseNow(r.id, r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
               >
@@ -4545,7 +4551,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       )}
 
       {focusMode && <div aria-hidden className="flex-1" data-focus-spacer />}
-      <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
+      {/* data-set-table: in Focus a tap here is for logging, never "next exercise" */}
+      <div data-set-table className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div
           className={cn(
             "grid items-center justify-items-center gap-1.5 border-b border-builder-card-border bg-builder-card/60 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground",

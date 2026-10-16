@@ -7,11 +7,31 @@ import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs
 
 /**
  * Focus view (stored as "story"): the workout one exercise at a time, full
- * screen. Swipe (or Next ›) through the exercises; the bars up top show where
- * you are and what's done. It's the same exercise cards as the list, laid out
+ * screen. Tap through the exercises like Crew's stories (the left third goes
+ * back, anywhere else forward) or use ‹ / Next; the bars up top show where you
+ * are and what's done. A sideways swipe is the card's own (swipe to delete). It's the same exercise cards as the list, laid out
  * side by side (WorkoutDayView switches the list's classes), so switching view
  * never reloads a card or loses what's typed into it.
  */
+
+/**
+ * What keeps its own tap in Focus (never "next exercise"): every control, the
+ * set table (that's for logging), and a card swiped open to Delete.
+ */
+const TAP_KEEPS =
+  'button, a, input, textarea, select, label, summary, [role="button"], [role="slider"], [role="switch"], ' +
+  '[role="checkbox"], [role="radio"], [role="menuitem"], [role="tab"], [role="link"], [contenteditable="true"], ' +
+  "[data-no-tap], [data-set-table], [data-swipe-open]";
+
+export function focusTapIgnored(target: EventTarget | null): boolean {
+  const el = typeof Element !== "undefined" && target instanceof Element ? target : null;
+  return !el || !!el.closest(TAP_KEEPS);
+}
+
+/** A tap at x on a screen this wide: the left third goes back, anywhere else forward (Crew's stories). */
+export function focusTapDirection(x: number, width: number): -1 | 1 {
+  return x < width / 3 ? -1 : 1;
+}
 
 /** Where story view opens: the exercise you were looking at, or the next one not done yet after it. */
 export function pickStoryStart(order: string[], done: ReadonlySet<string>, from: string | null): number {
@@ -126,10 +146,13 @@ export function FocusClock({ dayId }: { dayId: string }) {
   if (!session || session.stoppedAt != null || isSessionAbandoned(session, now)) return null;
   const elapsed = formatElapsed(Math.floor(sessionElapsedMs(session, now) / 1000));
   return (
-    <span data-testid="focus-clock" className="inline-flex shrink-0 items-center gap-1 tabular-nums">
-      <Clock className="h-3 w-3" aria-hidden />
-      {session.pausedAt != null ? `Paused ${elapsed}` : elapsed}
-    </span>
+    <>
+      <span data-testid="focus-clock" className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+        <Clock className="h-3 w-3" aria-hidden />
+        {session.pausedAt != null ? `Paused ${elapsed}` : elapsed}
+      </span>
+      <span aria-hidden>·</span>
+    </>
   );
 }
 
@@ -176,7 +199,7 @@ export function StoryChrome({
   const index = Math.max(0, Math.min(rawIndex, count - 1));
   const onIndexRef = useRef(onIndex);
   onIndexRef.current = onIndex;
-  // Follow the swipe here, so only these bars re-render as it lands.
+  // Follow the row of screens here, so only these bars re-render as it moves.
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
@@ -199,6 +222,42 @@ export function StoryChrome({
       cancelAnimationFrame(raf);
     };
   }, [listRef]);
+
+  // Tap to move, like Crew's stories; arrow keys on a keyboard. A small chevron
+  // flashes on the side that was tapped so it's clear what happened.
+  const latest = useRef({ index, count, onJump });
+  latest.current = { index, count, onJump };
+  const [flash, setFlash] = useState<{ dir: -1 | 1; k: number } | null>(null);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const go = (dir: -1 | 1) => {
+      const { index: i, count: n, onJump: jump } = latest.current;
+      const to = i + dir;
+      if (to < 0 || to >= n) return;
+      setFlash({ dir, k: Date.now() });
+      jump(to);
+    };
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || focusTapIgnored(e.target)) return;
+      if (window.getSelection?.()?.toString()) return;
+      go(focusTapDirection(e.clientX, window.innerWidth));
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.metaKey || e.ctrlKey) return;
+      if (document.activeElement?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      if (document.querySelector('[role="dialog"][data-state="open"], [role="menu"][data-state="open"]')) return;
+      if (e.key === "ArrowRight") go(1);
+      else if (e.key === "ArrowLeft") go(-1);
+    };
+    el.addEventListener("click", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      el.removeEventListener("click", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [listRef]);
+
   const last = index >= count - 1;
   const currentDone = !!done[index];
   const [finishing, setFinishing] = useState(false);
@@ -256,6 +315,19 @@ export function StoryChrome({
 
   return (
     <>
+      {flash && (
+        <div
+          key={flash.k}
+          aria-hidden
+          data-testid="focus-tap-flash"
+          className={cn(
+            "jf-tap-flash pointer-events-none fixed top-[calc(50%-24px)] z-[42] grid h-12 w-12 place-items-center rounded-full bg-foreground/15 text-foreground",
+            flash.dir === 1 ? "right-3" : "left-3",
+          )}
+        >
+          {flash.dir === 1 ? <ChevronRight className="h-6 w-6" /> : <ChevronLeft className="h-6 w-6" />}
+        </div>
+      )}
       <div
         data-testid="story-top"
         className={cn("fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2.5 pt-[calc(env(safe-area-inset-top,0px)+6px)]", anim)}
@@ -286,8 +358,8 @@ export function StoryChrome({
                 Exercise {index + 1} of {count}
               </div>
               <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                {/* the clock brings its own "·", so nothing dangles before it starts */}
                 {timer}
-                {timer && <span aria-hidden>·</span>}
                 <span className="truncate">{title}</span>
               </div>
             </div>
