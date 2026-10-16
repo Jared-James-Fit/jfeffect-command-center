@@ -259,9 +259,12 @@ export function useAutosave<T>({
   }, [online]);
 
   // Never flush on unmount; unmount/page-load saves caused workout corruption.
+  // Unmount only: callers pass `equals` inline, so with it (or doSave) as a
+  // dependency this cleared the pending save on every re-render, and a row
+  // that re-rendered inside the debounce (an RPE fill-down does) never saved.
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
-  }, [doSave, equals]);
+  }, []);
 
   const flush = useCallback(async () => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }

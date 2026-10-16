@@ -5953,11 +5953,15 @@ function SetRow({
     if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
     recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
   };
+  // A typed reps / RPE is a commit, like a weight pick: save this set now
+  // (after the autosave hook has seen the value, see commitFlushToken), then
+  // fill down. The sets below are written by the parent; this one only by us.
   const pickReps = (v: string) => {
     const previous = reps;
     setReps(v);
     setRepsEdited(true);
     guardRecentSave();
+    setCommitFlushToken((t) => t + 1);
     void onFieldCascade?.(setIndex, "reps", v, previous);
   };
   const pickEffort = (v: string) => {
@@ -5977,6 +5981,7 @@ function SetRow({
       setRpe(v);
     }
     guardRecentSave();
+    setCommitFlushToken((t) => t + 1);
     void onFieldCascade?.(setIndex, "rpe", stored, previous);
   };
 
