@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { CommunityPost } from "@/lib/community";
-import { extraLesson, hookLine, stickerUpTop } from "@/lib/lessons";
+import { extraLesson, hookLine, storyFrameLayout } from "@/lib/lessons";
 import { LessonVisualArt, visualLabel } from "@/components/community/lesson-visuals";
 
 /**
@@ -32,18 +32,21 @@ export function LessonStoryFrame({ post }: { post: CommunityPost }) {
   const lesson = extraLesson(post);
   if (!lesson) return null;
   const hook = hookLine(post.caption);
+  // always clear of the name row up top and the reply bar below (storyFrameLayout);
   // with a sticker under it, the lesson sits up top; moved up top, the lesson
-  // goes under it (above the reply bar). The hook only fits without a diagram.
+  // goes under it. The hook only fits without a diagram.
   const sticker = !!post.sticker;
-  const below = sticker && stickerUpTop(post.sticker?.y);
+  const layout = storyFrameLayout(post.sticker);
   const showHook = !!hook && !(sticker && lesson.visual);
   return (
     <div
       className={cn(
-        "flex flex-1 flex-col bg-zinc-950 bg-[radial-gradient(120%_70%_at_100%_0%,rgba(239,51,64,0.38),transparent_60%)] px-6",
-        below ? "justify-end pb-40" : sticker ? "justify-start pt-24" : "justify-center pb-28 pt-24",
+        "flex min-h-0 flex-1 flex-col bg-zinc-950 bg-[radial-gradient(120%_70%_at_100%_0%,rgba(239,51,64,0.38),transparent_60%)] px-6",
+        layout.place === "bottom" ? "justify-end" : layout.place === "top" ? "justify-start" : "justify-center",
       )}
+      style={layout.style}
       data-story-frame="lesson"
+      data-story-place={layout.place}
     >
       {/* no "Methods & cues" style label: it's his story, not a series' */}
       <span className="block text-[28px] font-black leading-[1.08]">{lesson.title}</span>
