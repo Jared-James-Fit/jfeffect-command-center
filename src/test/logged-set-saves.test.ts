@@ -5,9 +5,9 @@ import { historySetOrder } from "@/components/exercise-history-sheet";
 const read = (p: string) => readFileSync(p, "utf8");
 
 describe("a typed reps / RPE saves on the set it was typed in", () => {
-  it("a pending autosave survives re-renders (cleared only on unmount)", () => {
+  it("a pending autosave survives re-renders (dropped only on unmount or a different record)", () => {
     const hook = read("src/hooks/use-autosave.ts");
-    expect(hook).toMatch(/useEffect\(\(\) => \(\) => \{\n    if \(timer\.current\) clearTimeout\(timer\.current\);\n  \}, \[\]\);/);
+    expect(hook).toContain("if (timer.current) { clearTimeout(timer.current); timer.current = null; }\n  }, [key]);");
     expect(hook).not.toContain("}, [doSave, equals]);");
   });
   it("the set saves now, then the sets below fill down", () => {
