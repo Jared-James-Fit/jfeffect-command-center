@@ -73,24 +73,71 @@ function getCtx(): AudioContext | null {
   return ctx;
 }
 
+/**
+ * Keeping the context playing. Browsers start it suspended until a tap, and
+ * iPhones suspend it again ("interrupted") whenever the app goes to the
+ * background, a call comes in or Spotify takes over: from then on every sound
+ * was silent until a reload, because the tap listener had removed itself after
+ * the first unlock (and it listened for pointerdown, which a touch screen
+ * doesn't count as the tap that may start audio). Now every tap, key or return
+ * to the app tries again; while it's playing that's a cheap state check.
+ */
 let unlockInstalled = false;
+function wake(c: AudioContext) {
+  if (c.state === "running") return;
+  void c.resume().catch(() => {});
+  // Older iPhones only open the context once a sound actually starts inside the tap.
+  try {
+    const src = c.createBufferSource();
+    src.buffer = c.createBuffer(1, 1, c.sampleRate);
+    src.connect(c.destination);
+    src.start(0);
+  } catch { /* fine */ }
+}
 function installUnlock() {
   if (unlockInstalled || typeof window === "undefined") return;
   unlockInstalled = true;
   const unlock = () => {
     const c = getCtx();
-    if (c && c.state !== "running") void c.resume().catch(() => {});
-    if (c?.state === "running") {
-      window.removeEventListener("pointerdown", unlock, true);
-      window.removeEventListener("keydown", unlock, true);
-    }
+    if (c) wake(c);
   };
-  window.addEventListener("pointerdown", unlock, true);
-  window.addEventListener("keydown", unlock, true);
+  // The events a browser accepts as "the person tapped" for starting audio.
+  for (const type of ["touchend", "pointerup", "click", "keydown"]) window.addEventListener(type, unlock, true);
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && ctx) void ctx.resume().catch(() => {});
+    });
+  }
 }
 if (typeof window !== "undefined") {
   installUnlock();
   installMediaPlaybackSession();
+}
+
+/** How late a sound may still play once a suspended context comes back. */
+const LATE_MS = 400;
+
+/**
+ * Run `play` on a running context: now, or (when it was suspended) as soon as
+ * it resumes, if that's quick. A sound used to be dropped whenever the
+ * context needed waking first, so the first sound after any pause never played.
+ */
+function whenRunning(play: (c: AudioContext) => void): boolean {
+  const c = getCtx();
+  if (!c) return false;
+  if (c.state === "running") {
+    play(c);
+    return true;
+  }
+  const asked = Date.now();
+  wake(c);
+  void c.resume().then(
+    () => {
+      if (c.state === "running" && Date.now() - asked <= LATE_MS) play(c);
+    },
+    () => {},
+  );
+  return false;
 }
 
 function tone(c: BaseAudioContext, out: AudioNode, t: number, freq: number, dur: number, vel: number, type: OscillatorType = "sine", to?: number) {
@@ -196,19 +243,14 @@ export function playAppSound(name: AppSound, opts: { force?: boolean } = {}) {
     if (document.visibilityState === "hidden") return;
     if (!admitSound(name, Date.now(), gate)) return;
   }
-  const c = getCtx();
-  if (!c) return;
-  if (c.state !== "running") {
-    // Not unlocked yet (no tap so far) — try, but skip this sound.
-    void c.resume().catch(() => {});
-    return;
-  }
-  try {
-    const out = c.createGain();
-    out.gain.value = 0.9;
-    out.connect(c.destination);
-    PATTERNS[name](c, out, c.currentTime + 0.01);
-  } catch { /* never let a sound break the UI */ }
+  whenRunning((c) => {
+    try {
+      const out = c.createGain();
+      out.gain.value = 0.9;
+      out.connect(c.destination);
+      PATTERNS[name](c, out, c.currentTime + 0.01);
+    } catch { /* never let a sound break the UI */ }
+  });
 }
 
 /**
@@ -219,33 +261,35 @@ export function playAppSound(name: AppSound, opts: { force?: boolean } = {}) {
  */
 export function playSynth(build: (c: AudioContext, out: AudioNode, t: number) => number): () => void {
   if (typeof window === "undefined" || !appSoundsEnabled() || document.visibilityState === "hidden") return () => {};
-  const c = getCtx();
-  if (!c) return () => {};
-  if (c.state !== "running") {
-    void c.resume().catch(() => {});
-    return () => {};
-  }
   let master: GainNode | null = null;
-  try {
-    const t = c.currentTime + 0.02;
-    master = c.createGain();
-    master.gain.value = 1;
-    // A gentle limiter so stacked hits never clip on a phone speaker.
-    const limiter = c.createDynamicsCompressor();
-    limiter.threshold.value = -14;
-    limiter.knee.value = 8;
-    limiter.ratio.value = 6;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.15;
-    master.connect(limiter).connect(c.destination);
-    const length = build(c, master, t);
-    const m = master;
-    window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, (length + 1.5) * 1000);
-  } catch { /* never let a sound break the UI */ }
+  let ctxUsed: AudioContext | null = null;
+  let cancelled = false;
+  whenRunning((c) => {
+    if (cancelled) return;
+    ctxUsed = c;
+    try {
+      const t = c.currentTime + 0.02;
+      const m = c.createGain();
+      m.gain.value = 1;
+      // A gentle limiter so stacked hits never clip on a phone speaker.
+      const limiter = c.createDynamicsCompressor();
+      limiter.threshold.value = -14;
+      limiter.knee.value = 8;
+      limiter.ratio.value = 6;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.15;
+      m.connect(limiter).connect(c.destination);
+      master = m;
+      const length = build(c, m, t);
+      window.setTimeout(() => { try { m.disconnect(); } catch { /* gone */ } }, (length + 1.5) * 1000);
+    } catch { /* never let a sound break the UI */ }
+  });
   return () => {
+    cancelled = true;
     const m = master;
+    const c = ctxUsed;
     master = null;
-    if (!m) return;
+    if (!m || !c) return;
     try {
       const now = c.currentTime;
       m.gain.cancelScheduledValues(now);
@@ -387,7 +431,7 @@ export function startThinkingSound(): () => void {
   if (typeof window === "undefined" || !appSoundsEnabled()) return () => {};
   const c = getCtx();
   if (!c) return () => {};
-  if (c.state !== "running") void c.resume().catch(() => {});
+  wake(c);
   let master: GainNode | null = null;
   let timer: number | undefined;
   const begin = window.setTimeout(() => {
