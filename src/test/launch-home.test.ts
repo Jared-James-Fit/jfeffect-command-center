@@ -24,7 +24,7 @@ vi.stubGlobal("localStorage", {
 });
 vi.stubGlobal("window", globalThis);
 
-import { cachedLaunchTarget, crewHome, launchTarget } from "@/lib/launch-home";
+import { CLIENT_VIEW_HOME, cachedLaunchTarget, crewHome, launchTarget } from "@/lib/launch-home";
 import { clearLastRoute, resumableWorkoutRoute, saveLastRoute } from "@/lib/route-persistence";
 import { RESUME_WORKOUT_WITHIN_MS } from "@/lib/workout-resume";
 
@@ -111,5 +111,26 @@ describe("a fresh launch opens Crew; mid-workout it goes back to the workout", (
     expect(existsSync("src/lib/app-reopen.ts")).toBe(false);
     expect(read("src/routes/_authenticated/route.tsx")).not.toContain("reopenTarget");
     expect(read("public/manifest.json")).toContain('"start_url": "/"');
+  });
+
+  it("View as client and the member preview open where the person's app opens: Crew, not Home", () => {
+    expect(CLIENT_VIEW_HOME).toBe(crewHome("client"));
+    expect(CLIENT_VIEW_HOME).toBe(crewHome("member"));
+    expect(read("src/components/clients/use-enter-client-pov.ts")).toContain("window.location.href = opts.to ?? CLIENT_VIEW_HOME;");
+    const entries = [
+      "src/components/client-pov-quick-picker.tsx",
+      "src/routes/_authenticated/admin/client-pov.tsx",
+      "src/route-pages/_authenticated/admin/clients.$id.tsx",
+      "src/route-pages/_authenticated/admin/messages.tsx",
+      "src/components/pov-quick-toggle.tsx",
+      "src/components/members/members-directory.tsx",
+      "src/route-pages/_authenticated/admin/members.$memberId.tsx",
+      "src/routes/_authenticated/admin/membership.index.tsx",
+    ];
+    for (const f of entries) {
+      const src = read(f);
+      expect(src, f).toContain("navigate({ to: CLIENT_VIEW_HOME });");
+      expect(src, f).not.toContain('navigate({ to: "/portal" });');
+    }
   });
 });

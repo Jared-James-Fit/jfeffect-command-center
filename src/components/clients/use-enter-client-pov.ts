@@ -3,10 +3,11 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 
 /**
  * Open the app as a client ("View as client"), landing on `to` (default
- * their Home). Coming back out returns to the page you left from.
+ * Crew, where their app opens). Coming back out returns to the page you left from.
  *
  * Uses a full page load instead of navigate(): the portal reads the stored
  * POV on mount, and a client-side navigation can render the portal before the
@@ -30,7 +31,7 @@ export function useEnterClientPov() {
       if (!data?.user_id) {
         toast.message("Entering POV preview — client account isn't set up yet, so personal data will be empty.");
       }
-      window.location.href = opts.to ?? "/portal";
+      window.location.href = opts.to ?? CLIENT_VIEW_HOME;
     } catch (e: any) {
       toast.error(e?.message ?? "Could not enter POV");
       setBusy(false);

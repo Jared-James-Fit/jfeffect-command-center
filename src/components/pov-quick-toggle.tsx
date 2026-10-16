@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useNavigate, useLocation } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
@@ -98,7 +99,7 @@ export function PovQuickToggle({
       setPovFlag("app_member");
       await qc.invalidateQueries({ queryKey: ["m-me"] });
       toast.success("Switched to Member view");
-      navigate({ to: "/portal" });
+      navigate({ to: CLIENT_VIEW_HOME });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to switch");
     } finally {

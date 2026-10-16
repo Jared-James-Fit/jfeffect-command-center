@@ -16,7 +16,7 @@ describe("a coach opens the client's workout from a session", () => {
     const hook = read("src/components/clients/use-enter-client-pov.ts");
     expect(hook).toContain("impersonation.start(");
     expect(hook).toContain("window.location.pathname + window.location.search");
-    expect(hook).toContain('window.location.href = opts.to ?? "/portal";');
+    expect(hook).toContain("window.location.href = opts.to ?? CLIENT_VIEW_HOME;");
   });
 
   it("the Workouts page opens ?open=<date>'s workout once, the way its card's main button would", () => {

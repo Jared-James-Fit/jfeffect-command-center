@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { isMemberAccessActive } from "@/lib/memberAccess";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -129,7 +130,7 @@ export function MemberProfileWorkspace({
         qc.invalidateQueries({ queryKey: ["current-member-access"] }),
       ]);
       toast.success(`Showing the member app with ${member.full_name || member.email}'s access`);
-      navigate({ to: "/portal" });
+      navigate({ to: CLIENT_VIEW_HOME });
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
   const onCopySetupLink = async () => {

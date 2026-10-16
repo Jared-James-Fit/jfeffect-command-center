@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
@@ -80,7 +81,7 @@ function MembershipDashboard() {
       await qc.invalidateQueries({ queryKey: ["m-me"] });
       await qc.invalidateQueries({ queryKey: ["current-member-access"] });
       toast.success("Viewing the member app as your test member");
-      navigate({ to: "/portal" });
+      navigate({ to: CLIENT_VIEW_HOME });
     } catch (e: any) {
       toast.error(e?.message ?? "Could not enter POV");
     } finally {
