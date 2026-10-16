@@ -255,16 +255,48 @@ export type CommunityPost = {
 /** Someone who reposted a post, with the note they put on it. */
 export type Reposter = CommunityAuthor & { note: string | null; at: string; is_me?: boolean };
 
-/** A repost note: one line, at most this many characters (an emoji is enough). */
+/** A repost note: at most this many characters (an emoji is enough; a line break counts as one). */
 export const REPOST_NOTE_MAX = 60;
+/** …on at most this many lines (Return starts a new one, like Instagram's). */
+export const REPOST_NOTE_MAX_LINES = 6;
 /** Quick picks for a repost note. */
 export const REPOST_NOTE_EMOJI = ["🔥", "💪", "🙌", "👏", "💯", "😂", "❤️", "🐐"] as const;
 
-/** The note as it's kept (the database does the same): one line, trimmed, at most 60 characters. */
+/**
+ * The note as it's kept (the database does the same, `community_repost_note_clean`):
+ * its line breaks stay (blank lines too, but none at the ends), spaces inside a
+ * line fold to one, at most 6 lines (extra ones join the last) and 60 characters.
+ */
 export function cleanRepostNote(note: string | null | undefined): string | null {
-  const one = (note ?? "").replace(/\s+/g, " ").trim();
-  if (!one) return null;
-  return [...one].slice(0, REPOST_NOTE_MAX).join("").trim() || null;
+  let lines = (note ?? "").replace(/\r\n?/g, "\n").split("\n").map((l) => l.replace(/\s+/g, " ").trim());
+  while (lines.length && !lines[0]) lines.shift();
+  while (lines.length && !lines[lines.length - 1]) lines.pop();
+  if (!lines.length) return null;
+  if (lines.length > REPOST_NOTE_MAX_LINES) {
+    lines = [...lines.slice(0, REPOST_NOTE_MAX_LINES - 1), lines.slice(REPOST_NOTE_MAX_LINES - 1).join(" ").replace(/\s+/g, " ").trim()];
+  }
+  return [...lines.join("\n")].slice(0, REPOST_NOTE_MAX).join("").replace(/\s+$/, "") || null;
+}
+
+/** How many lines a note being written has (Return makes a new one). */
+export function noteLineCount(text: string): number {
+  return text.replace(/\r\n?/g, "\n").split("\n").length;
+}
+
+/**
+ * A note being written, kept to what it can hold: Return on the last line
+ * allowed does nothing, a pasted 7th line joins the 6th, and typing stops at
+ * 60 characters (emoji count once).
+ */
+export function fitRepostNoteDraft(prev: string, next: string): string {
+  let t = next.replace(/\r\n?/g, "\n");
+  const lines = t.split("\n");
+  if (lines.length > REPOST_NOTE_MAX_LINES) {
+    if (noteLineCount(prev) >= REPOST_NOTE_MAX_LINES) return prev;
+    t = [...lines.slice(0, REPOST_NOTE_MAX_LINES - 1), lines.slice(REPOST_NOTE_MAX_LINES - 1).join(" ")].join("\n");
+  }
+  const chars = [...t];
+  return chars.length > REPOST_NOTE_MAX ? chars.slice(0, REPOST_NOTE_MAX).join("") : t;
 }
 
 /** Only emoji (up to 3): shown big, like Instagram's notes. */

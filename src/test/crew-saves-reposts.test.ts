@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   REPOST_NOTE_MAX,
   cleanRepostNote,
+  fitRepostNoteDraft,
+  noteLineCount,
+  REPOST_NOTE_MAX_LINES,
   floatingNote,
   inFollowingFeed,
   isEmojiOnly,
@@ -23,14 +26,55 @@ const who = (user_id: string, name: string, note: string | null = null, is_me = 
 const author = { user_id: "kayla", name: "Kayla", avatar_url: null, is_coach: false };
 
 describe("a repost's note", () => {
-  it("is one line, trimmed, at most 60 characters (the database does the same)", () => {
+  it("keeps its line breaks, trimmed, at most 6 lines and 60 characters (the database does the same)", () => {
     expect(REPOST_NOTE_MAX).toBe(60);
+    expect(REPOST_NOTE_MAX_LINES).toBe(6);
+    // the same cases were run through community_repost_note_clean on the database (Oct 16)
     expect(cleanRepostNote("  🔥🔥   this one \n ")).toBe("🔥🔥 this one");
-    expect(cleanRepostNote("   ")).toBeNull();
+    expect(cleanRepostNote("   \n\n  ")).toBeNull();
     expect(cleanRepostNote(null)).toBeNull();
-    expect([...(cleanRepostNote("x".repeat(80)) ?? "")].length).toBe(60);
-    expect(sql).toContain("SELECT nullif(btrim(left(btrim(regexp_replace(coalesce(_note, ''), '\\s+', ' ', 'g')), 60)), '')");
+    expect(cleanRepostNote("x".repeat(80))).toBe("x".repeat(60));
+    expect(cleanRepostNote("\n\nfirst  line\r\n\nthird\n\n")).toBe("first line\n\nthird");
+    expect(cleanRepostNote("a\nb\nc\nd\ne\nf\ng")).toBe("a\nb\nc\nd\ne\nf g");
+    expect(cleanRepostNote(`${"y".repeat(59)}\nz`)).toBe("y".repeat(59));
+    expect(cleanRepostNote("💪".repeat(70))).toBe("💪".repeat(60));
+    expect(noteLineCount("a\n\nb")).toBe(3);
+    expect(noteLineCount("")).toBe(1);
+    const lines = read("supabase/migrations/20261211090000_repost_note_lines.sql");
+    expect(lines).toContain("CREATE OR REPLACE FUNCTION public.community_repost_note_clean(_note text)");
+    expect(lines).toContain("IF v_n > 6 THEN");
+    expect(lines).toContain("left(array_to_string(v_lines, E'\\n'), 60)");
     expect(sql).toContain("CONSTRAINT community_reposts_note_len CHECK (note IS NULL OR char_length(note) BETWEEN 1 AND 60)");
+  });
+
+  it("while you write it: Return stops at 6 lines, a pasted 7th joins the 6th, and it stops at 60 characters", () => {
+    const six = "a\nb\nc\nd\ne\nf";
+    expect(fitRepostNoteDraft(six, `${six}\n`)).toBe(six);
+    expect(fitRepostNoteDraft("a", "a\nb\nc\nd\ne\nf\ng\nh")).toBe("a\nb\nc\nd\ne\nf g h");
+    expect(fitRepostNoteDraft("", "line\r\nnext")).toBe("line\nnext");
+    expect(fitRepostNoteDraft("x".repeat(60), `${"x".repeat(60)}y`)).toBe("x".repeat(60));
+    expect([...fitRepostNoteDraft("", "🔥".repeat(61))].length).toBe(60);
+    // spaces and blank lines stay while typing (they're tidied when it's saved)
+    expect(fitRepostNoteDraft("hi", "hi \n\n")).toBe("hi \n\n");
+  });
+
+  it("is written Instagram's way: full screen, typed straight into the bubble, pinned above the keyboard, asks before throwing it away", () => {
+    const ed = read("src/components/community/repost-note-editor.tsx");
+    const card = read("src/components/community/repost-save.tsx");
+    expect(ed).toContain("useVisualViewportBox(true)");
+    expect(ed).toContain("style={{ top: keyboard ? view!.top : 0, height: keyboard ? view!.height : \"100%\" }}");
+    expect(ed).toContain("fitRepostNoteDraft(text, e.target.value)");
+    expect(ed).toContain('enterKeyHint="enter"');
+    expect(ed).toContain("Discard note?");
+    expect(ed).toContain("Keep editing");
+    expect(ed).toContain("const dirty = cleanRepostNote(text) !== cleanRepostNote(saved);");
+    // the phone-wide 16px text-box rule must not make the box wrap unlike its sizing copy
+    expect(ed).toContain('style={{ font: "inherit", letterSpacing: "inherit" }}');
+    expect(ed).not.toContain("<input");
+    expect(card).not.toContain("RepostNoteSheet");
+    expect(card).toContain("<RepostNoteEditor post={post} onClose={() => setEditing(false)} preview={opts.preview ?? null} />");
+    // the stamp shows its lines
+    expect(card).toContain("line-clamp-6 whitespace-pre-line break-words");
   });
 
   it("shows big when it's only emoji, like Instagram's notes", () => {

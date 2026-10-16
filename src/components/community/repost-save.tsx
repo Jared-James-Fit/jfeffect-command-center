@@ -7,11 +7,9 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls } from "@/lib/community.queries";
+import { RepostNoteEditor } from "@/components/community/repost-note-editor";
 import { useAlbumPosts, useCreateAlbum, useRepost, useSavedOverview, useSavePost, type SaveCover } from "@/lib/community-saves";
 import {
-  REPOST_NOTE_EMOJI,
-  REPOST_NOTE_MAX,
-  cleanRepostNote,
   floatingNote,
   isEmojiOnly,
   repostedLine,
@@ -84,7 +82,7 @@ export function RepostButton({ post, onReposted }: { post: CommunityPost; onRepo
       {count > 0 && <span className={cn("text-[13px] font-black tabular-nums", mine ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>{count}</span>}
     </button>
     {/* beside the button, never inside it: taps in the sheet must not reach the button */}
-    {noteOpen && <RepostNoteSheet post={post} open={noteOpen} onOpenChange={setNoteOpen} />}
+    {noteOpen && <RepostNoteEditor post={post} onClose={() => setNoteOpen(false)} />}
     </>
   );
 }
@@ -381,12 +379,12 @@ export function RepostStamp({ who, note, onTap, mine = false, ask = false, inlin
     >
       <span
         className={cn(
-          "block max-w-[min(16.5rem,68vw)] rounded-[18px] bg-white/95 px-3 py-[7px] text-left text-black shadow-[0_6px_20px_-6px_rgba(0,0,0,0.55)] backdrop-blur",
+          "block max-w-[min(16.5rem,68vw)] rounded-[18px] bg-white/95 px-3 py-[7px] text-center text-black shadow-[0_6px_20px_-6px_rgba(0,0,0,0.55)] backdrop-blur",
           big ? "text-[24px] leading-[1.05]" : "text-[13px] font-semibold leading-snug",
           ask && "font-bold text-black/50",
         )}
       >
-        <span className="line-clamp-2 break-words">{ask ? "Add a note…" : text}</span>
+        <span className="line-clamp-6 whitespace-pre-line break-words">{ask ? "Add a note…" : text}</span>
       </span>
       {/* the thought tail, down to the photo (beside it, inline) */}
       {inline ? (
@@ -441,89 +439,6 @@ export function RepostStamp({ who, note, onTap, mine = false, ask = false, inlin
   );
 }
 
-/** Write (or change) the note on your repost: a line and quick emoji, with a live preview. */
-export function RepostNoteSheet({ post, open, onOpenChange, preview }: { post: CommunityPost; open: boolean; onOpenChange: (o: boolean) => void; preview?: string | null }) {
-  const { user } = useAuth();
-  const { data: me } = useCommunityProfile(open ? (user?.id ?? null) : null);
-  const repost = useRepost();
-  const [text, setText] = useState("");
-  useEffect(() => {
-    if (open) setText(post.my_repost?.note ?? "");
-  }, [open, post.my_repost?.note]);
-  const had = !!post.my_repost?.note;
-  const clean = cleanRepostNote(text);
-  const left = REPOST_NOTE_MAX - [...text].length;
-  const done = (note: string | null) =>
-    repost.mutate(
-      { post, on: true, note },
-      {
-        onError: (e: any) => toast.error(e?.message ?? "Couldn't save your note. Try again."),
-        onSuccess: () => onOpenChange(false),
-      },
-    );
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[420px]" style={KEYBOARD_SAFE} data-repost-note-sheet>
-        <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/30" aria-hidden />
-        <div className="px-5 pt-3">
-          <SheetTitle className="text-[16px] font-black">{had ? "Your note" : "Add a note"}</SheetTitle>
-          <SheetDescription className="mt-0.5 text-[12px] leading-snug text-muted-foreground">It floats on the post for the people who see your repost.</SheetDescription>
-        </div>
-        {/* what they'll see: your photo and note in the post's corner */}
-        <div className="relative mx-5 mt-3 h-[150px] overflow-hidden rounded-2xl bg-[radial-gradient(120%_120%_at_0%_0%,rgba(239,51,64,0.35),#111114_70%)]" data-repost-preview>
-          {preview && <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" style={post.media_focus ? { objectPosition: `${post.media_focus.x * 100}% ${post.media_focus.y * 100}%` } : undefined} />}
-          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/45 to-transparent" aria-hidden />
-          <RepostStamp mine className="absolute bottom-3 left-3" who={{ name: me?.author.name ?? "You", avatar_url: me?.author.avatar_url ?? null }} note={clean} ask={!clean} />
-        </div>
-        <form
-          className="px-5 pt-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            done(clean);
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <input
-              autoFocus
-              value={text}
-              onChange={(e) => setText([...e.target.value.replace(/\n/g, " ")].slice(0, REPOST_NOTE_MAX).join(""))}
-              placeholder="Say why it's worth seeing"
-              enterKeyHint="done"
-              className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-[15px] outline-none focus:border-primary"
-              aria-label="Repost note"
-              data-repost-note-input
-            />
-            <span className={cn("w-7 shrink-0 text-right text-[11px] font-bold tabular-nums", left < 10 ? "text-primary" : "text-muted-foreground")}>{left}</span>
-          </div>
-          <div className="mt-2.5 grid grid-cols-8 gap-1.5" role="group" aria-label="Quick emoji">
-            {REPOST_NOTE_EMOJI.map((em) => (
-              <button
-                key={em}
-                type="button"
-                onClick={() => setText((t) => [...`${t}${em}`].slice(0, REPOST_NOTE_MAX).join(""))}
-                className="grid aspect-square w-full max-w-11 place-items-center justify-self-center rounded-full bg-muted text-[20px] active:scale-90"
-                aria-label={`Add ${em}`}
-              >
-                {em}
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 flex gap-2">
-            {had && (
-              <button type="button" disabled={repost.isPending} onClick={() => done(null)} className="h-11 flex-1 rounded-xl bg-muted text-[14px] font-bold active:bg-muted/70" data-remove-note>
-                Remove note
-              </button>
-            )}
-            <button type="submit" disabled={repost.isPending || (!clean && !had)} className="h-11 flex-1 rounded-xl bg-primary text-[14px] font-bold text-primary-foreground disabled:opacity-50" data-save-note>
-              {repost.isPending ? "Saving…" : "Done"}
-            </button>
-          </div>
-        </form>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
 /**
  * The repost stamp on a post card: yours (always, once you've reposted: tap
  * to add or change your note; "Add a note…" asks right after reposting), else
@@ -560,6 +475,6 @@ export function useRepostNote(post: CommunityPost, opts: { preview?: string | nu
       label={`${theirs.name} reposted: ${theirs.note}. Open their profile`}
     />
   ) : null;
-  const sheet = post.my_repost || editing ? <RepostNoteSheet post={post} open={editing} onOpenChange={setEditing} preview={opts.preview} /> : null;
+  const sheet = editing && post.my_repost ? <RepostNoteEditor post={post} onClose={() => setEditing(false)} preview={opts.preview ?? null} /> : null;
   return { bubble, sheet, ask: () => setAsking(true) };
 }
