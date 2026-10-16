@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -77,7 +77,7 @@ export function runStoryTransition(update: () => void, card: HTMLElement | null)
 }
 
 /** List ↔ Focus at the top of the workout. */
-export function WorkoutViewToggle({ view, onChange, className }: { view: WorkoutView; onChange: (view: WorkoutView) => void; className?: string }) {
+export function WorkoutViewToggle({ view, onChange, className, hint = false }: { view: WorkoutView; onChange: (view: WorkoutView) => void; className?: string; /** Glow on Focus while the intro invites people to try it. */ hint?: boolean }) {
   const options: Array<{ value: WorkoutView; label: string; icon: typeof Rows3 }> = [
     { value: "list", label: "List", icon: Rows3 },
     { value: "story", label: "Focus", icon: RectangleVertical },
@@ -103,6 +103,7 @@ export function WorkoutViewToggle({ view, onChange, className }: { view: Workout
             className={cn(
               "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition-colors duration-200",
               on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              hint && value === "story" && !on && "badge-pulse text-foreground",
             )}
           >
             <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -140,7 +141,9 @@ export type StoryFinish =
 export function StoryChrome({
   names,
   done,
-  index,
+  listRef,
+  initialIndex,
+  onIndex,
   title,
   timer,
   finish,
@@ -152,7 +155,11 @@ export function StoryChrome({
   names: string[];
   /** Per exercise: every set logged. */
   done: boolean[];
-  index: number;
+  /** The list laid out side by side: the bars follow its scroll. */
+  listRef: RefObject<HTMLDivElement | null>;
+  initialIndex: number;
+  /** Told when the exercise on screen changes (no re-render of the page). */
+  onIndex: (index: number) => void;
   title: string;
   /** The workout clock (FocusClock), while the workout is open. */
   timer?: ReactNode;
@@ -165,6 +172,33 @@ export function StoryChrome({
   onDone: () => void;
 }) {
   const count = names.length;
+  const [rawIndex, setIndex] = useState(initialIndex);
+  const index = Math.max(0, Math.min(rawIndex, count - 1));
+  const onIndexRef = useRef(onIndex);
+  onIndexRef.current = onIndex;
+  // Follow the swipe here, so only these bars re-render as it lands.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    let raf = 0;
+    let current = -1;
+    const read = () => {
+      raf = 0;
+      if (!el.clientWidth) return;
+      const i = Math.round(el.scrollLeft / el.clientWidth);
+      if (i === current) return;
+      current = i;
+      setIndex(i);
+      onIndexRef.current(i);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read); };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    read();
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [listRef]);
   const last = index >= count - 1;
   const currentDone = !!done[index];
   const [finishing, setFinishing] = useState(false);

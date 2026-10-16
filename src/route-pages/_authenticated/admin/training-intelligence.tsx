@@ -10,6 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Activity, Trophy, AlertTriangle, MessageSquare, Calendar, Timer, Search, ClipboardList, TrendingDown } from "lucide-react";
 import { getCoachIntel, filterIntel, LABEL_META, type FilterKey, type ClientIntel, listFollowups } from "@/lib/coach-intel";
 import { formatDistanceToNow } from "date-fns";
+import { useAuth } from "@/lib/auth";
+import { FocusUsageCard } from "@/components/admin/focus-usage-card";
 import {
   ClientQuickLinks, ReviewAlertButton, PainFlagActions, OpenWorkoutLink,
   FollowupRow, FollowupDialog, MarkAllClientReviewed, highlightPainHtml,
@@ -39,6 +41,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 export function TrainingIntelPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [filter, setFilter] = useState<FilterKey>("attention");
   const [search, setSearch] = useState("");
+  const { accountRole } = useAuth();
   const { data = [], isLoading } = useQuery({ queryKey: ["coach-intel"], queryFn: () => getCoachIntel() });
   const { data: followups = [] } = useQuery({ queryKey: ["followups"], queryFn: () => listFollowups() });
 
@@ -120,6 +123,8 @@ export function TrainingIntelPage({ embedded = false }: { embedded?: boolean } =
             <Section title="Recent notes to review" icon={MessageSquare} clients={sections.notes} variant="notes" />
           </div>
         )}
+        {/* Is the workout logger's Focus view worth keeping? (admins) */}
+        {accountRole === "admin" && <FocusUsageCard />}
       </div>
     </>
   );

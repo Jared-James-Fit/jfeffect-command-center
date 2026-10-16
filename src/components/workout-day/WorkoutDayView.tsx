@@ -50,6 +50,8 @@ import { cn } from "@/lib/utils";
 import { playAppSound } from "@/lib/app-sounds";
 import { haptic } from "@/platform/haptics";
 import { useWorkoutView } from "@/lib/use-workout-view";
+import { FocusIntro, useFocusIntro } from "@/components/workout-day/focus-intro";
+import { FocusUsageTracker } from "@/lib/focus-usage";
 import { FocusClock, StoryChrome, WorkoutViewToggle, exerciseInView, pickStoryStart, runStoryTransition, slideCard, visibleCard, type StoryFinish } from "@/components/workout-day/workout-story";
 import {
   selectExerciseNoteHistory,
@@ -100,7 +102,7 @@ import {
 } from "@/components/workout-day/deferred-exercise-actions";
 import { WorkoutToolsProvider, WorkoutToolsButton, useWorkoutToolsActions } from "@/components/workout-tools/workout-tools";
 import { WorkoutAddExercise } from "@/components/workout-day/workout-add-exercise";
-import { addExerciseToWorkout, reorderWorkoutExercises, removeExerciseFromWorkout } from "@/lib/quick-swap.functions";
+import { addExerciseToWorkout, listRemovedExercises, reorderWorkoutExercises, removeExerciseFromWorkout, restoreExerciseToWorkout } from "@/lib/quick-swap.functions";
 import { convertWeight } from "@/lib/progress-metrics";
 import {
   formatPreviousLiftLoad,
@@ -711,6 +713,8 @@ function WorkoutDay({
   const addExerciseSrv = useServerFn(addExerciseToWorkout);
   const reorderExercisesSrv = useServerFn(reorderWorkoutExercises);
   const removeExerciseSrv = useServerFn(removeExerciseFromWorkout);
+  const restoreExerciseSrv = useServerFn(restoreExerciseToWorkout);
+  const listRemovedSrv = useServerFn(listRemovedExercises);
   const canEditWorkoutStructure = adapter?.kind !== "member" && /^[0-9a-f-]{36}$/i.test(dayId);
 
   const addExerciseNow = async (
@@ -740,6 +744,23 @@ function WorkoutDay({
     }
   };
 
+  // Removed exercises can be put back (pl_exercise_row_trash): the Undo on the
+  // toast, or Restore under the list for anything removed earlier.
+  const removedKey = ["pl-day-removed-exercises", dayId] as const;
+  const restoreExerciseNow = async (trashId: string, exerciseName: string) => {
+    try {
+      await restoreExerciseSrv({ data: { dayId, trashId } });
+      await Promise.all([
+        qc.refetchQueries({ queryKey: ["pl-day-rows", dayId] }),
+        qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] }),
+        qc.invalidateQueries({ queryKey: removedKey }),
+      ]);
+      toast.success(`${exerciseName} is back`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not put it back");
+    }
+  };
+
   const removeExerciseNow = async (rowId: string, exerciseName: string) => {
     if (!canEditWorkoutStructure) return;
     const previous = rows as any[];
@@ -748,10 +769,16 @@ function WorkoutDay({
       previous.filter((row) => row.id !== rowId),
     );
     try {
-      await removeExerciseSrv({ data: { dayId, rowId } });
-      toast.success(`${exerciseName} removed from this workout`);
+      const { trashId } = await removeExerciseSrv({ data: { dayId, rowId } });
+      haptic("light");
+      toast.success(`${exerciseName} removed`, {
+        description: "Only this workout. Your program is unchanged.",
+        duration: 8000,
+        action: { label: "Undo", onClick: () => void restoreExerciseNow(trashId, exerciseName) },
+      });
       await qc.invalidateQueries({ queryKey: ["pl-day-rows", dayId] });
       await qc.invalidateQueries({ queryKey: ["pl-day-results", dayId] });
+      await qc.invalidateQueries({ queryKey: removedKey });
     } catch (error: any) {
       qc.setQueryData(
         ["pl-day-rows", dayId, adapter?.kind ?? null, adapter?.ref.ownerId ?? null],
@@ -817,6 +844,14 @@ function WorkoutDay({
     const frame = requestAnimationFrame(() => setSecondaryHydrationReady(true));
     return () => cancelAnimationFrame(frame);
   }, [rowsLoaded, rows.length]);
+
+  // Exercises removed from this workout that can still be put back.
+  const { data: removedExercises = [] } = useQuery({
+    queryKey: removedKey,
+    enabled: canEditWorkoutStructure && secondaryHydrationReady,
+    staleTime: 5 * 60_000,
+    queryFn: () => listRemovedSrv({ data: { dayId } }),
+  });
 
   const { data: results = [], isSuccess: resultsLoaded, isFetching: resultsFetching } = useQuery({
     queryKey: ["pl-day-results", dayId, client?.id, adapter?.kind ?? null, adapter?.ref.ownerId ?? null, scheduledWorkoutId],
@@ -1672,11 +1707,12 @@ function WorkoutDay({
   // Story view: one exercise at a time, full screen (workout-story.tsx). The
   // account's saved choice opens it; it's the list's own cards laid out side by
   // side, so switching view never remounts a card or drops what's typed in it.
-  const { view: savedView, setView: saveWorkoutView } = useWorkoutView();
+  const { view: savedView, setView: saveWorkoutView, tried: focusTried, known: focusKnown, noteIntro } = useWorkoutView();
   const [storyOpen, setStoryOpen] = useState(false);
   // Without view transitions: "in" story view's cards rising in, "back" the list fading in after it
   const [storyAnim, setStoryAnim] = useState<"in" | "back" | null>(null);
-  const [storyIndex, setStoryIndex] = useState(0);
+  // Which exercise Focus is on. A ref, not state: the bars (StoryChrome) track
+  // the swipe themselves, so swiping never re-renders the whole logger.
   const storyIndexRef = useRef(0);
   const storyListRef = useRef<HTMLDivElement | null>(null);
   // the slide to land on when it opens / the exercise to land on in the list when it closes
@@ -1685,7 +1721,6 @@ function WorkoutDay({
   // the workout the saved choice was already applied to (it opens story view once per workout)
   const storyAutoDayRef = useRef<string | null>(null);
   const storyTimerRef = useRef<number | undefined>(undefined);
-  const storyRafRef = useRef(0);
   // every set logged, per exercise (written each render from statusSummary)
   const storyDoneRef = useRef<ReadonlySet<string>>(new Set());
   // The exercise logger is isolated by WorkoutLoadBoundary while Finish Workout
@@ -2292,7 +2327,6 @@ function WorkoutDay({
   const storyReduced = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   useEffect(() => () => {
     window.clearTimeout(storyTimerRef.current);
-    cancelAnimationFrame(storyRafRef.current);
   }, []);
 
   const openStory = useCallback((animate: boolean) => {
@@ -2302,7 +2336,6 @@ function WorkoutDay({
     const update = () => {
       storyStartRef.current = start;
       storyIndexRef.current = start;
-      setStoryIndex(start);
       setStoryAnim(null);
       setStoryOpen(true);
     };
@@ -2346,20 +2379,6 @@ function WorkoutDay({
     el.scrollTo({ left: n * el.clientWidth, behavior: storyReduced() ? "auto" : "smooth" });
   }, [storyRowIds.length]);
 
-  const onStoryScroll = useCallback(() => {
-    if (storyRafRef.current) return;
-    storyRafRef.current = requestAnimationFrame(() => {
-      storyRafRef.current = 0;
-      const el = storyListRef.current;
-      if (!el || !el.clientWidth) return;
-      const i = Math.round(el.scrollLeft / el.clientWidth);
-      if (i !== storyIndexRef.current) {
-        storyIndexRef.current = i;
-        setStoryIndex(i);
-      }
-    });
-  }, []);
-
   // Opening: land on the right exercise before the first frame shows.
   useLayoutEffect(() => {
     const el = storyListRef.current;
@@ -2389,7 +2408,6 @@ function WorkoutDay({
     const target = at >= 0 ? at : Math.min(storyIndexRef.current, storyRowIds.length - 1);
     el.scrollLeft = target * el.clientWidth;
     storyIndexRef.current = target;
-    setStoryIndex(target);
   }, [storyRowIds, storyOpen]);
 
   // The saved choice opens story view once per workout, for logging: not on a
@@ -2412,6 +2430,17 @@ function WorkoutDay({
     if (completion?.completed_at || search.focus || search.review === 1 || search.recap === 1 || search.edit === 1) return;
     openStory(false);
   }, [dayId, savedView, rowsLoaded, storyRowIds.length, client?.id, completionPending, completion?.completed_at, search.focus, search.review, search.recap, search.edit, storyOpen, openStory]);
+
+  // Invites people who haven't used the List / Focus switch yet: once per app launch.
+  const focusIntro = useFocusIntro({
+    dayId,
+    eligible:
+      !storyOpen && !readonly && !isImpersonating && rowsLoaded && (rows as any[]).length >= 2 &&
+      !completionPending && !completion?.completed_at,
+    tried: focusTried,
+    known: focusKnown,
+    noteIntro,
+  });
 
   if (!day) {
     return (
@@ -2674,10 +2703,11 @@ function WorkoutDay({
             )}
             {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
             {rowsLoaded && (rows as any[]).length > 0 && (
-              <WorkoutViewToggle className="ml-auto" view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} />
+              <WorkoutViewToggle className="ml-auto" view={storyOpen ? "story" : "list"} onChange={chooseWorkoutView} hint={focusIntro.show} />
             )}
           </div>
         )}
+        {focusIntro.show && <FocusIntro onTry={() => chooseWorkoutView("story")} onDismiss={focusIntro.dismiss} />}
 
         <DayCoachNotes day={day} />
 
@@ -2711,7 +2741,6 @@ function WorkoutDay({
             data-anim={storyOpen && storyAnim === "in" ? "in" : undefined}
             data-no-pull-refresh={storyOpen ? "" : undefined}
             aria-roledescription={storyOpen ? "carousel" : undefined}
-            onScroll={storyOpen ? onStoryScroll : undefined}
             className={
               storyOpen
                 ? "workout-story"
@@ -2805,6 +2834,7 @@ function WorkoutDay({
                     onMoveUp={() => void moveExerciseNow(r.id, -1)}
                     onMoveDown={() => void moveExerciseNow(r.id, 1)}
                     onMoveTo={(position) => void moveExerciseTo(r.id, position)}
+                    onRemove={canEditWorkoutStructure && !readonly ? () => void removeExerciseNow(r.id, r.exercises?.name ?? r.exercise_name_override ?? "Exercise") : undefined}
                   />
                 )}
                 {/* Adding exercises lives in the list; Focus is for logging. */}
@@ -2821,6 +2851,28 @@ function WorkoutDay({
             ))}
           </div>
         </WorkoutLoadBoundary>
+
+        {removedExercises.length > 0 && !storyOpen && (
+          <div data-testid="removed-exercises" className="rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+            <div className="py-0.5 font-semibold">Removed from this workout</div>
+            {removedExercises.slice(0, 3).map((x) => (
+              <div key={x.trashId} className="flex items-center justify-between gap-2 py-1">
+                <span className="min-w-0 truncate">
+                  <span className="font-semibold text-foreground">{x.name}</span>
+                  {x.setsLogged > 0 ? ` · ${x.setsLogged} set${x.setsLogged === 1 ? "" : "s"} logged` : ""}
+                </span>
+                <button
+                  type="button"
+                  data-testid="restore-exercise"
+                  onClick={() => void restoreExerciseNow(x.trashId, x.name)}
+                  className="shrink-0 rounded-full bg-secondary px-3 py-1 text-xs font-bold text-foreground active:scale-95"
+                >
+                  Restore
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Finish Workout card — only show when workout is NOT yet completed.
              Guard: !completion?.completed_at prevents the glitchy state where
@@ -2899,11 +2951,24 @@ function WorkoutDay({
         {children}
       </div>
 
+      <FocusUsageTracker
+        key={dayId}
+        enabled={!!authUser && !isImpersonating && !readonly}
+        dayId={dayId}
+        clientId={client?.id ?? null}
+        view={storyOpen ? "story" : "list"}
+        ready={rowsLoaded && resultsLoaded && (rows as any[]).length > 0}
+        setsDone={statusSummary.setsDone}
+        finished={!!completion?.completed_at}
+      />
+
       {storyOpen && storyRowIds.length > 0 && (
         <StoryChrome
           names={(rows as any[]).map((r) => r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
           done={(rows as any[]).map((r) => statusSummary.doneRowIds.has(String(r.id)))}
-          index={Math.min(storyIndex, storyRowIds.length - 1)}
+          listRef={storyListRef}
+          initialIndex={Math.min(storyIndexRef.current, storyRowIds.length - 1)}
+          onIndex={(i) => { storyIndexRef.current = i; }}
           title={cleanDayTitle(day.title, day.day_index)}
           timer={!completion?.completed_at ? <FocusClock dayId={dayId} /> : undefined}
           finish={storyFinish}
@@ -3251,7 +3316,7 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -4357,6 +4422,22 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                     </div>
                   </>
                 )}
+              </>
+            )}
+            {onRemove && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  data-testid="card-remove"
+                  onSelect={onRemove}
+                  className="items-start rounded-lg py-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 mt-0.5 h-4 w-4 shrink-0" />
+                  <span className="flex flex-col leading-tight">
+                    <span className="font-semibold">Remove from this workout</span>
+                    <span className="text-[11px] text-muted-foreground">Only this workout. You can undo it.</span>
+                  </span>
+                </DropdownMenuItem>
               </>
             )}
           </DropdownMenuContent>

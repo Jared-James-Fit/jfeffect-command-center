@@ -633,6 +633,44 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
   .workout-story-list-in { animation: none; }
 }
 
+/* Focus intro (focus-intro.tsx): a mini phone swiping from one exercise to the
+   next while the bars fill. 4.8s loop, transform/opacity only (compositor). */
+.jf-fi-track { animation: jf-fi-swipe 4.8s cubic-bezier(0.6, 0, 0.2, 1) infinite; }
+.jf-fi-finger { animation: jf-fi-finger 4.8s ease-in-out infinite; opacity: 0; }
+.jf-fi-bar-0 { background-color: var(--foreground); }
+.jf-fi-bar-1 { animation: jf-fi-bar-1 4.8s linear infinite; }
+.jf-fi-bar-2 { animation: jf-fi-bar-2 4.8s linear infinite; }
+@keyframes jf-fi-swipe {
+  0%, 28% { transform: translateX(0); opacity: 1; }
+  40%, 64% { transform: translateX(-33.333%); opacity: 1; }
+  76%, 93% { transform: translateX(-66.666%); opacity: 1; }
+  98% { transform: translateX(-66.666%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 0; }
+}
+@keyframes jf-fi-finger {
+  0%, 24% { transform: translateX(0); opacity: 0; }
+  27% { transform: translateX(0); opacity: 1; }
+  38% { transform: translateX(-26px); opacity: 1; }
+  41%, 60% { transform: translateX(-26px); opacity: 0; }
+  61% { transform: translateX(0); opacity: 0; }
+  64% { transform: translateX(0); opacity: 1; }
+  75% { transform: translateX(-26px); opacity: 1; }
+  78%, 100% { transform: translateX(-26px); opacity: 0; }
+}
+@keyframes jf-fi-bar-1 {
+  0%, 37% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
+  40%, 96% { background-color: var(--foreground); }
+  100% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
+}
+@keyframes jf-fi-bar-2 {
+  0%, 74% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
+  77%, 96% { background-color: var(--foreground); }
+  100% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jf-fi-track, .jf-fi-finger, .jf-fi-bar-1, .jf-fi-bar-2 { animation: none; }
+}
+
 /* ============================================================
    Workout card visual polish — shadow utility for light theme.
    Applied via shadow-builder-card which maps to --shadow-builder-card.
