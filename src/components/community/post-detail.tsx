@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AuthorLine, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote } from "@/components/community/post-card";
+import { AuthorLine, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote, isPhotoPost } from "@/components/community/post-card";
 import { InlineFollow } from "@/components/community/follow-button";
 import { CommentThread } from "@/components/community/comments-sheet";
 import { MentionText } from "@/components/community/mentions";
@@ -114,6 +114,8 @@ function Detail({
   // Double-tap the photo / card for ❤️, same as in the feed.
   const [burst, setBurst] = useState(0);
   const markHint = useMarkHintSeen();
+  // a member's photo / clip post: the picture edge to edge, words under it (as in the feed)
+  const photo = isPhotoPost(post);
   const onHeroTap = useDoubleTap(() => {
     setBurst((b) => b + 1);
     if (!post.my_reaction) onReact(post, REACTION.key);
@@ -149,7 +151,7 @@ function Detail({
         />
       </div>
 
-      {post.kind === "note" ? (
+      {post.kind === "note" && !photo ? (
         <>
           <NoteBody post={post} onOpenPerson={onOpenAuthor} cover={post.media_type ? <PostMedia post={post} thumbUrl={thumb} full /> : undefined} />
           <NoteExtras post={post} unit={unit} className="mx-4 mb-2 mt-2" />
@@ -174,12 +176,12 @@ function Detail({
         </div>
       )}
 
-      {post.caption && post.kind !== "note" && (
+      {post.caption && (post.kind !== "note" || photo) && (
         <p className="whitespace-pre-line px-4 pt-3 text-[15px] leading-snug">
           <span className="font-bold">{post.author.name}</span> <MentionText text={post.caption} mentions={post.mentions} onOpen={onOpenAuthor} />
         </p>
       )}
-      {post.kind !== "note" && <PostExtras post={post} className="px-4 pt-3" />}
+      {(post.kind !== "note" || photo) && <PostExtras post={post} className="px-4 pt-3" />}
 
       {s && post.media_type && (
         <div className="px-4 pt-4">

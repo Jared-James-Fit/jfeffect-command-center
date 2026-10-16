@@ -1,26 +1,58 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { Camera, Check, ChevronLeft, Download, EyeOff, Images, Lock, PenLine, RefreshCcw, Send, Smile, Star, Timer, Type, User, Users, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Send, Smile, Square, Star, Timer, Type, User, Users, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { pickerAudience, type CommunityVisibility } from "@/lib/community";
 import { useFollowState } from "@/lib/community-social";
-import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareTemplate } from "@/lib/workout-share-card";
+import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareFormat, type ShareTemplate } from "@/lib/workout-share-card";
 import { CaptionEditor, CaptionField, captionThumb } from "@/components/community/caption-editor";
 import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach, type PostAttachInitial } from "@/components/community/post-attach";
 import { SlideTray, useSlideTray } from "@/components/community/slide-tray";
 import { MAX_SLIDES, type PostSlide } from "@/lib/community";
-import { StickerLayer, bakeStickers, drawStickers, remapStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
+import { StickerLayer, drawStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 import { context2d, releaseCanvas } from "@/lib/canvas-memory";
 import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-draft";
 import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTestFlight } from "@/platform";
 import { reportCameraTrouble } from "@/lib/camera-report";
-import { LookCarousel } from "@/components/community/look-carousel";
+import { LookCarousel, lookItems, type LookItem } from "@/components/community/look-carousel";
 import { canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
-import { useHintsSeen, useMarkHintSeen } from "@/lib/community.queries";
+import { createCommunityPost, useHintsSeen, useMarkHintSeen } from "@/lib/community.queries";
+import { useAuth } from "@/lib/auth";
+import {
+  CENTRED,
+  CENTRE_FOCUS,
+  POST_ASPECTS,
+  POST_ASPECT_LABEL,
+  STORY_ASPECT,
+  feedAspect,
+  focusPosition,
+  framingFromGuide,
+  guideBand,
+  nextAspect,
+  type Framing,
+  type PostAspect,
+} from "@/lib/photo-frame";
+import { drawableSize, framedCanvas, lightCopy, type Drawable } from "@/lib/photo-frame-draw";
+import { FocusFramer, PhotoFramer } from "@/components/community/photo-framer";
+import { CoverPicker } from "@/components/community/cover-picker";
 
-export type CameraMode = { key: string; label: string };
+/**
+ * What you're making, along the bottom like Instagram's POST / STORY: a post
+ * (the feed and your profile grid, framed 4:5 / 1:1 / 16:9) or a story (24h
+ * in the story rail, 9:16). The filters (Normal, a meal's looks, a lock in's,
+ * a workout's) are the circles around the shutter.
+ */
+export type ShareKind = "post" | "story";
+type CameraMode = { key: string; label: string };
+const KINDS: { key: ShareKind; label: string }[] = [
+  { key: "post", label: "Post" },
+  { key: "story", label: "Story" },
+];
+/** A card in a post is the feed's 4:5. */
+const FEED_CARD_ASPECT = 4 / 5;
 
 /** The card painted on the viewfinder; swipe sideways to change the look. */
 export type CameraCard = {
@@ -57,9 +89,15 @@ export type StudioPost = {
   /** Editing a post that already has a photo / card up front: no new photo keeps it. */
   hasCover?: boolean;
   onPost: (a: StudioPostArgs) => Promise<void>;
+  /** Off where this can only be a post (e.g. updating one that's already up). */
+  allowStory?: boolean;
+  /** Runs before a story goes up (a lock in's story starts the session, like its post does). */
+  beforeStory?: () => Promise<void>;
 };
 
 type Shot = { src: HTMLCanvasElement | HTMLImageElement; file: File | null; live: boolean; at: Date };
+/** Who can see a story: the crew (followers, on a private account) or Close friends. */
+const STORY_AUDIENCE: CommunityVisibility[] = ["community", "close_friends"];
 
 const CARD_W = 1080;
 const CARD_H = 1920;
@@ -88,13 +126,21 @@ const timeLabel = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric"
  * button picks several at once (the first photo gets the card, the rest
  * follow it), and the strip above the caption adds more from the camera or
  * the library. Each extra starts uploading the moment it's added.
+ *
+ * POST or STORY (the row under the camera, Instagram's): a post is framed
+ * at the feed's shape (the camera shows the 4:5 part; then drag and pinch,
+ * with a rule-of-thirds grid while your finger's on it, and 4:5 / 1:1 / 16:9)
+ * and baked into the photo, so the feed, the post and the 3:4 profile grid
+ * show exactly that. A clip keeps its whole picture: drag it to choose what
+ * the feed and grid show, and pick its cover frame. A story is 9:16 and goes
+ * to the story rail only.
  */
 export function ShareStudio({
   open,
   onClose,
-  modes,
-  mode,
-  onMode,
+  filters,
+  filter,
+  onFilter,
   chip,
   card,
   canShoot = true,
@@ -106,9 +152,14 @@ export function ShareStudio({
 }: {
   open: boolean;
   onClose: () => void;
-  modes?: CameraMode[];
-  mode?: string;
-  onMode?: (key: string) => void;
+  /**
+   * The circles around the shutter when there's more than one card to choose
+   * from (Normal, a meal's looks, a lock in's, a workout's): keys are the
+   * caller's. Without them, the card's own looks.
+   */
+  filters?: LookItem[] | null;
+  filter?: string | null;
+  onFilter?: (key: string) => void;
   chip?: ReactNode;
   card: CameraCard | null;
   /** False while there's nothing to share yet (the chip says why). */
@@ -125,6 +176,17 @@ export function ShareStudio({
   // No iOS focus-zoom anywhere in the studio: it left the editor zoomed and off-centre.
   useNoAutoZoom(open);
   const [phase, setPhase] = useState<"shoot" | "edit">("shoot");
+  // POST or STORY (the row under the camera)
+  const [kind, setKind] = useState<ShareKind>("post");
+  const story = kind === "story";
+  // a post's photo: its shape and how it sits in it (baked in when it's posted)
+  const [aspect, setAspect] = useState<PostAspect>("portrait");
+  const [framing, setFraming] = useState<Framing>(CENTRED);
+  // a finger is on it: the card repaints at preview quality until it lifts
+  const [framingLive, setFramingLive] = useState(false);
+  const [shapeFlash, setShapeFlash] = useState(0);
+  // Edit cover (a clip on a post)
+  const [coverFor, setCoverFor] = useState<string | null>(null);
   // Shooting another slide for the carousel (plain camera, no card on it).
   const [adding, setAdding] = useState(false);
   const [coverThumb, setCoverThumb] = useState<string | null>(null);
@@ -187,6 +249,10 @@ export function ShareStudio({
     setItems([]);
     setPosted(false);
     setBusy(null);
+    setKind("post");
+    setAspect("portrait");
+    setFraming(CENTRED);
+    setCoverFor(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   // The post it's for: start from what's already there (editing, not duplicating).
@@ -274,9 +340,10 @@ export function ShareStudio({
     void Promise.all([ensureDisplayFont(), cardLogo()]).then(([, l]) => setLogo(l));
   }, []);
 
-  // The card: exactly 9:16, so what you see is what you share. Shooting, it's
-  // edge to edge like Instagram's camera (the shutter and looks sit over its
-  // foot, the bar under it); a screen too short for that (a laptop) fits it.
+  // The camera: exactly 9:16. Shooting, it's edge to edge like Instagram's
+  // camera (the shutter and looks sit over its foot, the bar under it); a
+  // screen too short for that (a laptop) fits it. Editing, the frame is the
+  // post's own shape (below), so what you see is what you share.
   useEffect(() => {
     if (!area || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(([e]) => setAreaSize({ w: e.contentRect.width, h: e.contentRect.height }));
@@ -305,10 +372,27 @@ export function ShareStudio({
     return () => ro.disconnect();
   }, [barEl]);
   const fullScreen = phase === "shoot" && screenSize.w > 0 && barH > 0 && screenSize.h - screenSize.top - (screenSize.w * CARD_H) / CARD_W >= barH - 2;
+  // The editor's frame is what's posted: a story's 9:16; a post's card, the
+  // feed's 4:5; a post's photo, the shape picked (4:5 / 1:1 / 16:9); a post
+  // of clips, the shape the feed shows the first one at. The camera is 9:16.
+  const clip0 = phase === "edit" && !card && !shot ? tray.items[0] ?? null : null;
+  const frameAspect = story
+    ? STORY_ASPECT
+    : card && !cardFailed
+      ? FEED_CARD_ASPECT
+      : shot
+        ? POST_ASPECTS[aspect]
+        : clip0?.w && clip0?.h
+          ? feedAspect(clip0.w, clip0.h)
+          : FEED_CARD_ASPECT;
+  const boxAspect = phase === "shoot" ? CARD_W / CARD_H : frameAspect;
   const box = useMemo(() => {
-    const w = fullScreen ? areaSize.w : Math.min(areaSize.w, (areaSize.h * CARD_W) / CARD_H);
-    return { w: Math.floor(w), h: Math.floor((w * CARD_H) / CARD_W) };
-  }, [areaSize, fullScreen]);
+    const w = fullScreen ? areaSize.w : Math.min(areaSize.w, areaSize.h * boxAspect);
+    return { w: Math.floor(w), h: Math.floor(w / boxAspect) };
+  }, [areaSize, fullScreen, boxAspect]);
+  // a post on the camera: the 4:5 part of it (the rest is dimmed), what the photo starts framed as
+  const band = useMemo(() => (story ? { x: 0, y: 0, w: box.w, h: box.h } : guideBand(box, FEED_CARD_ASPECT)), [story, box]);
+  const cardFormat: ShareFormat = story ? "story" : "feed";
 
   /* ---- camera ------------------------------------------------------- */
   const cancelCount = () => {
@@ -499,7 +583,8 @@ export function ShareStudio({
       }
       const lockedIn = c.data.lockedIn?.live ? { time: timeLabel(new Date()), live: true } : c.data.lockedIn;
       try {
-        paintShareCard(cardEl, { ...c.data, lockedIn, template: c.look, media }, logo, LIVE_SCALE);
+        // a post's card is the feed's 4:5 (in the middle of the camera), a story's the full 9:16
+        paintShareCard(cardEl, { ...c.data, format: cardFormat, lockedIn, template: c.look, media }, logo, LIVE_SCALE);
       } catch {
         alive = false;
         setCardFailed(true);
@@ -511,20 +596,38 @@ export function ShareStudio({
       cancelAnimationFrame(raf);
       releaseCanvas(mirror);
     };
-  }, [shooting, cardEl, showCard, logo, status, video, facing]);
+  }, [shooting, cardEl, showCard, logo, status, video, facing, cardFormat]);
 
-  // Frozen: paint once per change, full res.
+  // The frozen shot, light enough to repaint a card on every move of a finger.
+  const light = useMemo(() => (shot ? lightCopy(shot.src) : null), [shot]);
+  useEffect(() => () => light?.release(), [light]);
+  const shotSize = useMemo(() => (shot ? drawableSize(shot.src) : null), [shot]);
+
+  // Frozen: the card over the photo as it's framed, full res once a finger lifts.
   useEffect(() => {
     if (phase !== "edit" || !cardEl || !card || !logo) return;
-    try {
-      paintShareCard(cardEl, { ...card.data, lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);
-    } catch {
-      setCardFailed(true);
-    }
+    let raf = 0;
+    raf = requestAnimationFrame(() => {
+      const media = shot ? framedCanvas(framingLive && light ? light.src : shot.src, framing, frameAspect, framingLive ? 540 : 1080) : null;
+      try {
+        paintShareCard(cardEl, { ...card.data, format: cardFormat, lockedIn: frozenLockedIn(card.data), template: card.look, media }, logo, framingLive ? 0.6 : 1);
+      } catch {
+        setCardFailed(true);
+      } finally {
+        releaseCanvas(media);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, cardEl, card?.look, card?.data, shot, logo]);
+  }, [phase, cardEl, card?.look, card?.data, shot, logo, framing, framingLive, cardFormat, frameAspect]);
 
   const changeLook = (dir: 1 | -1) => {
+    // on the camera, a swipe walks the whole row of filters (Normal, meal, lock in, workout)
+    if (phase === "shoot" && filters && filters.length > 1 && onFilter) {
+      const i = Math.max(0, filters.findIndex((f) => f.key === filter));
+      onFilter(filters[(i + dir + filters.length) % filters.length].key);
+      return;
+    }
     if (!card || card.looks.length < 2) return;
     const i = Math.max(0, card.looks.indexOf(card.look));
     const next = card.looks[(i + dir + card.looks.length) % card.looks.length];
@@ -537,6 +640,18 @@ export function ShareStudio({
     const t = setTimeout(() => setLookFlash(null), 900);
     return () => clearTimeout(t);
   }, [lookFlash]);
+  const [pinchHint, setPinchHint] = useState(false);
+  const hasCard = !!card;
+  useEffect(() => {
+    if (phase !== "edit" || !shot || !hasCard || cardFailed) return setPinchHint(false);
+    setPinchHint(true);
+    const t = setTimeout(() => setPinchHint(false), 2600);
+    return () => clearTimeout(t);
+  }, [phase, shot, hasCard, cardFailed]);
+  // the hint goes the moment they do it
+  useEffect(() => {
+    if (framingLive) setPinchHint(false);
+  }, [framingLive]);
 
   /* ---- shoot -------------------------------------------------------- */
   // a camera frame is a full-size canvas: hand its memory back the moment it's replaced or done with
@@ -551,11 +666,14 @@ export function ShareStudio({
     dropShot(shotRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  const freeze = (s: Shot) => {
+  /** The shot freezes into the editor, framed as `f` (what the camera showed of it, else centred). */
+  const freeze = (s: Shot, f: Framing = CENTRED) => {
     stop();
     if (shotRef.current && shotRef.current !== s) dropShot(shotRef.current);
     setShot(s);
     setItems([]);
+    setFraming(f);
+    setAspect("portrait");
     setPhase("edit");
   };
   const capture = () => {
@@ -585,7 +703,9 @@ export function ShareStudio({
       backToPost();
       return;
     }
-    freeze({ src: c, file: null, live: true, at: new Date() });
+    // framed the way the camera showed it: a post's 4:5 part (with a card on it, the card's own framing: centred)
+    const view = { w: box.w, h: box.h };
+    freeze({ src: c, file: null, live: true, at: new Date() }, card ? CENTRED : framingFromGuide({ w: c.width, h: c.height }, view, { w: band.w, h: band.h }));
   };
   const backToPost = () => {
     cancelCount();
@@ -646,6 +766,11 @@ export function ShareStudio({
       return;
     }
     const isVideo = (x: File) => x.type.startsWith("video/");
+    // a story is one photo or one clip
+    if (story && files.length > 1) {
+      toast.message("A story is one photo or clip", { description: "The first one you picked is in." });
+      files.splice(1);
+    }
     const heroAt = files.findIndex((x) => !isVideo(x));
     if (heroAt === -1) {
       // a plain post (no card): the clips are the post
@@ -713,32 +838,41 @@ export function ShareStudio({
   };
 
   /* ---- export ------------------------------------------------------- */
-  const finalPhoto = async (): Promise<File | null> => {
+  // What's posted is what the frame shows: the photo cut to the frame (1080
+  // wide, the shape picked), stickers where they sit. No re-mapping between
+  // shapes any more: the editor already shows the post's own shape.
+  const framedFile = async (frameShape: number, name: string): Promise<File | null> => {
     if (!shot) return null;
-    if (items.length) {
-      const b = await bakeStickers(shot.src, items);
-      if (b) return new File([b], "jf-photo.jpg", { type: "image/jpeg" });
-    }
-    if (shot.file) return shot.file;
-    const b = await canvasToBlob(shot.src as HTMLCanvasElement, "image/jpeg", 0.92);
-    return b ? new File([b], "jf-live.jpg", { type: "image/jpeg" }) : null;
-  };
-  const cardBlob = async (): Promise<Blob | null> => {
-    if (!card) return null;
-    const c = document.createElement("canvas");
+    const c = framedCanvas(shot.src as Drawable, framing, frameShape);
     try {
-      paintShareCard(c, { ...card.data, lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);
-      drawStickers(context2d(c), items, CARD_W, CARD_H);
-      return await canvasToBlob(c, "image/jpeg", 0.92);
+      if (items.length) drawStickers(context2d(c), items, c.width, c.height);
+      const b = await canvasToBlob(c, "image/jpeg", 0.92);
+      return b ? new File([b], name, { type: "image/jpeg" }) : null;
     } finally {
       releaseCanvas(c);
     }
   };
+  const finalPhoto = () => framedFile(frameAspect, shot?.live ? "jf-live.jpg" : "jf-photo.jpg");
+  /** The card as it's shown (a post's 4:5 or a story's 9:16), over the photo as it's framed, stickers on top. */
+  const cardImage = async (fmt: ShareFormat): Promise<Blob | null> => {
+    if (!card) return null;
+    const c = document.createElement("canvas");
+    const media = shot ? framedCanvas(shot.src as Drawable, framing, fmt === "feed" ? FEED_CARD_ASPECT : STORY_ASPECT) : null;
+    try {
+      paintShareCard(c, { ...card.data, format: fmt, lockedIn: frozenLockedIn(card.data), template: card.look, media }, logo, 1);
+      drawStickers(context2d(c), items, c.width, c.height);
+      return await canvasToBlob(c, "image/jpeg", 0.92);
+    } finally {
+      releaseCanvas(media);
+      releaseCanvas(c);
+    }
+  };
+  const cardBlob = () => cardImage(cardFormat);
 
-  // What gets posted is what you see: the look you're on, as a 4:5 feed card
-  // (stickers moved onto the same spot of the photo). "No filter" posts the
-  // photo itself; so does Hide weights, so a card never shows your numbers.
-  // With no photo, a carousel opens on the card itself (what you see as slide 1).
+  // What gets posted is what you see: the look you're on, as the 4:5 feed card.
+  // "No filter" posts the photo itself; so does Hide weights, so a card never
+  // shows your numbers. With no photo, a carousel opens on the card itself
+  // (what you see as slide 1).
   const postPhoto = async (carousel: boolean): Promise<File | null> => {
     if (!card) return finalPhoto();
     const bare = card.look === "plain" || (post?.showHideLoads && hideLoads);
@@ -746,38 +880,74 @@ export function ShareStudio({
     if (!shot && post?.hasCover) return null;
     if (!shot && (!carousel || bare)) return null;
     if (shot && bare) return finalPhoto();
-    const FEED_H = 1350;
-    const c = document.createElement("canvas");
-    let b: Blob | null;
+    const b = await cardImage("feed");
+    return b ? new File([b], `jf-${card.look}.jpg`, { type: "image/jpeg" }) : finalPhoto();
+  };
+  /** A story's picture: the card (9:16) or the framed photo; null for a clip (it goes up as it is). */
+  const storyPhoto = async (): Promise<File | null> => {
+    if (card && !(card.look === "plain" && shot)) {
+      const b = await cardImage("story");
+      return b ? new File([b], `jf-story-${card.look}.jpg`, { type: "image/jpeg" }) : finalPhoto();
+    }
+    return finalPhoto();
+  };
+
+  // what the frame shows now, small (the strip's slide 1, the caption screen)
+  const smallFrame = (extra?: (ctx: CanvasRenderingContext2D, w: number, h: number) => void) => {
+    if (cardEl) return captionThumb(cardEl, extra) ?? null;
+    if (!shot) return null;
+    const c = framedCanvas((light?.src ?? shot.src) as Drawable, framing, frameAspect, 378);
     try {
-      paintShareCard(c, { ...card.data, format: "feed", lockedIn: frozenLockedIn(card.data), template: card.look, media: shot?.src ?? null }, logo, 1);
-      if (shot) drawStickers(context2d(c), remapStickers(items, shot.src, { w: CARD_W, h: CARD_H }, { w: CARD_W, h: FEED_H }), CARD_W, FEED_H);
-      b = await canvasToBlob(c, "image/jpeg", 0.92);
+      return captionThumb(c, extra) ?? null;
     } finally {
       releaseCanvas(c);
     }
-    return b ? new File([b], `jf-${card.look}.jpg`, { type: "image/jpeg" }) : finalPhoto();
   };
-
-  // Slide 1 in the strip: the card as it is now, small.
+  // Slide 1 in the strip: the card or photo as it is now, small.
   useEffect(() => {
-    if (phase !== "edit") return;
-    const t = setTimeout(() => setCoverThumb(captionThumb(cardEl ?? (shot?.src as HTMLCanvasElement | undefined)) ?? null), 120);
+    if (phase !== "edit" || framingLive) return;
+    const t = setTimeout(() => setCoverThumb(smallFrame()), 120);
     return () => clearTimeout(t);
-  }, [phase, cardEl, card?.look, shot]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, cardEl, card?.look, shot, framing, framingLive, frameAspect]);
 
   // The caption screen's preview: the card as it is now, stickers and all, small.
   const openCaption = () => {
-    setThumb(captionThumb(cardEl ?? (shot?.src as HTMLCanvasElement | undefined), (ctx, w, h) => drawStickers(ctx, items, w, h)));
+    setThumb(smallFrame((ctx, w, h) => drawStickers(ctx, items, w, h)));
     setCaptioning(true);
   };
 
   // something to post: the card, or (a plain post) a photo or a slide
   const hasContent = !!card || !!shot || tray.items.length > 0;
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  /** STORY: the picture (or the clip) goes to your story, never the feed. */
+  const postStory = async () => {
+    if (!user?.id) throw new Error("Sign in again to post");
+    const photo = await storyPhoto();
+    // a clip story: the clip itself (it's been uploading since it was picked)
+    const extras = photo ? [] : (await tray.ready()).slice(0, 1);
+    if (!photo && !extras.length) throw new Error("Add a photo or a clip to your story");
+    await post?.beforeStory?.();
+    // (the button only offers the crew or Close friends; whatever the post it's for had, a story is one of those)
+    const audience: CommunityVisibility = STORY_AUDIENCE.includes(visibility) ? visibility : "community";
+    await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true });
+    if (!photo) tray.commit();
+    else tray.discard();
+    toast.success(audience === "close_friends" ? "Added to your Close friends story" : "Added to your story", { description: "It's in the story row for 24 hours." });
+  };
   const doPost = async () => {
     if (!post || busy || posted || !hasContent) return;
     setBusy("post");
     try {
+      if (story) {
+        await postStory();
+        void clearDraft();
+        draftOff.current = true;
+        setPosted(true);
+        setTimeout(onClose, 900);
+        return;
+      }
       // the extras have been uploading all along; this only waits for any still going
       const extras = await tray.ready();
       await post.onPost({ photo: await postPhoto(extras.length > 0), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card?.look ?? "plain", extras, attach: att.save });
@@ -825,7 +995,9 @@ export function ShareStudio({
     return shot.src instanceof HTMLImageElement ? shot.src.src : (shot.src as HTMLCanvasElement).toDataURL("image/jpeg", 0.8);
   }, [phase, showCard, shot]);
   const { data: follows } = useFollowState();
-  const audBase = AUDIENCE.find((a) => a.key === visibility) ?? AUDIENCE[0];
+  // a story goes to the crew or Close friends (a story only you or your coach could see would show nowhere)
+  const audList = story ? AUDIENCE.filter((a) => STORY_AUDIENCE.includes(a.key)) : AUDIENCE;
+  const audBase = audList.find((a) => a.key === visibility) ?? audList[0];
   // a private account's crew choice reaches its followers
   const aud = audBase.key === "community" && follows?.is_private ? { ...audBase, label: "Followers" } : audBase;
   const AudIcon = aud.icon;
@@ -834,6 +1006,13 @@ export function ShareStudio({
     [shot, card?.data.dateLabel, card?.data.workoutTitle],
   );
   const pill = "grid h-11 w-11 place-items-center rounded-full bg-black/40 backdrop-blur active:scale-95";
+  // Post or Story (Story is off only where this can only update a post that's already up)
+  const storyable = post?.allowStory !== false;
+  const pickKind = (k: ShareKind) => {
+    cancelCount();
+    setKind(k);
+    if (k === "story" && !STORY_AUDIENCE.includes(visibility)) setVisibility("community");
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -868,27 +1047,92 @@ export function ShareStudio({
                 playsInline
                 muted
                 autoPlay
-                className={cn("absolute inset-0 h-full w-full object-cover", status === "live" && !showCard ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
+                // a post's card sits in the middle 4:5: the camera shows (dimmed) around it
+                className={cn("absolute inset-0 h-full w-full object-cover", status === "live" && (!showCard || !story) ? "opacity-100" : "opacity-0", facing === "user" && "-scale-x-100")}
               />
             )}
-            {phase === "edit" && !showCard && shotUrl && <img src={shotUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
-            {/* a plain post of clips: the first one, up front (a clip plays, muted, while you write the caption) */}
-            {phase === "edit" && !card && !shot && tray.items[0]?.video ? (
-              <video
-                key={tray.items[0].video}
-                src={tray.items[0].video}
-                poster={tray.items[0].preview ?? undefined}
-                muted
-                loop
-                autoPlay
-                playsInline
-                className="absolute inset-0 h-full w-full object-cover"
-                data-studio-clip
-              />
+            {/* a post on the camera: what's outside the post's 4:5 is dimmed (Instagram's post camera) */}
+            {phase === "shoot" && !story && status === "live" && !adding && band.y > 1 && (
+              <>
+                <div className="pointer-events-none absolute inset-x-0 top-0 bg-black/60" style={{ height: band.y }} aria-hidden data-post-band="top" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/60" style={{ height: Math.max(0, box.h - band.y - band.h) }} aria-hidden data-post-band="bottom" />
+              </>
+            )}
+            {/* a plain post of clips: the first one, up front (a clip plays, muted, while you write the caption); drag it to choose what the feed shows */}
+            {clip0?.video ? (
+              story ? (
+                <video key={clip0.video} src={clip0.video} poster={clip0.preview ?? undefined} muted loop autoPlay playsInline className="absolute inset-0 h-full w-full object-cover" data-studio-clip />
+              ) : (
+                // (no grid-tile outline here: a clip's tile is its cover, shown for real in Edit cover)
+                <FocusFramer size={{ w: clip0.w ?? 9, h: clip0.h ?? 16 }} frame={box} focus={clip0.focus ?? CENTRE_FOCUS} onFocus={(f) => tray.setFocus(clip0.id, f)}>
+                  <video
+                    key={clip0.video}
+                    src={clip0.video}
+                    poster={clip0.preview ?? undefined}
+                    muted
+                    loop
+                    autoPlay
+                    playsInline
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                    style={{ objectPosition: focusPosition(clip0.focus) }}
+                    data-studio-clip
+                  />
+                </FocusFramer>
+              )
             ) : (
-              phase === "edit" && !card && !shot && tray.items[0]?.preview && <img src={tray.items[0].preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              clip0?.preview && <img src={clip0.preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
             )}
-            {showCard && <canvas ref={setCardEl} className="pointer-events-none absolute inset-0 h-full w-full" aria-label={card ? `${TEMPLATE_LABEL[card.look]} look` : undefined} />}
+            {showCard && (
+              <canvas
+                ref={setCardEl}
+                className="pointer-events-none absolute"
+                style={phase === "shoot" ? { left: band.x, top: band.y, width: band.w, height: band.h } : { inset: 0, width: "100%", height: "100%" }}
+                aria-label={card ? `${TEMPLATE_LABEL[card.look]} look` : undefined}
+              />
+            )}
+            {/* the photo, framed: drag and pinch (a card on it: two fingers, one swipes the looks). Over the card, so its grid shows; the card paints the photo itself */}
+            {phase === "edit" && shot && shotSize && (
+              <PhotoFramer
+                src={shotUrl}
+                size={shotSize}
+                frame={box}
+                framing={framing}
+                onFraming={setFraming}
+                oneFinger={!showCard}
+                showImage={!showCard}
+                gridPreview={!story}
+                flash={shapeFlash}
+                onActive={setFramingLive}
+                onClaim={() => (swipe.current = null)}
+              />
+            )}
+            {/* the post's shape (4:5 / 1:1 / 16:9), Instagram's corner button */}
+            {phase === "edit" && !story && shot && !showCard && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAspect(nextAspect(aspect));
+                  setShapeFlash((n) => n + 1);
+                }}
+                className="absolute bottom-2.5 left-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-black text-white backdrop-blur active:scale-95"
+                aria-label={`Shape ${POST_ASPECT_LABEL[aspect]}. Tap for ${POST_ASPECT_LABEL[nextAspect(aspect)]}`}
+                data-frame-shape={aspect}
+              >
+                {aspect === "portrait" ? <RectangleVertical className="h-4 w-4" /> : aspect === "square" ? <Square className="h-4 w-4" /> : <RectangleHorizontal className="h-4 w-4" />}
+                {POST_ASPECT_LABEL[aspect]}
+              </button>
+            )}
+            {/* a clip on a post: its cover (what shows before it plays, and on your profile grid) */}
+            {phase === "edit" && !story && clip0?.video && clip0.status !== "error" && (
+              <button
+                type="button"
+                onClick={() => setCoverFor(clip0.id)}
+                className="absolute bottom-2.5 left-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-black text-white backdrop-blur active:scale-95"
+                data-edit-cover
+              >
+                <Film className="h-4 w-4" /> Cover
+              </button>
+            )}
 
             {phase === "shoot" && status === "fallback" && (
               <div className={cn("absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center", showCard && "bg-black/55 backdrop-blur-[2px]")} data-camera-fallback={oldApp ? "old-app" : camWhy ?? "other"}>
@@ -947,6 +1191,12 @@ export function ShareStudio({
               </div>
             )}
             {flash && <div className="pointer-events-none absolute inset-0 bg-white/80" />}
+            {/* a card on a photo: one finger swipes the looks, so moving the photo is two fingers (said once per shot) */}
+            {pinchHint && (
+              <div className="pointer-events-none absolute inset-x-0 top-16 flex justify-center" data-pinch-hint>
+                <span className="animate-in fade-in rounded-full bg-black/55 px-3 py-1 text-[12px] font-bold backdrop-blur">Two fingers to move or zoom the photo</span>
+              </div>
+            )}
             {lookFlash && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center">
                 <span key={lookFlash} className="font-display animate-in fade-in zoom-in-95 rounded-2xl bg-black/35 px-5 py-2 text-[34px] uppercase leading-none backdrop-blur-sm">{lookFlash}</span>
@@ -989,7 +1239,7 @@ export function ShareStudio({
                       <button type="button" onClick={skipPhoto} className="h-10 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
                         No photo
                       </button>
-                    ) : onWrite ? (
+                    ) : onWrite && !story ? (
                       <button type="button" onClick={onWrite} className="inline-flex h-10 items-center gap-1.5 rounded-full bg-black/40 px-4 text-[13px] font-bold backdrop-blur active:scale-95">
                         <PenLine className="h-4 w-4" /> Write
                       </button>
@@ -1055,9 +1305,10 @@ export function ShareStudio({
                   </div>
                 )}
                 <LookCarousel
-                  looks={card?.looks ?? null}
-                  look={card?.look ?? null}
-                  onLook={(t) => card?.onLook(t)}
+                  // the whole row of filters (Normal, meal, lock in, workout), else this card's looks
+                  looks={filters ?? lookItems(card?.looks)}
+                  look={filters ? (filter ?? null) : (card?.look ?? null)}
+                  onLook={(k) => (filters ? onFilter?.(k) : card?.onLook(k as ShareTemplate))}
                   onShoot={shoot}
                   disabled={!canShoot}
                   counting={count != null}
@@ -1075,33 +1326,38 @@ export function ShareStudio({
                   <Images className="h-5 w-5" />
                 </button>
                 <div className="flex min-w-0 flex-1 justify-center">
-                  {modes && modes.length > 1 && !adding && <ModeTabs modes={modes} mode={mode} onMode={(k) => {
-                    cancelCount();
-                    onMode?.(k);
-                  }} />}
+                  {/* what you're making: Post or Story (Instagram's row); the filters are the circles above */}
+                  {storyable && !adding && !recorder.recording && <ModeTabs modes={KINDS} mode={kind} onMode={(k) => pickKind(k as ShareKind)} />}
                 </div>
+                {/* keeps the row's middle under the shutter */}
+                <span className="h-11 w-11 shrink-0" aria-hidden />
               </div>
             </>
           ) : (
             <div className="space-y-2">
-              <SlideTray
-                tray={tray}
-                hasCover={!!card || !!shot}
-                cover={coverThumb}
-                onCamera={() => {
-                  setAdding(true);
-                  setPhase("shoot");
-                }}
-                onLibrary={() => libRef.current?.click()}
-              />
-              <AttachPreview a={att} dark />
-              <div className="flex gap-2">
-                <div className="min-w-0 flex-1">
-                  <CaptionField value={caption} onOpen={openCaption} />
-                </div>
-                <AttachButtons a={att} dark />
-              </div>
-              <AttachGifPicker a={att} />
+              {/* a story is one picture with its words on it: no slides, caption, GIF or voice memo */}
+              {!story && (
+                <>
+                  <SlideTray
+                    tray={tray}
+                    hasCover={!!card || !!shot}
+                    cover={coverThumb}
+                    onCamera={() => {
+                      setAdding(true);
+                      setPhase("shoot");
+                    }}
+                    onLibrary={() => libRef.current?.click()}
+                  />
+                  <AttachPreview a={att} dark />
+                  <div className="flex gap-2">
+                    <div className="min-w-0 flex-1">
+                      <CaptionField value={caption} onOpen={openCaption} />
+                    </div>
+                    <AttachButtons a={att} dark />
+                  </div>
+                  <AttachGifPicker a={att} />
+                </>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -1115,7 +1371,7 @@ export function ShareStudio({
                 <button
                   type="button"
                   onClick={() => {
-                    setVisibility(AUDIENCE[(AUDIENCE.indexOf(audBase) + 1) % AUDIENCE.length].key);
+                    setVisibility(audList[(audList.indexOf(audBase) + 1) % audList.length].key);
                     setPosted(false);
                   }}
                   className="inline-flex h-14 shrink-0 items-center gap-1.5 rounded-2xl bg-white/10 px-3 text-[13px] font-black active:scale-95"
@@ -1123,7 +1379,7 @@ export function ShareStudio({
                 >
                   <AudIcon className="h-4 w-4" /> {aud.label}
                 </button>
-                {post?.showHideLoads && (
+                {post?.showHideLoads && !story && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1150,12 +1406,41 @@ export function ShareStudio({
                   )}
                 >
                   {posted ? <Check className="h-5 w-5" /> : <Send className="h-5 w-5" />}
-                  {busy === "post" ? (tray.uploading ? `Uploading ${tray.items.length - tray.uploading + 1}/${tray.items.length}…` : "Posting…") : posted ? "Posted" : post?.label ?? "Post"}
+                  {busy === "post"
+                    ? tray.uploading
+                      ? `Uploading ${tray.items.length - tray.uploading + 1}/${tray.items.length}…`
+                      : "Posting…"
+                    : posted
+                      ? story
+                        ? "Shared"
+                        : "Posted"
+                      : story
+                        ? "Your story"
+                        : (post?.label ?? "Post")}
                 </button>
               </div>
             </div>
           )}
         </div>
+        {coverFor && (() => {
+          const it = tray.items.find((x) => x.id === coverFor);
+          if (!it?.video) return null;
+          return (
+            <CoverPicker
+              src={it.video}
+              size={{ w: it.w ?? 9, h: it.h ?? 16 }}
+              aspect={feedAspect(it.w, it.h)}
+              focus={it.focus ?? CENTRE_FOCUS}
+              onCancel={() => setCoverFor(null)}
+              onDone={(cover, focus) => {
+                if (cover) tray.setCover(it.id, cover);
+                tray.setFocus(it.id, focus);
+                setCoverFor(null);
+                setPosted(false);
+              }}
+            />
+          );
+        })()}
         {captioning && (
           <CaptionEditor
             value={caption}
@@ -1173,9 +1458,8 @@ export function ShareStudio({
 }
 
 /**
- * What you're sharing, under the camera like Instagram's POST / STORY / REEL.
- * Every mode is in view (Meal was off the edge when the row centred the one
- * you're on); only a screen too narrow for them all scrolls, and then it
+ * What you're making, under the camera like Instagram's POST / STORY: every
+ * one is in view; only a screen too narrow for them all scrolls, and then it
  * keeps the one you're on in view.
  */
 function ModeTabs({ modes, mode, onMode }: { modes: CameraMode[]; mode?: string; onMode: (key: string) => void }) {
@@ -1199,7 +1483,7 @@ function ModeTabs({ modes, mode, onMode }: { modes: CameraMode[]; mode?: string;
       ref={row}
       className={cn("min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", over && "[mask-image:linear-gradient(90deg,#000_88%,transparent)]")}
       role="tablist"
-      aria-label="What you're sharing"
+      aria-label="Post or story"
       data-modes-over={over ? "" : undefined}
     >
       <div className="mx-auto flex w-max">

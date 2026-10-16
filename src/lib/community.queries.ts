@@ -848,7 +848,16 @@ export async function shareToCommunity(
  */
 export async function createCommunityPost(
   qc: ReturnType<typeof useQueryClient>,
-  i: { userId: string; caption: string; visibility: CommunityVisibility; photo: File | null; extras?: PostSlide[]; attach?: (postId: string) => Promise<void> },
+  i: {
+    userId: string;
+    caption: string;
+    visibility: CommunityVisibility;
+    photo: File | null;
+    extras?: PostSlide[];
+    attach?: (postId: string) => Promise<void>;
+    /** STORY on the camera: 24h in the story rail, never in the feed or on the profile grid. */
+    story?: boolean;
+  },
 ): Promise<string> {
   const media: PostSlide[] = [];
   let up: Awaited<ReturnType<typeof uploadPicked>> | null = null;
@@ -863,7 +872,8 @@ export async function createCommunityPost(
     media.push({ path: up.media_path, thumb: up.media_thumb_path, type: up.media_type, width: up.media_width, height: up.media_height });
   }
   media.push(...(i.extras ?? []));
-  const { data, error } = await db.rpc("community_create_post", { _caption: i.caption, _media: media, _visibility: i.visibility });
+  // (_story is only sent for a story, so a post never depends on it)
+  const { data, error } = await db.rpc("community_create_post", { _caption: i.caption, _media: media, _visibility: i.visibility, ...(i.story ? { _story: true } : {}) });
   if (error) {
     if (up && error.code) await removeCommunityFiles([up.media_path, up.media_thumb_path]);
     throw error;

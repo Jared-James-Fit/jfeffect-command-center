@@ -35,7 +35,8 @@ export function ProfileView({ userId, unit, onOpenPost, onOpenPerson }: { userId
   const feed = useCommunityFeed(userId);
   // a block (either way) shows no grid: the server already sends none, so no "Nothing shared yet" either
   const blocked = !!profile?.blocked;
-  const shown = useMemo(() => (blocked ? [] : feed.data?.pages.flatMap((p) => p.posts) ?? []), [feed.data, blocked]);
+  // (a story someone posted lives in the story rail only, never on the grid: Instagram's way)
+  const shown = useMemo(() => (blocked ? [] : (feed.data?.pages.flatMap((p) => p.posts) ?? []).filter((p) => !p.story)), [feed.data, blocked]);
   // Posts | Reposts | Saved | Archived (Instagram's tabs; only you see Saved and Archived)
   const [tab, setTab] = useState<ProfileTab>("posts");
   const showArchived = tab === "archived";

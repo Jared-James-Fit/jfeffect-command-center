@@ -9,8 +9,9 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, lockInCameraCard, mealCameraCard, mealFuelMoment, sessionDisplayTitle, sessionWhen } from "@/lib/community";
 import { createCommunityPost, shareToCommunity, useCreateCommunityPost, useDayPlan, useMyPostForCompletion, usePublicSessionTitle, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
-import type { ShareTemplate } from "@/lib/workout-share-card";
+import { TEMPLATE_LABEL, type ShareTemplate } from "@/lib/workout-share-card";
 import type { CameraCard, StudioPost } from "@/components/community/share-studio";
+import type { LookItem } from "@/components/community/look-carousel";
 import { startWorkout as startWorkoutFn } from "@/lib/workout-completion.functions";
 import { audienceDoneLabel } from "@/components/community/audience-picker";
 import { CameraChip } from "@/components/community/camera-overlays";
@@ -25,25 +26,33 @@ const plainKey = (userId: string | undefined) => `post:new:${userId ?? ""}`;
 const mealKey = (userId: string | undefined) => `meal:new:${userId ?? ""}`;
 type MealLook = Extract<ShareTemplate, "mealprep" | "onplan" | "fuel" | "highday" | "cheat" | "plain">;
 type LockLook = Extract<ShareTemplate, "lockin" | "lockclock" | "lockplan">;
+/** A filter's name over the shutter, where the card's own name alone would be unclear in one long row. */
+const FILTER_LABEL: Partial<Record<Exclude<Mode, "post">, Partial<Record<ShareTemplate, string>>>> = {
+  lockin: { lockclock: "Lock in clock", lockplan: "Today's plan" },
+  workout: { photo: "Workout photo", stats: "Workout stats" },
+};
 
 /** The app's own red for the one action we want people to take. */
 export const SHARE_GRADIENT = "bg-primary";
 
 /**
  * "+ Post" — the whole thing on one screen (ShareStudio), Instagram-style:
- * one tap and the camera is up. Three modes along the bottom:
- *   POST     any photo, carousel or clip, words optional; or Write for a
+ * one tap and the camera is up. Along the bottom, what you're making (Post /
+ * Story, Instagram's row); around the shutter, the filters, one row of
+ * circles (swipe the camera or the row):
+ *   Normal   any photo, carousel or clip, words optional; or Write for a
  *            words-first post. Nothing to do with a workout (no points).
- *   MEAL     a food photo with a look: Meal prep, On plan, Fuel, High day,
- *            Cheat meal (swipe), or none. A plain post too (no points).
- *   LOCK IN  today's session (Locked in / Clock / Today's plan); posting
+ *   Lock in  today's session (Locked in / Clock / Today's plan); posting
  *            starts the session.
- *   WORKOUT  a finished session with its card (Photo, vs last time, Receipt,
- *            Streak, Stats, Volume); the chip above the shutter picks which.
+ *   Workout  a finished session with its card (Workout photo, vs last time,
+ *            Receipt, Streak, Stats, Volume); the chip above the shutter
+ *            picks which session.
+ *   Meal     a food photo with a look: Meal prep, On plan, Fuel, High day,
+ *            Cheat meal. A plain post too (no points).
  * It opens on whatever fits right now: Lock in when there's a session to
- * start, Workout when one finished in the last day, else Post. Snap, the
- * frame freezes in place, add text or stickers, a caption, Post. Every post
- * is kept as a draft on the phone until it's up.
+ * start, Workout when one finished in the last day, else Normal. Snap, the
+ * frame freezes in place, frame it, add text or stickers, a caption, Post.
+ * Every post is kept as a draft on the phone until it's up.
  */
 export function ShareWorkoutButton({
   unit,
@@ -140,6 +149,10 @@ export function ShareWorkoutButton({
     ? {
         key: `lock:${lockCompletionId ?? today.dayId}:${lockExisting?.id ?? ""}`,
         label: lockExisting ? "Update" : "Post",
+        // a lock in on your story starts the session too
+        beforeStory: async () => {
+          if (!(await ensureStarted())) throw new Error("Couldn't start your session. Try again.");
+        },
         caption: lockExisting?.caption,
         visibility: lockExisting?.visibility,
         extras: lockExisting?.extra_media ?? null,
@@ -179,12 +192,32 @@ export function ShareWorkoutButton({
       toast.success(t.title, { description: t.description });
     },
   };
-  const modes = [
-    { key: "post", label: "Post" },
-    { key: "meal", label: "Meal" },
-    ...(today ? [{ key: "lockin", label: "Lock in" }] : []),
-    ...(target || isLoading ? [{ key: "workout", label: "Workout" }] : []),
+  // The filters around the shutter: Normal, then what fits right now (today's
+  // lock in, the workout just finished), then the meal looks. "No filter"
+  // inside a card's own looks stays a swipe away once the photo's taken.
+  const named = (m: Exclude<Mode, "post">, t: ShareTemplate): LookItem => ({ key: `${m}:${t}`, look: t, label: FILTER_LABEL[m]?.[t] ?? TEMPLATE_LABEL[t] });
+  // a card's own "No filter" only shows in the row while it's the one you're on (swiped to after a shot)
+  const group = (m: Exclude<Mode, "post">, looks: ShareTemplate[]) =>
+    looks.filter((t) => t !== "plain" || (activeMode === m && cameraCard?.look === "plain")).map((t) => named(m, t));
+  const filters: LookItem[] = [
+    { key: "post:normal", look: "plain", label: "Normal" },
+    ...(today && lockCard ? group("lockin", lockCard.looks) : []),
+    ...(target || isLoading
+      ? workout.card
+        ? group("workout", workout.card.looks)
+        : [{ key: "workout:pending", look: "photo" as ShareTemplate, label: "Workout" }]
+      : []),
+    ...group("meal", mealCard.looks),
   ];
+  const filterOn =
+    activeMode === "post" ? "post:normal" : activeMode === "workout" && !workout.card ? "workout:pending" : cameraCard ? `${activeMode}:${cameraCard.look}` : "post:normal";
+  const onFilter = (key: string) => {
+    const [m, look] = key.split(":") as [Mode, string];
+    setMode(m);
+    if (m === "meal") setMealLook(look as MealLook);
+    else if (m === "lockin") setLockLook(look as LockLook);
+    else if (m === "workout" && look !== "pending") workout.card?.onLook(look as ShareTemplate);
+  };
 
   return (
     <>
@@ -320,20 +353,17 @@ export function ShareWorkoutButton({
                   }
                 : undefined
             }
-            modes={modes}
-            mode={activeMode}
-            onMode={(k) => setMode(k as Mode)}
+            filters={filters}
+            filter={filterOn}
+            onFilter={onFilter}
             // shoot straight away: the card's numbers land on the photo when they arrive
             canShoot={activeMode === "post" || activeMode === "meal" ? true : activeMode === "lockin" ? !!today : !!target}
             allowNoPhoto={activeMode !== "meal"}
             card={activeMode === "post" ? null : cameraCard}
             post={activeMode === "post" ? plainPost : activeMode === "meal" ? mealPost : activeMode === "lockin" ? lockPost : workout.post}
+            // Normal and Meal need no chip (the filter's name is over the shutter, and a chip sat on the card's words)
             chip={
-              activeMode === "post" ? (
-                <CameraChip icon="📸" title="Post to the crew" sub="A photo, a few, or a clip" tone="muted" />
-              ) : activeMode === "meal" ? (
-                <CameraChip icon="🍽️" title="Show what you're eating" sub="Swipe: meal prep, high day, cheat meal…" tone="muted" />
-              ) : activeMode === "lockin" && today ? (
+              activeMode === "post" || activeMode === "meal" ? undefined : activeMode === "lockin" && today ? (
                 <CameraChip icon="🔒" title={sessionDisplayTitle(today.title)} sub={lockExisting ? "Update your lock in" : today.started ? "In progress" : "Posting it starts your session"} />
               ) : target ? (
                 <CameraChip

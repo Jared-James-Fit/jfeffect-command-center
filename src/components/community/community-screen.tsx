@@ -26,7 +26,7 @@ import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { openAppMore } from "@/lib/shell-events";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
-import { inFollowingFeed, isPulsePost, storiesNeedMore, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { inFeed, inFollowingFeed, storiesNeedMore, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
@@ -133,8 +133,9 @@ export function CommunityScreen({
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
   // The feed is the posts people made, newest first. A finished session that posted
-  // itself (a Pulse) is in that athlete's story instead (and on their profile).
-  const ownPosts = useMemo(() => posts.filter((p) => !isPulsePost(p)), [posts]);
+  // itself (a Pulse) is in that athlete's story instead (and on their profile), and
+  // a story someone posted (STORY on the camera) is only in the story rail.
+  const ownPosts = useMemo(() => posts.filter(inFeed), [posts]);
   // All (the whole crew, like a Strava club) or Following (just the people you follow, and you).
   const { data: follows } = useFollowState(!hideTabs);
   const followingIds = useMemo(() => new Set(follows?.following ?? []), [follows]);
@@ -152,7 +153,7 @@ export function CommunityScreen({
   const onDoubleTap = useCallback(() => markHint("double_tap"), [markHint]);
   const [tipDone, setTipDone] = useState(tipShownThisVisit);
   const tipVisit = hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k)) : undefined;
-  const hintId = scope.kind === "feed" && !tipDone && tipVisit && posts.length ? ((posts.find((p) => p.kind !== "note" && !isPulsePost(p)) ?? posts.find((p) => !isPulsePost(p)))?.id ?? null) : null;
+  const hintId = scope.kind === "feed" && !tipDone && tipVisit && posts.length ? ((posts.find((p) => p.kind !== "note" && inFeed(p)) ?? posts.find(inFeed))?.id ?? null) : null;
   useEffect(() => {
     if (!hintId || !tipVisit || tipShownThisVisit) return;
     tipShownThisVisit = true;

@@ -15,6 +15,10 @@ export function setFeedSound(on: boolean) {
   feedSound = on;
   soundListeners.forEach((l) => l());
 }
+/** A tap on a clip in the feed (Instagram's): sound on if it was off, off if it was on. */
+export function toggleFeedSound() {
+  setFeedSound(!feedSound);
+}
 export function useFeedSound(): boolean {
   return useSyncExternalStore(
     (l) => {
@@ -39,9 +43,12 @@ export function autoplayAllowed(): boolean {
  * plays, muted and looping, while at least 60% of it is on screen, and pauses
  * the moment it isn't (or its carousel slide is swiped away). The video file
  * is only asked for when the clip comes near the screen, and only its header
- * loads until it plays. The speaker button never opens the post.
+ * loads until it plays. The speaker button never opens the post; a tap on
+ * the clip itself toggles the sound too (the post card does that, so a
+ * double-tap can still ❤️ it). `position` is the clip's framing in a frame
+ * that crops it (CSS object-position, from its focus).
  */
-export function InlineVideo({ path, poster, active = true }: { path: string; poster: string | null; active?: boolean }) {
+export function InlineVideo({ path, poster, active = true, position }: { path: string; poster: string | null; active?: boolean; position?: string }) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const vid = useRef<HTMLVideoElement | null>(null);
   const [near, setNear] = useState(false);
@@ -110,6 +117,7 @@ export function InlineVideo({ path, poster, active = true }: { path: string; pos
           playsInline
           preload="metadata"
           className="absolute inset-0 h-full w-full object-cover"
+          style={position ? { objectPosition: position } : undefined}
           onPlaying={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onError={() => setFailed(true)}
@@ -121,6 +129,7 @@ export function InlineVideo({ path, poster, active = true }: { path: string; pos
           alt=""
           draggable={false}
           className={cn("pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-200", playing ? "opacity-0" : "opacity-100")}
+          style={position ? { objectPosition: position } : undefined}
         />
       )}
       {!auto && !tapped && (

@@ -68,8 +68,10 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
     // the clip plays while you write the caption
     expect(studio).toContain("data-studio-clip");
     const shutter = read("src/components/community/look-carousel.tsx");
-    expect(shutter).toContain("hold.onStart();");
+    expect(shutter).toContain("holdRef.current?.onStart();");
     expect(shutter).toContain("conic-gradient(rgb(239 68 68)");
+    // Normal in the ring of filters films too: the same element keeps the finger (no swap mid-hold)
+    expect(shutter).toContain("{...(on ? h.handlers : {})}");
   });
 
   it("the feed plays a clip muted while it's on screen, sound one tap away; a story plays it whole, its length runs the bar", () => {
@@ -77,7 +79,7 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
     expect(inline).toContain("setVisible(!!e && e.intersectionRatio >= 0.6)");
     expect(inline).toContain('v.setAttribute("muted", "")');
     expect(inline).toContain("prefers-reduced-motion: reduce");
-    expect(read("src/components/community/post-card.tsx")).toContain("<InlineVideo path={slide.path} poster={thumbUrl} active={active} />");
+    expect(read("src/components/community/post-card.tsx")).toContain("<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} />");
     const stories = read("src/components/community/crew-stories.tsx");
     expect(stories).toContain("return <StoryClip path={post.media_path} poster={thumb} {...clip} />;");
     expect(stories).toContain("progressRef.current(v.currentTime / v.duration)");
