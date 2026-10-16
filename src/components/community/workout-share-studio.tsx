@@ -39,6 +39,7 @@ export function WorkoutShareStudio({
         onClose={onClose}
         accept="image/*,video/*"
         onVideo={setVideo}
+        videoContext="workout"
         canShoot={w.ready}
         card={w.card}
         post={w.post}

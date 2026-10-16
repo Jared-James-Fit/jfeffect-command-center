@@ -48,6 +48,7 @@ export function CoverPicker({
   size,
   aspect,
   focus: initialFocus,
+  range,
   onCancel,
   onDone,
 }: {
@@ -58,12 +59,15 @@ export function CoverPicker({
   /** The shape the feed shows it at. */
   aspect: number;
   focus: MediaFocus;
+  /** The part of the clip that's posted (trimmed): the cover comes from inside it. */
+  range?: { start: number; end: number } | null;
   onCancel: () => void;
   onDone: (cover: Blob | null, focus: MediaFocus) => void;
 }) {
   const vid = useRef<HTMLVideoElement | null>(null);
   const [duration, setDuration] = useState(0);
-  const [t, setT] = useState(0);
+  const from = range?.start ?? 0;
+  const [t, setT] = useState(from);
   const [focus, setFocus] = useState(initialFocus);
   const [tile, setTile] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -116,7 +120,7 @@ export function CoverPicker({
       .play()
       .then(() => {
         v.pause();
-        v.currentTime = 0;
+        v.currentTime = from;
       })
       .catch(() => undefined);
   };
@@ -193,10 +197,10 @@ export function CoverPicker({
         </div>
         <input
           type="range"
-          min={0}
-          max={Math.max(0.01, duration)}
+          min={from}
+          max={Math.max(from + 0.01, range ? Math.min(range.end, duration || range.end) : duration)}
           step={0.01}
-          value={Math.min(t, duration || 0)}
+          value={Math.max(from, Math.min(t, range?.end ?? (duration || 0)))}
           onChange={(e) => seek(Number(e.target.value))}
           className="h-10 w-full accent-white"
           aria-label="Cover frame"

@@ -15,6 +15,7 @@ import { followLabel, useFollow, useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
 import { COMMENT_MAX, likesLabel, pinnedFirst, postTimeLabel, threadComments, type CommunityAuthor, type CommunityComment, type CommunityPost } from "@/lib/community";
 import { pickMedia, releasePicked, type PickedMedia } from "@/lib/community-media";
+import { useVideoTrimmer } from "@/components/video-trimmer";
 import type { ChatGif } from "@/lib/chat-gifs";
 import { GifPicker } from "@/components/gif-picker";
 import { MicButton, RecordingBar, VoiceMemoPlayer, useVoiceMemoRecorder, type RecordedVoice } from "@/components/community/voice-memo";
@@ -90,6 +91,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [picked, setPicked] = useState<PickedMedia | null>(null);
+  const trimmer = useVideoTrimmer();
   // one attachment at a time: a photo / video, a GIF, or a voice memo
   const [gif, setGif] = useState<ChatGif | null>(null);
   const [gifOpen, setGifOpen] = useState(false);
@@ -184,10 +186,11 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
   const onFile = async (file: File | undefined) => {
     if (!file) return;
     setPicking(true);
-    const res = await pickMedia(file);
+    // a comment's clip runs up to 60 s: a longer one opens the trimmer
+    const res = await pickMedia(file, { context: "comment", trim: trimmer.request });
     setPicking(false);
     if (!res.ok) {
-      toast.error(res.reason);
+      if (!res.cancelled) toast.error(res.reason);
       return;
     }
     releasePicked(pickedRef.current);
@@ -434,6 +437,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
         onPin={togglePin}
       />
       <ShareCommentSheet c={shareFor} onClose={() => setShareFor(null)} postAuthor={post.author.name} />
+      {trimmer.element}
       <MediaViewer c={viewing} thumbUrl={viewing ? urlFor(viewing, urls) : null} onClose={() => setViewing(null)} />
 
       <AlertDialog open={!!deleteFor} onOpenChange={(o) => !o && setDeleteFor(null)}>

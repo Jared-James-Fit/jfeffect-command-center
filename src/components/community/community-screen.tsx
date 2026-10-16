@@ -579,8 +579,8 @@ export function CommunityScreen({
             onOpenPost={(id) => setDetailId(id)}
             onOpenPerson={openAuthor}
             onJumpTo={setJumpTo}
-            addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} /> : undefined}
-            addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} /> : null}
+            addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
+            addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}
           />
           {/* All / Following lives in the name at the top (its ⌄), Instagram's way: no second row of chips here */}
           {following && feedPosts.length === 0 && (

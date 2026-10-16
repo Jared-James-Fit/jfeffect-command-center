@@ -52,7 +52,8 @@ import { ChatSoundCard } from "@/components/chat-sound-card";
 import { ScheduledStrip } from "@/components/messages/scheduled-strip";
 import { DeletedMessagesStrip, deletionsQueryKey } from "@/components/messages/deleted-messages-strip";
 import { ScheduleButton } from "@/components/messages/schedule-button";
-import { renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
+import { prepareChatFiles, renderBodyWithMeet, uploadChatAttachment } from "@/components/chat-shared";
+import { useVideoTrimmer } from "@/components/video-trimmer";
 import { CommunityPostChatCard, PostReplyText, postReplyCard, type PostCardAttachment } from "@/components/community/post-chat-card";
 import { WorkoutNoteCard } from "@/components/messages/workout-note-card";
 import type { WorkoutNoteCardAttachment } from "@/lib/workout-notes";
@@ -131,7 +132,8 @@ function uploadAttachment(
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
 ): Promise<MessageAttachment> {
-  return uploadChatAttachment(clientId, file, onProgress, signal) as Promise<MessageAttachment>;
+  // a coach thread: videos up to 10 minutes
+  return uploadChatAttachment(clientId, file, onProgress, signal, "coach") as Promise<MessageAttachment>;
 }
 
 /* ------------------------------- Signed URLs ------------------------------- */
@@ -797,6 +799,8 @@ export function MessageThread({
   const uploadAbortRef = useRef<AbortController | null>(null);
   // Picked photos/videos/files upload in the background; Send never waits on them.
   const uploads = useDraftUploads<MessageAttachment>();
+  // a video longer than 10 minutes opens the trimmer before it becomes a chip
+  const trimmer = useVideoTrimmer();
   // Messages already sent from the composer but still waiting on their media.
   const [queuedUploadSends, setQueuedUploadSends] = useState(0);
   const [sending, setSending] = useState(false);
@@ -1660,10 +1664,13 @@ export function MessageThread({
     exitSelection();
   };
 
-  const onPickFiles = (files: FileList | null) => {
+  const onPickFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
+    // (read now: the input is cleared right after this is called)
+    const list = await prepareChatFiles(Array.from(files), "coach", trimmer.request);
+    if (!list.length) return;
     uploads.add(
-      Array.from(files),
+      list,
       (file, onProgress, signal) => uploadAttachment(clientId, file, onProgress, signal),
       (d, e: any) => toast.error(`${d.name}: ${e?.message ?? "upload failed"}`),
     );
@@ -2596,14 +2603,15 @@ export function MessageThread({
         )}
 
         <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
+        {trimmer.element}
 
         {/* Hidden file inputs */}
         <input ref={fileInputRef} type="file" multiple className="hidden"
-          onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+          onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
         <input ref={photoInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
-          onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+          onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
         <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden"
-          onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+          onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
 
         {recorder.recording ? (
           <div className="flex items-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 px-3 py-2">

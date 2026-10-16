@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { removeCommunityFiles, uploadPicked, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
 
-type Entry = { media: PickedMedia; promise: Promise<UploadedMedia>; kept: boolean };
+type Entry = { media: PickedMedia; promise: Promise<UploadedMedia>; kept: boolean; ctl: AbortController };
 
 /**
  * Start uploading a picked photo or clip the moment it's picked, so by the
  * time the caption's written Post only has to save (Instagram uploads while
- * you edit). Swapped for another, or closed without posting: its files are
- * thrown away once they land. `take` hands Post the running upload (or a
- * fresh one if it failed); `keep` marks it posted so it stays.
+ * you edit). Swapped for another (or re-trimmed), or closed without posting:
+ * its upload stops and anything that landed is thrown away. `take` hands
+ * Post the running upload (or carries a failed one on from where it got to);
+ * `keep` marks it posted so it stays.
  */
 export function useEarlyUpload(media: PickedMedia | null, userId: string | undefined) {
   const entry = useRef<Entry | null>(null);
@@ -17,15 +18,18 @@ export function useEarlyUpload(media: PickedMedia | null, userId: string | undef
   useEffect(() => {
     setProgress(0);
     if (!media || !userId) return;
-    const e: Entry = { media, kept: false, promise: Promise.resolve() as unknown as Promise<UploadedMedia> };
+    const ctl = new AbortController();
+    const e: Entry = { media, kept: false, ctl, promise: Promise.resolve() as unknown as Promise<UploadedMedia> };
     e.promise = uploadPicked(media, userId, (p) => {
       if (entry.current === e) setProgress(p);
-    });
+    }, ctl.signal);
     e.promise.catch(() => {});
     entry.current = e;
     return () => {
       if (entry.current === e) entry.current = null;
-      if (!e.kept) void e.promise.then((up) => removeCommunityFiles([up.media_path, up.media_thumb_path]), () => {});
+      if (e.kept) return;
+      ctl.abort();
+      void e.promise.then((up) => removeCommunityFiles([up.media_path, up.media_thumb_path]), () => {});
     };
   }, [media, userId]);
 

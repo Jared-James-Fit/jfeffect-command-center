@@ -62,6 +62,7 @@ export function ShareWorkoutButton({
   previewOnly = false,
   labelClassName,
   trigger,
+  story = false,
 }: {
   unit: "kg" | "lb";
   className?: string;
@@ -73,6 +74,8 @@ export function ShareWorkoutButton({
   variant?: "pill" | "block" | "bubble" | "tile";
   /** Coach viewing as a client: looks the same, but never posts as them. */
   previewOnly?: boolean;
+  /** Opened from "Your story": its clips are trimmed to a story's 60 seconds. */
+  story?: boolean;
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -334,6 +337,7 @@ export function ShareWorkoutButton({
             workoutTitle={videoFor.session.title}
             unit={unit}
             initialFile={videoFor.file}
+            videoContext="workout"
           />
         </StudioShell>
       )}
@@ -356,6 +360,9 @@ export function ShareWorkoutButton({
             filters={filters}
             filter={filterOn}
             onFilter={onFilter}
+            // opened from Your story: straight onto Story (its clips are trimmed to a story's 60 s)
+            startAs={story ? "story" : "post"}
+            videoContext={activeMode === "workout" ? "workout" : "post"}
             // shoot straight away: the card's numbers land on the photo when they arrive
             canShoot={activeMode === "post" || activeMode === "meal" ? true : activeMode === "lockin" ? !!today : !!target}
             allowNoPhoto={activeMode !== "meal"}

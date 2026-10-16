@@ -129,6 +129,7 @@ export function DirectChatView({ thread, onBack }: { thread: DirectThread; onBac
       <GroupChatErrorBoundary key={`direct-${thread.group_id}`}>
         <GroupMessageThread
           groupId={thread.group_id}
+          videoContext="dm"
           groupName={name}
           placeholder={`Message ${name}…`}
           canPost={!thread.incoming && left !== 0}

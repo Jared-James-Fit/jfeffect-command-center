@@ -431,6 +431,7 @@ export function CrewChatView({ thread, onBack }: { thread: CrewThread; onBack: (
       <GroupChatErrorBoundary key={`crew-${thread.group_id}`}>
         <GroupMessageThread
           groupId={thread.group_id}
+          videoContext="dm"
           groupName={thread.name}
           canPost={joined}
           canManage={false}

@@ -8,7 +8,7 @@ import {
   ClipboardList, FileSignature, UtensilsCrossed, Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { preloadVideoCompressor } from "@/lib/video-compress";
+import { preloadVideoEngine } from "@/lib/video-edit/pick";
 import { ChatSendMenu, type ChatSendAttachment } from "@/components/chat-send-menu";
 import { GifPicker } from "@/components/gif-picker";
 import { useServerFn } from "@tanstack/react-start";
@@ -80,14 +80,14 @@ export function ComposerPlusMenu({
       section: "attach",
       label: "Camera",
       icon: <Camera className="h-6 w-6" />,
-      onClick: () => { setOpen(false); preloadVideoCompressor(); onPickCamera(); },
+      onClick: () => { setOpen(false); preloadVideoEngine(); onPickCamera(); },
     },
     {
       key: "photo",
       section: "attach",
       label: "Photos & Videos",
       icon: <ImageIcon className="h-6 w-6" />,
-      onClick: () => { setOpen(false); preloadVideoCompressor(); onPickPhotos(); },
+      onClick: () => { setOpen(false); preloadVideoEngine(); onPickPhotos(); },
     },
     {
       key: "file",

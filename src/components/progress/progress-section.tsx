@@ -27,7 +27,7 @@ import {
   type ProgressOwnerType, type ProgressVideoFormat,
   listSubmissions, getSubmission, createSubmission, updateSubmission, deleteSubmission,
   submitForReview, listMediaForSubmission, createMedia, updateMedia, deleteMedia,
-  uploadProgressFile, getSignedMediaUrl, listBodyweight, logBodyweight, deleteBodyweight,
+  uploadProgressFile, uploadProgressVideo, getSignedMediaUrl, listBodyweight, logBodyweight, deleteBodyweight,
   updateBodyweight,
   listMeasurements, logMeasurement, deleteMeasurement, bodyweightStats,
   listReviewResponses, addReviewResponse,
@@ -38,6 +38,8 @@ import { format, parseISO } from "date-fns";
 import { WaterTrackerCard } from "./water-tracker-card";
 import { convertWeight, type ProgressMetric } from "@/lib/progress-metrics";
 import { compressImage } from "@/lib/image-compress";
+import { useVideoTrimmer } from "@/components/video-trimmer";
+import { looksLikeVideo, pickVideo } from "@/lib/video-edit/pick";
 
 /**
  * Mobile-safe date picker: defaults to today and shows a plain text
@@ -958,6 +960,9 @@ function AngleUploadCard({
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  // a video is trimmed (longer than 10 minutes, or what this phone can send) and shrunk before it uploads
+  const [phase, setPhase] = useState<"preparing" | "uploading">("uploading");
+  const trimmer = useVideoTrimmer();
   const [err, setErr] = useState<string | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const localPreviewRef = useRef<string | null>(null);
@@ -977,6 +982,18 @@ function AngleUploadCard({
   async function onFile(f: File) {
     setErr(null);
     let uploadedPath: string | null = null;
+    // a video: read it first (and trim it when it's too long); only the part that goes uploads
+    let video: Extract<Awaited<ReturnType<typeof pickVideo>>, { ok: true }>["video"] | null = null;
+    if (mediaType === "video" || looksLikeVideo(f)) {
+      setProgress(1);
+      const picked = await pickVideo(f, "coach", { trim: trimmer.request });
+      if (!picked.ok) {
+        setProgress(null);
+        if (!picked.cancelled) setErr(picked.reason);
+        return;
+      }
+      video = picked.video;
+    }
     try {
       // Instant local preview + status. Yield one frame before any image work so
       // iPhone users see feedback immediately after choosing the file.
@@ -1004,11 +1021,20 @@ function AngleUploadCard({
       // Start the DB submission creation and the storage upload together.
       // Previously these were three serial round-trips before/after transfer.
       const subPromise = getSubId();
-      const uploadPromise = uploadProgressFile({
-        file: fileToUpload,
-        userId: ctx.userId,
-        onProgress: (p) => setProgress((prev) => Math.max(prev ?? 0, p)),
-      });
+      const uploadPromise = video
+        ? uploadProgressVideo({
+            video,
+            userId: ctx.userId,
+            onProgress: (p, ph) => {
+              setPhase(ph === "preparing" ? "preparing" : "uploading");
+              setProgress((prev) => Math.max(prev ?? 0, p));
+            },
+          })
+        : uploadProgressFile({
+            file: fileToUpload,
+            userId: ctx.userId,
+            onProgress: (p) => setProgress((prev) => Math.max(prev ?? 0, p)),
+          });
       const [sid, res] = await Promise.all([subPromise, uploadPromise]);
       uploadedPath = res.path;
 
@@ -1091,7 +1117,7 @@ function AngleUploadCard({
             <div className="progress-shimmer" />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
               <ProgressBar value={progress} className="h-1.5" />
-              <p className="mt-1 text-[11px] font-semibold text-white">{progress <= 3 ? "Preparing…" : `Uploading… ${progress}%`}</p>
+              <p className="mt-1 text-[11px] font-semibold text-white">{progress <= 3 ? "Preparing…" : phase === "preparing" ? `Preparing… ${progress}%` : `Uploading… ${progress}%`}</p>
             </div>
           </>
         )}
@@ -1127,6 +1153,7 @@ function AngleUploadCard({
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }}
       />
       {err && <p className="text-xs text-destructive">{err}</p>}
+      {trimmer.element}
     </div>
   );
 }

@@ -58,6 +58,20 @@ export default defineConfig({
       },
     },
     plugins: [
+      // mediabunny (videos: the phone trims them, the server reads their length)
+      // has a Node-only file reader we never use; leaving it out keeps the
+      // server bundle off node:fs/promises.
+      {
+        name: "mediabunny-without-node-files",
+        enforce: "pre",
+        resolveId(source: string, importer?: string) {
+          if (source === "./node.js" && importer && /[\\/]mediabunny[\\/]dist[\\/]modules[\\/]src[\\/]/.test(importer)) return "\0mediabunny-node-stub";
+          return null;
+        },
+        load(id: string) {
+          return id === "\0mediabunny-node-stub" ? "export const fs = {};" : null;
+        },
+      },
       VitePWA({
         // Manifest is hand-managed in public/manifest.json; only generate the SW here.
         registerType: "autoUpdate",

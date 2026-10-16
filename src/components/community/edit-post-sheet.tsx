@@ -20,7 +20,8 @@ import { PostAttachRow, attachOfPost, usePostAttach } from "@/components/communi
 export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; onClose: () => void }) {
   const edit = useEditPost();
   const setMedia = useSetPostMedia();
-  const draft = useMediaDraft({ open: !!post, initial: post ? postSlides(post) : null, key: post?.id ?? "none" });
+  // a workout's post keeps a recap's 90 s clips; any other post 3 min (the database holds it to the same)
+  const draft = useMediaDraft({ open: !!post, initial: post ? postSlides(post) : null, key: post?.id ?? "none", videoContext: post?.completion_id ? "workout" : "post" });
   const att = usePostAttach({ initial: attachOfPost(post), key: post?.id ?? "none", open: !!post });
   const archived = !!post?.archived_at;
   const [caption, setCaption] = useState("");

@@ -3,7 +3,7 @@ import { releaseCanvas } from "@/lib/canvas-memory";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Check, Copy, Download, ImagePlus, RefreshCw, Send, Share2, Users, X } from "lucide-react";
+import { Check, Copy, Download, ImagePlus, RefreshCw, Scissors, Send, Share2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,9 @@ import { cn } from "@/lib/utils";
 import { CAPTION_MAX, buildShareCardFields, isCrewAudience, lockInTimeLabel, pickerAudience, postPointsHint, type CommunityVisibility, postFiles } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, usePostPointsStatus, type SavePostInput } from "@/lib/community.queries";
 import { AudiencePicker } from "@/components/community/audience-picker";
-import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, type PickedMedia } from "@/lib/community-media";
+import { pickMedia, pickedSeconds, releasePicked, removeCommunityFiles, retrimPicked, signCommunityPaths, type PickedMedia } from "@/lib/community-media";
+import { useVideoTrimmer } from "@/components/video-trimmer";
+import { formatClock, type VideoContext } from "@/lib/video-edit/limits";
 import { useEarlyUpload } from "@/lib/use-early-upload";
 import {
   TEMPLATE_LABEL,
@@ -41,6 +43,8 @@ type Props = {
   initialFile?: File | null;
   /** The look they shot on in the camera: opens on that card. */
   initialTemplate?: ShareTemplate | null;
+  /** Where a clip goes: a workout recap (90 s) unless opened from Your story (60 s). Longer ones are trimmed first. */
+  videoContext?: VideoContext;
 };
 
 const firstName = (full?: string | null) => (full ?? "").trim().split(/\s+/)[0] || null;
@@ -57,7 +61,7 @@ const SHARE_GRADIENT = "bg-primary";
  * independent: nothing leaves the phone until a button is tapped. Every
  * number comes from the canonical completion via RPC.
  */
-export function ShareComposer({ open, onOpenChange, completionId, athleteName, workoutTitle, unit, initialFile, initialTemplate }: Props) {
+export function ShareComposer({ open, onOpenChange, completionId, athleteName, workoutTitle, unit, initialFile, initialTemplate, videoContext = "workout" }: Props) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -65,8 +69,19 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   const { data: existing } = useMyPostForCompletion(completionId, open);
 
   const [media, setMedia] = useState<PickedMedia | null>(null);
-  // the photo or clip starts uploading the moment it's picked
+  // the photo or clip starts uploading the moment it's picked (a clip once it's trimmed to fit)
   const early = useEarlyUpload(media, user?.id);
+  const trimmer = useVideoTrimmer();
+  const retrim = async () => {
+    const m = media;
+    if (!m || m.kind !== "video") return;
+    const next = await retrimPicked(m, trimmer.request);
+    if (!next) return;
+    setMedia((prev) => {
+      releasePicked(prev);
+      return next;
+    });
+  };
   const [existingDrawable, setExistingDrawable] = useState<HTMLImageElement | null>(null);
   const [removedExisting, setRemovedExisting] = useState(false);
   const [shareFormat, setShareFormat] = useState<ShareFormat>("story");
@@ -212,9 +227,9 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
 
   const onPick = async (file: File | undefined) => {
     if (!file) return;
-    const res = await pickMedia(file);
+    const res = await pickMedia(file, { context: videoContext, trim: trimmer.request });
     if (!res.ok) {
-      toast.error(res.reason);
+      if (!res.cancelled) toast.error(res.reason);
       return;
     }
     setMedia((prev) => {
@@ -243,9 +258,9 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
   useEffect(() => {
     if (!open || !initialFile || usedInitial.current === initialFile) return;
     usedInitial.current = initialFile;
-    void pickMedia(initialFile).then((res) => {
+    void pickMedia(initialFile, { context: videoContext, trim: trimmer.request }).then((res) => {
       photoReady.current = true;
-      if (!res.ok) return void toast.error(res.reason);
+      if (!res.ok) return void (res.cancelled || toast.error(res.reason));
       setMedia((prev) => {
         releasePicked(prev);
         return res.media;
@@ -428,6 +443,12 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
 
         {/* Cards — swipe sideways */}
         <div ref={setStageEl} className="relative min-h-0 flex-1">
+          {/* a clip: one tap to change which part goes */}
+          {media?.kind === "video" && (
+            <button type="button" onClick={() => void retrim()} className="absolute right-3 top-2 z-10 inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[13px] font-black backdrop-blur active:scale-95" aria-label="Trim the clip" data-composer-trim>
+              <Scissors className="h-4 w-4" /> Trim{pickedSeconds(media) != null ? ` · ${formatClock(pickedSeconds(media)!)}` : ""}
+            </button>
+          )}
           {statsError ? (
             <div className="grid h-full place-items-center px-8 text-center text-sm text-white/70">Couldn't load this workout. Close and try again.</div>
           ) : statsLoading || !base ? (
@@ -577,6 +598,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
             <p className="mt-2 text-center text-[11px] text-muted-foreground">Sharing to Instagram never posts here, and posting here never shares outside the app.</p>
           </Overlay>
         )}
+        {trimmer.element}
       </DialogContent>
     </Dialog>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Send, Smile, Square, Star, Timer, Type, User, Users, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smile, Square, Star, Timer, Type, User, Users, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -38,6 +38,9 @@ import {
 import { drawableSize, framedCanvas, lightCopy, type Drawable } from "@/lib/photo-frame-draw";
 import { FocusFramer, PhotoFramer } from "@/components/community/photo-framer";
 import { CoverPicker } from "@/components/community/cover-picker";
+import { TrimmedVideo } from "@/components/video-trimmer";
+import { preloadMediaTools } from "@/lib/community-media";
+import { formatClock, type VideoContext } from "@/lib/video-edit/limits";
 
 /**
  * What you're making, along the bottom like Instagram's POST / STORY: a post
@@ -149,6 +152,8 @@ export function ShareStudio({
   onVideo,
   post,
   onWrite,
+  videoContext = "post",
+  startAs = "post",
 }: {
   open: boolean;
   onClose: () => void;
@@ -172,6 +177,10 @@ export function ShareStudio({
   post: StudioPost | null;
   /** A words-first post instead (shown where "No photo" is, when there's no card). */
   onWrite?: () => void;
+  /** Where a post's clips go (a workout recap: 90 s; a post: 3 min; on Story always 60 s). Longer ones are trimmed first. */
+  videoContext?: VideoContext;
+  /** What it opens on: a post, or (from Your story) a story. */
+  startAs?: ShareKind;
 }) {
   // No iOS focus-zoom anywhere in the studio: it left the editor zoomed and off-centre.
   useNoAutoZoom(open);
@@ -227,7 +236,8 @@ export function ShareStudio({
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const cardRef = useRef(card);
   cardRef.current = card;
-  const tray = useSlideTray({ open, initial: post?.extras, resetKey: post?.key ?? "", coverCount: card || shot ? 1 : 0 });
+  // a story's clip runs up to 60 s (switching to Story with a longer one opens the trimmer on it)
+  const tray = useSlideTray({ open, initial: post?.extras, resetKey: post?.key ?? "", coverCount: card || shot ? 1 : 0, videoContext: story ? "story" : videoContext });
   const att = usePostAttach({ initial: post?.attach, key: post?.key ?? "", open });
   useEffect(() => {
     if (!open) att.discard();
@@ -249,7 +259,7 @@ export function ShareStudio({
     setItems([]);
     setPosted(false);
     setBusy(null);
-    setKind("post");
+    setKind(startAs);
     setAspect("portrait");
     setFraming(CENTRED);
     setCoverFor(null);
@@ -1023,7 +1033,7 @@ export function ShareStudio({
       >
         <DialogTitle className="sr-only">Share</DialogTitle>
         <DialogDescription className="sr-only">Take a photo, add text or stickers, then post it to the community or share it to your story.</DialogDescription>
-        <input ref={libRef} type="file" accept={accept} multiple hidden onChange={(e) => fromInput(e, false)} />
+        <input ref={libRef} type="file" accept={accept} multiple hidden onChange={(e) => fromInput(e, false)} onClick={() => accept.includes("video") && preloadMediaTools()} />
         {/* the phone's own camera (no live camera here): a plain post can film too */}
         <input ref={capRef} type="file" accept={card ? "image/*" : "image/*,video/*"} capture="environment" hidden onChange={(e) => fromInput(e, true)} />
 
@@ -1058,21 +1068,19 @@ export function ShareStudio({
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/60" style={{ height: Math.max(0, box.h - band.y - band.h) }} aria-hidden data-post-band="bottom" />
               </>
             )}
-            {/* a plain post of clips: the first one, up front (a clip plays, muted, while you write the caption); drag it to choose what the feed shows */}
+            {/* a plain post of clips: the first one, up front, just the part that goes (it plays, muted, while you write the caption); drag it to choose what the feed shows */}
             {clip0?.video ? (
               story ? (
-                <video key={clip0.video} src={clip0.video} poster={clip0.preview ?? undefined} muted loop autoPlay playsInline className="absolute inset-0 h-full w-full object-cover" data-studio-clip />
+                // a story shows the whole picture, as the story viewer does (a lift is never cropped off)
+                <TrimmedVideo key={clip0.video} src={clip0.video} trim={clip0.trim} poster={clip0.preview ?? undefined} className="absolute inset-0 h-full w-full bg-black object-contain" data-studio-clip />
               ) : (
                 // (no grid-tile outline here: a clip's tile is its cover, shown for real in Edit cover)
                 <FocusFramer size={{ w: clip0.w ?? 9, h: clip0.h ?? 16 }} frame={box} focus={clip0.focus ?? CENTRE_FOCUS} onFocus={(f) => tray.setFocus(clip0.id, f)}>
-                  <video
+                  <TrimmedVideo
                     key={clip0.video}
                     src={clip0.video}
+                    trim={clip0.trim}
                     poster={clip0.preview ?? undefined}
-                    muted
-                    loop
-                    autoPlay
-                    playsInline
                     className="pointer-events-none absolute inset-0 h-full w-full object-cover"
                     style={{ objectPosition: focusPosition(clip0.focus) }}
                     data-studio-clip
@@ -1131,6 +1139,17 @@ export function ShareStudio({
                 data-edit-cover
               >
                 <Film className="h-4 w-4" /> Cover
+              </button>
+            )}
+            {/* a clip: one tap to change which part goes */}
+            {clip0?.video && clip0.status !== "error" && (
+              <button
+                type="button"
+                onClick={() => void tray.edit(clip0.id)}
+                className="absolute bottom-2.5 right-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-black text-white backdrop-blur active:scale-95"
+                data-studio-trim
+              >
+                <Scissors className="h-4 w-4" /> Trim{clip0.seconds != null ? ` · ${formatClock(clip0.seconds)}` : ""}
               </button>
             )}
 
@@ -1428,6 +1447,7 @@ export function ShareStudio({
           return (
             <CoverPicker
               src={it.video}
+              range={it.trim}
               size={{ w: it.w ?? 9, h: it.h ?? 16 }}
               aspect={feedAspect(it.w, it.h)}
               focus={it.focus ?? CENTRE_FOCUS}
@@ -1452,6 +1472,8 @@ export function ShareStudio({
             thumb={thumb}
           />
         )}
+        {/* a clip that's too long (or tapped in the strip) is trimmed here, on top of the studio */}
+        {tray.trimmer}
       </DialogContent>
     </Dialog>
   );

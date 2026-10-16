@@ -106,7 +106,7 @@ describe("Crew Stories", () => {
     const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain("<StoryRail");
     // "Your story" leads with a + that opens the camera (Instagram's)
-    expect(screen).toContain("addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} /> : undefined}");
+    expect(screen).toContain("addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}");
     expect(read("src/components/community/crew-stories.tsx")).toContain("data-story-add");
     expect(read("src/components/community/crew-stories.tsx")).toContain("markPostViewed(post.id)");
     expect(read("supabase/migrations/20261101110000_community_post_seen.sql")).toContain("'seen', EXISTS");
@@ -233,7 +233,7 @@ describe("Crew Stories", () => {
       expect(viewer).toContain("if (!e.currentTarget.contains(e.target as Node)) return;");
       const screen = read("src/components/community/community-screen.tsx");
       expect(screen).toContain("onJumpTo={setJumpTo}");
-      expect(screen).toContain('addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} /> : null}');
+      expect(screen).toContain('addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}');
     });
   });
 });
