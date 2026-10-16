@@ -8,9 +8,10 @@ const hub = read("src/components/community/admin-community-hub.tsx");
 const dash = read("src/routes/_authenticated/admin/index.tsx");
 
 describe("the coach's community, in one place", () => {
-  it("the Crew page is the hub: Feed / League / Daily / Birthdays, opening on the Feed like the clients', what needs you, and + Post", () => {
+  it("the Crew page is the hub: Feed / Posts / League / Birthdays, opening on the Feed like the clients', what needs you, and + Post", () => {
     expect(read("src/routes/_authenticated/admin/community.tsx")).toContain("component: AdminCommunityHub,");
-    expect(hub).toContain('{ key: "feed", label: "Feed" },\n  { key: "league", label: "League" },');
+    // the coach's order: Feed, Posts, League, Birthdays
+    expect(hub).toContain('{ key: "feed", label: "Feed" },\n  { key: "daily", label: "Posts" },\n  { key: "league", label: "League" },\n  { key: "birthdays", label: "Birthdays" },');
     expect(hub).toContain('<h1 className="text-[22px] font-black tracking-tight">Crew</h1>');
     expect(hub).toContain('{ key: "daily", label: "Posts" }');
     expect(hub).toContain('{ key: "birthdays", label: "Birthdays" }');

@@ -70,8 +70,8 @@ function birthdayPost(p: CommunityPulse): { title: string; when: string | null }
 type HubTab = "league" | "feed" | "daily" | "birthdays";
 const HUB_TABS: { key: HubTab; label: string }[] = [
   { key: "feed", label: "Feed" },
-  { key: "league", label: "League" },
   { key: "daily", label: "Posts" },
+  { key: "league", label: "League" },
   { key: "birthdays", label: "Birthdays" },
 ];
 
