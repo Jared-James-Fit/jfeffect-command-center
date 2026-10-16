@@ -128,7 +128,9 @@ describe("card history: writing a snapshot back", () => {
 
 describe("card history: wired into the exercise card", () => {
   const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-  it("Undo / Redo / Reset sit at the top of the ⋯ menu", () => {
+  it("Tools first, then Undo / Redo / Reset, at the top of the ⋯ menu", () => {
+    expect(wdv.indexOf("<CardToolsRow unit={activeUnit} />")).toBeLessThan(wdv.indexOf('data-testid="card-undo"'));
+    expect(wdv.indexOf("<CardToolsRow unit={activeUnit} />")).toBeGreaterThan(wdv.indexOf('data-testid="card-undo"') - 1200);
     const menu = wdv.slice(wdv.indexOf('data-testid="card-undo"') - 600, wdv.indexOf("Exercise {movePosition} of {moveCount}"));
     const order = ["card-undo", "card-redo", "card-reset", "Swap exercise", "Show cues", "Training help"].map((k) => menu.indexOf(k));
     expect(order.every((i) => i >= 0)).toBe(true);

@@ -92,22 +92,23 @@ describe("Workout Tools: one sheet for the whole workout, plain labels", () => {
     expect(html).toContain("lb→kg");
     expect(html).not.toContain("<input");
   });
-  it("the card's calculator lives in its ⋯ menu (Tools on the Calculator, in the card's unit)", () => {
+  it("every tool is one tap from any card's ⋯ menu, in the card's unit (nothing on the card itself)", () => {
     const row = renderToStaticMarkup(createElement(ExerciseActionRow, {
       name: "Squat", howTo: null, hasNote: false, onOpenNote() {}, moreMenu: null, rest: null,
     }));
     expect(row).not.toContain('aria-label="Calculator"');
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-    expect(wdv).toContain('onSelect={() => toolsActions.open({ tool: "calc", unit: activeUnit })}');
+    expect(wdv).toContain("<CardToolsRow unit={activeUnit} />");
+    const tools = readFileSync("src/components/workout-tools/workout-tools.tsx", "utf8");
+    expect(tools).toContain("onSelect={() => tools.open({ tool: key, unit })}");
+    for (const key of ["calc", "e1rm", "timer", "stopwatch", "tally"]) expect(tools).toContain(`{ key: "${key}", label:`);
+    // the running one carries a dot; it's rendered only while the menu is open
+    expect(tools).toContain("status?.active === key");
   });
-  it("one Tools button at the top of the workout, next to Warm-Up", () => {
+  it("no Tools button at the top of the workout any more (Warm-Up and List / Focus only)", () => {
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
-    const warm = wdv.indexOf("<WarmupButton");
-    const tools = wdv.indexOf("<WorkoutToolsButton unit=");
-    expect(warm).toBeGreaterThan(0);
-    expect(tools).toBeGreaterThan(warm);
-    expect(tools - warm).toBeLessThan(800);
-    expect(wdv.match(/<WorkoutToolsButton/g)).toHaveLength(1);
+    expect(wdv).not.toContain("<WorkoutToolsButton");
+    expect(readFileSync("src/components/workout-tools/workout-tools.tsx", "utf8")).not.toContain("export function WorkoutToolsButton");
   });
   it("exercise cards use the actions without subscribing to the ticking status", () => {
     let seen: unknown = undefined;
